@@ -39,8 +39,8 @@ export const EmployeePage = () => {
           <div className="flex-1 flex flex-col min-h-0">
             <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
               <div className="h-full flex flex-col overflow-hidden">
-                {/* Header and Tabs - Top Section like SectionMotivation in home */}
-                <div className="flex-shrink-0 mb-2 mt-4">
+                {/* Header and Tabs - Top Section like reprimand page */}
+                <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
                     activeTab={activeTab} 
                     onTabChange={handleTabChange} 
@@ -51,7 +51,7 @@ export const EmployeePage = () => {
                 <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                   {/* Left Column - Filters and Metrics (75% like home center+left) */}
                   <div className="col-span-9 h-full">
-                    <div className="h-full flex flex-col max-h-[calc(100vh-200px)]">
+                    <div className="h-full flex flex-col">
                       {/* Filter Section */}
                       <div className="flex-shrink-0 mb-2">
                         <div className="bg-white border rounded-md p-2">
@@ -81,7 +81,7 @@ export const EmployeePage = () => {
 
                   {/* Right Column - Overview Sidebar (25% like home right) */}
                   <div className="col-span-3 h-full">
-                    <div className="h-full flex flex-col max-h-[calc(100vh-200px)]">
+                    <div className="h-full flex flex-col">
                       <EmployeeOverview employees={employees} />
                     </div>
                   </div>

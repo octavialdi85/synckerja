@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Users, AlertTriangle, FileText, UserCheck } from 'lucide-react';
+import { Users, AlertTriangle } from 'lucide-react';
 
 interface HeaderAndTabProps {
   activeTab: string;
@@ -21,24 +21,10 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
     },
     {
       id: 'reprimand',
-      label: 'Reprimand Management',
+      label: 'Reprimand',
       icon: AlertTriangle,
-      description: 'Track and manage employee disciplinary actions',
+      description: 'Manage employee reprimands and disciplinary actions',
       route: '/employees/reprimand'
-    },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: FileText,
-      description: 'Generate reprimand reports and analytics',
-      route: '/employees/reprimand/reports'
-    },
-    {
-      id: 'approvals',
-      label: 'Approvals',
-      icon: UserCheck,
-      description: 'Review and approve reprimand actions',
-      route: '/employees/reprimand/approvals'
     }
   ];
 
@@ -51,12 +37,6 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   };
 
   const getActiveTab = () => {
-    if (location.pathname === '/employees/reprimand/reports') {
-      return 'reports';
-    }
-    if (location.pathname === '/employees/reprimand/approvals') {
-      return 'approvals';
-    }
     if (location.pathname === '/employees/reprimand') {
       return 'reprimand';
     }

@@ -152,9 +152,9 @@ export const AddReprimandDialog = () => {
                             <SelectItem value="loading" disabled>Loading employees...</SelectItem>
                           ) : employees.length > 0 ? (
                             employees.map((employee) => (
-                              <SelectItem key={employee.id} value={employee.id}>
+                            <SelectItem key={employee.id} value={employee.id}>
                                 {employee.full_name} ({employee.employee_id || 'No ID'})
-                              </SelectItem>
+                            </SelectItem>
                             ))
                           ) : (
                             <SelectItem value="no-employees" disabled>No employees found</SelectItem>

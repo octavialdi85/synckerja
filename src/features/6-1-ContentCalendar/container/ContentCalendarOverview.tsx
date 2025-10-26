@@ -113,9 +113,14 @@ export const ContentCalendarOverview = ({
       </div>
 
       {/* Sidebar Footer */}
-      <div className="px-4 py-3 border-t border-gray-200 flex-shrink-0 bg-gray-50">
-        <div className="text-xs text-gray-600 text-center">
-          {contentPlans.length} total content plans
+      <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+        <div className="flex items-center justify-between text-xs text-gray-600">
+          <div>
+            Total Plans: <span className="font-medium">{contentPlans.length}</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <span>Status: <span className="font-medium text-green-600">Active</span></span>
+          </div>
         </div>
       </div>
     </div>

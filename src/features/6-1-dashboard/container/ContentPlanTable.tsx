@@ -135,7 +135,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   // Loading skeleton
   if (loading) {
     return (
-      <div className="w-full h-full seamless-scroll overflow-auto">
+      <div className="w-full h-full seamless-scroll overflow-auto flex-1">
         <table className="w-full border-collapse table-fixed">
           <TableHeader />
           <tbody>
@@ -155,7 +155,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   // Empty state
   if (contentPlans.length === 0) {
     return (
-      <div className="w-full h-full seamless-scroll overflow-auto">
+      <div className="w-full h-full seamless-scroll overflow-auto flex-1">
         <table className="w-full border-collapse table-fixed">
           <TableHeader />
           <tbody>
@@ -171,7 +171,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   }
 
   return (
-    <div className="w-full h-full seamless-scroll overflow-auto max-h-[calc(100vh-550px)]">
+    <div className="w-full h-full seamless-scroll overflow-auto flex-1">
       <table className="w-full border-collapse table-fixed">
         <TableHeader />
         <tbody>

@@ -123,7 +123,7 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-lg w-[500px] h-[500px] max-h-[500px] overflow-y-auto p-0" style={{ zIndex: 50 }}>
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-gray-900">

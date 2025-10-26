@@ -413,11 +413,11 @@ const SocialMediaContent = () => {
   return (
     <StandardLayout>
       <SocialMediaErrorBoundary>
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative seamless-scroll">
+        <div className="h-screen bg-gray-100 flex flex-col font-sans relative seamless-scroll overflow-hidden">
           <div className="flex flex-1 min-h-0 seamless-scroll">
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0 seamless-scroll">
-              <main className="flex-1 px-4 pt-16 pb-4 min-h-0 seamless-scroll">
+              <main className="flex-1 px-4 pt-16 pb-4 min-h-0 seamless-scroll overflow-hidden">
                 <div className="h-full flex flex-col overflow-hidden seamless-scroll">
                   {/* Header and Tabs */}
                   <div className="flex-shrink-0 mb-2">
@@ -427,8 +427,8 @@ const SocialMediaContent = () => {
                     />
                   </div>
 
-                  <Tabs value={activeMainTab} onValueChange={handleTabChange}>
-            <TabsContent value="dashboard" className="mt-0 flex-1 flex flex-col min-h-0">
+                  <Tabs value={activeMainTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+            <TabsContent value="dashboard" className="mt-0 flex-1 flex flex-col min-h-0 h-full">
               {/* Performance Tables - Full Width Above Sidebar */}
               <div className="flex-shrink-0 mb-2">
                 <SocialMediaErrorBoundary>
@@ -453,9 +453,9 @@ const SocialMediaContent = () => {
               </div>
 
               {/* Main Grid Layout - Metrics, Table, and Sidebar */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0 seamless-scroll">
+              <div className="grid grid-cols-12 gap-2 flex-1 min-h-0 seamless-scroll h-full">
                 {/* Left Section - Main Content (75% width / 9 cols) */}
-                <div className="lg:col-span-9 space-y-2 flex flex-col seamless-scroll">
+                <div className="col-span-9 space-y-2 flex flex-col seamless-scroll h-full">
                   {/* Social Media Metrics */}
                   <div className="flex-shrink-0">
                     <SocialMediaErrorBoundary>
@@ -464,7 +464,7 @@ const SocialMediaContent = () => {
                   </div>
 
                   {/* Social Media Plan Table */}
-                  <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm h-[calc(100vh-500px)] relative seamless-scroll">
+                  <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative seamless-scroll h-full">
                     {/* Filters Section - Sticky at top */}
                     <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
                       <SocialMediaErrorBoundary>
@@ -516,7 +516,7 @@ const SocialMediaContent = () => {
                 </div>
 
                 {/* Right Section - Sidebar (25% width / 3 cols) */}
-                <div className="lg:col-span-3 space-y-2 seamless-scroll">
+                <div className="col-span-3 space-y-2 seamless-scroll h-full">
                   <SidebarContainer />
                 </div>
               </div>
