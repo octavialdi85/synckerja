@@ -464,7 +464,7 @@ const SocialMediaContent = () => {
                   </div>
 
                   {/* Social Media Plan Table */}
-                  <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 max-h-[calc(100vh-225px)] relative seamless-scroll">
+                  <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm h-[calc(100vh-500px)] relative seamless-scroll">
                     {/* Filters Section - Sticky at top */}
                     <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
                       <SocialMediaErrorBoundary>

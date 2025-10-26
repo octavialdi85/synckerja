@@ -16,7 +16,7 @@ export const OverviewFooter = memo(({
   isRefreshing 
 }: OverviewFooterProps) => {
   return (
-    <div className="px-4 py-1.5 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+    <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <span>Total Metrics: {totalMetrics}</span>

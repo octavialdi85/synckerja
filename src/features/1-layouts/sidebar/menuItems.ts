@@ -66,7 +66,7 @@ export const menuItems: MenuItem[] = [
   {
     title: "Subscription",
     icon: CreditCard,
-    url: "/subscription/management",
+    url: "/subscription",
     hasSubSidebar: false,
   },
 ];

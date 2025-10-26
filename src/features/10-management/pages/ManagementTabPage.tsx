@@ -13,37 +13,90 @@ const ManagementContent = memo(() => {
   const { subscriptionStatus, refreshSubscriptionStatus } = useOptimizedSubscription();
 
   return (
-    <div className="space-y-1 sm:space-y-2">
-      {/* Enhanced Subscription Management */}
-      <div className="flex-shrink-0">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Subscription Management
-            </CardTitle>
-            <CardDescription>
-              Manage your subscription and billing details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 sm:gap-2">
-              {/* Current Plan Section */}
-              <CurrentPlanSection subscriptionStatus={subscriptionStatus} />
-
-              {/* Action Panel */}
-              <QuickActionsPanel 
-                subscriptionStatus={subscriptionStatus}
-                onRefreshStatus={refreshSubscriptionStatus}
-              />
+    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
+      {/* Main Content Section - 9 columns */}
+      <div className="col-span-9 flex flex-col min-h-0 h-full">
+        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
+          {/* Content Header */}
+          <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                <div className="flex flex-col">
+                  <h2 className="text-sm font-semibold text-gray-900">Subscription Management</h2>
+                  <p className="text-xs text-gray-500">Manage your subscription and billing details</p>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+            <div className="p-4 space-y-4">
+              {/* Enhanced Subscription Management */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Current Plan Section */}
+                <CurrentPlanSection subscriptionStatus={subscriptionStatus} />
+
+                {/* Action Panel */}
+                <QuickActionsPanel 
+                  subscriptionStatus={subscriptionStatus}
+                  onRefreshStatus={refreshSubscriptionStatus}
+                />
+              </div>
+
+              {/* Payment History */}
+              <PaymentHistory />
+            </div>
+          </div>
+
+          {/* Content Footer */}
+          <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Last Updated: {new Date().toLocaleTimeString()}</span>
+              <button 
+                onClick={refreshSubscriptionStatus}
+                className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Payment History */}
-      <div className="flex-shrink-0">
-        <PaymentHistory />
+      {/* Sidebar Section - 3 columns */}
+      <div className="col-span-3 h-full">
+        <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
+          {/* Sidebar Header */}
+          <div className="px-4 py-2 border-b flex-shrink-0">
+            <h3 className="text-sm font-semibold text-gray-900">Quick Info</h3>
+            <p className="text-xs text-gray-500 mt-1">Subscription details</p>
+          </div>
+
+          {/* Scrollable Sidebar Content */}
+          <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Current Plan</p>
+                <p className="text-sm font-semibold text-gray-900">{subscriptionStatus?.plan_name || 'N/A'}</p>
+              </div>
+              <div className="p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Status</p>
+                <p className="text-sm font-semibold text-gray-900">{subscriptionStatus?.is_active ? 'Active' : 'Inactive'}</p>
+              </div>
+              <div className="p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Member Count</p>
+                <p className="text-sm font-semibold text-gray-900">{subscriptionStatus?.current_employees || 0} / {subscriptionStatus?.member_count || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar Footer */}
+          <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+            <div className="text-xs text-gray-400">Subscription Management</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -81,7 +134,7 @@ const ManagementTabPage = memo(() => {
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
+            <main className="flex-1 px-4 pt-16 pb-2 min-h-0">
               <div className="h-full flex flex-col overflow-hidden">
                 {/* Header and Tab Navigation */}
                 <div className="flex-shrink-0 mb-1">
@@ -92,14 +145,14 @@ const ManagementTabPage = memo(() => {
                 </div>
 
                 {/* Management Content */}
-                <div className="flex-1 min-h-0 overflow-auto p-2">
+                <div className="flex-1 min-h-0">
                   <Suspense fallback={
-                    <div className="space-y-4">
-                      <Skeleton className="h-32 w-full" />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                          <Skeleton key={i} className="h-32 w-full" />
-                        ))}
+                    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                      <div className="col-span-9">
+                        <Skeleton className="h-full w-full" />
+                      </div>
+                      <div className="col-span-3">
+                        <Skeleton className="h-full w-full" />
                       </div>
                     </div>
                   }>

@@ -42,6 +42,7 @@ import EmployeeAttendance from "./features/2-1-employees/MyInfo/Attendance/pages
 import EmployeeLeavePermit from "./features/2-1-employees/MyInfo/LeavePermit/pages/EmployeeLeavePermit";
 import EmployeeDocuments from "./features/2-1-employees/MyInfo/Documents/pages/EmployeeDocuments";
 import EmployeePayroll from "./features/2-1-employees/MyInfo/Payroll/pages/EmployeePayroll";
+import { ReprimandManagementPage } from "./features/2-1-reprimand";
 import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
 // Removed legacy imports - using ImmediateProtectedRoute instead
@@ -222,6 +223,11 @@ const App = () => (
               <Route path="/employees/add" element={
                 <ImmediateProtectedRoute>
                   <AddEmployeePage />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/employees/reprimand" element={
+                <ImmediateProtectedRoute>
+                  <ReprimandManagementPage />
                 </ImmediateProtectedRoute>
               } />
               

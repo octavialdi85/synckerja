@@ -171,7 +171,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   }
 
   return (
-    <div className="w-full h-full seamless-scroll overflow-auto">
+    <div className="w-full h-full seamless-scroll overflow-auto max-h-[calc(100vh-550px)]">
       <table className="w-full border-collapse table-fixed">
         <TableHeader />
         <tbody>
