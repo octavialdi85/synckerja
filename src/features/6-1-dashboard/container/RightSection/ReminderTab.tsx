@@ -206,6 +206,14 @@ const ReminderTab: React.FC = () => {
             </div>
           </TabsContent>
         </Tabs>
+        
+        {/* Sidebar Footer */}
+        <div className="px-3 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="flex items-center justify-between text-xs text-gray-600">
+            <span className="font-medium">Dashboard Overview</span>
+            <span className="text-xs text-gray-500">Real-time</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

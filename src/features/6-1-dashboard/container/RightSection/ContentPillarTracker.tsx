@@ -282,22 +282,5 @@ export const ContentPillarTracker: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer Stats - Fixed at bottom */}
-      <div className="px-2 py-2 border-t border-gray-200 bg-gray-50 rounded-b-lg flex-shrink-0">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div className="text-center">
-            <span className="block text-gray-600">Total Posts</span>
-            <span className="font-medium">{pillarData.reduce((sum, p) => sum + p.count, 0)}</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-gray-600">Total Pillars</span>
-            <span className="font-medium">{pillarData.length}</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-gray-600">Default Pillars</span>
-            <span className="font-medium">{pillarData.filter(p => p.isDefault).length}</span>
-          </div>
-        </div>
-      </div>
     </div>;
 };

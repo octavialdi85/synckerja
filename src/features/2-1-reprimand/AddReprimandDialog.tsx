@@ -121,7 +121,7 @@ export const AddReprimandDialog = () => {
           Add Reprimand
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col" aria-describedby="add-reprimand-description">
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden" aria-describedby="add-reprimand-description">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Add New Reprimand</DialogTitle>
           <p id="add-reprimand-description" className="text-sm text-gray-600 mt-1">
@@ -130,9 +130,9 @@ export const AddReprimandDialog = () => {
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full min-h-0">
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 pb-20 space-y-6">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 relative z-0 bg-background min-h-0">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Employee Selection */}
                 <FormField
@@ -512,7 +512,7 @@ export const AddReprimandDialog = () => {
             </div>
 
             {/* Sticky Footer - Inside container */}
-            <div className="flex-shrink-0 px-6 py-4 border-t bg-background/95 backdrop-blur-sm relative z-10">
+            <div className="flex-shrink-0 px-6 py-4 border-t bg-background relative z-20">
               <div className="flex justify-end space-x-3">
                 <Button
                   type="button"
