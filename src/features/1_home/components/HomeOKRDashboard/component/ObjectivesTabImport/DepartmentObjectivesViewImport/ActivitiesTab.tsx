@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckSquare, 
   Square, 
@@ -17,8 +17,11 @@ import {
   History,
   Clock3,
   GripVertical,
-  Target
+  Target,
+  X,
+  Upload
 } from 'lucide-react';
+// Force recompile
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
@@ -64,6 +67,15 @@ import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
+interface ActivityFile {
+  id: string;
+  activity_id: string;
+  filename: string;
+  file_url: string;
+  file_size: number;
+  created_at: string;
+}
+
 interface ActivityStep {
   id: string;
   activity_id: string;
@@ -71,6 +83,7 @@ interface ActivityStep {
   is_completed: boolean;
   order: number;
   created_at: string;
+  files: ActivityFile[];
 }
 
 interface Activity {
@@ -88,8 +101,285 @@ interface Activity {
   created_by: string;
   assigned_to_name?: string;
   steps: ActivityStep[];
+  files: ActivityFile[];
   progress_percentage: number;
 }
+
+// ActivityStep Component - Mirip dengan TaskStep dari daily task
+interface ActivityStepProps {
+  step: ActivityStep;
+  index: number;
+  onUpdateStep: (stepId: string, updates: Partial<ActivityStep>) => Promise<void>;
+  onDeleteStep: (stepId: string) => Promise<void>;
+  onUploadFile: (stepId: string, file: File) => Promise<void>;
+  onDeleteFile: (fileId: string) => Promise<void>;
+}
+
+const ActivityStep = ({ step, index, onUpdateStep, onDeleteStep, onUploadFile, onDeleteFile }: ActivityStepProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(step.title);
+  const [showFiles, setShowFiles] = useState(step.files && step.files.length > 0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Update showFiles when step.files changes
+  useEffect(() => {
+    if (step.files && step.files.length > 0) {
+      setShowFiles(true);
+    }
+  }, [step.files]);
+
+  const handleToggleComplete = async () => {
+    await onUpdateStep(step.id, { is_completed: !step.is_completed });
+  };
+
+  const handleSaveEdit = async () => {
+    if (editTitle.trim() && editTitle !== step.title) {
+      await onUpdateStep(step.id, { title: editTitle.trim() });
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(step.title);
+    setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm('Are you sure you want to delete this step?')) {
+      await onDeleteStep(step.id);
+    }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await onUploadFile(step.id, file);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    const file = step.files?.find(f => f.id === fileId);
+    const fileName = file?.filename || 'this file';
+    
+    if (window.confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+      await onDeleteFile(fileId);
+    }
+  };
+
+  return (
+    <div>
+      <Draggable draggableId={step.id} index={index}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            className={`flex items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
+              snapshot.isDragging ? 'shadow-lg bg-blue-100' : ''
+            }`}
+          >
+            <button
+              onClick={handleToggleComplete}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              {step.is_completed ? (
+                <CheckSquare className="w-4 h-4 text-green-600" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+            </button>
+
+            <div
+              {...provided.dragHandleProps}
+              className="cursor-grab active:cursor-grabbing"
+            >
+              <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500" />
+            </div>
+
+            {isEditing ? (
+              <div className="flex items-center gap-2 flex-1">
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="flex-1 h-8 text-sm"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveEdit();
+                    } else if (e.key === 'Escape') {
+                      handleCancelEdit();
+                    }
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSaveEdit}
+                  className="h-8 px-2 text-green-600 hover:text-green-700"
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelEdit}
+                  className="h-8 px-2 text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <>
+                <span className={`flex-1 text-sm ${
+                  step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
+                }`}>
+                  {step.title}
+                </span>
+                
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowFiles(!showFiles)}
+                    className={`h-6 w-6 p-0 hover:text-gray-600 ${
+                      step.files && step.files.length > 0 
+                        ? 'text-blue-500' 
+                        : 'text-gray-400'
+                    }`}
+                    title={`Toggle files ${step.files && step.files.length > 0 ? `(${step.files.length})` : ''}`}
+                  >
+                    <Paperclip className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                    className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                  >
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Draggable>
+      
+      {/* File Upload and Display Section - Outside Draggable */}
+      {showFiles && (
+        <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+          {/* File Upload */}
+          <div className="mb-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              className="hidden"
+              accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar"
+            />
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="w-full"
+            >
+              {isUploading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  Uploading...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Upload File
+                </div>
+              )}
+            </Button>
+          </div>
+
+          {/* File List */}
+          <div className="space-y-2">
+            {step.files && step.files.length > 0 ? (
+              step.files.map((file) => (
+                <div key={file.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200">
+                  <FileText className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-700 flex-1 truncate">{file.filename}</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Open file in popup instead of new window
+                        const popup = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                        if (popup) {
+                          popup.document.write(`
+                            <html>
+                              <head><title>${file.filename}</title></head>
+                              <body style="margin:0; padding:20px; font-family: Arial, sans-serif;">
+                                <h2>${file.filename}</h2>
+                                <iframe src="${file.file_url}" width="100%" height="500px" style="border:none;"></iframe>
+                              </body>
+                            </html>
+                          `);
+                        }
+                      }}
+                      className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                      title="View file"
+                    >
+                      <FileText className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteFile(file.id)}
+                      className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                      title="Delete file"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 italic text-center">No files attached</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface ActivitiesTabProps {
   objectiveId: string;
@@ -120,6 +410,9 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
   const { data: currentEmployee, isLoading: isLoadingEmployee } = useCurrentEmployee();
+  
+  console.log('🏢 Organization ID:', organizationId);
+  console.log('👤 Employee loading state:', { isLoadingEmployee, hasEmployee: !!currentEmployee });
 
   // Fetch activities for this objective
   const fetchActivities = async () => {
@@ -127,36 +420,65 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
 
     try {
       setIsLoading(true);
+      console.log('🔄 Starting fetchActivities...', { organizationId, objectiveId });
+      
+      const startTime = performance.now();
       
       // First, check if activities table exists, if not create activities from daily_tasks
       const { data, error } = await supabase
         .from('daily_tasks')
         .select(`
           *,
-          task_steps (*),
+          task_steps (
+            *,
+            task_files (*)
+          ),
           assigned_employee:employees!assigned_to(id, full_name, email)
         `)
         .eq('organization_id', organizationId)
         .eq('objective_id', objectiveId)
         .order('created_at', { ascending: false });
 
+      const queryTime = performance.now() - startTime;
+      console.log('⏱️ Query completed in:', queryTime, 'ms');
+      console.log('📊 Data received:', data?.length || 0, 'activities');
+
       if (error) throw error;
       
       // Transform daily_tasks to activities format
-      const transformedActivities = (data || []).map(task => ({
-        ...(task as any),
-        activity_id: (task as any).id,
-        steps: ((task as any).task_steps || []).map((step: any) => ({
+      const transformStartTime = performance.now();
+      const transformedActivities = (data || []).map(task => {
+        const steps = ((task as any).task_steps || []).map((step: any) => ({
           ...step,
-          activity_id: (task as any).id
-        })),
-        progress_percentage: calculateProgress((task as any).task_steps || []),
-        assigned_to_name: (task as any).assigned_employee?.full_name || 'Unassigned'
-      }));
+          activity_id: (task as any).id,
+          files: step.task_files || []
+        }));
+        
+        console.log(`📁 Activity ${(task as any).id} files per step:`, {
+          stepsCount: steps.length,
+          filesPerStep: steps.map(s => ({ stepId: s.id, stepTitle: s.title, fileCount: s.files?.length || 0 }))
+        });
+        
+        return {
+          ...(task as any),
+          activity_id: (task as any).id,
+          steps: steps,
+          files: [], // Files are now displayed at step level, not activity level
+          progress_percentage: calculateProgress(steps),
+          assigned_to_name: (task as any).assigned_employee?.full_name || 'Unassigned'
+        };
+      });
+      
+      const transformTime = performance.now() - transformStartTime;
+      console.log('🔄 Data transformation completed in:', transformTime, 'ms');
+      console.log('📋 Transformed activities:', transformedActivities.length);
       
       setActivities(transformedActivities);
+      
+      const totalTime = performance.now() - startTime;
+      console.log('✅ fetchActivities completed in:', totalTime, 'ms');
     } catch (error) {
-      console.error('Error fetching activities:', error);
+      console.error('❌ Error fetching activities:', error);
       toast({
         title: 'Error',
         description: 'Failed to load activities',
@@ -174,7 +496,12 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
   };
 
   useEffect(() => {
-    fetchActivities();
+    console.log('🔄 useEffect triggered:', { organizationId, objectiveId });
+    if (organizationId && objectiveId) {
+      fetchActivities();
+    } else {
+      console.log('⏸️ Skipping fetchActivities - missing dependencies');
+    }
   }, [organizationId, objectiveId]);
 
   const toggleActivityExpansion = (activityId: string) => {
@@ -247,7 +574,7 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
           due_date: newActivity.due_date ? format(newActivity.due_date, 'yyyy-MM-dd') : null,
           status: 'pending',
           organization_id: organizationId,
-          objective_id: objectiveId,
+          objective_id: objectiveId || null, // Allow null if objective doesn't exist
           created_by: userData.user?.id || null,
           assigned_to: (currentEmployee as any).id, // Auto-assign to current employee
         })
@@ -415,6 +742,52 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
     }
   };
 
+  // New functions for ActivityStep component
+  const updateActivityStep = async (stepId: string, updates: Partial<ActivityStep>) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('task_steps')
+        .update(updates)
+        .eq('id', stepId);
+
+      if (error) throw error;
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('Error updating step:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update step',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteActivityStep = async (stepId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('task_steps')
+        .delete()
+        .eq('id', stepId);
+
+      if (error) throw error;
+      
+      toast({
+        title: 'Success',
+        description: 'Step deleted successfully'
+      });
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('Error deleting step:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete step',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDateChange = async (activityId: string, date: Date) => {
     try {
       const { error } = await (supabase as any)
@@ -498,6 +871,269 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
         title: 'Error',
         description: 'Failed to reorder steps',
         variant: 'destructive',
+      });
+    }
+  };
+
+  // File upload and delete functions
+  const uploadStepFile = async (stepId: string, file: File) => {
+    try {
+      console.log('📁 Uploading file to step:', stepId);
+      
+      // Upload file to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `activity-step-files/${stepId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('task-files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('task-files')
+        .getPublicUrl(filePath);
+
+      // Save file record to database
+      console.log('💾 Saving file record to database:', {
+        task_steps_id: stepId,
+        filename: file.name,
+        file_size: file.size
+      });
+      
+      const { error: dbError } = await (supabase as any)
+        .from('task_files')
+        .insert({
+          task_steps_id: stepId,
+          filename: file.name,
+          file_url: publicUrl,
+          file_size: file.size
+        });
+
+      if (dbError) {
+        console.error('❌ Error saving file record:', dbError);
+        throw dbError;
+      }
+      
+      console.log('✅ File uploaded successfully to step:', stepId);
+
+      toast({
+        title: 'Success',
+        description: 'File uploaded successfully'
+      });
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to upload file',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const uploadActivityFile = async (activityId: string, file: File) => {
+    try {
+      // First, find or create a step for this activity to attach files to
+      let stepId = null;
+      
+      // Check if activity has any steps
+      const activity = activities.find(a => a.id === activityId);
+      console.log('🔍 Activity found for file upload:', { 
+        activityId, 
+        hasActivity: !!activity, 
+        stepsCount: activity?.steps?.length || 0,
+        stepIds: activity?.steps?.map(s => s.id) || []
+      });
+      
+      if (activity && activity.steps && activity.steps.length > 0) {
+        // Use the first step's ID
+        stepId = activity.steps[0].id;
+        console.log('✅ Using existing step ID:', stepId);
+      } else {
+        // Create a default step for file uploads
+        console.log('🆕 Creating new step for file uploads...');
+        const { data: stepData, error: stepError } = await (supabase as any)
+          .from('task_steps')
+          .insert({
+            task_id: activityId,
+            title: 'File Attachments',
+            is_completed: false,
+            order: 0
+          })
+          .select()
+          .single();
+          
+        if (stepError) {
+          console.error('❌ Error creating step:', stepError);
+          throw stepError;
+        }
+        stepId = stepData.id;
+        console.log('✅ Created new step ID:', stepId);
+      }
+
+      // Upload file to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `activity-files/${activityId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('task-files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('task-files')
+        .getPublicUrl(filePath);
+
+      // Save file record to database
+      console.log('💾 Saving file record to database:', {
+        task_steps_id: stepId,
+        filename: file.name,
+        file_size: file.size
+      });
+      
+      const { error: dbError } = await (supabase as any)
+        .from('task_files')
+        .insert({
+          task_steps_id: stepId,
+          filename: file.name,
+          file_url: publicUrl,
+          file_size: file.size
+        });
+
+      if (dbError) {
+        console.error('❌ Error saving file record:', dbError);
+        throw dbError;
+      }
+      
+      console.log('✅ File record saved successfully');
+
+      toast({
+        title: 'Success',
+        description: 'File uploaded successfully'
+      });
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to upload file',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const deleteStepFile = async (fileId: string) => {
+    try {
+      console.log('🗑️ Deleting file:', fileId);
+      
+      // Get file info before deleting for storage cleanup
+      const fileToDelete = activities
+        .flatMap(activity => activity.steps)
+        .flatMap(step => step.files || [])
+        .find(file => file.id === fileId);
+
+      // Delete from database
+      const { error: dbError } = await (supabase as any)
+        .from('task_files')
+        .delete()
+        .eq('id', fileId);
+
+      if (dbError) {
+        console.error('❌ Error deleting file from database:', dbError);
+        throw dbError;
+      }
+
+      // Delete from storage if file exists
+      if (fileToDelete?.file_url) {
+        try {
+          const url = new URL(fileToDelete.file_url);
+          const filePath = url.pathname.split('/').slice(3).join('/');
+          
+          const { error: storageError } = await supabase.storage
+            .from('task-files')
+            .remove([filePath]);
+
+          if (storageError) {
+            console.warn('⚠️ Failed to delete file from storage:', storageError);
+          } else {
+            console.log('✅ File deleted from storage');
+          }
+        } catch (storageError) {
+          console.warn('⚠️ Failed to delete file from storage:', storageError);
+        }
+      }
+
+      console.log('✅ File deleted successfully');
+
+      toast({
+        title: 'Success',
+        description: 'File deleted successfully'
+      });
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('❌ Error deleting file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete file',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const deleteActivityFile = async (fileId: string) => {
+    try {
+      // Get file info before deleting for storage cleanup
+      const fileToDelete = activities
+        .flatMap(activity => activity.files)
+        .find(file => file.id === fileId);
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('task_files')
+        .delete()
+        .eq('id', fileId);
+
+      if (dbError) throw dbError;
+
+      // Delete from storage if file exists
+      if (fileToDelete?.file_url) {
+        try {
+          const url = new URL(fileToDelete.file_url);
+          const filePath = url.pathname.split('/').slice(3).join('/');
+          
+          const { error: storageError } = await supabase.storage
+            .from('task-files')
+            .remove([filePath]);
+
+          if (storageError) {
+            console.warn('Failed to delete file from storage:', storageError);
+          }
+        } catch (storageError) {
+          console.warn('Failed to delete file from storage:', storageError);
+        }
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File deleted successfully'
+      });
+      
+      await fetchActivities();
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete file',
+        variant: 'destructive'
       });
     }
   };
@@ -857,48 +1493,24 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
                                           activity.steps
                                             .sort((a, b) => a.order - b.order)
                                             .map((step, index) => (
-                                              <Draggable key={step.id} draggableId={step.id} index={index}>
-                                                {(provided, snapshot) => (
-                                                  <div
-                                                    ref={provided.innerRef}
-                                                    {...provided.draggableProps}
-                                                    className={`flex items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
-                                                      snapshot.isDragging ? 'shadow-lg bg-blue-100' : ''
-                                                    }`}
-                                                  >
-                                                    <button
-                                                      onClick={() => handleStepToggle(step.id, step.is_completed)}
-                                                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                                                    >
-                                                      {step.is_completed ? (
-                                                        <CheckSquare className="w-4 h-4 text-green-600" />
-                                                      ) : (
-                                                        <Square className="w-4 h-4" />
-                                                      )}
-                                                    </button>
-
-                                                    <div
-                                                      {...provided.dragHandleProps}
-                                                      className="cursor-grab active:cursor-grabbing"
-                                                    >
-                                                      <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500" />
-                                                    </div>
-
-                                                    <span className={`flex-1 text-sm ${
-                                                      step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
-                                                    }`}>
-                                                      {step.title}
-                                                    </span>
-                                                  </div>
-                                                )}
-                                              </Draggable>
+                                              <ActivityStep
+                                                key={step.id}
+                                                step={step}
+                                                index={index}
+                                                onUpdateStep={updateActivityStep}
+                                                onDeleteStep={deleteActivityStep}
+                                                onUploadFile={uploadStepFile}
+                                                onDeleteFile={deleteStepFile}
+                                              />
                                             ))
                                         )}
                                         {provided.placeholder}
                                       </div>
                                     )}
                                   </Droppable>
+
                                 </div>
+
                               </div>
                             </TableCell>
                           </TableRow>

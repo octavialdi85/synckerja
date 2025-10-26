@@ -9,7 +9,6 @@ import {
   Trash2, 
   Plus,
   FileText,
-  Paperclip,
   Clock,
   ChevronDown,
   ChevronRight,
@@ -62,7 +61,6 @@ interface DeadlineHistory {
   updated_at: string;
 }
 import { TaskStep } from './TaskStep';
-import { FileUpload } from './FileUpload';
 import { DeadlineExtensionDialog } from './DeadlineExtensionDialog';
 import { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 import { EditTaskDialog } from './EditTaskDialog';
@@ -580,37 +578,6 @@ export const TaskList = () => {
                     </Droppable>
                   </div>
 
-                  {/* Files Section */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                        <Paperclip className="w-4 h-4" />
-                        Files ({task.files.length})
-                      </h4>
-                      <FileUpload taskId={task.id} />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      {task.files.length === 0 ? (
-                        <p className="text-sm text-gray-500 italic">No files attached</p>
-                      ) : (
-                        task.files.map((file) => (
-                          <div key={file.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200">
-                            <FileText className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700 flex-1">{file.filename}</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(file.file_url, '_blank')}
-                              className="text-blue-600 hover:text-blue-700"
-                            >
-                              View
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
                 </div>
                           </TableCell>
                         </TableRow>

@@ -87,6 +87,7 @@ export interface DailyTaskContextType {
   deleteTaskStep: (stepId: string) => Promise<void>;
   reorderTaskSteps: (taskId: string, stepIds: string[]) => Promise<void>;
   uploadTaskFile: (taskId: string, file: File) => Promise<void>;
+  uploadTaskStepFile: (taskStepId: string, file: File) => Promise<void>;
   deleteTaskFile: (fileId: string) => Promise<void>;
   calculateTaskProgress: (taskId: string) => number;
   requestDeadlineExtension: (taskId: string, newDeadline: string, reason: string) => Promise<void>;
@@ -131,8 +132,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .from('daily_tasks')
         .select(`
           *,
-          task_steps (*),
-          task_files (*),
+          task_steps (
+            *,
+            task_files (*)
+          ),
           deadline_history (*),
           assigned_employee:employees!assigned_to(id, full_name, email)
         `)
@@ -146,8 +149,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Calculate progress for each task
       const tasksWithProgress = (data || []).map(task => ({
         ...task,
-        steps: task.task_steps || [],
-        files: task.task_files || [],
+        steps: (task.task_steps || []).map((step: any) => ({
+          ...step,
+          files: step.task_files || []
+        })),
         deadline_history: task.deadline_history || [],
         progress_percentage: calculateProgress(task.task_steps || []),
         assigned_to_name: (task as any).assigned_employee?.full_name || null
@@ -459,11 +464,69 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .from('task-files')
         .getPublicUrl(filePath);
 
+      // Get the first task step for this task
+      const { data: taskSteps } = await supabase
+        .from('task_steps')
+        .select('id')
+        .eq('task_id', taskId)
+        .order('order', { ascending: true })
+        .limit(1);
+
+      if (!taskSteps || taskSteps.length === 0) {
+        throw new Error('No task steps found for this task');
+      }
+
       // Save file record to database
       const { error: dbError } = await supabase
         .from('task_files')
         .insert({
-          task_id: taskId,
+          task_steps_id: taskSteps[0].id,
+          filename: file.name,
+          file_url: publicUrl,
+          file_size: file.size
+        });
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: 'Success',
+        description: 'File uploaded successfully'
+      });
+      
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to upload file',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const uploadTaskStepFile = async (taskStepId: string, file: File) => {
+    try {
+      // Upload file to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `task-step-files/${taskStepId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('task-step-files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('task-step-files')
+        .getPublicUrl(filePath);
+
+      // Save file record to database
+      const { error: dbError } = await supabase
+        .from('task_files')
+        .insert({
+          task_steps_id: taskStepId,
           filename: file.name,
           file_url: publicUrl,
           file_size: file.size
@@ -725,6 +788,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     deleteTaskStep,
     reorderTaskSteps,
     uploadTaskFile,
+    uploadTaskStepFile,
     deleteTaskFile,
     calculateTaskProgress,
     requestDeadlineExtension,
