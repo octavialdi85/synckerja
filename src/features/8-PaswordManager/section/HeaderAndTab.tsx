@@ -17,7 +17,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       label: 'Password Vault',
       icon: Key,
       description: 'View and manage all your stored passwords',
-      route: '/tools/password-manager'
+      route: '/password-manager'
     }
   ];
 
