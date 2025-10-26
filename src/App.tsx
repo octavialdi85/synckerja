@@ -1,27 +1,408 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/features/ui/toaster";
+import { Toaster as Sonner } from "@/features/ui/sonner";
+import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
+import { AuthProvider } from "@/features/1-login";
+import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
+import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
+import { ImmediateProtectedRoute } from "@/components/ImmediateProtectedRoute";
+import Index from "./features/1-login/pages/Index";
+import Login from "./features/1-login/pages/Login";
+import Register from "./features/1-login/pages/Register";
+import VerifyEmail from "./features/1-login/pages/VerifyEmail";
+import EmailVerified from "./features/1-login/pages/EmailVerified";
+import CreateOrganization from "./features/1-login/pages/CreateOrganization";
+import CreatePlan from "./features/1-login/pages/CreatePlan";
+import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
+import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
+import NotFound from "./features/1-login/pages/NotFound";
+import ModernHomePage from "./features/1_home/pages/ModernHomePage";
+import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
+import DailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
+import MeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
+import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
+import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
+import SettingsPage from "./features/6-1-Settings/SettingsPage";
+import ManagementTabPage from "./features/10-management/pages/ManagementTabPage";
+import OverviewTabPage from "./features/10-overview/OverviewTabPage";
+import PlansTabPage from "./features/10-Plans/PlansTabPage";
+import EmployeePage from "./features/2-1-employees/EmployeePage";
+import AddEmployeePage from "./features/2-1-employees/add-employee/AddEmployeePage";
+import FirstLogin from "./features/2-1-employees/employee-invitation/FirstLogin";
+import EmployeePersonalInfo from "./features/2-1-employees/MyInfo/PersonalInformation/pages/EmployeePersonalInfo";
+import EmployeeAddressInfo from "./features/2-1-employees/MyInfo/AddressInformation/pages/EmployeeAddressInfo";
+import EmployeeEmploymentInfo from "./features/2-1-employees/MyInfo/Employment/pages/EmployeeEmploymentInfo";
+import EmployeeEducationFormal from "./features/2-1-employees/MyInfo/Education/pages/EmployeeEducationFormal";
+import EmployeeEducationInformal from "./features/2-1-employees/MyInfo/InformalEducation/pages/EmployeeEducationInformal";
+import EmployeeWork from "./features/2-1-employees/MyInfo/WorkExperience/pages/EmployeeWork";
+import EmployeeFamily from "./features/2-1-employees/MyInfo/FamilyMembers/pages/EmployeeFamily";
+import EmployeeAttendance from "./features/2-1-employees/MyInfo/Attendance/pages/EmployeeAttendance";
+import EmployeeLeavePermit from "./features/2-1-employees/MyInfo/LeavePermit/pages/EmployeeLeavePermit";
+import EmployeeDocuments from "./features/2-1-employees/MyInfo/Documents/pages/EmployeeDocuments";
+import EmployeePayroll from "./features/2-1-employees/MyInfo/Payroll/pages/EmployeePayroll";
+import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
+import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
+// Removed legacy imports - using ImmediateProtectedRoute instead
+// import { AccessPermissionsGuard } from "./features/2-9-PageAccess/guards/AccessPermissionsGuard";
+// import { AccessPermissionsRedirector } from "./features/2-9-PageAccess/redirectors/AccessPermissionsRedirector";
+import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
+import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
+import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
+
+// Import debug utilities in development
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/debugPermissions');
+  import('./utils/testRouteProtection');
+}
 
 const queryClient = new QueryClient();
+
+// Security Wrapper Component
+const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {
+  // ACTIVATE GLOBAL SECURITY INTERCEPTOR
+  useSecurityInterceptor();
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <CentralizedUserDataProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true
+            }}
+          >
+            <SecurityWrapper>
+              <Routes>
+              {/* ======= IMMEDIATE PROTECTED ROUTES ======= */}
+              {/* ZERO FLASH CONTENT - IMMEDIATE PROTECTION SYSTEM */}
+              <Route path="/" element={
+                <ImmediateProtectedRoute>
+                  <ModernHomePage />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/home" element={
+                <ImmediateProtectedRoute>
+                  <ModernHomePage />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/dashboard" element={
+                <ImmediateProtectedRoute>
+                  <ModernHomePage />
+                </ImmediateProtectedRoute>
+              } />
+              
+              {/* Public Routes - Only accessible when NOT logged in */}
+              <Route path="/login" element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              } />
+              <Route path="/register" element={
+                <PublicRoute>
+                  <Register />
+                </PublicRoute>
+              } />
+              <Route path="/verify-email" element={
+                <PublicRoute>
+                  <VerifyEmail />
+                </PublicRoute>
+              } />
+              <Route path="/email-verified" element={
+                <PublicRoute>
+                  <EmailVerified />
+                </PublicRoute>
+              } />
+              
+              {/* Semi-Protected Routes - Have their own authentication logic */}
+              <Route path="/create-organization" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <CreateOrganization />
+                </ProtectedRoute>
+              } />
+              <Route path="/create-plan" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <CreatePlan />
+                </ProtectedRoute>
+              } />
+              <Route path="/employee-welcome" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeWelcome />
+                </ProtectedRoute>
+              } />
+              <Route path="/first-login" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <FirstLogin />
+                </ProtectedRoute>
+              } />
+              
+              {/* Public Terms Page */}
+              <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+              
+              {/* ======= UNIVERSAL PROTECTED APPLICATION ROUTES ======= */}
+              {/* ALL ROUTES CONTROLLED BY PAGE ACCESS CONFIGURATION DATABASE */}
+              <Route path="/password-manager" element={
+                <UniversalProtectedRoute>
+                  <PasswordManagerPage />
+                </UniversalProtectedRoute>
+              } />
+              <Route path="/daily-task" element={
+                <UniversalProtectedRoute>
+                  <DailyTaskPage />
+                </UniversalProtectedRoute>
+              } />
+              <Route path="/tools/daily-task" element={
+                <UniversalProtectedRoute>
+                  <DailyTaskPage />
+                </UniversalProtectedRoute>
+              } />
+              <Route path="/tools/meeting-notes" element={
+                <UniversalProtectedRoute>
+                  <MeetingNotesPage />
+                </UniversalProtectedRoute>
+              } />
+              
+              {/* Digital Marketing Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
+              <Route path="/digital-marketing/social-media" element={
+                <ProtectedRoute>
+                  <SocialMediaDashboardPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/digital-marketing/social-media/dashboard" element={
+                <ProtectedRoute>
+                  <SocialMediaDashboardPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/digital-marketing/social-media/content-calendar" element={
+                <ProtectedRoute>
+                  <ContentCalendarPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/digital-marketing/social-media/settings" element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Subscription Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
+              <Route path="/subscription" element={
+                <ProtectedRoute>
+                  <OverviewTabPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/subscription/overview" element={
+                <ProtectedRoute>
+                  <OverviewTabPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/subscription/plans" element={
+                <ProtectedRoute>
+                  <PlansTabPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/subscription/management" element={
+                <ProtectedRoute>
+                  <ManagementTabPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Employee Management Routes - ZERO FLASH PROTECTION */}
+              <Route path="/employees" element={
+                <ImmediateProtectedRoute>
+                  <EmployeePage />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/employees/add" element={
+                <ImmediateProtectedRoute>
+                  <AddEmployeePage />
+                </ImmediateProtectedRoute>
+              } />
+              
+              {/* ======= ACCESS PERMISSIONS - BASIC PROTECTED (Database-Only Control) ======= */}
+              {/* Using ProtectedRoute to allow database-only access control */}
+              <Route path="/access-permissions" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <AccessPermissionsConfig />
+                </ProtectedRoute>
+              } />
+              
+              {/* Page Access Tab - BASIC PROTECTED (Database-Only Access Control) */}
+              <Route path="/access-permissions/page-access" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <PageAccessTab />
+                </ProtectedRoute>
+              } />
+              
+              {/* Overview Tab - BASIC PROTECTED (Database-Only Control) */}
+              <Route path="/access-permissions/overview" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <AccessPermissionsConfig />
+                </ProtectedRoute>
+              } />
+              
+              {/* Roles Tab - BASIC PROTECTED (Database-Only Control) */}
+              <Route path="/access-permissions/roles" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <AccessPermissionsConfig />
+                </ProtectedRoute>
+              } />
+              
+              {/* Pages Tab - BASIC PROTECTED (Database-Only Control) */}
+              <Route path="/access-permissions/pages" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <AccessPermissionsConfig />
+                </ProtectedRoute>
+              } />
+              
+              {/* Admin Routes - IMMEDIATE PROTECTION */}
+              <Route path="/admin" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="Admin Panel" 
+                    description="Panel administrasi sistem akan segera tersedia"
+                    icon={<Settings className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/admin/settings" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="Admin Settings" 
+                    description="Pengaturan administrasi sistem akan segera tersedia"
+                    icon={<Settings className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/admin/users" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="Admin Users" 
+                    description="Manajemen pengguna admin akan segera tersedia"
+                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              
+              {/* User Management Routes - IMMEDIATE PROTECTION */}
+              <Route path="/users/permissions" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="User Permissions" 
+                    description="Manajemen izin pengguna akan segera tersedia"
+                    icon={<UserCheck className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/users/roles" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="User Roles Management" 
+                    description="Manajemen peran pengguna akan segera tersedia"
+                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              
+              {/* Recruitment Routes - IMMEDIATE PROTECTION */}
+              <Route path="/recruitment" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="Recruitment" 
+                    description="Sistem rekrutmen akan segera tersedia"
+                    icon={<Briefcase className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              <Route path="/recruitment/interviewees" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage 
+                    title="Interviewees" 
+                    description="Manajemen kandidat interview akan segera tersedia"
+                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                  />
+                </ImmediateProtectedRoute>
+              } />
+              
+              
+              {/* Employee Profile Routes */}
+              <Route path="/my-info/personal" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeePersonalInfo />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/address" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeAddressInfo />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/employment" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeEmploymentInfo />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/education/formal" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeEducationFormal />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/education/informal" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeEducationInformal />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/work" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeWork />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/family" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeFamily />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/attendance" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeAttendance />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/leave-permit" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeLeavePermit />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/documents" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeeDocuments />
+                </ProtectedRoute>
+              } />
+              <Route path="/my-info/payroll" element={
+                <ProtectedRoute requiresPermissions={false}>
+                  <EmployeePayroll />
+                </ProtectedRoute>
+              } />
+              
+              {/* ======= SECURITY: Access Permissions Catch-All ======= */}
+              {/* Catch any unregistered /access-permissions/* paths - redirect to main page-access */}
+              <Route path="/access-permissions/*" element={
+                <ImmediateProtectedRoute>
+                  <PlaceholderPage />
+                </ImmediateProtectedRoute>
+              } />
+              
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            </SecurityWrapper>
+          </BrowserRouter>
+        </CentralizedUserDataProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

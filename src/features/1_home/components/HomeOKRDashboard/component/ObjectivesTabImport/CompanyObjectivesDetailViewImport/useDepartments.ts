@@ -1,0 +1,142 @@
+
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Department } from './departmentTypes';
+
+export const useDepartments = (organizationId?: string) => {
+  const { data: departments = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['departments', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      
+      console.log('🔍 useDepartments: Fetching departments for org:', organizationId);
+      
+      // First, get departments directly from departments table for this organization
+      const { data: orgDepartments, error: orgDeptError } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name');
+
+      if (orgDeptError) {
+        console.error('❌ useDepartments: Error fetching org departments:', orgDeptError);
+      }
+
+      console.log('✅ useDepartments: Org departments:', orgDepartments?.length || 0);
+
+      // Second, get ALL employees for this organization to see what departments they use
+      const { data: allEmployees, error: empError } = await supabase
+        .from('employees')
+        .select('department_id, status, full_name')
+        .eq('organization_id', organizationId);
+
+      if (empError) {
+        console.error('❌ useDepartments: Error fetching employees:', empError);
+      } else {
+        console.log('📊 useDepartments: All employees in org:', allEmployees?.length || 0);
+        
+        // Log department usage by employees
+        const deptUsage = {};
+        allEmployees?.forEach(emp => {
+          if (emp.department_id) {
+            if (!deptUsage[emp.department_id]) {
+              deptUsage[emp.department_id] = [];
+            }
+            deptUsage[emp.department_id].push(`${emp.full_name} (${emp.status})`);
+          }
+        });
+        
+        console.log('📈 useDepartments: Department usage by employees:', deptUsage);
+      }
+
+      // Third, get departments used by active employees (even if department.organization_id is NULL)
+      const { data: employeeDepartments, error: empDeptError } = await supabase
+        .from('employees')
+        .select(`
+          department_id,
+          full_name,
+          status,
+          departments!inner(
+            id,
+            name,
+            organization_id,
+            is_active,
+            code,
+            description,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .eq('status', 'active')
+        .not('department_id', 'is', null);
+
+      if (empDeptError) {
+        console.error('❌ useDepartments: Error fetching employee departments:', empDeptError);
+      }
+
+      console.log('✅ useDepartments: Employee department relations:', employeeDepartments?.length || 0);
+      
+      // Log detailed employee-department relations
+      employeeDepartments?.forEach((emp, index) => {
+        console.log(`👤 Employee ${index + 1}: ${emp.full_name} (${emp.status}) -> Department: ${emp.departments.name} (org_id: ${emp.departments.organization_id})`);
+      });
+
+      // Extract department data from employee relations
+      const empDepts = employeeDepartments?.map(emp => emp.departments).filter(Boolean) || [];
+      console.log('✅ useDepartments: Extracted employee departments:', empDepts.length);
+
+      // Combine and deduplicate departments
+      const allDepartments = [...(orgDepartments || [])];
+      
+      // Add departments from employees that aren't already in the list
+      empDepts.forEach(empDept => {
+        if (!allDepartments.find(d => d.id === empDept.id)) {
+          console.log('➕ Adding department from employees:', empDept.name, 'org_id:', empDept.organization_id);
+          // Only include properties that match the Department type
+          allDepartments.push({
+            id: empDept.id,
+            name: empDept.name,
+            organization_id: empDept.organization_id,
+            is_active: empDept.is_active,
+            code: empDept.code,
+            description: empDept.description,
+            created_at: empDept.created_at,
+            updated_at: empDept.updated_at,
+            created_by: undefined,
+            is_default: false
+          });
+        }
+      });
+
+      // Filter active departments and sort by name
+      const activeDepartments = allDepartments
+        .filter(dept => dept.is_active !== false)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      console.log('🟢 useDepartments: Final active departments count:', activeDepartments.length);
+      
+      // Log each department with detailed info
+      activeDepartments.forEach((dept, index) => {
+        console.log(`📋 Final Department ${index + 1}:`, {
+          id: dept.id,
+          name: dept.name,
+          organization_id: dept.organization_id,
+          is_active: dept.is_active,
+          source: dept.organization_id === organizationId ? 'org_table' : 'employee_usage'
+        });
+      });
+      
+      return activeDepartments as Department[];
+    },
+    enabled: !!organizationId,
+  });
+
+  return {
+    departments,
+    isLoading,
+    error,
+    refetch,
+  };
+};

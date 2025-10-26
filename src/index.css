@@ -2,47 +2,174 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Seamless scroll styling - completely hides scrollbar while maintaining functionality */
+.seamless-scroll {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  scroll-behavior: smooth;
+}
+
+.seamless-scroll::-webkit-scrollbar {
+  display: none !important; /* WebKit browsers */
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Force hide scrollbars for all elements with seamless-scroll */
+.seamless-scroll * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.seamless-scroll *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.seamless-scroll *::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.seamless-scroll *::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.seamless-scroll *::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Global scrollbar hiding for dashboard area */
+[data-radix-tabs-content] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+[data-radix-tabs-content]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+[data-radix-tabs-content]::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+[data-radix-tabs-content]::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+[data-radix-tabs-content]::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Global scrollbar hiding for all elements */
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+*::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+*::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Horizontal scroll hidden for table containers */
+.table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  scroll-behavior: smooth;
+}
+
+.table-container::-webkit-scrollbar {
+  display: none !important; /* WebKit browsers */
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.table-container::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.table-container::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Additional force hide for any remaining scrollbars */
+.table-container::-webkit-scrollbar-horizontal {
+  display: none !important;
+}
+
+.table-container::-webkit-scrollbar-vertical {
+  display: none !important;
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */
 
 @layer base {
   :root {
-    --background: 240 20% 99%;
-    --foreground: 240 10% 10%;
+    --background: 210 20% 98%;
+    --foreground: 215 25% 27%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 215 25% 27%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover-foreground: 215 25% 27%;
 
-    --primary: 262 80% 50%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 270 100% 70%;
+    --primary: 215 28% 17%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 6% 10%;
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 215 28% 17%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted: 214 32% 91%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 262 80% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 213 97% 87%;
+    --accent-foreground: 215 28% 17%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 262 80% 50%;
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 215 28% 17%;
 
-    --radius: 0.75rem;
-    
-    --gradient-primary: linear-gradient(135deg, hsl(262 80% 50%) 0%, hsl(280 90% 60%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(240 20% 99%) 0%, hsl(250 30% 96%) 100%);
-    --shadow-glow: 0 10px 40px -10px hsl(262 80% 50% / 0.3);
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --radius: 0.25rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -62,38 +189,33 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 240 10% 5%;
-    --foreground: 240 10% 98%;
+    --background: 215 28% 17%;
+    --foreground: 210 20% 98%;
 
-    --card: 240 10% 8%;
-    --card-foreground: 240 10% 98%;
+    --card: 215 25% 20%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 240 10% 8%;
-    --popover-foreground: 240 10% 98%;
+    --popover: 215 25% 20%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 262 80% 50%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 270 100% 70%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 215 28% 17%;
 
-    --secondary: 240 6% 15%;
-    --secondary-foreground: 240 10% 98%;
+    --secondary: 215 25% 27%;
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 240 6% 15%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 215 25% 27%;
+    --muted-foreground: 215 16% 65%;
 
-    --accent: 262 80% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 213 97% 70%;
+    --accent-foreground: 215 28% 17%;
 
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 240 6% 20%;
-    --input: 240 6% 20%;
-    --ring: 262 80% 50%;
-    
-    --gradient-primary: linear-gradient(135deg, hsl(262 80% 50%) 0%, hsl(280 90% 60%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(240 10% 5%) 0%, hsl(250 20% 10%) 100%);
-    --shadow-glow: 0 10px 40px -10px hsl(262 80% 50% / 0.4);
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 210 20% 98%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -112,5 +234,24 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  }
+
+  body::-webkit-scrollbar {
+    display: none !important; /* WebKit browsers */
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  html {
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  }
+
+  html::-webkit-scrollbar {
+    display: none !important; /* WebKit browsers */
+    width: 0 !important;
+    height: 0 !important;
   }
 }

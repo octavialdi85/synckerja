@@ -1,0 +1,357 @@
+import React, { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/features/ui/dialog';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { Textarea } from '@/features/ui/textarea';
+import { Label } from '@/features/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
+import { useCreateIndividualObjective } from './useIndividualObjectives';
+// TODO: File not found - import { useDepartmentObjectives } from './useDepartmentObjectives';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+// TODO: File not found - import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { useToast } from '@/features/ui/use-toast';
+import { useObjectives } from '../component/ObjectivesTabImport/useObjectives';
+import { Target } from 'lucide-react';
+
+export interface ModalAddIndividualContributionProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  organizationId: string;
+  cycleId: string;
+  departmentId?: string;
+  employeeId?: string;
+  employeeName?: string;
+  onSuccess?: () => void;
+}
+
+export const ModalAddIndividualContribution = ({
+  open,
+  onOpenChange,
+  organizationId,
+  cycleId,
+  departmentId,
+  employeeId,
+  employeeName,
+  onSuccess
+}: ModalAddIndividualContributionProps) => {
+  const [formData, setFormData] = useState({
+    company_objective_id: '',
+    title: '',
+    description: '',
+    why_important: '',
+    metric_type: 'number' as 'number' | 'percentage' | 'currency' | 'boolean',
+    unit: '',
+    start_value: '0',
+    target_value: '100',
+    weight: '100'
+  });
+
+  const { toast } = useToast();
+  const { user: currentUser } = useCurrentUser();
+  const { data: currentEmployee } = useCurrentEmployee();
+  // TODO: File not found - const { data: employees = [] } = useEmployees();
+  const createObjective = useCreateIndividualObjective();
+
+  // Get department objectives to show in dropdown - using useObjectives hook
+  const { objectives: allDepartmentObjectives = [], isLoading: loadingObjectives, error: objectivesError } = useObjectives(organizationId, cycleId, 'department');
+  
+  // Debug logging
+  console.log('ModalAddIndividualContribution - organizationId:', organizationId);
+  console.log('ModalAddIndividualContribution - cycleId:', cycleId);
+  console.log('ModalAddIndividualContribution - allDepartmentObjectives:', allDepartmentObjectives);
+  console.log('ModalAddIndividualContribution - loadingObjectives:', loadingObjectives);
+  console.log('ModalAddIndividualContribution - objectivesError:', objectivesError);
+  
+  // Filter objectives by department if departmentId is provided
+  const departmentObjectives = departmentId 
+    ? allDepartmentObjectives.filter((obj: any) => obj.department_id === departmentId)
+    : allDepartmentObjectives;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentEmployee) {
+      toast({
+        title: 'Error',
+        description: 'Employee information not found. Please ensure you are logged in properly.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.company_objective_id || !formData.title) {
+      toast({
+        title: 'Error',
+        description: 'Please select a department objective and enter a title',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Find selected department objective
+    const selectedDeptObjective = departmentObjectives.find(obj => obj.id === formData.company_objective_id);
+    
+    try {
+      await createObjective.mutateAsync({
+        organization_id: organizationId,
+        cycle_id: cycleId,
+        employee_id: (currentEmployee as any).id,
+        owner_id: currentUser?.id || '',
+        department_objective_id: formData.company_objective_id,
+        title: formData.title,
+        description: formData.description,
+        why_important: formData.why_important,
+        weight: parseFloat(formData.weight),
+        status: 'active',
+        created_by: currentUser?.id || '',
+        
+      });
+
+      // Reset form
+      setFormData({
+        company_objective_id: '',
+        title: '',
+        description: '',
+        why_important: '',
+        metric_type: 'number',
+        unit: '',
+        start_value: '0',
+        target_value: '100',
+        weight: '100'
+      });
+
+      onSuccess?.();
+      onOpenChange(false);
+
+      toast({
+        title: 'Success',
+        description: 'Individual contribution created successfully',
+      });
+    } catch (error) {
+      console.error('Error creating individual contribution:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create individual contribution',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form
+    setFormData({
+      company_objective_id: '',
+      title: '',
+      description: '',
+      why_important: '',
+      metric_type: 'number',
+      unit: '',
+      start_value: '0',
+      target_value: '100',
+      weight: '100'
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2">
+            <Target className="h-5 w-5 text-orange-600" />
+            <span>Create Individual Contribution</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Department Objective Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="company_objective" className="text-sm font-medium">
+              Department Objective <span className="text-red-500">*</span>
+            </Label>
+            {departmentObjectives.length === 0 && !loadingObjectives && (
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                💡 No department objectives available. Please create a department objective first in the Department Objective tab.
+              </p>
+            )}
+            <Select
+              value={formData.company_objective_id}
+              onValueChange={(value) => setFormData({ ...formData, company_objective_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a department objective" />
+              </SelectTrigger>
+              <SelectContent>
+                {loadingObjectives ? (
+                  <SelectItem value="loading" disabled>
+                    Loading department objectives...
+                  </SelectItem>
+                ) : objectivesError ? (
+                  <SelectItem value="error" disabled>
+                    Error loading objectives
+                  </SelectItem>
+                ) : departmentObjectives.length > 0 ? (
+                  departmentObjectives.map((objective: any) => (
+                    <SelectItem key={objective.id} value={objective.id}>
+                      {objective.title}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-objectives" disabled>
+                    No department objectives found. Please create a department objective first.
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Individual Objective Title */}
+          <div className="space-y-2">
+            <Label htmlFor="title" className="text-sm font-medium">
+              Individual Objective Title <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="title"
+              placeholder="What is your individual contribution objective?"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description" className="text-sm font-medium">
+              Description
+            </Label>
+            <Textarea
+              id="description"
+              placeholder="Describe the individual objective in detail"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+            />
+          </div>
+
+          {/* Why Important */}
+          <div className="space-y-2">
+            <Label htmlFor="why_important" className="text-sm font-medium">
+              Why this is important
+            </Label>
+            <Textarea
+              id="why_important"
+              placeholder="Explain why this objective is important and its impact"
+              value={formData.why_important}
+              onChange={(e) => setFormData({ ...formData, why_important: e.target.value })}
+              rows={3}
+            />
+          </div>
+
+          {/* Metric Type and Unit */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="metric_type" className="text-sm font-medium">
+                Metric Type
+              </Label>
+              <Select
+                value={formData.metric_type}
+                onValueChange={(value: 'number' | 'percentage' | 'currency' | 'boolean') => 
+                  setFormData({ ...formData, metric_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="percentage">Percentage</SelectItem>
+                  <SelectItem value="currency">Currency</SelectItem>
+                  <SelectItem value="boolean">Boolean</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="unit" className="text-sm font-medium">
+                Unit
+              </Label>
+              <Input
+                id="unit"
+                placeholder="e.g., campaigns, designs, videos"
+                value={formData.unit}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Start Value and Target Value */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="start_value" className="text-sm font-medium">
+                Start Value
+              </Label>
+              <Input
+                id="start_value"
+                type="number"
+                value={formData.start_value}
+                onChange={(e) => setFormData({ ...formData, start_value: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="target_value" className="text-sm font-medium">
+                Target Value <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="target_value"
+                type="number"
+                value={formData.target_value}
+                onChange={(e) => setFormData({ ...formData, target_value: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Weight (Impact) */}
+          <div className="space-y-2">
+            <Label htmlFor="weight" className="text-sm font-medium">
+              Weight (Impact) <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="weight"
+              type="number"
+              value={formData.weight}
+              onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={createObjective.isPending}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {createObjective.isPending ? 'Creating...' : 'Create Individual Contribution'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+
+
+

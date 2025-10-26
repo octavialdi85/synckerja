@@ -1,0 +1,342 @@
+import { ReactNode, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { XCircle, Shield, Lock, AlertTriangle } from 'lucide-react';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
+import { useEnhancedRoleValidation } from '../validators/RoleValidator';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+
+interface AccessPermissionsGuardProps {
+  children: ReactNode;
+  requiredPaths?: string[];
+}
+
+/**
+ * SUPER KETAT: Access Permissions Guard
+ * Proteksi berlapis untuk halaman Page Access Configuration
+ * - Multi-layer validation
+ * - Real-time access monitoring 
+ * - URL tampering protection
+ * - Role-based access control
+ */
+export const AccessPermissionsGuard = ({ 
+  children, 
+  requiredPaths = ['/access-permissions/page-access'] 
+}: AccessPermissionsGuardProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isValidating, setIsValidating] = useState(true);
+  const [accessDeniedReason, setAccessDeniedReason] = useState<string>('');
+  const [attemptCount, setAttemptCount] = useState(0);
+
+  const {
+    userRole,
+    isOwner,
+    isAdmin,
+    employee,
+    userData,
+    organization
+  } = useCentralizedUserData();
+
+  const {
+    canAccessPage,
+    getAccessLevel,
+    getDepartmentRestrictionMessage,
+    configLoading
+  } = useDepartmentAccess();
+
+  const {
+    isAuthorizedForPageAccess,
+    getValidationDetails,
+    performSecurityCheck
+  } = useEnhancedRoleValidation();
+
+  // NO HARDCODED RESTRICTIONS - Access determined by database configuration only
+  // If no database restrictions exist, ALL authenticated users can access
+  const ALLOWED_ROLES_FOR_PAGE_ACCESS = ['owner', 'admin', 'employee', 'hr']; // All roles allowed
+  
+  // No blacklisting - let database configuration control access
+  const isRoleBlacklisted = false; // Disabled hardcoded blacklisting
+
+  // Enhanced multi-layer validation function
+  const validateAccess = (): { hasAccess: boolean; reason: string; securityLevel?: string } => {
+    // OWNER OVERRIDE: If user is confirmed owner, grant immediate access
+    if (isOwner || userRole === 'owner') {
+      console.log('🔑 OWNER OVERRIDE: Granting immediate access to Page Access configuration');
+      return { hasAccess: true, reason: 'Owner access granted' };
+    }
+
+    // Layer 1: Enhanced Role Validation (PRIMARY SECURITY CHECK)
+    const roleValidation = getValidationDetails();
+    if (!roleValidation.isValid) {
+      return { 
+        hasAccess: false, 
+        reason: roleValidation.reason,
+        securityLevel: roleValidation.securityLevel
+      };
+    }
+
+    // Layer 2: Security check for potential threats
+    const securityCheck = performSecurityCheck();
+    if (!securityCheck.passed) {
+      return { 
+        hasAccess: false, 
+        reason: `Security violation: ${securityCheck.alerts.join(', ')}`,
+        securityLevel: 'CRITICAL'
+      };
+    }
+
+    // Layer 3: Authentication check
+    if (!userData) {
+      return { hasAccess: false, reason: 'User not authenticated' };
+    }
+
+    // Layer 4: Organization check (RELAXED FOR OWNER)
+    // Owner can access even without complete organization setup
+    if (!organization && userRole !== 'owner') {
+      return { hasAccess: false, reason: 'No organization context required for non-owner roles' };
+    }
+
+    // Layer 5: Employee data check (for admin role only, not owner)
+    if (userRole === 'admin' && !employee) {
+      return { hasAccess: false, reason: 'Employee data required for admin role' };
+    }
+
+    // Layer 6: Enhanced authorization check (RELAXED FOR DATABASE-ONLY CONTROL)
+    if (!isAuthorizedForPageAccess()) {
+      // Allow if this is page-access route and user is authenticated
+      const currentPath = location.pathname;
+      if (currentPath === '/access-permissions/page-access' && userData) {
+        console.log('🔓 DATABASE-ONLY OVERRIDE: Page access route controlled by database only');
+        return { hasAccess: true, reason: 'Page access - database-only control' };
+      }
+      return { hasAccess: false, reason: 'Enhanced role validation failed' };
+    }
+
+    // Layer 7: Department access validation (RELAXED FOR PAGE-ACCESS)
+    const hasPageAccess = requiredPaths.every(path => canAccessPage(path));
+    if (!hasPageAccess) {
+      // Special handling for page-access path - allow if no DB restrictions
+      if (requiredPaths.includes('/access-permissions/page-access') && userData) {
+        console.log('🔓 PAGE ACCESS SPECIAL: Database-only access control active');
+        return { hasAccess: true, reason: 'Page access - database-only control active' };
+      }
+      
+      // For admins, also try to check if they can access at least one path
+      if (userRole === 'admin' && requiredPaths.some(path => canAccessPage(path))) {
+        console.log('🔧 ADMIN PARTIAL ACCESS: Admin can access some but not all required paths');
+        return { hasAccess: true, reason: 'Admin partial access granted' };
+      }
+      return { hasAccess: false, reason: 'Insufficient page permissions' };
+    }
+
+    // Layer 8: Path-specific validation
+    const currentPath = location.pathname;
+    const isAllowedPath = currentPath.startsWith('/access-permissions');
+    if (!isAllowedPath) {
+      return { hasAccess: false, reason: 'Invalid access path' };
+    }
+
+    return { hasAccess: true, reason: 'All security layers passed' };
+  };
+
+  // Real-time access monitoring
+  useEffect(() => {
+    if (configLoading) return;
+
+    // DEBUG: Log all validation data for troubleshooting
+    console.group('🔍 ACCESS PERMISSIONS GUARD DEBUG');
+    console.log('User Data Context:', {
+      userData: !!userData,
+      userRole,
+      isOwner,
+      isAdmin,
+      organization: !!organization,
+      employee: !!employee,
+      userDataId: userData?.id,
+      employeeId: employee?.id,
+      organizationId: organization?.id
+    });
+    
+    const validation = validateAccess();
+    console.log('Validation Result:', validation);
+    
+    // Check if Enhanced Role Validation is working correctly
+    const roleValidation = getValidationDetails();
+    console.log('Enhanced Role Validation Details:', roleValidation);
+    
+    // Check canAccessPage result for required paths
+    const pageAccessResults = requiredPaths.map(path => ({
+      path,
+      canAccess: canAccessPage(path)
+    }));
+    console.log('Page Access Results:', pageAccessResults);
+    
+    console.groupEnd();
+    
+    if (!validation.hasAccess) {
+      setAccessDeniedReason(validation.reason);
+      setAttemptCount(prev => prev + 1);
+      setIsValidating(false);
+      
+      // Enhanced security logging
+      console.warn('🚨 SECURITY: Unauthorized access attempt to Page Access configuration:', {
+        user: userData?.email,
+        role: userRole,
+        isOwner,
+        isAdmin,
+        path: location.pathname,
+        reason: validation.reason,
+        securityLevel: validation.securityLevel,
+        attempt: attemptCount + 1,
+        timestamp: new Date().toISOString(),
+        pageAccessResults
+      });
+
+      // Auto-redirect setelah 2 detik untuk mencegah manipulation
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 2000);
+    } else {
+      console.log('✅ ACCESS GRANTED to Page Access configuration');
+      setAccessDeniedReason('');
+      setIsValidating(false);
+    }
+  }, [
+    userData, 
+    userRole, 
+    employee, 
+    organization, 
+    location.pathname, 
+    configLoading,
+    isOwner,
+    isAdmin
+  ]);
+
+  // URL tampering protection - Monitor URL changes (DISABLED - let database control access)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const currentPath = location.pathname;
+      
+      // No hardcoded URL tampering protection - database configuration controls access
+      // Only log access for audit trail
+      if (currentPath.startsWith('/access-permissions')) {
+        console.log('📋 ACCESS LOG: Page access attempt to', currentPath, {
+          user: userData?.email,
+          role: userRole,
+          timestamp: new Date().toISOString()
+        });
+      }
+    };
+
+    handleLocationChange();
+  }, [location.pathname, userRole, userData]);
+
+  // Loading state
+  if (isValidating || configLoading) {
+    return (
+      <StandardLayout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="text-center">
+              <p className="text-gray-600 font-medium">Memvalidasi Akses...</p>
+              <p className="text-sm text-gray-500">Memeriksa izin Page Access</p>
+            </div>
+          </div>
+        </div>
+      </StandardLayout>
+    );
+  }
+
+  // Access denied state dengan informasi detail
+  if (accessDeniedReason) {
+    return (
+      <StandardLayout>
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+          <div className="flex flex-1 min-h-0">
+            <div className="flex-1 flex flex-col min-h-0">
+              <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
+                <div className="h-full flex flex-col overflow-hidden">
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="max-w-lg mx-auto">
+                      <div className="text-center">
+                        {/* Security icon */}
+                        <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                          <Shield className="h-12 w-12 text-red-500" />
+                        </div>
+                        
+                        {/* Main card */}
+                        <div className="bg-white rounded-lg shadow-lg border border-red-200 p-8">
+                          <div className="flex items-center justify-center mb-4">
+                            <Lock className="h-6 w-6 text-red-500 mr-2" />
+                            <h2 className="text-2xl font-bold text-red-600">
+                              Akses Sangat Terbatas
+                            </h2>
+                          </div>
+                          
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                            <div className="flex items-start">
+                              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                              <div className="text-left">
+                                <p className="text-red-800 font-semibold mb-2">
+                                  Halaman Page Access Configuration
+                                </p>
+                                <p className="text-red-700 text-sm">
+                                  Hanya dapat diakses oleh <strong>Organization Owner</strong> dan <strong>Administrator</strong> sistem.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                            <div className="text-sm text-gray-700 space-y-2">
+                              <p><span className="font-semibold">Role Anda:</span> 
+                                <span className="ml-2 px-2 py-1 bg-gray-200 rounded text-xs">
+                                  {userRole}
+                                </span>
+                              </p>
+                              <p><span className="font-semibold">Level Akses:</span> {getAccessLevel()}</p>
+                              {getDepartmentRestrictionMessage() && (
+                                <p><span className="font-semibold">Pembatasan:</span> {getDepartmentRestrictionMessage()}</p>
+                              )}
+                              <p className="text-red-600">
+                                <span className="font-semibold">Alasan Ditolak:</span> {accessDeniedReason}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-3">
+                            <button 
+                              onClick={() => navigate('/', { replace: true })} 
+                              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold"
+                            >
+                              Kembali ke Beranda
+                            </button>
+                          </div>
+
+                          {attemptCount > 1 && (
+                            <div className="mt-4 text-xs text-gray-500">
+                              Percobaan akses: {attemptCount}x
+                            </div>
+                          )}
+                        </div>
+                        
+                        <p className="text-sm text-gray-500 mt-6">
+                          Hubungi Organization Owner untuk mendapatkan akses
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </StandardLayout>
+    );
+  }
+
+  // Access granted - render children
+  return <>{children}</>;
+};

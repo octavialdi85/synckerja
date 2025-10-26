@@ -1,0 +1,209 @@
+/* Custom Date Picker Styles */
+
+.custom-date-picker {
+  font-family: inherit;
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Calendar grid */
+.custom-date-picker .grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+}
+
+/* Day buttons */
+.custom-date-picker button {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: #000000;
+}
+
+.custom-date-picker button:hover {
+  transform: scale(1.05);
+  background-color: #f1f5f9;
+}
+
+.custom-date-picker button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Selected day */
+.custom-date-picker button[data-selected="true"] {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  color: white;
+  font-weight: 600;
+}
+
+.custom-date-picker button[data-selected="true"]:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+  transform: scale(1.05);
+}
+
+/* Today */
+.custom-date-picker button[data-today="true"] {
+  position: relative;
+  font-weight: 700;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #3b82f6;
+}
+
+.custom-date-picker button[data-today="true"]:hover {
+  background-color: #bfdbfe;
+  border-color: #2563eb;
+}
+
+/* Outside month days */
+.custom-date-picker button[data-outside="true"] {
+  opacity: 0.3;
+  color: #cbd5e1;
+}
+
+.custom-date-picker button[data-outside="true"]:hover {
+  opacity: 0.5;
+  background-color: #f8fafc;
+}
+
+/* Disabled days */
+.custom-date-picker button:disabled {
+  cursor: not-allowed;
+  opacity: 0.2;
+  color: #e2e8f0;
+}
+
+.custom-date-picker button:disabled:hover {
+  background-color: transparent;
+  transform: none;
+}
+
+/* Weekday headers */
+.custom-date-picker .weekday-header {
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: #6b7280;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+}
+
+/* Navigation buttons */
+.custom-date-picker .nav-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 10;
+}
+
+.custom-date-picker .nav-button:hover {
+  transform: scale(1.05);
+  background-color: #f8fafc;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Month label */
+.custom-date-picker .month-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  margin: 0 16px;
+  flex: 0 0 auto;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-date-picker {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .custom-date-picker {
+    max-width: 280px;
+    padding: 12px;
+  }
+  
+  .custom-date-picker button {
+    font-size: 12px;
+    width: 28px;
+    height: 28px;
+  }
+  
+  .custom-date-picker .weekday-header {
+    font-size: 10px;
+    width: 28px;
+    height: 20px;
+  }
+  
+  .custom-date-picker .month-label {
+    font-size: 14px;
+  }
+}
+
+/* Dark mode support - keeping white background and gray text */
+@media (prefers-color-scheme: dark) {
+  .custom-date-picker {
+    background: #ffffff;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    border-color: #e5e7eb;
+  }
+  
+  .custom-date-picker .weekday-header {
+    color: #6b7280;
+  }
+  
+  .custom-date-picker .month-label {
+    color: #374151;
+  }
+  
+  .custom-date-picker button {
+    color: #374151;
+  }
+  
+  .custom-date-picker button:hover {
+    background-color: #f1f5f9;
+  }
+  
+  .custom-date-picker button[data-today="true"] {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #3b82f6;
+  }
+}

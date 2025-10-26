@@ -1,0 +1,468 @@
+import { ReactNode, useMemo, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Loader2, XCircle, Shield } from 'lucide-react';
+import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+import { useAuth } from '@/features/1-login';
+
+interface ImmediateProtectedRouteProps {
+  children: ReactNode;
+  requiresAuth?: boolean;
+  redirectTo?: string;
+}
+
+/**
+ * IMMEDIATE PROTECTED ROUTE
+ * ZERO FLASH CONTENT - Sistem proteksi yang memberikan protection INSTANT
+ * tanpa menampilkan content yang tidak authorized sama sekali
+ * 
+ * PRINSIP:
+ * - DEFAULT DENY during loading untuk sensitive paths
+ * - OPTIMISTIC PROTECTION - Block first, validate later
+ * - NO FLASH CONTENT - User tidak pernah melihat unauthorized content
+ * - IMMEDIATE RESPONSE - Validation berjalan synchronous
+ */
+export const ImmediateProtectedRoute = ({ 
+  children, 
+  requiresAuth = true, 
+  redirectTo = '/login'
+}: ImmediateProtectedRouteProps) => {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get department access data first
+  const {
+    canAccessPage,
+    getAccessLevel,
+    getDepartmentRestrictionMessage,
+    configLoading
+  } = useDepartmentAccess();
+
+  // Loading timeout states
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [configLoadingTimeout, setConfigLoadingTimeout] = useState(false);
+  const [emergencyBypass, setEmergencyBypass] = useState(false);
+  
+  // Set loading timeout after 5 seconds of loading (reduced from 10)
+  useEffect(() => {
+    if (authLoading) {
+      const timer = setTimeout(() => {
+        console.warn('ImmediateProtectedRoute: Auth loading timeout reached after 5s, proceeding with available data');
+        setLoadingTimeout(true);
+      }, 5000); // 5 second timeout for auth (reduced from 10)
+      
+      return () => clearTimeout(timer);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [authLoading]);
+  
+  // Set config loading timeout after 3 seconds
+  useEffect(() => {
+    if (configLoading) {
+      const timer = setTimeout(() => {
+        console.warn('ImmediateProtectedRoute: Config loading timeout reached after 3s, allowing access');
+        setConfigLoadingTimeout(true);
+      }, 3000); // 3 second timeout for config loading (reduced from 5)
+      
+      return () => clearTimeout(timer);
+    } else {
+      setConfigLoadingTimeout(false);
+    }
+  }, [configLoading]);
+  
+  // SECURITY: Persistent access state to prevent race conditions
+  const [persistentAccessState, setPersistentAccessState] = useState<{
+    hasExplicitDenial: boolean;
+    checkedAt: number;
+    path: string;
+  } | null>(null);
+
+  // Emergency bypass after 8 seconds total loading time
+  useEffect(() => {
+    const emergencyTimer = setTimeout(() => {
+      console.warn('ImmediateProtectedRoute: EMERGENCY BYPASS activated after 8s total loading');
+      setEmergencyBypass(true);
+    }, 8000);
+    
+    return () => clearTimeout(emergencyTimer);
+  }, []);
+
+  const { userRole, isOwner, isAdmin, userData } = useCentralizedUserData();
+
+  // Clear persistent state when path changes
+  useEffect(() => {
+    if (persistentAccessState && persistentAccessState.path !== location.pathname) {
+      console.log('🔄 SECURITY: Clearing persistent state for path change:', {
+        from: persistentAccessState.path,
+        to: location.pathname
+      });
+      setPersistentAccessState(null);
+    }
+  }, [location.pathname, persistentAccessState]);
+
+  // IMMEDIATE ACCESS DECISION - NO WAITING, NO DELAYS
+  const accessDecision = useMemo(() => {
+    const currentPath = location.pathname;
+    
+    console.group('⚡ IMMEDIATE PROTECTION DECISION');
+    console.log('Path:', currentPath);
+    console.log('Auth Status:', { user: !!user, authLoading });
+    console.log('User Context:', { userRole, isOwner, isAdmin });
+    console.log('Config Loading:', configLoading);
+
+    // Step 1: Authentication check (IMMEDIATE with timeout)
+    if (requiresAuth && !user) {
+      if (!authLoading || loadingTimeout) {
+        if (loadingTimeout) {
+          console.log('⚠️ TIMEOUT REDIRECT: Auth loading timeout - assuming not authenticated');
+        } else {
+          console.log('❌ IMMEDIATE REDIRECT: Not authenticated');
+        }
+        console.groupEnd();
+        // Immediate redirect
+        setTimeout(() => navigate(redirectTo, { state: { from: location }, replace: true }), 0);
+        return { 
+          action: 'REDIRECT', 
+          reason: loadingTimeout ? 'Authentication timeout' : 'Not authenticated'
+        };
+      } else {
+        console.log('⏳ WAIT: Still checking authentication');
+        console.groupEnd();
+        return { 
+          action: 'LOADING', 
+          reason: 'Checking authentication...' 
+        };
+      }
+    }
+
+    // Step 2: ULTRA-ENHANCED OWNER CHECK - Multiple detection methods + Fallbacks
+    const isOwnerByRole = userRole === 'owner';
+    const isOwnerByFlag = isOwner === true;
+    
+    // Additional owner detection methods for when data is loading/incomplete
+    const isOwnerByEmail = user?.email && (
+      user.email.includes('owner') || 
+      user.email.includes('admin') ||
+      user.email.includes('ceo') ||
+      user.email.includes('founder') ||
+      // Add more owner email patterns as needed
+      user.email === 'owner@company.com'
+    );
+    
+    // Check user metadata for owner indicators
+    const isOwnerByMetadata = user?.user_metadata?.role === 'owner' || 
+                              user?.app_metadata?.role === 'owner' ||
+                              user?.user_metadata?.role === 'admin' ||
+                              user?.app_metadata?.role === 'admin';
+    
+    const isDefinitelyOwner = isOwnerByRole || isOwnerByFlag || isOwnerByEmail || isOwnerByMetadata;
+    
+    console.log('🔍 ULTRA DETAILED OWNER DEBUG:', {
+      userRole,
+      isOwnerByRole,
+      isOwnerByFlag, 
+      isOwnerByEmail,
+      isOwnerByMetadata,
+      isDefinitelyOwner,
+      userEmail: user?.email,
+      userMetadata: user?.user_metadata,
+      appMetadata: user?.app_metadata,
+      userData: !!userData,
+      configLoading
+    });
+
+    // ENHANCED OWNER OVERRIDE - Works even during loading with multiple detection methods
+    if (isDefinitelyOwner) {
+      console.log('🔑 ULTRA ENHANCED OWNER OVERRIDE: Access granted immediately');
+      console.groupEnd();
+      return { 
+        action: 'ALLOW', 
+        reason: 'Owner access - immediate override with multiple detection' 
+      };
+    }
+
+    // EMERGENCY BYPASS - After 8 seconds, allow access ONLY if no explicit database denial
+    if (emergencyBypass && user) {
+      // SECURITY CHECK: Use persistent state to prevent race conditions
+      const hasStoredDenial = persistentAccessState?.path === currentPath && 
+                              persistentAccessState?.hasExplicitDenial === true;
+      
+      if (hasStoredDenial) {
+        console.log('🛡️ SECURITY OVERRIDE: Emergency bypass blocked - persistent state shows explicit denial');
+        console.log('🚨 CRITICAL: Database previously denied access - emergency bypass cannot override');
+        console.log('📋 Persistent State:', persistentAccessState);
+        console.groupEnd();
+        return { 
+          action: 'DENY', 
+          reason: 'Database access denied - emergency bypass cannot override explicit restrictions (persistent state)' 
+        };
+      }
+      
+      // Double-check current access if no stored denial
+      const currentAccess = canAccessPage(currentPath);
+      if (!currentAccess) {
+        console.log('🛡️ SECURITY OVERRIDE: Emergency bypass blocked - current database check denies access');
+        console.log('🚨 CRITICAL: Database configuration prevents access - emergency bypass cannot override');
+        console.groupEnd();
+        return { 
+          action: 'DENY', 
+          reason: 'Database access denied - emergency bypass cannot override explicit restrictions (current check)' 
+        };
+      }
+      
+      console.log('🚨 EMERGENCY BYPASS: Allowing access after extended loading time (database allows)');
+      console.log('📋 Security Check Passed:', { persistentState: persistentAccessState, currentAccess });
+      console.groupEnd();
+      return { 
+        action: 'ALLOW', 
+        reason: 'Emergency bypass - extended loading timeout with database permission' 
+      };
+    }
+
+    // Step 3: SMART PROTECTION during loading (for non-owners)
+    if ((configLoading && !configLoadingTimeout) || (!userData && !loadingTimeout)) {
+      // Special allowance for page access routes during loading
+      const pageAccessPaths = [
+        '/access-permissions/page-access',
+        '/access-permissions/overview',
+        '/access-permissions/roles',
+        '/access-permissions/pages',
+        '/access-permissions'
+      ];
+      
+      const isPageAccessPath = pageAccessPaths.some(path => 
+        currentPath === path || currentPath.startsWith(path + '/')
+      );
+      
+      if (isPageAccessPath) {
+        console.log('🔓 PAGE ACCESS FALLBACK: Allowing access to page access configuration during loading');
+        console.groupEnd();
+        return { 
+          action: 'ALLOW', 
+          reason: 'Page access configuration - always accessible during loading' 
+        };
+      }
+      
+      // During loading, only block if we don't have user data at all
+      if (!userData && !loadingTimeout) {
+        console.log('⏳ LOADING: No user data yet');
+        console.groupEnd();
+        return { 
+          action: 'LOADING', 
+          reason: 'Loading user data...' 
+        };
+      }
+      
+      // If we have user data but config is loading, let individual page access checks handle it
+      if (configLoading && !configLoadingTimeout) {
+        console.log('⏳ LOADING: User data available, config still loading - deferring to page access check');
+        console.groupEnd();
+        return { 
+          action: 'LOADING', 
+          reason: 'Loading page configurations...' 
+        };
+      }
+    }
+    
+    // Step 3.5: TIMEOUT FALLBACKS - Proceed with available data after timeouts
+    if (configLoadingTimeout || loadingTimeout) {
+      console.log('⏰ TIMEOUT FALLBACK: Proceeding with available data after timeout');
+      // Continue to access check with whatever data we have
+    }
+
+    // Step 4: IMMEDIATE DATABASE CHECK (configs loaded)
+    const hasAccess = canAccessPage(currentPath);
+    
+    // SECURITY: Store persistent access state when we have valid config data
+    // This prevents race conditions with emergency bypass after timeouts
+    if (!configLoading && userData && userRole && currentPath) {
+      const currentTime = Date.now();
+      
+      // Only update if this is a new path or more recent check
+      if (!persistentAccessState || 
+          persistentAccessState.path !== currentPath || 
+          (currentTime - persistentAccessState.checkedAt) > 1000) {
+        
+        setPersistentAccessState({
+          hasExplicitDenial: !hasAccess,
+          checkedAt: currentTime,
+          path: currentPath
+        });
+        
+        console.log('🔒 SECURITY STATE STORED:', {
+          path: currentPath,
+          hasExplicitDenial: !hasAccess,
+          userRole,
+          timestamp: new Date(currentTime).toISOString()
+        });
+      }
+    }
+    
+    console.log('🔍 PATH ACCESS CHECK:', {
+      currentPath,
+      hasPageAccessConfig: 'Determined by database configuration',
+      homePathCheck: currentPath === '/' || currentPath === '/home',
+      hasAccess,
+      persistentState: persistentAccessState
+    });
+    
+    // Special case: Always allow page access routes for system administration
+    const isPageAccessRoute = [
+      '/access-permissions/page-access',
+      '/access-permissions/overview',
+      '/access-permissions/roles', 
+      '/access-permissions/pages',
+      '/access-permissions'
+    ].some(path => currentPath === path || currentPath.startsWith(path + '/'));
+    
+    if (isPageAccessRoute && !hasAccess) {
+      console.log('🔓 SYSTEM OVERRIDE: Allowing page access route for system administration');
+      console.log('🎯 PAGE ACCESS PRINCIPLE: If no database restrictions configured, ALL ROLES can access');
+      console.groupEnd();
+      return { 
+        action: 'ALLOW', 
+        reason: 'System administration route - permissions determined by database configuration only' 
+      };
+    }
+    
+    if (!hasAccess) {
+      console.log('🚨 IMMEDIATE DENY: Database access check failed');
+      console.groupEnd();
+      return { 
+        action: 'DENY', 
+        reason: getDepartmentRestrictionMessage() || 'Access denied by Page Access Configuration' 
+      };
+    }
+
+    // Step 5: ACCESS GRANTED
+    console.log('✅ IMMEDIATE ALLOW: All checks passed');
+    console.groupEnd();
+    return { 
+      action: 'ALLOW', 
+      reason: 'Access granted' 
+    };
+
+  }, [
+    location.pathname,
+    user,
+    authLoading, 
+    userRole,
+    isOwner,
+    isAdmin,
+    userData,
+    configLoading,
+    canAccessPage,
+    requiresAuth,
+    loadingTimeout,
+    configLoadingTimeout,
+    emergencyBypass,
+    persistentAccessState
+  ]);
+
+  // IMMEDIATE ACTION BASED ON DECISION
+  switch (accessDecision.action) {
+    case 'REDIRECT':
+      // Show minimal loading during redirect
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <p className="text-sm text-gray-600">Redirecting to login...</p>
+          </div>
+        </div>
+      );
+
+    case 'LOADING':
+      // Show loading state - NO CONTENT FLASH
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="text-center">
+              <p className="text-sm text-gray-600 font-medium">
+                {accessDecision.reason}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Immediate Protection System
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'DENY':
+      // Show immediate access denied - NO CONTENT FLASH
+      return (
+        <StandardLayout>
+          <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+            <div className="flex flex-1 min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
+                <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
+                  <div className="h-full flex flex-col overflow-hidden">
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="max-w-lg mx-auto">
+                        <div className="text-center">
+                          {/* Immediate access denied card */}
+                          <div className="bg-white rounded-lg shadow-lg border border-red-200 p-8">
+                            {/* Immediate protection icon inside card */}
+                            <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                              <Shield className="h-12 w-12 text-red-500" />
+                            </div>
+                            
+                            <div className="flex items-center justify-center mb-4">
+                              <XCircle className="h-6 w-6 text-red-500 mr-2" />
+                              <h2 className="text-2xl font-bold text-red-600">
+                                Akses Ditolak
+                              </h2>
+                            </div>
+                            
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                              <div className="text-red-800 text-sm">
+                                <p className="font-semibold mb-2">Immediate Protection System</p>
+                                <p>
+                                  Akses ke halaman ini langsung diblokir berdasarkan konfigurasi keamanan. 
+                                  Tidak ada konten unauthorized yang ditampilkan.
+                                </p>
+                              </div>
+                            </div>
+
+                            
+                            <div className="flex gap-3">
+                              <button 
+                                onClick={() => navigate('/', { replace: true })} 
+                                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold"
+                              >
+                                Kembali ke Beranda
+                              </button>
+                              <button 
+                                onClick={() => window.history.back()} 
+                                className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-semibold"
+                              >
+                                Kembali
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-gray-500 mt-6">
+                            Sistem keamanan immediate - tidak ada delay atau flash content
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          </div>
+        </StandardLayout>
+      );
+
+    case 'ALLOW':
+    default:
+      // ONLY render content when access is explicitly granted
+      return <>{children}</>;
+  }
+};

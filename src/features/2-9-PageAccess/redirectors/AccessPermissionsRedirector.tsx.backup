@@ -1,0 +1,91 @@
+import { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useEnhancedRoleValidation } from '../validators/RoleValidator';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+import { Shield, ArrowLeft } from 'lucide-react';
+
+/**
+ * ACCESS PERMISSIONS REDIRECTOR
+ * Handles safe redirection for all /access-permissions/* paths
+ * Ensures unauthorized users are properly redirected without exposing content
+ */
+export const AccessPermissionsRedirector = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  const { isAuthorizedForPageAccess } = useEnhancedRoleValidation();
+
+  useEffect(() => {
+    const currentPath = location.pathname;
+    
+    // Log access attempt
+    console.log('🔍 Access Permissions Redirector:', {
+      path: currentPath,
+      userRole,
+      isOwner,
+      isAdmin,
+      timestamp: new Date().toISOString()
+    });
+
+    // Check if user is authorized for ANY access-permissions path
+    if (!isAuthorizedForPageAccess()) {
+      // Security log
+      console.warn('🚨 REDIRECTOR: Unauthorized access attempt blocked', {
+        user: userRole,
+        path: currentPath,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Immediate redirect to home
+      navigate('/', { replace: true });
+      return;
+    }
+
+    // Authorized users: redirect to first accessible tab
+    // Default redirect logic for authorized users
+    if (currentPath === '/access-permissions') {
+      navigate('/access-permissions/overview', { replace: true });
+    } else if (currentPath.startsWith('/access-permissions/') && currentPath !== '/access-permissions/overview') {
+      // Allow specific paths for authorized users
+      // AccessPermissionsConfig component will handle the tab logic
+      return;
+    }
+
+  }, [location.pathname, userRole, isOwner, isAdmin, isAuthorizedForPageAccess]);
+
+  // Show temporary loading while redirecting
+  return (
+    <StandardLayout>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center">
+          <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <Shield className="h-8 w-8 text-blue-600" />
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+              Memvalidasi Akses
+            </h2>
+            
+            <div className="flex items-center justify-center mb-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+            
+            <p className="text-gray-600 text-sm mb-4">
+              Memeriksa izin akses halaman...
+            </p>
+            
+            <button 
+              onClick={() => navigate('/', { replace: true })} 
+              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Kembali ke Beranda
+            </button>
+          </div>
+        </div>
+      </div>
+    </StandardLayout>
+  );
+};

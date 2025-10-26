@@ -1,0 +1,156 @@
+import { memo, useMemo } from 'react';
+import { Card, CardContent } from '@/features/ui/card';
+import { CreditCard, Users, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
+import type { SubscriptionStatus } from '@/features/10-management/hooks/useOptimizedSubscription';
+
+interface MetricCardsProps {
+  subscriptionStatus: SubscriptionStatus | null;
+}
+
+export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
+  // Optimized quick stats computation  
+  const quickStats = useMemo(() => {
+    if (!subscriptionStatus) return [];
+    
+    // Enhanced plan name display
+    const planName = subscriptionStatus?.plan_name || 'No Active Plan';
+    const isActive = subscriptionStatus?.is_active || false;
+    
+    // Enhanced member count with better data mapping  
+    const currentEmployees = subscriptionStatus?.current_employees || 
+                            subscriptionStatus?.employee_count || 0;
+    const memberLimit = subscriptionStatus?.member_count || 
+                       subscriptionStatus?.member_limit || 0;
+    
+    // Enhanced days calculation with multiple fallbacks
+    const daysLeft = Math.max(0, 
+      subscriptionStatus?.days_until_expiry || 
+      subscriptionStatus?.days_remaining || 0
+    );
+    
+    // Enhanced status with more detailed information
+    const isTrial = subscriptionStatus?.is_trial || false;
+    const status = isTrial ? 'Trial' : 
+                  subscriptionStatus?.status || 'Unknown';
+    
+    return [{
+      title: 'Current Plan',
+      value: planName,
+      icon: CreditCard,
+      color: isActive ? 'text-emerald-600' : 'text-red-500'
+    }, {
+      title: 'Active Members',
+      value: `${currentEmployees} / ${memberLimit}`,
+      icon: Users,
+      color: (subscriptionStatus?.over_limit || subscriptionStatus?.is_over_limit) ? 
+             'text-red-500' : 'text-emerald-600'
+    }, {
+      title: isTrial ? 'Trial Days Left' : 'Days Remaining',
+      value: daysLeft,
+      icon: Calendar,
+      color: daysLeft <= 3 ? 'text-red-500' : 
+             daysLeft <= 7 ? 'text-yellow-600' : 'text-emerald-600'
+    }, {
+      title: 'Subscription Status',
+      value: status,
+      icon: isActive ? CheckCircle : AlertCircle,
+      color: isActive ? 'text-emerald-600' : 'text-red-500'
+    }];
+  }, [subscriptionStatus]);
+
+  // ENHANCED NULL CHECK with Fallback Data
+  if (!subscriptionStatus || quickStats.length === 0) {
+    console.log('⚠️ MetricCards - No subscription status, showing loading cards');
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-600 mb-1">Current Plan</p>
+                <p className="text-2xl font-bold text-gray-400">Loading...</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-600 mb-1">Active Members</p>
+                <p className="text-2xl font-bold text-gray-400">- / -</p>
+              </div>
+              <Users className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-600 mb-1">Days Remaining</p>
+                <p className="text-2xl font-bold text-gray-400">-</p>
+              </div>
+              <Calendar className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-600 mb-1">Status</p>
+                <p className="text-2xl font-bold text-gray-400">Loading</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render real subscription data
+  console.log('✅ MetricCards - Rendering subscription data from Supabase');
+  
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+      {quickStats.map((stat, index) => (
+        <Card key={index} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-600 mb-1">{stat.title}</p>
+                <p className={`text-2xl font-bold ${stat.color} truncate`} title={String(stat.value)}>
+                  {stat.value}
+                </p>
+              </div>
+              <stat.icon className={`h-8 w-8 ${stat.color} flex-shrink-0 ml-2`} />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison for better performance
+  // Only re-render if plan_name or key metrics change
+  if (!prevProps.subscriptionStatus && !nextProps.subscriptionStatus) return true;
+  if (!prevProps.subscriptionStatus || !nextProps.subscriptionStatus) return false;
+  
+  return (
+    prevProps.subscriptionStatus.plan_name === nextProps.subscriptionStatus.plan_name &&
+    prevProps.subscriptionStatus.current_employees === nextProps.subscriptionStatus.current_employees &&
+    prevProps.subscriptionStatus.member_count === nextProps.subscriptionStatus.member_count &&
+    prevProps.subscriptionStatus.days_until_expiry === nextProps.subscriptionStatus.days_until_expiry &&
+    prevProps.subscriptionStatus.is_active === nextProps.subscriptionStatus.is_active
+  );
+});
+
+MetricCards.displayName = 'MetricCards';
+

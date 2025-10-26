@@ -1,0 +1,24 @@
+/* Seamless scroll styles for UpgradeConfirmationModal */
+.seamless-scroll {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  scroll-behavior: smooth;
+}
+
+.seamless-scroll::-webkit-scrollbar {
+  display: none !important; /* WebKit browsers */
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.seamless-scroll::-webkit-scrollbar-corner {
+  display: none !important;
+}

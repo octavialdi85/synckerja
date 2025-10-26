@@ -1,0 +1,514 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
+import { Button } from '@/features/ui/button';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit, Target } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import { format } from 'date-fns';
+import { ContentManager } from '@/types/social-media';
+import { useDigitalMarketingEmployees } from '../../hook/useDigitalMarketingEmployees';
+import { usePICFilter } from '../../PICFilterContext';
+import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
+import { useEmployeeTargets } from '../../hook/useEmployeeTargets';
+import { ProgressBar } from '@/features/share/ProgressBar';
+import EditTargetDialog from '../../modal/EditTargetDialog';
+
+interface ContentPlannerTabProps {
+  contentManagers: ContentManager[];
+  handleEditTarget: (manager: ContentManager) => void;
+}
+
+const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
+  contentManagers,
+  handleEditTarget
+}) => {
+  const [dailyTargetDate, setDailyTargetDate] = useState<Date>(new Date());
+  const [monthlyTargetDate, setMonthlyTargetDate] = useState<Date>(new Date());
+  const [currentPICPage, setCurrentPICPage] = useState(0);
+  const [isDailyDateEditing, setIsDailyDateEditing] = useState(false);
+  const [isMonthlyDateEditing, setIsMonthlyDateEditing] = useState(false);
+  const [isEditTargetDialogOpen, setIsEditTargetDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
+  
+  const dailyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const monthlyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get Digital Marketing employees based on filter
+  const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
+  const { selectedJobPositionId } = usePICFilter();
+  const { contentPlans } = useOptimizedSocialMedia();
+  const { targets } = useEmployeeTargets();
+
+  // Filter employees based on selected job position
+  const filteredEmployees = selectedJobPositionId 
+    ? digitalEmployees.filter(emp => emp.job_position_id === selectedJobPositionId)
+    : digitalEmployees;
+
+  // Auto-revert functionality for daily date
+  useEffect(() => {
+    const today = new Date();
+    const isDifferentDay = dailyTargetDate.getDate() !== today.getDate() || 
+                          dailyTargetDate.getMonth() !== today.getMonth() ||
+                          dailyTargetDate.getFullYear() !== today.getFullYear();
+    
+    if (isDifferentDay && dailyTimeoutRef.current) {
+      clearTimeout(dailyTimeoutRef.current);
+    }
+    
+    if (isDifferentDay) {
+      dailyTimeoutRef.current = setTimeout(() => {
+        setDailyTargetDate(new Date());
+      }, 5000);
+    }
+    
+    return () => {
+      if (dailyTimeoutRef.current) {
+        clearTimeout(dailyTimeoutRef.current);
+      }
+    };
+  }, [dailyTargetDate]);
+
+  // Auto-revert functionality for monthly date
+  useEffect(() => {
+    const today = new Date();
+    const isDifferentMonth = monthlyTargetDate.getMonth() !== today.getMonth() ||
+                            monthlyTargetDate.getFullYear() !== today.getFullYear();
+    
+    if (isDifferentMonth && monthlyTimeoutRef.current) {
+      clearTimeout(monthlyTimeoutRef.current);
+    }
+    
+    if (isDifferentMonth) {
+      monthlyTimeoutRef.current = setTimeout(() => {
+        setMonthlyTargetDate(new Date());
+      }, 5000);
+    }
+    
+    return () => {
+      if (monthlyTimeoutRef.current) {
+        clearTimeout(monthlyTimeoutRef.current);
+      }
+    };
+  }, [monthlyTargetDate]);
+
+  // Calculate daily approved count for specific PIC and exact date
+  const calculateDailyApproved = (picId: string, targetDate: Date) => {
+    const targetDateString = format(targetDate, 'yyyy-MM-dd');
+    
+    const filteredPlans = contentPlans.filter(plan => {
+      const isCorrectPIC = plan.pic_id === picId;
+      const isApproved = plan.approved === true;
+      const hasPostDate = plan.post_date !== null && plan.post_date !== undefined;
+      const dateMatches = plan.post_date === targetDateString;
+      
+      return isCorrectPIC && isApproved && hasPostDate && dateMatches;
+    });
+
+    return filteredPlans.length;
+  };
+
+  // Calculate monthly approved count for specific PIC and month/year
+  const calculateMonthlyApproved = (picId: string, targetDate: Date) => {
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    
+    const filteredPlans = contentPlans.filter(plan => {
+      if (!plan.pic_id || plan.pic_id !== picId || !plan.approved || !plan.post_date) {
+        return false;
+      }
+      
+      const planDate = new Date(plan.post_date + 'T00:00:00');
+      const planYear = planDate.getFullYear();
+      const planMonth = planDate.getMonth();
+      
+      return planYear === targetYear && planMonth === targetMonth && plan.approved === true;
+    });
+
+    return filteredPlans.length;
+  };
+
+  // Calculate on time rate for content planning
+  const calculateOnTimeRate = (picId: string, targetDate: Date) => {
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    
+    const monthlyPlans = contentPlans.filter(plan => {
+      if (!plan.pic_id || plan.pic_id !== picId || !plan.approved || !plan.post_date) {
+        return false;
+      }
+      
+      const planDate = new Date(plan.post_date + 'T00:00:00');
+      return planDate.getFullYear() === targetYear && 
+             planDate.getMonth() === targetMonth && 
+             plan.approved === true;
+    });
+
+    if (monthlyPlans.length === 0) return 0;
+
+    const onTimePlans = monthlyPlans.filter(plan => {
+      if (plan.completion_date && plan.post_date) {
+        const completionDate = new Date(plan.completion_date);
+        const postDate = new Date(plan.post_date);
+        return completionDate <= postDate;
+      }
+      return true;
+    });
+
+    return Math.round((onTimePlans.length / monthlyPlans.length) * 100);
+  };
+
+  // Calculate effective rate based on content produced and revision counts
+  const calculateEffectiveRate = (picId: string, targetDate: Date) => {
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    
+    // Get all approved content plans for this PIC in the target month
+    const monthlyPlans = contentPlans.filter(plan => {
+      if (!plan.pic_id || plan.pic_id !== picId || !plan.approved || !plan.post_date) {
+        return false;
+      }
+      
+      const planDate = new Date(plan.post_date + 'T00:00:00');
+      return planDate.getFullYear() === targetYear && 
+             planDate.getMonth() === targetMonth && 
+             plan.approved === true;
+    });
+
+    if (monthlyPlans.length === 0) return 100;
+
+    // Calculate total revisions for the month
+    const totalRevisions = monthlyPlans.reduce((sum, plan) => {
+      return sum + (plan.revision_count || 0);
+    }, 0);
+
+    // Calculate effective rate: higher revision count = lower effective rate
+    // Formula: 100 - (average revisions per content * 10)
+    // This means: 0 revisions = 100%, 1 revision = 90%, 2 revisions = 80%, etc.
+    const averageRevisionsPerContent = totalRevisions / monthlyPlans.length;
+    const effectiveRate = Math.max(0, Math.round(100 - (averageRevisionsPerContent * 10)));
+    
+    console.log('📊 Effective Rate Calculation (Content Planning):', {
+      picId,
+      totalContent: monthlyPlans.length,
+      totalRevisions,
+      averageRevisionsPerContent,
+      effectiveRate
+    });
+
+    return effectiveRate;
+  };
+
+  // Get target for specific employee
+  const getEmployeeTarget = (employeeId: string) => {
+    return targets.find(target => 
+      target.employee_id === employeeId && 
+      target.target_type === 'content_planning' &&
+      target.status === 'active'
+    );
+  };
+
+  // Get actual PIC names from content plans with calculated metrics
+  const getActualPICData = () => {
+    const picData = [];
+    
+    // Get unique PICs from content plans
+    const uniquePICs = new Set();
+    contentPlans.forEach(plan => {
+      if (plan.pic_id && !uniquePICs.has(plan.pic_id)) {
+        uniquePICs.add(plan.pic_id);
+        
+        const employee = digitalEmployees.find(emp => emp.id === plan.pic_id);
+        if (employee) {
+          const dailyApprovedCount = calculateDailyApproved(plan.pic_id, dailyTargetDate);
+          const monthlyApprovedCount = calculateMonthlyApproved(plan.pic_id, monthlyTargetDate);
+          const onTimeRate = calculateOnTimeRate(plan.pic_id, monthlyTargetDate);
+          const effectiveRate = calculateEffectiveRate(plan.pic_id, monthlyTargetDate);
+          const employeeTarget = getEmployeeTarget(employee.id);
+          
+          const currentValue = monthlyApprovedCount; // Use monthly approved count as current value
+          const targetValue = employeeTarget?.target_value || 0;
+          const progress = targetValue > 0 ? Math.min(Math.round((currentValue / targetValue) * 100), 100) : 0;
+          
+          // Calculate score as average of Progress, On Time Rate, and Effective Rate
+          const score = Math.round((progress + onTimeRate + effectiveRate) / 3);
+          
+          picData.push({
+            id: employee.id,
+            name: employee.full_name,
+            pic: employee.full_name.split(' ').map(n => n[0]).join('').toUpperCase(),
+            dailyTarget: dailyApprovedCount,
+            monthlyTarget: monthlyApprovedCount,
+            targetAdjusted: targetValue,
+            currentValue: currentValue,
+            progress: progress,
+            onTimeRate: onTimeRate,
+            effectiveRate: effectiveRate,
+            score: score,
+            hasTarget: !!employeeTarget,
+            targetStatus: employeeTarget?.status || 'none'
+          });
+        }
+      }
+    });
+    
+    return picData;
+  };
+
+  const displayData = getActualPICData().slice(currentPICPage * 2, (currentPICPage + 1) * 2);
+  
+  // Ensure exactly 2 rows
+  while (displayData.length < 2) {
+    displayData.push({
+      id: '',
+      name: '',
+      pic: '',
+      dailyTarget: 0,
+      monthlyTarget: 0,
+      targetAdjusted: 0,
+      currentValue: 0,
+      progress: 0,
+      onTimeRate: 0,
+      effectiveRate: 0,
+      score: 0,
+      hasTarget: false,
+      targetStatus: 'none'
+    });
+  }
+
+  const handleDailyDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    if (newDate) {
+      setDailyTargetDate(new Date(newDate));
+    }
+    setIsDailyDateEditing(false);
+  };
+
+  const handleMonthlyDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    if (newDate) {
+      setMonthlyTargetDate(new Date(newDate + '-01'));
+    }
+    setIsMonthlyDateEditing(false);
+  };
+
+  const handlePreviousPIC = () => {
+    setCurrentPICPage(Math.max(0, currentPICPage - 1));
+  };
+
+  const handleNextPIC = () => {
+    const actualPICCount = getActualPICData().length;
+    const maxPage = Math.ceil(actualPICCount / 2) - 1;
+    setCurrentPICPage(Math.min(maxPage, currentPICPage + 1));
+  };
+
+  const handleEditTargetClick = (employee: any) => {
+    if (employee.id) {
+      setSelectedEmployee({ id: employee.id, name: employee.name });
+      setIsEditTargetDialogOpen(true);
+    }
+  };
+
+  return (
+    <>
+      <div className="w-full border border-gray-200 rounded-lg overflow-visible bg-white" style={{ height: '130px' }}>
+        <div className="relative h-full">
+          <Table className="w-full">
+            <TableHeader className="sticky top-0 bg-white z-20">
+              <TableRow className="border-b border-gray-200 hover:bg-transparent h-10">
+                <TableHead className="w-[200px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  <div className="flex items-center justify-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handlePreviousPIC}
+                      className="h-5 w-5 p-0"
+                      disabled={currentPICPage === 0}
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                    </Button>
+                    <span className="text-xs">PIC Content</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleNextPIC}
+                      className="h-5 w-5 p-0"
+                      disabled={currentPICPage >= Math.ceil(getActualPICData().length / 2) - 1}
+                    >
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </TableHead>
+                
+                <TableHead className="w-[90px] px-2 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  {isDailyDateEditing ? (
+                    <input
+                      type="date"
+                      value={format(dailyTargetDate, 'yyyy-MM-dd')}
+                      onChange={handleDailyDateChange}
+                      onBlur={() => setIsDailyDateEditing(false)}
+                      autoFocus
+                      className="h-8 px-3 text-xs w-full border border-gray-300 rounded-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                    />
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsDailyDateEditing(true)}
+                      className="h-8 px-3 text-xs w-full justify-center rounded-sm"
+                    >
+                      <CalendarIcon className="h-3 w-3 mr-2 flex-shrink-0" />
+                      <span className="truncate font-medium">
+                        {format(dailyTargetDate, "dd MMM yyyy")}
+                      </span>
+                    </Button>
+                  )}
+                </TableHead>
+                
+                <TableHead className="w-[90px] px-2 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  {isMonthlyDateEditing ? (
+                    <input
+                      type="month"
+                      value={format(monthlyTargetDate, 'yyyy-MM')}
+                      onChange={handleMonthlyDateChange}
+                      onBlur={() => setIsMonthlyDateEditing(false)}
+                      autoFocus
+                      className="h-8 px-3 text-xs w-full border border-gray-300 rounded-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                    />
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsMonthlyDateEditing(true)}
+                      className="h-8 px-3 text-xs w-full justify-center rounded-sm"
+                    >
+                      <CalendarIcon className="h-3 w-3 mr-2 flex-shrink-0" />
+                      <span className="truncate font-medium">
+                        {format(monthlyTargetDate, "MMM yyyy")}
+                      </span>
+                    </Button>
+                  )}
+                </TableHead>
+                 
+                <TableHead className="w-[120px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  Target Adjusted
+                </TableHead>
+                
+                <TableHead className="w-[140px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  Progress
+                </TableHead>
+                
+                <TableHead className="w-[110px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  On Time Rate
+                </TableHead>
+                
+                <TableHead className="w-[110px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  Effective Rate
+                </TableHead>
+                
+                <TableHead className="w-[80px] px-3 py-2 text-center font-medium text-xs border-r border-gray-200 bg-white h-10">
+                  Score
+                </TableHead>
+                
+                <TableHead className="w-[80px] px-3 py-2 text-center font-medium text-xs bg-white h-10">
+                  Action
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            
+            <TableBody>
+              {displayData.map((manager, index) => (
+                <TableRow key={index} className="hover:bg-gray-50 border-b border-gray-100 h-10">
+                  <TableCell className="w-[200px] px-3 py-2 border-r border-gray-100 h-10">
+                    {manager.name ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium relative">
+                          {manager.pic}
+                          {manager.hasTarget && (
+                            <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                              manager.targetStatus === 'completed' ? 'bg-green-500' :
+                              manager.targetStatus === 'overdue' ? 'bg-red-500' :
+                              manager.targetStatus === 'active' ? 'bg-blue-500' : 'bg-gray-300'
+                            }`} />
+                          )}
+                        </div>
+                        <span className="text-xs font-medium truncate">{manager.name}</span>
+                      </div>
+                    ) : (
+                      <div className="h-6 flex items-center justify-center">
+                        <span className="text-xs text-gray-400">-</span>
+                      </div>
+                    )}
+                  </TableCell>
+                  
+                  <TableCell className="w-[90px] px-2 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs font-semibold text-blue-600">{manager.dailyTarget || 0}</span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[90px] px-2 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs font-semibold text-green-600">{manager.monthlyTarget || 0}</span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[120px] px-3 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs">
+                      {manager.name && manager.targetAdjusted ? `${manager.currentValue}/${manager.targetAdjusted}` : '-'}
+                    </span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[140px] px-3 py-2 border-r border-gray-100 h-10">
+                    <ProgressBar 
+                      current={manager.currentValue || 0} 
+                      target={manager.targetAdjusted || 0}
+                      color="blue"
+                    />
+                  </TableCell>
+                  
+                  <TableCell className="w-[110px] px-3 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs">{manager.name ? `${manager.onTimeRate}%` : '-'}</span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[110px] px-3 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs">{manager.name ? `${manager.effectiveRate}%` : '-'}</span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[80px] px-3 py-2 text-center border-r border-gray-100 h-10">
+                    <span className="text-xs font-bold text-blue-600">{manager.name ? manager.score : '-'}</span>
+                  </TableCell>
+                  
+                  <TableCell className="w-[80px] px-3 py-2 text-center h-10">
+                    {manager.name ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditTargetClick(manager)}
+                        className="h-6 px-2 text-xs"
+                        title={manager.hasTarget ? 'Edit target' : 'Create target'}
+                      >
+                        {manager.hasTarget ? <Edit className="h-3 w-3" /> : <Target className="h-3 w-3" />}
+                      </Button>
+                    ) : (
+                      <div className="h-6"></div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <EditTargetDialog
+        isOpen={isEditTargetDialogOpen}
+        onClose={() => {
+          setIsEditTargetDialogOpen(false);
+          setSelectedEmployee(null);
+        }}
+        employeeId={selectedEmployee?.id}
+        employeeName={selectedEmployee?.name}
+        targetType="content_planning"
+        existingTarget={selectedEmployee ? getEmployeeTarget(selectedEmployee.id) : undefined}
+      />
+    </>
+  );
+};
+
+export default ContentPlannerTab;

@@ -1,0 +1,383 @@
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Objective, OkrStatus } from './okr';
+import { useToast } from '@/features/ui/use-toast';
+
+export const useObjectives = (organizationId?: string, cycleId?: string, level?: string) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Set up real-time subscriptions for all objective tables
+  useEffect(() => {
+    if (!organizationId) return;
+
+    console.log('🔄 Setting up real-time subscriptions for objectives:', { level, organizationId });
+
+    const channels: any[] = [];
+
+    // Subscribe to company objectives
+    const companyChannel = supabase
+      .channel('company_objectives_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'company_objectives',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        (payload) => {
+          console.log('📡 Real-time update for company objectives:', payload);
+          queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
+          queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+        }
+      );
+
+    // Subscribe to department objectives
+    const deptChannel = supabase
+      .channel('department_objectives_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'department_objectives',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        (payload) => {
+          console.log('📡 Real-time update for department objectives:', payload);
+          queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
+          queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+        }
+      );
+
+    // Subscribe to individual objectives
+    const indivChannel = supabase
+      .channel('individual_objectives_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'individual_objectives',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        (payload) => {
+          console.log('📡 Real-time update for individual objectives:', payload);
+          queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
+          queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+        }
+      );
+
+    // Subscribe to key results for real-time updates
+    const keyResultsChannel = supabase
+      .channel('key_results_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'key_results',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        (payload) => {
+          console.log('📡 Real-time update for key results:', payload);
+          queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
+          queryClient.invalidateQueries({ queryKey: ['key-results'] });
+        }
+      );
+
+    channels.push(companyChannel, deptChannel, indivChannel, keyResultsChannel);
+
+    // Subscribe to all channels
+    channels.forEach(channel => channel.subscribe());
+
+    return () => {
+      console.log('🔄 Cleaning up objective real-time subscriptions');
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
+  }, [organizationId, cycleId, level, queryClient]);
+
+  const { data: objectives = [], isLoading, error, refetch } = useQuery({
+    queryKey: [`${level}-objectives`, organizationId, cycleId],
+    queryFn: async () => {
+      if (!organizationId) {
+        console.log('❌ No organizationId provided');
+        return [];
+      }
+      
+      console.log('🔍 Fetching objectives:', { organizationId, cycleId, level });
+      
+      // Use the new hierarchy tables based on level
+      let data: any[] = [];
+      
+      if (level === 'company') {
+        // Get from company_objectives with department objectives as key results
+        let query = supabase
+          .from('company_objectives')
+          .select(`
+            *,
+            department_objectives!company_objective_id(
+              id,
+              title,
+              progress_percentage,
+              weight,
+              status
+            )
+          `)
+          .eq('organization_id', organizationId);
+
+        if (cycleId) {
+          query = query.eq('cycle_id', cycleId);
+        }
+
+        const { data: companyData, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        data = companyData?.map(obj => ({
+          ...obj,
+          why_important: obj.why_important || '',
+          level: 'company' as const,
+          key_results: (obj.department_objectives || []).map((dept: any) => ({
+            id: dept.id,
+            title: dept.title,
+            current_value: dept.progress_percentage,
+            target_value: 100,
+            progress_percentage: dept.progress_percentage,
+            weight: dept.weight,
+            status: dept.status,
+            metric_type: 'percentage',
+            unit: '%'
+          })),
+          child_objectives: [],
+          parent_objective: null,
+          entity_id: null,
+          parent_objective_id: null,
+          department_id: null,
+          derived_from_kr_id: null,
+          weight: obj.weight || 100
+        })) || [];
+        
+      } else if (level === 'department') {
+        // Get from department_objectives with individual objectives as key results
+        let query = supabase
+          .from('department_objectives')
+          .select(`
+            *,
+            individual_objectives!department_objective_id(
+              id,
+              title,
+              progress_percentage,
+              weight,
+              status
+            )
+          `)
+          .eq('organization_id', organizationId);
+
+        if (cycleId) {
+          query = query.eq('cycle_id', cycleId);
+        }
+
+        const { data: deptData, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        data = deptData?.map(obj => ({
+          ...obj,
+          why_important: obj.why_important || '',
+          level: 'department' as const,
+          key_results: (obj.individual_objectives || []).map((indiv: any) => ({
+            id: indiv.id,
+            title: indiv.title,
+            current_value: indiv.progress_percentage,
+            target_value: 100,
+            progress_percentage: indiv.progress_percentage,
+            weight: indiv.weight,
+            status: indiv.status,
+            metric_type: 'percentage',
+            unit: '%'
+          })),
+          child_objectives: [],
+          parent_objective: null,
+          entity_id: null,
+          parent_objective_id: obj.company_objective_id,
+          derived_from_kr_id: null,
+          weight: obj.weight || 100
+        })) || [];
+        
+      } else if (level === 'individual') {
+        // Get from individual_objectives with related key results
+        let query = supabase
+          .from('individual_objectives')
+          .select(`
+            *,
+            key_results:key_results!individual_objective_id(*)
+          `)
+          .eq('organization_id', organizationId);
+
+        if (cycleId) {
+          query = query.eq('cycle_id', cycleId);
+        }
+
+        const { data: indivData, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        data = indivData?.map(obj => ({
+          ...obj,
+          why_important: obj.why_important || '',
+          level: 'individual' as const,
+          key_results: obj.key_results || [],
+          child_objectives: [],
+          parent_objective: null,
+          entity_id: null,
+          parent_objective_id: obj.department_objective_id,
+          department_id: null,
+          derived_from_kr_id: null,
+          weight: obj.weight || 100
+        })) || [];
+        
+      } else {
+        // Get company objectives by default with department objectives as key results
+        const query = supabase
+          .from('company_objectives')
+          .select(`
+            *,
+            department_objectives!company_objective_id(
+              id,
+              title,
+              progress_percentage,
+              weight,
+              status
+            )
+          `)
+          .eq('organization_id', organizationId);
+
+        const { data: companyData, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        data = companyData?.map(obj => ({
+          ...obj,
+          why_important: obj.why_important || '',
+          level: 'company' as const,
+          key_results: (obj.department_objectives || []).map((dept: any) => ({
+            id: dept.id,
+            title: dept.title,
+            current_value: dept.progress_percentage,
+            target_value: 100,
+            progress_percentage: dept.progress_percentage,
+            weight: dept.weight,
+            status: dept.status,
+            metric_type: 'percentage',
+            unit: '%'
+          })),
+          child_objectives: [],
+          parent_objective: null,
+          entity_id: null,
+          parent_objective_id: null,
+          department_id: null,
+          derived_from_kr_id: null,
+          weight: obj.weight || 100
+        })) || [];
+      }
+
+      console.log('✅ Objectives loaded:', data.length);
+      return data as Objective[];
+    },
+    enabled: !!organizationId,
+  });
+
+  return {
+    objectives,
+    isLoading,
+    error,
+    refetch
+  };
+};
+
+// Interface for company objective creation
+interface CreateObjectiveData {
+  organization_id: string;
+  cycle_id?: string | null;
+  title: string;
+  why_important: string;
+  level: 'company' | 'department' | 'individual'; // Keep for compatibility but won't be stored
+  owner_id: string;
+  status?: 'draft' | 'active' | 'completed' | 'cancelled';
+  weight?: number;
+  created_by: string;
+  // Additional fields for compatibility (these won't be stored in company_objectives)
+  department_id?: string;
+  parent_objective_id?: string;
+  entity_id?: string;
+}
+
+export const useCreateObjective = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (objectiveData: CreateObjectiveData) => {
+      console.log('🚀 Creating objective:', objectiveData);
+
+      // Prepare the data for company_objectives table
+      const finalObjectiveData = {
+        organization_id: objectiveData.organization_id,
+        cycle_id: objectiveData.cycle_id || null,
+        title: objectiveData.title,
+        why_important: objectiveData.why_important,
+        status: objectiveData.status || 'draft',
+        weight: objectiveData.weight || 100.00,
+        progress_percentage: 0.00,
+        owner_id: objectiveData.owner_id,
+        created_by: objectiveData.created_by,
+        start_date: null,
+        end_date: null
+      };
+
+      console.log('📝 Final objective data being sent:', finalObjectiveData);
+
+      const { data: objective, error } = await supabase
+        .from('company_objectives')
+        .insert(finalObjectiveData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating objective:', error);
+        throw error;
+      }
+
+      console.log('✅ Objective created successfully:', {
+        id: objective.id,
+        title: objective.title,
+        status: objective.status,
+        organization_id: objective.organization_id
+      });
+
+      // Company objectives don't have parent-child relationships in this table
+
+      return objective;
+    },
+    onSuccess: () => {
+      // Invalidate all OKR-related queries to ensure UI refresh
+      queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      toast({
+        title: 'Success',
+        description: 'Objective created successfully',
+      });
+    },
+    onError: (error) => {
+      console.error('❌ Failed to create objective:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create objective',
+        variant: 'destructive',
+      });
+    },
+  });
+};
