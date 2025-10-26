@@ -155,7 +155,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         })),
         deadline_history: task.deadline_history || [],
         progress_percentage: calculateProgress(task.task_steps || []),
-        assigned_to_name: (task as any).assigned_employee?.full_name || null
+        assigned_to_name: (task as any).assigned_employee?.full_name || null,
+        files: [] // Initialize empty files array for task level
       }));
       
       setTasks(tasksWithProgress);
@@ -170,24 +171,24 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const calculateProgress = (steps: TaskStep[]): number => {
-    if (steps.length === 0) return 0;
-    const completedSteps = steps.filter(step => step.is_completed).length;
+    if (!steps || !Array.isArray(steps) || steps.length === 0) return 0;
+    const completedSteps = steps.filter(step => step && step.is_completed).length;
     return Math.round((completedSteps / steps.length) * 100);
   };
 
   // Calculate summary data from tasks
   const summaryData: SummaryData = {
-    pending: tasks.filter(task => task.status === 'pending').length,
-    inProgress: tasks.filter(task => task.status === 'in_progress').length,
-    completed: tasks.filter(task => task.status === 'completed').length,
-    cancelled: tasks.filter(task => task.status === 'cancelled').length,
-    overdue: tasks.filter(task => {
-      if (!task.due_date) return false;
+    pending: (tasks || []).filter(task => task && task.status === 'pending').length,
+    inProgress: (tasks || []).filter(task => task && task.status === 'in_progress').length,
+    completed: (tasks || []).filter(task => task && task.status === 'completed').length,
+    cancelled: (tasks || []).filter(task => task && task.status === 'cancelled').length,
+    overdue: (tasks || []).filter(task => {
+      if (!task || !task.due_date) return false;
       return new Date(task.due_date) < new Date() && task.status !== 'completed';
     }).length,
-    totalSteps: tasks.reduce((sum, task) => sum + task.steps.length, 0),
-    completedSteps: tasks.reduce((sum, task) => 
-      sum + task.steps.filter(step => step.is_completed).length, 0
+    totalSteps: (tasks || []).reduce((sum, task) => sum + (task?.steps?.length || 0), 0),
+    completedSteps: (tasks || []).reduce((sum, task) => 
+      sum + (task?.steps?.filter(step => step && step.is_completed).length || 0), 0
     )
   };
 
