@@ -18,6 +18,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
 import { useObjectives } from '../component/ObjectivesTabImport/useObjectives';
 import { Target } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ModalAddIndividualContributionProps {
   open: boolean;
@@ -28,6 +29,7 @@ export interface ModalAddIndividualContributionProps {
   employeeId?: string;
   employeeName?: string;
   onSuccess?: () => void;
+  editObjective?: any; // Add edit mode support
 }
 
 export const ModalAddIndividualContribution = ({
@@ -38,7 +40,8 @@ export const ModalAddIndividualContribution = ({
   departmentId,
   employeeId,
   employeeName,
-  onSuccess
+  onSuccess,
+  editObjective
 }: ModalAddIndividualContributionProps) => {
   const [formData, setFormData] = useState({
     company_objective_id: '',
@@ -57,6 +60,36 @@ export const ModalAddIndividualContribution = ({
   const { data: currentEmployee } = useCurrentEmployee();
   // TODO: File not found - const { data: employees = [] } = useEmployees();
   const createObjective = useCreateIndividualObjective();
+
+  // Initialize form data when editObjective changes
+  React.useEffect(() => {
+    if (editObjective && open) {
+      setFormData({
+        company_objective_id: editObjective.department_objective_id || '',
+        title: editObjective.title || '',
+        description: editObjective.description || '',
+        why_important: editObjective.why_important || '',
+        metric_type: 'number',
+        unit: '',
+        start_value: '0',
+        target_value: '100',
+        weight: editObjective.weight?.toString() || '100'
+      });
+    } else if (!editObjective && open) {
+      // Reset form for new objective
+      setFormData({
+        company_objective_id: '',
+        title: '',
+        description: '',
+        why_important: '',
+        metric_type: 'number',
+        unit: '',
+        start_value: '0',
+        target_value: '100',
+        weight: '100'
+      });
+    }
+  }, [editObjective, open]);
 
   // Get department objectives to show in dropdown - using useObjectives hook
   const { objectives: allDepartmentObjectives = [], isLoading: loadingObjectives, error: objectivesError } = useObjectives(organizationId, cycleId, 'department');
@@ -98,7 +131,7 @@ export const ModalAddIndividualContribution = ({
     const selectedDeptObjective = departmentObjectives.find(obj => obj.id === formData.company_objective_id);
     
     try {
-      await createObjective.mutateAsync({
+      const individualObjective = await createObjective.mutateAsync({
         organization_id: organizationId,
         cycle_id: cycleId,
         employee_id: (currentEmployee as any).id,
@@ -112,6 +145,49 @@ export const ModalAddIndividualContribution = ({
         created_by: currentUser?.id || '',
         
       });
+
+      // Create corresponding key result for the individual objective
+      if (individualObjective && (individualObjective as any).id) {
+        try {
+          const { data: keyResultData, error: keyResultError } = await (supabase as any)
+            .from('key_results')
+            .insert({
+              organization_id: organizationId,
+              individual_objective_id: (individualObjective as any).id,
+              title: formData.title,
+              description: formData.description,
+              metric_type: formData.metric_type || 'percentage',
+              calculation_type: 'increase', // Required field - valid values: increase, decrease, maintain
+              start_value: parseFloat(formData.start_value) || 0,
+              target_value: parseFloat(formData.target_value) || 100,
+              unit: formData.unit || '%',
+              current_value: 0,
+              weight: parseFloat(formData.weight),
+              created_by: currentUser?.id || '',
+              owner_level: 'individual'
+            })
+            .select()
+            .single();
+
+          if (keyResultError) {
+            console.error('Error creating key result:', keyResultError);
+            toast({
+              title: 'Warning',
+              description: 'Individual objective created but key result creation failed. Please check the logs.',
+              variant: 'destructive',
+            });
+          } else {
+            console.log('✅ Key result created successfully:', keyResultData);
+          }
+        } catch (keyResultError) {
+          console.error('Error creating key result:', keyResultError);
+          toast({
+            title: 'Warning',
+            description: 'Individual objective created but key result creation failed. Please check the logs.',
+            variant: 'destructive',
+          });
+        }
+      }
 
       // Reset form
       setFormData({
@@ -165,7 +241,7 @@ export const ModalAddIndividualContribution = ({
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Target className="h-5 w-5 text-orange-600" />
-            <span>Create Individual Contribution</span>
+            <span>{editObjective ? 'Edit Individual Contribution' : 'Create Individual Contribution'}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -343,7 +419,7 @@ export const ModalAddIndividualContribution = ({
               disabled={createObjective.isPending}
               className="bg-orange-600 hover:bg-orange-700"
             >
-              {createObjective.isPending ? 'Creating...' : 'Create Individual Contribution'}
+              {createObjective.isPending ? (editObjective ? 'Updating...' : 'Creating...') : (editObjective ? 'Update Individual Contribution' : 'Create Individual Contribution')}
             </Button>
           </div>
         </form>

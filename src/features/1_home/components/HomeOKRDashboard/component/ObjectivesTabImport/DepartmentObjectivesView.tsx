@@ -5,7 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, User, MoreHorizontal, History } from 'lucide-react';
+import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, User, MoreHorizontal, History, Edit } from 'lucide-react';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
@@ -43,7 +43,7 @@ export const DepartmentObjectivesView = ({
   cycleIds
 }: DepartmentObjectivesViewProps) => {
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
-  const [expandedObjective, setExpandedObjective] = useState<string | undefined>(undefined);
+  const [expandedObjective, setExpandedObjective] = useState<string>('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [showContributionModal, setShowContributionModal] = useState(false);
@@ -59,6 +59,14 @@ export const DepartmentObjectivesView = ({
     objectiveId?: string;
     objectiveTitle?: string;
     cycleId?: string;
+  }>({
+    open: false
+  });
+
+  // Edit Modal states
+  const [editModal, setEditModal] = useState<{
+    open: boolean;
+    objective?: any;
   }>({
     open: false
   });
@@ -219,6 +227,14 @@ export const DepartmentObjectivesView = ({
     }
   };
 
+  const handleEditObjective = (e: React.MouseEvent, objective: any) => {
+    e.stopPropagation(); // Prevent accordion toggle
+    setEditModal({
+      open: true,
+      objective
+    });
+  };
+
   // Handle attendance check-in
   const handleAttendanceCheckIn = async (objectiveTitle: string) => {
     try {
@@ -293,7 +309,7 @@ export const DepartmentObjectivesView = ({
                   {objective.title}
                 </span>
               </div>
-              <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="flex items-center space-x-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <ObjectiveCheckinForm objectiveId={objective.id} objectiveTitle={objective.title} trigger={<Button variant="outline" size="sm" className="h-7 px-2 text-xs">
                       <Calendar className="h-3 w-3 mr-1" />
                       Weekly Check-in
@@ -306,6 +322,15 @@ export const DepartmentObjectivesView = ({
                 <Badge variant="outline" className={`text-xs ${status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                   {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => handleEditObjective(e, objective)}
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                  title="Edit objective"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={e => handleDeleteObjective(e, objective.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50">
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -516,7 +541,18 @@ export const DepartmentObjectivesView = ({
 
           {/* Department List with Expand/Collapse */}
           <div className="space-y-2">
-            {departments.map(department => {
+            {departments.filter(department => {
+              // Filter out departments that are actually organization names
+              const orgNamePatterns = [
+                'PT Softorb Technology Indonesia',
+                'Softorb Technology',
+                'Softorb',
+                'Technology Indonesia'
+              ];
+              return !orgNamePatterns.some(pattern => 
+                department.name.toLowerCase().includes(pattern.toLowerCase())
+              );
+            }).map(department => {
             const departmentObjectivesMap = objectivesByDepartmentAndStatus.get(department.id) || new Map();
             const activeObjectives = departmentObjectivesMap.get('active') || [];
             const draftObjectives = departmentObjectivesMap.get('draft') || [];
@@ -663,5 +699,21 @@ export const DepartmentObjectivesView = ({
       setShowCreateActivityModal(false);
       setSelectedObjectiveForActivity(null);
     }} organizationId={organizationId} objectiveId={selectedObjectiveForActivity.id} objectiveTitle={selectedObjectiveForActivity.title} employeeId={selectedObjectiveForActivity.employeeId} />}
+
+      {/* Edit Department Objective Modal */}
+      {editModal.open && editModal.objective && (
+        <ModalAddDepartmentContribution
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal({ open })}
+          organizationId={organizationId}
+          cycleId={cycleId || ''}
+          departmentId={editModal.objective.department_id}
+          editObjective={editModal.objective}
+          onSuccess={() => {
+            console.log('✅ Department objective updated successfully');
+            setEditModal({ open: false });
+          }}
+        />
+      )}
     </div>;
 };

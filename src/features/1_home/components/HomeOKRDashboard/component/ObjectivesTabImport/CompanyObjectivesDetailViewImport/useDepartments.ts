@@ -9,7 +9,7 @@ export const useDepartments = (organizationId?: string) => {
     queryFn: async () => {
       if (!organizationId) return [];
       
-      console.log('🔍 useDepartments: Fetching departments for org:', organizationId);
+      // console.log('🔍 useDepartments: Fetching departments for org:', organizationId);
       
       // First, get departments directly from departments table for this organization
       const { data: orgDepartments, error: orgDeptError } = await supabase
@@ -23,7 +23,7 @@ export const useDepartments = (organizationId?: string) => {
         console.error('❌ useDepartments: Error fetching org departments:', orgDeptError);
       }
 
-      console.log('✅ useDepartments: Org departments:', orgDepartments?.length || 0);
+      // console.log('✅ useDepartments: Org departments:', orgDepartments?.length || 0);
 
       // Second, get ALL employees for this organization to see what departments they use
       const { data: allEmployees, error: empError } = await supabase
@@ -34,20 +34,7 @@ export const useDepartments = (organizationId?: string) => {
       if (empError) {
         console.error('❌ useDepartments: Error fetching employees:', empError);
       } else {
-        console.log('📊 useDepartments: All employees in org:', allEmployees?.length || 0);
-        
-        // Log department usage by employees
-        const deptUsage = {};
-        allEmployees?.forEach(emp => {
-          if (emp.department_id) {
-            if (!deptUsage[emp.department_id]) {
-              deptUsage[emp.department_id] = [];
-            }
-            deptUsage[emp.department_id].push(`${emp.full_name} (${emp.status})`);
-          }
-        });
-        
-        console.log('📈 useDepartments: Department usage by employees:', deptUsage);
+        // console.log('📊 useDepartments: All employees in org:', allEmployees?.length || 0);
       }
 
       // Third, get departments used by active employees (even if department.organization_id is NULL)
@@ -76,16 +63,11 @@ export const useDepartments = (organizationId?: string) => {
         console.error('❌ useDepartments: Error fetching employee departments:', empDeptError);
       }
 
-      console.log('✅ useDepartments: Employee department relations:', employeeDepartments?.length || 0);
-      
-      // Log detailed employee-department relations
-      employeeDepartments?.forEach((emp, index) => {
-        console.log(`👤 Employee ${index + 1}: ${emp.full_name} (${emp.status}) -> Department: ${emp.departments.name} (org_id: ${emp.departments.organization_id})`);
-      });
+      // console.log('✅ useDepartments: Employee department relations:', employeeDepartments?.length || 0);
 
       // Extract department data from employee relations
       const empDepts = employeeDepartments?.map(emp => emp.departments).filter(Boolean) || [];
-      console.log('✅ useDepartments: Extracted employee departments:', empDepts.length);
+      // console.log('✅ useDepartments: Extracted employee departments:', empDepts.length);
 
       // Combine and deduplicate departments
       const allDepartments = [...(orgDepartments || [])];
@@ -93,7 +75,7 @@ export const useDepartments = (organizationId?: string) => {
       // Add departments from employees that aren't already in the list
       empDepts.forEach(empDept => {
         if (!allDepartments.find(d => d.id === empDept.id)) {
-          console.log('➕ Adding department from employees:', empDept.name, 'org_id:', empDept.organization_id);
+          // console.log('➕ Adding department from employees:', empDept.name, 'org_id:', empDept.organization_id);
           // Only include properties that match the Department type
           allDepartments.push({
             id: empDept.id,
@@ -115,18 +97,7 @@ export const useDepartments = (organizationId?: string) => {
         .filter(dept => dept.is_active !== false)
         .sort((a, b) => a.name.localeCompare(b.name));
       
-      console.log('🟢 useDepartments: Final active departments count:', activeDepartments.length);
-      
-      // Log each department with detailed info
-      activeDepartments.forEach((dept, index) => {
-        console.log(`📋 Final Department ${index + 1}:`, {
-          id: dept.id,
-          name: dept.name,
-          organization_id: dept.organization_id,
-          is_active: dept.is_active,
-          source: dept.organization_id === organizationId ? 'org_table' : 'employee_usage'
-        });
-      });
+      // console.log('🟢 useDepartments: Final active departments count:', activeDepartments.length);
       
       return activeDepartments as Department[];
     },

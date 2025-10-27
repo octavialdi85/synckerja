@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
-import { Building, Plus, Target, ChevronRight, ChevronDown, User, MoreHorizontal, CheckCircle, Calendar, Trash2 } from 'lucide-react';
+import { Building, Plus, Target, ChevronRight, ChevronDown, User, MoreHorizontal, CheckCircle, Calendar, Trash2, Edit } from 'lucide-react';
 import { Progress } from '@/features/ui/progress';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useIndividualObjectives, useDeleteIndividualObjective } from '../../modal/useIndividualObjectives';
@@ -31,7 +31,7 @@ export const IndividualObjectivesView = ({
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
-  const [expandedObjective, setExpandedObjective] = useState<string | undefined>(undefined);
+  const [expandedObjective, setExpandedObjective] = useState<string>('');
   const [showContributionModal, setShowContributionModal] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   // Create Activity Modal states
@@ -48,6 +48,14 @@ export const IndividualObjectivesView = ({
     id: string;
     title: string;
   } | null>(null);
+
+  // Edit Modal states
+  const [editModal, setEditModal] = useState<{
+    open: boolean;
+    objective?: any;
+  }>({
+    open: false
+  });
   const {
     data: employees = [],
     isLoading: loadingEmployees
@@ -112,6 +120,14 @@ export const IndividualObjectivesView = ({
     e.stopPropagation(); // Prevent accordion toggle
     setSelectedObjectiveForDelete(objective);
     setShowDeleteDialog(true);
+  };
+
+  const handleEditObjective = (e: React.MouseEvent, objective: any) => {
+    e.stopPropagation(); // Prevent accordion toggle
+    setEditModal({
+      open: true,
+      objective
+    });
   };
   
   const toggleEmployee = (employeeId: string) => {
@@ -323,6 +339,15 @@ export const IndividualObjectivesView = ({
                 }`}>
                   {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => handleEditObjective(e, objective)}
+                  className="h-7 w-7 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                  title="Edit objective"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -554,5 +579,20 @@ export const IndividualObjectivesView = ({
           setSelectedObjectiveForDelete(null);
         }}
       />
+
+      {/* Edit Individual Objective Modal */}
+      {editModal.open && editModal.objective && (
+        <ModalAddIndividualContribution
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal({ open })}
+          organizationId={organizationId}
+          cycleId={cycleId || finalCycleIds?.[0] || ''}
+          editObjective={editModal.objective}
+          onSuccess={() => {
+            console.log('✅ Individual objective updated successfully');
+            setEditModal({ open: false });
+          }}
+        />
+      )}
     </div>;
 };

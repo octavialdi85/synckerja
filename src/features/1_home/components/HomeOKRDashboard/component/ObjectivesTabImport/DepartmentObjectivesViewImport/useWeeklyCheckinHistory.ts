@@ -19,7 +19,20 @@ export interface WeeklyCheckinHistory {
 export const useWeeklyCheckinHistory = (keyResultId: string, organizationId: string) => {
   return useQuery({
     queryKey: ['weekly-checkin-history', keyResultId, organizationId],
-    queryFn: async (): Promise<WeeklyCheckinHistory[]> => {
+    queryFn: async (): Promise<{ history: WeeklyCheckinHistory[], keyResult: any }> => {
+      // Get key result details including metric type
+      const { data: keyResult, error: keyResultError } = await supabase
+        .from('key_results')
+        .select('id, title, metric_type, start_value, target_value, unit, current_value')
+        .eq('id', keyResultId)
+        .single();
+
+      if (keyResultError) {
+        console.error('Error fetching key result:', keyResultError);
+        throw keyResultError;
+      }
+
+      // Get weekly checkins
       const { data, error } = await supabase
         .from('weekly_checkins')
         .select(`
@@ -45,10 +58,12 @@ export const useWeeklyCheckinHistory = (keyResultId: string, organizationId: str
         throw error;
       }
 
-      return (data || []).map(item => ({
+      const history = (data || []).map(item => ({
         ...item,
         employee: item.employees || { full_name: 'Unknown Employee' }
       })) as WeeklyCheckinHistory[];
+
+      return { history, keyResult };
     },
     enabled: !!keyResultId && !!organizationId
   });
@@ -96,7 +111,8 @@ export const useObjectiveWeeklyCheckinHistory = (objectiveId: string, organizati
             const allCheckins = await Promise.all(
               childKeyResults.map(kr => getCheckinsForKeyResult(kr.id, organizationId))
             );
-            return allCheckins.flat();
+            const flatCheckins = allCheckins.flat();
+            return { history: flatCheckins, keyResult: null }; // Return proper structure
           }
         }
         
@@ -115,21 +131,40 @@ export const useObjectiveWeeklyCheckinHistory = (objectiveId: string, organizati
             const allCheckins = await Promise.all(
               childKeyResults.map(kr => getCheckinsForKeyResult(kr.id, organizationId))
             );
-            return allCheckins.flat();
+            const flatCheckins = allCheckins.flat();
+            
+            // Get the first key result's details for metric type info
+            const firstKeyResult = childKeyResults[0];
+            const { data: keyResultDetails } = await supabase
+              .from('key_results')
+              .select('id, title, metric_type, start_value, target_value, unit, current_value')
+              .eq('id', firstKeyResult.id)
+              .single();
+            
+            return { history: flatCheckins, keyResult: keyResultDetails };
           }
         }
         
-        return [];
+        return { history: [], keyResult: null };
       }
 
       // Get weekly checkins for all key results
       const allCheckins = await Promise.all(
         keyResults.map(kr => getCheckinsForKeyResult(kr.id, organizationId))
       );
-
-      return allCheckins.flat().sort((a, b) => 
+      const flatCheckins = allCheckins.flat().sort((a, b) => 
         new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime()
       );
+      
+      // Get the first key result's details for metric type info
+      const firstKeyResult = keyResults[0];
+      const { data: keyResultDetails } = await supabase
+        .from('key_results')
+        .select('id, title, metric_type, start_value, target_value, unit, current_value')
+        .eq('id', firstKeyResult.id)
+        .single();
+      
+      return { history: flatCheckins, keyResult: keyResultDetails };
     },
     enabled: !!objectiveId && !!organizationId
   });

@@ -11,15 +11,22 @@ import { useCreateObjective } from './HomeOKRDashboard/component/ObjectivesTabIm
 import { useProfile } from '@/features/2-1-employees/MyInfo/Documents/hooks/useProfile';
 import { useCreateOkrCycle } from './HomeOKRDashboard/hooks/useCreateOkrCycle';
 import { useToast } from '@/features/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 interface AddObjectiveDialogProps {
   type: 'company' | 'department' | 'individual';
   buttonClassName?: string;
   onObjectiveAdded?: () => void;
+  editObjective?: any; // Add edit mode support
+  open?: boolean; // Add open prop for controlled mode
+  onOpenChange?: (open: boolean) => void; // Add onOpenChange for controlled mode
 }
 export const AddObjectiveDialog = ({
   type,
   buttonClassName = '',
-  onObjectiveAdded
+  onObjectiveAdded,
+  editObjective,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange
 }: AddObjectiveDialogProps) => {
   const {
     data: profile
@@ -35,6 +42,32 @@ export const AddObjectiveDialog = ({
     status: 'draft' as 'draft' | 'active' | 'completed' | 'cancelled',
     department_id: ''
   });
+
+  // Use controlled open state if provided, otherwise use internal state
+  const isOpen = controlledOpen !== undefined ? controlledOpen : showCreateDialog;
+  const setIsOpen = controlledOnOpenChange || setShowCreateDialog;
+
+  // Initialize form data when editObjective changes
+  React.useEffect(() => {
+    if (editObjective && isOpen) {
+      setFormData({
+        cycle_id: editObjective.cycle_id || '',
+        title: editObjective.title || '',
+        why_important: editObjective.why_important || '',
+        status: editObjective.status || 'draft',
+        department_id: editObjective.department_id || ''
+      });
+    } else if (!editObjective && isOpen) {
+      // Reset form for new objective
+      setFormData({
+        cycle_id: '',
+        title: '',
+        why_important: '',
+        status: 'draft',
+        department_id: ''
+      });
+    }
+  }, [editObjective, isOpen]);
 
   // Hooks
   const {
@@ -151,45 +184,92 @@ export const AddObjectiveDialog = ({
       return;
     }
     try {
-      await createObjective.mutateAsync({
-        organization_id: organizationId,
-        cycle_id: formData.cycle_id,
-        title: formData.title,
-        why_important: formData.why_important,
-        level: type,
-        owner_id: profile.user_id,
-        status: formData.status,
-        weight: 100,
-        created_by: profile.user_id,
-        department_id: formData.department_id || undefined
-      });
+      if (editObjective) {
+        // TODO: Implement update logic for existing objectives
+        // For now, we'll just show a message that edit is not yet implemented
+        toast({
+          title: 'Info',
+          description: 'Edit functionality for company objectives is not yet implemented',
+        });
+        setIsOpen(false);
+        onObjectiveAdded?.();
+      } else {
+        const companyObjective = await createObjective.mutateAsync({
+          organization_id: organizationId,
+          cycle_id: formData.cycle_id,
+          title: formData.title,
+          why_important: formData.why_important,
+          level: type,
+          owner_id: profile.user_id,
+          status: formData.status,
+          weight: 100,
+          created_by: profile.user_id,
+          department_id: formData.department_id || undefined
+        });
 
-      // Reset form and close dialog
-      setFormData({
-        cycle_id: '',
-        title: '',
-        why_important: '',
-        status: 'draft',
-        department_id: ''
-      });
-      setShowCreateDialog(false);
-      onObjectiveAdded?.();
+        // Create corresponding key result for company objectives
+        if (type === 'company' && companyObjective && (companyObjective as any).id) {
+          try {
+            const { data: keyResultData, error: keyResultError } = await (supabase as any)
+              .from('key_results')
+              .insert({
+                organization_id: organizationId,
+                company_objective_id: (companyObjective as any).id,
+                title: formData.title,
+                description: formData.why_important,
+                metric_type: 'percentage', // Default to percentage for company objectives
+                calculation_type: 'increase', // Required field
+                start_value: 0,
+                target_value: 100,
+                unit: '%',
+                current_value: 0,
+                weight: 100,
+                created_by: profile.user_id,
+                owner_level: 'company'
+              })
+              .select()
+              .single();
+
+            if (keyResultError) {
+              console.error('Error creating key result for company objective:', keyResultError);
+              toast({
+                title: 'Warning',
+                description: 'Company objective created but key result creation failed. Please check the logs.',
+                variant: 'destructive',
+              });
+            } else {
+              console.log('✅ Key result created successfully for company objective:', keyResultData);
+            }
+          } catch (keyResultError) {
+            console.error('Error creating key result for company objective:', keyResultError);
+            toast({
+              title: 'Warning',
+              description: 'Company objective created but key result creation failed. Please check the logs.',
+              variant: 'destructive',
+            });
+          }
+        }
+
+        // Reset form and close dialog
+        setIsOpen(false);
+        onObjectiveAdded?.();
+      }
     } catch (error) {
       console.error('Error creating objective:', error);
     }
   };
-  return <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-      <DialogTrigger asChild>
+  return <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {!controlledOpen && <DialogTrigger asChild>
         <Button className={`${getButtonColor()} text-white ${buttonClassName}`}>
           <Plus className="h-4 w-4 mr-2" />
           Add Objective
         </Button>
-      </DialogTrigger>
+      </DialogTrigger>}
       
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Create Objective for {level.charAt(0).toUpperCase() + level.slice(1)}
+            {editObjective ? 'Edit' : 'Create'} Objective for {level.charAt(0).toUpperCase() + level.slice(1)}
           </DialogTitle>
         </DialogHeader>
 
@@ -339,11 +419,11 @@ export const AddObjectiveDialog = ({
             </div>}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={createObjective.isPending}>
-              {createObjective.isPending ? 'Creating...' : 'Create Objective'}
+              {createObjective.isPending ? (editObjective ? 'Updating...' : 'Creating...') : (editObjective ? 'Update Objective' : 'Create Objective')}
             </Button>
           </DialogFooter>
         </form>

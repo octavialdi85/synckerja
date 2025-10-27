@@ -103,17 +103,69 @@ export const useDeleteDepartmentObjective = () => {
     mutationFn: async (objectiveId: string) => {
       console.log('🗑️ Deleting department objective:', objectiveId);
 
-      const { error } = await supabase
-        .from('department_objectives')
-        .delete()
-        .eq('id', objectiveId);
+      try {
+        // First, delete related weekly check-ins via key results
+        const { data: keyResults } = await supabase
+          .from('key_results')
+          .select('id')
+          .eq('department_objective_id', objectiveId);
 
-      if (error) {
-        console.error('❌ Error deleting department objective:', error);
+        if (keyResults && keyResults.length > 0) {
+          const keyResultIds = keyResults.map(kr => kr.id);
+          console.log('🗑️ Deleting weekly check-ins for key results:', keyResultIds);
+          
+          const { error: checkinError } = await supabase
+            .from('weekly_checkins')
+            .delete()
+            .in('key_result_id', keyResultIds);
+
+          if (checkinError) {
+            console.error('❌ Error deleting weekly check-ins:', checkinError);
+            throw checkinError;
+          }
+        }
+
+        // Second, delete related key results
+        console.log('🗑️ Deleting key results for department objective');
+        const { error: keyResultError } = await supabase
+          .from('key_results')
+          .delete()
+          .eq('department_objective_id', objectiveId);
+
+        if (keyResultError) {
+          console.error('❌ Error deleting key results:', keyResultError);
+          throw keyResultError;
+        }
+
+        // Third, delete related individual objectives
+        console.log('🗑️ Deleting individual objectives for department objective');
+        const { error: individualError } = await supabase
+          .from('individual_objectives')
+          .delete()
+          .eq('department_objective_id', objectiveId);
+
+        if (individualError) {
+          console.error('❌ Error deleting individual objectives:', individualError);
+          throw individualError;
+        }
+
+        // Finally, delete the department objective itself
+        console.log('🗑️ Deleting department objective');
+        const { error } = await supabase
+          .from('department_objectives')
+          .delete()
+          .eq('id', objectiveId);
+
+        if (error) {
+          console.error('❌ Error deleting department objective:', error);
+          throw error;
+        }
+
+        console.log('✅ Department objective and all related data deleted successfully');
+      } catch (error) {
+        console.error('❌ Error in cascade delete:', error);
         throw error;
       }
-
-      console.log('✅ Department objective deleted successfully');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });

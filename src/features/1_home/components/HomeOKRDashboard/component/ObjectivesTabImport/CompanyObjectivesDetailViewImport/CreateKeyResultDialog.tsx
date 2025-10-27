@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useDepartments } from './useDepartments';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
-// import { useOptimizedEmployees } from '@/hooks/useOptimizedEmployees'; // TODO: File not found
+import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { toast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 // import { useCreateIndividualObjective } from '@/hooks/organized/okr'; // TODO: File not found
@@ -31,9 +31,10 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
   const { departments = [] } = useDepartments(organizationId);
-  const { data: allEmployees = [] } = useOptimizedEmployees();
-  const createKeyResult = useCreateKeyResult();
-  const createIndividualObjectiveMutation = useCreateIndividualObjective();
+  const { data: allEmployees = [] } = useEmployees();
+  // TODO: Implement these hooks when available
+  // const createKeyResult = useCreateKeyResult();
+  // const createIndividualObjectiveMutation = useCreateIndividualObjective();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -465,9 +466,9 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
             </Button>
             <Button
               type="submit"
-              disabled={createKeyResult.isPending || !formData.title.trim()}
+              disabled={!formData.title.trim()}
             >
-              {createKeyResult.isPending ? 'Creating...' : formData.responsible_employee_id ? 'Create Key Result & Individual Objective' : 'Create Key Result'}
+              {formData.responsible_employee_id ? 'Create Key Result & Individual Objective' : 'Create Key Result'}
             </Button>
           </div>
         </form>

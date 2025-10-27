@@ -4,7 +4,7 @@ import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
-import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, BarChart3, Trash2 } from 'lucide-react';
+import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, BarChart3, Trash2, Edit } from 'lucide-react';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDeleteCompanyObjective } from '../../hooks/useDeleteCompanyObjective';
@@ -26,6 +26,9 @@ import { KeyResultApprovalButtons } from './CompanyObjectivesDetailViewImport/Ke
 import { SectionActiveObjectives } from './CompanyObjectivesDetailViewImport/SectionActiveObjectives';
 import { SectionDraftObjectives } from './CompanyObjectivesDetailViewImport/SectionDraftObjectives';
 import { SectionCompletedObjectives } from './CompanyObjectivesDetailViewImport/SectionCompletedObjectives';
+import { ModalAddIndividualContribution } from '../../modal/ModalAddIndividualContribution';
+import { ModalAddDepartmentContribution } from '../../modal/ModalAddDepartmentContribution';
+import { AddObjectiveDialog } from '../../../AddObjectiveDialog';
 interface CompanyObjectivesViewProps {
   organizationId: string;
   cycleId?: string;
@@ -36,13 +39,20 @@ export const CompanyObjectivesDetailView = ({
   cycleId,
   cycleIds
 }: CompanyObjectivesViewProps) => {
-  const [expandedObjective, setExpandedObjective] = useState<string | undefined>(undefined);
+  const [expandedObjective, setExpandedObjective] = useState<string>('');
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
   const [expandedIndividualObjectives, setExpandedIndividualObjectives] = useState<Set<string>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createKRDialog, setCreateKRDialog] = useState<{
     open: boolean;
     objective?: any;
+  }>({
+    open: false
+  });
+  const [editModal, setEditModal] = useState<{
+    open: boolean;
+    objective?: any;
+    type?: 'individual' | 'department';
   }>({
     open: false
   });
@@ -268,6 +278,18 @@ export const CompanyObjectivesDetailView = ({
       deleteCompanyObjective.mutate(objectiveId);
     }
   };
+
+  const handleEditObjective = (e: React.MouseEvent, objective: any) => {
+    e.stopPropagation(); // Prevent accordion toggle
+    
+    // For Company Objectives, we should use AddObjectiveDialog with type 'company'
+    // This will open the "Create Objective for Company" modal
+    setEditModal({
+      open: true,
+      objective,
+      type: 'company'
+    });
+  };
   if (loadingObjectives || loadingDepartments || loadingAllObjectives) {
     return <div className="flex items-center justify-center p-6">
         <div className="text-center">
@@ -320,7 +342,7 @@ export const CompanyObjectivesDetailView = ({
                 {objective.title}
               </span>
             </div>
-            <div className="flex items-center space-x-2 flex-shrink-0 mr-3">
+            <div className="flex items-center space-x-2 flex-shrink-0 mr-3" onClick={(e) => e.stopPropagation()}>
               <Badge variant="outline" className="text-xs font-medium leading-tight">
                 {objective.all_key_results?.length || 0} KRs
               </Badge>
@@ -332,6 +354,15 @@ export const CompanyObjectivesDetailView = ({
                   {actualProgress}%
                 </div>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => handleEditObjective(e, objective)}
+                className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                title="Edit objective"
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -587,5 +618,47 @@ export const CompanyObjectivesDetailView = ({
       {createKRDialog.open && createKRDialog.objective && <CreateKeyResultDialog open={createKRDialog.open} onOpenChange={open => setCreateKRDialog({
       open
     })} objective={createKRDialog.objective} />}
+
+      {/* Edit Modals */}
+      {editModal.open && editModal.objective && editModal.type === 'company' && (
+        <AddObjectiveDialog
+          type="company"
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal({ open })}
+          editObjective={editModal.objective}
+          onObjectiveAdded={() => {
+            console.log('✅ Company objective updated successfully');
+            setEditModal({ open: false });
+          }}
+        />
+      )}
+
+      {editModal.open && editModal.objective && editModal.type === 'individual' && (
+        <ModalAddIndividualContribution
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal({ open })}
+          organizationId={organizationId}
+          cycleId={cycleId || ''}
+          editObjective={editModal.objective}
+          onSuccess={() => {
+            console.log('✅ Individual objective updated successfully');
+            setEditModal({ open: false });
+          }}
+        />
+      )}
+
+      {editModal.open && editModal.objective && editModal.type === 'department' && (
+        <ModalAddDepartmentContribution
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal({ open })}
+          organizationId={organizationId}
+          cycleId={cycleId || ''}
+          editObjective={editModal.objective}
+          onSuccess={() => {
+            console.log('✅ Department objective updated successfully');
+            setEditModal({ open: false });
+          }}
+        />
+      )}
     </div>;
 };

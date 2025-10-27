@@ -64,6 +64,7 @@ export const ObjectiveCheckinForm = ({
     target_value: number;
     current_value: number;
     unit: string;
+    metric_type: string;
     id: string;
   } | null>(null);
 
@@ -201,9 +202,10 @@ export const ObjectiveCheckinForm = ({
           keyResults = deptObjectives.map(dept => ({
             id: dept.id,
             title: dept.title,
-            target_value: 100,
+            target_value: 100, // Department objectives are percentage-based
             current_value: dept.progress_percentage || 0,
-            unit: '%'
+            unit: '%',
+            metric_type: 'percentage'
           }));
         }
         krError = deptObjError;
@@ -219,9 +221,10 @@ export const ObjectiveCheckinForm = ({
           keyResults = indivObjectives.map(indiv => ({
             id: indiv.id,
             title: indiv.title,
-            target_value: 100,
+            target_value: 100, // Individual objectives are percentage-based
             current_value: indiv.progress_percentage || 0,
-            unit: '%'
+            unit: '%',
+            metric_type: 'percentage'
           }));
         }
         krError = indivObjError;
@@ -253,9 +256,10 @@ export const ObjectiveCheckinForm = ({
           console.log('Individual objective detected - allowing direct check-in without key results');
           // Set dummy key result data for individual objectives
           setKeyResultData({
-            target_value: 100,
+            target_value: 100, // Individual objectives are percentage-based
             current_value: 0,
             unit: '%',
+            metric_type: 'percentage',
             id: objectiveId // Use the objective ID directly
           });
 
@@ -302,6 +306,7 @@ export const ObjectiveCheckinForm = ({
         target_value: keyResult.target_value || 0,
         current_value: keyResult.current_value || 0,
         unit: keyResult.unit || '',
+        metric_type: keyResult.metric_type || 'percentage',
         id: keyResultId
       });
       const {
@@ -315,9 +320,21 @@ export const ObjectiveCheckinForm = ({
       const checkinMap: Record<string, CheckinData> = {};
       existingCheckins?.forEach(checkin => {
         const weekKey = checkin.week_start_date;
+        
+        // For numerical metrics, store the actual current_value
+        // For percentage metrics, convert to percentage
+        let progressValue = checkin.current_value || 0;
+        if (keyResultData?.metric_type === 'number') {
+          // For numerical metrics, store the actual value (e.g., 50000)
+          progressValue = checkin.current_value || 0;
+        } else {
+          // For percentage metrics, convert to percentage (0-100)
+          progressValue = checkin.current_value || 0;
+        }
+        
         checkinMap[weekKey] = {
           id: checkin.id,
-          progress_percentage: checkin.current_value || 0,
+          progress_percentage: progressValue,
           status: checkin.status || 'on_track',
           comments: checkin.comments || '',
           blockers: checkin.blockers || '',
@@ -395,13 +412,54 @@ export const ObjectiveCheckinForm = ({
 
       // Check if this is an individual objective (keyResultId === objectiveId)
       const isIndividualObjective = keyResultId === objectiveId;
+      
+      // Check if this is a department objective being used as key result for company objective
+      const { data: deptObjCheck } = await supabase.from('department_objectives').select('id').eq('id', keyResultId).maybeSingle();
+      const isDepartmentObjectiveAsKeyResult = keyResultId !== objectiveId && deptObjCheck;
+      
+      // Check if this is an individual objective being used as key result for department objective
+      const { data: indivObjCheck } = await supabase.from('individual_objectives').select('id').eq('id', keyResultId).maybeSingle();
+      const isIndividualObjectiveAsKeyResult = keyResultId !== objectiveId && indivObjCheck;
+      
+      // Determine the final objective type
+      let finalObjectiveType = 'unknown';
+      if (isIndividualObjective) {
+        finalObjectiveType = 'individual_direct';
+      } else if (isDepartmentObjectiveAsKeyResult) {
+        finalObjectiveType = 'department_as_keyresult';
+      } else if (isIndividualObjectiveAsKeyResult) {
+        finalObjectiveType = 'individual_as_keyresult';
+      }
+      
+      // Debug logging
+      console.log('🔍 Objective Type Detection:', {
+        keyResultId,
+        objectiveId,
+        isIndividualObjective,
+        isDepartmentObjectiveAsKeyResult,
+        isIndividualObjectiveAsKeyResult,
+        finalObjectiveType,
+        deptObjCheck,
+        indivObjCheck
+      });
       for (const [weekKey, data] of changedWeeks) {
+        // Debug logging for progress values
+        console.log('🔍 Progress Value Debug:', {
+          weekKey,
+          originalValue: data.progress_percentage,
+          safeValue: Math.min(Math.max(data.progress_percentage, 0), 100),
+          finalObjectiveType
+        });
+        
         if (isIndividualObjective) {
           // For individual objectives, update the objective's progress directly
+          // Ensure progress_percentage is within database limits (0-100 for individual objectives)
+          const safeProgressPercentage = Math.min(Math.max(data.progress_percentage, 0), 100);
+          
           const {
             error: updateObjError
           } = await supabase.from('individual_objectives').update({
-            progress_percentage: data.progress_percentage,
+            progress_percentage: safeProgressPercentage,
             updated_at: new Date().toISOString()
           }).eq('id', objectiveId);
           if (updateObjError) {
@@ -435,6 +493,116 @@ export const ObjectiveCheckinForm = ({
               current_value: data.progress_percentage,
               confidence_level: 8,
               // Default confidence level
+              status: data.status,
+              comments: data.comments,
+              blockers: data.blockers
+            });
+            if (error) throw error;
+          }
+          console.log('✅ Individual objective progress and weekly checkin updated');
+        } else if (isDepartmentObjectiveAsKeyResult) {
+          // For department objectives used as key results for company objectives
+          // Ensure progress_percentage is within database limits (0-100 for department objectives)
+          const safeProgressPercentage = Math.min(Math.max(data.progress_percentage, 0), 100);
+          
+          const {
+            error: updateDeptError
+          } = await supabase.from('department_objectives').update({
+            progress_percentage: safeProgressPercentage,
+            updated_at: new Date().toISOString()
+          }).eq('id', keyResultId);
+          if (updateDeptError) {
+            console.error('Error updating department objective progress:', updateDeptError);
+            throw updateDeptError;
+          }
+
+          // Also create weekly check-in records for department objectives
+          if (data.id) {
+            // Update existing check-in
+            const {
+              error
+            } = await supabase.from('weekly_checkins').update({
+              current_value: data.progress_percentage,
+              confidence_level: 8,
+              status: data.status,
+              comments: data.comments,
+              blockers: data.blockers
+            }).eq('id', data.id);
+            if (error) throw error;
+          } else {
+            // Create new check-in for department objective
+            const {
+              error
+            } = await supabase.from('weekly_checkins').insert({
+              organization_id: profile.active_organization_id,
+              department_objective_id: keyResultId,
+              employee_id: employee.id,
+              week_start_date: weekKey,
+              current_value: data.progress_percentage,
+              confidence_level: 8,
+              status: data.status,
+              comments: data.comments,
+              blockers: data.blockers
+            });
+            if (error) throw error;
+          }
+          console.log('✅ Department objective progress and weekly checkin updated');
+        } else if (isIndividualObjectiveAsKeyResult) {
+          // For individual objectives used as key results for department objectives
+          // Check if this is a numerical metric - if so, update key_results.current_value instead of progress_percentage
+          const isNumericalMetric = keyResultData?.metric_type === 'number';
+          
+          if (isNumericalMetric) {
+            // For numerical metrics, update key_results.current_value (no constraint limits)
+            const {
+              error: updateKeyResultError
+            } = await supabase.from('key_results').update({
+              current_value: data.progress_percentage, // Use original value for numerical metrics
+              updated_at: new Date().toISOString()
+            }).eq('id', keyResultId);
+            if (updateKeyResultError) {
+              console.error('Error updating key result current_value:', updateKeyResultError);
+              throw updateKeyResultError;
+            }
+          } else {
+            // For percentage metrics, update individual_objectives.progress_percentage (0-100 constraint)
+            const safeProgressPercentage = Math.min(Math.max(data.progress_percentage, 0), 100);
+            const {
+              error: updateIndivError
+            } = await supabase.from('individual_objectives').update({
+              progress_percentage: safeProgressPercentage,
+              updated_at: new Date().toISOString()
+            }).eq('id', keyResultId);
+            if (updateIndivError) {
+              console.error('Error updating individual objective progress:', updateIndivError);
+              throw updateIndivError;
+            }
+          }
+
+          // Also create weekly check-in records for individual objectives
+          if (data.id) {
+            // Update existing check-in
+            const {
+              error
+            } = await supabase.from('weekly_checkins').update({
+              current_value: data.progress_percentage,
+              confidence_level: 8,
+              status: data.status,
+              comments: data.comments,
+              blockers: data.blockers
+            }).eq('id', data.id);
+            if (error) throw error;
+          } else {
+            // Create new check-in for individual objective
+            const {
+              error
+            } = await supabase.from('weekly_checkins').insert({
+              organization_id: profile.active_organization_id,
+              individual_objective_id: keyResultId,
+              employee_id: employee.id,
+              week_start_date: weekKey,
+              current_value: data.progress_percentage,
+              confidence_level: 8,
               status: data.status,
               comments: data.comments,
               blockers: data.blockers
@@ -565,17 +733,53 @@ export const ObjectiveCheckinForm = ({
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-semibold text-gray-800">Progress Overview</span>
                 <span className="text-sm font-medium text-purple-700 bg-white px-2 py-1 rounded-md">
-                  {keyResultData.current_value} / {keyResultData.target_value} {keyResultData.unit}
+                  {(() => {
+                    // Get the latest current value from weekly check-ins
+                    const latestCheckin = Object.values(checkinData).reduce((latest, current) => {
+                      if (!latest || current.progress_percentage > latest.progress_percentage) {
+                        return current;
+                      }
+                      return latest;
+                    }, null as CheckinData | null);
+                    
+                    const currentValue = latestCheckin?.progress_percentage || keyResultData.current_value;
+                    
+                    return keyResultData.metric_type === 'number' ? 
+                      `${currentValue} / ${keyResultData.target_value} ${keyResultData.unit || ''}` : 
+                      `${Math.round((currentValue / keyResultData.target_value) * 100)} / 100 %`;
+                  })()}
                 </span>
               </div>
               <Progress 
-                value={keyResultData.target_value > 0 ? (keyResultData.current_value / keyResultData.target_value) * 100 : 0} 
+                value={(() => {
+                  const latestCheckin = Object.values(checkinData).reduce((latest, current) => {
+                    if (!latest || current.progress_percentage > latest.progress_percentage) {
+                      return current;
+                    }
+                    return latest;
+                  }, null as CheckinData | null);
+                  
+                  const currentValue = latestCheckin?.progress_percentage || keyResultData.current_value;
+                  return keyResultData.target_value > 0 ? (currentValue / keyResultData.target_value) * 100 : 0;
+                })()} 
                 className="h-3 bg-white border border-purple-200" 
               />
               <div className="flex justify-between mt-2 text-xs text-gray-600">
-                <span>0 {keyResultData.unit}</span>
-                <span className="font-medium">{Math.round((keyResultData.current_value / keyResultData.target_value) * 100)}% Complete</span>
-                <span>{keyResultData.target_value} {keyResultData.unit}</span>
+                <span>{keyResultData.metric_type === 'number' ? `0 ${keyResultData.unit || ''}` : '0%'}</span>
+                <span className="font-medium">
+                  {(() => {
+                    const latestCheckin = Object.values(checkinData).reduce((latest, current) => {
+                      if (!latest || current.progress_percentage > latest.progress_percentage) {
+                        return current;
+                      }
+                      return latest;
+                    }, null as CheckinData | null);
+                    
+                    const currentValue = latestCheckin?.progress_percentage || keyResultData.current_value;
+                    return `${Math.round((currentValue / keyResultData.target_value) * 100)}% Complete`;
+                  })()}
+                </span>
+                <span>{keyResultData.metric_type === 'number' ? `${keyResultData.target_value} ${keyResultData.unit || ''}` : '100%'}</span>
               </div>
             </div>
           )}
