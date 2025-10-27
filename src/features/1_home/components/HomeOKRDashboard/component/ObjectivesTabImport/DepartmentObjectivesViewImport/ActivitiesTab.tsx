@@ -1198,9 +1198,9 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <TooltipProvider>
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm h-full flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200">
+        <div className="flex-1 min-h-0 relative bg-white rounded-lg border border-gray-200 shadow-sm">
+          {/* Fixed Header */}
+          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 rounded-t-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Target className="h-5 w-5 text-purple-600" />
@@ -1223,8 +1223,14 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
             </p>
           </div>
 
-          {/* Activities Table */}
-          <div className="flex-1 overflow-auto">
+          {/* Scrollable Content */}
+          <div 
+            className="overflow-y-auto overflow-x-hidden"
+            style={{ 
+              maxHeight: 'calc(100vh - 480px)',
+              minHeight: '200px'
+            }}
+          >
             {activities.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8">
                 <Target className="h-12 w-12 text-gray-300 mb-4" />
@@ -1439,78 +1445,86 @@ export const ActivitiesTab = ({ objectiveId, objectiveTitle }: ActivitiesTabProp
                         {/* Expanded Content Row */}
                         {isExpanded && (
                           <TableRow>
-                            <TableCell colSpan={9} className="w-full px-4 py-4 bg-blue-50 border-t border-blue-200">
-                              {activity.description && (
-                                <div className="mb-4">
-                                  <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>
-                                  <p className="text-sm text-gray-600">{activity.description}</p>
-                                </div>
-                              )}
-                              
-                              <div className="w-full space-y-4">
-                                {/* Steps Section */}
-                                <div>
-                                  <div className="flex items-center justify-between mb-3">
-                                    <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                                      <CheckSquare className="w-4 h-4 text-blue-600" />
-                                      Steps ({activity.steps.filter(s => s.is_completed).length}/{activity.steps.length})
-                                    </h4>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setShowAddStepDialog({ isOpen: true, activityId: activity.id, activityTitle: activity.title });
-                                      }}
-                                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                      title="Add a new step to this activity"
-                                    >
-                                      <Plus className="w-4 h-4 mr-1" />
-                                      Add Step
-                                    </Button>
+                            <TableCell colSpan={9} className="w-full p-0 bg-blue-50 border-t border-blue-200">
+                              <div 
+                                className="overflow-y-auto px-4 py-4"
+                                style={{ 
+                                  maxHeight: 'calc(45vh - 150px)',
+                                  minHeight: '150px'
+                                }}
+                              >
+                                {activity.description && (
+                                  <div className="mb-4">
+                                    <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>
+                                    <p className="text-sm text-gray-600">{activity.description}</p>
                                   </div>
-                                  
-                                  <Droppable droppableId={`steps-${activity.id}`}>
-                                    {(provided, snapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.droppableProps}
-                                        className={`space-y-2 min-h-[50px] ${
-                                          snapshot.isDraggingOver ? 'bg-blue-100 rounded-lg' : ''
-                                        }`}
+                                )}
+                                
+                                <div className="w-full space-y-4">
+                                  {/* Steps Section */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                        <CheckSquare className="w-4 h-4 text-blue-600" />
+                                        Steps ({activity.steps.filter(s => s.is_completed).length}/{activity.steps.length})
+                                      </h4>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setShowAddStepDialog({ isOpen: true, activityId: activity.id, activityTitle: activity.title });
+                                        }}
+                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                        title="Add a new step to this activity"
                                       >
-                                        {activity.steps.length === 0 ? (
-                                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                                            <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
-                                            <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
-                                            <p className="text-xs text-blue-700">
-                                              Break down this activity into smaller steps for better tracking
-                                            </p>
-                                            <p className="text-xs text-blue-600 mt-2">
-                                              👆 Click "Add Step" button above to get started
-                                            </p>
-                                          </div>
-                                        ) : (
-                                          activity.steps
-                                            .sort((a, b) => a.order - b.order)
-                                            .map((step, index) => (
-                                              <ActivityStep
-                                                key={step.id}
-                                                step={step}
-                                                index={index}
-                                                onUpdateStep={updateActivityStep}
-                                                onDeleteStep={deleteActivityStep}
-                                                onUploadFile={uploadStepFile}
-                                                onDeleteFile={deleteStepFile}
-                                              />
-                                            ))
-                                        )}
-                                        {provided.placeholder}
-                                      </div>
-                                    )}
-                                  </Droppable>
+                                        <Plus className="w-4 h-4 mr-1" />
+                                        Add Step
+                                      </Button>
+                                    </div>
+                                    
+                                    <Droppable droppableId={`steps-${activity.id}`}>
+                                      {(provided, snapshot) => (
+                                        <div
+                                          ref={provided.innerRef}
+                                          {...provided.droppableProps}
+                                          className={`space-y-2 min-h-[50px] ${
+                                            snapshot.isDraggingOver ? 'bg-blue-100 rounded-lg' : ''
+                                          }`}
+                                        >
+                                          {activity.steps.length === 0 ? (
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                                              <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
+                                              <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
+                                              <p className="text-xs text-blue-700">
+                                                Break down this activity into smaller steps for better tracking
+                                              </p>
+                                              <p className="text-xs text-blue-600 mt-2">
+                                                👆 Click "Add Step" button above to get started
+                                              </p>
+                                            </div>
+                                          ) : (
+                                            activity.steps
+                                              .sort((a, b) => a.order - b.order)
+                                              .map((step, index) => (
+                                                <ActivityStep
+                                                  key={step.id}
+                                                  step={step}
+                                                  index={index}
+                                                  onUpdateStep={updateActivityStep}
+                                                  onDeleteStep={deleteActivityStep}
+                                                  onUploadFile={uploadStepFile}
+                                                  onDeleteFile={deleteStepFile}
+                                                />
+                                              ))
+                                          )}
+                                          {provided.placeholder}
+                                        </div>
+                                      )}
+                                    </Droppable>
+
+                                  </div>
 
                                 </div>
-
                               </div>
                             </TableCell>
                           </TableRow>

@@ -18,7 +18,7 @@ export const TableFooter: React.FC<TableFooterProps> = ({
   services
 }) => {
   return (
-    <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
+    <div className="flex-shrink-0 px-2 py-1 border-t border-gray-200 bg-gray-50">
       <SocialMediaErrorBoundary>
         <MasterDataToolbar 
           onContentTypeDataChange={onContentTypeDataChange} 

@@ -615,7 +615,13 @@ export const ObjectiveCheckinForm = ({
               </div>
               
               {/* Scrollable Content */}
-              <div className="overflow-y-auto overflow-x-hidden max-h-[400px]">
+              <div 
+                className="overflow-y-auto overflow-x-hidden"
+                style={{ 
+                  maxHeight: 'calc(100vh - 520px)',
+                  minHeight: '200px'
+                }}
+              >
                 <div className="divide-y divide-gray-100">
               {weeklyPeriods.map(period => {
                   const weekKey = getWeekKey(period.weekStart);
