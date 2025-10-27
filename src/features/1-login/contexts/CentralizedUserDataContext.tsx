@@ -137,7 +137,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setError(null);
       
       // Run profile and email verification queries in parallel with timeout
-      const QUERY_TIMEOUT = 3000; // 3 seconds timeout (reduced from 10)
+      const QUERY_TIMEOUT = 5000; // 5 seconds timeout (increased for better reliability)
       
       const profilePromise = supabase
         .from('profiles')
@@ -153,9 +153,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         .limit(1)
         .maybeSingle();
       
-      // Race queries against timeout
+      // Race queries against timeout - increased timeout for better reliability
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('User data query timeout')), QUERY_TIMEOUT)
+        setTimeout(() => reject(new Error('User data query timeout')), QUERY_TIMEOUT * 2) // Increased timeout
       );
       
       const [

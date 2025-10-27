@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
@@ -37,14 +37,14 @@ export const usePermissionConfiguration = () => {
 
   useEffect(() => {
     const fetchConfigurations = async () => {
-      console.log('🔄 fetchConfigurations called', { organizationId: organization?.id, hasUser: !!user });
+      // console.log('🔄 fetchConfigurations called', { organizationId: organization?.id, hasUser: !!user });
       
       // Check application cache first
       const cacheKey = `${CACHE_KEY_PREFIX}${organization?.id || 'null'}`;
       const cached = APP_CONFIG_CACHE.get(cacheKey);
       
       if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-        console.log('🚀 CACHE HIT: Using cached permission configurations');
+        // console.log('🚀 CACHE HIT: Using cached permission configurations');
         setConfigurations(cached.data);
         setLoading(false);
         return;
@@ -52,18 +52,18 @@ export const usePermissionConfiguration = () => {
       
       // Shorter timeout for better responsiveness
       const timeoutTimer = setTimeout(() => {
-        console.log('⏰ Organization loading timeout (1s) - proceeding without organization data');
+        // console.log('⏰ Organization loading timeout (1s) - proceeding without organization data');
         setConfigurations([]);
         setLoading(false);
       }, 1000); // Further reduced for better UX
       
       if (!organization?.id) {
         // If no organization, check if we're still loading organization data
-        console.log('📋 No organization ID yet, waiting for organization data...');
+        // console.log('📋 No organization ID yet, waiting for organization data...');
         
         // Check if user is authenticated but just no active organization
         if (user && !organization) {
-          console.log('📋 User authenticated but no active organization - returning empty configurations');
+          // console.log('📋 User authenticated but no active organization - returning empty configurations');
           clearTimeout(timeoutTimer);
           setConfigurations([]);
           setLoading(false);
@@ -72,7 +72,7 @@ export const usePermissionConfiguration = () => {
         
         // If we have a user but no organization after a short delay, proceed with empty config
         const quickTimeout = setTimeout(() => {
-          console.log('📋 Quick timeout: Proceeding with empty configurations for better UX');
+          // console.log('📋 Quick timeout: Proceeding with empty configurations for better UX');
           clearTimeout(timeoutTimer);
           setConfigurations([]);
           setLoading(false);
@@ -112,7 +112,7 @@ export const usePermissionConfiguration = () => {
           });
         } else {
           // Only use real data from Supabase
-          console.log('📋 Real configurations loaded from Supabase:', customConfigs || []);
+          // console.log('📋 Real configurations loaded from Supabase:', customConfigs || []);
           const configs = customConfigs || [];
           setConfigurations(configs);
           
@@ -122,16 +122,16 @@ export const usePermissionConfiguration = () => {
             timestamp: Date.now(),
             organizationId: organization.id
           });
-          console.log('💾 CACHE STORED: Permission configurations cached for', CACHE_TTL / 1000, 'seconds');
+          // console.log('💾 CACHE STORED: Permission configurations cached for', CACHE_TTL / 1000, 'seconds');
         }
       } catch (error) {
         console.error('Error fetching permission configurations:', error);
         // If error occurs, return empty configurations instead of fallback
-        console.log('📋 Error occurred, returning empty configurations');
+        // console.log('📋 Error occurred, returning empty configurations');
         setConfigurations([]);
       } finally {
         setLoading(false);
-        console.log('✅ Loading completed');
+        // console.log('✅ Loading completed');
       }
     };
 

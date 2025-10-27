@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Objective } from '@/types/okr';
+import { useMemo } from 'react';
 
 /**
  * Hook for fetching objectives with multiple cycle filtering support
@@ -15,11 +16,11 @@ export const useFilteredObjectives = (
     queryKey: ['filtered-objectives', organizationId, cycleIds, level],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('❌ No organizationId provided');
+        // console.log('❌ No organizationId provided');
         return [];
       }
       
-      console.log('🔍 Fetching filtered objectives:', { organizationId, cycleIds, level });
+      // console.log('🔍 Fetching filtered objectives:', { organizationId, cycleIds, level });
       
       let query = supabase
         .from('company_objectives')
@@ -28,10 +29,10 @@ export const useFilteredObjectives = (
 
       // Filter by multiple cycle IDs if provided
       if (cycleIds && cycleIds.length > 0) {
-        console.log('🔍 Applying cycle filter:', { cycleIds });
+        // console.log('🔍 Applying cycle filter:', { cycleIds });
         query = query.in('cycle_id', cycleIds);
       } else {
-        console.log('⚠️ No cycleIds provided - fetching all objectives');
+        // console.log('⚠️ No cycleIds provided - fetching all objectives');
       }
 
       // Note: company_objectives table doesn't have level column - all are company level
@@ -44,31 +45,31 @@ export const useFilteredObjectives = (
       }
       
       if (!data) {
-        console.log('📊 No filtered objectives data returned');
+        // console.log('📊 No filtered objectives data returned');
         return [];
       }
       
-      console.log('📊 Raw filtered objectives data from database:', {
-        count: data.length,
-        objectives: data.map(obj => ({
-          id: obj.id,
-          title: obj.title,
-          cycle_id: obj.cycle_id,
-          organization_id: obj.organization_id
-        }))
-      });
+      // console.log('📊 Raw filtered objectives data from database:', {
+      //   count: data.length,
+      //   objectives: data.map(obj => ({
+      //     id: obj.id,
+      //     title: obj.title,
+      //     cycle_id: obj.cycle_id,
+      //     organization_id: obj.organization_id
+      //   }))
+      // });
 
       // Check specifically for the objective the user mentioned
       const targetObjective = data.find(obj => obj.id === '30258d1c-2f08-4c12-86ca-5678adf3630b');
       if (targetObjective) {
-        console.log('🎯 Found target objective:', {
-          id: targetObjective.id,
-          title: targetObjective.title,
-          cycle_id: targetObjective.cycle_id,
-          organization_id: targetObjective.organization_id
-        });
+        // console.log('🎯 Found target objective:', {
+        //   id: targetObjective.id,
+        //   title: targetObjective.title,
+        //   cycle_id: targetObjective.cycle_id,
+        //   organization_id: targetObjective.organization_id
+        // });
       } else {
-        console.log('❌ Target objective 30258d1c-2f08-4c12-86ca-5678adf3630b not found in results');
+        // console.log('❌ Target objective 30258d1c-2f08-4c12-86ca-5678adf3630b not found in results');
         
         // Let's also check if it exists at all
         const checkQuery = await supabase
@@ -76,7 +77,7 @@ export const useFilteredObjectives = (
           .select('*')
           .eq('id', '30258d1c-2f08-4c12-86ca-5678adf3630b');
           
-        console.log('🔍 Direct check for target objective:', checkQuery.data);
+        // console.log('🔍 Direct check for target objective:', checkQuery.data);
       }
       
       // Transform the data to match Objective type exactly
@@ -100,22 +101,22 @@ export const useFilteredObjectives = (
       // Filter by level if specified (though company_objectives are all company level)
       const filteredData = level ? (level === 'company' ? transformedData : []) : transformedData;
       
-      console.log('✅ Final filtered objectives result:', {
-        organizationId,
-        cycleIds,
-        level,
-        count: filteredData.length,
-        objectives: filteredData.map(obj => ({
-          id: obj.id,
-          title: obj.title,
-          level: obj.level,
-          cycle_id: obj.cycle_id,
-          status: obj.status,
-          owner_id: obj.owner_id,
-          department_id: obj.department_id,
-          key_results_count: 0,
-        }))
-      });
+      // console.log('✅ Final filtered objectives result:', {
+      //   organizationId,
+      //   cycleIds,
+      //   level,
+      //   count: filteredData.length,
+      //   objectives: filteredData.map(obj => ({
+      //     id: obj.id,
+      //     title: obj.title,
+      //     level: obj.level,
+      //     cycle_id: obj.cycle_id,
+      //     status: obj.status,
+      //     owner_id: obj.owner_id,
+      //     department_id: obj.department_id,
+      //     key_results_count: 0,
+      //   }))
+      // });
       
       return filteredData;
     },

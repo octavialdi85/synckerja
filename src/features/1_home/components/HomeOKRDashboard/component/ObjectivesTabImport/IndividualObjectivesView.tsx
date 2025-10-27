@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -6,6 +6,7 @@ import { Building, Plus, Target, ChevronRight, ChevronDown, User, MoreHorizontal
 import { Progress } from '@/features/ui/progress';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useIndividualObjectives, useDeleteIndividualObjective } from '../../modal/useIndividualObjectives';
+import { useObjectives } from './useObjectives';
 import { useDepartmentObjectives } from '../../modal/useDepartmentObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
 import { CreateIndividualObjectiveModal } from './DepartmentObjectivesViewImport/CreateIndividualObjectiveModal';
@@ -56,18 +57,51 @@ export const IndividualObjectivesView = ({
   }>({
     open: false
   });
+
   const {
     data: employees = [],
     isLoading: loadingEmployees
   } = useEmployees();
   const queryClient = useQueryClient();
 
-  // Get individual objectives from the dedicated table
+  // Get individual objectives with key results from useObjectives hook
   const finalCycleIds = cycleIds && cycleIds.length > 0 ? cycleIds : cycleId ? [cycleId] : undefined;
+  const finalCycleId = cycleIds && cycleIds.length > 0 ? cycleIds[0] : cycleId; // Use first cycle ID for useObjectives
+  
+  // console.log('🔍 IndividualObjectivesView - Before useObjectives:', {
+  //   organizationId,
+  //   finalCycleId,
+  //   level: 'individual'
+  // });
+  
   const {
     data: individualObjectives = [],
     isLoading: loadingObjectives
-  } = useIndividualObjectives(organizationId, finalCycleIds);
+  } = useObjectives(organizationId, finalCycleId, 'individual');
+  
+  // Memoize debug logging to prevent excessive console output
+  const debugInfo = useMemo(() => ({
+    organizationId,
+    cycleId,
+    cycleIds,
+    finalCycleId,
+    finalCycleIds,
+    individualObjectivesCount: individualObjectives.length,
+    loadingObjectives,
+    individualObjectives: individualObjectives.map(obj => ({
+      id: obj.id,
+      title: obj.title,
+      employee_id: obj.employee_id,
+      cycle_id: obj.cycle_id,
+      hasKeyResults: obj.key_results && obj.key_results.length > 0,
+      keyResultsCount: obj.key_results ? obj.key_results.length : 0
+    }))
+  }), [organizationId, cycleId, cycleIds, finalCycleId, finalCycleIds, individualObjectives, loadingObjectives]);
+
+  // Only log when debug info changes significantly
+  useEffect(() => {
+    // console.log('🔍 IndividualObjectivesView - After useObjectives:', debugInfo);
+  }, [debugInfo]);
 
   // Get department objectives for showing as key results in Department tab
   const {
@@ -143,21 +177,57 @@ export const IndividualObjectivesView = ({
     // Filter individual objectives that belong to this employee
     return individualObjectives.filter(obj => (obj as any).employee_id === employeeId);
   };
-  const getSyncedProgress = (objective: any) => {
-    // Calculate progress based on objective's own progress_percentage
-    return objective.progress_percentage || 0;
-  };
-  if (loadingEmployees || loadingObjectives || loadingDepartments) {
-    return <div className="flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto mb-3"></div>
-          <p className="text-sm text-gray-600">Loading objectives...</p>
-        </div>
-      </div>;
-  }
+  const getSyncedProgress = useCallback((objective: any) => {
+    // console.log('🔍 Individual Objective Progress Debug:', {
+    //   objectiveId: objective.id,
+    //   objectiveTitle: objective.title,
+    //   hasKeyResults: objective.key_results && objective.key_results.length > 0,
+    //   keyResults: objective.key_results,
+    //   objectiveProgressPercentage: objective.progress_percentage
+    // });
+    
+    // For individual objectives that have their own key results, 
+    // we need to calculate progress from key_results data
+    if (objective.key_results && objective.key_results.length > 0) {
+      const keyResult = objective.key_results[0]; // Get first key result
+      
+      if (keyResult.metric_type === 'number') {
+        // For numerical metrics, calculate percentage: (current_value / target_value) * 100
+        const currentValue = keyResult.current_value || 0;
+        const targetValue = keyResult.target_value || 1;
+        const calculatedProgress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
+        
+        // console.log('📊 Numerical Metric Progress:', {
+        //   currentValue,
+        //   targetValue,
+        //   calculatedProgress
+        // });
+        
+        return calculatedProgress;
+      } else {
+        // For percentage metrics, use progress_percentage from key_results
+        const progressPercentage = keyResult.progress_percentage || 0;
+        
+        // console.log('📊 Percentage Metric Progress:', {
+        //   progressPercentage
+        // });
+        
+        return progressPercentage;
+      }
+    }
+    
+    // Fallback to objective's own progress_percentage for objectives without key results
+    const fallbackProgress = objective.progress_percentage || 0;
+    
+    // console.log('📊 Fallback Progress:', {
+    //   fallbackProgress
+    // });
+    
+    return fallbackProgress;
+  }, []);
 
-  // Get objectives grouped by department and employee
-  const getObjectivesByDepartmentAndEmployee = () => {
+  // Memoize expensive calculations - MUST be before any early returns
+  const objectivesByDepartmentAndEmployee = useMemo(() => {
     const grouped = new Map<string, Map<string, any[]>>();
 
     // Group by department first, then by employee
@@ -174,10 +244,9 @@ export const IndividualObjectivesView = ({
       deptGroup.get(employeeId)!.push(obj);
     });
     return grouped;
-  };
+  }, [individualObjectives]);
 
-  // Get employees by department
-  const getEmployeesByDepartment = () => {
+  const employeesByDepartment = useMemo(() => {
     const grouped = new Map<string, any[]>();
     employees.forEach(emp => {
       const deptId = emp.department_id || 'no-department';
@@ -187,7 +256,36 @@ export const IndividualObjectivesView = ({
       grouped.get(deptId)!.push(emp);
     });
     return grouped;
-  };
+  }, [employees]);
+
+  // Memoize objectives by employee and status
+  const objectivesByEmployeeAndStatus = useMemo(() => {
+    const employeeObjectivesMap = new Map<string, Map<string, any[]>>();
+    
+    individualObjectives.forEach(objective => {
+      if (!employeeObjectivesMap.has((objective as any).employee_id)) {
+        employeeObjectivesMap.set((objective as any).employee_id, new Map());
+      }
+      
+      const statusMap = employeeObjectivesMap.get((objective as any).employee_id)!;
+      if (!statusMap.has((objective as any).status)) {
+        statusMap.set((objective as any).status, []);
+      }
+      
+      statusMap.get((objective as any).status)!.push(objective);
+    });
+    
+    return employeeObjectivesMap;
+  }, [individualObjectives]);
+
+  if (loadingEmployees || loadingObjectives || loadingDepartments) {
+    return <div className="flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto mb-3"></div>
+          <p className="text-sm text-gray-600">Loading objectives...</p>
+        </div>
+      </div>;
+  }
   const getDepartmentName = (departmentId: string) => {
     const department = departments.find(d => d.id === departmentId);
     return department?.name || 'Unknown Department';
@@ -208,9 +306,9 @@ export const IndividualObjectivesView = ({
                 {/* Dropdown for activities */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="h-8 w-8 p-0 flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <Plus className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-48 bg-white shadow-lg border z-50">
                     <DropdownMenuItem className="flex items-center">
@@ -230,21 +328,19 @@ export const IndividualObjectivesView = ({
                 </span>
               </div>
               <div className="flex items-center space-x-3 flex-shrink-0 mr-3">
-                <Button size="sm" variant="outline" className="bg-blue-50 hover:bg-blue-100 border-blue-200" onClick={(e) => e.stopPropagation()}>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Check In
-                </Button>
+                <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Check In</span>
+                </div>
                 <Badge variant="outline" className={`text-xs ${objective.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : objective.status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                   {objective.status === 'active' ? 'Active' : objective.status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <div
                   onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
-                  className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
                 >
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </div>
                 <div className="text-sm text-gray-500 min-w-[3rem] text-right">
                   {Math.round(syncedProgress)}%
                 </div>
@@ -282,27 +378,6 @@ export const IndividualObjectivesView = ({
       </AccordionItem>
     );
   };
-  const objectivesByDepartmentAndEmployee = getObjectivesByDepartmentAndEmployee();
-  const employeesByDepartment = getEmployeesByDepartment();
-  // Group objectives by employee and status (similar to Department view)
-  const getObjectivesByEmployeeAndStatus = () => {
-    const employeeObjectivesMap = new Map<string, Map<string, any[]>>();
-    
-    individualObjectives.forEach(objective => {
-      if (!employeeObjectivesMap.has((objective as any).employee_id)) {
-        employeeObjectivesMap.set((objective as any).employee_id, new Map());
-      }
-      
-      const statusMap = employeeObjectivesMap.get((objective as any).employee_id)!;
-      if (!statusMap.has((objective as any).status)) {
-        statusMap.set((objective as any).status, []);
-      }
-      
-      statusMap.get((objective as any).status)!.push(objective);
-    });
-    
-    return employeeObjectivesMap;
-  };
 
   const renderEmployeeObjectiveCard = (objective: any, employeeId: string, status: string, borderColor: string, iconColor: string) => {
     const syncedProgress = getSyncedProgress(objective);
@@ -323,10 +398,10 @@ export const IndividualObjectivesView = ({
                   objectiveId={objective.id}
                   objectiveTitle={objective.title}
                   trigger={
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                      <Calendar className="h-3 w-3 mr-1" />
-                      Weekly Check-in
-                    </Button>
+                    <div className="h-7 px-2 text-xs border border-gray-300 rounded flex items-center space-x-1 hover:bg-gray-50 cursor-pointer">
+                      <Calendar className="h-3 w-3" />
+                      <span>Weekly Check-in</span>
+                    </div>
                   }
                 />
                 <Badge variant="outline" className="text-xs bg-gray-50">
@@ -339,23 +414,19 @@ export const IndividualObjectivesView = ({
                 }`}>
                   {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <div
                   onClick={(e) => handleEditObjective(e, objective)}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                  className="h-7 w-7 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
                   title="Edit objective"
                 >
                   <Edit className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                </div>
+                <div
                   onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                  className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
                 >
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </div>
               </div>
             </div>
             
@@ -385,7 +456,6 @@ export const IndividualObjectivesView = ({
     );
   };
 
-  const objectivesByEmployeeAndStatus = getObjectivesByEmployeeAndStatus();
 
   return <div className="h-full w-full flex flex-col">
       <div className="flex-1 w-full overflow-auto">
@@ -427,9 +497,9 @@ export const IndividualObjectivesView = ({
                             {/* Three Dots Dropdown Menu */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={e => e.stopPropagation()}>
+                                <div className="h-8 w-8 p-0 flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer" onClick={e => e.stopPropagation()}>
                                   <MoreHorizontal className="h-4 w-4" />
-                                </Button>
+                                </div>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem onClick={e => {
@@ -569,6 +639,7 @@ export const IndividualObjectivesView = ({
           employeeId={selectedObjectiveForActivity.employeeId}
         />
       )}
+
 
       {/* Delete Individual Objective Dialog */}
       <DeleteIndividualObjectiveDialog

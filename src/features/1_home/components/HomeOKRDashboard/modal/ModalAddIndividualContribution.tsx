@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -94,19 +94,14 @@ export const ModalAddIndividualContribution = ({
   // Get department objectives to show in dropdown - using useObjectives hook
   const { objectives: allDepartmentObjectives = [], isLoading: loadingObjectives, error: objectivesError } = useObjectives(organizationId, cycleId, 'department');
   
-  // Debug logging
-  console.log('ModalAddIndividualContribution - organizationId:', organizationId);
-  console.log('ModalAddIndividualContribution - cycleId:', cycleId);
-  console.log('ModalAddIndividualContribution - allDepartmentObjectives:', allDepartmentObjectives);
-  console.log('ModalAddIndividualContribution - loadingObjectives:', loadingObjectives);
-  console.log('ModalAddIndividualContribution - objectivesError:', objectivesError);
-  
-  // Filter objectives by department if departmentId is provided
-  const departmentObjectives = departmentId 
-    ? allDepartmentObjectives.filter((obj: any) => obj.department_id === departmentId)
-    : allDepartmentObjectives;
+  // Memoize filtered objectives to prevent unnecessary re-renders
+  const departmentObjectives = useMemo(() => {
+    return departmentId 
+      ? allDepartmentObjectives.filter((obj: any) => obj.department_id === departmentId)
+      : allDepartmentObjectives;
+  }, [departmentId, allDepartmentObjectives]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!currentEmployee) {
@@ -217,9 +212,9 @@ export const ModalAddIndividualContribution = ({
         variant: 'destructive',
       });
     }
-  };
+  }, [currentEmployee, formData, departmentObjectives, createObjective, currentUser, organizationId, cycleId, toast, onSuccess, onOpenChange]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     // Reset form
     setFormData({
       company_objective_id: '',
@@ -233,7 +228,7 @@ export const ModalAddIndividualContribution = ({
       weight: '100'
     });
     onOpenChange(false);
-  };
+  }, [onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -78,19 +78,21 @@ export const ObjectivesTab = ({
   const singleCycleId = hasMultipleCycles ? undefined : selectedCycleId;
   
   // Use different hooks based on filtering type
+  // Note: For individual objectives, we don't use these hooks as IndividualObjectivesView handles its own data fetching
   const singleObjectivesQuery = useObjectives(
     organizationId, 
     singleCycleId, 
-    type === 'department' ? undefined : type
+    type === 'department' ? undefined : (type === 'individual' ? undefined : type)
   );
   
   const multiObjectivesQuery = useFilteredObjectives(
     organizationId,
     hasMultipleCycles ? filteredCycleIds : undefined,
-    type === 'department' ? undefined : type
+    type === 'department' ? undefined : (type === 'individual' ? undefined : type)
   );
 
   // Choose the appropriate query result
+  // For individual objectives, these queries are not used as IndividualObjectivesView handles its own data fetching
   const { objectives = [], refetch: refetchObjectives } = hasMultipleCycles 
     ? multiObjectivesQuery 
     : singleObjectivesQuery;

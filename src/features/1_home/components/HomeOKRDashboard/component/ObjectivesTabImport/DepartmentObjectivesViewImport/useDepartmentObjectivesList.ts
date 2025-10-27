@@ -92,6 +92,9 @@ export const useDepartmentObjectivesList = (organizationId: string, cycleIds?: s
       return data || [];
     },
     enabled: !!organizationId,
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 };
 

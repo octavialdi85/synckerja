@@ -1,6 +1,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Objective, OkrStatus } from './okr';
 import { useToast } from '@/features/ui/use-toast';
@@ -13,7 +13,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
   useEffect(() => {
     if (!organizationId) return;
 
-    console.log('🔄 Setting up real-time subscriptions for objectives:', { level, organizationId });
+    // console.log('🔄 Setting up real-time subscriptions for objectives:', { level, organizationId });
 
     const channels: any[] = [];
 
@@ -29,7 +29,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Real-time update for company objectives:', payload);
+          // console.log('📡 Real-time update for company objectives:', payload);
           queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
           queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
         }
@@ -47,7 +47,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Real-time update for department objectives:', payload);
+          // console.log('📡 Real-time update for department objectives:', payload);
           queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
           queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
         }
@@ -65,7 +65,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Real-time update for individual objectives:', payload);
+          // console.log('📡 Real-time update for individual objectives:', payload);
           queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
           queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
         }
@@ -83,7 +83,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Real-time update for key results:', payload);
+          // console.log('📡 Real-time update for key results:', payload);
           queryClient.invalidateQueries({ queryKey: [`${level}-objectives`, organizationId, cycleId] });
           queryClient.invalidateQueries({ queryKey: ['key-results'] });
         }
@@ -95,7 +95,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
     channels.forEach(channel => channel.subscribe());
 
     return () => {
-      console.log('🔄 Cleaning up objective real-time subscriptions');
+      // console.log('🔄 Cleaning up objective real-time subscriptions');
       channels.forEach(channel => supabase.removeChannel(channel));
     };
   }, [organizationId, cycleId, level, queryClient]);
@@ -104,11 +104,11 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
     queryKey: [`${level}-objectives`, organizationId, cycleId],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('❌ No organizationId provided');
+        // console.log('❌ No organizationId provided');
         return [];
       }
       
-      console.log('🔍 Fetching objectives:', { organizationId, cycleId, level });
+      // console.log('🔍 Fetching objectives:', { organizationId, cycleId, level });
       
       // Use the new hierarchy tables based on level
       let data: any[] = [];
@@ -208,22 +208,62 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
         
       } else if (level === 'individual') {
         // Get from individual_objectives with related key results
+        // console.log('🔍 Fetching individual objectives:', { organizationId, cycleId, level });
+        
+        // First, let's try a simpler query to check if individual objectives exist
         let query = supabase
           .from('individual_objectives')
-          .select(`
-            *,
-            key_results:key_results!individual_objective_id(*)
-          `)
+          .select('*')
           .eq('organization_id', organizationId);
 
         if (cycleId) {
+          // console.log('🔍 Applying cycle filter for individual objectives:', cycleId);
           query = query.eq('cycle_id', cycleId);
+        } else {
+          // console.log('⚠️ No cycleId provided for individual objectives - fetching all');
         }
 
         const { data: indivData, error } = await query.order('created_at', { ascending: false });
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Error fetching individual objectives:', error);
+          throw error;
+        }
         
-        data = indivData?.map(obj => ({
+        // console.log('📊 Raw individual objectives data:', {
+        //   count: indivData?.length || 0,
+        //   objectives: indivData?.map(obj => ({
+        //     id: obj.id,
+        //     title: obj.title,
+        //     cycle_id: obj.cycle_id,
+        //     employee_id: obj.employee_id
+        //   })) || []
+        // });
+        
+        // Now fetch key results for each individual objective
+        const objectivesWithKeyResults = await Promise.all(
+          (indivData || []).map(async (obj) => {
+            const { data: keyResults } = await supabase
+              .from('key_results')
+              .select('*')
+              .eq('individual_objective_id', obj.id);
+            
+            return {
+              ...obj,
+              key_results: keyResults || []
+            };
+          })
+        );
+        
+        // console.log('📊 Individual objectives with key results:', {
+        //   count: objectivesWithKeyResults.length,
+        //   objectives: objectivesWithKeyResults.map(obj => ({
+        //     id: obj.id,
+        //     title: obj.title,
+        //     keyResultsCount: obj.key_results.length
+        //   }))
+        // });
+        
+        data = objectivesWithKeyResults?.map(obj => ({
           ...obj,
           why_important: obj.why_important || '',
           level: 'individual' as const,
@@ -281,18 +321,22 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
         })) || [];
       }
 
-      console.log('✅ Objectives loaded:', data.length);
+      // console.log('✅ Objectives loaded:', data.length);
       return data as Objective[];
     },
     enabled: !!organizationId,
   });
 
-  return {
+  // Memoize the return value to prevent unnecessary re-renders
+  const returnValue = useMemo(() => ({
+    data: objectives, // Return as 'data' for consistency
     objectives,
     isLoading,
     error,
     refetch
-  };
+  }), [objectives, isLoading, error, refetch]);
+
+  return returnValue;
 };
 
 // Interface for company objective creation

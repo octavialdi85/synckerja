@@ -50,9 +50,9 @@ export const useProfile = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      console.log('🔍 useProfile - Basic profile data:', profileData);
-      console.log('🔍 useProfile - Extended profile data:', detailsData);
-      console.log('🔍 useProfile - Employee photo data:', employeeData);
+      // console.log('🔍 useProfile - Basic profile data:', profileData);
+      // console.log('🔍 useProfile - Extended profile data:', detailsData);
+      // console.log('🔍 useProfile - Employee photo data:', employeeData);
 
       // Use employee photo if user_profile_details doesn't have one
       const photoUrl = detailsData?.profile_photo_url || employeeData?.profile_photo_url || null;
@@ -68,9 +68,14 @@ export const useProfile = () => {
         profile_photo_url: photoUrl,
       };
 
-      console.log('🔍 useProfile - Final combined data:', combinedData);
+      // console.log('🔍 useProfile - Final combined data:', combinedData);
       return combinedData as Profile;
     },
     enabled: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: 1,
   });
 };

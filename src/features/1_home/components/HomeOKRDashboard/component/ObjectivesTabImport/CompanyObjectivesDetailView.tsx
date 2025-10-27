@@ -228,34 +228,16 @@ export const CompanyObjectivesDetailView = ({
     all_key_results: getRelatedKeyResults(objective)
   }));
 
-  // Helper function to get actual progress from current_value/target_value
+  // Helper function to get actual progress from progress_percentage directly
   const getActualProgress = (keyResult: any): number => {
-    if (!keyResult || !keyResult.target_value || keyResult.target_value === 0) {
-      return 0;
-    }
-    const startValue = keyResult.start_value || 0;
-    const currentValue = keyResult.current_value || 0;
-    const targetValue = keyResult.target_value;
-
-    // Calculate progress percentage
-    const totalRange = targetValue - startValue;
-    const achievedRange = currentValue - startValue;
-    if (totalRange <= 0) return 0;
-    const progress = keyResult.is_inverse ? Math.max(0, Math.min(100, (startValue - currentValue) / (startValue - targetValue) * 100)) : Math.max(0, Math.min(100, achievedRange / totalRange * 100));
-    return Math.round(progress);
+    // Use progress_percentage directly from database
+    return keyResult.progress_percentage || 0;
   };
 
   // Helper function to check if objective has actual progress
   const hasActualProgress = (objective: any) => {
-    if (!objective.key_results || objective.key_results.length === 0) {
-      return false;
-    }
-
-    // Check if any key result has progress > 0
-    return objective.key_results.some((kr: any) => {
-      const actualProgress = getActualProgress(kr);
-      return actualProgress > 0 || kr.current_value > 0;
-    });
+    // Check if objective has progress_percentage > 0
+    return (objective.progress_percentage || 0) > 0;
   };
   // Remove this function - accordion behavior will be handled by Accordion component
   const getObjectivesByStatus = (status: string) => {
@@ -329,8 +311,8 @@ export const CompanyObjectivesDetailView = ({
   const draftObjectives = getObjectivesByStatus('draft');
   const completedObjectives = getObjectivesByStatus('completed');
   const renderObjectiveCard = (objective: any, status: string, borderColor: string, iconColor: string) => {
-    // Calculate the actual progress using current_value vs target_value from key results
-    const actualProgress = objective.key_results && objective.key_results.length > 0 ? Math.round(objective.key_results.reduce((sum: number, kr: any) => sum + getActualProgress(kr), 0) / objective.key_results.length) : 0;
+    // Use progress_percentage directly from database
+    const actualProgress = objective.progress_percentage || 0;
     
     return (
       <AccordionItem key={objective.id} value={objective.id} className={`border-l-4 ${borderColor} shadow-sm mb-2 last:mb-0`}>
@@ -354,21 +336,16 @@ export const CompanyObjectivesDetailView = ({
                   {actualProgress}%
                 </div>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
+              <div
                 onClick={(e) => handleEditObjective(e, objective)}
-                className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
                 title="Edit objective"
               >
                 <Edit className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+              </div>
+              <div
                 onClick={(e) => handleDeleteObjective(e, objective.id, objective.title)}
-                disabled={deleteCompanyObjective.isPending}
-                className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50"
+                className={`h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded ${deleteCompanyObjective.isPending ? 'opacity-50' : ''}`}
                 title={deleteCompanyObjective.isPending ? 'Deleting...' : 'Delete objective'}
               >
                 {deleteCompanyObjective.isPending ? (
@@ -376,7 +353,7 @@ export const CompanyObjectivesDetailView = ({
                 ) : (
                   <Trash2 className="h-3 w-3" />
                 )}
-              </Button>
+              </div>
             </div>
           </div>
         </AccordionTrigger>
@@ -478,14 +455,10 @@ export const CompanyObjectivesDetailView = ({
                             objectiveId={kr.id}
                             objectiveTitle={kr.title}
                             trigger={
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-3"
-                              >
+                              <div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 cursor-pointer">
                                 <Calendar className="h-4 w-4 mr-1" />
                                 Check-in
-                              </Button>
+                              </div>
                             }
                           />
                         </div>
