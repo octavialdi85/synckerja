@@ -28,6 +28,9 @@ export const useDeleteCompanyObjective = () => {
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Company objective deleted successfully',

@@ -31,9 +31,9 @@ export const LeaveEligibilityAlert = () => {
   }
 
   return (
-    <div className="space-y-3" style={{ zIndex: 10 }}>
+    <div className="space-y-3">
       {/* Eligibility Status */}
-      <Alert variant={eligibility.isEligible ? "default" : "destructive"} style={{ zIndex: 10 }}>
+      <Alert variant={eligibility.isEligible ? "default" : "destructive"}>
         {eligibility.isEligible ? (
           <CheckCircle className="h-4 w-4" />
         ) : (
@@ -41,7 +41,7 @@ export const LeaveEligibilityAlert = () => {
         )}
         <AlertDescription className="flex items-center justify-between">
           <span>{eligibility.message}</span>
-          <Badge variant={eligibility.isEligible ? "default" : "secondary"} style={{ zIndex: 10 }}>
+          <Badge variant={eligibility.isEligible ? "default" : "secondary"}>
             {eligibility.isEligible ? "Berhak Cuti" : "Belum Berhak"}
           </Badge>
         </AlertDescription>

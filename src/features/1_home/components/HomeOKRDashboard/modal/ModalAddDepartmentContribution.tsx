@@ -87,10 +87,10 @@ export const ModalAddDepartmentContribution = ({
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.company_objective_id || !formData.title) {
+    if (!formData.company_objective_id || !formData.title || !formData.why_important.trim()) {
       toast({
         title: 'Error',
-        description: 'Please select a company objective and enter a title',
+        description: 'Please select a company objective, enter a title, and explain why this is important',
         variant: 'destructive',
       });
       return;
@@ -328,7 +328,7 @@ export const ModalAddDepartmentContribution = ({
           {/* Why Important */}
           <div className="space-y-2">
             <Label htmlFor="why_important" className="text-sm font-medium">
-              Why this is important
+              Why this is important <span className="text-red-500">*</span>
             </Label>
             <Textarea
               id="why_important"
@@ -336,6 +336,7 @@ export const ModalAddDepartmentContribution = ({
               value={formData.why_important}
               onChange={(e) => handleFormChange('why_important', e.target.value)}
               rows={3}
+              required
             />
           </div>
 

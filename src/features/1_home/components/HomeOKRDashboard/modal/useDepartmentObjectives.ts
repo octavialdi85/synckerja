@@ -248,6 +248,10 @@ export const useCreateDepartmentObjective = () => {
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Department objective created successfully',
@@ -311,7 +315,14 @@ export const useUpdateDepartmentObjective = () => {
       return data;
     },
     onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Department objective updated successfully',

@@ -3,7 +3,7 @@ import { Heart, Users } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { useMotivations } from './ModalMotifationForm/useMotivations';
-import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCurrentUserEmployee } from '@/features/1_home/components/HomeOKRDashboard/component/SectionGreetingsImport/useCurrentUserEmployee';
 import { useToast } from '@/features/ui/use-toast';
 
 interface MotivationLikeButtonProps {

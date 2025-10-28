@@ -1,18 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 
 export const useDepartmentObjectivesList = (organizationId: string, cycleIds?: string[]) => {
   const queryClient = useQueryClient();
+  const subscriptionRef = useRef<any>(null);
 
   // Real-time subscription for department objectives
   useEffect(() => {
     if (!organizationId) return;
 
-    console.log('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
+    // Prevent duplicate subscriptions
+    if (subscriptionRef.current) {
+      return;
+    }
 
-    const channel = supabase
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
+    }
+
+    subscriptionRef.current = supabase
       .channel(`department_objectives_realtime_${organizationId}`)
       .on(
         'postgres_changes',
@@ -23,12 +31,14 @@ export const useDepartmentObjectivesList = (organizationId: string, cycleIds?: s
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 REAL-TIME UPDATE for department objectives:', {
-            event: payload.eventType,
-            table: payload.table,
-            new: payload.new,
-            old: payload.old
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📡 REAL-TIME UPDATE for department objectives:', {
+              event: payload.eventType,
+              table: payload.table,
+              new: payload.new,
+              old: payload.old
+            });
+          }
           
           // Force immediate invalidation
           queryClient.invalidateQueries({ 
@@ -44,19 +54,28 @@ export const useDepartmentObjectivesList = (organizationId: string, cycleIds?: s
         }
       )
       .subscribe((status) => {
-        console.log('📊 Department objectives subscription status:', status);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📊 Department objectives subscription status:', status);
+        }
       });
 
     return () => {
-      console.log('🔄 Cleaning up department objectives subscription');
-      supabase.removeChannel(channel);
+      if (subscriptionRef.current) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Cleaning up department objectives subscription');
+        }
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
     };
   }, [organizationId, queryClient]);
 
   return useQuery({
     queryKey: ['department-objectives', organizationId, cycleIds],
     queryFn: async () => {
-      console.log('🔍 Fetching department objectives:', { organizationId, cycleIds });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Fetching department objectives:', { organizationId, cycleIds });
+      }
 
       let query = supabase
         .from('department_objectives')
@@ -88,7 +107,9 @@ export const useDepartmentObjectivesList = (organizationId: string, cycleIds?: s
         throw error;
       }
 
-      console.log('✅ Department objectives fetched:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Department objectives fetched:', data);
+      }
       return data || [];
     },
     enabled: !!organizationId,
@@ -171,9 +192,14 @@ export const useDeleteDepartmentObjective = () => {
       }
     },
     onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Department objective deleted successfully',

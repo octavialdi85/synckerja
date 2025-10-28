@@ -186,7 +186,19 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
 
       console.log('📝 Final key result data:', keyResultData);
 
-      await createKeyResult.mutateAsync(keyResultData);
+      // Insert key result directly using Supabase
+      const { data: insertedKeyResult, error: insertError } = await supabase
+        .from('key_results')
+        .insert([keyResultData])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('❌ Supabase error:', insertError);
+        throw new Error(insertError.message);
+      }
+
+      console.log('✅ Key result created successfully:', insertedKeyResult);
 
       toast({
         title: 'Success',

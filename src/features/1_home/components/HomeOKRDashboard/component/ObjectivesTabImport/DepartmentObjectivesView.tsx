@@ -5,7 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, User, MoreHorizontal, Edit } from 'lucide-react';
+import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, User, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
@@ -30,7 +30,6 @@ import { useIndividualObjectives } from '../../modal/useIndividualObjectives';
 import { useDepartmentAsKeyResult } from './DepartmentObjectivesViewImport/useDepartmentAsKeyResult';
 import { useAttendanceOperations } from './DepartmentObjectivesViewImport/useAttendanceOperations';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
 import { useEffect } from 'react';
 interface DepartmentObjectivesViewProps {
   organizationId: string;
@@ -347,15 +346,41 @@ export const DepartmentObjectivesView = ({
         <AccordionTrigger className="py-0 px-0 hover:bg-gray-50 transition-colors [&>svg]:hidden">
           <div className="w-full">
             {/* Header Section */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center space-x-2 flex-1">
-                <Building className={`h-4 w-4 ${iconColor}`} />
-                <span className="text-sm font-medium text-gray-900 truncate text-left">
-                  {objective.title}
-                </span>
+            <div className="px-4 py-3">
+              {/* Title Row */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2 flex-1">
+                  <Building className={`h-4 w-4 ${iconColor}`} />
+                  <span className="text-sm font-medium text-gray-900 truncate text-left">
+                    {objective.title}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  <div
+                    onClick={(e) => handleEditObjective(e, objective)}
+                    className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
+                    title="Edit objective"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </div>
+                  <div
+                    onClick={(e) => handleDeleteObjective(e, objective.id)}
+                    className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
+                    title="Delete objective"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </div>
+                  {/* Custom Expand/Collapse Arrow */}
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${expandedObjective === objective.id ? 'rotate-180' : ''}`} />
+                </div>
               </div>
-              <div className="flex items-center space-x-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                <ObjectiveCheckinForm objectiveId={objective.id} objectiveTitle={objective.title} trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 px-2 text-xs cursor-pointer">
+              
+            </div>
+
+            {/* Weekly Check-in Button with Progress Info */}
+            <div className="flex items-center justify-between px-4 pb-2">
+              <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
+                <ObjectiveCheckinForm objectiveId={objective.id} objectiveTitle={objective.title} disableActivitiesTab={true} trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 h-7 px-3 text-xs cursor-pointer">
                       <Calendar className="h-3 w-3 mr-1" />
                       Weekly Check-in
                     </div>} onSuccess={() => {
@@ -367,27 +392,11 @@ export const DepartmentObjectivesView = ({
                 <Badge variant="outline" className={`text-xs ${status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                   {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => handleEditObjective(e, objective)}
-                  className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50"
-                  title="Edit objective"
-                >
-                  <Edit className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={e => handleDeleteObjective(e, objective.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50">
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-                {/* Custom Expand/Collapse Arrow */}
-                <ChevronDown className="h-4 w-4 text-gray-400 transition-transform duration-200 data-[state=open]:rotate-180" />
               </div>
-            </div>
-
-            {/* Average Progress Label */}
-            <div className="flex items-center justify-between px-4 pb-2">
-              <span className="text-sm text-blue-600 font-medium">Average Progress</span>
-              <span className="text-sm font-medium text-blue-600">{Math.round(syncedProgress || 0)}%</span>
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-blue-600 font-medium">Average Progress</span>
+                <span className="text-sm font-medium text-blue-600">{Math.round(syncedProgress || 0)}%</span>
+              </div>
             </div>
             
             {/* Progress Bar - Full Width with padding */}
@@ -396,14 +405,16 @@ export const DepartmentObjectivesView = ({
             </div>
 
             {/* Why Important Section */}
-            {objective.why_important && <div className="bg-blue-50 p-3 mx-4 rounded-lg mt-3 mb-3">
+            {objective.why_important && objective.why_important.trim() && (
+              <div className="bg-blue-50 p-3 mx-4 rounded-lg mt-3 mb-3">
                 <h5 className="font-medium text-xs text-blue-900 mb-1 uppercase tracking-wide">
                   Why this is important:
                 </h5>
                 <p className="text-xs text-blue-800">
-                  Supporting Company Objective : {objective.company_objectives?.title || "Company Objective"}
+                  {objective.why_important}
                 </p>
-              </div>}
+              </div>
+            )}
           </div>
         </AccordionTrigger>
         <AccordionContent className="px-4 pb-4">
@@ -554,7 +565,7 @@ export const DepartmentObjectivesView = ({
   }
   return <div className="h-full w-full flex flex-col">
       <div className="flex-1 w-full overflow-auto">
-        <div className="space-y-4 pr-4 h-full">
+        <div className="space-y-4 h-full">
           
 
           {/* Department List with Expand/Collapse */}
@@ -576,12 +587,12 @@ export const DepartmentObjectivesView = ({
             const draftObjectives = departmentObjectivesMap.get('draft') || [];
             const completedObjectives = departmentObjectivesMap.get('completed') || [];
             const totalObjectives = activeObjectives.length + draftObjectives.length + completedObjectives.length;
-            return <div key={department.id} className="border border-gray-200 rounded-lg">
+            return <div key={department.id} className="border border-gray-200 rounded-lg w-full">
               <Collapsible open={expandedDepartments.has(department.id)} onOpenChange={() => toggleDepartment(department.id)}>
                 <CollapsibleTrigger asChild>
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors w-full">
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center space-x-3 flex-1">
                         {expandedDepartments.has(department.id) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
                         <Building className="h-4 w-4 text-purple-600" />
                         <span className="font-medium text-gray-900">{department.name}</span>
@@ -589,7 +600,7 @@ export const DepartmentObjectivesView = ({
                           {totalObjectives} Objectives
                         </Badge>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-shrink-0">
                         {/* Three Dots Dropdown Menu */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

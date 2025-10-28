@@ -28,9 +28,27 @@ interface UserData {
   refreshUserData: () => Promise<void>;
 }
 
-// Ultra-fast cache for user data
+// Enhanced cache for user data with better strategy
 const userDataCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 60 * 1000; // 1 minute for faster updates
+const CACHE_DURATION = 5 * 60 * 1000; // Increased to 5 minutes for better performance
+const MAX_CACHE_SIZE = 50; // Prevent memory leaks
+
+// Cache invalidation utility
+const invalidateCache = (userId: string) => {
+  userDataCache.delete(`user-${userId}`);
+};
+
+// Cache cleanup utility
+const cleanupCache = () => {
+  if (userDataCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(userDataCache.entries());
+    // Remove oldest entries
+    entries
+      .sort((a, b) => a[1].timestamp - b[1].timestamp)
+      .slice(0, Math.floor(MAX_CACHE_SIZE / 2))
+      .forEach(([key]) => userDataCache.delete(key));
+  }
+};
 
 export const useUserData = (): UserData => {
   const { user, session } = useAuth();
@@ -44,13 +62,17 @@ export const useUserData = (): UserData => {
   const fetchUserData = useCallback(async (userId: string) => {
     // Prevent duplicate fetches for the same user
     if (fetchingRef.current) {
-      console.log('🚫 Preventing duplicate fetch for user:', userId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚫 Preventing duplicate fetch for user:', userId);
+      }
       return;
     }
 
     // Check if we already have this user in progress and have data
     if (lastFetchRef.current === userId && profile !== null) {
-      console.log('📋 Using existing fetch for user:', userId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📋 Using existing fetch for user:', userId);
+      }
       return;
     }
 
@@ -58,7 +80,9 @@ export const useUserData = (): UserData => {
     const cacheKey = `user-${userId}`;
     const cached = userDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log('📋 Using cached user data for:', userId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📋 Using cached user data for:', userId);
+      }
       setProfile(cached.data.profile);
       setOrganization(cached.data.organization);
       setUserRole(cached.data.userRole);
@@ -71,7 +95,9 @@ export const useUserData = (): UserData => {
       lastFetchRef.current = userId;
       setLoading(true);
       
-      console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
+      }
       
       // Parallel fetch of profile and role data
       const [profileResult, roleResult] = await Promise.all([
@@ -99,7 +125,7 @@ export const useUserData = (): UserData => {
           // email_verified field moved to email_verification_tokens table
           organization_created: false
         };
-      } else {
+      } else if (process.env.NODE_ENV === 'development') {
         console.log("✅ useUserData: Profile fetched:", profileData);
       }
 
@@ -109,7 +135,7 @@ export const useUserData = (): UserData => {
       const roleData = roleResult.error ? null : roleResult.data as UserRole;
       if (roleResult.error) {
         console.error("❌ useUserData: Role fetch error:", roleResult.error);
-      } else {
+      } else if (process.env.NODE_ENV === 'development') {
         console.log("✅ useUserData: Role in active org:", roleData);
       }
       setUserRole(roleData);
@@ -125,10 +151,10 @@ export const useUserData = (): UserData => {
 
         if (orgError) {
           console.error("❌ useUserData: Organization error:", orgError);
-        } else {
+        } else if (process.env.NODE_ENV === 'development') {
           console.log("✅ useUserData: Organization fetched:", organizationData);
-          orgData = organizationData;
         }
+        orgData = organizationData;
       }
 
       setOrganization(orgData);
@@ -142,6 +168,9 @@ export const useUserData = (): UserData => {
         },
         timestamp: Date.now()
       });
+      
+      // Cleanup cache if it gets too large
+      cleanupCache();
 
     } catch (error) {
       console.error("❌ useUserData: Unexpected error:", error);
@@ -180,9 +209,11 @@ export const useUserData = (): UserData => {
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
-      console.log('🔄 Manual refresh of user data triggered');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Manual refresh of user data triggered');
+      }
       lastFetchRef.current = ''; // Reset to allow refetch
-      userDataCache.delete(`user-${user.id}`); // Clear cache
+      invalidateCache(user.id); // Use cache invalidation utility
       fetchingRef.current = false; // Reset fetching flag
       await fetchUserData(user.id);
     }

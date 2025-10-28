@@ -409,7 +409,9 @@ export const useCreateObjective = () => {
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
-      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Objective created successfully',

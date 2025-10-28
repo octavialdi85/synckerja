@@ -22,7 +22,7 @@ export const ModalMotifationForm = ({ isOpen, onClose, profileName, editingMotiv
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { saveMotivation, updateMotivation } = useMotivations();
+  const { saveMotivation, updateMotivation, isLoading, employeeData, employeeError } = useMotivations();
 
   // Set form data when editing
   useEffect(() => {
@@ -40,6 +40,16 @@ export const ModalMotifationForm = ({ isOpen, onClose, profileName, editingMotiv
       toast({
         title: "Error",
         description: "Mohon tulis motivasi terlebih dahulu",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if organization data is ready
+    if (!employeeData?.organization_id) {
+      toast({
+        title: "Error",
+        description: "Data organisasi belum siap. Silakan coba lagi dalam beberapa detik.",
         variant: "destructive",
       });
       return;
@@ -118,11 +128,26 @@ export const ModalMotifationForm = ({ isOpen, onClose, profileName, editingMotiv
             Akan tampil sebagai: <span className="font-medium">"...motivasi... - {authorName}"</span>
           </div>
 
+          {isLoading && (
+            <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+              Memuat data organisasi...
+            </div>
+          )}
+
+          {employeeError && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+              Error memuat data organisasi. Silakan refresh halaman.
+            </div>
+          )}
+
           <div className="flex justify-end space-x-2 pt-4">
             <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || isLoading || !employeeData?.organization_id}
+            >
               {isSubmitting ? "Menyimpan..." : (editingMotivation ? "Update Motivasi" : "Tambah Motivasi")}
             </Button>
           </div>

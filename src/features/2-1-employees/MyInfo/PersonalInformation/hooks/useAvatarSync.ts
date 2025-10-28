@@ -54,7 +54,8 @@ export const useAvatarSync = () => {
         'user-profile',
         'employees-optimized',
         'employees',
-        'unified-user-data'
+        'unified-user-data',
+        'user-data' // Add user-data cache invalidation for header
       ];
 
       console.log('🔄 Invalidating queries:', queriesToInvalidate);
@@ -91,6 +92,12 @@ export const useAvatarSync = () => {
         }
         return oldData;
       });
+
+      // Clear userDataCache from useUserData hook
+      if (typeof window !== 'undefined' && (window as any).userDataCache) {
+        (window as any).userDataCache.clear();
+        console.log('💾 Cleared userDataCache for immediate header update');
+      }
 
       // Also update employees cache if it exists
       queryClient.setQueryData(['employees-optimized'], (oldData: any) => {

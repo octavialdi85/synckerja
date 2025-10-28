@@ -1,7 +1,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCurrentUserEmployee } from '@/features/1_home/components/HomeOKRDashboard/component/SectionGreetingsImport/useCurrentUserEmployee';
 
 interface MotivationLike {
   id: string;
@@ -29,10 +29,13 @@ interface Motivation {
 
 export const useMotivations = () => {
   const queryClient = useQueryClient();
-  const { data: employeeData } = useCurrentUserEmployee();
+  const { data: employeeData, isLoading: employeeLoading, error: employeeError } = useCurrentUserEmployee();
 
   const fetchMotivations = async () => {
-    if (!employeeData?.organization_id) return [];
+    if (!employeeData?.organization_id) {
+      console.warn('useMotivations: No organization_id available', { employeeData, employeeLoading, employeeError });
+      return [];
+    }
 
     try {
       // First get motivations
@@ -102,13 +105,90 @@ export const useMotivations = () => {
   const { data: motivations = [], isLoading, refetch: refreshMotivations } = useQuery({
     queryKey: ['motivations', employeeData?.organization_id],
     queryFn: fetchMotivations,
-    enabled: !!employeeData?.organization_id,
+    enabled: !!employeeData?.organization_id && !employeeLoading,
     staleTime: 30000, // 30 seconds
   });
 
   const saveMotivation = async (content: string, isAnonymous: boolean, authorName?: string) => {
     if (!employeeData?.organization_id) {
-      throw new Error('Organization not found');
+      console.error('saveMotivation: Organization not found', { 
+        employeeData, 
+        employeeLoading, 
+        employeeError,
+        hasEmployeeData: !!employeeData,
+        hasOrganizationId: !!employeeData?.organization_id
+      });
+      
+      // If still loading, wait a bit and try to get organization data directly
+      if (employeeLoading) {
+        console.log('saveMotivation: Employee data still loading, attempting direct organization fetch...');
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('active_organization_id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (profile?.active_organization_id) {
+              console.log('saveMotivation: Found organization via direct fetch:', profile.active_organization_id);
+              // Continue with the found organization ID
+              const orgId = profile.active_organization_id;
+              
+              // Proceed with the save using the found organization ID
+              const { data: userData } = await supabase.auth.getUser();
+              if (!userData.user) {
+                throw new Error('User not authenticated');
+              }
+
+              // Check daily limit (2 motivations per day)
+              const today = new Date().toISOString().split('T')[0];
+              const { data: todayMotivations, error: checkError } = await supabase
+                .from('motivations')
+                .select('id')
+                .eq('created_by', userData.user.id)
+                .eq('organization_id', orgId)
+                .gte('created_at', today + ' 00:00:00')
+                .lt('created_at', today + ' 23:59:59');
+
+              if (checkError) {
+                console.error('Error checking daily limit:', checkError);
+                throw new Error('Gagal memeriksa batas harian');
+              }
+
+              if (todayMotivations && todayMotivations.length >= 2) {
+                throw new Error('Anda sudah menulis 2 motivasi hari ini. Batas harian tercapai.');
+              }
+
+              const { data, error } = await supabase
+                .from('motivations')
+                .insert({
+                  organization_id: orgId,
+                  content: content.trim(),
+                  author_name: isAnonymous ? 'Unknown' : (authorName || 'Unknown'),
+                  is_anonymous: isAnonymous,
+                  created_by: userData.user.id,
+                })
+                .select()
+                .single();
+
+              if (error) {
+                console.error('Error saving motivation:', error);
+                throw error;
+              }
+
+              // Invalidate query to trigger real-time refresh
+              queryClient.invalidateQueries({ queryKey: ['motivations', orgId] });
+              return data;
+            }
+          }
+        } catch (directFetchError) {
+          console.error('saveMotivation: Direct organization fetch failed:', directFetchError);
+        }
+      }
+      
+      throw new Error('Organization not found. Please ensure you are logged in and have selected an organization.');
     }
 
     try {
@@ -266,11 +346,13 @@ export const useMotivations = () => {
 
   return {
     motivations,
-    isLoading,
+    isLoading: isLoading || employeeLoading,
     saveMotivation,
     deleteMotivation,
     updateMotivation,
     toggleLike,
     refreshMotivations,
+    employeeData,
+    employeeError,
   };
 };

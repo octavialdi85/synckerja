@@ -78,6 +78,7 @@ const UserProfile = memo<UserProfileProps>(({ profile, userRole, organization, o
       <div className="flex items-center gap-2">
         <UnifiedAvatar 
           name={displayName}
+          photoUrl={profile?.profile_photo_url}
           size="md"
         />
         <ChevronDown className="h-4 w-4 text-gray-400" />

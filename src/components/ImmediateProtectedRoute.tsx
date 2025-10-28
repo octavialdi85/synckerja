@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo, useEffect, useState } from 'react';
+import React, { ReactNode, useMemo, useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, XCircle, Shield } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
@@ -48,6 +48,11 @@ export const ImmediateProtectedRoute = ({
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [configLoadingTimeout, setConfigLoadingTimeout] = useState(false);
   const [emergencyBypass, setEmergencyBypass] = useState(false);
+  
+  // Refs for tracking last logged values to prevent excessive logging
+  const lastLoggedPath = useRef<string>('');
+  const lastLoggedUser = useRef<boolean>(false);
+  const lastLoggedRole = useRef<string | null>(null);
   
   // IMMEDIATE auth timeout for better UX
   useEffect(() => {
@@ -112,8 +117,11 @@ export const ImmediateProtectedRoute = ({
   const accessDecision = useMemo(() => {
     const currentPath = location.pathname;
     
-    // Development logging for access decision
-    if (process.env.NODE_ENV === 'development') {
+    // Development logging for access decision - only log when values change
+    if (process.env.NODE_ENV === 'development' && 
+        (currentPath !== lastLoggedPath.current || 
+         !!user !== lastLoggedUser.current || 
+         userRole !== lastLoggedRole.current)) {
       console.log('⚡ Access Check:', {
         path: currentPath,
         hasUser: !!user,
@@ -121,13 +129,18 @@ export const ImmediateProtectedRoute = ({
         authLoading,
         configLoading
       });
+      lastLoggedPath.current = currentPath;
+      lastLoggedUser.current = !!user;
+      lastLoggedRole.current = userRole;
     }
 
     // IMMEDIATE EMPTY DATABASE CHECK - ZERO FLASH FOR EMPTY CONFIGS
     // Only check when config is definitely loaded (not loading)
     if (!configLoading && configurations && configurations.length === 0) {
-      console.log('🚀 IMMEDIATE ALLOW: Empty database confirmed - no restrictions configured');
-      console.log('✅ ZERO FLASH: Allowing immediate access (Empty Config = Allow All)');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 IMMEDIATE ALLOW: Empty database confirmed - no restrictions configured');
+        console.log('✅ ZERO FLASH: Allowing immediate access (Empty Config = Allow All)');
+      }
       return { 
         action: 'ALLOW', 
         reason: 'Empty database confirmed - no restrictions configured' 
@@ -137,11 +150,15 @@ export const ImmediateProtectedRoute = ({
     // RACE CONDITION PROTECTION: If config is loading and user role is loaded, 
     // check if we have cached permission data to make faster decision
     if (configLoading && userRole && configurations) {
-      console.log('⚡ RACE PROTECTION: Config loading but checking cached data for fast decision');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚡ RACE PROTECTION: Config loading but checking cached data for fast decision');
+      }
       
       // If we have some config data already (partial load), use it
       if (configurations.length === 0) {
-        console.log('🚀 FAST ALLOW: Partial empty config detected during loading');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🚀 FAST ALLOW: Partial empty config detected during loading');
+        }
         return { 
           action: 'ALLOW', 
           reason: 'Fast allow - empty partial config during loading' 

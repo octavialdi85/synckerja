@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 
@@ -43,14 +43,22 @@ interface CreateIndividualObjectiveData {
 
 export const useIndividualObjectives = (organizationId?: string, cycleIds?: string[]) => {
   const queryClient = useQueryClient();
+  const subscriptionRef = useRef<any>(null);
 
   // Real-time subscription for individual objectives
   useEffect(() => {
     if (!organizationId) return;
 
-    console.log('🔄 Setting up real-time subscription for individual objectives with org:', organizationId);
+    // Prevent duplicate subscriptions
+    if (subscriptionRef.current) {
+      return;
+    }
 
-    const channel = supabase
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Setting up real-time subscription for individual objectives with org:', organizationId);
+    }
+
+    subscriptionRef.current = supabase
       .channel(`individual_objectives_realtime_${organizationId}`)
       .on(
         'postgres_changes',
@@ -61,12 +69,14 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 REAL-TIME UPDATE for individual objectives:', {
-            event: payload.eventType,
-            table: payload.table,
-            new: payload.new,
-            old: payload.old
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📡 REAL-TIME UPDATE for individual objectives:', {
+              event: payload.eventType,
+              table: payload.table,
+              new: payload.new,
+              old: payload.old
+            });
+          }
           
           // Force immediate invalidation
           queryClient.invalidateQueries({ 
@@ -82,12 +92,19 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         }
       )
       .subscribe((status) => {
-        console.log('📊 Individual objectives subscription status:', status);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📊 Individual objectives subscription status:', status);
+        }
       });
 
     return () => {
-      console.log('🔄 Cleaning up individual objectives subscription');
-      supabase.removeChannel(channel);
+      if (subscriptionRef.current) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Cleaning up individual objectives subscription');
+        }
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
     };
   }, [organizationId, queryClient]);
 
@@ -95,11 +112,15 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
     queryKey: ['individual-objectives', organizationId, cycleIds],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('❌ No organizationId provided');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ No organizationId provided');
+        }
         return [];
       }
       
-      console.log('🔍 Fetching individual objectives:', { organizationId, cycleIds });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Fetching individual objectives:', { organizationId, cycleIds });
+      }
       
       let query = supabase
         .from('individual_objectives')
@@ -124,7 +145,9 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         throw error;
       }
 
-      console.log('✅ Individual objectives fetched:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Individual objectives fetched:', data);
+      }
       return data || [];
     },
     enabled: !!organizationId,
@@ -158,6 +181,10 @@ export const useCreateIndividualObjective = () => {
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Individual objective created successfully',
@@ -198,7 +225,14 @@ export const useUpdateIndividualObjective = () => {
       return data;
     },
     onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Individual objective updated successfully',
@@ -236,9 +270,14 @@ export const useDeleteIndividualObjective = () => {
       console.log('✅ Individual objective deleted successfully');
     },
     onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
       queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
       toast({
         title: 'Success',
         description: 'Individual objective deleted successfully',

@@ -6,7 +6,7 @@ import { Lightbulb, ChevronLeft, ChevronRight, PlusCircle, Trash2, Edit3, MoreHo
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { TrainingNotificationBanner } from './TrainingNotificationBanner';
 import { useLatestTrainingPrograms } from './useLatestTrainingPrograms';
-import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCurrentUserEmployee } from '@/features/1_home/components/HomeOKRDashboard/component/SectionGreetingsImport/useCurrentUserEmployee';
 import { Button } from '@/features/ui/button';
 import { ModalMotifationForm } from './ModalMotifationForm/ModalMotifationForm';
 import { MotivationLikeButton } from './MotivationLikeButton';

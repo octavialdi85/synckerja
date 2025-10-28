@@ -12,6 +12,7 @@ interface Profile {
   created_at: string;
   updated_at: string;
   organization_created: boolean;
+  profile_photo_url?: string | null;
 }
 
 interface Organization {
@@ -31,6 +32,11 @@ interface UserData {
 // Ultra-fast cache for user data
 const userDataCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 60 * 1000; // 1 minute for faster updates
+
+// Make cache accessible globally for avatar sync
+if (typeof window !== 'undefined') {
+  (window as any).userDataCache = userDataCache;
+}
 
 export const useUserData = (): UserData => {
   const { user, session } = useAuth();
@@ -73,17 +79,30 @@ export const useUserData = (): UserData => {
       
       console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
       
-      // Parallel fetch of profile and role data
-      const [profileResult, roleResult] = await Promise.all([
+      // Parallel fetch of profile, role data, and photo data
+      const [profileResult, roleResult, photoResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
           .single(),
-        supabase.rpc('get_user_role_in_active_org')
+        supabase.rpc('get_user_role_in_active_org'),
+        // Get photo from user_profile_details and employees tables
+        Promise.all([
+          supabase
+            .from('user_profile_details')
+            .select('profile_photo_url')
+            .eq('profile_id', userId)
+            .maybeSingle(),
+          supabase
+            .from('employees')
+            .select('profile_photo_url')
+            .eq('user_id', userId)
+            .maybeSingle()
+        ])
       ]);
 
-      let profileData = profileResult.data;
+      let profileData: Profile | null = profileResult.data;
       
       if (profileResult.error) {
         console.error("❌ useUserData: Profile error:", profileResult.error);
@@ -97,10 +116,33 @@ export const useUserData = (): UserData => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           // email_verified field moved to email_verification_tokens table
-          organization_created: false
+          organization_created: false,
+          profile_photo_url: null
         };
       } else {
         console.log("✅ useUserData: Profile fetched:", profileData);
+      }
+
+      // Get photo URL from user_profile_details or employees table
+      const [detailsPhoto, employeePhoto] = photoResult;
+      let photoUrl: string | null = null;
+      
+      // @ts-ignore - Supabase response type issues
+      if (detailsPhoto?.data?.profile_photo_url) {
+        // @ts-ignore
+        photoUrl = detailsPhoto.data.profile_photo_url;
+      // @ts-ignore
+      } else if (employeePhoto?.data?.profile_photo_url) {
+        // @ts-ignore
+        photoUrl = employeePhoto.data.profile_photo_url;
+      }
+      
+      // Add photo URL to profile data
+      if (profileData) {
+        profileData = {
+          ...profileData,
+          profile_photo_url: photoUrl
+        };
       }
 
       setProfile(profileData);
@@ -156,7 +198,8 @@ export const useUserData = (): UserData => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         // email_verified field moved to email_verification_tokens table
-        organization_created: false
+        organization_created: false,
+        profile_photo_url: null
       };
       setProfile(fallbackProfile);
     } finally {

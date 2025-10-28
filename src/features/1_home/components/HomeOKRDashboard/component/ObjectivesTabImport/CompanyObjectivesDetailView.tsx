@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -96,13 +96,22 @@ export const CompanyObjectivesDetailView = ({
   // Get filtered cycle IDs based on current selection
   const filteredCycleIds = getFilteredCycleIds(yearQuarterSelection);
   
-  // Debug logging
-  console.log('🔍 CompanyObjectivesDetailView Debug:', {
+  // Memoized debug info to prevent excessive logging
+  const debugInfo = useMemo(() => ({
     yearQuarterSelection,
     filteredCycleIds,
     cycleIds,
     cycles: cycles.map(c => ({ id: c.id, name: c.name, year: c.year, quarter: c.quarter }))
-  });
+  }), [yearQuarterSelection, filteredCycleIds, cycleIds, cycles]);
+
+  // Optimized debug logging - only log when data actually changes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && 
+        debugInfo.filteredCycleIds && 
+        debugInfo.filteredCycleIds.length > 0) {
+      console.log('🔍 CompanyObjectivesDetailView Debug:', debugInfo);
+    }
+  }, [debugInfo]);
   
   // Calculate dynamic title based on filtered cycles
   const getDynamicTitle = () => {
@@ -416,17 +425,6 @@ export const CompanyObjectivesDetailView = ({
               </span>
             </div>
             <div className="flex items-center space-x-2 flex-shrink-0 mr-3" onClick={(e) => e.stopPropagation()}>
-              <Badge variant="outline" className="text-xs font-medium leading-tight">
-                {objective.all_key_results?.length || 0} KRs
-              </Badge>
-              <Badge variant="outline" className={`text-xs font-medium leading-tight ${status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
-              </Badge>
-              {status !== 'draft' && hasActualProgress(objective) && (
-                <div className="text-xs text-gray-500 min-w-[3rem] text-right leading-normal">
-                  {actualProgress}%
-                </div>
-              )}
               <div
                 onClick={(e) => handleEditObjective(e, objective)}
                 className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
@@ -454,9 +452,17 @@ export const CompanyObjectivesDetailView = ({
           <div className="px-4 pb-2">
             <div className="flex items-center justify-between text-sm mb-2">
               <span className="text-blue-600 font-medium">Average Progress</span>
-              <span className="font-medium text-blue-600">
-                {Math.round(objective.all_key_results.reduce((sum, kr) => sum + (kr.progress_percentage || 0), 0) / objective.all_key_results.length)}%
-              </span>
+              <div className="flex items-center space-x-3">
+                <Badge variant="outline" className="text-xs font-medium leading-tight">
+                  {objective.all_key_results?.length || 0} KRs
+                </Badge>
+                <Badge variant="outline" className={`text-xs font-medium leading-tight ${status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                  {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
+                </Badge>
+                <span className="font-medium text-blue-600">
+                  {Math.round(objective.all_key_results.reduce((sum, kr) => sum + (kr.progress_percentage || 0), 0) / objective.all_key_results.length)}%
+                </span>
+              </div>
             </div>
             <Progress value={objective.all_key_results.reduce((sum, kr) => sum + (kr.progress_percentage || 0), 0) / objective.all_key_results.length} className="h-2" />
             
@@ -506,7 +512,7 @@ export const CompanyObjectivesDetailView = ({
             
             {/* Display All Key Results (Company + Department Objectives) */}
             {objective.all_key_results && objective.all_key_results.length > 0 && (
-              <div className="space-y-2 mb-4 max-h-80 overflow-y-auto pr-2">
+              <div className="space-y-2 mb-4 max-h-80 overflow-y-auto">
                 {objective.all_key_results.map((kr: any) => {
                   const actualKRProgress = getActualProgress(kr);
                   const isDepartmentObjective = kr.source_type === 'department_objective';
@@ -518,9 +524,9 @@ export const CompanyObjectivesDetailView = ({
                   const relatedIndividualObjectives = isDepartmentObjective ? getIndividualObjectivesForDepartment(kr.id) : [];
                   
                   return (
-                    <div key={`kr-${kr.id}-${isDepartmentObjective ? 'dept' : 'regular'}`} className={`${bgColor} border ${borderColor} rounded-lg p-3`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
+                    <div key={`kr-${kr.id}-${isDepartmentObjective ? 'dept' : 'regular'}`} className={`${bgColor} border ${borderColor} rounded-lg p-3 w-full`}>
+                      <div className="flex items-center justify-between mb-2 w-full">
+                        <div className="flex items-center space-x-2 flex-1">
                           {isDepartmentObjective && relatedIndividualObjectives.length > 0 && (
                             <span 
                               className="cursor-pointer text-gray-600 hover:text-gray-800"
@@ -535,38 +541,32 @@ export const CompanyObjectivesDetailView = ({
                           <Building className={`h-4 w-4 ${iconColor}`} />
                           <span className={`text-sm font-medium ${textColor}`}>{kr.title}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {kr.metric_type === 'number' ? 
-                              `${kr.current_value || 0}/${kr.target_value}` : 
-                              `${actualKRProgress}%`
-                            }
-                          </Badge>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs w-full">
                           <ObjectiveCheckinForm
                             objectiveId={kr.id}
                             objectiveTitle={kr.title}
                             trigger={
-                              <div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 cursor-pointer">
-                                <Calendar className="h-4 w-4 mr-1" />
-                                Check-in
+                              <div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 h-7 px-3 text-xs cursor-pointer">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Weekly Check-in
                               </div>
                             }
                           />
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className={`${labelColor} font-medium`}>Progress</span>
-                          {kr.metric_type === 'number' ? (
-                            <span className={`${textColor} font-medium`}>
-                              {kr.current_value || 0} / {kr.target_value} {kr.unit || ''}
-                            </span>
-                          ) : (
-                            <span className={`${textColor} font-medium`}>
-                              {actualKRProgress}%
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-3 flex-shrink-0">
+                            <span className={`${labelColor} font-medium`}>Progress</span>
+                            {kr.metric_type === 'number' ? (
+                              <span className={`${textColor} font-medium`}>
+                                {kr.current_value || 0} / {kr.target_value} {kr.unit || ''}
+                              </span>
+                            ) : (
+                              <span className={`${textColor} font-medium`}>
+                                {actualKRProgress}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {kr.metric_type === 'number' ? (
                           <Progress 

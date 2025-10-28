@@ -301,6 +301,7 @@ export const IndividualObjectivesView = ({
       <AccordionItem key={objective.id} value={objective.id} className={`border-l-4 ${borderColor} shadow-sm mb-4 last:mb-0 w-full`}>
         <AccordionTrigger className="py-4 px-6 hover:bg-gray-50 transition-colors [&[data-state=open]>div>div:first-child>svg]:rotate-180">
           <div className="space-y-4 w-full">
+            {/* Title Row */}
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center space-x-3 flex-1">
                 {/* Dropdown for activities */}
@@ -328,10 +329,6 @@ export const IndividualObjectivesView = ({
                 </span>
               </div>
               <div className="flex items-center space-x-3 flex-shrink-0 mr-3">
-                <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Check In</span>
-                </div>
                 <Badge variant="outline" className={`text-xs ${objective.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : objective.status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                   {objective.status === 'active' ? 'Active' : objective.status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
@@ -341,17 +338,20 @@ export const IndividualObjectivesView = ({
                 >
                   <Trash2 className="h-3 w-3" />
                 </div>
-                <div className="text-sm text-gray-500 min-w-[3rem] text-right">
-                  {Math.round(syncedProgress)}%
-                </div>
               </div>
             </div>
             
-            {/* Progress Bar */}
+            {/* Progress Bar with Check In Button */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Progress</span>
-                <span className="font-medium">{Math.round(syncedProgress)}%</span>
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-sm cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Check In</span>
+                  </div>
+                  <span className="font-medium">{Math.round(syncedProgress)}%</span>
+                </div>
               </div>
               <Progress value={syncedProgress} className="h-3" />
             </div>
@@ -386,55 +386,62 @@ export const IndividualObjectivesView = ({
         <AccordionTrigger className="py-0 px-0 hover:bg-gray-50 transition-colors [&>svg]:hidden">
           <div className="w-full">
             {/* Header Section */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center space-x-2 flex-1">
-                <Target className={`h-4 w-4 ${iconColor}`} />
-                <span className="text-sm font-medium text-gray-900 truncate text-left">
-                  {objective.title}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2 flex-shrink-0">
-                <ObjectiveCheckinForm
-                  objectiveId={objective.id}
-                  objectiveTitle={objective.title}
-                  trigger={
-                    <div className="h-7 px-2 text-xs border border-gray-300 rounded flex items-center space-x-1 hover:bg-gray-50 cursor-pointer">
-                      <Calendar className="h-3 w-3" />
-                      <span>Weekly Check-in</span>
-                    </div>
-                  }
-                />
-                <Badge variant="outline" className="text-xs bg-gray-50">
-                  0 KRs
-                </Badge>
-                <Badge variant="outline" className={`text-xs ${
-                  status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
-                  status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                  'bg-blue-50 text-blue-700 border-blue-200'
-                }`}>
-                  {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
-                </Badge>
-                <div
-                  onClick={(e) => handleEditObjective(e, objective)}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
-                  title="Edit objective"
-                >
-                  <Edit className="h-3 w-3" />
+            <div className="px-4 py-3">
+              {/* Title Row */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2 flex-1">
+                  <Target className={`h-4 w-4 ${iconColor}`} />
+                  <span className="text-sm font-medium text-gray-900 truncate text-left">
+                    {objective.title}
+                  </span>
                 </div>
-                <div
-                  onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
-                >
-                  <Trash2 className="h-3 w-3" />
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  <div
+                    onClick={(e) => handleEditObjective(e, objective)}
+                    className="h-7 w-7 p-0 text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center cursor-pointer rounded"
+                    title="Edit objective"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </div>
+                  <div
+                    onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
+                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </div>
                 </div>
               </div>
             </div>
             
-            {/* Progress Bar */}
+            {/* Weekly Check-in Button with Progress Info */}
             <div className="px-4 pb-3">
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-gray-500">Average Progress</span>
-                <span className="font-medium">{Math.round(syncedProgress)}%</span>
+                <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
+                  <ObjectiveCheckinForm
+                    objectiveId={objective.id}
+                    objectiveTitle={objective.title}
+                    trigger={
+                      <div className="h-7 px-2 text-xs border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 rounded flex items-center space-x-1 cursor-pointer">
+                        <Calendar className="h-3 w-3" />
+                        <span>Weekly Check-in</span>
+                      </div>
+                    }
+                  />
+                  <Badge variant="outline" className="text-xs bg-gray-50">
+                    0 KRs
+                  </Badge>
+                  <Badge variant="outline" className={`text-xs ${
+                    status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
+                    status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                    'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
+                  </Badge>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className="text-gray-500">Average Progress</span>
+                  <span className="font-medium">{Math.round(syncedProgress)}%</span>
+                </div>
               </div>
               <Progress value={syncedProgress} className="h-2" />
             </div>
@@ -459,7 +466,7 @@ export const IndividualObjectivesView = ({
 
   return <div className="h-full w-full flex flex-col">
       <div className="flex-1 w-full overflow-auto">
-        <div className="space-y-4 pr-4 h-full">
+        <div className="space-y-4 h-full">
           {/* Employee List with Expand/Collapse */}
           <div className="space-y-2">
             {employees.map(employee => {
@@ -470,12 +477,12 @@ export const IndividualObjectivesView = ({
               const totalObjectives = activeObjectives.length + draftObjectives.length + completedObjectives.length;
               
               return (
-                <div key={employee.id} className="border border-gray-200 rounded-lg">
+                <div key={employee.id} className="border border-gray-200 rounded-lg w-full">
                   <Collapsible open={expandedEmployees.has(employee.id)} onOpenChange={() => toggleEmployee(employee.id)}>
                     <CollapsibleTrigger asChild>
-                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors w-full">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center space-x-3 flex-1">
                             {expandedEmployees.has(employee.id) ? 
                               <ChevronDown className="h-4 w-4 text-gray-400" /> : 
                               <ChevronRight className="h-4 w-4 text-gray-400" />
@@ -493,7 +500,7 @@ export const IndividualObjectivesView = ({
                               {totalObjectives} Objectives
                             </Badge>
                           </div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-shrink-0">
                             {/* Three Dots Dropdown Menu */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

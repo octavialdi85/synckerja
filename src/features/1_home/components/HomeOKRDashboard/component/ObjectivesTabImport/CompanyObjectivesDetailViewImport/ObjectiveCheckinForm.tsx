@@ -36,12 +36,14 @@ interface ObjectiveCheckinFormProps {
   objectiveId: string;
   objectiveTitle: string;
   onSuccess?: () => void;
+  disableActivitiesTab?: boolean;
 }
 export const ObjectiveCheckinForm = ({
   trigger,
   objectiveId,
   objectiveTitle,
-  onSuccess
+  onSuccess,
+  disableActivitiesTab = false
 }: ObjectiveCheckinFormProps) => {
   const {
     data: profile
@@ -901,10 +903,12 @@ export const ObjectiveCheckinForm = ({
             </TabsTrigger>
             <TabsTrigger 
               value="activities" 
-              className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-purple-700 font-medium transition-all duration-200"
+              disabled={disableActivitiesTab}
+              className={`flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-purple-700 font-medium transition-all duration-200 ${disableActivitiesTab ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <Activity className="h-4 w-4" />
               Activities
+              {disableActivitiesTab && <Lock className="h-3 w-3 ml-1" />}
             </TabsTrigger>
           </TabsList>
           

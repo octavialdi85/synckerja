@@ -10,10 +10,33 @@ let logCount = 0;
 const LOG_DEBOUNCE_MS = 5000; // Only log every 5 seconds max
 const MAX_LOGS_PER_SESSION = 3; // Maximum 3 logs per session
 
-export const filterCyclesByYearQuarter = (
-  cycles: OkrCycle[],
-  selection: YearQuarterSelection
-): string[] => {
+// Cache for expensive computations
+const computationCache = new Map<string, string[]>();
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
+let cacheTimestamp = 0;
+
+// Memoized computation for better performance
+const memoizedFilter = (cycles: OkrCycle[], selection: YearQuarterSelection): string[] => {
+  const cacheKey = JSON.stringify({ 
+    cycles: cycles.map(c => ({ id: c.id, year: c.year, quarter: c.quarter })), 
+    selection 
+  });
+  
+  // Check cache first
+  if (computationCache.has(cacheKey) && (Date.now() - cacheTimestamp) < CACHE_DURATION) {
+    return computationCache.get(cacheKey)!;
+  }
+  
+  const result = computeFilter(cycles, selection);
+  
+  // Update cache
+  computationCache.set(cacheKey, result);
+  cacheTimestamp = Date.now();
+  
+  return result;
+};
+
+const computeFilter = (cycles: OkrCycle[], selection: YearQuarterSelection): string[] => {
   const selectedCycleIds: string[] = [];
 
   // Super aggressive logging control - only in development and very limited
@@ -88,6 +111,9 @@ export const filterCyclesByYearQuarter = (
   // Removed final log to reduce console spam
   return selectedCycleIds;
 };
+
+// Export the memoized version for better performance
+export const filterCyclesByYearQuarter = memoizedFilter;
 
 /**
  * Check if any year or quarter is selected

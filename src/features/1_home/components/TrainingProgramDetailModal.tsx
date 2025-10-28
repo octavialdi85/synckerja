@@ -22,7 +22,7 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { LatestTrainingProgram } from '../hooks/useTrainingPrograms';
 import { useTrainingParticipants } from '../hooks/useTrainingParticipants';
-import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCurrentUserEmployee } from '@/features/1_home/components/HomeOKRDashboard/component/SectionGreetingsImport/useCurrentUserEmployee';
 import { useTrainingPrograms } from '../hooks/useTrainingPrograms';
 import { TrainingRegistrationModal } from './TrainingRegistrationModal';
 import { toast } from 'sonner';
