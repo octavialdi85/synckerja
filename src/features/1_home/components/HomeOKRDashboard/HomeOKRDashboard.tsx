@@ -113,6 +113,7 @@ const HomeOKRDashboardContent = () => {
                 completedObjectives={[]} // Will be populated by ObjectivesTab
                 loading={companyStats.isLoading}
                 error={companyStats.error?.message || null}
+                stats={companyStats.data}
                 organizationId={organizationId}
                 yearQuarterSelection={yearQuarterSelection}
                 onYearQuarterChange={setYearQuarterSelection}

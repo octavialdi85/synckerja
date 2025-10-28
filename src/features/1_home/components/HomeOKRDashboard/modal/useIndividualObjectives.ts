@@ -107,7 +107,8 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
           *,
           employees!inner(full_name, email),
           department_objectives(title, description),
-          okr_cycles!inner(name, year, quarter)
+          okr_cycles!inner(name, year, quarter),
+          key_results!fk_key_results_individual_objective(id, current_value, target_value, progress_percentage, metric_type)
         `)
         .eq('organization_id', organizationId);
 

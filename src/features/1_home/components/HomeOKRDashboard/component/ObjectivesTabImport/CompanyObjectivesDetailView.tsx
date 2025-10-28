@@ -132,11 +132,11 @@ export const CompanyObjectivesDetailView = ({
   // Use filtered cycle IDs for objectives - same as AttendanceSection.tsx
   const shouldUseFilteredObjectives = filteredCycleIds && filteredCycleIds.length > 0;
   
-  // For single cycle, use existing hook
-  const singleObjectivesQuery = useObjectives(organizationId, shouldUseFilteredObjectives ? undefined : cycleId || undefined);
+  // For single cycle, use existing hook with 'company' level
+  const singleObjectivesQuery = useObjectives(organizationId, shouldUseFilteredObjectives ? undefined : cycleId || undefined, 'company');
   
   // For multiple cycles, use filtered hook with proper cycle IDs array
-  const filteredObjectivesQuery = useFilteredObjectives(organizationId, shouldUseFilteredObjectives ? filteredCycleIds : undefined);
+  const filteredObjectivesQuery = useFilteredObjectives(organizationId, shouldUseFilteredObjectives ? filteredCycleIds : undefined, 'company');
 
   // Choose the appropriate query result
   const {
@@ -177,6 +177,57 @@ export const CompanyObjectivesDetailView = ({
   // Helper function to get department objectives for a company objective
   const getDepartmentObjectives = (companyObjective: any) => {
     return allObjectives.filter(obj => obj.parent_objective_id === companyObjective.id && obj.level === 'department');
+  };
+
+  // Helper function to calculate progress for individual objective from key_results
+  const getIndividualObjectiveProgress = (indObj: any) => {
+    console.log('🔍 Calculating progress for individual objective:', {
+      id: indObj.id,
+      title: indObj.title,
+      hasKeyResults: indObj.key_results && indObj.key_results.length > 0,
+      keyResults: indObj.key_results,
+      objectiveProgress: indObj.progress_percentage
+    });
+    
+    // If individual objective has key_results, calculate progress from them
+    if (indObj.key_results && indObj.key_results.length > 0) {
+      const keyResult = indObj.key_results[0]; // Get first key result
+      
+      console.log('📊 Key result data:', keyResult);
+      
+      if (keyResult.metric_type === 'number') {
+        // For numerical metrics, calculate percentage: (current_value / target_value) * 100
+        const currentValue = keyResult.current_value || 0;
+        const targetValue = keyResult.target_value || 1;
+        const calculatedProgress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
+        
+        console.log('🔢 Numerical metric progress:', {
+          currentValue,
+          targetValue,
+          calculatedProgress
+        });
+        
+        return calculatedProgress;
+      } else {
+        // For percentage metrics, use progress_percentage from key_results
+        const progressPercentage = keyResult.progress_percentage || 0;
+        
+        console.log('📊 Percentage metric progress:', {
+          progressPercentage
+        });
+        
+        return progressPercentage;
+      }
+    }
+    
+    // Fallback to objective's own progress_percentage for objectives without key results
+    const fallbackProgress = indObj.progress_percentage || 0;
+    
+    console.log('📊 Fallback progress:', {
+      fallbackProgress
+    });
+    
+    return fallbackProgress;
   };
 
   // Helper function to get individual objectives for a department objective  
@@ -517,17 +568,20 @@ export const CompanyObjectivesDetailView = ({
                         <div className="mt-3 pt-3 border-t border-green-300">
                           <h6 className="text-xs font-medium text-green-800 mb-2 uppercase tracking-wide">Individual Objectives:</h6>
                           <div className="space-y-2">
-                            {relatedIndividualObjectives.map((indObj: any) => (
-                              <div key={indObj.id} className="bg-white border border-green-300 rounded-md p-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-medium text-green-900">{indObj.title}</span>
-                                  <Badge variant="outline" className="text-xs bg-green-100 text-green-800">
-                                    {indObj.progress_percentage || 0}%
-                                  </Badge>
+                            {relatedIndividualObjectives.map((indObj: any) => {
+                              const correctProgress = getIndividualObjectiveProgress(indObj);
+                              return (
+                                <div key={indObj.id} className="bg-white border border-green-300 rounded-md p-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-green-900">{indObj.title}</span>
+                                    <Badge variant="outline" className="text-xs bg-green-100 text-green-800">
+                                      {Math.round(correctProgress)}%
+                                    </Badge>
+                                  </div>
+                                  <Progress value={correctProgress} className="h-1 mt-1" />
                                 </div>
-                                <Progress value={indObj.progress_percentage || 0} className="h-1 mt-1" />
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}

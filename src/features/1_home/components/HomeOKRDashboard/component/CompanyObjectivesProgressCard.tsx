@@ -11,6 +11,15 @@ interface SectionCompanyObjectivesProgressOverviewProps {
   completedObjectives: any[];
   loading?: boolean;
   error?: string | null;
+  // Stats data
+  stats?: {
+    avgProgress: number;
+    totalObjectives: number;
+    nextDeadline: string;
+    active?: number;
+    draft?: number;
+    completed?: number;
+  };
   // Props for modal functionality
   organizationId?: string;
   yearQuarterSelection?: YearQuarterSelection;
@@ -26,6 +35,7 @@ export const CompanyObjectivesProgressCard = ({
   completedObjectives,
   loading = false,
   error = null,
+  stats,
   // Props for modal functionality
   organizationId,
   yearQuarterSelection,
@@ -62,13 +72,50 @@ export const CompanyObjectivesProgressCard = ({
     setIsExpanded(!isExpanded);
   };
 
-  const stats = {
-    total: enhancedCompanyObjectives.length,
-    active: activeObjectives.length,
-    draft: draftObjectives.length,
-    completed: completedObjectives.length,
-    averageProgress: calculateOverallProgress()
-  };
+  // Calculate stats - prefer data from props/arguments, fallback to stats
+  const finalStats = (() => {
+    // If we have actual objective arrays with data, use those
+    if (enhancedCompanyObjectives.length > 0) {
+      return {
+        total: enhancedCompanyObjectives.length,
+        active: enhancedCompanyObjectives.filter(obj => obj.status === 'active').length,
+        draft: enhancedCompanyObjectives.filter(obj => obj.status === 'draft').length,
+        completed: enhancedCompanyObjectives.filter(obj => obj.status === 'completed').length,
+        averageProgress: calculateOverallProgress()
+      };
+    }
+    
+    // If we have specific objective arrays, use those
+    if (activeObjectives.length > 0 || draftObjectives.length > 0 || completedObjectives.length > 0) {
+      return {
+        total: activeObjectives.length + draftObjectives.length + completedObjectives.length,
+        active: activeObjectives.length,
+        draft: draftObjectives.length,
+        completed: completedObjectives.length,
+        averageProgress: calculateOverallProgress()
+      };
+    }
+    
+    // Fallback to stats from useObjectiveStats
+    if (stats) {
+      return {
+        total: stats.totalObjectives,
+        active: stats.active || 0,
+        draft: stats.draft || 0,
+        completed: stats.completed || 0,
+        averageProgress: stats.avgProgress
+      };
+    }
+    
+    // Final fallback
+    return {
+      total: 0,
+      active: 0,
+      draft: 0,
+      completed: 0,
+      averageProgress: calculateOverallProgress()
+    };
+  })();
 
   return (
     <div className="space-y-3 flex-shrink-0">
@@ -128,13 +175,13 @@ export const CompanyObjectivesProgressCard = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-600">Average Progress</span>
-                <span className="text-xs font-semibold text-gray-900">{stats.averageProgress}%</span>
+                <span className="text-xs font-semibold text-gray-900">{finalStats.averageProgress}%</span>
               </div>
               {/* Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${stats.averageProgress}%` }}
+                  style={{ width: `${finalStats.averageProgress}%` }}
                 ></div>
               </div>
             </div>
@@ -146,22 +193,22 @@ export const CompanyObjectivesProgressCard = ({
           <div className="p-3 border-t border-gray-100 space-y-3">
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-green-50 rounded-md p-2">
-                <div className="text-sm font-bold text-green-600">{stats.active}</div>
+                <div className="text-sm font-bold text-green-600">{finalStats.active}</div>
                 <div className="text-xs text-green-700 font-medium">Active</div>
               </div>
               <div className="bg-gray-50 rounded-md p-2">
-                <div className="text-sm font-bold text-gray-600">{stats.draft}</div>
+                <div className="text-sm font-bold text-gray-600">{finalStats.draft}</div>
                 <div className="text-xs text-gray-600 font-medium">Draft</div>
               </div>
               <div className="bg-blue-50 rounded-md p-2">
-                <div className="text-sm font-bold text-blue-600">{stats.completed}</div>
+                <div className="text-sm font-bold text-blue-600">{finalStats.completed}</div>
                 <div className="text-xs text-blue-700 font-medium">Completed</div>
               </div>
             </div>
             
             <div className="text-center bg-gray-50 rounded-md p-2">
-              <div className="text-sm font-bold text-gray-900">{stats.total} Total</div>
-              <div className="text-xs text-gray-600">Overall Progress: {stats.averageProgress}%</div>
+              <div className="text-sm font-bold text-gray-900">{finalStats.total} Total</div>
+              <div className="text-xs text-gray-600">Overall Progress: {finalStats.averageProgress}%</div>
             </div>
           </div>
         )}
