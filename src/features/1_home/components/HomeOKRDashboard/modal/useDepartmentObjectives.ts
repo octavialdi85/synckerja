@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 
@@ -24,6 +24,14 @@ export interface DepartmentObjective {
   departments?: { name: string };
   company_objectives?: { title: string };
   okr_cycles?: { name: string; year: number; quarter?: string };
+  individual_objectives?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    progress_percentage: number;
+    status: string;
+    employees?: { full_name: string };
+  }>;
 }
 
 interface CreateDepartmentObjectiveData {
@@ -55,16 +63,24 @@ interface CreateDepartmentObjectiveWithKeyResults extends CreateDepartmentObject
   }>;
 }
 
-export const useDepartmentObjectives = (organizationId?: string, cycleIds?: string[]) => {
+export const useDepartmentObjectives = (organizationId?: string, cycleIds?: string[], includeIndividualObjectives: boolean = false) => {
   const queryClient = useQueryClient();
+  const subscriptionRef = useRef<any>(null);
 
   // Real-time subscription for department objectives
   useEffect(() => {
     if (!organizationId) return;
 
-    console.log('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
+    // Prevent duplicate subscriptions
+    if (subscriptionRef.current) {
+      return;
+    }
 
-    const channel = supabase
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
+    }
+
+    subscriptionRef.current = supabase
       .channel(`department_objectives_realtime_${organizationId}`)
       .on(
         'postgres_changes',
@@ -75,12 +91,14 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 REAL-TIME UPDATE for department objectives:', {
-            event: payload.eventType,
-            table: payload.table,
-            new: payload.new,
-            old: payload.old
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📡 REAL-TIME UPDATE for department objectives:', {
+              event: payload.eventType,
+              table: payload.table,
+              new: payload.new,
+              old: payload.old
+            });
+          }
           
           // Force immediate invalidation
           queryClient.invalidateQueries({ 
@@ -96,33 +114,60 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         }
       )
       .subscribe((status) => {
-        console.log('📊 Department objectives subscription status:', status);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📊 Department objectives subscription status:', status);
+        }
       });
 
     return () => {
-      console.log('🔄 Cleaning up department objectives subscription');
-      supabase.removeChannel(channel);
+      if (subscriptionRef.current) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Cleaning up department objectives subscription');
+        }
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
     };
   }, [organizationId, queryClient]);
 
   return useQuery({
-    queryKey: ['department-objectives', organizationId, cycleIds],
+    queryKey: ['department-objectives', organizationId, cycleIds, includeIndividualObjectives],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('❌ No organizationId provided');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ No organizationId provided');
+        }
         return [];
       }
       
-      console.log('🔍 Fetching department objectives:', { organizationId, cycleIds });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Fetching department objectives:', { organizationId, cycleIds, includeIndividualObjectives });
+      }
       
+      // Build base query
+      let selectQuery = `
+        *,
+        departments!inner(name),
+        company_objectives!inner(title),
+        okr_cycles!inner(name, year, quarter)
+      `;
+
+      // Add individual objectives if requested
+      if (includeIndividualObjectives) {
+        selectQuery += `,
+          individual_objectives(
+            id,
+            title,
+            description,
+            progress_percentage,
+            status,
+            employees!inner(full_name)
+          )`;
+      }
+
       let query = supabase
         .from('department_objectives')
-        .select(`
-          *,
-          departments!inner(name),
-          company_objectives!inner(title),
-          okr_cycles!inner(name, year, quarter)
-        `)
+        .select(selectQuery)
         .eq('organization_id', organizationId);
 
       // Filter by multiple cycle IDs if provided
@@ -137,10 +182,31 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         throw error;
       }
 
-      console.log('✅ Department objectives fetched:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Department objectives fetched:', data);
+        
+        // Check specifically for "te" objective
+        const teObjective = data?.find((obj: any) => obj.title === 'te');
+        if (teObjective) {
+          console.log('🚨 FOUND "te" OBJECTIVE in database query:', {
+            id: teObjective.id,
+            title: teObjective.title,
+            status: teObjective.status,
+            cycle_id: teObjective.cycle_id,
+            organization_id: teObjective.organization_id,
+            created_at: teObjective.created_at,
+            updated_at: teObjective.updated_at
+          });
+        } else {
+          console.log('✅ No "te" objective found in database query');
+        }
+      }
       return data || [];
     },
     enabled: !!organizationId,
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 };
 
@@ -333,6 +399,81 @@ export const useUpdateDepartmentObjective = () => {
       toast({
         title: 'Error',
         description: 'Failed to update department objective',
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+export const useDeleteDepartmentObjective = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (objectiveId: string) => {
+      console.log('🗑️ Deleting department objective:', objectiveId);
+
+      try {
+        // First, delete related individual objectives
+        const { error: individualError } = await supabase
+          .from('individual_objectives')
+          .delete()
+          .eq('department_objective_id', objectiveId);
+
+        if (individualError) {
+          console.warn('⚠️ Warning deleting individual objectives:', individualError);
+        } else {
+          console.log('✅ Deleted individual objectives for department objective');
+        }
+
+        // Delete related key results in company objectives
+        const { error: keyResultError } = await supabase
+          .from('key_results')
+          .delete()
+          .eq('department_objective_id', objectiveId);
+
+        if (keyResultError) {
+          console.warn('⚠️ Warning deleting key results:', keyResultError);
+        } else {
+          console.log('✅ Deleted key results for department objective');
+        }
+
+        // Finally, delete the department objective itself
+        const { error } = await supabase
+          .from('department_objectives')
+          .delete()
+          .eq('id', objectiveId);
+
+        if (error) {
+          console.error('❌ Error deleting department objective:', error);
+          throw error;
+        }
+
+        console.log('✅ Department objective deleted successfully');
+      } catch (error) {
+        console.error('❌ Error in delete process:', error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
+      queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['okr-hierarchy'] });
+      // Invalidate objective stats queries for all types
+      queryClient.invalidateQueries({ queryKey: ['objective-stats'] });
+      toast({
+        title: 'Success',
+        description: 'Department objective deleted successfully',
+      });
+    },
+    onError: (error) => {
+      console.error('❌ Failed to delete department objective:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete department objective',
         variant: 'destructive',
       });
     },

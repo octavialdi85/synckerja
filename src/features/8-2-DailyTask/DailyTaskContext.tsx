@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 export interface TaskStep {
@@ -85,6 +85,7 @@ export interface DailyTaskContextType {
   addTaskStep: (taskId: string, title: string) => Promise<void>;
   updateTaskStep: (stepId: string, data: Partial<TaskStep>) => Promise<void>;
   deleteTaskStep: (stepId: string) => Promise<void>;
+  assignTaskStep: (stepId: string, employeeId: string | null) => Promise<void>;
   reorderTaskSteps: (taskId: string, stepIds: string[]) => Promise<void>;
   uploadTaskFile: (taskId: string, file: File) => Promise<void>;
   uploadTaskStepFile: (taskStepId: string, file: File) => Promise<void>;
@@ -134,7 +135,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           *,
           task_steps (
             *,
-            task_files (*)
+            task_files (*),
+            assigned_employee:employees!assigned_to(id, full_name, email),
+            assigned_by_employee:employees!assigned_by(id, full_name, email)
           ),
           deadline_history (*),
           assigned_employee:employees!assigned_to(id, full_name, email)
@@ -394,6 +397,47 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
+  const assignTaskStep = async (stepId: string, employeeId: string | null) => {
+    try {
+      // Get current user to set assigned_by
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: currentEmployee } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      const updateData: any = {
+        assigned_to: employeeId,
+        assigned_at: employeeId ? new Date().toISOString() : null,
+        assigned_by: employeeId ? currentEmployee?.id : null
+      };
+
+      const { error } = await supabase
+        .from('task_steps')
+        .update(updateData)
+        .eq('id', stepId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: employeeId ? 'Step assigned successfully' : 'Step unassigned successfully'
+      });
+      
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error assigning step:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to assign step',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const deleteTaskStep = async (stepId: string) => {
     try {
       const { error } = await supabase
@@ -513,14 +557,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const filePath = `task-step-files/${taskStepId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('task-step-files')
+        .from('task-files')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('task-step-files')
+        .from('task-files')
         .getPublicUrl(filePath);
 
       // Save file record to database
@@ -553,12 +597,38 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const deleteTaskFile = async (fileId: string) => {
     try {
-      const { error } = await supabase
+      // First get the file record to get the file path
+      const { data: fileRecord, error: fetchError } = await supabase
+        .from('task_files')
+        .select('file_url')
+        .eq('id', fileId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Extract file path from URL
+      const fileUrl = fileRecord.file_url;
+      const urlParts = fileUrl.split('/');
+      const bucketName = urlParts[urlParts.length - 3]; // task-files
+      const filePath = urlParts.slice(urlParts.length - 2).join('/'); // task-step-files/stepId/filename
+
+      // Delete file from storage
+      const { error: storageError } = await supabase.storage
+        .from('task-files')
+        .remove([filePath]);
+
+      if (storageError) {
+        console.warn('Error deleting file from storage:', storageError);
+        // Continue with database deletion even if storage deletion fails
+      }
+
+      // Delete record from database
+      const { error: dbError } = await supabase
         .from('task_files')
         .delete()
         .eq('id', fileId);
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
       toast({
         title: 'Success',
@@ -787,6 +857,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     addTaskStep,
     updateTaskStep,
     deleteTaskStep,
+    assignTaskStep,
     reorderTaskSteps,
     uploadTaskFile,
     uploadTaskStepFile,

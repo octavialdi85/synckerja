@@ -55,11 +55,6 @@ export const menuItems: MenuItem[] = [
         title: "Daily Task",
         url: "/tools/daily-task",
         description: "Manage your daily tasks and productivity"
-      },
-      {
-        title: "Meeting Notes",
-        url: "/tools/meeting-notes",
-        description: "Take and manage meeting notes efficiently"
       }
     ]
   },

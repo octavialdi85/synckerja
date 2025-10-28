@@ -11,7 +11,6 @@ import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { CreateIndividualObjectiveModal } from './DepartmentObjectivesViewImport/CreateIndividualObjectiveModal';
-import { CreateActivityModal } from './DepartmentObjectivesViewImport/CreateActivityModal';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
@@ -25,7 +24,7 @@ import { ModalAddDepartmentContribution } from '../../modal/ModalAddDepartmentCo
 import { DepartmentObjectivesEmptyState } from './DepartmentObjectivesViewImport/DepartmentObjectivesEmptyState';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useDepartmentObjectivesList, useDeleteDepartmentObjective } from './DepartmentObjectivesViewImport/useDepartmentObjectivesList';
+import { useDepartmentObjectives, useDeleteDepartmentObjective } from '../../modal/useDepartmentObjectives';
 import { useIndividualObjectives } from '../../modal/useIndividualObjectives';
 import { useDepartmentAsKeyResult } from './DepartmentObjectivesViewImport/useDepartmentAsKeyResult';
 import { useAttendanceOperations } from './DepartmentObjectivesViewImport/useAttendanceOperations';
@@ -67,20 +66,12 @@ export const DepartmentObjectivesView = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
 
-  // Create Activity Modal states
-  const [showCreateActivityModal, setShowCreateActivityModal] = useState(false);
-  const [selectedObjectiveForActivity, setSelectedObjectiveForActivity] = useState<{
-    id: string;
-    title: string;
-    employeeId: string;
-  } | null>(null);
-
   // Get department objectives from the dedicated table
   const finalCycleIds = cycleIds && cycleIds.length > 0 ? cycleIds : cycleId ? [cycleId] : undefined;
   const {
     data: departmentObjectives = [],
     isLoading: loadingObjectives
-  } = useDepartmentObjectivesList(organizationId, finalCycleIds);
+  } = useDepartmentObjectives(organizationId, finalCycleIds, true); // Include individual objectives
   const {
     departments = [],
     isLoading: loadingDepartments
@@ -243,14 +234,6 @@ export const DepartmentObjectivesView = ({
   const handleCreateIndividualObjective = (employeeId: string) => {
     setSelectedEmployee(employeeId);
     setIsCreateModalOpen(true);
-  };
-  const handleCreateActivity = (objectiveId: string, objectiveTitle: string, employeeId: string) => {
-    setSelectedObjectiveForActivity({
-      id: objectiveId,
-      title: objectiveTitle,
-      employeeId: employeeId
-    });
-    setShowCreateActivityModal(true);
   };
   const toggleEmployee = (employeeId: string) => {
     const newExpanded = new Set(expandedEmployees);
@@ -718,12 +701,6 @@ export const DepartmentObjectivesView = ({
     }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
       console.log('✅ Individual objective created successfully');
     }} />}
-
-      {/* Create Activity Modal */}
-      {selectedObjectiveForActivity && <CreateActivityModal isOpen={showCreateActivityModal} onClose={() => {
-      setShowCreateActivityModal(false);
-      setSelectedObjectiveForActivity(null);
-    }} organizationId={organizationId} objectiveId={selectedObjectiveForActivity.id} objectiveTitle={selectedObjectiveForActivity.title} employeeId={selectedObjectiveForActivity.employeeId} />}
 
       {/* Edit Department Objective Modal */}
       {editModal.open && editModal.objective && (

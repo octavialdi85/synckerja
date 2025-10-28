@@ -257,17 +257,104 @@ export const useDeleteIndividualObjective = () => {
     mutationFn: async (objectiveId: string) => {
       console.log('🗑️ Deleting individual objective:', objectiveId);
 
-      const { error } = await supabase
-        .from('individual_objectives')
-        .delete()
-        .eq('id', objectiveId);
+      try {
+        // First, delete related weekly check-ins via key results
+        const { data: keyResults } = await supabase
+          .from('key_results')
+          .select('id')
+          .eq('individual_objective_id', objectiveId);
 
-      if (error) {
-        console.error('❌ Error deleting individual objective:', error);
+        if (keyResults && keyResults.length > 0) {
+          const keyResultIds = keyResults.map(kr => kr.id);
+          
+          // Delete weekly check-ins for these key results (correct table name: weekly_checkins)
+          const { error: checkinError } = await supabase
+            .from('weekly_checkins')
+            .delete()
+            .in('key_result_id', keyResultIds);
+
+          if (checkinError) {
+            console.warn('⚠️ Warning deleting weekly check-ins:', checkinError);
+          } else {
+            console.log('✅ Deleted weekly check-ins for key results');
+          }
+
+          // Delete activities for these key results (check if column exists)
+          const { error: activityError } = await supabase
+            .from('activities')
+            .delete()
+            .in('key_result_id', keyResultIds);
+
+          if (activityError) {
+            console.warn('⚠️ Warning deleting activities by key_result_id:', activityError);
+            // Try alternative column names
+            const { error: altActivityError } = await supabase
+              .from('activities')
+              .delete()
+              .in('objective_id', keyResultIds);
+
+            if (altActivityError) {
+              console.warn('⚠️ Alternative activity deletion also failed:', altActivityError);
+            } else {
+              console.log('✅ Deleted activities using alternative column');
+            }
+          } else {
+            console.log('✅ Deleted activities for key results');
+          }
+
+          // Delete the key results themselves
+          const { error: keyResultError } = await supabase
+            .from('key_results')
+            .delete()
+            .eq('individual_objective_id', objectiveId);
+
+          if (keyResultError) {
+            console.error('❌ Error deleting key results:', keyResultError);
+            throw keyResultError;
+          } else {
+            console.log('✅ Deleted key results for individual objective');
+          }
+        }
+
+        // Delete activities directly linked to the objective
+        const { error: directActivityError } = await supabase
+          .from('activities')
+          .delete()
+          .eq('individual_objective_id', objectiveId);
+
+        if (directActivityError) {
+          console.warn('⚠️ Warning deleting direct activities:', directActivityError);
+          // Try alternative column names
+          const { error: altDirectActivityError } = await supabase
+            .from('activities')
+            .delete()
+            .eq('objective_id', objectiveId);
+
+          if (altDirectActivityError) {
+            console.warn('⚠️ Alternative direct activity deletion also failed:', altDirectActivityError);
+          } else {
+            console.log('✅ Deleted direct activities using alternative column');
+          }
+        } else {
+          console.log('✅ Deleted direct activities for individual objective');
+        }
+
+        // Finally, delete the individual objective itself
+        const { error } = await supabase
+          .from('individual_objectives')
+          .delete()
+          .eq('id', objectiveId);
+
+        if (error) {
+          console.error('❌ Error deleting individual objective:', error);
+          throw error;
+        }
+
+        console.log('✅ Individual objective deleted successfully');
+      } catch (error) {
+        console.error('❌ Error in delete process:', error);
         throw error;
       }
-
-      console.log('✅ Individual objective deleted successfully');
     },
     onSuccess: () => {
       // Invalidate all related queries for immediate UI update

@@ -1,5 +1,6 @@
 import React from 'react';
-import { CheckSquare } from 'lucide-react';
+import { CheckSquare, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderAndTabProps {
   activeTab: string;
@@ -7,14 +8,31 @@ interface HeaderAndTabProps {
 }
 
 export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
+  const navigate = useNavigate();
+  
   const tabs = [
     { 
       id: 'daily-task', 
       label: 'Daily Task', 
       icon: CheckSquare,
-      description: 'Manage your daily tasks and to-do lists'
+      description: 'Manage your daily tasks and to-do lists',
+      path: '/tools/daily-task'
+    },
+    { 
+      id: 'meeting-notes', 
+      label: 'Meeting Notes', 
+      icon: FileText,
+      description: 'Track and manage meeting discussions and action items',
+      path: '/tools/meeting-notes'
     }
   ];
+
+  const handleTabClick = (tab: any) => {
+    onTabChange(tab.id);
+    if (tab.path) {
+      navigate(tab.path);
+    }
+  };
 
   return (
     <div className="px-1 py-3">
@@ -34,7 +52,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
             return (
               <div
                 key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+                onClick={() => handleTabClick(tab)}
                 className={`flex items-center space-x-1.5 py-1.5 px-1 border-b-2 font-medium text-sm cursor-pointer transition-colors ${
                   isActive
                     ? 'border-blue-500 text-blue-600'

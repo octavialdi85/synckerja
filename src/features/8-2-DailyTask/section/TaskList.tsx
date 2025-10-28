@@ -67,7 +67,10 @@ import { EditTaskDialog } from './EditTaskDialog';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import './TaskList.css';
 import { format } from 'date-fns';
-import { Droppable, DragDropContext, DropResult } from 'react-beautiful-dnd';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export const TaskList = () => {
   const context = useDailyTask();
@@ -163,42 +166,52 @@ export const TaskList = () => {
     setDatePickerOpen(null);
   };
 
-  const onDragEnd = (result: DropResult) => {
-    const { destination, source, draggableId } = result;
-
-    // If dropped outside a droppable area
-    if (!destination) {
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) {
       return;
     }
 
-    // If dropped in the same position
-    if (destination.droppableId === source.droppableId && destination.index === source.index) {
-      return;
+    // Extract step IDs from the drag event
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    
+    // Check if we're reordering steps within a task
+    if (activeId.startsWith('step-') && overId.startsWith('step-')) {
+      const activeStepId = activeId.replace('step-', '');
+      const overStepId = overId.replace('step-', '');
+      
+      // Find the task that contains these steps
+      const task = tasks.find(t => 
+        t.steps.some(s => s.id === activeStepId) && 
+        t.steps.some(s => s.id === overStepId)
+      );
+      
+      if (task) {
+        // Get the steps in their current order
+        const sortedSteps = task.steps.sort((a, b) => a.order - b.order);
+        const activeIndex = sortedSteps.findIndex(s => s.id === activeStepId);
+        const overIndex = sortedSteps.findIndex(s => s.id === overStepId);
+        
+        if (activeIndex !== -1 && overIndex !== -1) {
+          // Create new order array
+          const newSteps = [...sortedSteps];
+          const [removed] = newSteps.splice(activeIndex, 1);
+          newSteps.splice(overIndex, 0, removed);
+          
+          // Extract step IDs in new order
+          const stepIds = newSteps.map(step => step.id);
+          
+          // Call reorder function
+          reorderTaskSteps(task.id, stepIds);
+        }
+      }
     }
-
-    // Extract task ID from droppableId (format: "steps-{taskId}")
-    const taskId = destination.droppableId.replace('steps-', '');
-    
-    // Get the task and its steps
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    const sortedSteps = task.steps.sort((a, b) => a.order - b.order);
-    
-    // Create new array with reordered steps
-    const newSteps = Array.from(sortedSteps);
-    const [removed] = newSteps.splice(source.index, 1);
-    newSteps.splice(destination.index, 0, removed);
-
-    // Extract step IDs in new order
-    const stepIds = newSteps.map(step => step.id);
-    
-    // Call reorder function
-    reorderTaskSteps(taskId, stepIds);
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
+    <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <TooltipProvider>
         <div className="h-full flex flex-col">
         <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
@@ -545,37 +558,28 @@ export const TaskList = () => {
                       </Button>
                     </div>
                     
-                    <Droppable droppableId={`steps-${task.id}`}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={`space-y-2 min-h-[50px] ${
-                            snapshot.isDraggingOver ? 'bg-blue-100 rounded-lg' : ''
-                          }`}
-                        >
-                          {task.steps.length === 0 ? (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                              <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
-                              <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
-                              <p className="text-xs text-blue-700">
-                                Break down this task into smaller steps for better tracking
-                              </p>
-                              <p className="text-xs text-blue-600 mt-2">
-                                👆 Click "Add Step" button above to get started
-                              </p>
-                            </div>
-                          ) : (
-                            task.steps
-                              .sort((a, b) => a.order - b.order)
-                              .map((step, index) => (
-                                <TaskStep key={step.id} step={step} index={index} />
-                              ))
-                          )}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
+                    <SortableContext items={task.steps.map(step => `step-${step.id}`)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2 min-h-[50px]">
+                        {task.steps.length === 0 ? (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                            <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
+                            <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
+                            <p className="text-xs text-blue-700">
+                              Break down this task into smaller steps for better tracking
+                            </p>
+                            <p className="text-xs text-blue-600 mt-2">
+                              👆 Click "Add Step" button above to get started
+                            </p>
+                          </div>
+                        ) : (
+                          task.steps
+                            .sort((a, b) => a.order - b.order)
+                            .map((step, index) => (
+                              <TaskStep key={step.id} step={step} index={index} />
+                            ))
+                        )}
+                      </div>
+                    </SortableContext>
                   </div>
 
                 </div>
@@ -628,6 +632,6 @@ export const TaskList = () => {
         )}
         </div>
       </TooltipProvider>
-    </DragDropContext>
+    </DndContext>
   );
 };

@@ -96,7 +96,16 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
 
     return () => {
       // console.log('🔄 Cleaning up objective real-time subscriptions');
-      channels.forEach(channel => supabase.removeChannel(channel));
+      channels.forEach(channel => {
+        try {
+          supabase.removeChannel(channel);
+        } catch (error) {
+          // Ignore WebSocket cleanup errors
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️ WebSocket cleanup warning:', error);
+          }
+        }
+      });
     };
   }, [organizationId, cycleId, level, queryClient]);
 

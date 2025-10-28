@@ -137,21 +137,20 @@ export const useLocationServices = () => {
         },
         (error) => {
           setLocationLoading(false);
-          let errorMessage = 'Unable to retrieve location';
+          console.warn('Geolocation error:', error.message);
           
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = 'Location access denied by user';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable';
-              break;
-            case error.TIMEOUT:
-              errorMessage = 'Location request timeout';
-              break;
-          }
+          // Don't reject, just provide fallback data
+          const fallbackLocation: LocationData = {
+            latitude: 0,
+            longitude: 0,
+            accuracy: 0,
+            address: 'Location not available',
+            formatted_address: 'Location not available',
+            geocoding_success: false
+          };
           
-          reject(new Error(errorMessage));
+          setCurrentLocation(fallbackLocation);
+          resolve(fallbackLocation);
         },
         {
           enableHighAccuracy: true,

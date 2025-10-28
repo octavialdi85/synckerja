@@ -30,9 +30,15 @@ export const DeleteIndividualObjectiveDialog = ({
   const handleConfirm = () => {
     if (!objective) return;
     
+    console.log('🗑️ Confirming deletion of objective:', objective.id, objective.title);
+    
     deleteObjective.mutate(objective.id, {
       onSuccess: () => {
+        console.log('✅ Objective deleted successfully');
         onClose();
+      },
+      onError: (error) => {
+        console.error('❌ Failed to delete objective:', error);
       }
     });
   };

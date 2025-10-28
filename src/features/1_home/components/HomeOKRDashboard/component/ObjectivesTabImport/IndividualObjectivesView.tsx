@@ -12,7 +12,6 @@ import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartmen
 import { CreateIndividualObjectiveModal } from './DepartmentObjectivesViewImport/CreateIndividualObjectiveModal';
 import { ModalAddIndividualContribution } from '../../modal/ModalAddIndividualContribution';
 import { ObjectiveCheckinForm } from './CompanyObjectivesDetailViewImport/ObjectiveCheckinForm';
-import { CreateActivityModal } from './DepartmentObjectivesViewImport/CreateActivityModal';
 import { DeleteIndividualObjectiveDialog } from './DeleteIndividualObjectiveDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
@@ -35,13 +34,6 @@ export const IndividualObjectivesView = ({
   const [expandedObjective, setExpandedObjective] = useState<string>('');
   const [showContributionModal, setShowContributionModal] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
-  // Create Activity Modal states
-  const [showCreateActivityModal, setShowCreateActivityModal] = useState(false);
-  const [selectedObjectiveForActivity, setSelectedObjectiveForActivity] = useState<{
-    id: string;
-    title: string;
-    employeeId: string;
-  } | null>(null);
 
   // Delete Dialog states
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -333,8 +325,12 @@ export const IndividualObjectivesView = ({
                   {objective.status === 'active' ? 'Active' : objective.status === 'draft' ? 'Draft' : 'Completed'}
                 </Badge>
                 <div
-                  onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
-                  className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteObjective(e, { id: objective.id, title: objective.title });
+                  }}
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded transition-colors"
+                  title="Delete objective"
                 >
                   <Trash2 className="h-3 w-3" />
                 </div>
@@ -404,8 +400,12 @@ export const IndividualObjectivesView = ({
                     <Edit className="h-3 w-3" />
                   </div>
                   <div
-                    onClick={(e) => handleDeleteObjective(e, { id: objective.id, title: objective.title })}
-                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteObjective(e, { id: objective.id, title: objective.title });
+                    }}
+                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer rounded transition-colors"
+                    title="Delete objective"
                   >
                     <Trash2 className="h-3 w-3" />
                   </div>
@@ -631,22 +631,6 @@ export const IndividualObjectivesView = ({
       <ModalAddIndividualContribution open={showContributionModal} onOpenChange={setShowContributionModal} organizationId={organizationId} cycleId={cycleId || finalCycleIds?.[0] || ''} onSuccess={() => {
       console.log('✅ Individual contribution created successfully');
     }} />
-
-      {/* Create Activity Modal */}
-      {selectedObjectiveForActivity && (
-        <CreateActivityModal
-          isOpen={showCreateActivityModal}
-          onClose={() => {
-            setShowCreateActivityModal(false);
-            setSelectedObjectiveForActivity(null);
-          }}
-          organizationId={organizationId}
-          objectiveId={selectedObjectiveForActivity.id}
-          objectiveTitle={selectedObjectiveForActivity.title}
-          employeeId={selectedObjectiveForActivity.employeeId}
-        />
-      )}
-
 
       {/* Delete Individual Objective Dialog */}
       <DeleteIndividualObjectiveDialog

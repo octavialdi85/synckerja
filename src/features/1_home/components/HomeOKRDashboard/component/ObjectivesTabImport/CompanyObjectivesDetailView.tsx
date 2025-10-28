@@ -8,7 +8,7 @@ import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, 
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDeleteCompanyObjective } from '../../hooks/useDeleteCompanyObjective';
-import { useDepartmentObjectivesList } from './CompanyObjectivesDetailViewImport/useDepartmentObjectivesList';
+import { useDepartmentObjectives } from '../../modal/useDepartmentObjectives';
 import { useIndividualObjectives } from '../../modal/useIndividualObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
@@ -207,7 +207,7 @@ export const CompanyObjectivesDetailView = ({
   const {
     data: departmentObjectives = [],
     isLoading: loadingDepartmentObjectives
-  } = useDepartmentObjectivesList(organizationId, filteredCycleIds);
+  } = useDepartmentObjectives(organizationId, filteredCycleIds, true); // Include individual objectives
 
   // Fetch individual objectives from individual_objectives table - use filtered cycle IDs
   const {

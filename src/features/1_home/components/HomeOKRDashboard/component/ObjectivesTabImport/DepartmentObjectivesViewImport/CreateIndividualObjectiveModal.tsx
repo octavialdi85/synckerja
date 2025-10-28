@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 // import { useDepartmentObjectives } from '@/hooks/organized/okr'; // TODO: File not found
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { User, Target, AlertCircle, RefreshCcw } from 'lucide-react';
+import { useDepartmentObjectives } from '../../../modal/useDepartmentObjectives';
 
 interface CreateIndividualObjectiveModalProps {
   open: boolean;
@@ -39,7 +40,8 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
   // Get department objectives for parent selection
   const { data: departmentObjectives = [], isLoading: loadingDepartmentObjectives, refetch } = useDepartmentObjectives(
     organizationId, 
-    cycleId ? [cycleId] : undefined
+    cycleId ? [cycleId] : undefined,
+    false // Don't include individual objectives for dropdown
   );
 
   const [formData, setFormData] = useState({
@@ -142,6 +144,42 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
   const availableDepartmentObjectives = departmentObjectives.filter(obj => 
     obj.status === 'active' || obj.status === 'draft'
   );
+
+  // Debug logging to help identify the issue
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 CreateIndividualObjectiveModal - Department Objectives Debug:', {
+        totalObjectives: departmentObjectives.length,
+        availableObjectives: availableDepartmentObjectives.length,
+        allObjectives: departmentObjectives.map(obj => ({
+          id: obj.id,
+          title: obj.title,
+          status: obj.status,
+          cycle_id: obj.cycle_id,
+          organization_id: obj.organization_id
+        })),
+        cycleId,
+        organizationId,
+        queryKey: ['department-objectives', organizationId, cycleId ? [cycleId] : undefined, false]
+      });
+      
+      // Check specifically for "te" objective
+      const teObjective = departmentObjectives.find(obj => obj.title === 'te');
+      if (teObjective) {
+        console.log('🚨 FOUND "te" OBJECTIVE:', {
+          id: teObjective.id,
+          title: teObjective.title,
+          status: teObjective.status,
+          cycle_id: teObjective.cycle_id,
+          organization_id: teObjective.organization_id,
+          created_at: teObjective.created_at,
+          updated_at: teObjective.updated_at
+        });
+      } else {
+        console.log('✅ No "te" objective found in departmentObjectives');
+      }
+    }
+  }, [departmentObjectives, availableDepartmentObjectives, cycleId, organizationId]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

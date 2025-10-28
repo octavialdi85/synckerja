@@ -37,8 +37,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
       ],
       '/tools': [
         '/password-manager',
-        '/tools/daily-task',
-        '/tools/meeting-notes'
+        '/tools/daily-task'
       ],
       '/digital-marketing': [
         '/digital-marketing',

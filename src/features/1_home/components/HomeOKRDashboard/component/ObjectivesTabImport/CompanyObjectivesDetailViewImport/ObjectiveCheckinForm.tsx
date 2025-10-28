@@ -15,6 +15,8 @@ import { ScrollArea } from '@/features/ui/scroll-area';
 import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ActivitiesTab } from '../DepartmentObjectivesViewImport/ActivitiesTab';
+import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { BlockerDisplay } from '@/features/8-2-DailyTask/section/BlockerDisplay';
 interface WeeklyPeriod {
   weekStart: Date;
   weekEnd: Date;
@@ -69,6 +71,7 @@ export const ObjectiveCheckinForm = ({
     metric_type: string;
     id: string;
   } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('checkins');
 
   // Load OKR cycle data
   const loadCycleData = async () => {
@@ -79,29 +82,32 @@ export const ObjectiveCheckinForm = ({
 
       // First try company_objectives
       const {
-        data: objFromCompany,
-        error: objFromCompanyError
-      } = await supabase.from('company_objectives').select('cycle_id').eq('id', objectiveId).single();
-      if (!objFromCompanyError && objFromCompany) {
-        objective = objFromCompany;
+        data: companyData,
+        error: companyError
+      } = await supabase.from('company_objectives').select('cycle_id').eq('id', objectiveId);
+      
+      if (!companyError && companyData && companyData.length > 0) {
+        objective = companyData[0];
       } else {
         // Try department_objectives
         const {
-          data: objFromDept,
-          error: objFromDeptError
-        } = await supabase.from('department_objectives').select('cycle_id').eq('id', objectiveId).single();
-        if (!objFromDeptError && objFromDept) {
-          objective = objFromDept;
+          data: deptData,
+          error: deptError
+        } = await supabase.from('department_objectives').select('cycle_id').eq('id', objectiveId);
+        
+        if (!deptError && deptData && deptData.length > 0) {
+          objective = deptData[0];
         } else {
           // Try individual_objectives
           const {
-            data: objFromIndiv,
-            error: objFromIndivError
-          } = await supabase.from('individual_objectives').select('cycle_id').eq('id', objectiveId).single();
-          if (!objFromIndivError && objFromIndiv) {
-            objective = objFromIndiv;
+            data: indivData,
+            error: indivError
+          } = await supabase.from('individual_objectives').select('cycle_id').eq('id', objectiveId);
+          
+          if (!indivError && indivData && indivData.length > 0) {
+            objective = indivData[0];
           } else {
-            console.error('Error loading objective from all tables:', objFromCompanyError, objFromDeptError, objFromIndivError);
+            console.error('Error loading objective from all tables:', companyError, deptError, indivError);
             return;
           }
         }
@@ -814,17 +820,6 @@ export const ObjectiveCheckinForm = ({
                     
                     const currentValue = latestCheckin?.progress_percentage || (keyResultData.metric_type === 'number' ? keyResultData.current_value : keyResultData.progress_percentage) || 0;
                     
-                    console.log('🔍 Progress Debug:', {
-                      latestCheckin: latestCheckin?.progress_percentage,
-                      keyResultData: {
-                        metric_type: keyResultData.metric_type,
-                        current_value: keyResultData.current_value,
-                        progress_percentage: keyResultData.progress_percentage,
-                        target_value: keyResultData.target_value
-                      },
-                      finalCurrentValue: currentValue
-                    });
-                    
                     if (keyResultData?.metric_type === 'number') {
                       // For numerical metrics, currentValue is the actual value (e.g., 100)
                       return `${currentValue} / ${keyResultData?.target_value || 0} ${keyResultData?.unit || ''}`;
@@ -845,20 +840,6 @@ export const ObjectiveCheckinForm = ({
                   }, null as CheckinData | null);
                   
                   const currentValue = latestCheckin?.progress_percentage || (keyResultData?.metric_type === 'number' ? keyResultData?.current_value : keyResultData?.progress_percentage) || 0;
-                  
-                  console.log('🔍 Progress Bar Debug:', {
-                    latestCheckin: latestCheckin?.progress_percentage,
-                    keyResultData: {
-                      metric_type: keyResultData?.metric_type,
-                      current_value: keyResultData?.current_value,
-                      progress_percentage: keyResultData?.progress_percentage,
-                      target_value: keyResultData?.target_value
-                    },
-                    finalCurrentValue: currentValue,
-                    calculatedProgress: keyResultData?.metric_type === 'number' ? 
-                      (keyResultData?.target_value > 0 ? (currentValue / keyResultData.target_value) * 100 : 0) :
-                      (keyResultData?.target_value > 0 ? (currentValue / keyResultData.target_value) * 100 : 0)
-                  });
                   
                   if (keyResultData?.metric_type === 'number') {
                     // For numerical metrics, calculate percentage: (currentValue / targetValue) * 100
@@ -892,7 +873,7 @@ export const ObjectiveCheckinForm = ({
         </DialogHeader>
         
         {/* Tabs Container */}
-        <Tabs defaultValue="checkins" className="flex-1 min-h-0 flex flex-col mt-6">
+        <Tabs defaultValue="checkins" value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col mt-6">
           <TabsList className="grid w-full grid-cols-2 shrink-0 mb-6 bg-gray-100 p-1 rounded-lg h-12">
             <TabsTrigger 
               value="checkins" 
@@ -1029,14 +1010,25 @@ export const ObjectiveCheckinForm = ({
 
                       {/* Blockers */}
                       <div className="flex-1 min-w-52">
-                        <Textarea 
-                          placeholder="Blockers..." 
-                          value={data.blockers} 
-                          onChange={e => updateCheckinData(weekKey, 'blockers', e.target.value)} 
-                          disabled={!period.isEditable} 
-                          className={`min-h-9 text-sm border-gray-300 focus:border-purple-500 focus:ring-purple-500 resize-none ${!period.isEditable ? 'bg-gray-100' : 'bg-white'}`} 
-                          rows={1} 
-                        />
+                        {period.isEditable ? (
+                          <BlockerDisplay
+                            weekStart={period.weekStart.toISOString().split('T')[0]}
+                            weekEnd={period.weekEnd.toISOString().split('T')[0]}
+                            organizationId={profile.active_organization_id}
+                            objectiveId={objectiveId}
+                            onBlockerUpdate={() => {
+                              // Refresh data if needed
+                            }}
+                          />
+                        ) : (
+                          <Textarea 
+                            placeholder="Blockers..." 
+                            value={data.blockers} 
+                            disabled={true}
+                            className="min-h-9 text-sm border-gray-300 bg-gray-100 resize-none" 
+                            rows={1} 
+                          />
+                        )}
                       </div>
 
                       {/* Actions - Hidden since we removed it from header but keep structure */}
@@ -1054,10 +1046,12 @@ export const ObjectiveCheckinForm = ({
           </TabsContent>
           
           <TabsContent value="activities" className="flex-1 min-h-0">
-            <ActivitiesTab 
-              objectiveId={objectiveId}
-              objectiveTitle={objectiveTitle}
-            />
+            <DailyTaskProvider>
+              <ActivitiesTab 
+                objectiveId={objectiveId}
+                objectiveTitle={objectiveTitle}
+              />
+            </DailyTaskProvider>
           </TabsContent>
         </Tabs>
 
@@ -1070,10 +1064,12 @@ export const ObjectiveCheckinForm = ({
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={hasUnsavedChanges}>
               {hasUnsavedChanges ? 'Save First' : 'Close'}
             </Button>
-            <Button onClick={handleSaveAll} disabled={!hasUnsavedChanges} className="bg-purple-600 hover:bg-purple-700">
-              <Save className="h-4 w-4 mr-2" />
-              Save All Changes
-            </Button>
+            {activeTab !== 'activities' && (
+              <Button onClick={handleSaveAll} disabled={!hasUnsavedChanges} className="bg-purple-600 hover:bg-purple-700">
+                <Save className="h-4 w-4 mr-2" />
+                Save All Changes
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

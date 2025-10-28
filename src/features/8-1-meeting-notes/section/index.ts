@@ -1,4 +1,3 @@
-export { HeaderAndTab } from './HeaderAndTab';
 export { default as MeetingNotesHeader } from './MeetingNotesHeader';
 export { default as MeetingFilters } from './MeetingFilters';
 export { default as MeetingPointsTable } from './MeetingPointsTable';

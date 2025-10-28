@@ -1,7 +1,7 @@
 import React from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+import { HeaderAndTab } from '@/features/8-2-DailyTask/section/HeaderAndTab';
 import {
-  HeaderAndTab,
   MeetingFilters,
   MeetingPointsTable,
   MeetingSummaryCards,
