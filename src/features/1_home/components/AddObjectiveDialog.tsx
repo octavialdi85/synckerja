@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, CalendarDays, Calendar } from 'lucide-react';
 import { useOkrCycles } from './HomeOKRDashboard/hooks/useOkrCycles';
 import { useCreateObjective } from './HomeOKRDashboard/component/ObjectivesTabImport/useObjectives';
+import { useUpdateCompanyObjective } from './HomeOKRDashboard/hooks/useUpdateCompanyObjective';
 import { useProfile } from '@/features/2-1-employees/MyInfo/Documents/hooks/useProfile';
 import { useCreateOkrCycle } from './HomeOKRDashboard/hooks/useCreateOkrCycle';
 import { useToast } from '@/features/ui/use-toast';
@@ -74,6 +75,7 @@ export const AddObjectiveDialog = ({
     data: cycles = []
   } = useOkrCycles(organizationId);
   const createObjective = useCreateObjective();
+  const updateCompanyObjective = useUpdateCompanyObjective();
   const createOkrCycle = useCreateOkrCycle();
   const level = type;
   const departments: any[] = []; // TODO: Add departments hook
@@ -180,17 +182,44 @@ export const AddObjectiveDialog = ({
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.cycle_id || !formData.title || !formData.why_important || !organizationId || !profile?.user_id) {
-      return;
+    
+    // For edit mode, we don't need cycle_id validation since the objective already exists
+    if (editObjective) {
+      if (!formData.title || !formData.why_important || !organizationId || !profile?.user_id) {
+        return;
+      }
+    } else {
+      if (!formData.cycle_id || !formData.title || !formData.why_important || !organizationId || !profile?.user_id) {
+        return;
+      }
     }
+    
     try {
       if (editObjective) {
-        // TODO: Implement update logic for existing objectives
-        // For now, we'll just show a message that edit is not yet implemented
-        toast({
-          title: 'Info',
-          description: 'Edit functionality for company objectives is not yet implemented',
-        });
+        console.log('🔄 Edit mode - objective data:', editObjective);
+        console.log('🔄 Edit mode - form data:', formData);
+        
+        // Handle edit mode for company objectives
+        if (type === 'company') {
+          const updateData = {
+            id: editObjective.id,
+            updates: {
+              title: formData.title,
+              why_important: formData.why_important,
+              status: formData.status,
+              weight: 100
+            }
+          };
+          
+          console.log('🔄 Updating company objective with data:', updateData);
+          await updateCompanyObjective.mutateAsync(updateData);
+        } else {
+          // For other types, show message that edit is not yet implemented
+          toast({
+            title: 'Info',
+            description: `Edit functionality for ${type} objectives is not yet implemented`,
+          });
+        }
         setIsOpen(false);
         onObjectiveAdded?.();
       } else {
@@ -255,7 +284,12 @@ export const AddObjectiveDialog = ({
         onObjectiveAdded?.();
       }
     } catch (error) {
-      console.error('Error creating objective:', error);
+      console.error('Error with objective:', error);
+      toast({
+        title: 'Error',
+        description: editObjective ? 'Failed to update objective' : 'Failed to create objective',
+        variant: 'destructive',
+      });
     }
   };
   return <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -276,12 +310,16 @@ export const AddObjectiveDialog = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="cycle_id">
-              OKR Cycle <span className="text-red-500">*</span>
+              OKR Cycle {!editObjective && <span className="text-red-500">*</span>}
             </Label>
-            <Select value={formData.cycle_id} onValueChange={value => setFormData(prev => ({
-            ...prev,
-            cycle_id: value
-          }))}>
+            <Select 
+              value={formData.cycle_id} 
+              onValueChange={value => setFormData(prev => ({
+                ...prev,
+                cycle_id: value
+              }))}
+              disabled={editObjective} // Disable cycle selection in edit mode
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select OKR cycle" />
               </SelectTrigger>
@@ -422,8 +460,11 @@ export const AddObjectiveDialog = ({
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createObjective.isPending}>
-              {createObjective.isPending ? (editObjective ? 'Updating...' : 'Creating...') : (editObjective ? 'Update Objective' : 'Create Objective')}
+            <Button type="submit" disabled={createObjective.isPending || updateCompanyObjective.isPending}>
+              {createObjective.isPending || updateCompanyObjective.isPending ? 
+                (editObjective ? 'Updating...' : 'Creating...') : 
+                (editObjective ? 'Update Objective' : 'Create Objective')
+              }
             </Button>
           </DialogFooter>
         </form>

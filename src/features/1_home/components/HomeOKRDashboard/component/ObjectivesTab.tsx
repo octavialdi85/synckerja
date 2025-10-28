@@ -159,6 +159,8 @@ export const ObjectivesTab = ({
               organizationId={organizationId}
               cycleId={hasMultipleCycles ? undefined : selectedCycleId}
               cycleIds={hasMultipleCycles ? filteredCycleIds : undefined}
+              yearQuarterSelection={yearQuarterSelection}
+              onYearQuarterChange={onYearQuarterChange}
             />
           </div>
         ) : (

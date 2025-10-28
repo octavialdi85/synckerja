@@ -33,11 +33,15 @@ interface CompanyObjectivesViewProps {
   organizationId: string;
   cycleId?: string;
   cycleIds?: string[]; // Support for multiple cycle IDs
+  yearQuarterSelection?: YearQuarterSelection; // Add yearQuarterSelection prop
+  onYearQuarterChange?: (selection: YearQuarterSelection) => void; // Add onYearQuarterChange prop
 }
 export const CompanyObjectivesDetailView = ({
   organizationId,
   cycleId,
-  cycleIds
+  cycleIds,
+  yearQuarterSelection: propYearQuarterSelection,
+  onYearQuarterChange: propOnYearQuarterChange
 }: CompanyObjectivesViewProps) => {
   const [expandedObjective, setExpandedObjective] = useState<string>('');
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
@@ -63,10 +67,13 @@ export const CompanyObjectivesDetailView = ({
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
   
-  // Real data from Supabase
-  const [yearQuarterSelection, setYearQuarterSelection] = useState<YearQuarterSelection>({
+  // Use prop yearQuarterSelection or fallback to local state
+  const [localYearQuarterSelection, setLocalYearQuarterSelection] = useState<YearQuarterSelection>({
     years: {}
   });
+  
+  const yearQuarterSelection = propYearQuarterSelection || localYearQuarterSelection;
+  const onYearQuarterChange = propOnYearQuarterChange || setLocalYearQuarterSelection;
   
   const {
     organizationId: currentOrgId
@@ -79,11 +86,6 @@ export const CompanyObjectivesDetailView = ({
   // Get available years from cycles
   const availableYears = cycles.length > 0 ? cycles.map(c => c.year).filter((year, index, arr) => arr.indexOf(year) === index).sort((a, b) => b - a) : undefined;
 
-  const onYearQuarterChange = (selection: YearQuarterSelection) => {
-    console.log('🟠 SectionMainCompanyObjectives - Year quarter selection changed:', selection);
-    setYearQuarterSelection(selection);
-  };
-
   // Calculate filtered cycle IDs for objectives - same as AttendanceSection.tsx
   const getFilteredCycleIds = (yearQuarterSelection: YearQuarterSelection) => {
     return hasYearQuarterSelection(yearQuarterSelection) 
@@ -94,12 +96,50 @@ export const CompanyObjectivesDetailView = ({
   // Get filtered cycle IDs based on current selection
   const filteredCycleIds = getFilteredCycleIds(yearQuarterSelection);
   
-  // Removed excessive debug logging for performance
-  const getDynamicTitle = () => 'Company Objectives - Q3 2025';
+  // Debug logging
+  console.log('🔍 CompanyObjectivesDetailView Debug:', {
+    yearQuarterSelection,
+    filteredCycleIds,
+    cycleIds,
+    cycles: cycles.map(c => ({ id: c.id, name: c.name, year: c.year, quarter: c.quarter }))
+  });
+  
+  // Calculate dynamic title based on filtered cycles
+  const getDynamicTitle = () => {
+    if (!filteredCycleIds || filteredCycleIds.length === 0) {
+      return 'Company Objectives';
+    }
+    
+    const filteredCycles = cycles.filter(cycle => filteredCycleIds.includes(cycle.id));
+    if (filteredCycles.length === 1) {
+      return `Company Objectives - ${filteredCycles[0].name}`;
+    } else if (filteredCycles.length > 1) {
+      const years = [...new Set(filteredCycles.map(c => c.year))];
+      return `Company Objectives - ${years.join(', ')}`;
+    }
+    
+    return 'Company Objectives';
+  };
+  
   const loading = false;
   const error = null;
   const onToggleQuarterDropdown = () => setShowQuarterDropdown(!showQuarterDropdown);
-  const getDisplayText = () => 'Q3 2025';
+  
+  const getDisplayText = () => {
+    if (!filteredCycleIds || filteredCycleIds.length === 0) {
+      return 'All Periods';
+    }
+    
+    const filteredCycles = cycles.filter(cycle => filteredCycleIds.includes(cycle.id));
+    if (filteredCycles.length === 1) {
+      return filteredCycles[0].name;
+    } else if (filteredCycles.length > 1) {
+      return `${filteredCycles.length} periods selected`;
+    }
+    
+    return 'All Periods';
+  };
+  
   const onClearAll = () => setSelectedQuarters([]);
   const quarters = [
     { id: 'q1-2025', label: 'Q1 2025' },

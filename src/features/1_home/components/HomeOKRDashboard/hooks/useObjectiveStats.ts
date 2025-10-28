@@ -34,7 +34,8 @@ export const useObjectiveStats = (
         console.log(`🎯 [${type}] Filtering by cycle IDs:`, cycleIds);
         query = query.in('cycle_id', cycleIds);
       } else {
-        console.log(`⚠️ [${type}] No cycle IDs provided, fetching all objectives for this org`);
+        console.log(`⚠️ [${type}] No cycle IDs provided, returning zero stats`);
+        return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
       const { data: objectives, error } = await query;

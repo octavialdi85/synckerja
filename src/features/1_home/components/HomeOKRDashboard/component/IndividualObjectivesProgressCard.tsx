@@ -68,12 +68,18 @@ export const IndividualObjectivesProgressCard = ({
   };
 
 
+  // Check if any period is selected
+  const hasSelectedPeriod = yearQuarterSelection && 
+    Object.values(yearQuarterSelection.years).some(year => 
+      year.selected || Object.values(year.quarters).some(Boolean)
+    );
+
   const stats = {
-    total: enhancedIndividualObjectives.length,
-    active: activeObjectives.length,
-    draft: draftObjectives.length,
-    completed: completedObjectives.length,
-    averageProgress: calculateOverallProgress()
+    total: hasSelectedPeriod ? enhancedIndividualObjectives.length : 0,
+    active: hasSelectedPeriod ? activeObjectives.length : 0,
+    draft: hasSelectedPeriod ? draftObjectives.length : 0,
+    completed: hasSelectedPeriod ? completedObjectives.length : 0,
+    averageProgress: hasSelectedPeriod ? calculateOverallProgress() : 0
   };
 
   return (

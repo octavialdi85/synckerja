@@ -72,8 +72,25 @@ export const CompanyObjectivesProgressCard = ({
     setIsExpanded(!isExpanded);
   };
 
+  // Check if any period is selected
+  const hasSelectedPeriod = currentYearQuarterSelection && 
+    Object.values(currentYearQuarterSelection.years).some(year => 
+      year.selected || Object.values(year.quarters).some(Boolean)
+    );
+
   // Calculate stats - prefer data from props/arguments, fallback to stats
   const finalStats = (() => {
+    // If no period is selected, return zero stats
+    if (!hasSelectedPeriod) {
+      return {
+        total: 0,
+        active: 0,
+        draft: 0,
+        completed: 0,
+        averageProgress: 0
+      };
+    }
+
     // If we have actual objective arrays with data, use those
     if (enhancedCompanyObjectives.length > 0) {
       return {
@@ -113,7 +130,7 @@ export const CompanyObjectivesProgressCard = ({
       active: 0,
       draft: 0,
       completed: 0,
-      averageProgress: calculateOverallProgress()
+      averageProgress: 0
     };
   })();
 
