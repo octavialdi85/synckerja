@@ -12,7 +12,7 @@ export const useCurrentEmployee = () => {
     queryKey: ['current-employee', user?.id, organizationId],
     queryFn: async () => {
       if (!user?.id || !organizationId) {
-        console.log('useCurrentEmployee: Missing user or organization ID');
+        console.log('useCurrentEmployee: Missing user or organization ID - user:', user?.id, 'org:', organizationId);
         return null;
       }
 

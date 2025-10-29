@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useLocationServices } from './useLocationServices';
-import { findNearestOfficeLocation } from './officeLocationUtils';
-import { hasOfficeLocations } from './officeLocationValidation';
+import { findNearestOfficeLocation } from '../utils/officeLocationUtils';
+import { hasOfficeLocations } from '../utils/officeLocationValidation';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
 
@@ -792,3 +792,4 @@ export const useSimpleAttendance = () => {
     }
   };
 };
+

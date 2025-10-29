@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
@@ -184,3 +183,4 @@ export const TrainingRegistrationModal = ({
     </Dialog>
   );
 };
+

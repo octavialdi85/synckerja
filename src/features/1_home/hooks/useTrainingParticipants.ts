@@ -228,3 +228,4 @@ export const useTrainingParticipants = (programId?: string) => {
     removeParticipant,
   };
 };
+

@@ -92,6 +92,8 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
   
+  console.log('📅 PersonalAttendanceCalendar rendered with employeeId:', employeeId);
+  
   const { userData } = useCentralizedUserData();
   const { settings: workScheduleSettings, loading: scheduleLoading } = useWorkScheduleSettings();
   const { records: attendanceRecords = [], isLoading: attendanceLoading } = useAttendanceRecords(organizationId);
@@ -103,6 +105,18 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
   
   const { data: personalPenalties = 0 } = useAttendancePenaltyTotal(employeeId, currentMonth, currentYear);
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+  
+  console.log('📊 Calendar data status:', {
+    employeeId,
+    organizationId,
+    userData: userData?.full_name,
+    scheduleLoading,
+    attendanceLoading,
+    holidaysLoading,
+    leaveLoading,
+    attendanceRecordsCount: attendanceRecords.length,
+    workScheduleSettingsCount: workScheduleSettings.length
+  });
   
   const defaultSchedule = workScheduleSettings.find(schedule => schedule.is_default) || workScheduleSettings[0];
   const workingDays = defaultSchedule?.working_days || [1, 2, 3, 4, 5];

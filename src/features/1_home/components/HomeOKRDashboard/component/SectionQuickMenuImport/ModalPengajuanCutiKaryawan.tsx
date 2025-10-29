@@ -15,9 +15,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { CalendarIcon, User, Building, Loader2, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
-import { useLeaveRequest } from '../../../useLeaveRequest';
-import { useEmployeeLeaveEligibility } from '../../../useEmployeeLeaveEligibility';
-import { LeaveEligibilityAlert } from '../../../LeaveEligibilityAlert';
+import { useLeaveRequest } from '../../../../hooks/useLeaveRequest';
+import { useEmployeeLeaveEligibility } from '../../../../hooks/useEmployeeLeaveEligibility';
+import { LeaveEligibilityAlert } from '../../../../components/LeaveEligibilityAlert';
 
 const leaveRequestSchema = z.object({
   leaveType: z.string().min(1, 'Jenis cuti harus dipilih'),

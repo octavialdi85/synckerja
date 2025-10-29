@@ -53,6 +53,7 @@ interface StepHistory {
   brief_type: string | null;
   created_at: string;
   created_by: string;
+  created_by_employee?: { id: string; full_name: string; email?: string };
 }
 
 interface StepHistoryModalProps {
@@ -76,7 +77,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
   taskId,
   onHistoryUpdate
 }) => {
-  const [activeTab, setActiveTab] = useState('blocker');
+  const [activeTab, setActiveTab] = useState('brief');
   const [history, setHistory] = useState<StepHistory[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -113,7 +114,35 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setHistory(data || []);
+      
+      // Get unique user IDs from history
+      const userIds = [...new Set((data || []).map((entry: any) => entry.created_by).filter(Boolean))];
+      
+      // Fetch employee data for these user IDs
+      let employeesData = {};
+      if (userIds.length > 0) {
+        const { data: employees, error: empError } = await (supabase as any)
+          .from('employees')
+          .select('user_id, full_name, email')
+          .in('user_id', userIds);
+        
+        if (empError) {
+          console.warn('Failed to fetch employees:', empError);
+        } else {
+          employeesData = employees?.reduce((acc: any, emp: any) => {
+            acc[emp.user_id] = emp;
+            return acc;
+          }, {}) || {};
+        }
+      }
+
+      // Add employee data to history entries
+      const historyWithEmployees = (data || []).map((entry: any) => ({
+        ...entry,
+        created_by_employee: employeesData[entry.created_by] || null
+      }));
+
+      setHistory(historyWithEmployees);
     } catch (error: any) {
       console.error('Error fetching step history:', error);
       toast({
@@ -349,13 +378,13 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         <div className="flex-1 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="blocker" className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Blockers
-              </TabsTrigger>
               <TabsTrigger value="brief" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Brief Updates
+              </TabsTrigger>
+              <TabsTrigger value="blocker" className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Blockers
               </TabsTrigger>
               <TabsTrigger value="status" className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
@@ -598,7 +627,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                               </span>
                               <span className="flex items-center gap-1">
                                 <User className="w-3 h-3" />
-                                {entry.created_by}
+                                {entry.created_by_employee?.full_name || 'Unknown User'}
                               </span>
                             </div>
                           </div>

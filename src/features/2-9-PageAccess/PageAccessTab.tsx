@@ -317,7 +317,7 @@ export const PageAccessTab = () => {
                                   Add New Page
                                 </Button>
                               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-lg aspect-square">
                 <DialogHeader>
                   <DialogTitle>Create New Page Access</DialogTitle>
                   <DialogDescription>

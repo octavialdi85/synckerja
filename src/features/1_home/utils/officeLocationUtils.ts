@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface OfficeLocationResult {
@@ -92,3 +91,4 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
   return R * c; // Distance in meters
 };
+

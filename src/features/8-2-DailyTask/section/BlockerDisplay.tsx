@@ -17,7 +17,8 @@ import {
   Clock, 
   ChevronRight,
   Filter,
-  X
+  X,
+  Target
 } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +34,7 @@ interface Blocker {
   created_by_employee?: { id: string; full_name: string; email?: string };
   step_title: string;
   task_title: string;
+  objective_id: string;
 }
 
 interface BlockerDisplayProps {
@@ -57,6 +59,7 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [objectiveInfo, setObjectiveInfo] = useState<Record<string, { title: string; type: 'department' | 'individual' }>>({});
   
   const { toast } = useToast();
 
@@ -65,7 +68,36 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
     
     setLoading(true);
     try {
-      // First, get the blockers data
+      let objectiveIds = [];
+      
+      // If objectiveId is provided, check if it's a department objective
+      if (objectiveId) {
+        // First, check if this is a department objective
+        const { data: departmentObjective } = await (supabase as any)
+          .from('department_objectives')
+          .select('id, title')
+          .eq('id', objectiveId)
+          .single();
+        
+        if (departmentObjective) {
+          // This is a department objective, get related individual objectives
+          const { data: individualObjectives } = await (supabase as any)
+            .from('individual_objectives')
+            .select('id, title')
+            .eq('department_objective_id', objectiveId);
+          
+          // Add department objective ID and all related individual objective IDs
+          objectiveIds = [objectiveId, ...(individualObjectives?.map((io: any) => io.id) || [])];
+          
+          console.log('🔍 Department objective found:', departmentObjective.title);
+          console.log('🔍 Related individual objectives:', individualObjectives?.map((io: any) => io.title) || []);
+        } else {
+          // This is not a department objective, use as is
+          objectiveIds = [objectiveId];
+        }
+      }
+
+      // Build the query for blockers
       let query = (supabase as any)
         .from('task_step_history')
         .select(`
@@ -91,8 +123,8 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
         .lte('created_at', `${weekEnd}T23:59:59.999Z`);
 
       // Add objective filter if provided
-      if (objectiveId) {
-        query = query.eq('task_steps.daily_tasks.objective_id', objectiveId);
+      if (objectiveIds.length > 0) {
+        query = query.in('task_steps.daily_tasks.objective_id', objectiveIds);
       }
 
       const { data: blockersData, error } = await query.order('created_at', { ascending: false });
@@ -100,6 +132,7 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
       if (error) throw error;
 
       console.log('🔍 Raw blocker data:', blockersData);
+      console.log('🔍 Filtering by objective IDs:', objectiveIds);
 
       // Get unique user IDs from blockers
       const userIds = [...new Set(blockersData?.map((blocker: any) => blocker.created_by).filter(Boolean))];
@@ -134,11 +167,43 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
         created_by: blocker.created_by,
         created_by_employee: employeesData[blocker.created_by] || null,
         step_title: blocker.task_steps?.title || 'Unknown Step',
-        task_title: blocker.task_steps?.daily_tasks?.title || 'Unknown Task'
+        task_title: blocker.task_steps?.daily_tasks?.title || 'Unknown Task',
+        objective_id: blocker.task_steps?.daily_tasks?.objective_id || 'Unknown Objective'
       }));
 
       console.log('🔍 Formatted blockers:', formattedBlockers);
 
+      // Fetch objective information for all unique objective IDs
+      const uniqueObjectiveIds = [...new Set(formattedBlockers.map(blocker => blocker.objective_id))];
+      const objectiveInfoMap: Record<string, { title: string; type: 'department' | 'individual' }> = {};
+      
+      for (const objId of uniqueObjectiveIds) {
+        if (objId === 'Unknown Objective') continue;
+        
+        // Check if it's a department objective
+        const { data: deptObj } = await (supabase as any)
+          .from('department_objectives')
+          .select('id, title')
+          .eq('id', objId)
+          .single();
+        
+        if (deptObj) {
+          objectiveInfoMap[objId] = { title: deptObj.title, type: 'department' };
+        } else {
+          // Check if it's an individual objective
+          const { data: indObj } = await (supabase as any)
+            .from('individual_objectives')
+            .select('id, title')
+            .eq('id', objId)
+            .single();
+          
+          if (indObj) {
+            objectiveInfoMap[objId] = { title: indObj.title, type: 'individual' };
+          }
+        }
+      }
+      
+      setObjectiveInfo(objectiveInfoMap);
       setBlockers(formattedBlockers);
     } catch (error: any) {
       console.error('Error fetching blockers:', error);
@@ -229,8 +294,9 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
           </Button>
         </div>
       ) : (
-        <div className="w-full h-9 px-3 py-2 text-sm text-gray-500 border border-gray-300 rounded-md bg-gray-50 flex items-center">
-          No blockers found for this week period.
+        <div className="w-full h-9 px-3 py-2 text-sm text-gray-500 border border-gray-300 rounded-md bg-gray-50 flex items-center gap-2 overflow-hidden">
+          <AlertTriangle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <span className="truncate">No blockers reported this week</span>
         </div>
       )}
 
@@ -340,6 +406,18 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
                           <User className="w-3 h-3" />
                           {blocker.created_by_employee?.full_name || 'Unknown User'}
                         </span>
+                        {objectiveInfo[blocker.objective_id] && (
+                          <span className="flex items-center gap-1">
+                            <Target className="w-3 h-3" />
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              objectiveInfo[blocker.objective_id].type === 'department' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : 'bg-green-100 text-green-700'
+                            }`}>
+                              {objectiveInfo[blocker.objective_id].type === 'department' ? 'Dept' : 'Ind'}: {objectiveInfo[blocker.objective_id].title}
+                            </span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -20,3 +20,4 @@ export const hasOfficeLocations = async (organizationId: string): Promise<boolea
     return false;
   }
 };
+

@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Badge } from '@/features/ui/badge';
 import { Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { useEmployeeLeaveEligibility } from './useEmployeeLeaveEligibility';
+import { useEmployeeLeaveEligibility } from '../hooks/useEmployeeLeaveEligibility';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 

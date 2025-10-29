@@ -7,6 +7,7 @@ import { useAttendanceStatus } from './AttendanceStatusProvider';
 import { ModalPengajuanCutiKaryawan } from './SectionQuickMenuImport/ModalPengajuanCutiKaryawan';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { Clock, Camera, BarChart3, Users } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TeamData {
   name: string;
@@ -27,8 +28,9 @@ export const SectionQuickMenu = ({
   const { hasCheckedIn, hasCheckedOut, todayRecord, refreshStatus } = useAttendanceStatus();
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const navigate = useNavigate();
-  const { data: employeeData } = useCurrentEmployee();
+  const { data: employeeData, isLoading: employeeLoading } = useCurrentEmployee();
 
   const calculateWorkingHours = (record: any) => {
     if (!record?.check_in_time) return "0 jam 0 menit";
@@ -45,9 +47,29 @@ export const SectionQuickMenu = ({
 
   const workingHoursToday = todayRecord ? calculateWorkingHours(todayRecord) : "0 jam 0 menit";
 
-  const handleRiwayatAbsensi = () => {
+  const handleRiwayatAbsensi = async () => {
+    console.log('🔍 Riwayat Absensi clicked, employeeData:', employeeData);
+    
+    if (employeeLoading) {
+      toast.info('Memuat data karyawan...');
+      return;
+    }
+    
     if (employeeData?.id) {
-      navigate(`/my-info/attendance?id=${employeeData.id}`);
+      console.log('✅ Navigating to attendance page with employee ID:', employeeData.id);
+      setIsNavigating(true);
+      try {
+        navigate(`/my-info/attendance?id=${employeeData.id}`);
+      } catch (error) {
+        console.error('Navigation error:', error);
+        toast.error('Gagal membuka halaman riwayat absensi');
+      } finally {
+        setIsNavigating(false);
+      }
+    } else {
+      console.warn('⚠️ No employee data available for navigation');
+      // Show a toast notification to inform the user
+      toast.error('Data karyawan tidak tersedia. Silakan refresh halaman atau hubungi administrator.');
     }
   };
 
@@ -137,10 +159,17 @@ export const SectionQuickMenu = ({
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={handleRiwayatAbsensi}
-              className="flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-md hover:bg-blue-50 transition-colors cursor-pointer"
+              disabled={employeeLoading || isNavigating}
+              className={`flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-md transition-colors ${
+                employeeLoading || isNavigating 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'hover:bg-blue-50 cursor-pointer'
+              }`}
             >
               <Clock className="h-4 w-4 text-blue-600" />
-              <span className="text-xs font-semibold leading-relaxed">Riwayat Absensi</span>
+              <span className="text-xs font-semibold leading-relaxed">
+                {isNavigating ? 'Membuka...' : 'Riwayat Absensi'}
+              </span>
             </button>
             <button 
               onClick={handlePengajuanCuti}
