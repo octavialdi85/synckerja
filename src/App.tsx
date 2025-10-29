@@ -50,6 +50,7 @@ import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/Acc
 // import { AccessPermissionsRedirector } from "./features/2-9-PageAccess/redirectors/AccessPermissionsRedirector";
 import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
 import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
+import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
 import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
 
 // Import debug utilities in development
@@ -331,6 +332,13 @@ const App = () => (
                 </ImmediateProtectedRoute>
               } />
               
+              
+              {/* Transfer Ownership Route - IMMEDIATE PROTECTION */}
+              <Route path="/transfer-ownership" element={
+                <ImmediateProtectedRoute>
+                  <TransferOwnership />
+                </ImmediateProtectedRoute>
+              } />
               
               {/* Employee Profile Routes */}
               <Route path="/my-info/personal" element={
