@@ -10,6 +10,7 @@ export interface TaskStep {
   is_completed: boolean;
   order: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface TaskFile {
@@ -34,6 +35,16 @@ export interface DeadlineHistory {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;
+}
+
+export interface RecentStepUpdate {
+  id: string;
+  task_id: string;
+  step_title: string;
+  task_title: string;
+  is_completed: boolean;
+  updated_at: string;
+  action: 'created' | 'updated' | 'completed' | 'reopened';
 }
 
 export interface Task {
@@ -73,12 +84,23 @@ interface Filters {
   dateFilter: string;
 }
 
+interface RecentStepFilters {
+  dateRange: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+  actionType: 'all' | 'completed' | 'updated' | 'created' | 'reopened';
+  customStartDate?: string;
+  customEndDate?: string;
+}
+
 export interface DailyTaskContextType {
   tasks: Task[];
   summaryData: SummaryData;
+  recentStepUpdates: RecentStepUpdate[];
+  filteredRecentStepUpdates: RecentStepUpdate[];
+  recentStepFilters: RecentStepFilters;
   filters: Filters;
   isLoading: boolean;
   setFilters: (filters: Filters | ((prev: Filters) => Filters)) => void;
+  setRecentStepFilters: (filters: RecentStepFilters | ((prev: RecentStepFilters) => RecentStepFilters)) => void;
   addTask: (data: Partial<Task>) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -112,6 +134,8 @@ interface DailyTaskProviderProps {
 
 export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [recentStepUpdates, setRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
+  const [filteredRecentStepUpdates, setFilteredRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -119,10 +143,102 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     priority: '',
     dateFilter: ''
   });
+  const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
+    dateRange: 'today',
+    actionType: 'all'
+  });
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
 
+  // Filter recent step updates based on current filters
+  const filterRecentStepUpdates = (updates: RecentStepUpdate[], filters: RecentStepFilters) => {
+    let filtered = [...updates];
+
+    // Filter by action type
+    if (filters.actionType !== 'all') {
+      filtered = filtered.filter(update => update.action === filters.actionType);
+    }
+
+    // Filter by date range
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    filtered = filtered.filter(update => {
+      const updateDate = new Date(update.updated_at);
+      
+      switch (filters.dateRange) {
+        case 'today':
+          return updateDate >= today;
+        case 'yesterday':
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return updateDate >= yesterday && updateDate < today;
+        case 'this_week':
+          const weekStart = new Date(today);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          return updateDate >= weekStart;
+        case 'this_month':
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          return updateDate >= monthStart;
+        case 'last_month':
+          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+          return updateDate >= lastMonthStart && updateDate < lastMonthEnd;
+        case 'custom':
+          if (filters.customStartDate && filters.customEndDate) {
+            const startDate = new Date(filters.customStartDate);
+            const endDate = new Date(filters.customEndDate);
+            endDate.setHours(23, 59, 59, 999); // Include the entire end date
+            return updateDate >= startDate && updateDate <= endDate;
+          }
+          return true;
+        default:
+          return true;
+      }
+    });
+
+    return filtered;
+  };
+
   // Centralized fetch functions
+  const fetchRecentStepUpdates = async () => {
+    if (!organizationId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('task_steps')
+        .select(`
+          id,
+          task_id,
+          title,
+          is_completed,
+          updated_at,
+          daily_tasks!inner(title)
+        `)
+        .eq('daily_tasks.organization_id', organizationId)
+        .order('updated_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      const recentUpdates: RecentStepUpdate[] = (data || []).map((step: any) => ({
+        id: step.id,
+        task_id: step.task_id,
+        step_title: step.title,
+        task_title: step.daily_tasks.title,
+        is_completed: step.is_completed,
+        updated_at: step.updated_at,
+        action: step.is_completed ? 'completed' : 'updated'
+      }));
+
+      setRecentStepUpdates(recentUpdates);
+      // Apply current filters to the new data
+      setFilteredRecentStepUpdates(filterRecentStepUpdates(recentUpdates, recentStepFilters));
+    } catch (error) {
+      console.error('Error fetching recent step updates:', error);
+    }
+  };
+
   const fetchTasks = async () => {
     if (!organizationId) return;
 
@@ -767,7 +883,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     // Initial data fetch
     const loadData = async () => {
       setIsLoading(true);
-      await fetchTasks();
+      await Promise.all([
+        fetchTasks(),
+        fetchRecentStepUpdates()
+      ]);
       setIsLoading(false);
     };
 
@@ -845,12 +964,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     };
   }, [organizationId]);
 
+  // Apply filters when recentStepFilters or recentStepUpdates change
+  useEffect(() => {
+    setFilteredRecentStepUpdates(filterRecentStepUpdates(recentStepUpdates, recentStepFilters));
+  }, [recentStepFilters, recentStepUpdates]);
+
   const value: DailyTaskContextType = {
     tasks,
     summaryData,
+    recentStepUpdates,
+    filteredRecentStepUpdates,
+    recentStepFilters,
     filters,
     isLoading,
     setFilters,
+    setRecentStepFilters,
     addTask,
     updateTask,
     deleteTask,

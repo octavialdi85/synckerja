@@ -1,5 +1,6 @@
 import { CheckSquare, Clock, AlertTriangle, XCircle, Calendar, TrendingUp } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
+import RecentUpdateSteps from './RecentUpdateSteps';
 
 interface SummaryData {
   label: string;
@@ -123,6 +124,11 @@ const TaskSummaryCards = () => {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Recent Step Updates */}
+      <div className="mt-4">
+        <RecentUpdateSteps />
       </div>
     </div>
   );

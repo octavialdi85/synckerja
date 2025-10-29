@@ -5,6 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AddLinkModal } from './AddLinkModal';
+import { EditLinkModal } from './EditLinkModal';
 
 interface StepLink {
   id: string;
@@ -23,6 +24,7 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
   const [links, setLinks] = useState<StepLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingLink, setEditingLink] = useState<StepLink | null>(null);
   const { toast } = useToast();
 
   const fetchLinks = async () => {
@@ -82,6 +84,15 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
 
   const openLink = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleEditLink = (link: StepLink) => {
+    setEditingLink(link);
+  };
+
+  const handleUpdateLink = () => {
+    fetchLinks();
+    setEditingLink(null);
   };
 
   if (!isExpanded) return null;
@@ -145,6 +156,15 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={() => handleEditLink(link)}
+                  className="h-5 w-5 p-0 text-gray-400 hover:text-blue-600"
+                  title="Edit link"
+                >
+                  <Edit className="w-3 h-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => deleteLink(link.id)}
                   className="h-5 w-5 p-0 text-gray-400 hover:text-red-600"
                   title="Delete link"
@@ -162,6 +182,13 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
         onClose={() => setShowAddModal(false)}
         taskStepId={taskStepId}
         onSuccess={fetchLinks}
+      />
+
+      <EditLinkModal
+        isOpen={!!editingLink}
+        onClose={() => setEditingLink(null)}
+        link={editingLink}
+        onSuccess={handleUpdateLink}
       />
     </div>
   );

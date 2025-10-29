@@ -227,13 +227,13 @@ export const TaskList = () => {
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
                   Task Title
                 </TableHead>
-                <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                   PIC
                 </TableHead>
-                <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                   Due Date
                 </TableHead>
-                <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                   Finish Date
                 </TableHead>
                 <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }}>
@@ -358,8 +358,8 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* PIC (Person In Charge) */}
-                        <TableCell className="px-2 py-3 text-center" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
-                          <div className="flex items-center justify-center">
+                        <TableCell className="px-2 py-3 text-left" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                          <div className="flex items-center">
                             {task.assigned_to_name ? (
                               <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 text-blue-600" />
@@ -376,7 +376,7 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* Due Date */}
-                        <TableCell className="px-2 py-3 text-center" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                           <Popover 
                             open={datePickerOpen === task.id} 
                             onOpenChange={(open) => setDatePickerOpen(open ? task.id : null)}
@@ -389,7 +389,7 @@ export const TaskList = () => {
                                 }`}
                               >
                                 {task.due_date ? (
-                                  <div className="flex flex-col items-center">
+                                  <div className="flex flex-col">
                                     <div className="flex items-center gap-1">
                                       <Calendar className="w-3 h-3" />
                                       <span className="text-sm">{formatDate(task.due_date)}</span>
@@ -431,9 +431,9 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* Finish Date */}
-                        <TableCell className="px-2 py-3 text-center" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                           {task.finish_date ? (
-                            <div className="flex flex-col items-center">
+                            <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-green-600" />
                                 <span className="text-sm text-green-600 font-medium">
