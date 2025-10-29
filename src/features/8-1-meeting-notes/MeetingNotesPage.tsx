@@ -40,12 +40,11 @@ const MeetingNotesContent = () => {
 
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col">
                 {/* Header and Tabs */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -59,7 +58,7 @@ const MeetingNotesContent = () => {
                   {/* Main Content - 9 columns */}
                   <div className="col-span-9 flex flex-col min-h-0">
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
                         {/* Filters Section */}
                         <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200 flex items-center">
                           <MeetingFilters />
@@ -71,8 +70,10 @@ const MeetingNotesContent = () => {
                         </div>
 
                         {/* Scrollable Table Content */}
-                        <div className="flex-1 min-h-0 p-4">
-                          <MeetingPointsTable />
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                          <div className="h-full p-4">
+                            <MeetingPointsTable />
+                          </div>
                         </div>
 
                         {/* Table Footer */}
@@ -86,7 +87,7 @@ const MeetingNotesContent = () => {
                   
                   {/* Sidebar - 3 columns */}
                   <div className="col-span-3 h-full">
-                    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
+                    <div className="bg-white border rounded-lg h-full flex flex-col">
                         {/* Sidebar Header */}
                         <div className="px-4 py-1.5 border-b flex-shrink-0">
                           <h3 className="text-sm font-semibold text-gray-900">Meeting Summary</h3>
@@ -107,8 +108,7 @@ const MeetingNotesContent = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

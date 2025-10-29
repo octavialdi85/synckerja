@@ -4,34 +4,50 @@ import Header from '@/features/1-layouts/header/Header';
 import { AppSidebar } from '@/features/1-layouts/sidebar/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/features/ui/sidebar';
 import { SubscriptionBanner } from '@/features/share/banners';
-import { useOptimizedSubscription } from '@/features/1-login/hooks/useOptimizedSubscription';
+import { useOptimizedSubscription } from '@/features/10-management/hooks/useOptimizedSubscription';
 
 interface StandardLayoutProps {
   children: ReactNode;
 }
 
 export const StandardLayout = ({ children }: StandardLayoutProps) => {
-  const { subscriptionStatus } = useOptimizedSubscription();
+  const { subscriptionStatus, statusLoading } = useOptimizedSubscription();
   
-  // Only show banner if we have valid subscription data and it needs renewal
-  const showBanner = subscriptionStatus?.needs_renewal && subscriptionStatus?.is_active && subscriptionStatus?.days_until_expiry !== undefined;
+  // Debug logging for banner visibility
+  console.log('🔍 Banner Debug:', {
+    statusLoading,
+    subscriptionStatus,
+    isTrial: subscriptionStatus?.is_trial,
+    daysUntilExpiry: subscriptionStatus?.days_until_expiry,
+    needsRenewal: subscriptionStatus?.needs_renewal,
+    isActive: subscriptionStatus?.is_active
+  });
+  
+  // Show banner if trial is expiring soon or subscription needs renewal
+  // For testing: show banner for trial users with any days remaining
+  const showBanner = !statusLoading && subscriptionStatus && (
+    subscriptionStatus.is_trial || // Show for all trial users
+    (subscriptionStatus.needs_renewal && subscriptionStatus.is_active)
+  );
+  
+  console.log('🚨 Show Banner:', showBanner);
 
   return (
     <div className="min-h-screen flex flex-col w-full">
       <Header />
       
-      <div className="flex flex-1 w-full">
+      <div className="flex flex-1 w-full mt-16">
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="flex-1 min-w-0">
-            {/* Trial/Subscription Banner - positioned inside sidebar inset for full width */}
+          <SidebarInset className="flex-1 min-w-0 flex flex-col">
+            {/* Trial/Subscription Banner - positioned inside sidebar inset for proper layout */}
             {showBanner && (
-              <div className="w-full bg-white border-b">
+              <div className="w-full bg-white border-b shadow-sm relative z-10">
                 <SubscriptionBanner subscriptionStatus={subscriptionStatus} />
               </div>
             )}
             
-            <main className="flex-1 w-full">
+            <main className={`flex-1 w-full ${showBanner ? 'pt-1' : ''}`}>
               {children}
             </main>
           </SidebarInset>

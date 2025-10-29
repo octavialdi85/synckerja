@@ -246,7 +246,7 @@ export const EmployeeTable = memo(({
 
       <div className="flex-1 overflow-x-auto overflow-y-auto seamless-scroll min-h-0">
         <div className="min-w-max">
-          <Table>
+          <Table className="employee-table">
             <TableHeader>
               <TableRow className="bg-gray-50 h-10 border-b">
                 {tableHeaders.map((header) => (
@@ -281,13 +281,8 @@ export const EmployeeTable = memo(({
       <EmployeeTableFooter 
         totalEmployees={employees.length}
         activeEmployees={employees.filter(emp => (emp.employee_status_name || emp.status) === 'active').length}
-        newHires={employees.filter(emp => {
-          if (!emp.join_date) return false;
-          const joinDate = new Date(emp.join_date);
-          const thisMonth = new Date();
-          return joinDate.getMonth() === thisMonth.getMonth() && 
-                 joinDate.getFullYear() === thisMonth.getFullYear();
-        }).length}
+        filteredEmployees={employees.length}
+        selectedDepartment="all"
       />
     </div>
   );

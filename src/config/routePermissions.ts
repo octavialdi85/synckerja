@@ -61,12 +61,6 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     description: 'Home page - accessible to all authenticated users'
   },
   {
-    path: '/home',
-    requiresAuth: true,
-    requiresPermissions: false,
-    description: 'Home page alias - accessible to all authenticated users'
-  },
-  {
     path: '/create-organization',
     requiresAuth: true,
     requiresPermissions: false,

@@ -32,7 +32,7 @@ const EmployeeWelcome = () => {
     sessionStorage.removeItem('navigationAfterOrgCreation');
 
     // Navigate to main dashboard
-    navigate('/home', {
+    navigate('/', {
       replace: true
     });
   };

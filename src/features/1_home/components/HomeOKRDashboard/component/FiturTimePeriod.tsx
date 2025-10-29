@@ -21,6 +21,7 @@ interface FiturTimePeriodProps {
   onChange: (selection: YearQuarterSelection) => void;
   availableYears?: number[];
   className?: string;
+  isLoading?: boolean;
 }
 
 const QUARTERS = [
@@ -43,44 +44,53 @@ export const FiturTimePeriod: React.FC<FiturTimePeriodProps> = ({
   value,
   onChange,
   availableYears,
-  className
+  className,
+  isLoading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   
   // Removed excessive debug logging for performance
 
-  // Default to current year and next 3 years if not provided
-  const years = availableYears || [
-    new Date().getFullYear(),
-    new Date().getFullYear() + 1,
-    new Date().getFullYear() + 2,
-    new Date().getFullYear() + 3,
-  ];
+  // Only use availableYears from database, no fallback to hardcoded years
+  const years = availableYears || [];
 
-  // Initialize with current quarter selection if not provided
+  // Initialize with current quarter selection if not provided and data is available
   React.useEffect(() => {
-    if (!isInitialized && Object.keys(value.years).length === 0) {
+    if (!isInitialized && Object.keys(value.years).length === 0 && years.length > 0) {
       const currentYear = new Date().getFullYear().toString();
       const currentQuarter = getCurrentQuarter();
       
-      const defaultValue: YearQuarterSelection = { 
-        years: {
-          [currentYear]: {
-            selected: false,
-            quarters: {
-              [currentQuarter]: true
+      // Only initialize if current year is available in the data
+      if (years.includes(parseInt(currentYear))) {
+        const defaultValue: YearQuarterSelection = { 
+          years: {
+            [currentYear]: {
+              selected: false,
+              quarters: {
+                [currentQuarter]: true
+              }
             }
           }
-        }
-      };
-      
-      onChange(defaultValue);
+        };
+        
+        onChange(defaultValue);
+      }
       setIsInitialized(true);
     }
-  }, [value, onChange, isInitialized]);
+  }, [value, onChange, isInitialized, years]);
 
   const getSelectedSummary = () => {
+    // Show loading state if data is not available
+    if (isLoading) {
+      return 'Loading...';
+    }
+    
+    // Show message if no data available
+    if (years.length === 0) {
+      return 'No data available';
+    }
+    
     const selectedItems: string[] = [];
     
     if (!value || !value.years) {
@@ -153,7 +163,12 @@ export const FiturTimePeriod: React.FC<FiturTimePeriodProps> = ({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn("justify-between", className)}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className={cn("justify-between", className)}
+          disabled={isLoading || years.length === 0}
+        >
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             <span className="truncate">{getSelectedSummary()}</span>
@@ -161,13 +176,15 @@ export const FiturTimePeriod: React.FC<FiturTimePeriodProps> = ({
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <TimePeriods
-          availableTimePeriods={convertToTimePeriodsFormat()}
-          onSelectionChange={handleTimePeriodsChange}
-          onClose={() => setIsOpen(false)}
-        />
-      </PopoverContent>
+      {!isLoading && years.length > 0 && (
+        <PopoverContent className="w-auto p-0" align="start">
+          <TimePeriods
+            availableTimePeriods={convertToTimePeriodsFormat()}
+            onSelectionChange={handleTimePeriodsChange}
+            onClose={() => setIsOpen(false)}
+          />
+        </PopoverContent>
+      )}
     </Popover>
   );
 };

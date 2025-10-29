@@ -18,6 +18,7 @@ interface SectionDepartmentObjectivesProgressOverviewProps {
   yearQuarterSelection?: YearQuarterSelection;
   onYearQuarterChange?: (selection: YearQuarterSelection) => void;
   availableYears?: number[];
+  isLoadingCycles?: boolean;
 }
 
 export const DepartmentObjectivesProgressCard = ({
@@ -34,7 +35,8 @@ export const DepartmentObjectivesProgressCard = ({
   departmentId,
   yearQuarterSelection,
   onYearQuarterChange,
-  availableYears
+  availableYears,
+  isLoadingCycles = false
 }: SectionDepartmentObjectivesProgressOverviewProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -99,8 +101,9 @@ export const DepartmentObjectivesProgressCard = ({
               <FiturTimePeriod
                 value={currentYearQuarterSelection}
                 onChange={handleYearQuarterChange}
-                availableYears={availableYears || [2024, 2025, 2026, 2027]}
+                availableYears={availableYears}
                 className="h-8"
+                isLoading={isLoadingCycles}
               />
               
               {/* Add Contribution Button */}

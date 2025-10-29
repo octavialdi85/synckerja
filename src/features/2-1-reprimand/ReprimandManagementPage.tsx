@@ -210,9 +210,8 @@ export const ReprimandManagementPage = () => {
       <StandardLayout>
         <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
           <div className="flex flex-1 min-h-0">
-            <div className="flex-1 flex flex-col min-h-0">
-              <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-                <div className="h-full flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+              <div className="h-full flex flex-col overflow-hidden">
                   <div className="flex-shrink-0 mb-1">
                     <HeaderAndTab 
                       activeTab={activeTab} 
@@ -234,8 +233,7 @@ export const ReprimandManagementPage = () => {
                       </div>
                     </div>
                   </div>
-                </div>
-              </main>
+              </div>
             </div>
           </div>
         </div>
@@ -247,72 +245,70 @@ export const ReprimandManagementPage = () => {
     <StandardLayout>
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
-          {/* Main Content - EXACT SAME STRUCTURE AS EMPLOYEE PAGE */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                {/* Header and Tabs - Top Section like other pages */}
-                <div className="flex-shrink-0 mb-1">
-                  <HeaderAndTab 
-                    activeTab={activeTab} 
-                    onTabChange={handleTabChange} 
-                  />
-                </div>
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Header and Tabs - Top Section like other pages */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeTab={activeTab} 
+                  onTabChange={handleTabChange} 
+                />
+              </div>
 
-                {/* Main Layout - Following employee page grid pattern */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                  {/* Left Column - Main Content (75% like employee page) */}
-                  <div className="col-span-9 h-full">
-                    <div className="h-full flex flex-col">
-                      {/* Filter Section */}
-                      <div className="flex-shrink-0 mb-2">
-                        <div className="bg-white border rounded-md p-2">
-                          <ReprimandManagementFilters
-                            filters={filters}
-                            updateFilter={updateFilter}
-                            getFilterOptions={getFilterOptions}
-                            clearFilters={clearFilters}
-                          />
-                        </div>
-                      </div>
-                      
-                      {/* Metrics Cards Section */}
-                      <div className="flex-shrink-0 mb-2">
-                        <ReprimandManagementMetricsCards 
-                          reprimands={filteredReprimands}
-                          employees={filteredEmployees}
+              {/* Main Layout - Following employee page grid pattern */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Left Column - Main Content (75% like employee page) */}
+                <div className="col-span-9 h-full">
+                  <div className="h-full flex flex-col">
+                    {/* Filter Section */}
+                    <div className="flex-shrink-0 mb-2">
+                      <div className="bg-white border rounded-md p-2">
+                        <ReprimandManagementFilters
+                          filters={filters}
+                          updateFilter={updateFilter}
+                          getFilterOptions={getFilterOptions}
+                          clearFilters={clearFilters}
                         />
                       </div>
-                      
-                      {/* Table Section - Main Content */}
-                      <div className="flex-1 min-h-0">
-                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
-                          <ReprimandManagementTable
-                            employeesByDepartment={employeesByDepartment}
-                            reprimands={filteredReprimands}
-                            selectedDepartment={filters.department}
-                            getReprimandCount={getReprimandCount}
-                            renderReprimandBoxes={renderReprimandBoxes}
-                            totalEmployees={filteredEmployees.length}
-                            totalReprimands={filteredReprimands.length}
-                          />
-                        </div>
-                      </div>
                     </div>
-                  </div>
-
-                  {/* Right Column - Overview Sidebar (25% like employee page) */}
-                  <div className="col-span-3 h-full">
-                    <div className="h-full flex flex-col">
-                      <ReprimandManagementOverview 
+                    
+                    {/* Metrics Cards Section */}
+                    <div className="flex-shrink-0 mb-2">
+                      <ReprimandManagementMetricsCards 
                         reprimands={filteredReprimands}
                         employees={filteredEmployees}
                       />
                     </div>
+                    
+                    {/* Table Section - Main Content */}
+                    <div className="flex-1 min-h-0">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+                        <ReprimandManagementTable
+                          employeesByDepartment={employeesByDepartment}
+                          reprimands={filteredReprimands}
+                          selectedDepartment={filters.department}
+                          getReprimandCount={getReprimandCount}
+                          renderReprimandBoxes={renderReprimandBoxes}
+                          totalEmployees={filteredEmployees.length}
+                          totalReprimands={filteredReprimands.length}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Overview Sidebar (25% like employee page) */}
+                <div className="col-span-3 h-full">
+                  <div className="h-full flex flex-col">
+                    <ReprimandManagementOverview 
+                      reprimands={filteredReprimands}
+                      employees={filteredEmployees}
+                    />
                   </div>
                 </div>
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

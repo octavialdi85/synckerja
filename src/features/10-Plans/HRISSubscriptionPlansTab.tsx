@@ -344,7 +344,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       {/* Main Content Section - 9 columns */}
       <div className="col-span-9 flex flex-col min-h-0">
         <div className="flex-1 min-h-0">
-          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
+          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
             {/* Content Header */}
             <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -441,9 +441,9 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       
       {/* Sidebar Section - 3 columns */}
       <div className="col-span-3 h-full">
-        <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
+        <div className="bg-white border rounded-lg h-full flex flex-col">
           {/* Sidebar Header */}
-          <div className="px-4 py-2 border-b flex-shrink-0">
+          <div className="px-4 py-1.5 border-b flex-shrink-0">
             <h3 className="text-sm font-semibold text-gray-900">Plan Comparison</h3>
             <p className="text-xs text-gray-500 mt-1">Compare features and pricing</p>
           </div>
@@ -494,7 +494,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           </div>
 
           {/* Sidebar Footer */}
-          <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>Live pricing</span>
               <span className="text-xs text-gray-400">Real-time</span>

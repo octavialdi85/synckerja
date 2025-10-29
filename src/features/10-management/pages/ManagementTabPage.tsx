@@ -16,7 +16,7 @@ const ManagementContent = memo(() => {
     <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
       {/* Main Content Section - 9 columns */}
       <div className="col-span-9 flex flex-col min-h-0 h-full">
-        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
+        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
           {/* Content Header */}
           <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center justify-between">
@@ -51,7 +51,7 @@ const ManagementContent = memo(() => {
           </div>
 
           {/* Content Footer */}
-          <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>Last Updated: {new Date().toLocaleTimeString()}</span>
               <button 
@@ -67,9 +67,9 @@ const ManagementContent = memo(() => {
 
       {/* Sidebar Section - 3 columns */}
       <div className="col-span-3 h-full">
-        <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
+        <div className="bg-white border rounded-lg h-full flex flex-col">
           {/* Sidebar Header */}
-          <div className="px-4 py-2 border-b flex-shrink-0">
+          <div className="px-4 py-1.5 border-b flex-shrink-0">
             <h3 className="text-sm font-semibold text-gray-900">Quick Info</h3>
             <p className="text-xs text-gray-500 mt-1">Subscription details</p>
           </div>
@@ -93,8 +93,8 @@ const ManagementContent = memo(() => {
           </div>
 
           {/* Sidebar Footer */}
-          <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-            <div className="text-xs text-gray-400">Subscription Management</div>
+          <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
+            <div className="text-xs text-gray-500">Subscription Management</div>
           </div>
         </div>
       </div>
@@ -133,9 +133,8 @@ const ManagementTabPage = memo(() => {
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-2 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-2">
+            <div className="h-full flex flex-col overflow-hidden">
                 {/* Header and Tab Navigation */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -159,8 +158,7 @@ const ManagementTabPage = memo(() => {
                     <ManagementContent />
                   </Suspense>
                 </div>
-              </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

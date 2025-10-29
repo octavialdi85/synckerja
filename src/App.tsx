@@ -89,11 +89,6 @@ const App = () => (
                   <ModernHomePage />
                 </ImmediateProtectedRoute>
               } />
-              <Route path="/home" element={
-                <ImmediateProtectedRoute>
-                  <ModernHomePage />
-                </ImmediateProtectedRoute>
-              } />
               <Route path="/dashboard" element={
                 <ImmediateProtectedRoute>
                   <ModernHomePage />

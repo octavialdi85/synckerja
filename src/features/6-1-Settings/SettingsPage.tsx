@@ -195,110 +195,100 @@ export const SettingsPage: React.FC = () => {
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                {/* Header and Tabs */}
-                <div className="flex-shrink-0 mb-1">
-                  <HeaderAndTab 
-                    activeMainTab={activeMainTab}
-                    handleTabChange={handleTabChange}
-                  />
-                </div>
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Header and Tabs */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeMainTab={activeMainTab}
+                  handleTabChange={handleTabChange}
+                />
+              </div>
 
-                {/* Main Content Area - Grid Layout */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                  {/* Left Column - Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
-                      {/* Sidebar Header */}
-                      <div className="px-4 py-2 border-b flex-shrink-0">
-                        <h3 className="text-sm font-semibold text-gray-900">Pengaturan Social Media</h3>
-                        <p className="text-xs text-gray-500 mt-1">Konfigurasi sistem social media</p>
-                      </div>
+              {/* Main Content Area - Grid Layout */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Left Column - Sidebar - 3 columns */}
+                <div className="col-span-3 h-full">
+                  <div className="bg-white border rounded-lg shadow-sm h-full flex flex-col">
+                    {/* Sidebar Header */}
+                    <div className="px-4 py-1.5 border-b flex-shrink-0">
+                      <h3 className="text-sm font-semibold text-gray-900">Pengaturan Social Media</h3>
+                      <p className="text-xs text-gray-500 mt-1">Konfigurasi sistem social media</p>
+                    </div>
 
-                      {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
-                        <SettingsSidebar
-                          activeSection={activeSection}
-                          onSectionChange={setActiveSection}
-                        />
-                      </div>
+                    {/* Scrollable Sidebar Content */}
+                    <div className="flex-1 overflow-y-auto seamless-scroll p-3">
+                      <SettingsSidebar
+                        activeSection={activeSection}
+                        onSectionChange={setActiveSection}
+                      />
+                    </div>
 
-                      {/* Sidebar Footer */}
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-                        <div className="flex items-center justify-between text-xs text-gray-600">
-                          <div className="flex items-center">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2"></div>
-                            <span>Auto-sync enabled</span>
-                          </div>
-                          <span className="font-medium text-gray-800">Real-time</span>
-                        </div>
+                    {/* Sidebar Footer */}
+                    <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>Settings Overview</span>
+                        <span className="text-xs text-gray-400">Real-time</span>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Right Column - Content - 9 columns */}
-                  <div className="col-span-9 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
-                        {/* Content Header */}
-                        <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0 flex-1">
-                              <h2 className="text-sm font-semibold text-gray-900 truncate">
-                                {activeSection === 'approval-access' ? 'Approval Access' : 'Settings'}
-                              </h2>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {activeSection === 'approval-access' ? 'Manage approval access configurations' : 'Configure social media settings'}
-                              </p>
-                            </div>
-                            {activeSection === 'approval-access' && (
-                              <button
-                                onClick={() => setIsModalOpen(true)}
-                                disabled={isLoading || !isAdmin}
-                                title={isAdmin ? undefined : 'Only admins can create configurations'}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ml-4"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                                  <path d="M5 12h14"></path>
-                                  <path d="M12 5v14"></path>
-                                </svg>
-                                Add New Configuration
-                              </button>
-                            )}
+                </div>
+                
+                {/* Right Column - Content - 9 columns */}
+                <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                      {/* Content Header */}
+                      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <h2 className="text-sm font-semibold text-gray-900 truncate">
+                              {activeSection === 'approval-access' ? 'Approval Access' : 'Settings'}
+                            </h2>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {activeSection === 'approval-access' ? 'Manage approval access configurations' : 'Configure social media settings'}
+                            </p>
                           </div>
+                          {activeSection === 'approval-access' && (
+                            <button
+                              onClick={() => setIsModalOpen(true)}
+                              disabled={isLoading || !isAdmin}
+                              title={isAdmin ? undefined : 'Only admins can create configurations'}
+                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ml-4"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                                <path d="M5 12h14"></path>
+                                <path d="M12 5v14"></path>
+                              </svg>
+                              Add New Configuration
+                            </button>
+                          )}
                         </div>
+                      </div>
 
-                        {/* Scrollable Content */}
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-4 space-y-4">
-                            {renderContent()}
-                          </div>
+                      {/* Scrollable Content */}
+                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                        <div className="p-4">
+                          {renderContent()}
                         </div>
+                      </div>
 
-                        {/* Content Footer */}
-                        <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-                          <div className="flex items-center justify-between text-xs text-gray-600">
-                            <div>
-                              Total Settings: <span className="font-medium">1</span>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                              <span>Last Updated: <span className="font-medium">Just now</span></span>
-                              <span>Status: <span className="font-medium text-green-600">Active</span></span>
-                            </div>
-                          </div>
+                      {/* Content Footer */}
+                      <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>Total Settings: <span className="font-medium">1</span></span>
+                          <span className="text-xs text-gray-400">Status: <span className="font-medium text-green-600">Active</span></span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>
-
+      
       {/* Modals */}
       <ApprovalAccessModal
         isOpen={isModalOpen}

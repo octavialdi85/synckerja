@@ -416,9 +416,8 @@ const SocialMediaContent = () => {
         <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
           <div className="flex flex-1 min-h-0">
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-                <div className="h-full flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+              <div className="h-full flex flex-col overflow-hidden">
                   {/* Header and Tabs */}
                   <div className="flex-shrink-0 mb-1">
                     <HeaderAndTab 
@@ -548,8 +547,7 @@ const SocialMediaContent = () => {
             employeeName={editingManager?.name}
             targetType={targetType}
           />
-                </div>
-              </main>
+              </div>
             </div>
           </div>
         </div>

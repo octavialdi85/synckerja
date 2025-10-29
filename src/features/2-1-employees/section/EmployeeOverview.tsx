@@ -1,6 +1,5 @@
 import { Users, UserCheck, Calendar, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { EmployeeSidebarFooter } from './EmployeeSidebarFooter';
 
 interface EmployeeOverviewProps {
   employees?: any[];
@@ -40,15 +39,7 @@ export const EmployeeOverview = ({ employees = [] }: EmployeeOverviewProps) => {
   const avgTenure = tenures.length > 0 ? tenures.reduce((sum, tenure) => sum + tenure, 0) / tenures.length : 0;
 
   return (
-    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
-      {/* Header */}
-      <div className="px-4 py-2 border-b flex-shrink-0">
-        <h3 className="text-sm font-semibold text-gray-900">Employee Overview</h3>
-        <p className="text-xs text-gray-500 mt-1">Team statistics and insights</p>
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-4">
+    <div className="space-y-4">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-3">
           <div className="p-3 bg-blue-50 rounded-lg">
@@ -146,14 +137,6 @@ export const EmployeeOverview = ({ employees = [] }: EmployeeOverviewProps) => {
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <EmployeeSidebarFooter 
-        totalEmployees={employees.length}
-        activeEmployees={activeEmployees}
-        totalDepartments={totalDepartments}
-      />
     </div>
   );
 };

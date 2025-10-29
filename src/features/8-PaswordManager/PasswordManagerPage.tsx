@@ -143,103 +143,101 @@ const PasswordManagerPage: React.FC = () => {
 
   return (
     <StandardLayout>
-      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col">
-                {/* Header and Tabs */}
-                <div className="flex-shrink-0 mb-1">
-                  <HeaderAndTab 
-                    activeTab={activeTab} 
-                    onTabChange={handleTabChange} 
-                  />
-                </div>
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Header and Tabs */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeTab={activeTab} 
+                  onTabChange={handleTabChange} 
+                />
+              </div>
 
-                {/* Stats */}
-                <div className="flex-shrink-0 mb-1">
-                  <PasswordStats
-                    totalPasswords={stats.total}
-                    strongPasswords={stats.strong}
-                    weakPasswords={stats.weak}
-                    favorites={stats.favorites}
-                  />
-                </div>
+              {/* Stats */}
+              <div className="flex-shrink-0 mb-1">
+                <PasswordStats
+                  totalPasswords={stats.total}
+                  strongPasswords={stats.strong}
+                  weakPasswords={stats.weak}
+                  favorites={stats.favorites}
+                />
+              </div>
 
-                {/* Main Content Area - Grid Layout */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                  {/* Left Column - Filters - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white border rounded-lg shadow-sm h-full flex flex-col">
-                      {/* Sidebar Header */}
-                      <div className="px-4 py-1.5 border-b flex-shrink-0">
-                        <h3 className="text-sm font-semibold text-gray-900">Categories</h3>
-                        <p className="text-xs text-gray-500 mt-1">Filter by category</p>
-                      </div>
+              {/* Main Content Area - Grid Layout */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Left Column - Filters - 3 columns */}
+                <div className="col-span-3 h-full">
+                  <div className="bg-white border rounded-lg shadow-sm h-full flex flex-col max-h-[calc(100vh-180px)]">
+                    {/* Sidebar Header */}
+                    <div className="px-4 py-1.5 border-b flex-shrink-0">
+                      <h3 className="text-sm font-semibold text-gray-900">Categories</h3>
+                      <p className="text-xs text-gray-500 mt-1">Filter by category</p>
+                    </div>
 
-                      {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-3">
-                        <CategoryFilter
-                          categories={categoriesWithCounts}
-                          selectedCategory={selectedCategory}
-                          onSelectCategory={handleCategorySelect}
-                          showFavoritesCount={stats.favorites}
-                          onShowFavorites={handleShowFavorites}
-                          isShowingFavorites={isShowingFavorites}
-                        />
-                      </div>
-
-                      {/* Sidebar Footer */}
-                      <PasswordSidebarFooter 
-                        totalCategories={categoriesWithCounts.length}
+                    {/* Scrollable Sidebar Content */}
+                    <div className="flex-1 overflow-y-auto seamless-scroll p-3">
+                      <CategoryFilter
+                        categories={categoriesWithCounts}
                         selectedCategory={selectedCategory}
-                        totalPasswords={passwords.length}
+                        onSelectCategory={handleCategorySelect}
+                        showFavoritesCount={stats.favorites}
+                        onShowFavorites={handleShowFavorites}
+                        isShowingFavorites={isShowingFavorites}
                       />
                     </div>
+
+                    {/* Sidebar Footer */}
+                    <PasswordSidebarFooter 
+                      totalCategories={categoriesWithCounts.length}
+                      selectedCategory={selectedCategory}
+                      totalPasswords={passwords.length}
+                    />
                   </div>
+                </div>
 
-                  {/* Right Column - Password List - 9 columns */}
-                  <div className="col-span-9 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                        {/* Search and Filter Section */}
-                        <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
-                          <SearchAndFilter
-                            searchQuery={searchQuery}
-                            onSearchChange={setSearchQuery}
-                            selectedCategory={selectedCategory}
-                            onCategoryChange={handleCategorySelect}
-                            categories={categoriesWithCounts}
-                            onAddPassword={handleAddPassword}
-                          />
-                        </div>
-
-                        {/* Scrollable Password List Content */}
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-4">
-                            <PasswordList
-                              passwords={filteredPasswords}
-                              categories={categoriesWithCounts}
-                              onEdit={handleEditPassword}
-                              onDelete={handleDeletePassword}
-                              onToggleFavorite={handleToggleFavorite}
-                            />
-                          </div>
-                        </div>
-
-                        {/* List Footer */}
-                        <PasswordListFooter 
-                          totalPasswords={passwords.length}
-                          filteredPasswords={filteredPasswords.length}
+                {/* Right Column - Password List - 9 columns */}
+                <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
+                      {/* Search and Filter Section */}
+                      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
+                        <SearchAndFilter
+                          searchQuery={searchQuery}
+                          onSearchChange={setSearchQuery}
                           selectedCategory={selectedCategory}
+                          onCategoryChange={handleCategorySelect}
+                          categories={categoriesWithCounts}
+                          onAddPassword={handleAddPassword}
                         />
                       </div>
+
+                      {/* Scrollable Password List Content */}
+                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                        <div className="p-4">
+                          <PasswordList
+                            passwords={filteredPasswords}
+                            categories={categoriesWithCounts}
+                            onEdit={handleEditPassword}
+                            onDelete={handleDeletePassword}
+                            onToggleFavorite={handleToggleFavorite}
+                          />
+                        </div>
+                      </div>
+
+                      {/* List Footer */}
+                      <PasswordListFooter 
+                        totalPasswords={passwords.length}
+                        filteredPasswords={filteredPasswords.length}
+                        selectedCategory={selectedCategory}
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

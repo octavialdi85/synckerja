@@ -59,7 +59,10 @@ export const SubscriptionBanner = ({ subscriptionStatus }: SubscriptionBannerPro
         </div>
         
         <Button
-          onClick={() => navigate('/subscription')}
+          onClick={() => {
+            console.log('🚀 Banner Button Clicked: Navigating to /subscription');
+            navigate('/subscription');
+          }}
           size="sm"
           className={`${
             isUrgent 

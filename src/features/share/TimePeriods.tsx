@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar } from 'lucide-react';
 
 interface Quarter {
   id: string;
@@ -24,73 +24,8 @@ interface TimePeriodsProps {
   availableTimePeriods?: Year[];
 }
 
-const initialTimePeriodsData: Year[] = [
-  {
-    id: '2025',
-    name: '2025',
-    dateRange: 'Jan 1 - Dec 31',
-    selected: false,
-    expanded: false,
-    quarters: [
-      { id: 'Q1-2025', name: 'Q1-2025', dateRange: 'Jan 1 - Mar 31', selected: false },
-      { id: 'Q2-2025', name: 'Q2-2025', dateRange: 'Apr 1 - Jun 30', selected: false },
-      { id: 'Q3-2025', name: 'Q3-2025', dateRange: 'Jul 1 - Sep 30', selected: false },
-      { id: 'Q4-2025', name: 'Q4-2025', dateRange: 'Oct 1 - Dec 31', selected: false },
-    ],
-  },
-  {
-    id: '2024',
-    name: '2024',
-    dateRange: 'Jan 1 - Dec 31',
-    selected: false,
-    expanded: false,
-    quarters: [
-      { id: 'Q1-2024', name: 'Q1-2024', dateRange: 'Jan 1 - Mar 31', selected: false },
-      { id: 'Q2-2024', name: 'Q2-2024', dateRange: 'Apr 1 - Jun 30', selected: false },
-      { id: 'Q3-2024', name: 'Q3-2024', dateRange: 'Jul 1 - Sep 30', selected: false },
-      { id: 'Q4-2024', name: 'Q4-2024', dateRange: 'Oct 1 - Dec 31', selected: false },
-    ],
-  },
-  {
-    id: '2023',
-    name: '2023',
-    dateRange: 'Jan 1 - Dec 31',
-    selected: false,
-    expanded: false,
-    quarters: [
-      { id: 'Q1-2023', name: 'Q1-2023', dateRange: 'Jan 1 - Mar 31', selected: false },
-      { id: 'Q2-2023', name: 'Q2-2023', dateRange: 'Apr 1 - Jun 30', selected: false },
-      { id: 'Q3-2023', name: 'Q3-2023', dateRange: 'Jul 1 - Sep 30', selected: false },
-      { id: 'Q4-2023', name: 'Q4-2023', dateRange: 'Oct 1 - Dec 31', selected: false },
-    ],
-  },
-  {
-    id: '2022',
-    name: '2022',
-    dateRange: 'Jan 1 - Dec 31',
-    selected: false,
-    expanded: false,
-    quarters: [
-      { id: 'Q1-2022', name: 'Q1-2022', dateRange: 'Jan 1 - Mar 31', selected: false },
-      { id: 'Q2-2022', name: 'Q2-2022', dateRange: 'Apr 1 - Jun 30', selected: false },
-      { id: 'Q3-2022', name: 'Q3-2022', dateRange: 'Jul 1 - Sep 30', selected: false },
-      { id: 'Q4-2022', name: 'Q4-2022', dateRange: 'Oct 1 - Dec 31', selected: false },
-    ],
-  },
-  {
-    id: '2021',
-    name: '2021',
-    dateRange: 'Jan 1 - Dec 31',
-    selected: false,
-    expanded: false,
-    quarters: [
-      { id: 'Q1-2021', name: 'Q1-2021', dateRange: 'Jan 1 - Mar 31', selected: false },
-      { id: 'Q2-2021', name: 'Q2-2021', dateRange: 'Apr 1 - Jun 30', selected: false },
-      { id: 'Q3-2021', name: 'Q3-2021', dateRange: 'Jul 1 - Sep 30', selected: false },
-      { id: 'Q4-2021', name: 'Q4-2021', dateRange: 'Oct 1 - Dec 31', selected: false },
-    ],
-  },
-];
+// No hardcoded data - only use data from database
+const initialTimePeriodsData: Year[] = [];
 
 export const TimePeriods: React.FC<TimePeriodsProps> = ({ 
   onSelectionChange, 
@@ -98,12 +33,12 @@ export const TimePeriods: React.FC<TimePeriodsProps> = ({
   onClose,
   availableTimePeriods
 }) => {
-  const [timePeriods, setTimePeriods] = useState<Year[]>(availableTimePeriods || initialTimePeriodsData);
+  const [timePeriods, setTimePeriods] = useState<Year[]>(availableTimePeriods || []);
   const checkboxRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
 
   // Update timePeriods when availableTimePeriods changes - but preserve selection state
   React.useEffect(() => {
-    if (availableTimePeriods) {
+    if (availableTimePeriods && availableTimePeriods.length > 0) {
       console.log('🔍 TimePeriods: availableTimePeriods changed:', availableTimePeriods);
       setTimePeriods(prevPeriods => {
         console.log('🔍 TimePeriods: useEffect - Before merge, prevPeriods:', prevPeriods.map(y => ({ 
@@ -139,6 +74,9 @@ export const TimePeriods: React.FC<TimePeriodsProps> = ({
         
         return merged;
       });
+    } else {
+      // Clear timePeriods if no data available
+      setTimePeriods([]);
     }
   }, [availableTimePeriods]);
 
@@ -372,61 +310,73 @@ export const TimePeriods: React.FC<TimePeriodsProps> = ({
 
       {/* Time Period List - Seamless Vertical Scroll */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
-        {timePeriods.map(year => (
-          <div key={year.id} className="border-b border-gray-50 last:border-b-0">
-            {/* Year Row */}
-            <div className="flex items-center py-2 px-3 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center space-x-2 flex-1">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    ref={el => checkboxRefs.current[year.id] = el}
-                    className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500 focus:ring-2"
-                    checked={year.selected}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      console.log('🔍 TimePeriods: Year checkbox clicked:', year.id, 'current selected:', year.selected);
-                      handleYearSelect(year.id);
-                    }}
-                  />
+        {timePeriods.length > 0 ? (
+          timePeriods.map(year => (
+            <div key={year.id} className="border-b border-gray-50 last:border-b-0">
+              {/* Year Row */}
+              <div className="flex items-center py-2 px-3 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center space-x-2 flex-1">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      ref={el => checkboxRefs.current[year.id] = el}
+                      className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500 focus:ring-2"
+                      checked={year.selected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        console.log('🔍 TimePeriods: Year checkbox clicked:', year.id, 'current selected:', year.selected);
+                        handleYearSelect(year.id);
+                      }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-800">{year.name}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-800">{year.name}</span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500 text-left min-w-0 flex-shrink-0">{year.dateRange}</span>
+                  <button 
+                    onClick={() => handleYearToggle(year.id)} 
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 flex-shrink-0"
+                  >
+                    {year.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-gray-500 text-left min-w-0 flex-shrink-0">{year.dateRange}</span>
-                <button 
-                  onClick={() => handleYearToggle(year.id)} 
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 flex-shrink-0"
-                >
-                  {year.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
 
-             {/* Quarters List */}
-             {year.expanded && (
-               <div className="pl-6 pr-3 py-1 bg-gray-50">
-                 {year.quarters.map(quarter => (
-                   <div key={quarter.id} className="flex items-center py-1.5 hover:bg-gray-100 transition-colors">
-                     <div className="flex items-center space-x-2 flex-1">
-                       <input
-                         type="checkbox"
-                         className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500 focus:ring-2"
-                         checked={quarter.selected}
-                         onChange={(e) => {
-                           e.stopPropagation();
-                           console.log('🔍 TimePeriods: Quarter checkbox clicked:', quarter.id, 'current selected:', quarter.selected);
-                           handleQuarterSelect(year.id, quarter.id);
-                         }}
-                       />
-                       <span className="text-sm text-gray-700 text-left">{quarter.name} -- ({quarter.dateRange})</span>
+               {/* Quarters List */}
+               {year.expanded && (
+                 <div className="pl-6 pr-3 py-1 bg-gray-50">
+                   {year.quarters.map(quarter => (
+                     <div key={quarter.id} className="flex items-center py-1.5 hover:bg-gray-100 transition-colors">
+                       <div className="flex items-center space-x-2 flex-1">
+                         <input
+                           type="checkbox"
+                           className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500 focus:ring-2"
+                           checked={quarter.selected}
+                           onChange={(e) => {
+                             e.stopPropagation();
+                             console.log('🔍 TimePeriods: Quarter checkbox clicked:', quarter.id, 'current selected:', quarter.selected);
+                             handleQuarterSelect(year.id, quarter.id);
+                           }}
+                         />
+                         <span className="text-sm text-gray-700 text-left">{quarter.name} -- ({quarter.dateRange})</span>
+                       </div>
                      </div>
-                   </div>
-                 ))}
-               </div>
-             )}
+                   ))}
+                 </div>
+               )}
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center justify-center py-8 px-4">
+            <div className="text-center">
+              <div className="text-gray-400 mb-2">
+                <Calendar className="h-8 w-8 mx-auto" />
+              </div>
+              <p className="text-sm text-gray-500">No time periods available</p>
+              <p className="text-xs text-gray-400 mt-1">Please check your OKR cycles configuration</p>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

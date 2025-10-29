@@ -7,6 +7,7 @@ import {
   EmployeeTable,
   EmployeeOverview
 } from './section';
+import { EmployeeSidebarFooter } from './section/EmployeeSidebarFooter';
 import { useEmployees } from './hooks/useEmployees';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
@@ -30,43 +31,42 @@ export const EmployeePage = () => {
     refetch();
   }, [refetch]);
 
-  // Following ModernHomePage structure that works perfectly
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
-          {/* Main Content - EXACT SAME STRUCTURE AS HOME PAGE */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                {/* Header and Tabs - Top Section like reprimand page */}
-                <div className="flex-shrink-0 mb-1">
-                  <HeaderAndTab 
-                    activeTab={activeTab} 
-                    onTabChange={handleTabChange} 
-                  />
-                </div>
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col">
+              {/* Header and Tabs */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeTab={activeTab} 
+                  onTabChange={handleTabChange} 
+                />
+              </div>
 
-                {/* Main Layout - Following home page grid pattern */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                  {/* Left Column - Filters and Metrics (75% like home center+left) */}
-                  <div className="col-span-9 h-full">
-                    <div className="h-full flex flex-col">
-                      {/* Filter Section */}
-                      <div className="flex-shrink-0 mb-2">
-                        <div className="bg-white border rounded-md p-2">
+              {/* Grid Layout: 12 columns (9-3) */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Main Content - 9 columns */}
+                <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                      {/* Filters Section */}
+                      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200 flex items-center">
+                        <div className="w-full">
                           <EmployeeFilters />
                         </div>
                       </div>
-                      
+
                       {/* Metrics Cards Section */}
-                      <div className="flex-shrink-0 mb-2">
+                      <div className="flex-shrink-0 p-3 border-b border-gray-200">
                         <EmployeeMetricsCards employees={employees} />
                       </div>
-                      
-                      {/* Table Section - Main Content */}
-                      <div className="flex-1 min-h-0">
-                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+
+                      {/* Scrollable Table Content */}
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="h-full p-4">
                           <EmployeeTable 
                             employees={employees}
                             currentUserEmail={user?.email}
@@ -78,16 +78,36 @@ export const EmployeePage = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+                
+                {/* Sidebar - 3 columns */}
+                <div className="col-span-3 flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                      {/* Sidebar Header */}
+                      <div className="px-4 py-1.5 border-b flex-shrink-0">
+                        <h3 className="text-sm font-semibold text-gray-900">Employee Overview</h3>
+                        <p className="text-xs text-gray-500 mt-1">Summary of employee data</p>
+                      </div>
 
-                  {/* Right Column - Overview Sidebar (25% like home right) */}
-                  <div className="col-span-3 h-full">
-                    <div className="h-full flex flex-col">
-                      <EmployeeOverview employees={employees} />
+                      {/* Scrollable Sidebar Content */}
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="h-full p-4">
+                          <EmployeeOverview employees={employees} />
+                        </div>
+                      </div>
+
+                      {/* Sidebar Footer */}
+                      <EmployeeSidebarFooter 
+                        totalDepartments={[...new Set(employees.map(emp => emp.department_name).filter(Boolean))].length}
+                        selectedDepartment="all"
+                        totalEmployees={employees.length}
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

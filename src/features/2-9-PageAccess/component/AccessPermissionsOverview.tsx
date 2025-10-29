@@ -32,9 +32,9 @@ export const AccessPermissionsOverview = ({ configurations = [] }: AccessPermiss
   );
 
   return (
-    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-180px)]">
+    <div className="bg-white border rounded-lg h-full flex flex-col">
       {/* Header */}
-      <div className="px-4 py-2 border-b flex-shrink-0">
+      <div className="px-4 py-1.5 border-b flex-shrink-0">
         <h3 className="text-sm font-semibold text-gray-900">Access Overview</h3>
         <p className="text-xs text-gray-500 mt-1">Permission statistics and insights</p>
       </div>

@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { SidebarProvider } from '@/features/ui/sidebar';
-import { AppSidebar } from '@/features/1-layouts/sidebar/AppSidebar';
-import Header from '@/features/1-layouts/header/Header';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { Card, CardContent } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -122,172 +120,158 @@ const EmployeeEducationFormal = () => {
 
   if (!employeeId || isLoading) {
     return (
-      <SidebarProvider>
-        <AppSidebar />
-        <main className="flex-1">
-          <Header />
-          <div className="flex items-center justify-center min-h-96">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        </main>
-      </SidebarProvider>
+      <StandardLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </StandardLayout>
     );
   }
 
   if (error || !employee) {
     return (
-      <SidebarProvider>
-        <AppSidebar />
-        <main className="flex-1">
-          <Header />
-          <div className="flex items-center justify-center min-h-96">
-            <Card className="w-96">
-              <CardContent className="text-center py-12">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Employee Not Found</h3>
-                <p className="text-gray-600 mb-4">The employee you're looking for doesn't exist.</p>
-                <Button onClick={handleBackToEmployees}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Employees
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </SidebarProvider>
+      <StandardLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <Card className="w-96">
+            <CardContent className="text-center py-12">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Employee Not Found</h3>
+              <p className="text-gray-600 mb-4">The employee you're looking for doesn't exist.</p>
+              <Button onClick={handleBackToEmployees}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Employees
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </StandardLayout>
     );
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main className="flex-1">
-        <Header />
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
-          <div className="flex flex-1 min-h-0">
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                {/* Header with Actions */}
-                <div className="flex-shrink-0 mt-2 mb-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={handleBackToEmployees} 
-                    className="flex items-center space-x-2"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    <span>Back to Employees</span>
-                  </Button>
+    <StandardLayout>
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="flex flex-1 min-h-0">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Header with Actions */}
+              <div className="flex-shrink-0 mt-2 mb-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleBackToEmployees} 
+                  className="flex items-center space-x-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Back to Employees</span>
+                </Button>
+              </div>
+              
+              {/* Content Area - Grid Layout */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Left Column - Employee Overview Sidebar - 3 columns */}
+                <div className="col-span-3 h-full">
+                  <div className="bg-white rounded-lg border border-gray-200 shadow-sm h-full flex flex-col max-h-[calc(100vh-135px)]">
+                    {/* Employee Profile Card */}
+                    <div className="p-6 text-center border-b border-gray-200 flex-shrink-0">
+                      <div className="mb-4 flex justify-center">
+                        <EmployeeProfilePhoto 
+                          employeeName={employee.full_name}
+                          employeeId={employee.id}
+                          photoUrl={employee.profile_photo_url}
+                          size="lg"
+                          onPhotoUpdate={async (newPhotoUrl) => {
+                            try {
+                              const loadingToast = toast.loading('Memperbarui foto profil...');
+                              const result = await syncAvatarAcrossApp(newPhotoUrl);
+                              toast.dismiss(loadingToast);
+                              
+                              if (result?.success) {
+                                setTimeout(() => refetch(), 500);
+                                toast.success('Foto profil berhasil diperbarui di seluruh aplikasi! 🎉');
+                              } else {
+                                toast.error('Gagal menyinkronkan foto di seluruh aplikasi');
+                              }
+                            } catch (error) {
+                              console.error('Error during photo update:', error);
+                              toast.error('Gagal memperbarui foto profil');
+                            }
+                          }}
+                        />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{employee.full_name}</h3>
+                      <p className="text-sm text-gray-600 mb-2">{employee.job_position_name || 'Employee'}</p>
+                      <Badge 
+                        variant={employee.status === 'active' ? 'default' : 'secondary'} 
+                        className={`${employee.status === 'active' ? 'bg-green-100 text-green-800' : ''}`}
+                      >
+                        {employee.status || 'Active'}
+                      </Badge>
+                    </div>
+
+                    {/* Navigation Menu */}
+                    <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3 text-sm">Quick Navigation</h4>
+                      <div className="space-y-1">
+                        {navigationItems.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Button 
+                              key={item.id}
+                              variant={item.active ? "default" : "ghost"}
+                              size="sm"
+                              className={`w-full justify-start text-xs ${
+                                item.active 
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                              }`}
+                              onClick={() => navigate(item.path)}
+                            >
+                              <Icon className="h-3 w-3 mr-2" />
+                              {item.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Sidebar Footer */}
+                    <EducationSidebarFooter 
+                      employeeName={employee.full_name}
+                      totalEducation={totalEducation}
+                    />
+                  </div>
                 </div>
                 
-                {/* Content Area - Grid Layout */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                  {/* Left Column - Employee Overview Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm h-full flex flex-col max-h-[calc(100vh-135px)]">
-                      {/* Employee Profile Card */}
-                      <div className="p-6 text-center border-b border-gray-200 flex-shrink-0">
-                        <div className="mb-4 flex justify-center">
-                          <EmployeeProfilePhoto 
-                            employeeName={employee.full_name}
-                            employeeId={employee.id}
-                            photoUrl={employee.profile_photo_url}
-                            size="lg"
-                            onPhotoUpdate={async (newPhotoUrl) => {
-                              try {
-                                const loadingToast = toast.loading('Memperbarui foto profil...');
-                                const result = await syncAvatarAcrossApp(newPhotoUrl);
-                                toast.dismiss(loadingToast);
-                                
-                                if (result?.success) {
-                                  setTimeout(() => refetch(), 500);
-                                  toast.success('Foto profil berhasil diperbarui di seluruh aplikasi! 🎉');
-                                } else {
-                                  toast.error('Gagal menyinkronkan foto di seluruh aplikasi');
-                                }
-                              } catch (error) {
-                                console.error('Error during photo update:', error);
-                                toast.error('Gagal memperbarui foto profil');
-                              }
-                            }}
-                          />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{employee.full_name}</h3>
-                        <p className="text-sm text-gray-600 mb-2">{employee.job_position_name || 'Employee'}</p>
-                        <Badge 
-                          variant={employee.status === 'active' ? 'default' : 'secondary'} 
-                          className={`${employee.status === 'active' ? 'bg-green-100 text-green-800' : ''}`}
-                        >
-                          {employee.status || 'Active'}
-                        </Badge>
-                      </div>
-
-                      {/* Navigation Menu */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
-                        <h4 className="font-semibold text-gray-900 mb-3 text-sm">Quick Navigation</h4>
-                        <div className="space-y-1">
-                          {navigationItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                              <Button 
-                                key={item.id}
-                                variant={item.active ? "default" : "ghost"}
-                                size="sm"
-                                className={`w-full justify-start text-xs ${
-                                  item.active 
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                                }`}
-                                onClick={() => navigate(item.path)}
-                              >
-                                <Icon className="h-3 w-3 mr-2" />
-                                {item.label}
-                              </Button>
-                            );
-                          })}
+                {/* Right Column - Main Content - 9 columns */}
+                <div className="col-span-9 flex flex-col min-h-0">
+                  {/* Main Content Section */}
+                  <div className="flex-1 min-h-0">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-135px)]">
+                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                        <div className="p-6">
+                          {/* Header */}
+                          <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold text-gray-900">Formal Education</h2>
+                          </div>
+                          
+                          <EducationInfoTab employee={employee} isEditMode={isEditMode} onUpdate={() => {}} />
                         </div>
                       </div>
 
-                      {/* Sidebar Footer */}
-                      <EducationSidebarFooter 
-                        employeeName={employee.full_name}
-                        totalEducation={totalEducation}
+                      {/* Table Footer */}
+                      <EducationTableFooter 
+                        lastUpdated={lastUpdated}
+                        highestDegree={highestDegree}
                       />
                     </div>
                   </div>
-                  
-                  {/* Right Column - Main Content - 9 columns */}
-                  <div className="col-span-9 flex flex-col min-h-0">
-                    {/* Main Content Section */}
-                    <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-135px)]">
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-6">
-                            {/* Header */}
-                            <div className="flex items-center justify-between mb-6">
-                              <h2 className="text-xl font-semibold text-gray-900">Formal Education</h2>
-                            </div>
-                            
-                            <EducationInfoTab employee={employee} isEditMode={isEditMode} onUpdate={() => {}} />
-                          </div>
-                        </div>
-
-                        {/* Table Footer */}
-                        <EducationTableFooter 
-                          lastUpdated={lastUpdated}
-                          highestDegree={highestDegree}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </main>
-    </SidebarProvider>
+      </div>
+    </StandardLayout>
   );
 };
 

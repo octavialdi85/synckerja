@@ -25,8 +25,8 @@ const ContentCalendarContent: React.FC = () => {
   const [showAddContentDialog, setShowAddContentDialog] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState('content-calendar');
   
-  const { contentPlans, organizationId } = useSocialMediaData();
-  const { addContentPlan } = useSocialMediaMutations();
+  const { contentPlans, organizationId, services } = useSocialMediaData();
+  const { addContentPlan, refreshMasterData } = useSocialMediaMutations();
 
   // Calendar calculations
   const monthStart = startOfMonth(currentDate);
@@ -149,6 +149,14 @@ const ContentCalendarContent: React.FC = () => {
     navigate(`/digital-marketing/social-media/${newTab}`);
   };
 
+  const handleMasterDataChange = async () => {
+    try {
+      await refreshMasterData();
+    } catch (error) {
+      console.error('Error refreshing master data:', error);
+    }
+  };
+
   // Calculate footer data
   const calendarFooterData = useMemo(() => {
     const currentMonthDays = daysInMonth.length;
@@ -175,9 +183,8 @@ const ContentCalendarContent: React.FC = () => {
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
                 {/* Header and Tabs */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -208,7 +215,7 @@ const ContentCalendarContent: React.FC = () => {
                     
                     {/* Calendar Section */}
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-390px)]">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
                         {/* Calendar Grid with Scroll */}
                         <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 p-4">
                           <CalendarGrid
@@ -218,12 +225,19 @@ const ContentCalendarContent: React.FC = () => {
                           />
                         </div>
 
-                        {/* Calendar Footer */}
-                        <CalendarGridFooter 
-                          totalDays={calendarFooterData.totalDays}
-                          activeDays={calendarFooterData.activeDays}
-                          totalPosts={calendarFooterData.totalPosts}
-                        />
+                        {/* Calendar Footer - Sticky at bottom */}
+                        <div className="sticky bottom-0 left-0 right-0 flex-shrink-0 bg-white z-10 border-t border-gray-200">
+                          <CalendarGridFooter 
+                            totalDays={calendarFooterData.totalDays}
+                            activeDays={calendarFooterData.activeDays}
+                            totalPosts={calendarFooterData.totalPosts}
+                            onContentTypeDataChange={handleMasterDataChange}
+                            onServiceDataChange={handleMasterDataChange}
+                            onContentPillarDataChange={handleMasterDataChange}
+                            onSocialMediaNameDataChange={() => {}}
+                            services={Array.isArray(services) ? services : []}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -238,8 +252,7 @@ const ContentCalendarContent: React.FC = () => {
                     />
                   </div>
                 </div>
-              </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

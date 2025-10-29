@@ -465,7 +465,7 @@ export const ImmediateProtectedRoute = ({
     console.log('🔍 PATH ACCESS CHECK:', {
       currentPath,
       hasPageAccessConfig: 'Determined by database configuration',
-      homePathCheck: currentPath === '/' || currentPath === '/home',
+      homePathCheck: currentPath === '/',
       hasAccess,
       persistentState: persistentAccessState
     });
@@ -534,7 +534,7 @@ export const ImmediateProtectedRoute = ({
     });
     
     // Special tracking for security-sensitive paths
-    if (!['/', '/home', '/dashboard'].includes(location.pathname)) {
+    if (!['/', '/dashboard'].includes(location.pathname)) {
       console.log('🛡️ Security Path Protection:', {
         path: location.pathname,
         blocked: accessDecision.action !== 'ALLOW',

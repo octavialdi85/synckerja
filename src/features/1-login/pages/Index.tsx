@@ -12,7 +12,7 @@ const Index = () => {
     if (!loading) {
       if (user) {
         // User is authenticated, redirect to home
-        navigate('/home', { replace: true });
+        navigate('/', { replace: true });
       } else {
         // User is not authenticated, redirect to login
         navigate('/login', { replace: true });
@@ -54,7 +54,7 @@ const Index = () => {
           </Button>
           <Button 
             variant="outline"
-            onClick={() => navigate('/home')}
+            onClick={() => navigate('/')}
             className="w-full"
           >
             Go to Home

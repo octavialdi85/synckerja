@@ -616,7 +616,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '48px',
         minWidth: '48px',
         maxWidth: '48px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <Checkbox checked={selectedItems.includes(plan.id)} onCheckedChange={handleCheckboxChange} />
         </td>
 
@@ -625,7 +625,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <PostDateCell postDate={plan.post_date} onDateChange={date => onFieldChange(plan.id, 'post_date', date)} />
         </td>
 
@@ -634,7 +634,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <PICCell picId={plan.pic_id} isPICLocked={isPICLocked} employees={picEmployees} selectedPIC={selectedPIC} onPICChange={value => onFieldChange(plan.id, 'pic_id', value)} />
         </td>
 
@@ -643,7 +643,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.content_type_id || 'placeholder'} onValueChange={value => {
           if (value === 'placeholder') return;
           onFieldChange(plan.id, 'content_type_id', value);
@@ -665,7 +665,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.service_id || 'placeholder'} onValueChange={value => {
           if (value === 'placeholder') return;
           onFieldChange(plan.id, 'service_id', value);
@@ -688,7 +688,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.sub_service_id || 'placeholder'} onValueChange={value => {
           if (value === 'placeholder') return;
           onFieldChange(plan.id, 'sub_service_id', value);
@@ -710,7 +710,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '280px',
         minWidth: '280px',
         maxWidth: '280px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Button variant="ghost" className="h-8 w-full justify-start text-xs px-2 border border-gray-200 hover:bg-gray-50" onClick={() => onOpenTitleDialog(plan.id, plan.title)}>
               <span className="truncate block w-full text-left">
                 {plan.title || 'Click to add title...'}
@@ -723,7 +723,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.content_pillar_id || 'placeholder'} onValueChange={value => {
           if (value === 'placeholder') return;
           onFieldChange(plan.id, 'content_pillar_id', value);
@@ -745,7 +745,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <BriefPreview brief={plan.brief} onClick={handleBriefClick} />
         </td>
 
@@ -754,7 +754,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.status || 'none'} onValueChange={value => {
           if (value === 'none') {
             onStatusChange(plan.id, '');
@@ -781,7 +781,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '96px',
         minWidth: '96px',
         maxWidth: '96px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <RevisionCounter count={plan.revision_count || 0} onReset={() => onResetRevision(plan.id, 'revision_count')} showResetButton={configLoaded && revisionConfigActive} />
         </td>
 
@@ -790,7 +790,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '120px',
         minWidth: '120px',
         maxWidth: '120px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <Switch checked={plan.approved || false} onCheckedChange={handleApprovedChange} />
         </td>
 
@@ -799,7 +799,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <span className="text-xs text-gray-600">
             {plan.completion_date ? formatDateTime(plan.completion_date) : '-'}
           </span>
@@ -810,7 +810,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           {selectedProductionPIC?.full_name ? <div className="flex items-center gap-2 h-8 px-3 bg-blue-50 border border-blue-200 rounded-sm text-xs">
               <User className="h-3 w-3 text-blue-500" />
               <span className="font-medium text-blue-700">
@@ -826,7 +826,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '280px',
         minWidth: '280px',
         maxWidth: '280px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <GoogleDriveLinkCell googleDriveLink={plan.google_drive_link} isDisabled={isGoogleDriveLinkDisabled} onClick={() => {
           if (!plan.approved) return; // Don't open if not approved
           setIsGoogleDriveDialogOpen(true);
@@ -838,7 +838,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.production_status || 'none'} onValueChange={value => {
           if (value === 'none') {
             onProductionStatusChange(plan.id, '');
@@ -865,7 +865,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '96px',
         minWidth: '96px',
         maxWidth: '96px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <RevisionCounter count={plan.production_revision_count || 0} onReset={() => onResetRevision(plan.id, 'production_revision_count')} showResetButton={configLoaded && productionRevisionConfigActive} />
         </td>
 
@@ -874,7 +874,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '120px',
         minWidth: '120px',
         maxWidth: '120px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <Switch checked={plan.production_approved || false} onCheckedChange={handleProductionApprovedChange} disabled={!canApproveProduction} />
           {!canApproveProduction}
         </td>
@@ -884,7 +884,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <span className="text-xs text-gray-600">
             {plan.production_completion_date ? formatDateTime(plan.production_completion_date) : '-'}
           </span>
@@ -895,7 +895,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <span className="text-xs text-gray-600">
             {plan.production_approved_date ? formatDateTime(plan.production_approved_date) : '-'}
           </span>
@@ -906,7 +906,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '280px',
         minWidth: '280px',
         maxWidth: '280px'
-      }} className="px-2 py-0 border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <PostLinkCell planId={plan.id} isDisabled={isPostLinkDisabled} onSocialLinksClick={() => {
           if (!plan.production_approved) return; // Don't open if production not approved
           setIsSocialLinksDialogOpen(true);
@@ -918,7 +918,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '64px',
         minWidth: '64px',
         maxWidth: '64px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <Switch checked={links && links.length > 0} onCheckedChange={() => {}} // Read-only, controlled by links existence
         disabled={true} />
         </td>
@@ -928,7 +928,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <span className="text-xs text-gray-600">
             {displayActualPostDate()}
           </span>
@@ -939,7 +939,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 text-center border-r border-gray-200 border-b border-gray-200">
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
           <span className={`text-xs font-medium ${displayOnTimeStatus().includes('Late') ? 'text-red-600' : displayOnTimeStatus() === 'Ontime' ? 'text-green-600' : 'text-gray-600'}`}>
             {displayOnTimeStatus() || '-'}
           </span>
@@ -950,7 +950,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         width: '160px',
         minWidth: '160px',
         maxWidth: '160px'
-      }} className="px-2 py-0 border-b border-gray-200">
+      }} className="px-2 py-1 border-b border-gray-200">
           <Select value={plan.status_content || 'none'} onValueChange={value => onStatusContentChange(plan.id, value)}>
             <SelectTrigger className="h-8 text-xs border-gray-200 text-left">
               <SelectValue />

@@ -37,7 +37,6 @@ const getExistingRoutes = (): string[] => {
   // For now, we'll return the routes we know exist based on our implementation
   return [
     '/',
-    '/home',
     '/dashboard',
     '/subscription',
     '/subscription/overview',

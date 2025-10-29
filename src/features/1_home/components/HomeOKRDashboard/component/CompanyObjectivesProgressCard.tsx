@@ -25,6 +25,7 @@ interface SectionCompanyObjectivesProgressOverviewProps {
   yearQuarterSelection?: YearQuarterSelection;
   onYearQuarterChange?: (selection: YearQuarterSelection) => void;
   availableYears?: number[];
+  isLoadingCycles?: boolean;
 }
 
 export const CompanyObjectivesProgressCard = ({
@@ -40,7 +41,8 @@ export const CompanyObjectivesProgressCard = ({
   organizationId,
   yearQuarterSelection,
   onYearQuarterChange,
-  availableYears
+  availableYears,
+  isLoadingCycles = false
 }: SectionCompanyObjectivesProgressOverviewProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -152,8 +154,9 @@ export const CompanyObjectivesProgressCard = ({
               <FiturTimePeriod
                 value={currentYearQuarterSelection}
                 onChange={handleYearQuarterChange}
-                availableYears={availableYears || [2024, 2025, 2026, 2027]}
+                availableYears={availableYears}
                 className="h-8"
+                isLoading={isLoadingCycles}
               />
               
               {/* Add Objective Button */}

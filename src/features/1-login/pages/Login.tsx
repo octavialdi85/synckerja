@@ -124,7 +124,7 @@ const Login = () => {
 
         // Navigate directly to home page after successful login
         console.log('Login: Success, redirecting to home page...');
-        navigate("/home", { replace: true });
+        navigate("/", { replace: true });
       }
     } catch (err) {
       console.error("Login: Unexpected error:", err);

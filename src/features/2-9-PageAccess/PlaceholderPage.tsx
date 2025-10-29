@@ -15,9 +15,8 @@ export const PlaceholderPage = ({
     <StandardLayout>
       <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
         <div className="flex flex-1 min-h-0">
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
                 <div className="flex-1 flex items-center justify-center">
                   <div className="max-w-md mx-auto text-center">
                     {icon && (
@@ -48,8 +47,7 @@ export const PlaceholderPage = ({
                     </p>
                   </div>
                 </div>
-              </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

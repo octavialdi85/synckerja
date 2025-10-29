@@ -33,7 +33,8 @@ const HomeOKRDashboardContent = () => {
     organizationId
   } = useCurrentOrg();
   const {
-    data: cycles = []
+    data: cycles = [],
+    isLoading: isLoadingCycles
   } = useOkrCycles(organizationId);
   const {
     data: currentEmployee
@@ -118,6 +119,7 @@ const HomeOKRDashboardContent = () => {
                 yearQuarterSelection={yearQuarterSelection}
                 onYearQuarterChange={setYearQuarterSelection}
                 availableYears={availableYears}
+                isLoadingCycles={isLoadingCycles}
               />
               
               <ObjectivesTab 
@@ -153,6 +155,7 @@ const HomeOKRDashboardContent = () => {
                 yearQuarterSelection={yearQuarterSelection}
                 onYearQuarterChange={setYearQuarterSelection}
                 availableYears={availableYears}
+                isLoadingCycles={isLoadingCycles}
               />
               
               <ObjectivesTab 
@@ -187,6 +190,7 @@ const HomeOKRDashboardContent = () => {
                 yearQuarterSelection={yearQuarterSelection}
                 onYearQuarterChange={setYearQuarterSelection}
                 availableYears={availableYears}
+                isLoadingCycles={isLoadingCycles}
               />
               
               <ObjectivesTab 

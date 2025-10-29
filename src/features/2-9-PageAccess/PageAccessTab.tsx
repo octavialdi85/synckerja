@@ -282,9 +282,8 @@ export const PageAccessTab = () => {
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
                 {/* Header and Tabs */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -300,9 +299,9 @@ export const PageAccessTab = () => {
                     
                     {/* Main Card Section */}
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-135px)]">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
                         {/* Card Header */}
-                        <div className="px-6 py-4 border-b flex-shrink-0">
+                        <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
                           <div className="flex items-center justify-between">
                             <div>
                               <h2 className="text-lg font-semibold text-gray-900">Page Access Configuration</h2>
@@ -433,7 +432,7 @@ export const PageAccessTab = () => {
                         
                         {/* Scrollable Table Content */}
                         <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-6 pt-0">
+                          <div className="p-4">
                             {loading ? (
                               <div className="flex items-center justify-center py-8">
                                 <Loader2 className="w-6 h-6 animate-spin mr-2" />
@@ -540,10 +539,12 @@ export const PageAccessTab = () => {
                         </div>
 
                         {/* Table Footer */}
-                        <AccessPermissionsTableFooter 
-                          totalConfigurations={configurations.length}
-                          lastUpdated={configurations.find(c => c.organization_id !== null)?.updated_at}
-                        />
+                        <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
+                          <AccessPermissionsTableFooter 
+                            totalConfigurations={configurations.length}
+                            lastUpdated={configurations.find(c => c.organization_id !== null)?.updated_at}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -658,8 +659,7 @@ export const PageAccessTab = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-              </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { SidebarProvider } from '@/features/ui/sidebar';
-import { AppSidebar } from '@/features/1-layouts/sidebar/AppSidebar';
-import Header from '@/features/1-layouts/header/Header';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { Card, CardContent } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -117,52 +115,40 @@ const EmployeeFamily = () => {
 
   if (!employeeId || isLoading) {
     return (
-      <SidebarProvider>
-        <AppSidebar />
-        <main className="flex-1">
-          <Header />
-          <div className="flex items-center justify-center min-h-96">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        </main>
-      </SidebarProvider>
+      <StandardLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </StandardLayout>
     );
   }
 
   if (error || !employee) {
     return (
-      <SidebarProvider>
-        <AppSidebar />
-        <main className="flex-1">
-          <Header />
-          <div className="flex items-center justify-center min-h-96">
-            <Card className="w-96">
-              <CardContent className="text-center py-12">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Employee Not Found</h3>
-                <p className="text-gray-600 mb-4">The employee you're looking for doesn't exist.</p>
-                <Button onClick={handleBackToEmployees}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Employees
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </SidebarProvider>
+      <StandardLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <Card className="w-96">
+            <CardContent className="text-center py-12">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Employee Not Found</h3>
+              <p className="text-gray-600 mb-4">The employee you're looking for doesn't exist.</p>
+              <Button onClick={handleBackToEmployees}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Employees
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </StandardLayout>
     );
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main className="flex-1">
-        <Header />
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
-          <div className="flex flex-1 min-h-0">
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 px-4 pt-16 pb-4 min-h-0">
-              <div className="h-full flex flex-col overflow-hidden">
+    <StandardLayout>
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="flex flex-1 min-h-0">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
                 {/* Header with Actions */}
                 <div className="flex-shrink-0 mt-2 mb-2">
                   <Button 
@@ -276,13 +262,11 @@ const EmployeeFamily = () => {
                     </div>
                   </div>
                 </div>
-                </div>
               </div>
             </div>
-          </div>
         </div>
-      </main>
-    </SidebarProvider>
+      </div>
+    </StandardLayout>
   );
 };
 
