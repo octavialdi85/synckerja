@@ -16,9 +16,18 @@ import EmailVerified from "./features/1-login/pages/EmailVerified";
 import CreateOrganization from "./features/1-login/pages/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
 import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
+import MobileEmployeeWelcome from "./mobile/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
 import NotFound from "./features/1-login/pages/NotFound";
+import MobileLogin from "./mobile/pages/Login";
+import { useIsMobile } from "./mobile/hooks/use-mobile";
 import ModernHomePage from "./features/1_home/pages/ModernHomePage";
+import MobileHome from "./mobile/pages/home/Absensi";
+import MobileProfile from "./mobile/pages/home/Profile";
+import MobileSchedule from "./mobile/pages/home/Schedule";
+import MobileClientVisit from "./mobile/pages/home/ClientVisit";
+import MobileReports from "./mobile/pages/home/Reports";
+import MobileCreateOrganization from "./mobile/pages/CreateOrganization";
 import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
 import DailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
 import MeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
@@ -69,6 +78,45 @@ const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Route element selector for Login: uses viewport hook + UA heuristics
+const LoginRouteElement = () => {
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileLogin /> : <Login />;
+};
+
+// Route element selector for Home: uses viewport hook + UA heuristics
+const HomeRouteElement = () => {
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileHome /> : <ModernHomePage />;
+};
+
+// Route element selector for EmployeeWelcome
+const EmployeeWelcomeRouteElement = () => {
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileEmployeeWelcome /> : <EmployeeWelcome />;
+};
+// Route element selector for Create Organization
+const CreateOrganizationRouteElement = () => {
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileCreateOrganization /> : <CreateOrganization />;
+};
+
+// Route element selector for Profile
+const ProfileRouteElement = () => {
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileProfile /> : <MobileProfile />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -89,14 +137,14 @@ const App = () => (
               <Route path="/" element={
                 <ProtectedRoute>
                   <HomeAccessGuard>
-                    <ModernHomePage />
+                    <HomeRouteElement />
                   </HomeAccessGuard>
                 </ProtectedRoute>
               } />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <HomeAccessGuard>
-                    <ModernHomePage />
+                    <HomeRouteElement />
                   </HomeAccessGuard>
                 </ProtectedRoute>
               } />
@@ -104,7 +152,7 @@ const App = () => (
               {/* Public Routes - Only accessible when NOT logged in */}
               <Route path="/login" element={
                 <PublicRoute>
-                  <Login />
+                  <LoginRouteElement />
                 </PublicRoute>
               } />
               <Route path="/register" element={
@@ -122,7 +170,7 @@ const App = () => (
               {/* Semi-Protected Routes - Have their own authentication logic */}
               <Route path="/create-organization" element={
                 <ProtectedRoute requiresPermissions={false}>
-                  <CreateOrganization />
+                  <CreateOrganizationRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/create-plan" element={
@@ -132,7 +180,7 @@ const App = () => (
               } />
               <Route path="/employee-welcome" element={
                 <ProtectedRoute requiresPermissions={false}>
-                  <EmployeeWelcome />
+                  <EmployeeWelcomeRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/first-login" element={
@@ -400,6 +448,34 @@ const App = () => (
               <Route path="/my-info/payroll" element={
                 <ProtectedRoute requiresPermissions={false}>
                   <EmployeePayroll />
+                </ProtectedRoute>
+              } />
+
+              {/* Mobile Profile Route */}
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <ProfileRouteElement />
+                </ProtectedRoute>
+              } />
+
+              {/* Mobile Schedule Route */}
+              <Route path="/schedule" element={
+                <ProtectedRoute>
+                  <MobileSchedule />
+                </ProtectedRoute>
+              } />
+
+              {/* Mobile Client Visit Route */}
+              <Route path="/client-visit" element={
+                <ProtectedRoute>
+                  <MobileClientVisit />
+                </ProtectedRoute>
+              } />
+
+              {/* Mobile Reports Route */}
+              <Route path="/reports" element={
+                <ProtectedRoute>
+                  <MobileReports />
                 </ProtectedRoute>
               } />
               

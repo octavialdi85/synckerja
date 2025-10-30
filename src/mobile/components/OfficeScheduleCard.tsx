@@ -1,0 +1,155 @@
+import { Clock, MapPin, Loader2 } from "lucide-react";
+import { Skeleton } from "@/mobile/components/ui/skeleton";
+import { useWorkSchedule } from "@/mobile/hooks/useWorkSchedule";
+export const OfficeScheduleCard = () => {
+  const {
+    workSchedule,
+    scheduleData,
+    loading,
+    error
+  } = useWorkSchedule();
+  console.log('🏢 OfficeScheduleCard: workSchedule updated', {
+    workSchedule: workSchedule?.name,
+    lateTolerance: workSchedule?.late_tolerance_minutes,
+    loading
+  });
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-primary/10 border-primary text-primary';
+      case 'upcoming':
+        return 'bg-muted border-border text-muted-foreground';
+      case 'completed':
+        return 'bg-success/10 border-success/30 text-success';
+      default:
+        return 'bg-muted border-border text-muted-foreground';
+    }
+  };
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'Aktif';
+      case 'upcoming':
+        return 'Nanti';
+      case 'completed':
+        return 'Selesai';
+      default:
+        return '';
+    }
+  };
+  if (loading) {
+    return <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <div className="p-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-5 w-32" />
+          </div>
+        </div>
+        
+        <div className="overflow-hidden">
+          {/* Header Skeleton */}
+          <div className="grid grid-cols-5 bg-primary text-primary-foreground p-3 text-xs font-medium">
+            <div>Hari</div>
+            <div>Tanggal</div>
+            <div>Masuk</div>
+            <div>Pulang</div>
+            <div>Status</div>
+          </div>
+          
+          {/* Schedule Items Skeleton */}
+          <div className="max-h-64">
+            {Array.from({
+            length: 7
+          }).map((_, index) => <div key={index} className="grid grid-cols-5 p-3 border-b border-border text-xs">
+                <Skeleton className="h-4 w-8" />
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>)}
+          </div>
+        </div>
+        
+        {/* Footer Skeleton */}
+        <div className="p-3 bg-muted/30 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <div className="mt-1">
+            <Skeleton className="h-3 w-40" />
+          </div>
+        </div>
+      </div>;
+  }
+  if (error || !workSchedule) {
+    return <div className="bg-card rounded-lg border border-border p-6 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <Clock className="h-8 w-8 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium text-foreground mb-1">Jadwal Kerja Belum Dikonfigurasi</p>
+            <p className="text-xs text-muted-foreground">Silakan hubungi administrator untuk mengatur jadwal kerja</p>
+          </div>
+        </div>
+      </div>;
+  }
+  return <div className="bg-card rounded-lg border border-border overflow-hidden">
+      <div className="p-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Clock className="h-5 w-5 text-primary" />
+          <h2 className="font-semibold text-foreground">{workSchedule.name}</h2>
+        </div>
+      </div>
+      
+      <div className="overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-5 bg-primary text-primary-foreground p-3 text-xs font-medium">
+          <div>Hari</div>
+          <div>Tanggal</div>
+          <div>Masuk</div>
+          <div>Pulang</div>
+          <div>Status</div>
+        </div>
+        
+        {/* Schedule Items */}
+        <div className="max-h-64 overflow-y-auto">
+          {scheduleData.map((item, index) => <div key={index} className={`grid grid-cols-5 p-3 border-b border-border text-xs ${item.status === 'active' ? 'bg-primary/5' : ''}`}>
+              <div className={`font-medium ${item.isWorkingDay ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {item.day}
+              </div>
+              <div className="text-muted-foreground">{item.date}</div>
+              <div className={`${item.isWorkingDay ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {item.startTime}
+              </div>
+              <div className={`${item.isWorkingDay ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {item.endTime}
+              </div>
+              <div>
+                {item.isWorkingDay ? <span className={`px-2 py-1 rounded-full text-xs border ${getStatusColor(item.status)}`}>
+                    {getStatusLabel(item.status)}
+                  </span> : <span className="px-2 py-1 rounded-full text-xs border bg-muted border-border text-muted-foreground">
+                    Libur
+                  </span>}
+              </div>
+            </div>)}
+        </div>
+      </div>
+      
+      {/* Schedule Info */}
+      <div className="p-3 bg-muted/30 border-t border-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Timezone: {workSchedule.timezone}</span>
+          </div>
+          {workSchedule.break_start_time && workSchedule.break_end_time && <span className="text-xs text-muted-foreground">
+              Istirahat: {workSchedule.break_start_time.slice(0, 5)} - {workSchedule.break_end_time.slice(0, 5)}
+            </span>}
+        </div>
+        {workSchedule.late_tolerance_minutes > 0}
+      </div>
+    </div>;
+};
