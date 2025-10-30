@@ -64,3 +64,4 @@ CREATE POLICY "Users can update active_organization_id in their profile"
 -- Add comment to document the RLS policies
 COMMENT ON TABLE profiles IS 'User profiles with RLS enabled. Users can view their own profile and profiles in the same organization. Users can insert and update their own profile.';
 
+

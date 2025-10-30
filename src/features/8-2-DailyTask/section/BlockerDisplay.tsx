@@ -10,6 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/features/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { 
   AlertTriangle, 
   Calendar, 
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { BlockerResolutionModal } from '@/features/8-2-DailyTaskReport/components/BlockerResolutionModal';
 
 interface Blocker {
   id: string;
@@ -35,6 +37,7 @@ interface Blocker {
   step_title: string;
   task_title: string;
   objective_id: string;
+  is_resolved?: boolean;
 }
 
 interface BlockerDisplayProps {
@@ -60,6 +63,9 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [objectiveInfo, setObjectiveInfo] = useState<Record<string, { title: string; type: 'department' | 'individual' }>>({});
+  const [tab, setTab] = useState<'list' | 'resolved'>('list');
+  const [resolutionFor, setResolutionFor] = useState<Blocker | null>(null);
+  const [resolvedRows, setResolvedRows] = useState<Array<{ id: string; task_step_history_id: string; description: string; created_at: string; blocker_description?: string; taskTitle?: string; stepTitle?: string }>>([]);
   
   const { toast } = useToast();
 
@@ -108,6 +114,7 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
           blocker_severity,
           created_at,
           created_by,
+          is_resolved,
           task_steps!inner(
             title,
             daily_tasks!inner(
@@ -168,7 +175,8 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
         created_by_employee: employeesData[blocker.created_by] || null,
         step_title: blocker.task_steps?.title || 'Unknown Step',
         task_title: blocker.task_steps?.daily_tasks?.title || 'Unknown Task',
-        objective_id: blocker.task_steps?.daily_tasks?.objective_id || 'Unknown Objective'
+        objective_id: blocker.task_steps?.daily_tasks?.objective_id || 'Unknown Objective',
+        is_resolved: blocker.is_resolved || false
       }));
 
       console.log('🔍 Formatted blockers:', formattedBlockers);
@@ -277,6 +285,39 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
     });
   };
 
+  const markResolved = async (b: Blocker) => {
+    await (supabase as any).from('task_step_history').update({ is_resolved: true }).eq('id', b.id);
+    setBlockers(prev => prev.map(x => x.id === b.id ? { ...x, is_resolved: true } : x));
+    setResolutionFor(b);
+    setTab('resolved');
+  };
+
+  useEffect(() => {
+    const loadResolved = async () => {
+      if (!showModal) return;
+      const ids = blockers.map(b => b.id);
+      if (ids.length === 0) { setResolvedRows([]); return; }
+      const { data } = await (supabase as any)
+        .from('task_step_history_blocker_resolved')
+        .select('id, task_step_history_id, description, created_at, task_step_history(description)')
+        .in('task_step_history_id', ids);
+      const mapped = (data || []).map((row: any) => {
+        const src = blockers.find(b => b.id === row.task_step_history_id);
+        return {
+          id: row.id,
+          task_step_history_id: row.task_step_history_id,
+          description: row.description,
+          created_at: row.created_at,
+          blocker_description: row.task_step_history?.description || null,
+          taskTitle: src?.task_title || '-',
+          stepTitle: src?.step_title || '-',
+        };
+      });
+      setResolvedRows(mapped);
+    };
+    loadResolved();
+  }, [showModal, blockers]);
+
 
 
   return (
@@ -360,70 +401,123 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
               </div>
             </div>
 
-            {/* Blockers List */}
-            <div className="flex-1 overflow-auto">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading blockers...</p>
-                </div>
-              ) : filteredBlockers.length === 0 ? (
-                <div className="text-center py-8">
-                  <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No blockers found for the selected filters</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredBlockers.map((blocker, index) => (
-                    <div key={blocker.id} className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">
-                            #{index + 1}
-                          </span>
-                          {getSeverityBadge(blocker.blocker_severity)}
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 px-2 py-1 text-xs">
-                            {getTypeIcon(blocker.blocker_type)} {blocker.blocker_type}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatDate(blocker.created_at)}
-                        </div>
-                      </div>
-                      
-                      <p className="text-sm text-gray-700 mb-3">{blocker.description}</p>
-                      
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {blocker.task_title}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {blocker.step_title}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {blocker.created_by_employee?.full_name || 'Unknown User'}
-                        </span>
-                        {objectiveInfo[blocker.objective_id] && (
-                          <span className="flex items-center gap-1">
-                            <Target className="w-3 h-3" />
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              objectiveInfo[blocker.objective_id].type === 'department' 
-                                ? 'bg-blue-100 text-blue-700' 
-                                : 'bg-green-100 text-green-700'
-                            }`}>
-                              {objectiveInfo[blocker.objective_id].type === 'department' ? 'Dept' : 'Ind'}: {objectiveInfo[blocker.objective_id].title}
-                            </span>
-                          </span>
-                        )}
-                      </div>
+            <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 min-h-0 flex flex-col">
+              <TabsList className="mb-2">
+                <TabsTrigger value="list">Blockers</TabsTrigger>
+                <TabsTrigger value="resolved">Blocker Resolved</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="list" className="flex-1 min-h-0">
+                <div className="flex-1 overflow-auto">
+                  {loading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading blockers...</p>
                     </div>
-                  ))}
+                  ) : filteredBlockers.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No blockers found for the selected filters</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredBlockers.map((blocker, index) => (
+                        <div key={blocker.id} className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-900">
+                                #{index + 1}
+                              </span>
+                              {getSeverityBadge(blocker.blocker_severity)}
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-200 px-2 py-1 text-xs">
+                                {getTypeIcon(blocker.blocker_type)} {blocker.blocker_type}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {blocker.is_resolved && (
+                                <span className="text-[10px] bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5">Resolved</span>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!!blocker.is_resolved}
+                                onClick={() => markResolved(blocker)}
+                                className={`${blocker.is_resolved ? 'text-gray-400 border-gray-200' : 'text-green-700 border-green-300 hover:bg-green-50'}`}
+                              >
+                                Resolve
+                              </Button>
+                              <div className="text-xs text-gray-500">
+                                {formatDate(blocker.created_at)}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-gray-700 mb-3">{blocker.description}</p>
+                          
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {blocker.task_title}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {blocker.step_title}
+                            </span>
+                          <span className="flex items-center gap-1 whitespace-nowrap">
+                              <User className="w-3 h-3" />
+                              {blocker.created_by_employee?.full_name || 'Unknown User'}
+                            </span>
+                            {objectiveInfo[blocker.objective_id] && (
+                              <span className="flex items-center gap-1">
+                                <Target className="w-3 h-3" />
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  objectiveInfo[blocker.objective_id].type === 'department' 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {objectiveInfo[blocker.objective_id].type === 'department' ? 'Dept' : 'Ind'}: {objectiveInfo[blocker.objective_id].title}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </TabsContent>
+
+              <TabsContent value="resolved" className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 seamless-scroll overflow-auto overflow-x-auto">
+                  <table className="text-sm min-w-max">
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Task</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Step</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Resolved At</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Blocker</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Resolution Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resolvedRows.length === 0 ? (
+                        <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500 whitespace-nowrap">No resolved records</td></tr>
+                      ) : (
+                        resolvedRows.map((row) => (
+                          <tr key={row.id} className="border-t">
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.taskTitle || '-'}</td>
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.stepTitle || '-'}</td>
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.blocker_description || '-'}</td>
+                            <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.description}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
 
           <DialogFooter>
@@ -442,6 +536,19 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <BlockerResolutionModal
+        open={!!resolutionFor}
+        onOpenChange={(o) => !o && setResolutionFor(null)}
+        blocker={resolutionFor ? {
+          id: resolutionFor.id,
+          blocker_type: resolutionFor.blocker_type,
+          description: resolutionFor.description,
+          created_at: resolutionFor.created_at,
+          taskTitle: resolutionFor.task_title,
+          stepTitle: resolutionFor.step_title,
+          subStepTitle: null,
+        } : null}
+      />
     </div>
   );
 };

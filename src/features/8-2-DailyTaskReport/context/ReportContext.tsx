@@ -47,6 +47,7 @@ interface ReportContextType {
   };
   updateFilter: (key: 'search' | 'status' | 'timePeriod' | 'customStart' | 'customEnd' | 'pic' | 'task' | 'step' | 'subStep', value: string) => void;
   options: { pics: string[]; tasks: string[]; steps: string[]; subSteps: string[] };
+  getBlockersForStep: (stepId: string) => any[];
 }
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
@@ -70,6 +71,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     customStart?: string | null; customEnd?: string | null;
     pic?: 'all' | string; task?: 'all' | string; step?: 'all' | string; subStep?: 'all' | string;
   }>({ search: '', status: 'all', timePeriod: 'all', customStart: null, customEnd: null, pic: 'all', task: 'all', step: 'all', subStep: 'all' });
+  const [blockerCountByStep, setBlockerCountByStep] = useState<Record<string, number>>({});
+  const [blockersByStep, setBlockersByStep] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -106,7 +109,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         const hist = history || [];
 
         // Collect IDs for enrichment (both for blockers and updates)
-        const rawBlockers = hist.filter((h: any) => h.action_type?.startsWith('blocker'));
+        const rawBlockers = hist.filter((h: any) => h.action_type === 'blocker_added');
         const stepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
         const subStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
         // Also include from general history
@@ -148,6 +151,19 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           };
         });
         setBlockers(enriched);
+
+        // Build blocker count and map by step (use parent step for sub-step blockers)
+        const countMap: Record<string, number> = {};
+        const byStep: Record<string, any[]> = {};
+        enriched.forEach((b: any) => {
+          const parentStepId = b.task_step_id || (b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id]?.parent_step_id : null);
+          if (parentStepId) {
+            countMap[parentStepId] = (countMap[parentStepId] || 0) + 1;
+            (byStep[parentStepId] = byStep[parentStepId] || []).push(b);
+          }
+        });
+        setBlockerCountByStep(countMap);
+        setBlockersByStep(byStep);
 
         // Enrich recent updates similarly
         const recent = hist.map((b: any) => {
@@ -376,7 +392,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     setFilters(prev => ({ ...prev, [key]: value as any }));
   };
 
-  const value: ReportContextType = { loading, performance, filtered, blockers, recentUpdates, filteredBlockers, filteredRecentUpdates, filters, updateFilter };
+  const value: ReportContextType = { loading, performance: performance.map(p => ({ ...p, })), filtered: filtered.map(p => ({ ...p, })), blockers, recentUpdates, filteredBlockers, filteredRecentUpdates, filters, updateFilter, getBlockersForStep: (stepId: string) => blockersByStep[stepId] || [] };
   // Build dependent dropdown options from current dataset
   const base = [...performance];
   const pics = Array.from(new Set(base.map(p => p.employeeName).filter(Boolean))).sort();

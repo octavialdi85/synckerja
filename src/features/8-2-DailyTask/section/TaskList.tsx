@@ -47,6 +47,8 @@ import {
 } from '@/features/ui/popover';
 import { CustomDatePicker } from '@/features/share/calendar';
 import { useDailyTask, type Task } from '../DailyTaskContext';
+import { supabase } from '@/integrations/supabase/client';
+import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';
 
 interface DeadlineHistory {
   id: string;
@@ -85,6 +87,9 @@ export const TaskList = () => {
   const [addStepDialog, setAddStepDialog] = useState<{ isOpen: boolean; taskId: string | null; taskTitle: string }>({ isOpen: false, taskId: null, taskTitle: '' });
   const taskRefs = useRef<{ [key: string]: HTMLTableRowElement | null }>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [blockerCountByTask, setBlockerCountByTask] = useState<Record<string, number>>({});
+  const [blockerModalOpen, setBlockerModalOpen] = useState(false);
+  const [blockerModalItems, setBlockerModalItems] = useState<any[]>([]);
 
   // Auto-scroll to highlighted task
   useEffect(() => {
@@ -118,6 +123,40 @@ export const TaskList = () => {
       }
     }
   }, [highlightedTask]);
+  
+
+  const openTaskBlockers = async (task: Task) => {
+    const stepIds = task.steps.map(s => s.id);
+    const { data: subSteps } = await supabase
+      .from('task_steps_to_steps')
+      .select('id, title, parent_step_id')
+      .in('parent_step_id', stepIds);
+    const subById: Record<string, any> = {};
+    (subSteps || []).forEach(s => { subById[s.id] = s; });
+    const subIds = (subSteps || []).map(s => s.id);
+    const { data: history } = await supabase
+      .from('task_step_history')
+      .select('*')
+      .eq('action_type', 'blocker_added')
+      .or([
+        stepIds.length ? `task_step_id.in.(${stepIds.join(',')})` : '',
+        subIds.length ? `task_steps_to_steps_id.in.(${subIds.join(',')})` : ''
+      ].filter(Boolean).join(','))
+      .order('created_at', { ascending: false });
+    const enriched = (history || []).map((h: any) => {
+      const step = task.steps.find(s => s.id === h.task_step_id) || null;
+      const sub = h.task_steps_to_steps_id ? subById[h.task_steps_to_steps_id] : null;
+      return {
+        ...h,
+        taskTitle: task.title,
+        stepTitle: step?.title || (sub ? (task.steps.find(s => s.id === sub.parent_step_id)?.title || '-') : '-'),
+        subStepTitle: sub?.title || null,
+      };
+    });
+    setBlockerModalItems(enriched);
+    setBlockerModalOpen(true);
+  };
+
 
   // Filter tasks based on filters
   const filteredTasks = tasks.filter(task => {
@@ -143,6 +182,38 @@ export const TaskList = () => {
     }
     return true;
   });
+
+  // Compute blocker counts per task to mirror report page
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const allTasks = filteredTasks;
+        const counts: Record<string, number> = {};
+        for (const t of allTasks) {
+          const stepIds = t.steps.map(s => s.id);
+          if (stepIds.length === 0) { counts[t.id] = 0; continue; }
+          const { data: subSteps } = await supabase
+            .from('task_steps_to_steps')
+            .select('id, parent_step_id')
+            .in('parent_step_id', stepIds);
+          const subIds = (subSteps || []).map(s => s.id);
+          const { count } = await supabase
+            .from('task_step_history')
+            .select('id', { count: 'exact', head: true })
+            .eq('action_type', 'blocker_added')
+            .or([
+              stepIds.length ? `task_step_id.in.(${stepIds.join(',')})` : '',
+              subIds.length ? `task_steps_to_steps_id.in.(${subIds.join(',')})` : ''
+            ].filter(Boolean).join(','));
+          counts[t.id] = count || 0;
+        }
+        setBlockerCountByTask(counts);
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadCounts();
+  }, [filteredTasks]);
 
   const toggleTaskExpansion = (taskId: string) => {
     const isOpen = expandedTasks.has(taskId);
@@ -289,7 +360,10 @@ export const TaskList = () => {
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                   Finish Date
                 </TableHead>
-                <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }}>
+                <TableHead className="px-2 pr-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                  Blocker
+                </TableHead>
+                <TableHead className="px-2 pr-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                   Priority
                 </TableHead>
                 <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
@@ -498,8 +572,22 @@ export const TaskList = () => {
                           )}
                         </TableCell>
 
+                        {/* Blocker */}
+                        <TableCell className="px-2 pr-2 py-3 text-center" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                          {(() => {
+                            const count = blockerCountByTask[task.id] || 0;
+                            return count > 0 ? (
+                              <button onClick={() => openTaskBlockers(task)} className="text-xs font-medium text-purple-700 hover:underline">
+                                Found {count} Blocker{count > 1 ? 's' : ''}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            );
+                          })()}
+                        </TableCell>
+
                         {/* Priority */}
-                        <TableCell className="px-2 py-3 text-center" style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }}>
+                        <TableCell className="px-2 pr-4 py-3 text-center" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -726,6 +814,13 @@ export const TaskList = () => {
           />
         )}
         </div>
+
+        <BlockerDetailsModal
+          open={blockerModalOpen}
+          onOpenChange={setBlockerModalOpen}
+          items={blockerModalItems}
+          initialTab={'list'}
+        />
       </TooltipProvider>
     </DndContext>
   );

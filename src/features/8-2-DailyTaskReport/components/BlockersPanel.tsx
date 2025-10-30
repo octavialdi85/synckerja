@@ -1,8 +1,21 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useDailyTaskReport } from '../context/ReportContext';
+import { BlockerDetailsModal } from './BlockerDetailsModal';
+import { BlockerResolutionModal } from './BlockerResolutionModal';
+import { supabase } from '@/integrations/supabase/client';
 
 export const BlockersPanel = () => {
   const { filteredBlockers: blockers, loading } = useDailyTaskReport() as any;
+  const [open, setOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
+  const [resolutionFor, setResolutionFor] = useState<any | null>(null);
+  const [locResolved, setLocResolved] = useState<Record<string, boolean>>({});
+
+  const handleResolve = async (blocker: any) => {
+    await supabase.from('task_step_history').update({ is_resolved: true } as any).eq('id', blocker.id);
+    setLocResolved(prev => ({ ...prev, [blocker.id]: true }));
+    setResolutionFor(blocker);
+  };
 
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, any[]>> = {};
@@ -40,7 +53,21 @@ export const BlockersPanel = () => {
                           )}
                           <div className="text-red-700 font-medium">{b.blocker_type || 'Blocker'}</div>
                           {b.description && <div className="text-red-800">{b.description}</div>}
-                          <div className="text-xs text-red-600 mt-1">{new Date(b.created_at).toLocaleString()}</div>
+                          <div className="flex items-center justify-between mt-1">
+                            <div className="text-xs text-red-600">{new Date(b.created_at).toLocaleString()}</div>
+                            <div className="flex items-center gap-2">
+                              {(b.is_resolved || locResolved[b.id]) && (
+                                <span className="text-[10px] bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5">Resolved</span>
+                              )}
+                              <button
+                                className={`text-xs rounded px-2 py-1 border ${(b.is_resolved || locResolved[b.id]) ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-green-600 text-white border-green-700 hover:bg-green-700'}`}
+                                disabled={!!(b.is_resolved || locResolved[b.id])}
+                                onClick={() => handleResolve(b)}
+                              >
+                                Resolve
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -51,6 +78,20 @@ export const BlockersPanel = () => {
           ))
         )}
       </div>
+      <BlockerDetailsModal open={open} onOpenChange={setOpen} items={blockers || []} initialTab={initialTab} />
+      <BlockerResolutionModal
+        open={!!resolutionFor}
+        onOpenChange={(o) => !o && setResolutionFor(null)}
+        blocker={resolutionFor ? {
+          id: resolutionFor.id,
+          blocker_type: resolutionFor.blocker_type,
+          description: resolutionFor.description,
+          created_at: resolutionFor.created_at,
+          taskTitle: resolutionFor.taskTitle,
+          stepTitle: resolutionFor.stepTitle,
+          subStepTitle: resolutionFor.subStepTitle,
+        } : null}
+      />
     </div>
   );
 };
