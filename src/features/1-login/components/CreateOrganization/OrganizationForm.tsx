@@ -17,6 +17,7 @@ interface OrganizationFormData {
   address: string;
   website: string;
   description: string;
+  industry: string;
   acceptTerms: boolean;
 }
 
@@ -27,6 +28,7 @@ const initialFormData: OrganizationFormData = {
   address: "",
   website: "",
   description: "",
+  industry: "",
   acceptTerms: false,
 };
 
@@ -61,13 +63,17 @@ const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
         .from('organizations')
         .insert([
           {
-            name: data.name,
+            company_name: data.name,
             email: data.email,
-            phone: data.phone,
+            phone_number: data.phone,
             address: data.address,
             website: data.website,
             description: data.description,
+            industry: data.industry,
+            user_id: user.user.id,
             created_by: user.user.id,
+            terms_accepted: !!data.acceptTerms,
+            terms_accepted_at: data.acceptTerms ? new Date().toISOString() : null,
           }
         ])
         .select()
@@ -77,10 +83,109 @@ const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
         throw error;
       }
 
+      const orgData = organization as any;
+
+      // Create default department for the organization (no code to avoid global unique conflict)
+      const { data: department, error: deptError } = await supabase
+        .from('departments')
+        .insert({
+          name: data.name,
+          description: 'Default department',
+          organization_id: orgData.id,
+          is_default: true,
+          created_by: user.user.id,
+        })
+        .select('id')
+        .single();
+
+      if (deptError) {
+        console.error('Error creating default department:', deptError);
+        throw new Error('Failed to create default department');
+      }
+
+      // Create user_organizations entry to link user to organization
+      const { error: userOrgError } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: user.user.id,
+          organization_id: orgData.id,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          joined_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (userOrgError) {
+        console.error('Error creating user organization:', userOrgError);
+        throw new Error('Failed to link user to organization');
+      }
+
+      // Create user_roles entry to assign user as owner
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .insert({
+          user_id: user.user.id,
+          organization_id: orgData.id,
+          role: 'owner',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (roleError) {
+        console.error('Error creating user role:', roleError);
+        throw new Error('Failed to assign user role');
+      }
+
+      // Create employee entry for the creator
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('user_id', user.user.id)
+        .single();
+
+      const { error: employeeError } = await supabase
+        .from('employees')
+        .insert({
+          user_id: user.user.id,
+          organization_id: orgData.id,
+          full_name: profileData?.full_name || 'User',
+          email: profileData?.email || null,
+          department_id: department?.id || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by: user.user.id,
+        });
+
+      if (employeeError) {
+        console.error('Error creating employee for creator:', employeeError);
+        throw new Error('Failed to create initial employee');
+      }
+
+      // Update user profile with active organization and mark organization_created
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          active_organization_id: orgData.id,
+          organization_created: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user.id);
+
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+        // Don't throw error here as organization was created successfully
+      }
+
       toast({
         title: "Organisasi berhasil dibuat",
         description: `Organisasi ${data.name} telah berhasil dibuat.`
       });
+
+      // Store organization ID for next steps
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('newOrganizationId', orgData.id);
+        sessionStorage.setItem('organizationJustCreated', 'true');
+      }
 
       if (onSuccess) {
         onSuccess();
@@ -175,6 +280,17 @@ const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
               value={formData.website}
               onChange={(e) => handleInputChange('website', e.target.value)}
               placeholder="https://www.organisasi.com"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="industry">Industri</Label>
+            <Input
+              id="industry"
+              value={formData.industry}
+              onChange={(e) => handleInputChange('industry', e.target.value)}
+              placeholder="Contoh: Teknologi, Keuangan, Kesehatan, dll"
               disabled={loading}
             />
           </div>

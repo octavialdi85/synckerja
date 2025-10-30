@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentUser } from './useCurrentUser';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useToast } from './use-toast';
 import type { Password, PasswordFormData, Category } from '../types';
 
@@ -9,6 +10,7 @@ export const usePasswords = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useCurrentUser();
+  const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
 
   // Fetch categories
@@ -41,7 +43,7 @@ export const usePasswords = () => {
 
   // Fetch passwords
   const fetchPasswords = async () => {
-    if (!user) return;
+    if (!user || !organizationId) return;
 
     try {
       setLoading(true);
@@ -52,6 +54,7 @@ export const usePasswords = () => {
           password_categories!inner(id, name, icon)
         `)
         .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -83,7 +86,7 @@ export const usePasswords = () => {
 
   // Add password
   const addPassword = async (data: PasswordFormData) => {
-    if (!user) return;
+    if (!user || !organizationId) return;
 
     try {
       const { data: newPassword, error } = await supabase
@@ -91,6 +94,7 @@ export const usePasswords = () => {
         .insert([
           {
             user_id: user.id,
+            organization_id: organizationId,
             title: data.title,
             username: data.username,
             password: data.password,
@@ -123,7 +127,7 @@ export const usePasswords = () => {
 
   // Update password
   const updatePassword = async (id: string, data: PasswordFormData) => {
-    if (!user) return;
+    if (!user || !organizationId) return;
 
     try {
       const { error } = await supabase
@@ -139,7 +143,8 @@ export const usePasswords = () => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId);
 
       if (error) throw error;
 
@@ -161,14 +166,15 @@ export const usePasswords = () => {
 
   // Delete password
   const deletePassword = async (id: string) => {
-    if (!user) return;
+    if (!user || !organizationId) return;
 
     try {
       const { error } = await supabase
         .from('passwords')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId);
 
       if (error) throw error;
 
@@ -190,7 +196,7 @@ export const usePasswords = () => {
 
   // Toggle favorite
   const toggleFavorite = async (id: string) => {
-    if (!user) return;
+    if (!user || !organizationId) return;
 
     try {
       const password = passwords.find((p) => p.id === id);
@@ -203,7 +209,8 @@ export const usePasswords = () => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId);
 
       if (error) throw error;
 
@@ -223,10 +230,10 @@ export const usePasswords = () => {
   }, []);
 
   useEffect(() => {
-    if (user) {
+    if (user && organizationId) {
       fetchPasswords();
     }
-  }, [user]);
+  }, [user, organizationId]);
 
   // Update category counts when passwords change
   useEffect(() => {

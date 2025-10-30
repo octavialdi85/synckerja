@@ -154,6 +154,10 @@ export const useRegistration = () => {
         
         // Store user info for verification process
         sessionStorage.setItem('pendingUserId', data.user.id);
+        sessionStorage.setItem('registrationFlow', 'true');
+        sessionStorage.setItem('fromRegistration', 'true');
+        sessionStorage.setItem('userEmail', sanitizedEmail);
+        sessionStorage.setItem('userName', fullName.trim());
         
         // Wait a bit for database triggers to complete
         await new Promise(resolve => setTimeout(resolve, 500));

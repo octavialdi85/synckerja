@@ -313,6 +313,99 @@ export interface Database {
           email?: string | null
         }
       }
+      organizations: {
+        Row: {
+          id: string
+          company_name: string
+          email: string | null
+          phone_number: string | null
+          address: string | null
+          website: string | null
+          description: string | null
+          industry: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_name: string
+          email?: string | null
+          phone?: string | null
+          address?: string | null
+          website?: string | null
+          description?: string | null
+          industry?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_name?: string
+          email?: string | null
+          phone?: string | null
+          address?: string | null
+          website?: string | null
+          description?: string | null
+          industry?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      user_organizations: {
+        Row: {
+          id: string
+          user_id: string
+          organization_id: string
+          is_active: boolean
+          joined_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          organization_id: string
+          is_active?: boolean
+          joined_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          organization_id?: string
+          is_active?: boolean
+          joined_at?: string
+          updated_at?: string
+        }
+      }
+      user_roles: {
+        Row: {
+          id: string
+          user_id: string
+          organization_id: string
+          role: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          organization_id: string
+          role: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          organization_id?: string
+          role?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       task_step_links: {
         Row: {
           id: string

@@ -52,7 +52,10 @@ const CreateOrganization = () => {
           </p>
         </CardHeader>
         <CardContent className="p-8">
-          <OrganizationForm />
+          <OrganizationForm onSuccess={() => {
+            // Navigate to create plan after organization is created
+            navigate('/create-plan', { replace: true });
+          }} />
         </CardContent>
       </Card>
     </div>

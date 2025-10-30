@@ -63,7 +63,8 @@ interface StepHistoryModalProps {
   stepTitle: string;
   currentStatus: string;
   currentPriority: string;
-  taskId: string;
+  taskId?: string;
+  subStepId?: string; // when provided, operate on sub-step history instead
   onHistoryUpdate?: () => void;
 }
 
@@ -75,6 +76,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
   currentStatus,
   currentPriority,
   taskId,
+  subStepId,
   onHistoryUpdate
 }) => {
   const [activeTab, setActiveTab] = useState('brief');
@@ -107,11 +109,14 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
     
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const base = (supabase as any)
         .from('task_step_history')
         .select('*')
-        .eq('task_step_id', taskStepId)
         .order('created_at', { ascending: false });
+
+      const { data, error } = subStepId
+        ? await base.eq('task_steps_to_steps_id', subStepId)
+        : await base.eq('task_step_id', taskStepId);
 
       if (error) throw error;
       
@@ -157,48 +162,57 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
 
   useEffect(() => {
     fetchHistory();
-  }, [isOpen, taskStepId]);
+  }, [isOpen, taskStepId, subStepId]);
 
   const addHistoryEntry = async (actionType: string, data: any) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      const insertPayload: any = {
+        action_type: actionType,
+        ...data,
+        created_by: user.id,
+      };
+      if (subStepId) {
+        insertPayload.task_steps_to_steps_id = subStepId;
+        insertPayload.task_step_id = taskStepId; // always record parent step id for sub-step history
+      } else {
+        insertPayload.task_step_id = taskStepId;
+      }
+
       const { error } = await (supabase as any)
         .from('task_step_history')
-        .insert({
-          task_step_id: taskStepId,
-          action_type: actionType,
-          ...data,
-          created_by: user.id
-        });
+        .insert(insertPayload);
 
       if (error) throw error;
 
       // Update step status if needed
-      if (actionType === 'status_change') {
-        const { error: updateError } = await (supabase as any)
-          .from('task_steps')
-          .update({
-            status: newStatus,
-            blocked_reason: newStatus === 'blocked' ? data.description : null,
-            blocked_at: newStatus === 'blocked' ? new Date().toISOString() : null,
-            started_at: newStatus === 'in_progress' ? new Date().toISOString() : null,
-            completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-          })
-          .eq('id', taskStepId);
+      if (!subStepId) {
+        if (actionType === 'status_change') {
+          const { error: updateError } = await (supabase as any)
+            .from('task_steps')
+            .update({
+              status: newStatus,
+              blocked_reason: newStatus === 'blocked' ? data.description : null,
+              blocked_at: newStatus === 'blocked' ? new Date().toISOString() : null,
+              started_at: newStatus === 'in_progress' ? new Date().toISOString() : null,
+              completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+            })
+            .eq('id', taskStepId);
 
-        if (updateError) throw updateError;
-      }
+          if (updateError) throw updateError;
+        }
 
-      // Update step priority if needed
-      if (actionType === 'priority_change') {
-        const { error: updateError } = await (supabase as any)
-          .from('task_steps')
-          .update({ priority: newPriority })
-          .eq('id', taskStepId);
+        // Update step priority if needed
+        if (actionType === 'priority_change') {
+          const { error: updateError } = await (supabase as any)
+            .from('task_steps')
+            .update({ priority: newPriority })
+            .eq('id', taskStepId);
 
-        if (updateError) throw updateError;
+          if (updateError) throw updateError;
+        }
       }
 
       toast({
@@ -377,7 +391,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
 
         <div className="flex-1 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="brief" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Brief Updates
@@ -386,14 +400,18 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                 <AlertTriangle className="w-4 h-4" />
                 Blockers
               </TabsTrigger>
-              <TabsTrigger value="status" className="flex items-center gap-2">
+            {!subStepId && (
+            <TabsTrigger value="status" className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 Status
-              </TabsTrigger>
-              <TabsTrigger value="dependencies" className="flex items-center gap-2">
+            </TabsTrigger>
+            )}
+            {!subStepId && (
+            <TabsTrigger value="dependencies" className="flex items-center gap-2">
                 <GitBranch className="w-4 h-4" />
                 Dependencies
-              </TabsTrigger>
+            </TabsTrigger>
+            )}
               <TabsTrigger value="history" className="flex items-center gap-2">
                 <History className="w-4 h-4" />
                 Timeline
@@ -500,6 +518,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                 </div>
               </TabsContent>
 
+              {!subStepId && (
               <TabsContent value="status" className="space-y-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
@@ -566,7 +585,9 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                   </div>
                 </div>
               </TabsContent>
+              )}
 
+              {!subStepId && (
               <TabsContent value="dependencies" className="space-y-4">
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                   <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
@@ -585,6 +606,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                   </Button>
                 </div>
               </TabsContent>
+              )}
 
               <TabsContent value="history" className="space-y-4">
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

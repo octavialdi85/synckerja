@@ -109,9 +109,13 @@ export const useCreateSubscription = () => {
       queryClient.invalidateQueries({ queryKey: ['organization-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
       
-      // Small delay then redirect to home
+      // Store subscription creation flag and redirect to employee welcome
+      sessionStorage.setItem('subscriptionJustCreated', 'true');
+      sessionStorage.setItem('planSelectionCompleted', 'true');
+      
+      // Small delay then redirect to employee welcome
       setTimeout(() => {
-        window.location.href = '/';
+        window.location.href = '/employee-welcome';
       }, 1500);
     },
     onError: (error: any) => {

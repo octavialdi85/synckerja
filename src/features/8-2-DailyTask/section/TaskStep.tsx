@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History } from 'lucide-react';
+import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History, Plus, ListChecks } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
@@ -9,6 +9,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { AssignStepDialog } from './AssignStepDialog';
 import { StepLinks } from './StepLinks';
 import { StepHistoryModal } from './StepHistoryModal';
+import { ModalViewSubSteps } from './ModalViewSubSteps';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 interface TaskFile {
   id: string;
@@ -35,6 +38,7 @@ interface TaskStepProps {
     is_completed: boolean;
     order: number;
     created_at: string;
+    updated_at?: string;
     assigned_to?: string | null;
     assigned_at?: string | null;
     assigned_by?: string | null;
@@ -42,6 +46,7 @@ interface TaskStepProps {
     priority?: string;
     files?: TaskFile[];
     links?: TaskLink[];
+    assigned_due_date?: string | null;
     // Relations
     assigned_employee?: {
       id: string;
@@ -66,7 +71,11 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isViewSubStepsOpen, setIsViewSubStepsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [subStepCount, setSubStepCount] = useState<number>(0);
+  const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
+  const { organizationId } = useCurrentOrg();
 
   // Check if step has notifications (files or links)
   const fileCount = step.files?.length || 0;
@@ -96,8 +105,85 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
     }
   }, [step.files]);
 
+  // Compute on-time/late label for finished step vs due date
+  const getFinishStatusLabel = (): { text: string; className: string } | null => {
+    if (!step.assigned_due_date || !step.updated_at || !step.is_completed) return null;
+    const assigneeName = step.assigned_employee?.full_name || 'Assignee';
+    const finish = new Date(step.updated_at);
+    const dueEnd = new Date(step.assigned_due_date);
+    // on time means finish is on/before 23:59:59 of due date
+    dueEnd.setHours(23, 59, 59, 999);
+    if (finish.getTime() <= dueEnd.getTime()) {
+      return { text: `${assigneeName} · ontime`, className: 'inline-flex items-center whitespace-normal break-words bg-green-100 text-green-700 border border-green-200 rounded px-1.5 py-0.5' };
+    }
+    const diffMs = finish.getTime() - dueEnd.getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const lateDays = Math.ceil(diffMs / dayMs);
+    return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'inline-flex items-center whitespace-normal break-words bg-red-100 text-red-700 border border-red-200 rounded px-1.5 py-0.5' };
+  };
+
+  // Load sub-steps stats (total and completed)
+  useEffect(() => {
+    const fetchSubStepStats = async () => {
+      if (!organizationId) return;
+      try {
+        const [{ count: totalCount }, { count: completedCount }] = await Promise.all([
+          supabase
+            .from('task_steps_to_steps')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', organizationId)
+            .eq('parent_step_id', step.id),
+          supabase
+            .from('task_steps_to_steps')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', organizationId)
+            .eq('parent_step_id', step.id)
+            .eq('is_completed', true),
+        ]);
+        setSubStepCount(totalCount || 0);
+        setSubStepCompletedCount(completedCount || 0);
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchSubStepStats();
+  }, [organizationId, step.id]);
+
+  // Refresh stats when closing sub-steps modal
+  useEffect(() => {
+    if (!isViewSubStepsOpen) {
+      (async () => {
+        if (!organizationId) return;
+        try {
+          const [{ count: totalCount }, { count: completedCount }] = await Promise.all([
+            supabase
+              .from('task_steps_to_steps')
+              .select('id', { count: 'exact', head: true })
+              .eq('organization_id', organizationId)
+              .eq('parent_step_id', step.id),
+            supabase
+              .from('task_steps_to_steps')
+              .select('id', { count: 'exact', head: true })
+              .eq('organization_id', organizationId)
+              .eq('parent_step_id', step.id)
+              .eq('is_completed', true),
+          ]);
+          setSubStepCount(totalCount || 0);
+          setSubStepCompletedCount(completedCount || 0);
+        } catch (_) {
+          // ignore
+        }
+      })();
+    }
+  }, [isViewSubStepsOpen, organizationId, step.id]);
+
   const handleToggleComplete = async () => {
-    await updateTaskStep(step.id, { is_completed: !step.is_completed });
+    const next = !step.is_completed;
+    const payload: any = { is_completed: next };
+    if (next) {
+      payload.updated_at = new Date().toISOString();
+    }
+    await updateTaskStep(step.id, payload);
   };
 
   const handleSaveEdit = async () => {
@@ -155,10 +241,9 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
     }
   };
 
-  const handleAssignStep = async (employeeId: string) => {
+  const handleAssignStep = async (employeeId: string, dueDateIso?: string | null) => {
     try {
-      await assignTaskStep(step.id, employeeId);
-      setShowAssignDialog(false);
+      await assignTaskStep(step.id, employeeId, dueDateIso || null);
     } catch (error) {
       console.error('Error assigning step:', error);
     }
@@ -237,13 +322,62 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
         </div>
       ) : (
         <>
-          <span className={`flex-1 text-sm ${
-            step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
-          }`}>
-            {step.title}
-          </span>
+          <div className="flex-1">
+            <span className={`text-sm ${
+              step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
+            }`}>
+              {step.title}
+            </span>
+            {subStepCount > 0 && (
+              <div className="mt-1">
+                <div className="w-full h-1.5 bg-blue-100 rounded">
+                  <div
+                    className="h-1.5 bg-blue-500 rounded"
+                    style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500">
+                    {subStepCompletedCount}/{subStepCount}
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-medium">
+                    {Math.round((subStepCompletedCount / subStepCount) * 100)}%
+                  </span>
+                </div>
+              </div>
+            )}
+            {(step.assigned_due_date || (step.is_completed && step.updated_at)) && (
+              <div className="mt-1 flex items-center gap-4 text-[10px] text-gray-500">
+                {step.assigned_due_date && (
+                  <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                )}
+                {step.is_completed && step.updated_at && (
+                  <span className="flex items-center gap-2">
+                    <span>Finished: {new Date(step.updated_at).toLocaleString()}</span>
+                    {getFinishStatusLabel() && (
+                      <span className={`ml-2 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsViewSubStepsOpen(true)}
+              className="h-6 w-6 p-0 text-gray-400 hover:text-blue-600 relative"
+              title="View steps"
+            >
+              <ListChecks className="w-3 h-3" />
+              {subStepCount > 0 && (
+                <div className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {subStepCount}
+                </div>
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -434,6 +568,23 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
         }}
       />
     )}
+    <ModalViewSubSteps
+      open={isViewSubStepsOpen}
+      onOpenChange={setIsViewSubStepsOpen}
+      parentStepId={step.id}
+      parentStepTitle={step.title}
+      onParentCompletionChange={async (completed) => {
+        try {
+          const payload: any = { is_completed: completed };
+          if (completed) {
+            payload.updated_at = new Date().toISOString();
+          }
+          await updateTaskStep(step.id, payload);
+        } catch (_) {
+          // ignore
+        }
+      }}
+    />
     </div>
   );
 };

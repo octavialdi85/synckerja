@@ -290,8 +290,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             task_files (*),
             task_step_links (*),
             task_step_history (*),
-            assigned_employee:employees!assigned_to(id, full_name, email),
-            assigned_by_employee:employees!assigned_by(id, full_name, email)
+            task_steps_assigned (id, employee_id, assigned_by, assigned_at,
+              employee:employees!employee_id(id, full_name, email),
+              assigner:employees!assigned_by(id, full_name, email),
+              task_steps_assigned_duedate (due_date, created_at)
+            )
           ),
           deadline_history (*),
           assigned_employee:employees!assigned_to(id, full_name, email)
@@ -310,12 +313,26 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         
         return {
           ...task,
-          steps: (task.task_steps || []).map((step: any) => ({
-            ...step,
-            files: step.task_files || [],
-            links: step.task_step_links || [],
-            history: step.task_step_history || []
-          })),
+          steps: (task.task_steps || []).map((step: any) => {
+            const assignments = (step.task_steps_assigned || []).sort((a: any,b: any)=>new Date(b.assigned_at).getTime()-new Date(a.assigned_at).getTime());
+            const active = assignments[0];
+            let assignedDueDate: string | null = null;
+            if (active?.task_steps_assigned_duedate && active.task_steps_assigned_duedate.length > 0) {
+              const sorted = [...active.task_steps_assigned_duedate].sort((a: any,b: any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+              assignedDueDate = sorted[0]?.due_date || null;
+            }
+            return {
+              ...step,
+              files: step.task_files || [],
+              links: step.task_step_links || [],
+              history: step.task_step_history || [],
+              // compatibility shape for UI
+              assigned_to: active?.employee_id || null,
+              assigned_employee: active?.employee || null,
+              assigned_by_employee: active?.assigner || null,
+              assigned_due_date: assignedDueDate,
+            };
+          }),
           deadline_history: task.deadline_history || [],
           progress_percentage: progress,
           status: synchronizedStatus, // Use synchronized status
@@ -372,22 +389,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const determineStatusFromProgress = (progress: number, currentStatus: string): string => {
-    // If task is completed or cancelled, keep the current status
-    if (currentStatus === 'completed' || currentStatus === 'cancelled') {
-      return currentStatus;
-    }
-    
-    // If progress is 0%, status should be pending
-    if (progress === 0) {
-      return 'pending';
-    }
-    
-    // If progress is 100%, status should be completed
-    if (progress === 100) {
-      return 'completed';
-    }
-    
-    // If progress is between 0% and 100%, status should be in_progress
+    // Cancelled remains cancelled
+    if (currentStatus === 'cancelled') return 'cancelled';
+    if (progress >= 100) return 'completed';
+    if (progress <= 0) return 'pending';
     return 'in_progress';
   };
 
@@ -545,6 +550,13 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const updateTaskStep = async (stepId: string, data: Partial<TaskStep>) => {
     try {
+      // Fetch existing to detect status change
+      const { data: before } = await supabase
+        .from('task_steps')
+        .select('id, is_completed, title, task_id')
+        .eq('id', stepId)
+        .single();
+
       const { error } = await supabase
         .from('task_steps')
         .update(data)
@@ -569,7 +581,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         if (allSteps) {
           // Calculate progress and determine new status
           const progress = calculateProgress(allSteps as any);
-          const newStatus = determineStatusFromProgress(progress, 'pending'); // We'll get the current status from the task
+          const newStatus = determineStatusFromProgress(progress, 'pending');
           
           // Get current task status
           const { data: currentTask } = await supabase
@@ -596,6 +608,22 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
+      // Record history if completion status changed
+      const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : (before as any)?.is_completed;
+      if (typeof data.is_completed === 'boolean' && before && (before as any).is_completed !== data.is_completed) {
+        const { data: { user } } = await supabase.auth.getUser();
+        await (supabase as any)
+          .from('task_step_history')
+          .insert({
+            task_step_id: stepId,
+            action_type: 'status_change',
+            old_value: (before as any).is_completed ? 'completed' : 'pending',
+            new_value: afterCompleted ? 'completed' : 'pending',
+            description: afterCompleted ? 'Step completed' : 'Step reopened',
+            created_by: user?.id || null,
+          });
+      }
+
       toast({
         title: 'Success',
         description: 'Step updated successfully'
@@ -612,7 +640,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
-  const assignTaskStep = async (stepId: string, employeeId: string | null) => {
+  const assignTaskStep = async (stepId: string, employeeId: string | null, dueDateIso?: string | null) => {
     try {
       // Get current user to set assigned_by
       const { data: { user } } = await supabase.auth.getUser();
@@ -624,18 +652,58 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .eq('user_id', user.id)
         .single();
 
-      const updateData: any = {
-        assigned_to: employeeId,
-        assigned_at: employeeId ? new Date().toISOString() : null,
-        assigned_by: employeeId ? (currentEmployee as any)?.id : null
-      };
+      if (employeeId) {
+        // delete any existing assignment rows (we only keep latest)
+        await supabase
+          .from('task_steps_assigned')
+          .delete()
+          .eq('task_step_id', stepId);
 
-      const { error } = await supabase
-        .from('task_steps')
-        .update(updateData)
-        .eq('id', stepId);
+        // insert new assignment
+        // fetch organization id via step -> task
+        const { data: stepTask } = await supabase
+          .from('task_steps')
+          .select('task_id')
+          .eq('id', stepId)
+          .single();
+        const { data: taskOrg } = await supabase
+          .from('daily_tasks')
+          .select('organization_id')
+          .eq('id', (stepTask as any)?.task_id)
+          .single();
 
-      if (error) throw error;
+        const { data: inserted, error } = await supabase
+          .from('task_steps_assigned')
+          .insert({
+            organization_id: (taskOrg as any)?.organization_id || null,
+            task_step_id: stepId,
+            employee_id: employeeId,
+            assigned_by: (currentEmployee as any)?.id || null,
+            assigned_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+
+        // Save due date if provided
+        if (dueDateIso) {
+          await supabase
+            .from('task_steps_assigned_duedate')
+            .insert({
+              organization_id: (taskOrg as any)?.organization_id || null,
+              task_steps_assigned_id: (inserted as any).id,
+              due_date: dueDateIso,
+            });
+        }
+      } else {
+        // unassign by deleting assignment rows for this step
+        const { error } = await supabase
+          .from('task_steps_assigned')
+          .delete()
+          .eq('task_step_id', stepId);
+        if (error) throw error;
+      }
+
 
       toast({
         title: 'Success',

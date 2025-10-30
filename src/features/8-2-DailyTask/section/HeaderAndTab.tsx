@@ -24,6 +24,13 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       icon: FileText,
       description: 'Track and manage meeting discussions and action items',
       path: '/tools/meeting-notes'
+    },
+    {
+      id: 'daily-task-report',
+      label: 'Daily Task Report',
+      icon: FileText,
+      description: 'Analyze completed tasks, on-time performance, and delays',
+      path: '/tools/daily-task-report'
     }
   ];
 

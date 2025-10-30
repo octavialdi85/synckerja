@@ -23,12 +23,9 @@ export const StandardLayout = ({ children }: StandardLayoutProps) => {
     isActive: subscriptionStatus?.is_active
   });
   
-  // Show banner if trial is expiring soon or subscription needs renewal
-  // For testing: show banner for trial users with any days remaining
-  const showBanner = !statusLoading && subscriptionStatus && (
-    subscriptionStatus.is_trial || // Show for all trial users
-    (subscriptionStatus.needs_renewal && subscriptionStatus.is_active)
-  );
+  // Show banner only when expiry is within 3 days (trial or paid)
+  const daysLeft = subscriptionStatus?.days_until_expiry ?? Number.POSITIVE_INFINITY;
+  const showBanner = !statusLoading && !!subscriptionStatus && daysLeft <= 3;
   
   console.log('🚨 Show Banner:', showBanner);
 

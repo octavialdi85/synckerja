@@ -7,7 +7,7 @@ import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
-import { ImmediateProtectedRoute } from "@/components/ImmediateProtectedRoute";
+import { HomeAccessGuard } from "@/components/HomeAccessGuard";
 import Index from "./features/1-login/pages/Index";
 import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
@@ -45,13 +45,14 @@ import EmployeePayroll from "./features/2-1-employees/MyInfo/Payroll/pages/Emplo
 import { ReprimandManagementPage } from "./features/2-1-reprimand";
 import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
-// Removed legacy imports - using ImmediateProtectedRoute instead
+// Removed legacy imports - using ProtectedRoute instead
 // import { AccessPermissionsGuard } from "./features/2-9-PageAccess/guards/AccessPermissionsGuard";
 // import { AccessPermissionsRedirector } from "./features/2-9-PageAccess/redirectors/AccessPermissionsRedirector";
 import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
 import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
 import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
+import DailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -83,17 +84,21 @@ const App = () => (
           >
             <SecurityWrapper>
               <Routes>
-              {/* ======= IMMEDIATE PROTECTED ROUTES ======= */}
-              {/* ZERO FLASH CONTENT - IMMEDIATE PROTECTION SYSTEM */}
+              {/* ======= PROTECTED ROUTES ======= */}
+              {/* PROTECTION SYSTEM */}
               <Route path="/" element={
-                <ImmediateProtectedRoute>
-                  <ModernHomePage />
-                </ImmediateProtectedRoute>
+                <ProtectedRoute>
+                  <HomeAccessGuard>
+                    <ModernHomePage />
+                  </HomeAccessGuard>
+                </ProtectedRoute>
               } />
               <Route path="/dashboard" element={
-                <ImmediateProtectedRoute>
-                  <ModernHomePage />
-                </ImmediateProtectedRoute>
+                <ProtectedRoute>
+                  <HomeAccessGuard>
+                    <ModernHomePage />
+                  </HomeAccessGuard>
+                </ProtectedRoute>
               } />
               
               {/* Public Routes - Only accessible when NOT logged in */}
@@ -108,14 +113,10 @@ const App = () => (
                 </PublicRoute>
               } />
               <Route path="/verify-email" element={
-                <PublicRoute>
-                  <VerifyEmail />
-                </PublicRoute>
+                <VerifyEmail />
               } />
               <Route path="/email-verified" element={
-                <PublicRoute>
-                  <EmailVerified />
-                </PublicRoute>
+                <EmailVerified />
               } />
               
               {/* Semi-Protected Routes - Have their own authentication logic */}
@@ -165,6 +166,11 @@ const App = () => (
                   <MeetingNotesPage />
                 </UniversalProtectedRoute>
               } />
+              <Route path="/tools/daily-task-report" element={
+                <UniversalProtectedRoute>
+                  <DailyTaskReportPage />
+                </UniversalProtectedRoute>
+              } />
               
               {/* Digital Marketing Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
               <Route path="/digital-marketing/social-media" element={
@@ -210,21 +216,21 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
-              {/* Employee Management Routes - ZERO FLASH PROTECTION */}
+              {/* Employee Management Routes - PROTECTED */}
               <Route path="/employees" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <EmployeePage />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/employees/add" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <AddEmployeePage />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/employees/reprimand" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <ReprimandManagementPage />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
               {/* ======= ACCESS PERMISSIONS - BASIC PROTECTED (Database-Only Control) ======= */}
@@ -263,81 +269,81 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
-              {/* Admin Routes - IMMEDIATE PROTECTION */}
+              {/* Admin Routes - PROTECTED */}
               <Route path="/admin" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="Admin Panel" 
                     description="Panel administrasi sistem akan segera tersedia"
                     icon={<Settings className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/admin/settings" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="Admin Settings" 
                     description="Pengaturan administrasi sistem akan segera tersedia"
                     icon={<Settings className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/admin/users" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="Admin Users" 
                     description="Manajemen pengguna admin akan segera tersedia"
                     icon={<Users className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
-              {/* User Management Routes - IMMEDIATE PROTECTION */}
+              {/* User Management Routes - PROTECTED */}
               <Route path="/users/permissions" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="User Permissions" 
                     description="Manajemen izin pengguna akan segera tersedia"
                     icon={<UserCheck className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/users/roles" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="User Roles Management" 
                     description="Manajemen peran pengguna akan segera tersedia"
                     icon={<Users className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
-              {/* Recruitment Routes - IMMEDIATE PROTECTION */}
+              {/* Recruitment Routes - PROTECTED */}
               <Route path="/recruitment" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="Recruitment" 
                     description="Sistem rekrutmen akan segera tersedia"
                     icon={<Briefcase className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               <Route path="/recruitment/interviewees" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage 
                     title="Interviewees" 
                     description="Manajemen kandidat interview akan segera tersedia"
                     icon={<Users className="h-8 w-8 text-gray-500" />}
                   />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
               
-              {/* Transfer Ownership Route - IMMEDIATE PROTECTION */}
+              {/* Transfer Ownership Route - PROTECTED */}
               <Route path="/transfer-ownership" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <TransferOwnership />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
               {/* Employee Profile Routes */}
@@ -400,9 +406,9 @@ const App = () => (
               {/* ======= SECURITY: Access Permissions Catch-All ======= */}
               {/* Catch any unregistered /access-permissions/* paths - redirect to main page-access */}
               <Route path="/access-permissions/*" element={
-                <ImmediateProtectedRoute>
+                <ProtectedRoute>
                   <PlaceholderPage />
-                </ImmediateProtectedRoute>
+                </ProtectedRoute>
               } />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

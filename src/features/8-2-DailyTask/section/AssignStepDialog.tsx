@@ -25,7 +25,7 @@ interface AssignStepDialogProps {
       email?: string;
     };
   };
-  onAssign: (employeeId: string) => void;
+  onAssign: (employeeId: string, dueDateIso?: string | null) => void;
   onUnassign: () => void;
   onClose: () => void;
 }
@@ -35,6 +35,9 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [dueDate, setDueDate] = useState<string>('');
+  const [savingDue, setSavingDue] = useState<boolean>(false);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
 
@@ -43,6 +46,46 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
       fetchEmployees();
     }
   }, [organizationId]);
+
+  // Load current assignment and due date (if any)
+  useEffect(() => {
+    const loadAssignmentAndDue = async () => {
+      try {
+        if (!organizationId || !step?.id) return;
+        // latest assignment for this step
+        const { data: assigns } = await supabase
+          .from('task_steps_assigned')
+          .select('id, assigned_at')
+          .eq('task_step_id', step.id)
+          .order('assigned_at', { ascending: false })
+          .limit(1);
+        const assign = (assigns || [])[0];
+        if (assign) {
+          setActiveAssignmentId(assign.id);
+          const { data: dueRows } = await supabase
+            .from('task_steps_assigned_duedate')
+            .select('due_date')
+            .eq('task_steps_assigned_id', assign.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          const due = (dueRows || [])[0]?.due_date as string | undefined;
+          if (due) {
+            const d = new Date(due);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            setDueDate(`${yyyy}-${mm}-${dd}`);
+          }
+        } else {
+          setActiveAssignmentId(null);
+        }
+      } catch (e) {
+        console.warn('Failed to load assignment/due date', e);
+      }
+    };
+    loadAssignmentAndDue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step?.id, organizationId]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -92,8 +135,12 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
     }
   };
 
+  const resolveDueDateIso = (): string | null => {
+    return dueDate ? new Date(dueDate).toISOString() : null;
+  };
+
   const handleAssign = (employeeId: string) => {
-    onAssign(employeeId);
+    onAssign(employeeId, resolveDueDateIso());
   };
 
   const handleUnassign = () => {
@@ -150,6 +197,42 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
+          </div>
+
+          {/* Due Date (single field, autosave) */}
+          <div>
+            <label className="text-xs text-gray-500">Due date</label>
+            <Input
+              type="date"
+              className="mt-1 h-9"
+              value={dueDate}
+              onChange={async (e) => {
+                const val = e.target.value;
+                setDueDate(val);
+                // autosave only if an active assignment exists
+                if (!activeAssignmentId) return;
+                try {
+                  setSavingDue(true);
+                  // store as append-only (latest wins)
+                  const iso = val ? new Date(val).toISOString() : null;
+                  if (iso) {
+                    await supabase
+                      .from('task_steps_assigned_duedate')
+                      .insert({
+                        organization_id: organizationId,
+                        task_steps_assigned_id: activeAssignmentId,
+                        due_date: iso,
+                      });
+                  }
+                } catch (err) {
+                  console.error('Autosave due date failed', err);
+                  toast({ title: 'Error', description: 'Failed to save due date', variant: 'destructive' });
+                } finally {
+                  setSavingDue(false);
+                }
+              }}
+            />
+            {savingDue && <div className="text-[10px] text-gray-400 mt-1">Saving…</div>}
           </div>
 
           {/* Employee List */}

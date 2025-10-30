@@ -145,18 +145,20 @@ export const TaskList = () => {
   });
 
   const toggleTaskExpansion = (taskId: string) => {
-    const newExpanded = new Set(expandedTasks);
-    if (newExpanded.has(taskId)) {
-      newExpanded.delete(taskId);
+    const isOpen = expandedTasks.has(taskId);
+    if (isOpen) {
+      setExpandedTasks(new Set());
     } else {
-      newExpanded.add(taskId);
+      setExpandedTasks(new Set([taskId]));
     }
-    setExpandedTasks(newExpanded);
   };
 
-  const handleStatusToggle = async (taskId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
-    await updateTask(taskId, { status: newStatus });
+  const handleStatusToggle = async (task: Task) => {
+    const isFullComplete = (task.steps?.length || 0) > 0 && task.progress_percentage === 100;
+    const newStatus = isFullComplete ? (task.status === 'completed' ? 'pending' : 'completed') : 'pending';
+    if (newStatus !== task.status) {
+      await updateTask(task.id, { status: newStatus });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -168,7 +170,7 @@ export const TaskList = () => {
     };
     
     return (
-      <Badge className={`${variants[status] || ''} px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap`}>
+      <Badge className={`${variants[status] || ''} px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap hover:bg-inherit hover:text-inherit hover:opacity-100`}>
         {status.replace('_', ' ').toUpperCase()}
       </Badge>
     );
@@ -183,7 +185,7 @@ export const TaskList = () => {
     };
     
     return (
-      <Badge className={`${variants[priority] || ''} px-2 py-1 text-xs font-medium rounded-md`}>
+      <Badge className={`${variants[priority] || ''} px-2 py-1 text-xs font-medium rounded-md hover:bg-inherit hover:text-inherit hover:opacity-100`}>
         <Flag className="w-3 h-3 mr-1" />
         {priority.toUpperCase()}
       </Badge>
@@ -347,16 +349,17 @@ export const TaskList = () => {
 
                 {/* Checkbox */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
-                <button
-                  onClick={() => handleStatusToggle(task.id, task.status)}
-                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {task.status === 'completed' ? (
-                    <CheckSquare className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <Square className="w-5 h-5" />
-                  )}
-                </button>
+                          <button
+                            onClick={() => handleStatusToggle(task)}
+                            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                            title={task.progress_percentage === 100 ? 'Mark complete / reopen' : 'Complete all steps to mark task complete'}
+                          >
+                            {task.progress_percentage === 100 ? (
+                              <CheckSquare className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
+                          </button>
                         </TableCell>
 
                         {/* Task Title */}
@@ -365,7 +368,7 @@ export const TaskList = () => {
                             <TooltipTrigger asChild>
                               <div 
                                 className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
-                                  task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
+                                  task.progress_percentage === 100 ? 'line-through text-gray-500' : 'text-gray-900'
                                 }`}
                                 onClick={() => toggleTaskExpansion(task.id)}
                               >
@@ -481,7 +484,7 @@ export const TaskList = () => {
 
                         {/* Finish Date */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {task.finish_date ? (
+                          {task.finish_date && task.progress_percentage === 100 ? (
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-green-600" />
@@ -501,7 +504,7 @@ export const TaskList = () => {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                className="priority-dropdown-trigger h-auto p-1 hover:bg-gray-100 rounded-md transition-colors"
+                                className="priority-dropdown-trigger h-auto p-1 hover:bg-gray-50 rounded-md transition-colors hover:text-inherit"
                               >
                                 {getPriorityBadge(task.priority)}
                               </Button>

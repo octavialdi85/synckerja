@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +17,13 @@ interface CreateOrganizationModalProps {
 }
 
 const CreateOrganizationModal = ({ open, onOpenChange, onSuccess }: CreateOrganizationModalProps) => {
+  const navigate = useNavigate();
+
   const handleSuccess = () => {
     onOpenChange(false);
     onSuccess?.();
+    // Redirect to plan selection to ensure subscription record is created
+    navigate('/create-plan');
   };
 
   return (

@@ -85,7 +85,7 @@ export const useUserData = (): UserData => {
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
-          .single(),
+          .maybeSingle(),
         supabase.rpc('get_user_role_in_active_org'),
         // Get photo from user_profile_details and employees tables
         Promise.all([

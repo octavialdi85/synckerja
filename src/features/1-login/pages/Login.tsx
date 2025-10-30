@@ -116,15 +116,34 @@ const Login = () => {
         // Clear verification flow flag
         sessionStorage.removeItem('verificationFlow');
 
-        // Show success toast
-        toast({
-          title: "Login berhasil",
-          description: "Selamat datang kembali!"
-        });
+        // Check if user is coming from email verification (new user without profile)
+        const emailJustVerified = sessionStorage.getItem('emailJustVerified');
+        
+        // Check if user has a profile (existing users have profiles)
+        const hasProfile = profile !== null;
 
-        // Navigate directly to home page after successful login
-        console.log('Login: Success, redirecting to home page...');
-        navigate("/", { replace: true });
+        if (emailJustVerified === 'true' || !hasProfile) {
+          // New user: redirect to create organization
+          console.log('Login: New user detected, redirecting to create-organization...');
+          sessionStorage.removeItem('emailJustVerified');
+          
+          toast({
+            title: "Login berhasil!",
+            description: "Silakan buat organisasi Anda terlebih dahulu."
+          });
+          
+          navigate("/create-organization", { replace: true });
+        } else {
+          // Existing user: show welcome toast and go to home
+          toast({
+            title: "Login berhasil",
+            description: "Selamat datang kembali!"
+          });
+          
+          // Navigate directly to home page after successful login
+          console.log('Login: Success, redirecting to home page...');
+          navigate("/", { replace: true });
+        }
       }
     } catch (err) {
       console.error("Login: Unexpected error:", err);

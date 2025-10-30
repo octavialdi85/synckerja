@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/features/ui/card";
@@ -6,6 +5,7 @@ import { Button } from "@/features/ui/button";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Mail, RefreshCw, ExternalLink } from "lucide-react";
+import { AuthTestimonialsPanel } from "@/features/1-login/AuthTestimonialsPanel";
 
 const VerifyEmail = () => {
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -172,14 +172,7 @@ const VerifyEmail = () => {
             .maybeSingle();
           
           if (verificationToken && (verificationToken as any).email_verified) {
-            console.log('Email already verified, checking organization status...');
-            
-            // Check if user has organization
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('active_organization_id')
-              .eq('user_id', session.user.id)
-              .single();
+            console.log('Email already verified, keeping user on verify-email page to read instructions');
             
             // Clear registration flags
             sessionStorage.removeItem('registrationFlow');
@@ -189,34 +182,13 @@ const VerifyEmail = () => {
             sessionStorage.removeItem('emailError');
             localStorage.removeItem('pendingEmailVerification');
             
-            // Force refresh user data to update email verification status
+            // Set flag to indicate email has been verified
+            sessionStorage.setItem('emailJustVerified', 'true');
             sessionStorage.setItem('forceRefreshUserData', 'true');
             sessionStorage.setItem('emailVerified', 'true');
             
-            if (profile && (profile as any).active_organization_id) {
-              // User has organization, redirect to welcome page
-              console.log('User has organization, redirecting to welcome page');
-              toast({
-                title: "Email sudah diverifikasi!",
-                description: "Selamat datang! Mengarahkan ke halaman utama.",
-              });
-              
-              setTimeout(() => {
-                navigate("/employee-welcome", { replace: true });
-              }, 100);
-            } else {
-              // User doesn't have organization, redirect to create organization
-              console.log('User has no organization, redirecting to create-organization');
-              toast({
-                title: "Email sudah diverifikasi!",
-                description: "Selamat datang! Silakan lanjutkan setup organisasi Anda.",
-              });
-              
-              setTimeout(() => {
-                navigate("/create-organization", { replace: true });
-              }, 100);
-            }
-            return;
+            // DON'T redirect here - let the user click "Back to Login" button
+            // The login page will handle the redirect to create-organization based on emailJustVerified flag
           }
         }
       } catch (error) {
@@ -235,113 +207,128 @@ const VerifyEmail = () => {
   // Show loading while checking access
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <div className="min-h-screen flex">
+        {/* Left Panel - Testimonials */}
+        <div className="hidden lg:flex lg:flex-1">
+          <AuthTestimonialsPanel />
+        </div>
+
+        {/* Right Panel - Loading */}
+        <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-md">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading...</p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-      <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
-        <CardContent className="p-6 flex flex-col items-center">
-          {/* Mail Icon */}
-          <Mail size={48} className="mb-4 text-blue-500" />
-          
-          {/* Title */}
-          <h2 className="text-xl font-bold text-center mb-3 text-gray-900">
-            Periksa Email Anda
-          </h2>
-          
-          {/* Description */}
-          <p className="text-center text-gray-600 text-sm mb-4 leading-relaxed">
-            Kami telah mengirim email verifikasi dengan link khusus untuk mengaktifkan akun Anda. 
-            Klik link di email tersebut untuk melanjutkan.
-          </p>
+    <div className="min-h-screen flex">
+      {/* Left Panel - Testimonials */}
+      <div className="hidden lg:flex lg:flex-1">
+        <AuthTestimonialsPanel />
+      </div>
 
-          {/* Email information box - only show if we have email */}
-          {userEmail && (
-            <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-blue-700">
-                <span className="font-medium text-blue-600">Email dikirim ke:</span>{" "}
-                <span className="text-blue-800">{userEmail}</span>
-              </p>
-            </div>
-          )}
-
-          {/* Error Display */}
-          {emailError && (
-            <div className="w-full bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-red-700">{emailError}</p>
-            </div>
-          )}
-
-          {/* Steps info */}
-          <div className="w-full bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-            <div className="text-xs text-green-700">
-              <p className="font-medium mb-2 text-green-800">Langkah verifikasi:</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Buka email dari ProfitLoop</li>
-                <li>Klik tombol "Verifikasi Email Saya"</li>
-                <li>Anda akan otomatis diarahkan ke halaman konfirmasi</li>
-                <li>Kemudian login dengan akun Anda</li>
-              </ol>
-            </div>
+      {/* Right Panel - Verification Instructions */}
+      <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          {/* Header */}
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">Verifikasi Email</h1>
+            <p className="text-muted-foreground">Periksa email Anda untuk melanjutkan</p>
           </div>
-          
-          {/* Action Buttons */}
-          <div className="w-full space-y-2 mb-4">
-            {/* Open Email Button */}
-            {userEmail && (
-              <Button
-                className="w-full rounded-lg font-medium bg-green-600 hover:bg-green-700 text-white"
-                onClick={openEmailProvider}
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Buka Email
-              </Button>
-            )}
-            
-            {/* Resend Email Button */}
-            <Button
-              variant="outline"
-              className="w-full rounded-lg font-medium border-gray-300 text-gray-700 hover:bg-gray-50"
-              onClick={resendVerificationEmail}
-              disabled={resendingEmail}
-            >
-              {resendingEmail ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Mengirim...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" /> Kirim Ulang Email
-                </>
+
+          <Card className="border-0 shadow-none bg-transparent">
+            <CardContent className="p-0 flex flex-col items-center">
+              {/* Mail Icon */}
+              <Mail size={64} className="mb-6 text-orange-500" />
+
+              {/* Email information box - only show if we have email */}
+              {userEmail && (
+                <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium text-blue-600">Email dikirim ke:</span>{" "}
+                    <span className="text-blue-800">{userEmail}</span>
+                  </p>
+                </div>
               )}
-            </Button>
-          </div>
 
-          {/* Back to Login Button */}
-          <Button
-            variant="ghost"
-            className="w-full rounded-lg font-medium text-gray-600 hover:bg-gray-50"
-            onClick={() => {
-              // Clear registration flow flags
-              sessionStorage.removeItem('registrationFlow');
-              sessionStorage.removeItem('fromRegistration');
-              sessionStorage.removeItem('userEmail');
-              sessionStorage.removeItem('userName');
-              sessionStorage.removeItem('emailError');
-              navigate("/login");
-            }}
-          >
-            Kembali ke Login
-          </Button>
-        </CardContent>
-      </Card>
+              {/* Error Display */}
+              {emailError && (
+                <div className="w-full bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-red-700">{emailError}</p>
+                </div>
+              )}
+
+              {/* Steps info */}
+              <div className="w-full bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
+                <div className="text-sm text-green-700">
+                  <p className="font-medium mb-2 text-green-800">Langkah verifikasi:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm">
+                    <li>Buka email dari ProfitLoop</li>
+                    <li>Klik tombol "Verifikasi Email Saya"</li>
+                    <li>Anda akan otomatis diarahkan ke halaman konfirmasi</li>
+                    <li>Kemudian login dengan akun Anda</li>
+                  </ol>
+                </div>
+              </div>
+          
+              {/* Action Buttons */}
+              <div className="w-full space-y-3">
+                {/* Open Email Button */}
+                {userEmail && (
+                  <Button
+                    className="w-full h-12 font-medium bg-orange-500 hover:bg-orange-600 text-white"
+                    onClick={openEmailProvider}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Buka Email
+                  </Button>
+                )}
+                
+                {/* Resend Email Button */}
+                <Button
+                  variant="outline"
+                  className="w-full h-12 font-medium"
+                  onClick={resendVerificationEmail}
+                  disabled={resendingEmail}
+                >
+                  {resendingEmail ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Mengirim...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" /> Kirim Ulang Email
+                    </>
+                  )}
+                </Button>
+
+                {/* Back to Login Button */}
+                <Button
+                  variant="ghost"
+                  className="w-full h-12 font-medium"
+                  onClick={() => {
+                    // Clear registration flow flags
+                    sessionStorage.removeItem('registrationFlow');
+                    sessionStorage.removeItem('fromRegistration');
+                    sessionStorage.removeItem('userEmail');
+                    sessionStorage.removeItem('userName');
+                    sessionStorage.removeItem('emailError');
+                    navigate("/login");
+                  }}
+                >
+                  Kembali ke Login
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

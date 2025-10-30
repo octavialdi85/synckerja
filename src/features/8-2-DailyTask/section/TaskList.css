@@ -113,7 +113,12 @@
 }
 
 .task-list-table td:nth-child(7) .priority-dropdown-trigger:hover {
-  background-color: #f3f4f6;
+  background-color: transparent; /* avoid dark overlay */
+}
+.task-list-table td:nth-child(7) .priority-dropdown-trigger:focus,
+.task-list-table td:nth-child(7) .priority-dropdown-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* Ensure PIC and Due Date columns are left-aligned */
