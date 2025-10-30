@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, FilterX } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
 import {
@@ -41,7 +41,7 @@ export const TaskFilters = () => {
       <div className="relative flex-1 max-w-md">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <Input
-          placeholder="Search tasks..."
+          placeholder="Search tasks and steps..."
           value={filters.search}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -82,10 +82,10 @@ export const TaskFilters = () => {
           variant="ghost"
           size="sm"
           onClick={clearFilters}
-          className="text-gray-500 hover:text-gray-700"
+          className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
+          title="Clear Filters"
         >
-          <Filter className="w-4 h-4 mr-1" />
-          Clear
+          <FilterX className="w-4 h-4" />
         </Button>
       )}
     </div>

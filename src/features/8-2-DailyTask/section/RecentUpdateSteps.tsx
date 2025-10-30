@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckSquare, Clock, Edit, Plus, RotateCcw, Filter, Calendar, X } from 'lucide-react';
+import { CheckSquare, Clock, Edit, Plus, RotateCcw, Filter, Calendar, X, FilterX } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
@@ -8,8 +8,9 @@ import { Input } from '@/features/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 
 const RecentUpdateSteps = () => {
-  const { filteredRecentStepUpdates, recentStepFilters, setRecentStepFilters, isLoading } = useDailyTask();
+  const { filteredRecentStepUpdates, recentStepFilters, setRecentStepFilters, isLoading, navigateToTask } = useDailyTask();
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [clickedUpdateId, setClickedUpdateId] = useState<string | null>(null);
 
   const getActionIcon = (action: string, isCompleted: boolean) => {
     switch (action) {
@@ -112,6 +113,19 @@ const RecentUpdateSteps = () => {
     });
   };
 
+  const handleStepUpdateClick = (update: any) => {
+    // Set visual feedback
+    setClickedUpdateId(update.id);
+    
+    // Navigate to the task and expand it, including specific step if available
+    navigateToTask(update.task_id, update.step_id);
+    
+    // Clear visual feedback after 2 seconds
+    setTimeout(() => {
+      setClickedUpdateId(null);
+    }, 2000);
+  };
+
   if (filteredRecentStepUpdates.length === 0 && !isLoading) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -120,15 +134,6 @@ const RecentUpdateSteps = () => {
             <Clock className="w-4 h-4" />
             Recent Step Updates
           </h4>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700"
-          >
-            <X className="w-3 h-3 mr-1" />
-            Clear Filters
-          </Button>
         </div>
         <div className="text-center text-gray-500 text-sm">No updates found for selected filters</div>
       </div>
@@ -142,15 +147,6 @@ const RecentUpdateSteps = () => {
           <Clock className="w-4 h-4" />
           Recent Step Updates
         </h4>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={clearFilters}
-          className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700"
-        >
-          <X className="w-3 h-3 mr-1" />
-          Clear Filters
-        </Button>
       </div>
 
       {/* Filter Controls */}
@@ -170,22 +166,35 @@ const RecentUpdateSteps = () => {
           </SelectContent>
         </Select>
 
-        {/* Action Type Filter */}
-        <Select 
-          value={recentStepFilters.actionType} 
-          onValueChange={(value) => setRecentStepFilters(prev => ({ ...prev, actionType: value as any }))}
-        >
-          <SelectTrigger className="h-8 text-xs w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Actions</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="updated">Updated</SelectItem>
-            <SelectItem value="created">Created</SelectItem>
-            <SelectItem value="reopened">Reopened</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Action Type Filter with Clear Button */}
+        <div className="flex items-center gap-1">
+          <Select 
+            value={recentStepFilters.actionType} 
+            onValueChange={(value) => setRecentStepFilters(prev => ({ ...prev, actionType: value as any }))}
+          >
+            <SelectTrigger className="h-8 text-xs w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Actions</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="updated">Updated</SelectItem>
+              <SelectItem value="created">Created</SelectItem>
+              <SelectItem value="reopened">Reopened</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Clear Filters Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
+            title="Clear Filters"
+          >
+            <FilterX className="w-4 h-4" />
+          </Button>
+        </div>
 
         {/* Custom Date Range Picker */}
         {recentStepFilters.dateRange === 'custom' && (
@@ -243,10 +252,17 @@ const RecentUpdateSteps = () => {
       </div>
       
       <div className="space-y-3 max-h-64 overflow-y-auto seamless-scroll">
-        {filteredRecentStepUpdates.map((update) => (
+        {filteredRecentStepUpdates.map((update) => {
+          const isClicked = clickedUpdateId === update.id;
+          return (
           <div
             key={update.id}
-            className="flex items-start gap-3 p-2 rounded-md hover:bg-gray-50 transition-colors"
+            className={`flex items-start gap-3 p-2 rounded-md transition-all duration-300 cursor-pointer ${
+              isClicked 
+                ? 'bg-blue-100 border-l-4 border-l-blue-500 shadow-sm' 
+                : 'hover:bg-gray-50'
+            }`}
+            onClick={() => handleStepUpdateClick(update)}
           >
             <div className="flex-shrink-0 mt-0.5">
               {getActionIcon(update.action, update.is_completed)}
@@ -274,7 +290,8 @@ const RecentUpdateSteps = () => {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   CheckSquare, 
   Square, 
@@ -14,7 +14,9 @@ import {
   ChevronRight,
   User,
   History,
-  Clock3
+  Clock3,
+  Paperclip,
+  Target
 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -74,20 +76,65 @@ import { CSS } from '@dnd-kit/utilities';
 
 export const TaskList = () => {
   const context = useDailyTask();
-  const { tasks, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps } = context;
+  const { tasks, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps, expandedTasks, setExpandedTasks, highlightedTask } = context;
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
   const [deadlineDialog, setDeadlineDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [historyDialog, setHistoryDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [addStepDialog, setAddStepDialog] = useState<{ isOpen: boolean; taskId: string | null; taskTitle: string }>({ isOpen: false, taskId: null, taskTitle: '' });
+  const taskRefs = useRef<{ [key: string]: HTMLTableRowElement | null }>({});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to highlighted task
+  useEffect(() => {
+    if (highlightedTask && taskRefs.current[highlightedTask] && scrollContainerRef.current) {
+      const taskElement = taskRefs.current[highlightedTask];
+      const scrollContainer = scrollContainerRef.current;
+      
+      if (taskElement) {
+        // Add a small delay to ensure the DOM has updated
+        setTimeout(() => {
+          const taskRect = taskElement.getBoundingClientRect();
+          const containerRect = scrollContainer.getBoundingClientRect();
+          
+          // Check if task is visible in the container
+          const isVisible = taskRect.top >= containerRect.top && 
+                           taskRect.bottom <= containerRect.bottom;
+          
+          if (!isVisible) {
+            // Calculate scroll position to center the task
+            const scrollTop = scrollContainer.scrollTop + 
+                            (taskRect.top - containerRect.top) - 
+                            (containerRect.height / 2) + 
+                            (taskRect.height / 2);
+            
+            scrollContainer.scrollTo({
+              top: Math.max(0, scrollTop),
+              behavior: 'smooth'
+            });
+          }
+        }, 150);
+      }
+    }
+  }, [highlightedTask]);
 
   // Filter tasks based on filters
   const filteredTasks = tasks.filter(task => {
-    if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
+    // Search filter - now includes both task title and step titles
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
+      const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
+      const stepMatch = task.steps?.some(step => 
+        step.title?.toLowerCase().includes(searchTerm)
+      ) || false;
+      
+      if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
+        return false;
+      }
     }
+    
     if (filters.status && task.status !== filters.status) {
       return false;
     }
@@ -166,6 +213,10 @@ export const TaskList = () => {
     setDatePickerOpen(null);
   };
 
+  const handlePriorityChange = async (taskId: string, newPriority: string) => {
+    await updateTask(taskId, { priority: newPriority });
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -214,7 +265,7 @@ export const TaskList = () => {
     <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <TooltipProvider>
         <div className="h-full flex flex-col">
-        <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 seamless-scroll overflow-auto">
           <table className="w-full caption-bottom text-sm task-list-table">
             <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
               <TableRow className="hover:bg-transparent">
@@ -265,11 +316,19 @@ export const TaskList = () => {
                 filteredTasks.map((task) => {
         const isExpanded = expandedTasks.has(task.id);
         const isOverdueTask = isOverdue(task.due_date, task.status);
+        const isHighlighted = highlightedTask === task.id;
         
         return (
                     <React.Fragment key={task.id}>
                       {/* Main Task Row */}
-                      <TableRow className="w-full hover:bg-gray-50">
+                      <TableRow 
+                        ref={(el) => { taskRefs.current[task.id] = el; }}
+                        className={`w-full hover:bg-gray-50 transition-all duration-300 ${
+                          isHighlighted 
+                            ? 'bg-blue-50 border-l-4 border-l-blue-500 shadow-md' 
+                            : ''
+                        }`}
+                      >
                         {/* Expand/Collapse Button */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                           <Button
@@ -302,45 +361,35 @@ export const TaskList = () => {
 
                         {/* Task Title */}
                         <TableCell className="px-2 py-3" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
-                          {task.title.length > 60 ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div 
-                                  className={`text-sm font-medium cursor-pointer hover:text-blue-600 ${
-                      task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
-                                  }`}
-                                  onClick={() => toggleTaskExpansion(task.id)}
-                                  title="Click to expand"
-                                >
-                                  {task.title.substring(0, 60)}...
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent 
-                                side="bottom" 
-                                align="start"
-                                className="max-w-md p-4 bg-gray-900 text-white shadow-lg border-gray-700"
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div 
+                                className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
+                                  task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
+                                }`}
+                                onClick={() => toggleTaskExpansion(task.id)}
                               >
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {task.title}
-                                </p>
-                                {task.description && (
-                                  <p className="text-xs text-gray-300 mt-2 border-t border-gray-700 pt-2">
-                      {task.description}
-                    </p>
-                  )}
-                              </TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <div 
-                              className={`text-sm font-medium cursor-pointer hover:text-blue-600 ${
-                                task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
-                              }`}
-                              onClick={() => toggleTaskExpansion(task.id)}
-                              title="Click to expand"
+                                {isHighlighted && (
+                                  <Target className="w-4 h-4 text-blue-600 animate-pulse" />
+                                )}
+                                {task.title}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent 
+                              side="bottom" 
+                              align="start"
+                              className="max-w-md p-4 bg-gray-900 text-white shadow-lg border-gray-700"
                             >
-                              {task.title}
-                      </div>
-                    )}
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                {task.title}
+                              </p>
+                              {task.description && (
+                                <p className="text-xs text-gray-300 mt-2 border-t border-gray-700 pt-2">
+                                  {task.description}
+                                </p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
                           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                     {task.steps.length > 0 && (
                       <div className="flex items-center gap-1">
@@ -448,7 +497,46 @@ export const TaskList = () => {
 
                         {/* Priority */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '90px', minWidth: '90px', maxWidth: '90px' }}>
-                          {getPriorityBadge(task.priority)}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                className="priority-dropdown-trigger h-auto p-1 hover:bg-gray-100 rounded-md transition-colors"
+                              >
+                                {getPriorityBadge(task.priority)}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center" className="w-32">
+                              <DropdownMenuItem 
+                                onClick={() => handlePriorityChange(task.id, 'low')}
+                                className="flex items-center gap-2"
+                              >
+                                <Flag className="w-3 h-3 text-green-600" />
+                                <span className="text-green-700">Low</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handlePriorityChange(task.id, 'medium')}
+                                className="flex items-center gap-2"
+                              >
+                                <Flag className="w-3 h-3 text-blue-600" />
+                                <span className="text-blue-700">Medium</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handlePriorityChange(task.id, 'high')}
+                                className="flex items-center gap-2"
+                              >
+                                <Flag className="w-3 h-3 text-orange-600" />
+                                <span className="text-orange-700">High</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handlePriorityChange(task.id, 'urgent')}
+                                className="flex items-center gap-2"
+                              >
+                                <Flag className="w-3 h-3 text-red-600" />
+                                <span className="text-red-700">Urgent</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
 
                         {/* Status */}
@@ -528,7 +616,11 @@ export const TaskList = () => {
                       {/* Expanded Content Row */}
             {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={10} className="w-full px-4 py-4 bg-blue-50 border-t border-blue-200">
+                          <TableCell colSpan={10} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
+                            isHighlighted 
+                              ? 'bg-blue-100 border-l-4 border-l-blue-500' 
+                              : 'bg-blue-50'
+                          }`}>
                 {task.description && (
                   <div className="mb-4">
                     <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>

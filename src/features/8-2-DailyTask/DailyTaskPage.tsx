@@ -9,14 +9,33 @@ import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
 
+const DailyTaskPage = () => {
+  return (
+    <DailyTaskProvider>
+      <DailyTaskContent />
+    </DailyTaskProvider>
+  );
+};
+
 const DailyTaskContent = () => {
   const { tasks, filters } = useDailyTask();
 
   // Filter tasks based on filters
   const filteredTasks = tasks.filter(task => {
-    if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
+    // Search filter - now includes both task title, description and step titles
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
+      const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
+      const stepMatch = task.steps?.some(step => 
+        step.title?.toLowerCase().includes(searchTerm)
+      ) || false;
+      
+      if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
+        return false;
+      }
     }
+    
     if (filters.status && task.status !== filters.status) {
       return false;
     }
@@ -112,14 +131,6 @@ const DailyTaskContent = () => {
         </div>
       </div>
     </StandardLayout>
-  );
-};
-
-const DailyTaskPage = () => {
-  return (
-    <DailyTaskProvider>
-      <DailyTaskContent />
-    </DailyTaskProvider>
   );
 };
 

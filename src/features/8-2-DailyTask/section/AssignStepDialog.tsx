@@ -49,7 +49,7 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
       setFilteredEmployees(employees);
     } else {
       const filtered = employees.filter(emp =>
-        emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.email?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredEmployees(filtered);

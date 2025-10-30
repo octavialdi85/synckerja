@@ -234,9 +234,9 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
 
     if (searchTerm !== '') {
       filtered = filtered.filter(blocker => 
-        blocker.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        blocker.task_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        blocker.step_title.toLowerCase().includes(searchTerm.toLowerCase())
+        blocker.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        blocker.task_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        blocker.step_title?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 

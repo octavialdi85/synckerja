@@ -7,8 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface PersonalInfoFormProps {
   employee: any;
   isEditMode: boolean;
-  onSave?: (formData: any) => Promise<void>;
-  onDataChange?: (formData: any) => void;
+  onSave?: (formData: any) => Promise<boolean>;
   isLoading?: boolean;
 }
 
@@ -28,7 +27,7 @@ const MARITAL_STATUS_OPTIONS = [
   { value: 'widowed', label: 'Widowed' }
 ];
 
-export const PersonalInfoForm = ({ employee, isEditMode, onSave, onDataChange, isLoading = false }: PersonalInfoFormProps) => {
+export const PersonalInfoForm = ({ employee, isEditMode, onSave, isLoading = false }: PersonalInfoFormProps) => {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -60,12 +59,7 @@ export const PersonalInfoForm = ({ employee, isEditMode, onSave, onDataChange, i
   const handleInputChange = useCallback((field: string, value: string) => {
     const newFormData = { ...formData, [field]: value };
     setFormData(newFormData);
-    
-    // Trigger auto-save if in edit mode
-    if (isEditMode && onDataChange) {
-      onDataChange(newFormData);
-    }
-  }, [formData, isEditMode, onDataChange]);
+  }, [formData]);
 
   // Expose form data to parent component for unified saving
   useEffect(() => {

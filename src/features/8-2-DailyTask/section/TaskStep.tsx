@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
+import { Badge } from '@/features/ui/badge';
 import { useDailyTask } from '../DailyTaskContext';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,6 +16,14 @@ interface TaskFile {
   filename: string;
   file_url: string;
   file_size: number;
+  created_at: string;
+}
+
+interface TaskLink {
+  id: string;
+  task_steps_id: string;
+  title: string;
+  url: string;
   created_at: string;
 }
 
@@ -32,6 +41,7 @@ interface TaskStepProps {
     status?: string;
     priority?: string;
     files?: TaskFile[];
+    links?: TaskLink[];
     // Relations
     assigned_employee?: {
       id: string;
@@ -57,6 +67,11 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if step has notifications (files or links)
+  const fileCount = step.files?.length || 0;
+  const linkCount = step.links?.length || 0;
+  const historyCount = step.history?.length || 0; // Has updates
 
   // Use sortable hook for drag and drop
   const {
@@ -164,6 +179,7 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
       <div
         ref={setNodeRef}
         style={style}
+        data-step-id={step.id}
         className={`flex items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
           isDragging ? 'shadow-lg bg-blue-100' : ''
         }`}
@@ -232,7 +248,7 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
               variant="ghost"
               size="sm"
               onClick={() => setShowFiles(!showFiles)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 ${
+              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
                 step.files && step.files.length > 0 
                   ? 'text-blue-500' 
                   : 'text-gray-400'
@@ -240,38 +256,60 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
               title={`Toggle files ${step.files && step.files.length > 0 ? `(${step.files.length})` : ''}`}
             >
               <Paperclip className="w-3 h-3" />
+              {fileCount > 0 && (
+                <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {fileCount}
+                </div>
+              )}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowLinks(!showLinks)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 ${
-                showLinks ? 'text-blue-500' : 'text-gray-400'
+              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
+                linkCount > 0 ? 'text-green-500' : 'text-gray-400'
               }`}
               title="Toggle links"
             >
               <Link className="w-3 h-3" />
+              {linkCount > 0 && (
+                <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {linkCount}
+                </div>
+              )}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowAssignDialog(true)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 ${
+              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
                 step.assigned_to ? 'text-green-500' : 'text-gray-400'
               }`}
               title={step.assigned_to ? `Assigned to ${step.assigned_employee?.full_name || 'Unknown'}` : 'Assign step'}
             >
               <Users className="w-3 h-3" />
+              {step.assigned_to && (
+                <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  1
+                </div>
+              )}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowHistoryModal(true)}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-purple-600"
-              title="View history and manage blockers"
-            >
-              <History className="w-3 h-3" />
-            </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowHistoryModal(true)}
+            className={`h-6 w-6 p-0 hover:text-purple-600 relative ${
+              historyCount > 0 ? 'text-purple-500' : 'text-gray-400'
+            }`}
+            title={`View history and manage blockers ${historyCount > 0 ? `(${historyCount})` : ''}`}
+          >
+            <History className="w-3 h-3" />
+            {historyCount > 0 && (
+              <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                {historyCount}
+              </div>
+            )}
+          </Button>
             <Button
               variant="ghost"
               size="sm"

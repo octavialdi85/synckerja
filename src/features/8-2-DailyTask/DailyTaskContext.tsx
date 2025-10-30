@@ -3,6 +3,29 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
+export interface TaskLink {
+  id: string;
+  task_step_id: string;
+  title: string;
+  url: string;
+  created_at: string;
+}
+
+export interface TaskStepHistory {
+  id: string;
+  task_step_id: string;
+  action_type: string;
+  old_value?: string;
+  new_value?: string;
+  description?: string;
+  blocker_type?: string;
+  blocker_severity?: string;
+  brief_type?: string;
+  created_at: string;
+  updated_at?: string;
+  created_by?: string;
+}
+
 export interface TaskStep {
   id: string;
   task_id: string;
@@ -11,6 +34,9 @@ export interface TaskStep {
   order: number;
   created_at: string;
   updated_at: string;
+  files?: TaskFile[];
+  links?: TaskLink[];
+  history?: TaskStepHistory[];
 }
 
 export interface TaskFile {
@@ -40,6 +66,7 @@ export interface DeadlineHistory {
 export interface RecentStepUpdate {
   id: string;
   task_id: string;
+  step_id: string;
   step_title: string;
   task_title: string;
   is_completed: boolean;
@@ -99,6 +126,10 @@ export interface DailyTaskContextType {
   recentStepFilters: RecentStepFilters;
   filters: Filters;
   isLoading: boolean;
+  expandedTasks: Set<string>;
+  setExpandedTasks: (expandedTasks: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  highlightedTask: string | null;
+  setHighlightedTask: (taskId: string | null) => void;
   setFilters: (filters: Filters | ((prev: Filters) => Filters)) => void;
   setRecentStepFilters: (filters: RecentStepFilters | ((prev: RecentStepFilters) => RecentStepFilters)) => void;
   addTask: (data: Partial<Task>) => Promise<void>;
@@ -116,6 +147,8 @@ export interface DailyTaskContextType {
   requestDeadlineExtension: (taskId: string, newDeadline: string, reason: string) => Promise<void>;
   approveDeadlineExtension: (historyId: string) => Promise<void>;
   rejectDeadlineExtension: (historyId: string) => Promise<void>;
+  navigateToTask: (taskId: string, stepId?: string) => void;
+  scrollToStep: (stepId: string) => void;
 }
 
 const DailyTaskContext = createContext<DailyTaskContextType | undefined>(undefined);
@@ -147,6 +180,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     dateRange: 'today',
     actionType: 'all'
   });
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
 
@@ -224,6 +259,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const recentUpdates: RecentStepUpdate[] = (data || []).map((step: any) => ({
         id: step.id,
         task_id: step.task_id,
+        step_id: step.id, // Use step id as step_id
         step_title: step.title,
         task_title: step.daily_tasks.title,
         is_completed: step.is_completed,
@@ -252,6 +288,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           task_steps (
             *,
             task_files (*),
+            task_step_links (*),
+            task_step_history (*),
             assigned_employee:employees!assigned_to(id, full_name, email),
             assigned_by_employee:employees!assigned_by(id, full_name, email)
           ),
@@ -265,20 +303,31 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       
       console.log('Fetched tasks:', data);
       
-      // Calculate progress for each task
-      const tasksWithProgress = (data || []).map(task => ({
-        ...task,
-        steps: (task.task_steps || []).map((step: any) => ({
-          ...step,
-          files: step.task_files || []
-        })),
-        deadline_history: task.deadline_history || [],
-        progress_percentage: calculateProgress(task.task_steps || []),
-        assigned_to_name: (task as any).assigned_employee?.full_name || null,
-        files: [] // Initialize empty files array for task level
-      }));
+      // Calculate progress for each task and synchronize status
+      const tasksWithProgress = (data || []).map((task: any) => {
+        const progress = calculateProgress(task.task_steps || []);
+        const synchronizedStatus = determineStatusFromProgress(progress, task.status);
+        
+        return {
+          ...task,
+          steps: (task.task_steps || []).map((step: any) => ({
+            ...step,
+            files: step.task_files || [],
+            links: step.task_step_links || [],
+            history: step.task_step_history || []
+          })),
+          deadline_history: task.deadline_history || [],
+          progress_percentage: progress,
+          status: synchronizedStatus, // Use synchronized status
+          assigned_to_name: (task as any).assigned_employee?.full_name || null,
+          files: [] // Initialize empty files array for task level
+        };
+      });
       
       setTasks(tasksWithProgress);
+      
+      // Update status in database for tasks that need synchronization
+      await syncTaskStatusesInDatabase(tasksWithProgress, data || []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -289,10 +338,57 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
+  const syncTaskStatusesInDatabase = async (synchronizedTasks: Task[], originalTasks: any[]) => {
+    try {
+      const updatesNeeded = synchronizedTasks.filter((task, index) => {
+        const originalTask = originalTasks[index];
+        return originalTask && task.status !== originalTask.status;
+      });
+
+      if (updatesNeeded.length > 0) {
+        console.log('Syncing task statuses in database:', updatesNeeded.map(t => ({ id: t.id, oldStatus: originalTasks.find(ot => ot.id === t.id)?.status, newStatus: t.status })));
+        
+        // Update status for each task that needs synchronization
+        for (const task of updatesNeeded) {
+          const { error } = await supabase
+            .from('daily_tasks')
+            .update({ status: task.status })
+            .eq('id', task.id);
+          
+          if (error) {
+            console.error(`Error updating status for task ${task.id}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing task statuses:', error);
+    }
+  };
+
   const calculateProgress = (steps: TaskStep[]): number => {
     if (!steps || !Array.isArray(steps) || steps.length === 0) return 0;
     const completedSteps = steps.filter(step => step && step.is_completed).length;
     return Math.round((completedSteps / steps.length) * 100);
+  };
+
+  const determineStatusFromProgress = (progress: number, currentStatus: string): string => {
+    // If task is completed or cancelled, keep the current status
+    if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+      return currentStatus;
+    }
+    
+    // If progress is 0%, status should be pending
+    if (progress === 0) {
+      return 'pending';
+    }
+    
+    // If progress is 100%, status should be completed
+    if (progress === 100) {
+      return 'completed';
+    }
+    
+    // If progress is between 0% and 100%, status should be in_progress
+    return 'in_progress';
   };
 
   // Calculate summary data from tasks
@@ -327,7 +423,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           priority: data.priority || 'medium',
           due_date: data.due_date || null,
           assigned_to: data.assigned_to || null,
-          objective_id: data.objective_id || null,
+          objective_id: (data as any).objective_id || null,
           created_by: (await supabase.auth.getUser()).data.user?.id || null
         })
         .select()
@@ -417,7 +513,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .limit(1);
 
       const nextOrder = existingSteps && existingSteps.length > 0 
-        ? existingSteps[0].order + 1 
+        ? ((existingSteps as any)[0].order as number) + 1 
         : 1;
 
       const { error } = await supabase
@@ -468,32 +564,35 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const { data: allSteps } = await supabase
           .from('task_steps')
           .select('is_completed')
-          .eq('task_id', stepData.task_id);
+          .eq('task_id', (stepData as any).task_id);
 
-        const allCompleted = allSteps?.every(step => step.is_completed);
-        
-        // If step is being completed and all steps are now completed
-        if (data.is_completed === true && allCompleted) {
-          // Set finish_date when all steps are completed
+        if (allSteps) {
+          // Calculate progress and determine new status
+          const progress = calculateProgress(allSteps as any);
+          const newStatus = determineStatusFromProgress(progress, 'pending'); // We'll get the current status from the task
+          
+          // Get current task status
+          const { data: currentTask } = await supabase
+            .from('daily_tasks')
+            .select('status')
+            .eq('id', (stepData as any).task_id)
+            .single();
+          
+          const finalStatus = determineStatusFromProgress(progress, (currentTask as any)?.status || 'pending');
+          
+          // Update task status and finish_date based on progress
+          const updateData: any = { status: finalStatus };
+          
+          if (finalStatus === 'completed' && progress === 100) {
+            updateData.finish_date = new Date().toISOString();
+          } else if (finalStatus !== 'completed') {
+            updateData.finish_date = null;
+          }
+          
           await supabase
             .from('daily_tasks')
-            .update({ 
-              finish_date: new Date().toISOString(),
-              status: 'completed'
-            })
-            .eq('id', stepData.task_id);
-        }
-        
-        // If step is being uncompleted and not all steps are completed anymore
-        if (data.is_completed === false && !allCompleted) {
-          // Clear finish_date when any step is unchecked
-          await supabase
-            .from('daily_tasks')
-            .update({ 
-              finish_date: null,
-              status: 'in_progress'
-            })
-            .eq('id', stepData.task_id);
+            .update(updateData)
+            .eq('id', (stepData as any).task_id);
         }
       }
 
@@ -520,7 +619,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (!user) throw new Error('User not authenticated');
 
       const { data: currentEmployee } = await supabase
-        .from('employees')
+        .from('employees' as any)
         .select('id')
         .eq('user_id', user.id)
         .single();
@@ -528,7 +627,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const updateData: any = {
         assigned_to: employeeId,
         assigned_at: employeeId ? new Date().toISOString() : null,
-        assigned_by: employeeId ? currentEmployee?.id : null
+        assigned_by: employeeId ? (currentEmployee as any)?.id : null
       };
 
       const { error } = await supabase
@@ -641,7 +740,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const { error: dbError } = await supabase
         .from('task_files')
         .insert({
-          task_steps_id: taskSteps[0].id,
+          task_steps_id: (taskSteps as any)[0].id,
           filename: file.name,
           file_url: publicUrl,
           file_size: file.size
@@ -723,7 +822,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (fetchError) throw fetchError;
 
       // Extract file path from URL
-      const fileUrl = fileRecord.file_url;
+      const fileUrl = (fileRecord as any).file_url;
       const urlParts = fileUrl.split('/');
       const bucketName = urlParts[urlParts.length - 3]; // task-files
       const filePath = urlParts.slice(urlParts.length - 2).join('/'); // task-step-files/stepId/filename
@@ -827,8 +926,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (historyData) {
         await supabase
           .from('daily_tasks')
-          .update({ due_date: historyData.new_deadline })
-          .eq('id', historyData.task_id);
+          .update({ due_date: (historyData as any).new_deadline })
+          .eq('id', (historyData as any).task_id);
       }
 
       toast({
@@ -969,6 +1068,51 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     setFilteredRecentStepUpdates(filterRecentStepUpdates(recentStepUpdates, recentStepFilters));
   }, [recentStepFilters, recentStepUpdates]);
 
+  // Navigation function to expand specific task and optionally highlight a step
+  const navigateToTask = (taskId: string, stepId?: string) => {
+    // Expand the task
+    setExpandedTasks(prev => new Set([...prev, taskId]));
+    
+    // Highlight the task
+    setHighlightedTask(taskId);
+    
+    // Auto-clear highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedTask(null);
+    }, 3000);
+    
+    // If stepId is provided, set search filter to highlight the step
+    if (stepId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        const step = task.steps.find(s => s.id === stepId);
+        if (step) {
+          setFilters(prev => ({
+            ...prev,
+            search: step.title
+          }));
+          
+          // Scroll to specific step after a delay
+          setTimeout(() => {
+            scrollToStep(stepId);
+          }, 200);
+        }
+      }
+    }
+  };
+
+  // Function to scroll to specific step
+  const scrollToStep = (stepId: string) => {
+    const stepElement = document.querySelector(`[data-step-id="${stepId}"]`);
+    if (stepElement) {
+      stepElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest'
+      });
+    }
+  };
+
   const value: DailyTaskContextType = {
     tasks,
     summaryData,
@@ -977,6 +1121,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     recentStepFilters,
     filters,
     isLoading,
+    expandedTasks,
+    setExpandedTasks,
+    highlightedTask,
+    setHighlightedTask,
     setFilters,
     setRecentStepFilters,
     addTask,
@@ -993,7 +1141,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     calculateTaskProgress,
     requestDeadlineExtension,
     approveDeadlineExtension,
-    rejectDeadlineExtension
+    rejectDeadlineExtension,
+    navigateToTask,
+    scrollToStep
   };
 
   return (

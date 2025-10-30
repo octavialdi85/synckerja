@@ -104,6 +104,18 @@
   padding-left: 20px !important;
 }
 
+/* Priority dropdown button styling */
+.task-list-table td:nth-child(7) .priority-dropdown-trigger {
+  width: 100%;
+  justify-content: center;
+  padding: 2px 4px;
+  min-height: 24px;
+}
+
+.task-list-table td:nth-child(7) .priority-dropdown-trigger:hover {
+  background-color: #f3f4f6;
+}
+
 /* Ensure PIC and Due Date columns are left-aligned */
 .task-list-table th:nth-child(4),
 .task-list-table td:nth-child(4) {
@@ -138,6 +150,7 @@
   min-width: 250px;
   max-width: 250px;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-list-table td:nth-child(4) {

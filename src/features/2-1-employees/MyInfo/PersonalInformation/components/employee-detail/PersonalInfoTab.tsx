@@ -2,7 +2,6 @@
 import { Card, CardContent } from '@/features/ui/card';
 import { useUpdateEmployee } from '../../hooks';
 import { PersonalInfoForm } from './PersonalInfoForm';
-import { useAutoSave } from '@/features/share/hooks/useAutoSave';
 
 interface PersonalInfoTabProps {
   employee: any;
@@ -47,11 +46,6 @@ export const PersonalInfoTab = ({ employee, isEditMode, onUpdate }: PersonalInfo
     }
   };
 
-  const { isSaving, lastSaved, hasUnsavedChanges, triggerSave } = useAutoSave({
-    onSave: handleSave,
-    enabledCondition: isEditMode
-  });
-
   // Expose the save function globally for backward compatibility
   if (typeof window !== 'undefined') {
     (window as any).savePersonalInfo = async () => {
@@ -63,11 +57,6 @@ export const PersonalInfoTab = ({ employee, isEditMode, onUpdate }: PersonalInfo
     };
   }
 
-  // Fix: Create wrapper function that matches the expected signature
-  const handleFormSave = async (formData: any): Promise<void> => {
-    await handleSave(formData);
-  };
-
   return (
     <div className="space-y-6">
       <Card>
@@ -75,9 +64,8 @@ export const PersonalInfoTab = ({ employee, isEditMode, onUpdate }: PersonalInfo
           <PersonalInfoForm
             employee={employee}
             isEditMode={isEditMode}
-            onSave={handleFormSave}
-            onDataChange={triggerSave}
-            isLoading={updateEmployee.isPending || isSaving}
+            onSave={handleSave}
+            isLoading={updateEmployee.isPending}
           />
         </CardContent>
       </Card>

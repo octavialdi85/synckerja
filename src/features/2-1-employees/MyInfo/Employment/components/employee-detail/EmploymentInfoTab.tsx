@@ -31,26 +31,25 @@ export const EmploymentInfoTab = ({ employee, isEditMode, onUpdate }: Employment
     console.log('EmploymentInfoTab: Initial state employee:', employee);
     
     // Format dates properly on initial render
-    // Fix: Use hire_date as the actual join date to sync with employees list
     let formattedJoinDate = '';
     let formattedHireDate = '';
     
-    if (employee?.hire_date) {
-      const joinDate = new Date(employee.hire_date);
+    if (employee?.join_date) {
+      const joinDate = new Date(employee.join_date);
       if (!isNaN(joinDate.getTime())) {
         formattedJoinDate = joinDate.toISOString().split('T')[0];
       }
     }
     
-    if (employee?.join_date) {
-      const hireDate = new Date(employee.join_date);
+    if (employee?.hire_date) {
+      const hireDate = new Date(employee.hire_date);
       if (!isNaN(hireDate.getTime())) {
         formattedHireDate = hireDate.toISOString().split('T')[0];
       }
     }
     
-    console.log('EmploymentInfoTab: Initial formatted join_date (from hire_date):', formattedJoinDate);
-    console.log('EmploymentInfoTab: Initial formatted hire_date (from join_date):', formattedHireDate);
+    console.log('EmploymentInfoTab: Initial formatted join_date:', formattedJoinDate);
+    console.log('EmploymentInfoTab: Initial formatted hire_date:', formattedHireDate);
     
     return {
       employee_id: employee?.employee_id || '',
@@ -59,8 +58,8 @@ export const EmploymentInfoTab = ({ employee, isEditMode, onUpdate }: Employment
       job_level_id: employee?.job_level_id || '',
       branch_id: employee?.branch_id || '',
       employee_status_id: employee?.employee_status_id || '',
-      join_date: formattedJoinDate, // This now uses hire_date from DB
-      hire_date: formattedHireDate,  // This now uses join_date from DB
+      join_date: formattedJoinDate,
+      hire_date: formattedHireDate,
     };
   });
   
@@ -228,28 +227,25 @@ export const EmploymentInfoTab = ({ employee, isEditMode, onUpdate }: Employment
       console.log('EmploymentInfoTab: hire_date value:', employee.hire_date);
       
       // Format dates properly if they exist
-      // Based on the issue: the actual join date is stored in hire_date field
       let formattedJoinDate = '';
       let formattedHireDate = '';
       
-      // Fix: Use hire_date as the actual join date to sync with employees list
-      if (employee.hire_date) {
-        const joinDate = new Date(employee.hire_date);
+      if (employee.join_date) {
+        const joinDate = new Date(employee.join_date);
         if (!isNaN(joinDate.getTime())) {
           formattedJoinDate = joinDate.toISOString().split('T')[0];
         }
       }
       
-      // Keep hire_date empty for now or use join_date if it exists
-      if (employee.join_date) {
-        const hireDate = new Date(employee.join_date);
+      if (employee.hire_date) {
+        const hireDate = new Date(employee.hire_date);
         if (!isNaN(hireDate.getTime())) {
           formattedHireDate = hireDate.toISOString().split('T')[0];
         }
       }
       
-      console.log('EmploymentInfoTab: Formatted join_date (from hire_date):', formattedJoinDate);
-      console.log('EmploymentInfoTab: Formatted hire_date (from join_date):', formattedHireDate);
+      console.log('EmploymentInfoTab: Formatted join_date:', formattedJoinDate);
+      console.log('EmploymentInfoTab: Formatted hire_date:', formattedHireDate);
       
       const employmentData = {
         employee_id: employee.employee_id || '',
@@ -258,8 +254,8 @@ export const EmploymentInfoTab = ({ employee, isEditMode, onUpdate }: Employment
         job_level_id: employee.job_level_id || '',
         branch_id: employee.branch_id || '',
         employee_status_id: employee.employee_status_id || '',
-        join_date: formattedJoinDate, // This now uses hire_date from DB
-        hire_date: formattedHireDate,  // This now uses join_date from DB
+        join_date: formattedJoinDate,
+        hire_date: formattedHireDate,
       };
       
       console.log('EmploymentInfoTab: Final employment data:', employmentData);

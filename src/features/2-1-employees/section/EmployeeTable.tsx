@@ -140,8 +140,8 @@ const EmployeeRow = memo(({
           </div>
         </div>
       </TableCell>
-      <TableCell className="w-32 px-3">
-        <span className="font-mono text-xs bg-gray-50 px-2 py-1 rounded">{employee.employee_id}</span>
+      <TableCell className="w-48 px-3">
+        <span className="font-mono text-xs bg-gray-50 px-2 py-1 rounded whitespace-nowrap">{employee.employee_id}</span>
       </TableCell>
       <TableCell className="w-40 px-3 text-blue-600 text-sm">
         <span className="truncate block" title={employee.department_name || '-'}>
@@ -200,7 +200,7 @@ export const EmployeeTable = memo(({
   // Memoize the table headers to prevent re-renders
   const tableHeaders = useMemo(() => [
     { key: 'name', label: 'Employee Name', width: 'w-64' },
-    { key: 'id', label: 'Employee ID', width: 'w-32' },
+    { key: 'id', label: 'Employee ID', width: 'w-48' },
     { key: 'department', label: 'Department', width: 'w-40' },
     { key: 'position', label: 'Job Position', width: 'w-36' },
     { key: 'level', label: 'Job Level', width: 'w-32' },
