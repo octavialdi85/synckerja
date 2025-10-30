@@ -10,7 +10,7 @@ import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
-import { useCreateIndividualObjective } from './useIndividualObjectives';
+import { useCreateIndividualObjective, useUpdateIndividualObjective } from './useIndividualObjectives';
 // TODO: File not found - import { useDepartmentObjectives } from './useDepartmentObjectives';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
@@ -60,6 +60,7 @@ export const ModalAddIndividualContribution = ({
   const { data: currentEmployee } = useCurrentEmployee();
   // TODO: File not found - const { data: employees = [] } = useEmployees();
   const createObjective = useCreateIndividualObjective();
+  const updateObjective = useUpdateIndividualObjective();
 
   // Initialize form data when editObjective changes
   React.useEffect(() => {
@@ -126,61 +127,75 @@ export const ModalAddIndividualContribution = ({
     const selectedDeptObjective = departmentObjectives.find(obj => obj.id === formData.company_objective_id);
     
     try {
-      const individualObjective = await createObjective.mutateAsync({
-        organization_id: organizationId,
-        cycle_id: cycleId,
-        employee_id: (currentEmployee as any).id,
-        owner_id: currentUser?.id || '',
-        department_objective_id: formData.company_objective_id,
-        title: formData.title,
-        description: formData.description,
-        why_important: formData.why_important,
-        weight: parseFloat(formData.weight),
-        status: 'active',
-        created_by: currentUser?.id || '',
-        
-      });
+      if (editObjective && editObjective.id) {
+        await updateObjective.mutateAsync({
+          id: editObjective.id,
+          updates: {
+            department_objective_id: formData.company_objective_id,
+            title: formData.title,
+            description: formData.description,
+            // If there is a separate why_important column, include it; otherwise ignore
+            // @ts-ignore
+            why_important: formData.why_important,
+            weight: parseFloat(formData.weight),
+          }
+        });
+      } else {
+        const individualObjective = await createObjective.mutateAsync({
+          organization_id: organizationId,
+          cycle_id: cycleId,
+          employee_id: (currentEmployee as any).id,
+          owner_id: currentUser?.id || '',
+          department_objective_id: formData.company_objective_id,
+          title: formData.title,
+          description: formData.description,
+          why_important: formData.why_important,
+          weight: parseFloat(formData.weight),
+          status: 'active',
+          created_by: currentUser?.id || '',
+        });
 
-      // Create corresponding key result for the individual objective
-      if (individualObjective && (individualObjective as any).id) {
-        try {
-          const { data: keyResultData, error: keyResultError } = await (supabase as any)
-            .from('key_results')
-            .insert({
-              organization_id: organizationId,
-              individual_objective_id: (individualObjective as any).id,
-              title: formData.title,
-              description: formData.description,
-              metric_type: formData.metric_type || 'percentage',
-              calculation_type: 'increase', // Required field - valid values: increase, decrease, maintain
-              start_value: parseFloat(formData.start_value) || 0,
-              target_value: parseFloat(formData.target_value) || 100,
-              unit: formData.unit || '%',
-              current_value: 0,
-              weight: parseFloat(formData.weight),
-              created_by: currentUser?.id || '',
-              owner_level: 'individual'
-            })
-            .select()
-            .single();
+        // Create corresponding key result for the individual objective (create mode only)
+        if (individualObjective && (individualObjective as any).id) {
+          try {
+            const { data: keyResultData, error: keyResultError } = await (supabase as any)
+              .from('key_results')
+              .insert({
+                organization_id: organizationId,
+                individual_objective_id: (individualObjective as any).id,
+                title: formData.title,
+                description: formData.description,
+                metric_type: formData.metric_type || 'percentage',
+                calculation_type: 'increase',
+                start_value: parseFloat(formData.start_value) || 0,
+                target_value: parseFloat(formData.target_value) || 100,
+                unit: formData.unit || '%',
+                current_value: 0,
+                weight: parseFloat(formData.weight),
+                created_by: currentUser?.id || '',
+                owner_level: 'individual'
+              })
+              .select()
+              .single();
 
-          if (keyResultError) {
+            if (keyResultError) {
+              console.error('Error creating key result:', keyResultError);
+              toast({
+                title: 'Warning',
+                description: 'Individual objective created but key result creation failed. Please check the logs.',
+                variant: 'destructive',
+              });
+            } else {
+              console.log('✅ Key result created successfully:', keyResultData);
+            }
+          } catch (keyResultError) {
             console.error('Error creating key result:', keyResultError);
             toast({
               title: 'Warning',
               description: 'Individual objective created but key result creation failed. Please check the logs.',
               variant: 'destructive',
             });
-          } else {
-            console.log('✅ Key result created successfully:', keyResultData);
           }
-        } catch (keyResultError) {
-          console.error('Error creating key result:', keyResultError);
-          toast({
-            title: 'Warning',
-            description: 'Individual objective created but key result creation failed. Please check the logs.',
-            variant: 'destructive',
-          });
         }
       }
 
@@ -202,7 +217,7 @@ export const ModalAddIndividualContribution = ({
 
       toast({
         title: 'Success',
-        description: 'Individual contribution created successfully',
+        description: editObjective ? 'Individual contribution updated successfully' : 'Individual contribution created successfully',
       });
     } catch (error) {
       console.error('Error creating individual contribution:', error);
