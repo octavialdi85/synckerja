@@ -120,6 +120,10 @@ export const useMidtransPayment = () => {
           // Store order ID for potential troubleshooting
           localStorage.setItem('lastOrderId', data.order_id);
           
+          // Invalidate subscription expiry cache to refresh status immediately
+          // This will be handled by the query client invalidation after page reload
+          // The subscription_expiry query will auto-refetch on next check
+          
           // Refresh subscription data and redirect to subscription page
           setTimeout(() => {
             window.location.href = '/subscription/overview';

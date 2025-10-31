@@ -8,6 +8,7 @@ import { CentralizedUserDataProvider } from "@/features/1-login/contexts/Central
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
 import { HomeAccessGuard } from "@/components/HomeAccessGuard";
+import { SubscriptionExpiryGuard } from "@/components/SubscriptionExpiryGuard";
 import Index from "./features/1-login/pages/Index";
 import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
@@ -126,16 +127,17 @@ const App = () => (
             }}
           >
             <SecurityWrapper>
-              <Routes>
-              {/* ======= PROTECTED ROUTES ======= */}
-              {/* PROTECTION SYSTEM */}
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <HomeAccessGuard>
-                    <HomeRouteElement />
-                  </HomeAccessGuard>
-                </ProtectedRoute>
-              } />
+              <SubscriptionExpiryGuard>
+                <Routes>
+                {/* ======= PROTECTED ROUTES ======= */}
+                {/* PROTECTION SYSTEM */}
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <HomeAccessGuard>
+                      <HomeRouteElement />
+                    </HomeAccessGuard>
+                  </ProtectedRoute>
+                } />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <HomeAccessGuard>
@@ -484,7 +486,8 @@ const App = () => (
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
+                </Routes>
+              </SubscriptionExpiryGuard>
             </SecurityWrapper>
           </BrowserRouter>
         </CentralizedUserDataProvider>

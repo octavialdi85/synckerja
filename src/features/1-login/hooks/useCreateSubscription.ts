@@ -105,9 +105,10 @@ export const useCreateSubscription = () => {
     onSuccess: (data) => {
       toast.success(data.message);
       
-      // Refresh relevant queries
+      // Refresh relevant queries including subscription expiry check
       queryClient.invalidateQueries({ queryKey: ['organization-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-expiry', organizationId] });
       
       // Store subscription creation flag and redirect to employee welcome
       sessionStorage.setItem('subscriptionJustCreated', 'true');
