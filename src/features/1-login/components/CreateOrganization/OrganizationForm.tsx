@@ -231,13 +231,13 @@ const OrganizationForm = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       {/* Basic Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Informasi Dasar</CardTitle>
+      <Card className="mx-0 sm:mx-0">
+        <CardHeader className="px-4 sm:px-6 pb-3 sm:pb-6 pt-4 sm:pt-6">
+          <CardTitle className="text-base sm:text-lg">Informasi Dasar</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 sm:px-6 pb-4 sm:pb-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="name">Nama Organisasi *</Label>
             <Input
@@ -277,11 +277,11 @@ const OrganizationForm = () => {
       </Card>
 
       {/* Additional Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Informasi Tambahan</CardTitle>
+      <Card className="mx-0 sm:mx-0 mt-3 sm:mt-0">
+        <CardHeader className="px-4 sm:px-6 pb-3 sm:pb-6 pt-4 sm:pt-6">
+          <CardTitle className="text-base sm:text-lg">Informasi Tambahan</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 sm:px-6 pb-4 sm:pb-6 pt-0">
           <div className="space-y-2">
             <Label htmlFor="address">Alamat</Label>
             <Input
@@ -330,14 +330,14 @@ const OrganizationForm = () => {
       </Card>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-800 text-sm font-medium">Error:</div>
-          <div className="text-red-700 text-sm mt-1">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mt-3 sm:mt-4">
+          <div className="text-red-800 text-xs sm:text-sm font-medium">Error:</div>
+          <div className="text-red-700 text-xs sm:text-sm mt-1">{error}</div>
         </div>
       )}
 
 
-      <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
+      <div className="flex items-center space-x-2 p-3 sm:p-4 bg-muted/50 rounded-lg mt-3 sm:mt-4">
         <Checkbox 
           id="terms-accepted" 
           checked={formData.acceptTerms}
@@ -356,7 +356,7 @@ const OrganizationForm = () => {
 
       <Button
         type="submit"
-        className="w-full h-11 rounded-lg text-base font-semibold bg-[#181E29] hover:bg-[#222b3c]"
+        className="w-full h-11 sm:h-11 rounded-lg text-sm sm:text-base font-semibold bg-[#181E29] hover:bg-[#222b3c] mt-3 sm:mt-4"
         disabled={loading || !formData.acceptTerms}
       >
         {loading ? (

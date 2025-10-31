@@ -14,6 +14,7 @@ import Register from "./features/1-login/pages/Register";
 import VerifyEmail from "./features/1-login/pages/VerifyEmail";
 import EmailVerified from "./features/1-login/pages/EmailVerified";
 import CreateOrganization from "./features/1-login/pages/CreateOrganization";
+import MobileCreateOrganization from "./mobile/login/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
 import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
@@ -95,9 +96,12 @@ const EmployeeWelcomeRouteElement = () => {
   return <EmployeeWelcome />;
 };
 // Route element selector for Create Organization
-// Always use the feature-based CreateOrganization.tsx for all devices (mobile and desktop)
+// Use mobile version if detected on smartphone, otherwise use desktop version
 const CreateOrganizationRouteElement = () => {
-  return <CreateOrganization />;
+  const isViewportMobile = useIsMobile();
+  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  const isMobile = isViewportMobile || isMobileUserAgent;
+  return isMobile ? <MobileCreateOrganization /> : <CreateOrganization />;
 };
 
 // Route element selector for Profile

@@ -75,7 +75,7 @@ const CreateOrganization = () => {
 
   return (
     <div className="min-h-screen flex items-start sm:items-center justify-center bg-[#f8fafc] py-4 sm:py-8 px-3 sm:px-4 safe-area-inset">
-      <Card className="w-full max-w-full sm:max-w-2xl shadow-sm border rounded-xl sm:rounded-2xl bg-white">
+      <Card className="w-full max-w-full sm:max-w-2xl shadow-sm border-0 sm:border rounded-none sm:rounded-xl sm:rounded-2xl bg-white">
         <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6 pt-4 sm:pt-6">
           <div className="flex items-center gap-2 sm:gap-3 mb-2">
             <Button 
@@ -95,7 +95,7 @@ const CreateOrganization = () => {
             Lengkapi informasi organisasi Anda untuk mulai menggunakan ProfitLoop
           </p>
         </CardHeader>
-        <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 pt-0">
+        <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6 pt-0">
           <OrganizationForm />
         </CardContent>
       </Card>
