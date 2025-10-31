@@ -8,7 +8,7 @@ interface TaskListFooterProps {
 export const TaskListFooter = ({ totalTasks, filteredTasks }: TaskListFooterProps) => {
   return (
     <div 
-      className="task-list-footer px-4 py-2 flex-shrink-0 relative z-10"
+      className="task-list-footer px-4 py-3 flex-shrink-0 relative z-10"
       style={{ 
         backgroundColor: '#ffffff',
         borderTop: '1px solid #e5e7eb',
