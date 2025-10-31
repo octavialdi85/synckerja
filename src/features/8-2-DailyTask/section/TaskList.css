@@ -201,6 +201,37 @@
   background-color: #f9fafb !important;
 }
 
+/* Ensure expanded content row fills full width */
+.task-list-table tbody tr:has(td[colspan]) {
+  width: 100%;
+}
+
+.task-list-table tbody tr:has(td[colspan]) td {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+}
+
+/* Force full width for expanded content and empty state */
+.task-list-table tbody tr td[colspan] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+/* Ensure empty state row fills full width */
+.task-list-table tbody tr:has(td[colspan="11"]) {
+  width: 100%;
+}
+
+.task-list-table tbody tr:has(td[colspan="11"]) td {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+}
+
 /* Smooth scrolling - moved to global index.css */
 
 /* Enhanced horizontal scroll for wide tables */

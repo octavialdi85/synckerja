@@ -425,9 +425,9 @@ export const TaskList = () => {
             </TableHeader>
             <TableBody>
               {filteredTasks.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                    <div className="flex flex-col items-center">
+                <TableRow className="w-full">
+                  <TableCell colSpan={11} className="text-center py-8 text-gray-500 w-full" style={{ width: '100%' }}>
+                    <div className="flex flex-col items-center w-full">
                       <CheckSquare className="w-8 h-8 mb-2 text-gray-300" />
                       <p>No tasks found</p>
                       <p className="text-sm text-gray-400">Create your first task to get started</p>
@@ -752,23 +752,23 @@ export const TaskList = () => {
 
                       {/* Expanded Content Row */}
             {isExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={10} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
+                        <TableRow className="w-full">
+                          <TableCell colSpan={11} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
                             isHighlighted 
                               ? 'bg-blue-100 border-l-4 border-l-blue-500' 
                               : 'bg-blue-50'
-                          }`}>
+                          }`} style={{ width: '100%' }}>
                 {task.description && (
-                  <div className="mb-4">
+                  <div className="mb-4 w-full">
                     <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>
                     <p className="text-sm text-gray-600">{task.description}</p>
                   </div>
                 )}
                 
-                <div className="w-full space-y-4">
+                <div className="w-full space-y-4" style={{ width: '100%' }}>
                   {/* Steps Section */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="w-full">
+                    <div className="flex items-center justify-between mb-3 w-full">
                       <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                         <CheckSquare className="w-4 h-4 text-blue-600" />
                         Steps ({task.steps.filter(s => s.is_completed).length}/{task.steps.length})
@@ -788,7 +788,7 @@ export const TaskList = () => {
                     </div>
                     
                     <SortableContext items={task.steps.map(step => `step-${step.id}`)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-2 min-h-[50px]">
+                      <div className="space-y-2 min-h-[50px] w-full">
                         {task.steps.length === 0 ? (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                             <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />

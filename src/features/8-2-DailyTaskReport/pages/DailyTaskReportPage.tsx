@@ -4,8 +4,7 @@ import { HeaderAndTab } from '@/features/8-2-DailyTask/section/HeaderAndTab';
 import { DailyTaskReportProvider } from '../context/ReportContext';
 import { OverviewCards } from '../components/OverviewCards';
 import { PerformanceTable } from '../components/PerformanceTable';
-import { BlockersPanel } from '../components/BlockersPanel';
-import { RecentUpdates } from '../components/RecentUpdates';
+import { BlockersAndUpdatesPanel } from '../components/BlockersAndUpdatesPanel';
 import { Filters } from '../components/Filters';
 
 const DailyTaskReportPage = () => {
@@ -24,8 +23,7 @@ const DailyTaskReportPage = () => {
                 <PerformanceTable />
               </div>
               <div className="col-span-3 flex flex-col gap-2 min-h-0">
-                <BlockersPanel />
-                <RecentUpdates />
+                <BlockersAndUpdatesPanel />
               </div>
             </div>
           </div>
