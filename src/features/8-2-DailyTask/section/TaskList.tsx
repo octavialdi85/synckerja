@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   CheckSquare, 
   Square, 
@@ -158,44 +158,79 @@ export const TaskList = () => {
   };
 
 
-  // Filter tasks based on filters
-  const filteredTasks = tasks.filter(task => {
-    // Search filter - now includes both task title and step titles
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
-      const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
-      const stepMatch = task.steps?.some(step => 
-        step.title?.toLowerCase().includes(searchTerm)
-      ) || false;
+  // Filter tasks based on filters - memoized to prevent unnecessary recalculations
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      // Search filter - now includes both task title and step titles
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
+        const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
+        const stepMatch = task.steps?.some(step => 
+          step.title?.toLowerCase().includes(searchTerm)
+        ) || false;
+        
+        if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
+          return false;
+        }
+      }
       
-      if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
+      if (filters.status && task.status !== filters.status) {
         return false;
       }
-    }
-    
-    if (filters.status && task.status !== filters.status) {
-      return false;
-    }
-    if (filters.priority && task.priority !== filters.priority) {
-      return false;
-    }
-    return true;
-  });
+      if (filters.priority && task.priority !== filters.priority) {
+        return false;
+      }
+      return true;
+    });
+  }, [tasks, filters.search, filters.status, filters.priority]);
 
   // Compute blocker counts per task to mirror report page
+  // Create stable string of task IDs and step counts to use as dependency
+  const blockerCalculationKey = useMemo(() => {
+    if (filteredTasks.length === 0) return '';
+    return filteredTasks
+      .map(t => `${t.id}:${t.steps.length}`)
+      .sort()
+      .join('|');
+  }, [filteredTasks]);
+  
+  // Store snapshot of filteredTasks when blockerCalculationKey changes
+  const filteredTasksSnapshotRef = useRef(filteredTasks);
   useEffect(() => {
+    filteredTasksSnapshotRef.current = filteredTasks;
+  }, [blockerCalculationKey, filteredTasks]);
+  
+  useEffect(() => {
+    // Prevent running if no tasks
+    if (!blockerCalculationKey) {
+      setBlockerCountByTask({});
+      return;
+    }
+
+    let cancelled = false;
+    
     const loadCounts = async () => {
       try {
-        const allTasks = filteredTasks;
+        // Use snapshot from ref to avoid closure issues
+        const tasksToProcess = filteredTasksSnapshotRef.current;
         const counts: Record<string, number> = {};
-        for (const t of allTasks) {
+        
+        for (const t of tasksToProcess) {
+          // Check if cancelled before each iteration
+          if (cancelled) return;
+          
           const stepIds = t.steps.map(s => s.id);
-          if (stepIds.length === 0) { counts[t.id] = 0; continue; }
+          if (stepIds.length === 0) { 
+            counts[t.id] = 0; 
+            continue; 
+          }
+          
           const { data: subSteps } = await supabase
             .from('task_steps_to_steps')
             .select('id, parent_step_id')
             .in('parent_step_id', stepIds);
+          
           const subIds = (subSteps || []).map(s => s.id);
           const { count } = await supabase
             .from('task_step_history')
@@ -205,15 +240,26 @@ export const TaskList = () => {
               stepIds.length ? `task_step_id.in.(${stepIds.join(',')})` : '',
               subIds.length ? `task_steps_to_steps_id.in.(${subIds.join(',')})` : ''
             ].filter(Boolean).join(','));
+          
           counts[t.id] = count || 0;
         }
-        setBlockerCountByTask(counts);
+        
+        // Only update state if not cancelled
+        if (!cancelled) {
+          setBlockerCountByTask(counts);
+        }
       } catch (e) {
         // ignore
       }
     };
+    
     loadCounts();
-  }, [filteredTasks]);
+    
+    // Cleanup function to cancel if component unmounts or dependencies change
+    return () => {
+      cancelled = true;
+    };
+  }, [blockerCalculationKey]); // Only depend on blockerCalculationKey
 
   const toggleTaskExpansion = (taskId: string) => {
     const isOpen = expandedTasks.has(taskId);

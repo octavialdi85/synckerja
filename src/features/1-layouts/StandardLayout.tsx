@@ -13,21 +13,21 @@ interface StandardLayoutProps {
 export const StandardLayout = ({ children }: StandardLayoutProps) => {
   const { subscriptionStatus, statusLoading } = useOptimizedSubscription();
   
-  // Debug logging for banner visibility
-  console.log('🔍 Banner Debug:', {
-    statusLoading,
-    subscriptionStatus,
-    isTrial: subscriptionStatus?.is_trial,
-    daysUntilExpiry: subscriptionStatus?.days_until_expiry,
-    needsRenewal: subscriptionStatus?.needs_renewal,
-    isActive: subscriptionStatus?.is_active
-  });
-  
   // Show banner only when expiry is within 3 days (trial or paid)
   const daysLeft = subscriptionStatus?.days_until_expiry ?? Number.POSITIVE_INFINITY;
   const showBanner = !statusLoading && !!subscriptionStatus && daysLeft <= 3;
   
-  console.log('🚨 Show Banner:', showBanner);
+  // Debug logging for banner visibility (only in development)
+  if (import.meta.env.DEV && showBanner) {
+    console.log('🔍 Banner Debug:', {
+      statusLoading,
+      subscriptionStatus,
+      isTrial: subscriptionStatus?.is_trial,
+      daysUntilExpiry: subscriptionStatus?.days_until_expiry,
+      needsRenewal: subscriptionStatus?.needs_renewal,
+      isActive: subscriptionStatus?.is_active
+    });
+  }
 
   return (
     <div className="min-h-screen flex flex-col w-full">

@@ -196,6 +196,25 @@ export const useMultiOrganization = () => {
                  (queryKey[0] === 'subscriptionStatus' || queryKey[0] === 'subscription-expiry');
         }
       });
+
+      // CRITICAL: Clear useCurrentOrg cache to force it to refetch from database
+      // This ensures DailyTaskContext and other components using useCurrentOrg get the new organization ID
+      try {
+        const orgCacheKey = `org-${user.id}`;
+        const localStorageKey = `org-cache-${user.id}`;
+        
+        // Clear localStorage cache for useCurrentOrg
+        localStorage.removeItem(localStorageKey);
+        console.log('🗑️ Cleared useCurrentOrg localStorage cache');
+        
+        // Trigger a custom event to notify useCurrentOrg to refetch
+        window.dispatchEvent(new CustomEvent('organization-switched', { 
+          detail: { organizationId } 
+        }));
+        console.log('📢 Dispatched organization-switched event');
+      } catch (error) {
+        console.warn('Failed to clear useCurrentOrg cache:', error);
+      }
       
       // Step 2: Invalidate all subscription-related queries (for queries that can't be removed)
       queryClient.invalidateQueries({ 

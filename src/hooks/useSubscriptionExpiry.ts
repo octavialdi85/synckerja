@@ -18,7 +18,7 @@ export interface SubscriptionExpiryStatus {
  * Checks both trial_end_date and subscription_end_date from organization_subscriptions table
  */
 export const useSubscriptionExpiry = () => {
-  const { organizationId } = useCurrentOrg();
+  const { organizationId, loading: orgLoading } = useCurrentOrg();
 
   const {
     data: expiryStatus,
@@ -49,7 +49,9 @@ export const useSubscriptionExpiry = () => {
         .maybeSingle();
 
       if (subError) {
-        console.error('❌ Error checking subscription expiry for org:', organizationId, subError);
+        if (import.meta.env.DEV) {
+          console.error('❌ Error checking subscription expiry for org:', organizationId, subError);
+        }
         // If error, don't block access - return safe default
         return {
           isExpired: false,
@@ -65,7 +67,9 @@ export const useSubscriptionExpiry = () => {
 
       if (!subscription) {
         // No subscription found, allow access (might be new organization)
-        console.log('ℹ️ No subscription found for org:', organizationId, '- Allowing access');
+        if (import.meta.env.DEV) {
+          console.log('ℹ️ No subscription found for org:', organizationId, '- Allowing access');
+        }
         return {
           isExpired: false,
           isTrialExpired: false,
@@ -84,6 +88,7 @@ export const useSubscriptionExpiry = () => {
       // CRITICAL: Verify the returned data belongs to requested organization
       // This is a security check to prevent cross-organization data leaks
       if (subData.organization_id !== organizationId) {
+        // Always log security errors
         console.error('🚨 SECURITY ERROR: Subscription data mismatch!', {
           requestedOrgId: organizationId,
           receivedOrgId: subData.organization_id,
@@ -246,7 +251,7 @@ export const useSubscriptionExpiry = () => {
 
       return result;
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && !orgLoading, // Only run when orgId is available and not loading
     refetchInterval: 60 * 1000, // Check every 1 minute for stricter expiry detection
     staleTime: 30 * 1000, // 30 seconds - shorter stale time for more accurate checks
     gcTime: 5 * 60 * 1000, // 5 minutes cache
@@ -261,9 +266,9 @@ export const useSubscriptionExpiry = () => {
       subscriptionEndDate: null,
       expiredDate: null,
       daysExpired: 0,
-      status: 'checking' as const
+      status: orgLoading ? 'checking' as const : 'active' as const
     },
-    isLoading,
+    isLoading: isLoading || orgLoading, // Include org loading state
     error
   };
 };

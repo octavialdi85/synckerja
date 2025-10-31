@@ -87,6 +87,38 @@ export const useCurrentOrg = () => {
         return;
       }
       
+      // CRITICAL: Check if session exists first to avoid AuthSessionMissingError
+      // This prevents errors when session is not yet ready
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        // If no session, silently return - session might be loading
+        if (sessionError || !session) {
+          // Don't log or set error - session might not be ready yet
+          // Use cached data if available
+          const cachedOrgId = organizationId;
+          if (cachedOrgId) {
+            // Keep using cached orgId
+            setLoading(false);
+          } else {
+            // No session and no cache - wait for session to be ready
+            setLoading(false);
+          }
+          fetchingRef.current = false;
+          return;
+        }
+      } catch (sessionCheckError: any) {
+        // Session check failed - might be network or session not ready
+        // Silently continue with cached data if available
+        if (organizationId) {
+          setLoading(false);
+        } else {
+          setLoading(false);
+        }
+        fetchingRef.current = false;
+        return;
+      }
+      
       // Get current user with optimized timeout and retry
       const getUserWithRetry = () => retryableAuthOperation(
         () => supabase.auth.getUser(),
@@ -105,6 +137,11 @@ export const useCurrentOrg = () => {
       
       
       if (authError) {
+        // Check for session missing errors - handle gracefully
+        const isSessionMissing = authError.message?.includes('Auth session missing') ||
+                                authError.name === 'AuthSessionMissingError' ||
+                                authError.message?.includes('session');
+        
         // Check for network/connection errors or timeouts - handle silently
         const isNetworkError = authError.message === 'Auth timeout' ||
                               authError.message?.includes('Failed to fetch') ||
@@ -112,16 +149,27 @@ export const useCurrentOrg = () => {
                               authError.name === 'AuthRetryableFetchError' ||
                               authError.message?.includes('network');
         
-        if (isNetworkError) {
-          // Network errors are handled gracefully - no need to log or set error
+        if (isSessionMissing || isNetworkError) {
+          // Session or network errors are handled gracefully - no need to log or set error
           // Use cached data or continue without organization
-          setLoading(false);
+          if (!isDev) {
+            // Only log in development
+            setLoading(false);
+          } else {
+            // In dev, only log if we don't have cached data
+            if (!organizationId) {
+              // Silently handle - session will be ready soon
+            }
+            setLoading(false);
+          }
           fetchingRef.current = false;
           return;
         }
         
-        // Only log non-network errors
-        console.error('❌ useCurrentOrg: Auth error:', authError);
+        // Only log unexpected non-network, non-session errors in development
+        if (isDev) {
+          console.error('❌ useCurrentOrg: Unexpected auth error:', authError);
+        }
         setError('Authentication failed');
         setLoading(false);
         fetchingRef.current = false;
@@ -270,6 +318,13 @@ export const useCurrentOrg = () => {
 
       setLoading(false);
     } catch (error) {
+      // Check for session missing errors
+      const isSessionMissing = error instanceof Error && (
+        error.message?.includes('Auth session missing') ||
+        error.message?.includes('session') ||
+        (error as any).name === 'AuthSessionMissingError'
+      );
+      
       // Check for network/connection errors or timeouts - handle silently
       const isNetworkError = error instanceof Error && (
         error.message === 'Auth timeout' ||
@@ -280,26 +335,56 @@ export const useCurrentOrg = () => {
         error.message?.includes('network')
       );
       
-      // Don't set error for network/timeout errors, just continue with current state
-      if (isNetworkError) {
-        // Network errors handled gracefully - no need to log or set error
-        // This is expected behavior for slow connections or network issues
+      // Don't set error for session/network/timeout errors, just continue with current state
+      if (isSessionMissing || isNetworkError) {
+        // Session/network errors handled gracefully - no need to log or set error
+        // This is expected behavior when session is not ready or slow connections
+        // Use cached data if available
       } else {
-        console.error('useCurrentOrg: Unexpected error:', error);
+        // Only log unexpected errors in development
+        if (isDev) {
+          console.error('useCurrentOrg: Unexpected error:', error);
+        }
         setError('Failed to fetch organization');
       }
       setLoading(false);
     } finally {
       fetchingRef.current = false;
     }
-  }, []);
+  }, [organizationId, isDev]);
 
   useEffect(() => {
     // Only fetch if not in registration flow
     const registrationFlow = sessionStorage.getItem('registrationFlow');
     if (registrationFlow !== 'true') {
-      fetchCurrentOrg();
+      // Add small delay to ensure session is ready
+      const initTimeout = setTimeout(() => {
+        fetchCurrentOrg();
+      }, 100); // Small delay to allow session to initialize
+      
+      return () => clearTimeout(initTimeout);
     }
+
+    // Listen for organization switch events from useMultiOrganization
+    const handleOrganizationSwitch = async (event: CustomEvent) => {
+      console.log('📢 useCurrentOrg: Received organization-switched event:', event.detail);
+      // Clear cache and force refetch
+      const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      if (user) {
+        const cacheKey = `org-${user.id}`;
+        const localStorageKey = `org-cache-${user.id}`;
+        orgCache.delete(cacheKey);
+        try {
+          localStorage.removeItem(localStorageKey);
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+        lastUserIdRef.current = ''; // Force refetch
+        fetchCurrentOrg();
+      }
+    };
+
+    window.addEventListener('organization-switched', handleOrganizationSwitch as EventListener);
 
     // Listen for auth changes - but debounce them and avoid during registration
     let timeoutId: NodeJS.Timeout;
@@ -314,7 +399,8 @@ export const useCurrentOrg = () => {
       if (timeoutId) clearTimeout(timeoutId);
       
       // Only refetch on important auth events and debounce them more aggressively
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' && session) {
+        // Only fetch if we have a session
         timeoutId = setTimeout(() => {
           // Double check we're still not in registration flow
           const stillInRegistration = sessionStorage.getItem('registrationFlow') === 'true';
@@ -329,14 +415,15 @@ export const useCurrentOrg = () => {
         setError(null);
         orgCache.clear(); // Clear cache on sign out
       }
-      // Skip INITIAL_SESSION to prevent redundant calls
+      // Skip INITIAL_SESSION and TOKEN_REFRESHED to prevent redundant calls
     });
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
+      window.removeEventListener('organization-switched', handleOrganizationSwitch as EventListener);
     };
-  }, [fetchCurrentOrg]);
+  }, [fetchCurrentOrg, organizationId]);
 
   const switchOrganization = async (newOrgId: string) => {
     try {
@@ -438,8 +525,9 @@ export const useCurrentOrg = () => {
     fetchCurrentOrg();
   };
 
-  // Optimized logging - only log significant changes
-  if (error) {
+  // Optimized logging - only log significant changes in development
+  // Don't log session missing errors - they're expected during initial load
+  if (error && isDev && !error.includes('session') && !error.includes('Authentication failed')) {
     console.error('🏢 Organization error:', error);
   }
 

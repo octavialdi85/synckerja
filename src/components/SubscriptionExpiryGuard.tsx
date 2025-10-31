@@ -27,6 +27,7 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
   const [isChecking, setIsChecking] = useState(true);
   
   // Setup realtime subscription to listen for subscription changes
+  // Hook will handle conditional setup internally based on organizationId
   useSubscriptionExpiryRealtime();
 
   // Routes that should be accessible even when expired (to allow renewal)
@@ -65,16 +66,18 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     // STRICT CHECK: If subscription expired, lock access IMMEDIATELY
     // This check is based on trial_end_date or subscription_end_date from database
     if (expiryStatus.isExpired) {
-      console.warn('🚨 SUBSCRIPTION EXPIRED - LOCKING APPLICATION', {
-        isTrialExpired: expiryStatus.isTrialExpired,
-        isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
-        expiredDate: expiryStatus.expiredDate,
-        daysExpired: expiryStatus.daysExpired,
-        trialEndDate: expiryStatus.trialEndDate,
-        subscriptionEndDate: expiryStatus.subscriptionEndDate,
-        currentPath: location.pathname,
-        status: expiryStatus.status
-      });
+      if (import.meta.env.DEV) {
+        console.warn('🚨 SUBSCRIPTION EXPIRED - LOCKING APPLICATION', {
+          isTrialExpired: expiryStatus.isTrialExpired,
+          isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
+          expiredDate: expiryStatus.expiredDate,
+          daysExpired: expiryStatus.daysExpired,
+          trialEndDate: expiryStatus.trialEndDate,
+          subscriptionEndDate: expiryStatus.subscriptionEndDate,
+          currentPath: location.pathname,
+          status: expiryStatus.status
+        });
+      }
       setIsChecking(false);
       return;
     }
@@ -123,13 +126,15 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
   // This blocks ALL routes except renewal routes (handled by isAllowedRoute check above)
   // The check is based on trial_end_date or subscription_end_date from organization_subscriptions table
   if (expiryStatus.isExpired) {
-    console.warn('🔒 ACCESS DENIED: Subscription/Trial expired', {
-      expiredDate: expiryStatus.expiredDate,
-      daysExpired: expiryStatus.daysExpired,
-      trialEndDate: expiryStatus.trialEndDate,
-      subscriptionEndDate: expiryStatus.subscriptionEndDate,
-      currentPath: location.pathname
-    });
+    if (import.meta.env.DEV) {
+      console.warn('🔒 ACCESS DENIED: Subscription/Trial expired', {
+        expiredDate: expiryStatus.expiredDate,
+        daysExpired: expiryStatus.daysExpired,
+        trialEndDate: expiryStatus.trialEndDate,
+        subscriptionEndDate: expiryStatus.subscriptionEndDate,
+        currentPath: location.pathname
+      });
+    }
     return <SubscriptionExpiredPage expiryStatus={expiryStatus} />;
   }
 

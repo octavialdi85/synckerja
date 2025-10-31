@@ -302,9 +302,29 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching tasks:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          organizationId
+        });
+        throw error;
+      }
       
-      console.log('Fetched tasks:', data);
+      console.log('✅ Fetched tasks:', data);
+      console.log('📊 Task count:', data?.length || 0);
+      
+      // Debug: Log if no tasks found
+      if (!data || data.length === 0) {
+        console.warn('⚠️ No tasks found for organization:', organizationId);
+        console.warn('💡 This could mean:');
+        console.warn('   1. No tasks exist for this organization');
+        console.warn('   2. RLS policy is blocking access');
+        console.warn('   3. Organization ID mismatch');
+      }
       
       // Calculate progress for each task and synchronize status
       const tasksWithProgress = (data || []).map((task: any) => {

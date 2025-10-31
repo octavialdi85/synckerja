@@ -15,16 +15,23 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
  */
 export const useSubscriptionExpiryRealtime = () => {
   const queryClient = useQueryClient();
-  const { organizationId } = useCurrentOrg();
+  const { organizationId, loading } = useCurrentOrg();
   const channelRef = useRef<any>(null);
   const previousOrgIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Don't setup subscription if organization is still loading
+    if (loading) {
+      return;
+    }
+
     // CRITICAL: Cleanup previous subscription when organization changes
     if (previousOrgIdRef.current && previousOrgIdRef.current !== organizationId) {
       const oldChannelName = `subscription-expiry-realtime-${previousOrgIdRef.current}`;
       if (channelRef.current) {
-        console.log('🔌 Cleaning up realtime subscription for previous org:', previousOrgIdRef.current);
+        if (import.meta.env.DEV) {
+          console.log('🔌 Cleaning up realtime subscription for previous org:', previousOrgIdRef.current);
+        }
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
@@ -64,7 +71,9 @@ export const useSubscriptionExpiryRealtime = () => {
             return;
           }
 
-          console.log('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
+          if (import.meta.env.DEV) {
+            console.log('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
+          }
           
           // CRITICAL: Invalidate ALL subscription-related queries for THIS specific organization
           // This includes both subscription-expiry and subscriptionStatus queries
@@ -78,17 +87,25 @@ export const useSubscriptionExpiryRealtime = () => {
               refetchType: 'active' // Immediately refetch active queries
             })
           ]).then(() => {
-            console.log('✅ All subscription caches invalidated for org:', organizationId);
+            if (import.meta.env.DEV) {
+              console.log('✅ All subscription caches invalidated for org:', organizationId);
+            }
           }).catch((error) => {
-            console.warn('⚠️ Error invalidating subscription caches:', error);
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ Error invalidating subscription caches:', error);
+            }
           });
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Subscribed to subscription expiry realtime for org:', organizationId);
+          if (import.meta.env.DEV) {
+            console.log('✅ Subscribed to subscription expiry realtime for org:', organizationId);
+          }
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
+          if (import.meta.env.DEV) {
+            console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
+          }
         }
       });
 
@@ -98,11 +115,13 @@ export const useSubscriptionExpiryRealtime = () => {
     // Cleanup on unmount or organization change
     return () => {
       if (channelRef.current && previousOrgIdRef.current === organizationId) {
-        console.log('🔌 Unsubscribing from subscription expiry realtime for org:', organizationId);
+        if (import.meta.env.DEV) {
+          console.log('🔌 Unsubscribing from subscription expiry realtime for org:', organizationId);
+        }
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [organizationId, queryClient]); // Dependency on organizationId ensures re-subscribe on switch
+  }, [organizationId, queryClient, loading]); // Dependency on organizationId and loading ensures proper setup/cleanup
 };
 

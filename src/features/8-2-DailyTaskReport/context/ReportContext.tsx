@@ -100,13 +100,65 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         }));
         setRows(mapped);
 
-        // recent history (timeline)
-        const { data: history } = await supabase
-          .from('task_step_history')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(50);
-        const hist = history || [];
+        // recent history (timeline) - CRITICAL: Filter by organization_id to prevent data leakage
+        // Get history only for tasks in the current organization
+        const { data: taskIds } = await supabase
+          .from('daily_tasks')
+          .select('id')
+          .eq('organization_id', organizationId);
+        
+        const taskIdList = (taskIds || []).map(t => t.id);
+        
+        let history: any[] = [];
+        if (taskIdList.length > 0) {
+          // Get step IDs for these tasks
+          const { data: stepIds } = await supabase
+            .from('task_steps')
+            .select('id')
+            .in('task_id', taskIdList);
+          
+          const stepIdList = (stepIds || []).map(s => s.id);
+          
+          // Get sub-step IDs for these steps
+          let subStepIdList: string[] = [];
+          if (stepIdList.length > 0) {
+            const { data: subSteps } = await supabase
+              .from('task_steps_to_steps')
+              .select('id')
+              .in('parent_step_id', stepIdList);
+            subStepIdList = (subSteps || []).map(s => s.id);
+          }
+          
+          // Fetch history for steps and sub-steps in current organization
+          // CRITICAL: Filter by organization to prevent data leakage
+          if (stepIdList.length > 0 || subStepIdList.length > 0) {
+            let historyQuery = supabase
+              .from('task_step_history')
+              .select('*');
+            
+            // Build OR condition properly for Supabase
+            if (stepIdList.length > 0 && subStepIdList.length > 0) {
+              // Both conditions
+              historyQuery = historyQuery.or(
+                `task_step_id.in.(${stepIdList.join(',')}),task_steps_to_steps_id.in.(${subStepIdList.join(',')})`
+              );
+            } else if (stepIdList.length > 0) {
+              // Only step condition
+              historyQuery = historyQuery.in('task_step_id', stepIdList);
+            } else if (subStepIdList.length > 0) {
+              // Only sub-step condition
+              historyQuery = historyQuery.in('task_steps_to_steps_id', subStepIdList);
+            }
+            
+            const { data: historyData } = await historyQuery
+              .order('created_at', { ascending: false })
+              .limit(50);
+            
+            history = historyData || [];
+          }
+        }
+        
+        const hist = history;
 
         // Collect IDs for enrichment (both for blockers and updates)
         const rawBlockers = hist.filter((h: any) => h.action_type === 'blocker_added');
