@@ -32,11 +32,7 @@ const initialFormData: OrganizationFormData = {
   acceptTerms: false,
 };
 
-interface OrganizationFormProps {
-  onSuccess?: () => void;
-}
-
-const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
+const OrganizationForm = () => {
   const [formData, setFormData] = useState<OrganizationFormData>(initialFormData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,124 +54,137 @@ const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
         throw new Error('User not authenticated');
       }
 
-      // Create organization in database
-      const { data: organization, error } = await supabase
-        .from('organizations')
-        .insert([
-          {
-            company_name: data.name,
-            email: data.email,
-            phone_number: data.phone,
-            address: data.address,
-            website: data.website,
-            description: data.description,
-            industry: data.industry,
-            user_id: user.user.id,
-            created_by: user.user.id,
-            terms_accepted: !!data.acceptTerms,
-            terms_accepted_at: data.acceptTerms ? new Date().toISOString() : null,
-          }
-        ])
-        .select()
-        .single();
+      const userId = user.user.id;
+      const timestamp = new Date().toISOString();
 
-      if (error) {
-        throw error;
+      // Step 1: Fetch profile data and create organization in parallel (early optimization)
+      const [profileResult, orgResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('user_id', userId)
+          .single(),
+        supabase
+          .from('organizations')
+          .insert([
+            {
+              company_name: data.name,
+              email: data.email,
+              phone_number: data.phone,
+              address: data.address,
+              website: data.website,
+              description: data.description,
+              industry: data.industry,
+              user_id: userId,
+              created_by: userId,
+              terms_accepted: !!data.acceptTerms,
+              terms_accepted_at: data.acceptTerms ? timestamp : null,
+            }
+          ])
+          .select()
+          .single()
+      ]);
+
+      if (orgResult.error) {
+        throw orgResult.error;
       }
 
-      const orgData = organization as any;
+      const orgData = orgResult.data as any;
+      const profileData = profileResult.data;
 
-      // Create default department for the organization (no code to avoid global unique conflict)
-      const { data: department, error: deptError } = await supabase
-        .from('departments')
-        .insert({
-          name: data.name,
-          description: 'Default department',
-          organization_id: orgData.id,
-          is_default: true,
-          created_by: user.user.id,
-        })
-        .select('id')
-        .single();
+      // Step 2: Create department, user_organizations, user_roles, and employee in parallel
+      const [deptResult, userOrgResult, roleResult] = await Promise.all([
+        supabase
+          .from('departments')
+          .insert({
+            name: data.name,
+            description: 'Default department',
+            organization_id: orgData.id,
+            is_default: true,
+            created_by: userId,
+          })
+          .select('id')
+          .single(),
+        supabase
+          .from('user_organizations')
+          .insert({
+            user_id: userId,
+            organization_id: orgData.id,
+            is_active: true,
+            created_at: timestamp,
+            joined_at: timestamp,
+            updated_at: timestamp
+          }),
+        supabase
+          .from('user_roles')
+          .insert({
+            user_id: userId,
+            organization_id: orgData.id,
+            role: 'owner',
+            created_at: timestamp,
+            updated_at: timestamp
+          })
+      ]);
 
-      if (deptError) {
-        console.error('Error creating default department:', deptError);
+      if (deptResult.error) {
+        console.error('Error creating default department:', deptResult.error);
         throw new Error('Failed to create default department');
       }
 
-      // Create user_organizations entry to link user to organization
-      const { error: userOrgError } = await supabase
-        .from('user_organizations')
-        .insert({
-          user_id: user.user.id,
-          organization_id: orgData.id,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          joined_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (userOrgError) {
-        console.error('Error creating user organization:', userOrgError);
+      if (userOrgResult.error) {
+        console.error('Error creating user organization:', userOrgResult.error);
         throw new Error('Failed to link user to organization');
       }
 
-      // Create user_roles entry to assign user as owner
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: user.user.id,
-          organization_id: orgData.id,
-          role: 'owner',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (roleError) {
-        console.error('Error creating user role:', roleError);
+      if (roleResult.error) {
+        console.error('Error creating user role:', roleResult.error);
         throw new Error('Failed to assign user role');
       }
 
-      // Create employee entry for the creator
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('user_id', user.user.id)
-        .single();
+      // Step 3: Create employee and update profile in parallel
+      const [employeeResult, profileUpdateResult] = await Promise.all([
+        supabase
+          .from('employees')
+          .insert({
+            user_id: userId,
+            organization_id: orgData.id,
+            full_name: profileData?.full_name || 'User',
+            email: profileData?.email || null,
+            department_id: deptResult.data?.id || null,
+            created_at: timestamp,
+            updated_at: timestamp,
+            created_by: userId,
+          }),
+        supabase
+          .from('profiles')
+          .update({
+            active_organization_id: orgData.id,
+            organization_created: true,
+            updated_at: timestamp
+          })
+          .eq('user_id', userId)
+      ]);
 
-      const { error: employeeError } = await supabase
-        .from('employees')
-        .insert({
-          user_id: user.user.id,
-          organization_id: orgData.id,
-          full_name: profileData?.full_name || 'User',
-          email: profileData?.email || null,
-          department_id: department?.id || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          created_by: user.user.id,
-        });
-
-      if (employeeError) {
-        console.error('Error creating employee for creator:', employeeError);
+      if (employeeResult.error) {
+        console.error('Error creating employee for creator:', employeeResult.error);
         throw new Error('Failed to create initial employee');
       }
 
-      // Update user profile with active organization and mark organization_created
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          active_organization_id: orgData.id,
-          organization_created: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.user.id);
-
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
+      if (profileUpdateResult.error) {
+        console.error('Error updating profile:', profileUpdateResult.error);
         // Don't throw error here as organization was created successfully
       }
 
+      // Step 4: Check subscription status (can be done in parallel with profile update, but safer to do after)
+      const { data: orgCheck } = await supabase
+        .from('organizations')
+        .select('has_active_subscription')
+        .eq('id', orgData.id)
+        .single();
+
+      const hasActiveSubscription = orgCheck?.has_active_subscription === true;
+
+      // Show success toast
       toast({
         title: "Organisasi berhasil dibuat",
         description: `Organisasi ${data.name} telah berhasil dibuat.`
@@ -185,10 +194,21 @@ const OrganizationForm = ({ onSuccess }: OrganizationFormProps) => {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('newOrganizationId', orgData.id);
         sessionStorage.setItem('organizationJustCreated', 'true');
+        // Set force refresh flag to update user data context
+        sessionStorage.setItem('forceRefreshUserData', 'true');
       }
 
-      if (onSuccess) {
-        onSuccess();
+      // Simplified redirect logic - always redirect to create-plan if no active subscription
+      // Otherwise redirect to home
+      const redirectPath = hasActiveSubscription ? '/' : '/create-plan';
+      
+      // Use immediate window.location.href for forceful redirect that cannot be intercepted
+      // This ensures redirect happens even if other components try to interfere
+      if (typeof window !== 'undefined') {
+        // Small delay to ensure all state updates are complete, then force redirect
+        setTimeout(() => {
+          window.location.href = redirectPath;
+        }, 100);
       }
 
       return true;

@@ -161,6 +161,7 @@ export const ProtectedRoute = ({
  */
 export const PublicRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   // Show loading spinner while checking auth state
   if (loading) {
@@ -174,8 +175,17 @@ export const PublicRoute = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  // If user is authenticated, redirect to home
+  // If user is authenticated, redirect to home EXCEPT for login page with emailJustVerified flag
+  // This allows the login page to handle the emailJustVerified flow before redirect
   if (user) {
+    const isEmailJustVerified = sessionStorage.getItem('emailJustVerified') === 'true';
+    const isLoginPage = location.pathname === '/login';
+    
+    // Allow authenticated user to stay on login page if they just verified email
+    if (isLoginPage && isEmailJustVerified) {
+      return <>{children}</>;
+    }
+    
     return <Navigate to="/" replace />;
   }
 

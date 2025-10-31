@@ -62,7 +62,7 @@ const EmployeeWelcome = () => {
 
   // Show loading state with retry option after 10 seconds
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+    return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4">
         <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
           <CardContent className="p-6 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
@@ -86,7 +86,7 @@ const EmployeeWelcome = () => {
 
   // Show error state if no organization data after loading
   if (!loading && !organization) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+    return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4">
         <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
           <CardContent className="p-6 text-center">
             <div className="text-red-500 mb-4">
@@ -114,7 +114,7 @@ const EmployeeWelcome = () => {
 
   // Main render - show welcome page when data is loaded
   console.log('EmployeeWelcome: Rendering main content');
-  return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12">
+  return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-4">
       <Card className="w-full max-w-2xl shadow border rounded-2xl bg-white">
         <CardHeader className="text-center pb-6">
           <div className="flex justify-center mb-4">

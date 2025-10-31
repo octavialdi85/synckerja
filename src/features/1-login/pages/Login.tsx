@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/features/ui/card";
 import { Input } from "@/features/ui/input";
 import { Button } from "@/features/ui/button";
 import { Label } from "@/features/ui/label";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { AuthTestimonialsPanel } from "@/features/1-login/AuthTestimonialsPanel";
@@ -14,19 +14,50 @@ const Login = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const navigate = useNavigate();
 
   // Check if user is coming from email verification
   useEffect(() => {
-    const fromEmailVerification = sessionStorage.getItem('fromEmailVerification');
-    if (fromEmailVerification === 'true') {
-      toast({
-        title: "Email Berhasil Diverifikasi",
-        description: "Silakan login untuk melanjutkan pembuatan organisasi."
-      });
-      sessionStorage.removeItem('fromEmailVerification');
-    }
-  }, []);
+    const checkEmailVerificationStatus = async () => {
+      setCheckingAuth(true);
+      try {
+        // CRITICAL: Check if user is in registration flow - prevent redirect to /login
+        const registrationFlow = sessionStorage.getItem('registrationFlow');
+        const fromRegistration = sessionStorage.getItem('fromRegistration');
+        if (registrationFlow === 'true' || fromRegistration === 'true') {
+          // User is in registration flow, redirect to verify-email instead
+          console.log('Login: User in registration flow, redirecting to verify-email...');
+          navigate("/verify-email", { replace: true });
+          return;
+        }
+        
+        // Check if already authenticated
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // If user has a session, redirect to home
+          // Don't auto-redirect to /create-organization here - let user login first
+          console.log('Login: User already authenticated, redirecting to home...');
+          navigate("/", { replace: true });
+          return;
+        }
+        
+        // Handle toast for email verification
+        const fromEmailVerification = sessionStorage.getItem('fromEmailVerification');
+        if (fromEmailVerification === 'true') {
+          toast({
+            title: "Email Berhasil Diverifikasi",
+            description: "Silakan login untuk melanjutkan pembuatan organisasi."
+          });
+          sessionStorage.removeItem('fromEmailVerification');
+        }
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    
+    checkEmailVerificationStatus();
+  }, [navigate]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -116,15 +147,12 @@ const Login = () => {
         // Clear verification flow flag
         sessionStorage.removeItem('verificationFlow');
 
-        // Check if user is coming from email verification (new user without profile)
-        const emailJustVerified = sessionStorage.getItem('emailJustVerified');
+        // Check if user has organization
+        const hasOrganization = profile && 'active_organization_id' in profile && profile.active_organization_id !== null && profile.active_organization_id !== undefined;
         
-        // Check if user has a profile (existing users have profiles)
-        const hasProfile = profile !== null;
-
-        if (emailJustVerified === 'true' || !hasProfile) {
-          // New user: redirect to create organization
-          console.log('Login: New user detected, redirecting to create-organization...');
+        if (!hasOrganization) {
+          // User without organization: redirect to create organization
+          console.log('Login: User without organization detected, redirecting to create-organization...');
           sessionStorage.removeItem('emailJustVerified');
           
           toast({
@@ -134,7 +162,10 @@ const Login = () => {
           
           navigate("/create-organization", { replace: true });
         } else {
-          // Existing user: show welcome toast and go to home
+          // User with organization: show welcome toast and go to home
+          // Clear emailJustVerified flag if it exists
+          sessionStorage.removeItem('emailJustVerified');
+          
           toast({
             title: "Login berhasil",
             description: "Selamat datang kembali!"
@@ -152,6 +183,24 @@ const Login = () => {
       setLoading(false);
     }
   };
+
+  // Show loading while checking authentication status
+  if (checkingAuth) {
+    return <div className="min-h-screen flex">
+      <div className="hidden lg:flex lg:flex-1">
+        <AuthTestimonialsPanel />
+      </div>
+      <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-orange-500 mx-auto" />
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    </div>;
+  }
+
   return <div className="min-h-screen flex">
       {/* Left Panel - Testimonials */}
       <div className="hidden lg:flex lg:flex-1">

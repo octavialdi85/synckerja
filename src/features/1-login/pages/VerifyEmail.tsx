@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/features/ui/card";
 import { Button } from "@/features/ui/button";
 import { toast } from "@/features/1-login/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, RefreshCw, ExternalLink } from "lucide-react";
+import { Mail, RefreshCw, ExternalLink, CheckCircle2 } from "lucide-react";
 import { AuthTestimonialsPanel } from "@/features/1-login/AuthTestimonialsPanel";
 
 const VerifyEmail = () => {
@@ -13,10 +13,41 @@ const VerifyEmail = () => {
   const [userName, setUserName] = useState<string>("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
+  
+  // Refs untuk cleanup
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Helper function untuk clear registration flags
+  const clearRegistrationFlags = useCallback(() => {
+    sessionStorage.removeItem('registrationFlow');
+    sessionStorage.removeItem('fromRegistration');
+    sessionStorage.removeItem('userEmail');
+    sessionStorage.removeItem('userName');
+    sessionStorage.removeItem('emailError');
+    localStorage.removeItem('pendingEmailVerification');
+  }, []);
+
+  // Helper function untuk handle redirect setelah verifikasi berhasil
+  const handleVerificationSuccess = useCallback(() => {
+    clearRegistrationFlags();
+    
+    // Set flag to indicate email has been verified
+    sessionStorage.setItem('emailJustVerified', 'true');
+    sessionStorage.setItem('forceRefreshUserData', 'true');
+    sessionStorage.setItem('emailVerified', 'true');
+    
+    // Redirect to login
+    navigate("/login", { replace: true });
+  }, [clearRegistrationFlags, navigate]);
 
   // Check if user has valid access to this page
-  const checkValidAccess = async () => {
+  const checkValidAccess = useCallback(async () => {
     const registrationFlow = sessionStorage.getItem('registrationFlow');
     const fromRegistration = sessionStorage.getItem('fromRegistration');
     
@@ -53,7 +84,76 @@ const VerifyEmail = () => {
     }
 
     return false;
-  };
+  }, []);
+
+  // Optimized function untuk check verification status
+  const checkVerificationStatus = useCallback(async (userIdToCheck: string | null = null) => {
+    if (!isMountedRef.current) return false;
+
+    try {
+      setIsCheckingVerification(true);
+      
+      const targetUserId = userIdToCheck || userId || sessionStorage.getItem('pendingUserId');
+      
+      if (!targetUserId) {
+        // Try to get from session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const checkUserId = session.user.id;
+          
+          // Check email verification status
+          const { data: verificationToken, error } = await supabase
+            .from('email_verification_tokens')
+            .select('email_verified')
+            .eq('user_id', checkUserId)
+            .eq('email_verified', true)
+            .order('used_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (error) {
+            console.error('Error checking verification:', error);
+            return false;
+          }
+          
+          if (verificationToken?.email_verified) {
+            handleVerificationSuccess();
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Check email verification status dengan user ID
+      const { data: verificationToken, error } = await supabase
+        .from('email_verification_tokens')
+        .select('email_verified')
+        .eq('user_id', targetUserId)
+        .eq('email_verified', true)
+        .order('used_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking verification:', error);
+        return false;
+      }
+
+      if (verificationToken?.email_verified) {
+        handleVerificationSuccess();
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking email verification status:', error);
+      return false;
+    } finally {
+      if (isMountedRef.current) {
+        setIsCheckingVerification(false);
+      }
+    }
+  }, [userId, handleVerificationSuccess]);
 
   // Function to open email provider
   const openEmailProvider = () => {
@@ -85,8 +185,17 @@ const VerifyEmail = () => {
     window.open(emailUrl, '_blank');
   };
 
-  // Fungsi untuk kirim ulang email verifikasi
-  const resendVerificationEmail = async () => {
+  // Fungsi untuk kirim ulang email verifikasi dengan rate limiting
+  const resendVerificationEmail = useCallback(async () => {
+    // Check cooldown
+    if (resendCooldown > 0) {
+      toast({
+        title: "Mohon tunggu",
+        description: `Silakan tunggu ${resendCooldown} detik sebelum mengirim ulang email.`,
+      });
+      return;
+    }
+
     setResendingEmail(true);
     setEmailError(null);
 
@@ -110,6 +219,27 @@ const VerifyEmail = () => {
         description: "Email verifikasi telah dikirim ulang. Silakan cek kotak masuk Anda.",
       });
 
+      // Set cooldown period (60 seconds)
+      setResendCooldown(60);
+      
+      // Start cooldown timer
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
+      
+      cooldownIntervalRef.current = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            if (cooldownIntervalRef.current) {
+              clearInterval(cooldownIntervalRef.current);
+              cooldownIntervalRef.current = null;
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
     } catch (err) {
       console.error("Error resending email:", err);
       const errorMessage = err instanceof Error ? err.message : "Terjadi kesalahan saat mengirim ulang email.";
@@ -117,14 +247,35 @@ const VerifyEmail = () => {
     } finally {
       setResendingEmail(false);
     }
-  };
+  }, [userEmail, userName, resendCooldown]);
+
+  // Cleanup function
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+      
+      // Clear polling interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      
+      // Clear cooldown interval
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+        cooldownIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Check access on mount
     const performAccessCheck = async () => {
       // Do NOT force sign-out here to avoid breaking ongoing flows
       const hasValidAccess = await checkValidAccess();
-      if (!hasValidAccess) {
+      if (!hasValidAccess || !isMountedRef.current) {
         console.log("Invalid access to verify-email page, redirecting to login");
         navigate("/login");
         return;
@@ -135,14 +286,19 @@ const VerifyEmail = () => {
     };
 
     const initializePage = async () => {
+      if (!isMountedRef.current) return;
+
       // Get stored data
       const storedEmail = sessionStorage.getItem('userEmail');
       const storedName = sessionStorage.getItem('userName');
       const storedEmailError = sessionStorage.getItem('emailError');
       const fromRegistration = sessionStorage.getItem('fromRegistration');
+      const pendingUserId = sessionStorage.getItem('pendingUserId');
       
       if (storedEmail) setUserEmail(storedEmail);
       if (storedName) setUserName(storedName);
+      if (pendingUserId) setUserId(pendingUserId);
+      
       if (storedEmailError) {
         setEmailError(storedEmailError);
         // Clear the stored error
@@ -157,52 +313,53 @@ const VerifyEmail = () => {
         });
       }
 
-      // Check if email is already verified
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          // Check email verification status
-          const { data: verificationToken } = await supabase
-            .from('email_verification_tokens')
-            .select('email_verified')
-            .eq('user_id', session.user.id)
-            .eq('email_verified', true)
-            .order('used_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (verificationToken && (verificationToken as any).email_verified) {
-            console.log('Email already verified, keeping user on verify-email page to read instructions');
-            
-            // Clear registration flags
-            sessionStorage.removeItem('registrationFlow');
-            sessionStorage.removeItem('fromRegistration');
-            sessionStorage.removeItem('userEmail');
-            sessionStorage.removeItem('userName');
-            sessionStorage.removeItem('emailError');
-            localStorage.removeItem('pendingEmailVerification');
-            
-            // Set flag to indicate email has been verified
-            sessionStorage.setItem('emailJustVerified', 'true');
-            sessionStorage.setItem('forceRefreshUserData', 'true');
-            sessionStorage.setItem('emailVerified', 'true');
-            
-            // DON'T redirect here - let the user click "Back to Login" button
-            // The login page will handle the redirect to create-organization based on emailJustVerified flag
-          }
-        }
-      } catch (error) {
-        console.error('Error checking email verification status:', error);
+      // Initial check if email is already verified
+      const isVerified = await checkVerificationStatus(pendingUserId);
+      
+      if (isVerified || !isMountedRef.current) {
+        setIsLoading(false);
+        return;
       }
 
       setIsLoading(false);
 
-      // Auth state change listener removed to prevent infinite loop
+      // Start auto-polling untuk check verification status setiap 5 detik
+      // Hanya jika belum verified
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
+      pollingIntervalRef.current = setInterval(async () => {
+        if (!isMountedRef.current) {
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          return;
+        }
+
+        const verified = await checkVerificationStatus(pendingUserId);
+        if (verified) {
+          // Stop polling if verified
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        }
+      }, 5000); // Poll every 5 seconds
     };
 
     // Start the access check
     performAccessCheck();
-  }, [navigate]);
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [navigate, checkValidAccess, checkVerificationStatus]);
 
   // Show loading while checking access
   if (isLoading) {
@@ -240,6 +397,7 @@ const VerifyEmail = () => {
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-slate-800 mb-2">Verifikasi Email</h1>
             <p className="text-muted-foreground">Periksa email Anda untuk melanjutkan</p>
+            <p className="text-xs text-muted-foreground mt-1">Status verifikasi dicek otomatis setiap 5 detik</p>
           </div>
 
           <Card className="border-0 shadow-none bg-transparent">
@@ -265,7 +423,7 @@ const VerifyEmail = () => {
               )}
 
               {/* Steps info */}
-              <div className="w-full bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
+              <div className="w-full bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                 <div className="text-sm text-green-700">
                   <p className="font-medium mb-2 text-green-800">Langkah verifikasi:</p>
                   <ol className="list-decimal list-inside space-y-1 text-sm">
@@ -276,6 +434,16 @@ const VerifyEmail = () => {
                   </ol>
                 </div>
               </div>
+
+              {/* Auto-checking indicator */}
+              {isCheckingVerification && (
+                <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-center space-x-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                    <p className="text-sm text-blue-700">Memeriksa status verifikasi...</p>
+                  </div>
+                </div>
+              )}
           
               {/* Action Buttons */}
               <div className="w-full space-y-3">
@@ -284,22 +452,27 @@ const VerifyEmail = () => {
                   <Button
                     className="w-full h-12 font-medium bg-orange-500 hover:bg-orange-600 text-white"
                     onClick={openEmailProvider}
+                    disabled={isCheckingVerification}
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Buka Email
                   </Button>
                 )}
                 
-                {/* Resend Email Button */}
+                {/* Resend Email Button with Cooldown */}
                 <Button
                   variant="outline"
                   className="w-full h-12 font-medium"
                   onClick={resendVerificationEmail}
-                  disabled={resendingEmail}
+                  disabled={resendingEmail || resendCooldown > 0 || isCheckingVerification}
                 >
                   {resendingEmail ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Mengirim...
+                    </>
+                  ) : resendCooldown > 0 ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" /> Kirim Ulang ({resendCooldown}s)
                     </>
                   ) : (
                     <>
@@ -314,13 +487,10 @@ const VerifyEmail = () => {
                   className="w-full h-12 font-medium"
                   onClick={() => {
                     // Clear registration flow flags
-                    sessionStorage.removeItem('registrationFlow');
-                    sessionStorage.removeItem('fromRegistration');
-                    sessionStorage.removeItem('userEmail');
-                    sessionStorage.removeItem('userName');
-                    sessionStorage.removeItem('emailError');
+                    clearRegistrationFlags();
                     navigate("/login");
                   }}
+                  disabled={isCheckingVerification}
                 >
                   Kembali ke Login
                 </Button>

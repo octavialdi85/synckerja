@@ -5,7 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Slider } from '@/features/ui/slider';
 import { Switch } from '@/features/ui/switch';
 import { Label } from '@/features/ui/label';
-import { Check, Zap, Users, Shield, Star } from 'lucide-react';
+import { Check, Zap, Users, Shield, Star, Loader2 } from 'lucide-react';
 import { useSubscriptionPlans } from '@/features/1-login/hooks/useSubscriptionPlans';
 import { useOptimizedSubscription, SubscriptionPlan } from '@/features/1-login/hooks/useOptimizedSubscription';
 import { useMidtransPayment } from '@/features/1-login/hooks/useMidtransPayment';
@@ -15,6 +15,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { formatIDR, getMonthlyPriceForMembers, getYearlyPriceForMembers } from '@/features/1-login/utils/subscriptionUtils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 const CreatePlan = () => {
   const [memberCounts, setMemberCounts] = useState<{ [key: string]: number }>({});
@@ -29,6 +30,7 @@ const CreatePlan = () => {
   const { mutate: createSubscription, isPending: isCreatingSubscription } = useCreateSubscription();
   const { data: currentEmployeeCount = 0 } = useEmployeeCount();
   const { organizationId, loading: orgLoading } = useCurrentOrg();
+  const { isAuthenticated, isEmailVerified, hasOrganization, loading: userDataLoading } = useCentralizedUserData();
 
   // Fallback mechanism to check sessionStorage if organizationId is not available
   useEffect(() => {
@@ -41,6 +43,37 @@ const CreatePlan = () => {
       }
     }
   }, [organizationId, orgLoading]);
+
+  // Check authentication and email verification before rendering
+  useEffect(() => {
+    if (userDataLoading) return;
+    
+    // Check if organization was just created (skip redirect to create-organization)
+    const organizationJustCreated = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('organizationJustCreated') === 'true';
+    
+    if (!isAuthenticated) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if (!isEmailVerified) {
+      navigate('/verify-email', { replace: true });
+      return;
+    }
+    
+    // Skip redirect to create-organization if organization was just created
+    // This ensures create-plan page stays visible on mobile after organization creation
+    if (!hasOrganization && !organizationJustCreated) {
+      navigate('/create-organization', { replace: true });
+      return;
+    }
+    
+    // If organization was just created but context hasn't updated yet, show loading
+    if (organizationJustCreated && !hasOrganization) {
+      console.log('CreatePlan: Organization just created, waiting for context update...');
+      // Don't redirect, just wait for context to update
+      return;
+    }
+  }, [isAuthenticated, isEmailVerified, hasOrganization, userDataLoading, navigate]);
 
   // Use organizationId from hook or fallback - prioritize fallback for new organizations
   const effectiveOrgId = fallbackOrgId || organizationId;
@@ -160,6 +193,25 @@ const CreatePlan = () => {
     if (planName.toLowerCase().includes('enterprise')) return Shield;
     return Star;
   };
+
+  // Check if organization was just created (for loading state logic)
+  const organizationJustCreated = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('organizationJustCreated') === 'true';
+  
+  // Show loading state while checking authentication and email verification
+  // Also show loading if organization was just created but context hasn't updated yet
+  if (userDataLoading || (organizationJustCreated && !hasOrganization && !orgLoading)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4">
+        <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
+          <CardContent className="p-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Memuat Data...</h2>
+            <p className="text-gray-600 text-sm">Mohon tunggu sebentar...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

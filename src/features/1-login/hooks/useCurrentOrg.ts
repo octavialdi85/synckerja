@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { retryableAuthOperation } from '@/integrations/supabase/retry';
 
 // Global cache for organization data
 const orgCache = new Map<string, { data: string | null; timestamp: number }>();
@@ -86,12 +87,17 @@ export const useCurrentOrg = () => {
         return;
       }
       
-      // Get current user with optimized timeout
+      // Get current user with optimized timeout and retry
+      const getUserWithRetry = () => retryableAuthOperation(
+        () => supabase.auth.getUser(),
+        { maxRetries: 1, initialDelay: 300 }
+      );
+      
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Auth timeout')), 5000) // Reduced to 5 seconds
       );
       
-      const authPromise = supabase.auth.getUser();
+      const authPromise = getUserWithRetry();
       const { data: { user }, error: authError } = await Promise.race([
         authPromise, 
         timeoutPromise
@@ -99,12 +105,22 @@ export const useCurrentOrg = () => {
       
       
       if (authError) {
-        // Don't set error for timeout, just use cached data or default
-        if (authError.message === 'Auth timeout') {
+        // Check for network/connection errors or timeouts - handle silently
+        const isNetworkError = authError.message === 'Auth timeout' ||
+                              authError.message?.includes('Failed to fetch') ||
+                              authError.message?.includes('ERR_CONNECTION_CLOSED') ||
+                              authError.name === 'AuthRetryableFetchError' ||
+                              authError.message?.includes('network');
+        
+        if (isNetworkError) {
+          // Network errors are handled gracefully - no need to log or set error
+          // Use cached data or continue without organization
           setLoading(false);
           fetchingRef.current = false;
           return;
         }
+        
+        // Only log non-network errors
         console.error('❌ useCurrentOrg: Auth error:', authError);
         setError('Authentication failed');
         setLoading(false);
@@ -254,10 +270,20 @@ export const useCurrentOrg = () => {
 
       setLoading(false);
     } catch (error) {
-      // Don't set error for timeout errors, just continue with current state
-      if (error instanceof Error && (error.message === 'Auth timeout' || error.message === 'Profile fetch timeout')) {
-        // Timeout handled gracefully - no need to log or set error
-        // This is expected behavior for slow connections
+      // Check for network/connection errors or timeouts - handle silently
+      const isNetworkError = error instanceof Error && (
+        error.message === 'Auth timeout' ||
+        error.message === 'Profile fetch timeout' ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('ERR_CONNECTION_CLOSED') ||
+        (error as any).name === 'AuthRetryableFetchError' ||
+        error.message?.includes('network')
+      );
+      
+      // Don't set error for network/timeout errors, just continue with current state
+      if (isNetworkError) {
+        // Network errors handled gracefully - no need to log or set error
+        // This is expected behavior for slow connections or network issues
       } else {
         console.error('useCurrentOrg: Unexpected error:', error);
         setError('Failed to fetch organization');

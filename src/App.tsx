@@ -16,10 +16,8 @@ import EmailVerified from "./features/1-login/pages/EmailVerified";
 import CreateOrganization from "./features/1-login/pages/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
 import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
-import MobileEmployeeWelcome from "./mobile/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
 import NotFound from "./features/1-login/pages/NotFound";
-import MobileLogin from "./mobile/pages/Login";
 import { useIsMobile } from "./mobile/hooks/use-mobile";
 import ModernHomePage from "./features/1_home/pages/ModernHomePage";
 import MobileHome from "./mobile/pages/home/Absensi";
@@ -27,7 +25,6 @@ import MobileProfile from "./mobile/pages/home/Profile";
 import MobileSchedule from "./mobile/pages/home/Schedule";
 import MobileClientVisit from "./mobile/pages/home/ClientVisit";
 import MobileReports from "./mobile/pages/home/Reports";
-import MobileCreateOrganization from "./mobile/pages/CreateOrganization";
 import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
 import DailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
 import MeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
@@ -79,11 +76,9 @@ const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Route element selector for Login: uses viewport hook + UA heuristics
+// Always use the feature-based Login.tsx for all devices (mobile and desktop)
 const LoginRouteElement = () => {
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileLogin /> : <Login />;
+  return <Login />;
 };
 
 // Route element selector for Home: uses viewport hook + UA heuristics
@@ -95,18 +90,14 @@ const HomeRouteElement = () => {
 };
 
 // Route element selector for EmployeeWelcome
+// Always use the feature-based EmployeeWelcome.tsx for all devices (mobile and desktop)
 const EmployeeWelcomeRouteElement = () => {
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileEmployeeWelcome /> : <EmployeeWelcome />;
+  return <EmployeeWelcome />;
 };
 // Route element selector for Create Organization
+// Always use the feature-based CreateOrganization.tsx for all devices (mobile and desktop)
 const CreateOrganizationRouteElement = () => {
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileCreateOrganization /> : <CreateOrganization />;
+  return <CreateOrganization />;
 };
 
 // Route element selector for Profile

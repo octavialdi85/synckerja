@@ -13,6 +13,37 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+    detectSessionInUrl: true,
+    // Flow type for better compatibility
+    flowType: 'pkce',
+  },
+  global: {
+    // Better error handling for network issues
+    fetch: (url, options = {}) => {
+      // Create abort controller for timeout if not already provided
+      const controller = options.signal ? undefined : new AbortController();
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 10000) : undefined; // 10 second timeout
+      
+      return fetch(url, {
+        ...options,
+        signal: options.signal || controller?.signal,
+      }).catch((error) => {
+        // Clear timeout if request completes
+        if (timeoutId) clearTimeout(timeoutId);
+        
+        // Map network errors to be more descriptive
+        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+          throw new Error('Network request timeout');
+        }
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+          throw new Error('Network request failed - please check your connection');
+        }
+        throw error;
+      }).finally(() => {
+        // Clear timeout on success too
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+    },
+  },
 });
 

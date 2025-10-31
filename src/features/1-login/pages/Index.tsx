@@ -10,6 +10,15 @@ const Index = () => {
   // Check authentication status and redirect accordingly
   useEffect(() => {
     if (!loading) {
+      // CRITICAL: Check if user is in registration flow - prevent redirect to /login
+      const registrationFlow = sessionStorage.getItem('registrationFlow');
+      const fromRegistration = sessionStorage.getItem('fromRegistration');
+      if (registrationFlow === 'true' || fromRegistration === 'true') {
+        // User is in registration flow, redirect to verify-email instead
+        navigate("/verify-email", { replace: true });
+        return;
+      }
+      
       if (user) {
         // User is authenticated, redirect to home
         navigate('/', { replace: true });

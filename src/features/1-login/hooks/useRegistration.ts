@@ -91,13 +91,16 @@ export const useRegistration = () => {
 
       console.log('Starting registration process for:', sanitizedEmail);
 
-      // OPTIMIZED: Simplified registration without immediate logout
+      // OPTIMIZED: Registration without auto-login to ensure last_sign_in_at remains NULL
+      // By not passing autoConfirm: true, user must verify email before first login
       const { data, error } = await supabase.auth.signUp({
         email: sanitizedEmail,
         password,
         options: { 
           data: { full_name: fullName.trim() },
-          emailRedirectTo: `${window.location.origin}/email-verified`
+          emailRedirectTo: `${window.location.origin}/email-verified`,
+          // Ensure email confirmation is required (default behavior)
+          // Do not set autoConfirm: true to prevent immediate login
         },
       });
 
@@ -152,17 +155,50 @@ export const useRegistration = () => {
       if (data.user) {
         console.log("User registered successfully:", data.user.id);
         
-        // Store user info for verification process
+        // Store user info for verification process FIRST (before signOut)
+        // This prevents redirect to /login during registration flow
         sessionStorage.setItem('pendingUserId', data.user.id);
         sessionStorage.setItem('registrationFlow', 'true');
         sessionStorage.setItem('fromRegistration', 'true');
         sessionStorage.setItem('userEmail', sanitizedEmail);
         sessionStorage.setItem('userName', fullName.trim());
         
-        // Wait a bit for database triggers to complete
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Navigate to verify-email IMMEDIATELY to prevent redirect to /login
+        // We'll do signOut in the background
+        navigate("/verify-email", { replace: true });
+        
+        // CRITICAL: Sign out after navigation to ensure "Last sign in at" remains NULL
+        // This ensures no session is created and the user hasn't actually logged in yet
+        // Do this in the background so it doesn't block navigation
+        setTimeout(async () => {
+          try {
+            console.log('Signing out after registration to preserve NULL last_sign_in_at...');
+            await supabase.auth.signOut({ scope: 'global' });
+            
+            // Additionally, manually remove auth tokens from localStorage to ensure no session persists
+            // This prevents any accidental session creation that might update last_sign_in_at
+            Object.keys(localStorage).forEach((key) => {
+              if (key.startsWith('supabase.auth.token') || 
+                  key.startsWith('sb-') && key.includes('auth-token')) {
+                localStorage.removeItem(key);
+              }
+            });
+            
+            console.log('Successfully signed out and cleared auth tokens after registration');
+          } catch (signOutError) {
+            console.warn('Error signing out after registration (non-critical):', signOutError);
+            // Even if signOut fails, manually clear auth tokens as fallback
+            Object.keys(localStorage).forEach((key) => {
+              if (key.startsWith('supabase.auth.token') || 
+                  key.startsWith('sb-') && key.includes('auth-token')) {
+                localStorage.removeItem(key);
+              }
+            });
+          }
+        }, 100); // Small delay to ensure navigation completes first
         
         // Send confirmation email dengan custom link
+        // Note: Navigation already happened above, so we're already on verify-email page
         try {
           console.log('Sending confirmation email...');
           
@@ -178,9 +214,6 @@ export const useRegistration = () => {
           
           // Clear registration in progress flag but keep flow flags
           sessionStorage.removeItem('registrationInProgress');
-          
-          // Navigate to verify-email page immediately
-          navigate("/verify-email", { replace: true });
           
         } catch (emailError) {
           console.error("Error sending confirmation email:", emailError);
@@ -200,7 +233,7 @@ export const useRegistration = () => {
           });
           
           sessionStorage.removeItem('registrationInProgress');
-          navigate("/verify-email", { replace: true });
+          // Navigation already happened, no need to navigate again
         }
         
         return;

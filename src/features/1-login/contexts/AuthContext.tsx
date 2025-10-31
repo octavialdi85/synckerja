@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, ReactNod
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { forceAuthReset } from '@/features/1-login/utils/authCleanup';
+import { retryableAuthOperation } from '@/integrations/supabase/retry';
 
 interface AuthContextType {
   user: User | null;
@@ -44,6 +45,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       async (event, session) => {
         if (!mounted) return;
 
+        // Handle token refresh errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.warn('AuthContext: Token refresh failed - no session returned, forcing reset');
+          forceAuthReset();
+          return;
+        }
+
         // Debounce auth logging to prevent spam
         const eventKey = `${event}-${session?.user?.id || 'null'}`;
         if (lastAuthEventRef.current !== eventKey) {
@@ -76,11 +84,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
+    // Set up global error handler for unhandled auth errors
+    // This catches errors from Supabase's internal token refresh mechanism
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const error = event.reason;
+      // Check if this is a Supabase auth error related to refresh tokens
+      const isAuthError = error?.message?.includes('Invalid Refresh Token') ||
+                         error?.message?.includes('Refresh Token Not Found') ||
+                         (error?.name === 'AuthApiError' && 
+                          (error?.message?.includes('refresh_token') || 
+                           error?.status === 400));
+      
+      if (isAuthError) {
+        console.warn('AuthContext: Unhandled refresh token error detected, cleaning up');
+        event.preventDefault(); // Prevent console error spam
+        if (mounted) {
+          forceAuthReset();
+        }
+      }
+    };
+    
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     // Get initial session with stale auth detection
     const getInitialSession = async () => {
       try {
-        // Add timeout to prevent hanging
-        const sessionPromise = supabase.auth.getSession();
+        // Add timeout to prevent hanging, with retry for network failures
+        const getSessionWithRetry = () => retryableAuthOperation(
+          () => supabase.auth.getSession(),
+          { maxRetries: 1, initialDelay: 300 }
+        );
+        
+        const sessionPromise = getSessionWithRetry();
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Session check timeout')), 5000)
         );
@@ -90,22 +125,53 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (!mounted) return;
         
         if (error) {
-          console.error('Error getting session:', error);
+          // Check for network/connection errors - handle silently
+          const isNetworkError = error.message?.includes('Failed to fetch') ||
+                                error.message?.includes('ERR_CONNECTION_CLOSED') ||
+                                error.name === 'AuthRetryableFetchError' ||
+                                error.message?.includes('network') ||
+                                error.message?.includes('timeout');
+          
+          if (isNetworkError) {
+            // Network errors are handled gracefully - no need to log or set error
+            // Assume no session on network failure
+            if (mounted) {
+              setSession(null);
+              setUser(null);
+              setLoading(false);
+            }
+            return;
+          }
+          
+          // Only log non-network errors
+          if (!isNetworkError) {
+            console.error('Error getting session:', error);
+          }
           
           // Check for stale auth errors
           if (error.message?.includes('JWT expired') ||
-              error.message?.includes('User from sub claim in JWT does not exist')) {
+              error.message?.includes('User from sub claim in JWT does not exist') ||
+              error.message?.includes('Invalid Refresh Token') ||
+              error.message?.includes('Refresh Token Not Found')) {
             console.warn('AuthContext: Stale auth detected, forcing reset');
             forceAuthReset();
             return;
           }
           
-          setError(error.message);
+          // Only set error for non-network issues
+          if (!isNetworkError) {
+            setError(error.message);
+          }
         } else {
-          // If we have a session, verify it's valid with timeout
+          // If we have a session, verify it's valid with timeout and retry
           if (session?.user) {
             try {
-              const userPromise = supabase.auth.getUser();
+              const getUserWithRetry = () => retryableAuthOperation(
+                () => supabase.auth.getUser(),
+                { maxRetries: 1, initialDelay: 300 }
+              );
+              
+              const userPromise = getUserWithRetry();
               const userTimeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('User check timeout')), 3000)
               );
@@ -113,27 +179,54 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               const { error: userError } = await Promise.race([userPromise, userTimeoutPromise]) as any;
               
               if (userError) {
+                // Check for network errors first
+                const isNetworkError = userError.message?.includes('Failed to fetch') ||
+                                      userError.message?.includes('ERR_CONNECTION_CLOSED') ||
+                                      userError.name === 'AuthRetryableFetchError' ||
+                                      userError.message?.includes('network') ||
+                                      userError.message === 'User check timeout';
+                
+                if (isNetworkError) {
+                  // Network timeout - assume session is valid since we already have it
+                  setSession(session);
+                  setUser(session?.user ?? null);
+                  return;
+                }
+                
                 if (userError.message?.includes('User from sub claim in JWT does not exist') ||
-                    userError.message?.includes('user_not_found')) {
-                  console.warn('AuthContext: Invalid user in session, forcing reset');
+                    userError.message?.includes('user_not_found') ||
+                    userError.message?.includes('Invalid Refresh Token') ||
+                    userError.message?.includes('Refresh Token Not Found')) {
+                  console.warn('AuthContext: Invalid user in session or refresh token error, forcing reset');
                   forceAuthReset();
                   return;
                 }
               }
             } catch (userCheckError: any) {
-              console.warn('AuthContext: User verification failed:', userCheckError);
+              // Check for network/timeout errors first
+              const isNetworkError = userCheckError?.message?.includes('Failed to fetch') ||
+                                    userCheckError?.message?.includes('ERR_CONNECTION_CLOSED') ||
+                                    userCheckError?.name === 'AuthRetryableFetchError' ||
+                                    userCheckError?.message?.includes('network') ||
+                                    userCheckError?.message === 'User check timeout';
               
-              // Ignore timeout errors - session is probably valid
-              if (userCheckError?.message === 'User check timeout') {
-                console.log('AuthContext: User check timeout (non-critical), assuming valid session');
+              // Ignore network/timeout errors - session is probably valid
+              if (isNetworkError) {
                 setSession(session);
                 setUser(session?.user ?? null);
                 return;
               }
               
+              // Only log non-network errors
+              if (!isNetworkError) {
+                console.warn('AuthContext: User verification failed:', userCheckError);
+              }
+              
               if (userCheckError?.status === 403 ||
-                  userCheckError?.message?.includes('User from sub claim in JWT does not exist')) {
-                console.warn('AuthContext: 403 or user not found, forcing reset');
+                  userCheckError?.message?.includes('User from sub claim in JWT does not exist') ||
+                  userCheckError?.message?.includes('Invalid Refresh Token') ||
+                  userCheckError?.message?.includes('Refresh Token Not Found')) {
+                console.warn('AuthContext: 403 or user not found or invalid refresh token, forcing reset');
                 forceAuthReset();
                 return;
               }
@@ -144,11 +237,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(session?.user ?? null);
         }
       } catch (err: any) {
-        console.error('Session check error:', err);
+        // Check for network/connection errors or timeouts - handle silently
+        const isNetworkError = err?.message?.includes('Failed to fetch') ||
+                              err?.message?.includes('ERR_CONNECTION_CLOSED') ||
+                              err?.name === 'AuthRetryableFetchError' ||
+                              err?.message?.includes('network') ||
+                              err?.message === 'Session check timeout' ||
+                              err?.message === 'User check timeout';
         
-        // Ignore timeout errors - assume no session
-        if (err?.message === 'Session check timeout') {
-          console.log('AuthContext: Session check timeout, assuming no session');
+        // Ignore timeout and network errors - assume no session
+        if (isNetworkError) {
+          // Silently handle network failures - no logging needed
           if (mounted) {
             setSession(null);
             setUser(null);
@@ -157,15 +256,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return;
         }
         
+        // Only log non-network errors
+        if (!isNetworkError) {
+          console.error('Session check error:', err);
+        }
+        
         // Handle auth errors in catch block too
         if (err?.message?.includes('User from sub claim in JWT does not exist') ||
-            err?.status === 403) {
+            err?.status === 403 ||
+            err?.message?.includes('Invalid Refresh Token') ||
+            err?.message?.includes('Refresh Token Not Found')) {
           console.warn('AuthContext: Auth error in session check, forcing reset');
           forceAuthReset();
           return;
         }
         
-        if (mounted) {
+        // Only set error for non-network issues
+        if (!isNetworkError && mounted) {
           setError('Failed to check authentication status');
         }
       } finally {
@@ -180,6 +287,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
 

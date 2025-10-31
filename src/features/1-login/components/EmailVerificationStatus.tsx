@@ -14,8 +14,7 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
   const [loading, setLoading] = useState(true);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
-  const [hasRedirected, setHasRedirected] = useState(false);
+  const [countdown, setCountdown] = useState(5);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -114,6 +113,9 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // Keep loading state while redirecting
+        setLoading(true);
+
         // Clear registration flags
         sessionStorage.removeItem('registrationFlow');
         sessionStorage.removeItem('fromRegistration');
@@ -127,54 +129,46 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
         sessionStorage.setItem('forceRefreshUserData', 'true');
         sessionStorage.setItem('emailVerified', 'true');
         
-        // Check if user has organization
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('active_organization_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        // For new users without organization, always redirect to /login
-        // Login page will then redirect to /create-organization
-        console.log('Email verified successfully, redirecting to login in 5 seconds...');
-        setTimeout(() => {
-          navigate("/login", { replace: true });
-        }, 5000);
+        // Set verified state to show success message with countdown
+        // Don't redirect immediately - let the countdown handle it
+        console.log('Email verified successfully, starting countdown...');
       } catch (error) {
-        console.error('Error checking organization status:', error);
-        // Default to login if check fails
-        setTimeout(() => {
-          navigate("/login", { replace: true });
-        }, 5000);
+        console.error('Error during verification completion:', error);
+        // Default to login if check fails after countdown
+        setVerified(true); // Still show success state
       }
     };
 
     verifyEmail();
   }, [token, navigate]);
 
-  // Start a visible countdown once verified, to match the 5s redirect
+  // Countdown timer effect for auto-redirect after verification
   useEffect(() => {
-    if (!verified) return;
+    if (!verified || error) {
+      // Reset countdown if not verified or has error
+      setCountdown(5);
+      return;
+    }
+
+    // Reset countdown to 5 when verified becomes true
     setCountdown(5);
+
+    // Start countdown when verified
     const timer = setInterval(() => {
-      setCountdown(prev => {
+      setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          // Redirect to login when countdown reaches 0
+          console.log('Countdown finished, redirecting to login...');
+          navigate("/login", { replace: true });
           return 0;
         }
         return prev - 1;
       });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [verified]);
+    }, 1000); // Update every second
 
-  // Fallback: ensure redirect when countdown hits 0
-  useEffect(() => {
-    if (verified && countdown === 0 && !hasRedirected) {
-      setHasRedirected(true);
-      navigate('/login', { replace: true });
-    }
-  }, [verified, countdown, hasRedirected, navigate]);
+    return () => clearInterval(timer);
+  }, [verified, error, navigate]);
 
   const handleNavigateToLogin = () => {
     sessionStorage.setItem('fromEmailVerification', 'true');
@@ -212,6 +206,9 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
                   <div className="text-center space-y-2">
                     <h2 className="text-xl font-semibold text-gray-900">Memverifikasi Email...</h2>
                     <p className="text-sm text-gray-600">Mohon tunggu sebentar</p>
+                    {verified && (
+                      <p className="text-xs text-green-600 mt-2">✓ Email berhasil diverifikasi, mengarahkan ke login...</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -284,37 +281,43 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
         </div>
 
         {/* Right Panel - Verification Success */}
-        <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="auth-right-panel flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8">
           <div className="w-full max-w-md">
             {/* Header */}
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Verifikasi Email</h1>
-              <p className="text-muted-foreground">Email berhasil diverifikasi</p>
+            <div className="text-center mb-6 sm:mb-8">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">Verifikasi Email</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">Email berhasil diverifikasi</p>
             </div>
 
             <Card className="border-0 shadow-none bg-transparent">
               <CardContent className="p-0">
-                <div className="flex flex-col items-center space-y-6 py-8">
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-10 w-10 text-green-600" />
+                <div className="flex flex-col items-center space-y-4 sm:space-y-6 py-4 sm:py-8">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-green-600" />
                   </div>
-                  <div className="text-center space-y-2">
-                    <h2 className="text-xl font-semibold text-green-700">Email Berhasil Diverifikasi!</h2>
-                    <p className="text-sm text-gray-600">
-                      Akun Anda sudah aktif. Silakan login untuk melanjutkan.
+                  <div className="text-center space-y-3 sm:space-y-4 w-full">
+                    <h2 className="text-lg sm:text-xl font-semibold text-green-700 px-2">Email Berhasil Diverifikasi!</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 px-4">
+                      Akun Anda sudah aktif. Anda akan diarahkan ke halaman login dalam:
+                    </p>
+                    {/* Countdown Timer - Enhanced for Mobile Visibility */}
+                    <div className="flex items-center justify-center mt-4 sm:mt-6 mb-3 sm:mb-4">
+                      <div className="bg-orange-50 border-4 border-orange-300 rounded-full w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 flex items-center justify-center shadow-xl animate-pulse">
+                        <span className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-orange-600">{countdown}</span>
+                      </div>
+                    </div>
+                    <p className="text-sm sm:text-base text-gray-700 mt-2 sm:mt-3 px-4 font-semibold">
+                      {countdown > 0 ? `Mengarahkan ke login dalam ${countdown} ${countdown === 1 ? 'detik' : 'detik'}...` : 'Mengarahkan ke login...'}
                     </p>
                   </div>
-                  <div className="w-full pt-4">
+                  <div className="w-full pt-4 sm:pt-6">
                     <Button 
                       onClick={handleNavigateToLogin}
-                      className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12"
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 sm:h-14 text-base sm:text-lg font-semibold"
                     >
                       Lanjut ke Login
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Mengarahkan ke halaman login dalam {countdown}s...
-                  </p>
                 </div>
               </CardContent>
             </Card>
