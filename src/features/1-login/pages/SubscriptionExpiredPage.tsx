@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/features/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
-import { AlertCircle, Calendar, CreditCard, RefreshCw } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, RefreshCw, Building2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/features/ui/alert';
 import { SubscriptionExpiryStatus } from '@/hooks/useSubscriptionExpiry';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { supabase } from '@/integrations/supabase/client';
 // import { useTranslation } from 'react-i18next'; // Commented out - translation not available
 
 interface SubscriptionExpiredPageProps {
@@ -12,7 +15,31 @@ interface SubscriptionExpiredPageProps {
 
 const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps) => {
   const navigate = useNavigate();
+  const { organizationId } = useCurrentOrg();
   // const { t } = useTranslation(); // Commented out - translation not available
+
+  // Fetch organization name
+  const { data: organizationName } = useQuery({
+    queryKey: ['organization-name', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return null;
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('company_name')
+        .eq('id', organizationId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching organization name:', error);
+        return null;
+      }
+      
+      return data?.company_name || null;
+    },
+    enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+  });
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -41,6 +68,13 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
               <AlertCircle className="h-12 w-12 text-red-600" />
             </div>
           </div>
+          {/* Organization Name */}
+          {organizationName && (
+            <div className="flex items-center justify-center gap-2 text-lg font-semibold text-gray-700 mb-2">
+              <Building2 className="h-5 w-5 text-gray-600" />
+              <span>{organizationName}</span>
+            </div>
+          )}
           <CardTitle className="text-2xl md:text-3xl">
             {expiredType === 'trial' 
               ? 'Masa Trial Telah Berakhir'

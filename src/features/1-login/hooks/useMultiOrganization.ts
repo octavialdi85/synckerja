@@ -177,14 +177,61 @@ export const useMultiOrganization = () => {
         role: selectedOrg.role
       });
       
-      // Clear all subscription-related cache for the new organization
+      // CRITICAL: Clear ALL subscription-related caches BEFORE switching
+      // This ensures no stale data from previous organization affects the new one
+      console.log('🔄 Clearing ALL subscription caches before switching to org:', organizationId);
+      
+      // Step 1: Remove ALL subscription-related queries to force fresh fetch
+      // This includes both 'subscription-expiry' and 'subscriptionStatus' query keys
+      queryClient.removeQueries({ 
+        predicate: (query) => {
+          const queryKey = query.queryKey;
+          if (!Array.isArray(queryKey)) return false;
+          
+          // Remove queries that contain subscription-related keys
+          const keyString = JSON.stringify(queryKey);
+          return keyString.includes('subscription-expiry') || 
+                 keyString.includes('subscriptionStatus') ||
+                 keyString.includes('subscription') ||
+                 (queryKey[0] === 'subscriptionStatus' || queryKey[0] === 'subscription-expiry');
+        }
+      });
+      
+      // Step 2: Invalidate all subscription-related queries (for queries that can't be removed)
       queryClient.invalidateQueries({ 
         predicate: (query) => {
           const queryKey = query.queryKey;
-          return Array.isArray(queryKey) && 
-                 (queryKey.includes('subscription') || queryKey.includes('current-org'));
+          if (!Array.isArray(queryKey)) return false;
+          
+          // Invalidate all subscription-related queries
+          const keyString = JSON.stringify(queryKey);
+          return keyString.includes('subscription') || 
+                 queryKey.includes('current-org') ||
+                 queryKey[0] === 'subscriptionStatus' ||
+                 queryKey[0] === 'subscription-expiry';
         }
       });
+      
+      // Step 3: Force refetch ALL subscription data for NEW organization immediately
+      // This ensures the UI reflects the correct subscription status for the new org
+      // Refetch both subscription-expiry and subscriptionStatus queries
+      Promise.all([
+        queryClient.refetchQueries({ 
+          queryKey: ['subscription-expiry', organizationId],
+          type: 'active'
+        }),
+        queryClient.refetchQueries({ 
+          queryKey: ['subscriptionStatus', organizationId],
+          type: 'active'
+        })
+      ]).catch((error) => {
+        console.warn('⚠️ Error refetching subscription for new org:', error);
+      });
+      
+      console.log('✅ All subscription queries removed, invalidated, and refetched for org:', organizationId);
+      
+      console.log('✅ Organization switched successfully to:', selectedOrg.company_name, 'ID:', organizationId);
+      console.log('✅ Subscription cache cleared and refetched for new organization');
       
       toast({
         title: "Organisasi Berhasil Diganti",

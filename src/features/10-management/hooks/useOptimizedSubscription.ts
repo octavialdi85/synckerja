@@ -50,33 +50,29 @@ export const useOptimizedSubscription = () => {
   const queryClient = useQueryClient();
 
 
-  // Optimize organization change handling to reduce cache invalidation
+  // CRITICAL: Invalidate and refetch subscription query when organization changes
+  // This ensures we get fresh data from Supabase for the new organization
   useEffect(() => {
     if (organizationId) {
-      // Only invalidate if data is stale, not on every org change
-      const cachedData = queryClient.getQueryData(optimizedQueryKeys.subscription.status(organizationId));
-      if (!cachedData) {
-        console.log('🚀 PREFETCH: Preparing subscription query for org:', organizationId);
-        queryClient.prefetchQuery({
-          queryKey: optimizedQueryKeys.subscription.status(organizationId),
-          queryFn: async () => {
-            console.log('📞 PREFETCH RPC: Calling get_subscription_status');
-            const { data, error } = await (supabase as any).rpc('get_subscription_status', {
-              org_id: organizationId
-            });
-
-            if (error) {
-              console.error('❌ Prefetch subscription error:', error);
-              throw error;
-            }
-
-            const subscriptionData = Array.isArray(data) && data && data.length > 0 ? data[0] : data;
-            console.log('✅ PREFETCH SUCCESS:', subscriptionData);
-            return subscriptionData;
-          },
-          staleTime: 30 * 1000
-        });
-      }
+      console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
+      
+      // Remove stale queries from previous organizations
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const queryKey = query.queryKey;
+          return Array.isArray(queryKey) && 
+                 queryKey[0] === 'subscriptionStatus' && 
+                 queryKey[1] !== organizationId; // Remove queries for other organizations
+        }
+      });
+      
+      // Invalidate and force refetch subscription data for new organization
+      queryClient.invalidateQueries({ 
+        queryKey: optimizedQueryKeys.subscription.status(organizationId),
+        refetchType: 'active' // Immediately refetch active queries
+      });
+      
+      console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
     }
   }, [organizationId, queryClient]);
 
@@ -151,10 +147,11 @@ export const useOptimizedSubscription = () => {
       return mappedData;
     },
     enabled: !!organizationId,
-    staleTime: 2 * 60 * 1000, // 2 minutes for more responsiveness  
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
-    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more accurate data when switching organizations
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+    refetchOnWindowFocus: true, // Refetch on window focus for fresh data
     refetchOnMount: true, // Enable mount refetch for fresh data
+    refetchOnReconnect: true, // Refetch when network reconnects
     retry: (failureCount, error: any) => {
       console.error('🔄 Query retry:', failureCount, error);
       // Don't retry on 4xx errors
@@ -225,11 +222,13 @@ export const useOptimizedSubscription = () => {
     }
   }, [checkEmployeeLimitMutation]);
 
-  // Memoized refresh function
+  // Memoized refresh function - force refetch from Supabase
   const refreshSubscriptionStatus = useCallback(() => {
     if (organizationId) {
+      console.log('🔄 [refreshSubscriptionStatus] Manually refreshing subscription for org:', organizationId);
       queryClient.invalidateQueries({ 
-        queryKey: optimizedQueryKeys.subscription.status(organizationId) 
+        queryKey: optimizedQueryKeys.subscription.status(organizationId),
+        refetchType: 'active' // Immediately refetch active queries
       });
     }
   }, [organizationId, queryClient]);

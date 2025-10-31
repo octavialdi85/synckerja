@@ -7,61 +7,102 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
  * Hook to setup realtime subscription for organization_subscriptions table
  * Automatically invalidates subscription-expiry cache when subscription data changes
  * This ensures the expiry guard updates immediately when subscription is renewed
+ * 
+ * CRITICAL: This hook properly isolates realtime subscriptions per organization
+ * - Cleans up previous organization's subscription when switching
+ * - Prevents cross-organization data leaks
+ * - Ensures only current organization's subscription is monitored
  */
 export const useSubscriptionExpiryRealtime = () => {
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const channelRef = useRef<any>(null);
+  const previousOrgIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!organizationId) return;
+    // CRITICAL: Cleanup previous subscription when organization changes
+    if (previousOrgIdRef.current && previousOrgIdRef.current !== organizationId) {
+      const oldChannelName = `subscription-expiry-realtime-${previousOrgIdRef.current}`;
+      if (channelRef.current) {
+        console.log('🔌 Cleaning up realtime subscription for previous org:', previousOrgIdRef.current);
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    }
 
-    // Prevent duplicate subscriptions
-    if (channelRef.current) {
+    if (!organizationId) {
+      previousOrgIdRef.current = null;
+      return;
+    }
+
+    // Prevent duplicate subscriptions for same organization
+    if (channelRef.current && previousOrgIdRef.current === organizationId) {
       return;
     }
 
     // Subscribe to changes in organization_subscriptions table
+    // CRITICAL: Filter strictly by organization_id to prevent cross-organization data leaks
+    const channelName = `subscription-expiry-realtime-${organizationId}`;
     const channel = supabase
-      .channel(`subscription-expiry-realtime-${organizationId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'organization_subscriptions',
-          filter: `organization_id=eq.${organizationId}`
+          filter: `organization_id=eq.${organizationId}` // STRICT filter per organization
         },
         (payload) => {
-          console.log('📡 Subscription expiry data changed:', payload.eventType);
+          // Verify payload belongs to current organization
+          const payloadOrgId = payload.new?.organization_id || payload.old?.organization_id;
+          if (payloadOrgId !== organizationId) {
+            console.warn('🚨 SECURITY: Received subscription update for different organization!', {
+              currentOrg: organizationId,
+              payloadOrg: payloadOrgId
+            });
+            return;
+          }
+
+          console.log('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
           
-          // Invalidate subscription expiry cache to force recheck
-          queryClient.invalidateQueries({ 
-            queryKey: ['subscription-expiry', organizationId],
-            refetchType: 'active' // Immediately refetch active queries
+          // CRITICAL: Invalidate ALL subscription-related queries for THIS specific organization
+          // This includes both subscription-expiry and subscriptionStatus queries
+          Promise.all([
+            queryClient.invalidateQueries({ 
+              queryKey: ['subscription-expiry', organizationId], // Query key includes orgId for isolation
+              refetchType: 'active' // Immediately refetch active queries
+            }),
+            queryClient.invalidateQueries({ 
+              queryKey: ['subscriptionStatus', organizationId], // Also invalidate subscriptionStatus query
+              refetchType: 'active' // Immediately refetch active queries
+            })
+          ]).then(() => {
+            console.log('✅ All subscription caches invalidated for org:', organizationId);
+          }).catch((error) => {
+            console.warn('⚠️ Error invalidating subscription caches:', error);
           });
-          
-          console.log('✅ Subscription expiry cache invalidated');
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Subscribed to subscription expiry realtime updates');
+          console.log('✅ Subscribed to subscription expiry realtime for org:', organizationId);
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Error subscribing to subscription expiry realtime');
+          console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
         }
       });
 
     channelRef.current = channel;
+    previousOrgIdRef.current = organizationId;
 
-    // Cleanup on unmount
+    // Cleanup on unmount or organization change
     return () => {
-      if (channelRef.current) {
-        console.log('🔌 Unsubscribing from subscription expiry realtime');
+      if (channelRef.current && previousOrgIdRef.current === organizationId) {
+        console.log('🔌 Unsubscribing from subscription expiry realtime for org:', organizationId);
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [organizationId, queryClient]);
+  }, [organizationId, queryClient]); // Dependency on organizationId ensures re-subscribe on switch
 };
 

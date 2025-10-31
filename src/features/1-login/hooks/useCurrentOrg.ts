@@ -341,8 +341,19 @@ export const useCurrentOrg = () => {
   const switchOrganization = async (newOrgId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
+      if (!user) {
+        console.warn('⚠️ Cannot switch organization: No authenticated user');
+        return false;
+      }
 
+      const previousOrgId = organizationId;
+      console.log('🔄 Switching organization:', {
+        from: previousOrgId,
+        to: newOrgId,
+        userId: user.id
+      });
+
+      // Update database first
       const { error } = await supabase
         .from('profiles')
         .update({ 
@@ -352,7 +363,7 @@ export const useCurrentOrg = () => {
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Error switching organization:', error);
+        console.error('❌ Error switching organization:', error);
         toast({
           title: 'Error',
           description: 'Failed to switch organization',
@@ -361,12 +372,23 @@ export const useCurrentOrg = () => {
         return false;
       }
 
-      // Clear cache to ensure fresh data
+      // CRITICAL: Clear cache to ensure fresh data
+      // This prevents stale organization data from previous organization
       const cacheKey = `org-${user.id}`;
       orgCache.delete(cacheKey);
+      console.log('🗑️ Cleared organization cache for user:', user.id);
       
       // Update state immediately
+      // This will trigger useSubscriptionExpiry to re-fetch with new organizationId
+      // because the queryKey includes organizationId as a dependency
       setOrganizationId(newOrgId);
+      lastUserIdRef.current = user.id; // Update ref to prevent duplicate fetches
+      
+      console.log('✅ Organization switched successfully:', {
+        from: previousOrgId,
+        to: newOrgId,
+        note: 'Subscription expiry will be re-checked automatically'
+      });
       
       toast({
         title: 'Success',
@@ -374,7 +396,7 @@ export const useCurrentOrg = () => {
       });
       return true;
     } catch (error) {
-      console.error('Error switching organization:', error);
+      console.error('❌ Error switching organization:', error);
       return false;
     }
   };

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/1-login';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 
 interface HomeAccessGuardProps {
   children: ReactNode;
@@ -37,6 +38,9 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     isEmailVerified,
     loading: userDataLoading 
   } = useCentralizedUserData();
+  
+  // ADDITIONAL LAYER: Check subscription expiry based on trial_end_date and subscription_end_date
+  const { expiryStatus, isLoading: expiryLoading } = useSubscriptionExpiry();
   
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null);
@@ -107,8 +111,8 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     checkSubscription();
   }, [organization?.id]);
 
-  // Show loading while checking auth and user data
-  if (authLoading || userDataLoading || loadingSubscription) {
+  // Show loading while checking auth, user data, and expiry status
+  if (authLoading || userDataLoading || loadingSubscription || expiryLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
@@ -155,6 +159,21 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
         </div>
       </div>
     );
+  }
+
+  // STRICT EXPIRY CHECK (LAYER 1): Check if subscription/trial expired based on dates
+  // This check is based on trial_end_date or subscription_end_date from organization_subscriptions table
+  // Takes priority over status checks because it's date-based (more accurate)
+  if (expiryStatus.isExpired) {
+    console.warn('HomeAccessGuard: Subscription/Trial expired based on dates, redirecting to create-plan', {
+      isTrialExpired: expiryStatus.isTrialExpired,
+      isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
+      expiredDate: expiryStatus.expiredDate,
+      trialEndDate: expiryStatus.trialEndDate,
+      subscriptionEndDate: expiryStatus.subscriptionEndDate,
+      daysExpired: expiryStatus.daysExpired
+    });
+    return <Navigate to="/create-plan" replace />;
   }
 
   // PRIMARY CHECK: Check has_active_subscription from organizations table

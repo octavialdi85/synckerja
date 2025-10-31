@@ -42,9 +42,11 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
   ];
 
   // Check if current route is allowed when expired
-  const isAllowedRoute = ALLOWED_EXPIRED_ROUTES.some(route => 
-    location.pathname === route || location.pathname.startsWith(route + '/')
-  );
+  // STRICT: Only exact matches or routes that start with allowed route + /
+  const isAllowedRoute = ALLOWED_EXPIRED_ROUTES.some(route => {
+    const pathname = location.pathname;
+    return pathname === route || pathname.startsWith(route + '/');
+  });
 
   useEffect(() => {
     // If not authenticated or still loading, don't block
@@ -53,34 +55,38 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
       return;
     }
 
-    // If allowed route, don't check expiry
+    // If allowed route (renewal routes), don't check expiry
+    // These routes must be accessible even when expired to allow renewal
     if (isAllowedRoute) {
       setIsChecking(false);
       return;
     }
 
-    // If subscription expired, lock access
+    // STRICT CHECK: If subscription expired, lock access IMMEDIATELY
+    // This check is based on trial_end_date or subscription_end_date from database
     if (expiryStatus.isExpired) {
-      console.log('🚨 Subscription expired - locking application');
-      console.log('Expired details:', {
+      console.warn('🚨 SUBSCRIPTION EXPIRED - LOCKING APPLICATION', {
         isTrialExpired: expiryStatus.isTrialExpired,
         isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
         expiredDate: expiryStatus.expiredDate,
         daysExpired: expiryStatus.daysExpired,
         trialEndDate: expiryStatus.trialEndDate,
-        subscriptionEndDate: expiryStatus.subscriptionEndDate
+        subscriptionEndDate: expiryStatus.subscriptionEndDate,
+        currentPath: location.pathname,
+        status: expiryStatus.status
       });
       setIsChecking(false);
       return;
     }
 
-    // Subscription is active
+    // Subscription is active - allow access
     setIsChecking(false);
   }, [
     authLoading, 
     isLoading, 
     user, 
     expiryStatus.isExpired, 
+    expiryStatus.status,
     isAllowedRoute, 
     expiryStatus.isTrialExpired, 
     expiryStatus.isSubscriptionExpired, 
@@ -113,12 +119,21 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     return <>{children}</>;
   }
 
-  // If subscription expired, show expired page
+  // STRICT ENFORCEMENT: If subscription expired, show expired page
+  // This blocks ALL routes except renewal routes (handled by isAllowedRoute check above)
+  // The check is based on trial_end_date or subscription_end_date from organization_subscriptions table
   if (expiryStatus.isExpired) {
+    console.warn('🔒 ACCESS DENIED: Subscription/Trial expired', {
+      expiredDate: expiryStatus.expiredDate,
+      daysExpired: expiryStatus.daysExpired,
+      trialEndDate: expiryStatus.trialEndDate,
+      subscriptionEndDate: expiryStatus.subscriptionEndDate,
+      currentPath: location.pathname
+    });
     return <SubscriptionExpiredPage expiryStatus={expiryStatus} />;
   }
 
-  // Subscription is active, allow access
+  // Subscription is active, allow access to all routes
   return <>{children}</>;
 };
 
