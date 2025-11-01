@@ -48,27 +48,16 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
 
       console.log('🔍 Fetching leave requests with filters:', { organizationId, month, year, status });
       
-      // First, let's check if we can connect to the table at all
-      console.log('📊 Checking leave_requests table...');
-      
+      // OPTIMIZED: Simplified query to prevent 502 Bad Gateway
+      // Strategy: Remove nested joins, fetch employee data separately
       let query = supabase
         .from('leave_requests')
-        .select(`
-          *,
-          employees!inner (
-            full_name,
-            email,
-            employee_id,
-            organization_id,
-            departments (
-              name
-            )
-          )
-        `)
-        .eq('employees.organization_id', organizationId)
-        .order('created_at', { ascending: false });
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(50); // Limit results to prevent huge datasets
 
-      // Filter by organization first, then by month and year if provided
+      // Filter by month and year if provided
       if (month && year) {
         const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
         const endDate = new Date(year, month, 0).toISOString().split('T')[0];
@@ -84,7 +73,22 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
         query = query.eq('status', status);
       }
 
-      const { data, error } = await query;
+      // Add timeout protection (10 seconds)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Leave requests query timeout')), 10000)
+      );
+
+      let data: any = null;
+      let error: any = null;
+
+      try {
+        const result = await Promise.race([query, timeoutPromise]) as any;
+        data = result.data;
+        error = result.error;
+      } catch (timeoutError: any) {
+        console.warn('⏰ Leave requests query timed out - returning empty array');
+        return []; // Graceful degradation
+      }
 
       if (error) {
         console.error('❌ Error fetching leave requests:', error);
@@ -94,23 +98,55 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
           hint: error.hint,
           code: error.code
         });
-        throw error;
+        // Graceful degradation - return empty array instead of throwing
+        return [];
       }
 
       console.log('✅ Leave requests fetched successfully!');
       console.log('📋 Data received:', data);
       console.log('📊 Total records:', data?.length || 0);
       
-      // Log first record for debugging if available
-      if (data && data.length > 0) {
-        console.log('📝 Sample record:', data[0]);
+      if (!data || data.length === 0) {
+        return [];
       }
 
-      return data as LeaveRequestData[];
+      // Fetch employee data separately (simpler query)
+      const employeeIds = [...new Set(data.map((lr: any) => lr.employee_id).filter(Boolean))];
+      
+      let employeeMap: Record<string, any> = {};
+      if (employeeIds.length > 0) {
+        try {
+          const { data: employees } = await supabase
+            .from('employees')
+            .select('id, full_name, email, employee_id, department_id, departments(name)')
+            .in('id', employeeIds)
+            .eq('organization_id', organizationId);
+          
+          if (employees) {
+            employeeMap = employees.reduce((acc: any, emp: any) => {
+              acc[emp.id] = emp;
+              return acc;
+            }, {});
+          }
+        } catch (empError) {
+          console.warn('⚠️ Error fetching employee data, continuing without:', empError);
+        }
+      }
+
+      // Map employee data to leave requests
+      const enrichedData = data.map((lr: any) => ({
+        ...lr,
+        employees: employeeMap[lr.employee_id] || null
+      }));
+
+      console.log('✅ Leave requests enriched with employee data');
+      
+      return enrichedData as LeaveRequestData[];
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
+    retry: false, // Don't retry on failure - graceful degradation
   });
 };
 

@@ -183,8 +183,14 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         created_by: user.id,
       };
       if (subStepId) {
+        // For sub-step history (especially blockers), set task_steps_to_steps_id
         insertPayload.task_steps_to_steps_id = subStepId;
-        insertPayload.task_step_id = taskStepId; // always record parent step id for sub-step history
+        // IMPORTANT: For blockers from sub-steps, task_step_id should be NULL to avoid double display
+        // For other action types (status_change, priority_change), we keep the parent step id
+        if (actionType !== 'blocker_added') {
+          insertPayload.task_step_id = taskStepId; // Keep parent step id for non-blocker actions
+        }
+        // For blocker_added from sub-step: task_step_id will be NULL (not set)
       } else {
         insertPayload.task_step_id = taskStepId;
       }

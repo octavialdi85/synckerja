@@ -363,12 +363,19 @@ export const DepartmentObjectivesView = ({
             {/* Weekly Check-in Button with Progress Info */}
             <div className="flex items-center justify-between px-4 pb-2">
               <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
-                <ObjectiveCheckinForm objectiveId={objective.id} objectiveTitle={objective.title} disableActivitiesTab={true} trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 h-7 px-3 text-xs cursor-pointer">
+                <ObjectiveCheckinForm 
+                  objectiveId={objective.id} 
+                  objectiveTitle={objective.title} 
+                  objectiveType="department"
+                  disableActivitiesTab={true} 
+                  trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 h-7 px-3 text-xs cursor-pointer">
                       <Calendar className="h-3 w-3 mr-1" />
                       Weekly Check-in
-                    </div>} onSuccess={() => {
-                // console.log('✅ Weekly OKR check-in saved successfully');
-              }} />
+                    </div>} 
+                  onSuccess={() => {
+                    // console.log('✅ Weekly OKR check-in saved successfully');
+                  }} 
+                />
                 <Badge variant="outline" className="text-xs">
                   {objective.key_results?.length || 0} KRs
                 </Badge>
@@ -433,12 +440,18 @@ export const DepartmentObjectivesView = ({
                          <Badge variant="outline" className="text-xs">
                            {kr.progress_percentage || 0}%
                          </Badge>
-                         <ObjectiveCheckinForm objectiveId={objective.id} objectiveTitle={objective.title} trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs cursor-pointer">
+                         <ObjectiveCheckinForm 
+                           objectiveId={objective.id} 
+                           objectiveTitle={objective.title} 
+                           objectiveType="department"
+                           trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs cursor-pointer">
                                <Calendar className="h-3 w-3 mr-1" />
                                Check-in
-                             </div>} onSuccess={() => {
-                    // console.log('✅ KR weekly check-in saved successfully');
-                  }} />
+                             </div>} 
+                           onSuccess={() => {
+                             // console.log('✅ KR weekly check-in saved successfully');
+                           }} 
+                         />
                        </div>
                      </div>
                      

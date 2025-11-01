@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/features/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -37,6 +37,7 @@ interface ObjectiveCheckinFormProps {
   trigger?: React.ReactNode;
   objectiveId: string;
   objectiveTitle: string;
+  objectiveType?: 'individual' | 'department' | 'company';
   onSuccess?: () => void;
   disableActivitiesTab?: boolean;
 }
@@ -44,6 +45,7 @@ export const ObjectiveCheckinForm = ({
   trigger,
   objectiveId,
   objectiveTitle,
+  objectiveType = 'individual',
   onSuccess,
   disableActivitiesTab = false
 }: ObjectiveCheckinFormProps) => {
@@ -799,9 +801,9 @@ export const ObjectiveCheckinForm = ({
               - {objectiveTitle}
             </span>
           </DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
+          <DialogDescription className="text-sm text-muted-foreground mt-1">
             Weekly periods run from Saturday to Friday. Current and past weeks can be edited.
-          </p>
+          </DialogDescription>
           
           {/* Progress Bar Section */}
           {keyResultData && (
@@ -1016,6 +1018,7 @@ export const ObjectiveCheckinForm = ({
                             weekEnd={period.weekEnd.toISOString().split('T')[0]}
                             organizationId={profile.active_organization_id}
                             objectiveId={objectiveId}
+                            objectiveType={objectiveType}
                             onBlockerUpdate={() => {
                               // Refresh data if needed
                             }}

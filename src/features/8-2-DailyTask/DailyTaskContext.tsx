@@ -367,6 +367,28 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       console.log('✅ Fetched task steps:', stepsData?.length || 0);
 
+      // Fetch task assignments separately to get PIC information
+      console.log('🔍 Fetching task assignments for tasks:', taskIds);
+      
+      const { data: assignmentsData, error: assignmentsError } = await supabase
+        .from('daily_tasks_assigned')
+        .select(`
+          id,
+          daily_task_id,
+          employee_id,
+          assigned_by,
+          assigned_at,
+          employee:employees!employee_id(id, full_name)
+        `)
+        .in('daily_task_id', taskIds);
+
+      if (assignmentsError) {
+        console.error('❌ Error fetching task assignments:', assignmentsError);
+        // Continue without assignment data rather than failing completely
+      }
+
+      console.log('✅ Fetched task assignments:', assignmentsData?.length || 0);
+
       // Group steps by task_id
       const stepsByTaskId: Record<string, any[]> = {};
       (stepsData || []).forEach(step => {
@@ -375,12 +397,26 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
         stepsByTaskId[step.task_id].push(step);
       });
+
+      // Group assignments by daily_task_id
+      const assignmentsByTaskId: Record<string, any> = {};
+      (assignmentsData || []).forEach(assignment => {
+        // Only store the first assignment if there are multiple (shouldn't happen normally)
+        if (!assignmentsByTaskId[assignment.daily_task_id]) {
+          assignmentsByTaskId[assignment.daily_task_id] = assignment;
+        }
+      });
       
       // Calculate progress for each task and synchronize status
       const tasksWithProgress = (data || []).map((task: any) => {
         const taskSteps = stepsByTaskId[task.id] || [];
         const progress = calculateProgress(taskSteps);
         const synchronizedStatus = determineStatusFromProgress(progress, task.status);
+        
+        // Get assignment data for this task
+        const assignment = assignmentsByTaskId[task.id];
+        const assignedEmployeeName = assignment?.employee?.full_name || null;
+        const assignedEmployeeId = assignment?.employee_id || null;
         
         return {
           ...task,
@@ -397,8 +433,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           deadline_history: [], // Load separately on demand
           progress_percentage: progress,
           status: synchronizedStatus,
-          assigned_to: null,
-          assigned_to_name: null,
+          assigned_to: assignedEmployeeId,
+          assigned_to_name: assignedEmployeeName,
           files: []
         };
       });
@@ -511,7 +547,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           .maybeSingle();
 
         if (assignedBy) {
-          await supabase
+          // Insert assignment record
+          const { data: assignmentRecord, error: assignmentError } = await supabase
             .from('daily_tasks_assigned')
             .insert({
               organization_id: organizationId,
@@ -519,7 +556,45 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               employee_id: data.assigned_to,
               assigned_by: assignedBy.id,
               assigned_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (assignmentError) {
+            console.error('Error creating assignment:', assignmentError);
+          }
+
+          // If deadline is provided, save it to task_steps_assigned_duedate table
+          if (data.due_date && assignmentRecord) {
+            console.log('💾 Saving deadline to task_steps_assigned_duedate:', {
+              daily_tasks_assigned_id: assignmentRecord.id,
+              due_date: data.due_date,
+              organization_id: organizationId
             });
+
+            const { data: deadlineRecord, error: deadlineError } = await supabase
+              .from('task_steps_assigned_duedate')
+              .insert({
+                organization_id: organizationId,
+                daily_tasks_assigned_id: assignmentRecord.id,
+                due_date: data.due_date,
+                created_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+            if (deadlineError) {
+              console.error('❌ Error saving deadline:', deadlineError);
+            } else {
+              console.log('✅ Deadline saved successfully:', deadlineRecord);
+            }
+          } else {
+            console.log('⚠️ Deadline not saved:', {
+              has_due_date: !!data.due_date,
+              has_assignment_record: !!assignmentRecord,
+              due_date_value: data.due_date
+            });
+          }
         }
       }
 

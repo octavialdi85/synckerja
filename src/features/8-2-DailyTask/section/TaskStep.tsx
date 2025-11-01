@@ -75,12 +75,12 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [subStepCount, setSubStepCount] = useState<number>(0);
   const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
+  const [historyCount, setHistoryCount] = useState<number>(0);
   const { organizationId } = useCurrentOrg();
 
   // Check if step has notifications (files or links)
   const fileCount = step.files?.length || 0;
   const linkCount = step.links?.length || 0;
-  const historyCount = step.history?.length || 0; // Has updates
 
   // Use sortable hook for drag and drop
   const {
@@ -121,6 +121,49 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
     const lateDays = Math.ceil(diffMs / dayMs);
     return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'inline-flex items-center whitespace-normal break-words bg-red-100 text-red-700 border border-red-200 rounded px-1.5 py-0.5' };
   };
+
+  // Load history count for badge using RPC (bypasses RLS overhead)
+  useEffect(() => {
+    const fetchHistoryCount = async () => {
+      try {
+        // Add timeout protection to prevent hanging
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('History count timeout')), 3000)
+        );
+
+        const countPromise = (supabase as any).rpc('get_step_history_count', {
+          p_task_step_id: step.id
+        });
+
+        const { data: count, error } = await Promise.race([
+          countPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (error) {
+          // Silently fail - don't spam console with errors
+          // Just set count to 0 for graceful degradation
+          setHistoryCount(0);
+          return;
+        }
+        
+        setHistoryCount(count || 0);
+        
+        // Only log if count > 0 to reduce console noise
+        if (count > 0) {
+          console.log(`📊 History count for step "${step.title}":`, count);
+        }
+      } catch (error: any) {
+        // Graceful degradation for timeout or other errors
+        if (error?.message !== 'History count timeout') {
+          console.warn('⚠️ History count fetch failed, using 0:', step.title);
+        }
+        setHistoryCount(0);
+      }
+    };
+
+    fetchHistoryCount();
+  }, [step.id, step.title]);
 
   // Load sub-steps stats (total and completed)
   useEffect(() => {
@@ -563,8 +606,21 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
         currentStatus={step.status || 'pending'}
         currentPriority={step.priority || 'medium'}
         taskId={step.task_id}
-        onHistoryUpdate={() => {
-          // Refresh step data if needed
+        onHistoryUpdate={async () => {
+          // Refresh history count after adding entry using RPC
+          try {
+            const { data: count, error } = await (supabase as any).rpc('get_step_history_count', {
+              p_task_step_id: step.id
+            });
+            
+            if (error) {
+              console.error('Error refreshing history count:', error);
+            } else {
+              setHistoryCount(count || 0);
+            }
+          } catch (error) {
+            console.error('Error refreshing history count:', error);
+          }
         }}
       />
     )}

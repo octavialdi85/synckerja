@@ -62,7 +62,7 @@ const DailyTaskContent = () => {
 
   return (
     <StandardLayout>
-      <div className="max-h-[calc(100vh-80px)] bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
@@ -150,7 +150,7 @@ const DailyTaskContent = () => {
                         </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll max-h-[calc(100vh-300px)] p-4">
+                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
                         {sidebarTab === 'summary' ? (
                           <TaskSummaryCards />
                         ) : (

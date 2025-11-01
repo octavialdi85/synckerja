@@ -161,7 +161,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         const hist = history;
 
         // Collect IDs for enrichment (both for blockers and updates)
-        const rawBlockers = hist.filter((h: any) => h.action_type === 'blocker_added');
+        // Filter: Only include unresolved blockers
+        const rawBlockers = hist.filter((h: any) => h.action_type === 'blocker_added' && !h.is_resolved);
         const stepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
         const subStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
         // Also include from general history

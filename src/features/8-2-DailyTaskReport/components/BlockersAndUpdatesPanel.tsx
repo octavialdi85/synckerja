@@ -4,6 +4,18 @@ import { BlockerDetailsModal } from './BlockerDetailsModal';
 import { BlockerResolutionModal } from './BlockerResolutionModal';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
+import { useToast } from '@/features/ui/use-toast';
+import { Trash2, Edit } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 
 export const BlockersAndUpdatesPanel = () => {
   const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport() as any;
@@ -12,11 +24,184 @@ export const BlockersAndUpdatesPanel = () => {
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
   const [resolutionFor, setResolutionFor] = useState<any | null>(null);
   const [locResolved, setLocResolved] = useState<Record<string, boolean>>({});
+  const [deletingBlocker, setDeletingBlocker] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [locDeleted, setLocDeleted] = useState<Record<string, boolean>>({});
+  const [editingBlocker, setEditingBlocker] = useState<any | null>(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
   const handleResolve = async (blocker: any) => {
-    await supabase.from('task_step_history').update({ is_resolved: true } as any).eq('id', blocker.id);
-    setLocResolved(prev => ({ ...prev, [blocker.id]: true }));
+    // Open resolution modal to get resolution details
+    // Modal will handle inserting to task_step_history_blocker_resolved
     setResolutionFor(blocker);
+  };
+
+  const handleResolutionComplete = async () => {
+    if (!resolutionFor) return;
+    
+    try {
+      // Update is_resolved flag in task_step_history
+      // NOTE: This is called AFTER resolution details are inserted to task_step_history_blocker_resolved
+      const { error } = await supabase
+        .from('task_step_history')
+        .update({ is_resolved: true } as any)
+        .eq('id', resolutionFor.id);
+      
+      if (error) {
+        console.error('Error updating blocker resolution status:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to mark blocker as resolved: ${error.message}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      // Verify that resolution was actually saved to task_step_history_blocker_resolved
+      const { data: resolutionCheck, error: checkError } = await (supabase as any)
+        .rpc('get_blocker_resolutions', {
+          p_task_step_history_ids: [resolutionFor.id]
+        });
+      
+      if (checkError) {
+        console.error('Error verifying blocker resolution:', checkError);
+      } else if (!resolutionCheck || resolutionCheck.length === 0) {
+        console.warn('⚠️ Blocker marked as resolved but no resolution entry found in task_step_history_blocker_resolved');
+        toast({
+          title: 'Warning',
+          description: 'Blocker marked as resolved but resolution details may not have been saved',
+          variant: 'destructive',
+        });
+      } else {
+        console.log('✅ Resolution verified:', resolutionCheck[0]);
+      }
+      
+      // Update local state
+      setLocResolved(prev => ({ ...prev, [resolutionFor.id]: true }));
+      
+      // Close modal
+      setResolutionFor(null);
+      
+      toast({
+        title: 'Success',
+        description: 'Blocker marked as resolved',
+      });
+    } catch (error: any) {
+      console.error('Unexpected error in handleResolutionComplete:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while updating blocker status',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = (blocker: any) => {
+    setDeletingBlocker(blocker);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingBlocker) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete the blocker from task_step_history
+      const { error } = await supabase
+        .from('task_step_history')
+        .delete()
+        .eq('id', deletingBlocker.id);
+
+      if (error) {
+        console.error('Error deleting blocker:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to delete blocker: ${error.message}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // If blocker was resolved, also delete from task_step_history_blocker_resolved
+      if (deletingBlocker.is_resolved) {
+        const { error: resError } = await supabase
+          .from('task_step_history_blocker_resolved')
+          .delete()
+          .eq('task_step_history_id', deletingBlocker.id);
+
+        if (resError) {
+          console.warn('Could not delete resolution entry:', resError);
+        }
+      }
+
+      // Mark as deleted locally
+      setLocDeleted(prev => ({ ...prev, [deletingBlocker.id]: true }));
+      setDeletingBlocker(null);
+
+      toast({
+        title: 'Success',
+        description: 'Blocker deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Unexpected error deleting blocker:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = (blocker: any) => {
+    setEditingBlocker(blocker);
+    setEditDescription(blocker.description || '');
+  };
+
+  const saveEdit = async () => {
+    if (!editingBlocker || !editDescription.trim()) return;
+
+    setIsSaving(true);
+    try {
+      // Update blocker description in task_step_history
+      const { error } = await supabase
+        .from('task_step_history')
+        .update({ description: editDescription.trim() })
+        .eq('id', editingBlocker.id);
+
+      if (error) {
+        console.error('Error updating blocker:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to update blocker: ${error.message}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Update in local state by refreshing
+      setEditingBlocker(null);
+      setEditDescription('');
+
+      toast({
+        title: 'Success',
+        description: 'Blocker updated successfully',
+      });
+
+      // Trigger re-render by forcing a state update
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Unexpected error updating blocker:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const grouped = useMemo(() => {
@@ -85,7 +270,7 @@ export const BlockersAndUpdatesPanel = () => {
                         <div key={taskTitle + stepTitle} className="border border-gray-200 rounded-md bg-white p-2 ml-1">
                           <div className="text-sm font-medium text-gray-800 mb-1">Step: {stepTitle}</div>
                           <div className="space-y-1 ml-1">
-                            {(items as any[]).map((b: any) => (
+                            {(items as any[]).filter((b: any) => !locDeleted[b.id]).map((b: any) => (
                               <div key={b.id} className="p-2 border border-red-200 bg-red-50 rounded text-sm">
                                 {b.subStepTitle && (
                                   <div className="text-red-700 font-semibold mb-0.5">Sub-step: {b.subStepTitle}</div>
@@ -104,6 +289,20 @@ export const BlockersAndUpdatesPanel = () => {
                                       onClick={() => handleResolve(b)}
                                     >
                                       Resolve
+                                    </button>
+                                    <button
+                                      className="p-1.5 rounded border bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
+                                      onClick={() => handleEdit(b)}
+                                      title="Edit blocker"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      className="p-1.5 rounded border bg-red-600 text-white border-red-700 hover:bg-red-700"
+                                      onClick={() => handleDelete(b)}
+                                      title="Delete blocker"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </div>
@@ -165,7 +364,11 @@ export const BlockersAndUpdatesPanel = () => {
       <BlockerDetailsModal open={open} onOpenChange={setOpen} items={blockers || []} initialTab={initialTab} />
       <BlockerResolutionModal
         open={!!resolutionFor}
-        onOpenChange={(o) => !o && setResolutionFor(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setResolutionFor(null);
+          }
+        }}
         blocker={resolutionFor ? {
           id: resolutionFor.id,
           blocker_type: resolutionFor.blocker_type,
@@ -175,7 +378,95 @@ export const BlockersAndUpdatesPanel = () => {
           stepTitle: resolutionFor.stepTitle,
           subStepTitle: resolutionFor.subStepTitle,
         } : null}
+        onResolutionComplete={handleResolutionComplete}
       />
+
+      {/* Edit Blocker Modal */}
+      {editingBlocker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+            <h3 className="text-lg font-semibold mb-4">Edit Blocker</h3>
+            
+            <div className="space-y-3 mb-4">
+              <div className="p-3 bg-gray-50 rounded border border-gray-200">
+                <div className="text-xs text-gray-600 mb-1">Task: <span className="font-medium text-gray-900">{editingBlocker.taskTitle}</span></div>
+                <div className="text-xs text-gray-600 mb-1">Step: <span className="font-medium text-gray-900">{editingBlocker.stepTitle}</span></div>
+                {editingBlocker.subStepTitle && (
+                  <div className="text-xs text-gray-600 mb-1">Sub-step: <span className="font-medium text-gray-900">{editingBlocker.subStepTitle}</span></div>
+                )}
+                <div className="text-xs text-gray-600 mt-2">Type: <span className="font-medium text-gray-900">{editingBlocker.blocker_type}</span></div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Blocker Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter blocker description..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setEditingBlocker(null);
+                  setEditDescription('');
+                }}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={!editDescription.trim() || isSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingBlocker} onOpenChange={(open) => !open && setDeletingBlocker(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Blocker</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingBlocker && (
+                <div className="space-y-2">
+                  <p>Are you sure you want to delete this blocker?</p>
+                  <div className="p-3 bg-gray-50 rounded border border-gray-200 text-sm">
+                    <div className="font-medium text-gray-900 mb-1">
+                      {deletingBlocker.blocker_type || 'Blocker'}
+                    </div>
+                    <div className="text-gray-700">{deletingBlocker.description}</div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      Task: {deletingBlocker.taskTitle} • Step: {deletingBlocker.stepTitle}
+                      {deletingBlocker.subStepTitle && ` • Sub-step: ${deletingBlocker.subStepTitle}`}
+                    </div>
+                  </div>
+                  <p className="text-red-600 font-medium">This action cannot be undone.</p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Blocker'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

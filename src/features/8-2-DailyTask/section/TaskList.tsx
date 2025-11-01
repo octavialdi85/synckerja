@@ -49,6 +49,16 @@ import { CustomDatePicker } from '@/features/share/calendar';
 import { useDailyTask, type Task } from '../DailyTaskContext';
 import { supabase } from '@/integrations/supabase/client';
 import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 
 interface DeadlineHistory {
   id: string;
@@ -85,6 +95,7 @@ export const TaskList = () => {
   const [deadlineDialog, setDeadlineDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [historyDialog, setHistoryDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [addStepDialog, setAddStepDialog] = useState<{ isOpen: boolean; taskId: string | null; taskTitle: string }>({ isOpen: false, taskId: null, taskTitle: '' });
+  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; taskId: string | null; taskTitle: string }>({ isOpen: false, taskId: null, taskTitle: '' });
   const taskRefs = useRef<{ [key: string]: HTMLTableRowElement | null }>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [blockerCountByTask, setBlockerCountByTask] = useState<Record<string, number>>({});
@@ -151,13 +162,14 @@ export const TaskList = () => {
       // Fetch history in separate queries to avoid OR complexity
       let allHistory: any[] = [];
       
-      // Fetch history for steps
+      // Fetch history for steps - ONLY unresolved blockers
       if (stepIds.length > 0) {
         const { data: stepHistory, error: stepError } = await supabase
           .from('task_step_history')
           .select('*')
           .eq('action_type', 'blocker_added')
           .in('task_step_id', stepIds)
+          .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
           .order('created_at', { ascending: false });
         
         if (stepError) {
@@ -167,13 +179,14 @@ export const TaskList = () => {
         }
       }
       
-      // Fetch history for sub-steps
+      // Fetch history for sub-steps - ONLY unresolved blockers
       if (subIds.length > 0) {
         const { data: subStepHistory, error: subError } = await supabase
           .from('task_step_history')
           .select('*')
           .eq('action_type', 'blocker_added')
           .in('task_steps_to_steps_id', subIds)
+          .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
           .order('created_at', { ascending: false });
         
         if (subError) {
@@ -306,14 +319,15 @@ export const TaskList = () => {
 
         const allSubStepIds = allSubSteps.map(s => s.id);
         
-        // SINGLE BATCHED QUERY #2: Get ALL blocker counts for ALL steps at once
+        // SINGLE BATCHED QUERY #2: Get ALL blocker counts for ALL steps at once (only unresolved)
         let stepBlockers: any[] = [];
         try {
           const { data, error } = await supabase
             .from('task_step_history')
             .select('task_step_id')
             .eq('action_type', 'blocker_added')
-            .in('task_step_id', allStepIds);
+            .in('task_step_id', allStepIds)
+            .or('is_resolved.is.null,is_resolved.eq.false'); // Filter: only unresolved blockers
           
           if (!error && data) {
             stepBlockers = data;
@@ -325,7 +339,7 @@ export const TaskList = () => {
 
         if (cancelled) return;
 
-        // SINGLE BATCHED QUERY #3: Get ALL blocker counts for ALL sub-steps at once
+        // SINGLE BATCHED QUERY #3: Get ALL blocker counts for ALL sub-steps at once (only unresolved)
         let subStepBlockers: any[] = [];
         if (allSubStepIds.length > 0) {
           try {
@@ -333,6 +347,7 @@ export const TaskList = () => {
               .from('task_step_history')
               .select('task_steps_to_steps_id')
               .eq('action_type', 'blocker_added')
+              .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
               .in('task_steps_to_steps_id', allSubStepIds);
             
             if (!error && data) {
@@ -470,6 +485,25 @@ export const TaskList = () => {
 
   const handlePriorityChange = async (taskId: string, newPriority: string) => {
     await updateTask(taskId, { priority: newPriority });
+  };
+
+  const handleDeleteClick = (task: Task) => {
+    setDeleteDialog({
+      isOpen: true,
+      taskId: task.id,
+      taskTitle: task.title
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteDialog.taskId) {
+      await deleteTask(deleteDialog.taskId);
+      setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -869,6 +903,7 @@ export const TaskList = () => {
                               size="sm"
                               onClick={() => setEditingTask(task.id)}
                               className="h-7 w-7 p-0 hover:bg-blue-50 hover:text-blue-600"
+                              title="Edit task"
                             >
                               <Edit className="w-3 h-3" />
                             </Button>
@@ -877,8 +912,9 @@ export const TaskList = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => deleteTask(task.id)}
+                              onClick={() => handleDeleteClick(task)}
                               className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
+                              title="Delete task"
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
@@ -995,6 +1031,43 @@ export const TaskList = () => {
             }}
           />
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialog.isOpen} onOpenChange={handleCancelDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                Delete Task
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-600">
+                    Are you sure you want to delete this task?
+                  </div>
+                  {deleteDialog.taskTitle && (
+                    <div className="font-semibold text-gray-900 bg-gray-50 p-2 rounded border border-gray-200 text-sm">
+                      "{deleteDialog.taskTitle}"
+                    </div>
+                  )}
+                  <div className="text-red-600 font-medium text-sm">
+                    This action cannot be undone. This will permanently delete the task and all its associated data including steps, files, and history.
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Task
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         </div>
 
         <BlockerDetailsModal

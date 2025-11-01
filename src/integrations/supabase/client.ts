@@ -36,6 +36,26 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           
           // Clear timeout on success
           if (timeoutId) clearTimeout(timeoutId);
+
+          // CRITICAL: Handle 504 Gateway Timeout from auth service
+          // This occurs when Supabase infrastructure is overloaded (36+ second response time)
+          if (response.status === 504 && url.includes('/auth/v1/user')) {
+            console.warn('⚠️ Auth service timeout (504) - infrastructure overloaded');
+            
+            // If this is not the last retry, continue to retry
+            if (attempt < MAX_RETRIES) {
+              const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
+              console.log(`Retrying auth check after 504 (attempt ${attempt + 1}/${MAX_RETRIES + 1}), waiting ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue; // Retry
+            }
+            
+            // Last attempt failed - dispatch event for auth cleanup
+            console.error('❌ Auth service 504 on final attempt, triggering session cleanup');
+            window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
+              detail: { status: 504, message: 'Auth service timeout', url }
+            }));
+          }
           
           return response;
         } catch (error: any) {
