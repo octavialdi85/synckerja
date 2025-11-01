@@ -114,9 +114,17 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         .select('*')
         .order('created_at', { ascending: false });
 
-      const { data, error } = subStepId
-        ? await base.eq('task_steps_to_steps_id', subStepId)
-        : await base.eq('task_step_id', taskStepId);
+      // OPTIMIZATION: Add timeout protection (5 seconds)
+      const historyPromise = subStepId
+        ? base.eq('task_steps_to_steps_id', subStepId)
+        : base.eq('task_step_id', taskStepId);
+
+      const { data, error } = await Promise.race([
+        historyPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('History fetch timeout')), 5000)
+        )
+      ]) as any;
 
       if (error) throw error;
       

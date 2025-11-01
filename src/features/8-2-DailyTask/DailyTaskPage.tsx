@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from './section/HeaderAndTab';
 import { TaskFilters } from './section/TaskFilters';
 import { TaskList } from './section/TaskList';
 import TaskSummaryCards from './section/TaskSummaryCards';
+import TaskInitiative, { InitiativeStats } from './section/TaskInitiative';
 import { TaskForm } from './section/TaskForm';
 import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
+import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
 
 const DailyTaskPage = () => {
@@ -19,6 +21,8 @@ const DailyTaskPage = () => {
 
 const DailyTaskContent = () => {
   const { tasks, filters } = useDailyTask();
+  const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative'>('summary');
+  const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
 
   // Filter tasks based on filters
   const filteredTasks = tasks.filter(task => {
@@ -104,25 +108,69 @@ const DailyTaskContent = () => {
                   </div>
                   
                   {/* Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
+                  <div className="col-span-3 h-full max-h-[calc(100vh-120px)]">
                     <div className="bg-white border rounded-lg h-full flex flex-col">
-                        {/* Sidebar Header */}
-                        <div className="px-4 py-1.5 border-b flex-shrink-0">
-                          <h3 className="text-sm font-semibold text-gray-900">Task Summary</h3>
-                          <p className="text-xs text-gray-500 mt-1">Overview of daily tasks</p>
+                        {/* Sidebar Header with Tabs */}
+                        <div className="border-b flex-shrink-0">
+                          {/* Tab Buttons */}
+                          <div className="flex border-b border-gray-200">
+                            <button
+                              onClick={() => setSidebarTab('summary')}
+                              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                                sidebarTab === 'summary'
+                                  ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                            >
+                              Task Summary
+                            </button>
+                            <button
+                              onClick={() => setSidebarTab('initiative')}
+                              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                                sidebarTab === 'initiative'
+                                  ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                            >
+                              Initiative
+                            </button>
+                          </div>
+                          
+                          {/* Tab Description */}
+                          <div className="px-4 py-1.5">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                              {sidebarTab === 'summary' ? 'Task Summary' : 'Initiative'}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {sidebarTab === 'summary' 
+                                ? 'Overview of daily tasks' 
+                                : 'Track initiative progress'}
+                            </p>
+                          </div>
                         </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
-                        <TaskSummaryCards />
+                      <div className="flex-1 overflow-y-auto seamless-scroll max-h-[calc(100vh-300px)] p-4">
+                        {sidebarTab === 'summary' ? (
+                          <TaskSummaryCards />
+                        ) : (
+                          <TaskInitiative onStatsChange={setInitiativeStats} />
+                        )}
                       </div>
 
-                      {/* Sidebar Footer */}
-                      <TaskSidebarFooter 
-                        totalTasks={tasks.length}
-                        thisWeek={thisWeekTasks}
-                        completionRate={completionRate}
-                      />
+                      {/* Sidebar Footer - Conditional based on active tab */}
+                      {sidebarTab === 'summary' ? (
+                        <TaskSidebarFooter 
+                          totalTasks={tasks.length}
+                          thisWeek={thisWeekTasks}
+                          completionRate={completionRate}
+                        />
+                      ) : (
+                        <TaskInitiativeFooter 
+                          totalItems={initiativeStats.totalItems}
+                          unassignedItems={initiativeStats.unassignedItems}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

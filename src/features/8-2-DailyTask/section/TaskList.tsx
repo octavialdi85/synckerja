@@ -126,35 +126,84 @@ export const TaskList = () => {
   
 
   const openTaskBlockers = async (task: Task) => {
-    const stepIds = task.steps.map(s => s.id);
-    const { data: subSteps } = await supabase
-      .from('task_steps_to_steps')
-      .select('id, title, parent_step_id')
-      .in('parent_step_id', stepIds);
-    const subById: Record<string, any> = {};
-    (subSteps || []).forEach(s => { subById[s.id] = s; });
-    const subIds = (subSteps || []).map(s => s.id);
-    const { data: history } = await supabase
-      .from('task_step_history')
-      .select('*')
-      .eq('action_type', 'blocker_added')
-      .or([
-        stepIds.length ? `task_step_id.in.(${stepIds.join(',')})` : '',
-        subIds.length ? `task_steps_to_steps_id.in.(${subIds.join(',')})` : ''
-      ].filter(Boolean).join(','))
-      .order('created_at', { ascending: false });
-    const enriched = (history || []).map((h: any) => {
-      const step = task.steps.find(s => s.id === h.task_step_id) || null;
-      const sub = h.task_steps_to_steps_id ? subById[h.task_steps_to_steps_id] : null;
-      return {
-        ...h,
-        taskTitle: task.title,
-        stepTitle: step?.title || (sub ? (task.steps.find(s => s.id === sub.parent_step_id)?.title || '-') : '-'),
-        subStepTitle: sub?.title || null,
-      };
-    });
-    setBlockerModalItems(enriched);
-    setBlockerModalOpen(true);
+    try {
+      const stepIds = task.steps.map(s => s.id);
+      
+      // Fetch sub-steps with better error handling
+      let subSteps: any[] = [];
+      if (stepIds.length > 0) {
+        const { data, error } = await supabase
+          .from('task_steps_to_steps')
+          .select('id, title, parent_step_id')
+          .in('parent_step_id', stepIds);
+        
+        if (error) {
+          console.error('Error fetching sub-steps:', error);
+        } else {
+          subSteps = data || [];
+        }
+      }
+      
+      const subById: Record<string, any> = {};
+      subSteps.forEach(s => { subById[s.id] = s; });
+      const subIds = subSteps.map(s => s.id);
+      
+      // Fetch history in separate queries to avoid OR complexity
+      let allHistory: any[] = [];
+      
+      // Fetch history for steps
+      if (stepIds.length > 0) {
+        const { data: stepHistory, error: stepError } = await supabase
+          .from('task_step_history')
+          .select('*')
+          .eq('action_type', 'blocker_added')
+          .in('task_step_id', stepIds)
+          .order('created_at', { ascending: false });
+        
+        if (stepError) {
+          console.error('Error fetching step history:', stepError);
+        } else if (stepHistory) {
+          allHistory = [...allHistory, ...stepHistory];
+        }
+      }
+      
+      // Fetch history for sub-steps
+      if (subIds.length > 0) {
+        const { data: subStepHistory, error: subError } = await supabase
+          .from('task_step_history')
+          .select('*')
+          .eq('action_type', 'blocker_added')
+          .in('task_steps_to_steps_id', subIds)
+          .order('created_at', { ascending: false });
+        
+        if (subError) {
+          console.error('Error fetching substep history:', subError);
+        } else if (subStepHistory) {
+          allHistory = [...allHistory, ...subStepHistory];
+        }
+      }
+      
+      // Sort combined history by created_at
+      allHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      const enriched = allHistory.map((h: any) => {
+        const step = task.steps.find(s => s.id === h.task_step_id) || null;
+        const sub = h.task_steps_to_steps_id ? subById[h.task_steps_to_steps_id] : null;
+        return {
+          ...h,
+          taskTitle: task.title,
+          stepTitle: step?.title || (sub ? (task.steps.find(s => s.id === sub.parent_step_id)?.title || '-') : '-'),
+          subStepTitle: sub?.title || null,
+        };
+      });
+      
+      setBlockerModalItems(enriched);
+      setBlockerModalOpen(true);
+    } catch (error) {
+      console.error('Error in openTaskBlockers:', error);
+      setBlockerModalItems([]);
+      setBlockerModalOpen(true);
+    }
   };
 
 
@@ -214,50 +263,137 @@ export const TaskList = () => {
       try {
         // Use snapshot from ref to avoid closure issues
         const tasksToProcess = filteredTasksSnapshotRef.current;
-        const counts: Record<string, number> = {};
         
-        for (const t of tasksToProcess) {
-          // Check if cancelled before each iteration
-          if (cancelled) return;
-          
+        // OPTIMIZATION: Skip blocker counting entirely if DB is overloaded
+        // This is a non-critical feature that can degrade gracefully
+        if (tasksToProcess.length === 0) {
+          setBlockerCountByTask({});
+          return;
+        }
+
+        // Collect ALL step IDs from ALL tasks at once
+        const allStepIds: string[] = [];
+        const taskToStepMapping: Record<string, string[]> = {};
+        
+        tasksToProcess.forEach(t => {
           const stepIds = t.steps.map(s => s.id);
-          if (stepIds.length === 0) { 
-            counts[t.id] = 0; 
-            continue; 
-          }
-          
-          const { data: subSteps } = await supabase
+          taskToStepMapping[t.id] = stepIds;
+          allStepIds.push(...stepIds);
+        });
+
+        if (allStepIds.length === 0) {
+          setBlockerCountByTask({});
+          return;
+        }
+
+        // SINGLE BATCHED QUERY #1: Get all sub-steps for all tasks at once
+        let allSubSteps: any[] = [];
+        try {
+          const { data, error } = await supabase
             .from('task_steps_to_steps')
             .select('id, parent_step_id')
-            .in('parent_step_id', stepIds);
+            .in('parent_step_id', allStepIds);
           
-          const subIds = (subSteps || []).map(s => s.id);
-          const { count } = await supabase
-            .from('task_step_history')
-            .select('id', { count: 'exact', head: true })
-            .eq('action_type', 'blocker_added')
-            .or([
-              stepIds.length ? `task_step_id.in.(${stepIds.join(',')})` : '',
-              subIds.length ? `task_steps_to_steps_id.in.(${subIds.join(',')})` : ''
-            ].filter(Boolean).join(','));
-          
-          counts[t.id] = count || 0;
+          if (!error && data) {
+            allSubSteps = data;
+          }
+        } catch (err) {
+          console.warn('Failed to fetch sub-steps:', err);
+          // Continue with empty sub-steps
         }
+
+        if (cancelled) return;
+
+        const allSubStepIds = allSubSteps.map(s => s.id);
+        
+        // SINGLE BATCHED QUERY #2: Get ALL blocker counts for ALL steps at once
+        let stepBlockers: any[] = [];
+        try {
+          const { data, error } = await supabase
+            .from('task_step_history')
+            .select('task_step_id')
+            .eq('action_type', 'blocker_added')
+            .in('task_step_id', allStepIds);
+          
+          if (!error && data) {
+            stepBlockers = data;
+          }
+        } catch (err) {
+          console.warn('Failed to count step blockers:', err);
+          // Continue with empty blockers - graceful degradation
+        }
+
+        if (cancelled) return;
+
+        // SINGLE BATCHED QUERY #3: Get ALL blocker counts for ALL sub-steps at once
+        let subStepBlockers: any[] = [];
+        if (allSubStepIds.length > 0) {
+          try {
+            const { data, error } = await supabase
+              .from('task_step_history')
+              .select('task_steps_to_steps_id')
+              .eq('action_type', 'blocker_added')
+              .in('task_steps_to_steps_id', allSubStepIds);
+            
+            if (!error && data) {
+              subStepBlockers = data;
+            }
+          } catch (err) {
+            console.warn('Failed to count sub-step blockers:', err);
+            // Continue with empty blockers - graceful degradation
+          }
+        }
+
+        if (cancelled) return;
+
+        // Map sub-steps to their parent steps
+        const subStepToParent: Record<string, string> = {};
+        allSubSteps.forEach(sub => {
+          subStepToParent[sub.id] = sub.parent_step_id;
+        });
+
+        // Count blockers per task
+        const counts: Record<string, number> = {};
+        tasksToProcess.forEach(task => {
+          const taskStepIds = taskToStepMapping[task.id];
+          let count = 0;
+
+          // Count step blockers
+          stepBlockers.forEach(blocker => {
+            if (taskStepIds.includes(blocker.task_step_id)) {
+              count++;
+            }
+          });
+
+          // Count sub-step blockers
+          subStepBlockers.forEach(blocker => {
+            const parentStepId = subStepToParent[blocker.task_steps_to_steps_id];
+            if (parentStepId && taskStepIds.includes(parentStepId)) {
+              count++;
+            }
+          });
+
+          counts[task.id] = count;
+        });
         
         // Only update state if not cancelled
         if (!cancelled) {
           setBlockerCountByTask(counts);
         }
       } catch (e) {
-        // ignore
+        console.warn('Error loading blocker counts:', e);
+        // Graceful degradation: Show tasks without blocker counts
+        setBlockerCountByTask({});
       }
     };
     
-    loadCounts();
+    // Debounce the loading to reduce query spam
+    const timeoutId = setTimeout(loadCounts, 300);
     
     // Cleanup function to cancel if component unmounts or dependencies change
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [blockerCalculationKey]); // Only depend on blockerCalculationKey
 

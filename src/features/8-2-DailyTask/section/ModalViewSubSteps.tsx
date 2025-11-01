@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Badge } from '@/features/ui/badge';
@@ -41,35 +41,87 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const { toast } = useToast();
 
   const fetchSubSteps = async () => {
-    if (!organizationId || !parentStepId) return;
+    console.log('🔍 Fetching sub-steps:', { organizationId, parentStepId });
+    
+    if (!organizationId || !parentStepId) {
+      console.warn('⚠️ Missing organizationId or parentStepId');
+      return;
+    }
+    
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // First attempt: with organization_id filter
+      let { data, error } = await supabase
         .from('task_steps_to_steps')
         .select('*')
         .eq('organization_id', organizationId)
         .eq('parent_step_id', parentStepId)
         .order('order', { ascending: true })
         .order('created_at', { ascending: true });
-      if (error) throw error;
+      
+      console.log('📊 Sub-steps query result (with org filter):', { data, error, count: data?.length });
+      
+      // If no data found with organization_id, try without it (fallback)
+      if (!error && (!data || data.length === 0)) {
+        console.log('🔄 No data with org filter, trying without org filter...');
+        const fallbackResult = await supabase
+          .from('task_steps_to_steps')
+          .select('*')
+          .eq('parent_step_id', parentStepId)
+          .order('order', { ascending: true })
+          .order('created_at', { ascending: true });
+        
+        console.log('📊 Sub-steps fallback query result:', { 
+          data: fallbackResult.data, 
+          error: fallbackResult.error, 
+          count: fallbackResult.data?.length 
+        });
+        
+        if (!fallbackResult.error && fallbackResult.data) {
+          data = fallbackResult.data;
+          error = fallbackResult.error;
+        }
+      }
+      
+      if (error) {
+        console.error('❌ Error fetching sub-steps:', error);
+        throw error;
+      }
+      
       setSubSteps((data || []) as SubStep[]);
+      console.log('✅ Sub-steps set to state:', data?.length || 0, 'items');
+      
       await syncParentCompletion((data || []) as SubStep[]);
 
-      // Fetch history counts for these sub-steps
+      // Fetch history counts for these sub-steps (with graceful degradation)
       const ids = (data || []).map((d: any) => d.id);
       if (ids.length > 0) {
-        const { data: historyRows, error: histErr } = await supabase
-          .from('task_step_history')
-          .select('task_steps_to_steps_id')
-          .in('task_steps_to_steps_id', ids);
-        if (!histErr) {
-          const tally: Record<string, number> = {};
-          (historyRows || []).forEach((row: any) => {
-            const key = row.task_steps_to_steps_id;
-            tally[key] = (tally[key] || 0) + 1;
-          });
-          setHistoryCounts(tally);
-        }
+        // OPTIMIZATION: Make this non-blocking with timeout protection
+        // This is a non-critical UI enhancement that can fail gracefully
+        Promise.race([
+          supabase
+            .from('task_step_history')
+            .select('task_steps_to_steps_id')
+            .in('task_steps_to_steps_id', ids),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('History count timeout')), 3000)
+          )
+        ])
+        .then((result: any) => {
+          if (result?.data && !result?.error) {
+            const tally: Record<string, number> = {};
+            (result.data || []).forEach((row: any) => {
+              const key = row.task_steps_to_steps_id;
+              tally[key] = (tally[key] || 0) + 1;
+            });
+            setHistoryCounts(tally);
+          }
+        })
+        .catch((err) => {
+          console.warn('History count fetch failed (non-critical):', err);
+          setHistoryCounts({}); // Show sub-steps without counts - graceful degradation
+        });
       } else {
         setHistoryCounts({});
       }
@@ -240,6 +292,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             </span>
             <span className="text-xs text-gray-500 truncate max-w-[60%]" title={parentStepTitle}>{parentStepTitle}</span>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Manage sub-steps for {parentStepTitle}. Add, edit, complete, or delete individual steps.
+          </DialogDescription>
         </DialogHeader>
 
 		<div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -269,9 +324,12 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 					<ul className="space-y-2">
 						{subSteps.map((s) => (
                 <li key={s.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200 hover:bg-gray-50">
-								<button onClick={() => toggleCompleted(s.id, s.is_completed)} className="text-gray-400 hover:text-gray-600">
-									<Checkbox checked={s.is_completed} onCheckedChange={() => toggleCompleted(s.id, s.is_completed)} />
-								</button>
+								{/* Fixed: Removed button wrapper to prevent button nesting - Checkbox is already a button */}
+								<Checkbox 
+									checked={s.is_completed} 
+									onCheckedChange={() => toggleCompleted(s.id, s.is_completed)}
+									className="text-gray-400 hover:text-gray-600"
+								/>
                   {editingId === s.id ? (
 									<div className="flex items-center gap-2 flex-1">
 										<Input
