@@ -126,7 +126,7 @@ export const useOptimizedSubscription = () => {
         current_employees: rawData.employee_count || 0,
         member_count: rawData.member_limit || (rawData.is_trial ? 2 : 1000),
         over_limit: rawData.is_over_limit || false,
-        days_until_expiry: Math.max(0, rawData.days_remaining || 0),
+        days_until_expiry: rawData.days_remaining || 0,
         needs_renewal: (rawData.days_remaining || 0) <= 7,
         end_date: rawData.end_date,
         subscription_start_date: rawData.subscription_start_date,
