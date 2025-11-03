@@ -181,7 +181,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/first-login" element={
-                <ProtectedRoute requiresPermissions={false}>
+                <ProtectedRoute requiresAuth={false} requiresPermissions={false}>
                   <FirstLogin />
                 </ProtectedRoute>
               } />
