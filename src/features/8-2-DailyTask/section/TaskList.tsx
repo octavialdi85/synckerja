@@ -85,11 +85,15 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } 
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 export const TaskList = () => {
   const context = useDailyTask();
   const { tasks, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps, expandedTasks, setExpandedTasks, highlightedTask } = context;
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
+  const { user } = useCurrentUser();
+  const { data: currentEmployee } = useCurrentEmployee();
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
   const [deadlineDialog, setDeadlineDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
@@ -137,63 +141,81 @@ export const TaskList = () => {
   
 
   const openTaskBlockers = async (task: Task) => {
+    // OPTIMIZATION: Open modal immediately with loading state
+    setBlockerModalItems([]);
+    setBlockerModalOpen(true);
+
     try {
-      const stepIds = task.steps.map(s => s.id);
+      // Fix: Use proper filter to only show steps assigned to current user
+      const stepIds = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).map(s => s.id);
       
-      // Fetch sub-steps with better error handling
-      let subSteps: any[] = [];
-      if (stepIds.length > 0) {
-        const { data, error } = await supabase
-          .from('task_steps_to_steps')
-          .select('id, title, parent_step_id')
-          .in('parent_step_id', stepIds);
-        
-        if (error) {
-          console.error('Error fetching sub-steps:', error);
-        } else {
-          subSteps = data || [];
-        }
-      }
-      
+      // OPTIMIZATION: Fetch sub-steps and history in PARALLEL
+      const subStepsPromise = stepIds.length > 0 
+        ? supabase
+            .from('task_steps_to_steps')
+            .select('id, title, parent_step_id')
+            .in('parent_step_id', stepIds)
+        : Promise.resolve({ data: [], error: null });
+
+      // Fetch history for steps with timeout - PARALLEL
+      const stepHistoryPromise = stepIds.length > 0
+        ? Promise.race([
+            supabase
+              .from('task_step_history')
+              .select('*')
+              .eq('action_type', 'blocker_added')
+              .in('task_step_id', stepIds)
+              .order('created_at', { ascending: false })
+              .limit(50), // Reduced limit for faster response
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Query timeout')), 1500) // Reduced timeout
+            )
+          ]).catch(() => ({ data: null, error: { message: 'Timeout' } }))
+        : Promise.resolve({ data: [], error: null });
+
+      // Execute sub-steps and step history in parallel
+      const [subStepsResult, stepHistoryResult] = await Promise.all([
+        subStepsPromise,
+        stepHistoryPromise
+      ]) as any[];
+
+      const subSteps = subStepsResult?.data || [];
       const subById: Record<string, any> = {};
-      subSteps.forEach(s => { subById[s.id] = s; });
-      const subIds = subSteps.map(s => s.id);
-      
-      // Fetch history in separate queries to avoid OR complexity
+      subSteps.forEach((s: any) => { subById[s.id] = s; });
+      const subIds = subSteps.map((s: any) => s.id);
+
+      // Fetch sub-step history ONLY if we have sub-steps
+      let subStepHistoryResult: any = { data: [], error: null };
+      if (subIds.length > 0) {
+        subStepHistoryResult = await Promise.race([
+          supabase
+            .from('task_step_history')
+            .select('*')
+            .eq('action_type', 'blocker_added')
+            .in('task_steps_to_steps_id', subIds)
+            .order('created_at', { ascending: false })
+            .limit(50), // Reduced limit
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), 1500) // Reduced timeout
+          )
+        ]).catch(() => ({ data: null, error: { message: 'Timeout' } }));
+      }
+
+      // Combine and filter history
       let allHistory: any[] = [];
       
-      // Fetch history for steps - ONLY unresolved blockers
-      if (stepIds.length > 0) {
-        const { data: stepHistory, error: stepError } = await supabase
-          .from('task_step_history')
-          .select('*')
-          .eq('action_type', 'blocker_added')
-          .in('task_step_id', stepIds)
-          .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
-          .order('created_at', { ascending: false });
-        
-        if (stepError) {
-          console.error('Error fetching step history:', stepError);
-        } else if (stepHistory) {
-          allHistory = [...allHistory, ...stepHistory];
-        }
+      if (stepHistoryResult?.data) {
+        const unresolvedStepHistory = stepHistoryResult.data.filter((h: any) => 
+          h.is_resolved === null || h.is_resolved === false
+        );
+        allHistory = [...allHistory, ...unresolvedStepHistory];
       }
       
-      // Fetch history for sub-steps - ONLY unresolved blockers
-      if (subIds.length > 0) {
-        const { data: subStepHistory, error: subError } = await supabase
-          .from('task_step_history')
-          .select('*')
-          .eq('action_type', 'blocker_added')
-          .in('task_steps_to_steps_id', subIds)
-          .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
-          .order('created_at', { ascending: false });
-        
-        if (subError) {
-          console.error('Error fetching substep history:', subError);
-        } else if (subStepHistory) {
-          allHistory = [...allHistory, ...subStepHistory];
-        }
+      if (subStepHistoryResult?.data) {
+        const unresolvedSubStepHistory = subStepHistoryResult.data.filter((h: any) => 
+          h.is_resolved === null || h.is_resolved === false
+        );
+        allHistory = [...allHistory, ...unresolvedSubStepHistory];
       }
       
       // Sort combined history by created_at
@@ -211,11 +233,9 @@ export const TaskList = () => {
       });
       
       setBlockerModalItems(enriched);
-      setBlockerModalOpen(true);
     } catch (error) {
       console.error('Error in openTaskBlockers:', error);
       setBlockerModalItems([]);
-      setBlockerModalOpen(true);
     }
   };
 
@@ -324,13 +344,13 @@ export const TaskList = () => {
         try {
           const { data, error } = await supabase
             .from('task_step_history')
-            .select('task_step_id')
+            .select('task_step_id, is_resolved')
             .eq('action_type', 'blocker_added')
-            .in('task_step_id', allStepIds)
-            .or('is_resolved.is.null,is_resolved.eq.false'); // Filter: only unresolved blockers
+            .in('task_step_id', allStepIds);
           
           if (!error && data) {
-            stepBlockers = data;
+            // Filter for unresolved blockers in JavaScript to avoid 500 errors
+            stepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
           }
         } catch (err) {
           console.warn('Failed to count step blockers:', err);
@@ -345,13 +365,13 @@ export const TaskList = () => {
           try {
             const { data, error } = await supabase
               .from('task_step_history')
-              .select('task_steps_to_steps_id')
+              .select('task_steps_to_steps_id, is_resolved')
               .eq('action_type', 'blocker_added')
-              .or('is_resolved.is.null,is_resolved.eq.false') // Filter: only unresolved blockers
               .in('task_steps_to_steps_id', allSubStepIds);
             
             if (!error && data) {
-              subStepBlockers = data;
+              // Filter for unresolved blockers in JavaScript to avoid 500 errors
+              subStepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
             }
           } catch (err) {
             console.warn('Failed to count sub-step blockers:', err);
@@ -421,8 +441,22 @@ export const TaskList = () => {
     }
   };
 
+  // Check if current user is the creator of the task
+  const isTaskCreator = (task: Task): boolean => {
+    return task.created_by === user?.id;
+  };
+
+  // Calculate progress only for visible steps (assigned OR created by user OR has assigned substeps)
+  const calculateAssignedStepsProgress = (task: Task): number => {
+    const visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+    if (visibleSteps.length === 0) return 0;
+    const completedVisibleSteps = visibleSteps.filter(s => s.is_completed).length;
+    return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
+  };
+
   const handleStatusToggle = async (task: Task) => {
-    const isFullComplete = (task.steps?.length || 0) > 0 && task.progress_percentage === 100;
+    const assignedProgress = calculateAssignedStepsProgress(task);
+    const isFullComplete = (task.steps?.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length || 0) > 0 && assignedProgress === 100;
     const newStatus = isFullComplete ? (task.status === 'completed' ? 'pending' : 'completed') : 'pending';
     if (newStatus !== task.status) {
       await updateTask(task.id, { status: newStatus });
@@ -642,9 +676,9 @@ export const TaskList = () => {
                           <button
                             onClick={() => handleStatusToggle(task)}
                             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-                            title={task.progress_percentage === 100 ? 'Mark complete / reopen' : 'Complete all steps to mark task complete'}
+                            title={calculateAssignedStepsProgress(task) === 100 ? 'Mark complete / reopen' : 'Complete all assigned steps to mark task complete'}
                           >
-                            {task.progress_percentage === 100 ? (
+                            {calculateAssignedStepsProgress(task) === 100 ? (
                               <CheckSquare className="w-5 h-5 text-green-600" />
                             ) : (
                               <Square className="w-5 h-5" />
@@ -658,7 +692,7 @@ export const TaskList = () => {
                             <TooltipTrigger asChild>
                               <div 
                                 className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
-                                  task.progress_percentage === 100 ? 'line-through text-gray-500' : 'text-gray-900'
+                                  calculateAssignedStepsProgress(task) === 100 ? 'line-through text-gray-500' : 'text-gray-900'
                                 }`}
                                 onClick={() => toggleTaskExpansion(task.id)}
                               >
@@ -774,7 +808,7 @@ export const TaskList = () => {
 
                         {/* Finish Date */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {task.finish_date && task.progress_percentage === 100 ? (
+                          {task.finish_date && calculateAssignedStepsProgress(task) === 100 ? (
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-green-600" />
@@ -808,12 +842,19 @@ export const TaskList = () => {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                className="priority-dropdown-trigger h-auto p-1 hover:bg-gray-50 rounded-md transition-colors hover:text-inherit"
+                                disabled={!isTaskCreator(task)}
+                                className={`priority-dropdown-trigger h-auto p-1 rounded-md transition-colors ${
+                                  isTaskCreator(task) 
+                                    ? 'hover:bg-gray-50 hover:text-inherit cursor-pointer' 
+                                    : 'opacity-60 cursor-not-allowed'
+                                }`}
+                                title={isTaskCreator(task) ? 'Change priority' : '🔒 Only task creator can change priority'}
                               >
                                 {getPriorityBadge(task.priority)}
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="center" className="w-32">
+                            {isTaskCreator(task) && (
+                              <DropdownMenuContent align="center" className="w-32">
                               <DropdownMenuItem 
                                 onClick={() => handlePriorityChange(task.id, 'low')}
                                 className="flex items-center gap-2"
@@ -843,6 +884,7 @@ export const TaskList = () => {
                                 <span className="text-red-700">Urgent</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
+                            )}
                           </DropdownMenu>
                         </TableCell>
 
@@ -855,14 +897,14 @@ export const TaskList = () => {
                         <TableCell className="px-2 py-3" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                           <div className="flex flex-col items-center gap-1">
                             <div className="text-xs text-gray-500">
-                    {task.steps.length > 0 ? `${task.progress_percentage}%` : 'No steps'}
+                    {task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length > 0 ? `${calculateAssignedStepsProgress(task)}%` : 'No steps'}
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div 
                       className={`h-1.5 rounded-full transition-all duration-300 ${
-                        task.progress_percentage === 100 ? 'bg-green-500' : 'bg-blue-600'
+                        calculateAssignedStepsProgress(task) === 100 ? 'bg-green-500' : 'bg-blue-600'
                       }`}
-                      style={{ width: `${task.steps.length > 0 ? task.progress_percentage : 0}%` }}
+                      style={{ width: `${task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length > 0 ? calculateAssignedStepsProgress(task) : 0}%` }}
                     />
                   </div>
                 </div>
@@ -897,24 +939,34 @@ export const TaskList = () => {
                               </Button>
                             )}
                             
-                            {/* Edit */}
+                            {/* Edit - Locked for assigned users */}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setEditingTask(task.id)}
-                              className="h-7 w-7 p-0 hover:bg-blue-50 hover:text-blue-600"
-                              title="Edit task"
+                              onClick={() => isTaskCreator(task) && setEditingTask(task.id)}
+                              disabled={!isTaskCreator(task)}
+                              className={`h-7 w-7 p-0 ${
+                                isTaskCreator(task) 
+                                  ? 'hover:bg-blue-50 hover:text-blue-600 cursor-pointer' 
+                                  : 'opacity-40 cursor-not-allowed'
+                              }`}
+                              title={isTaskCreator(task) ? 'Edit task' : '🔒 Only task creator can edit'}
                             >
                               <Edit className="w-3 h-3" />
                             </Button>
                             
-                            {/* Delete */}
+                            {/* Delete - Locked for assigned users */}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteClick(task)}
-                              className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
-                              title="Delete task"
+                              onClick={() => isTaskCreator(task) && handleDeleteClick(task)}
+                              disabled={!isTaskCreator(task)}
+                              className={`h-7 w-7 p-0 ${
+                                isTaskCreator(task) 
+                                  ? 'hover:bg-red-50 hover:text-red-600 cursor-pointer' 
+                                  : 'opacity-40 cursor-not-allowed'
+                              }`}
+                              title={isTaskCreator(task) ? 'Delete task' : '🔒 Only task creator can delete'}
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
@@ -943,16 +995,24 @@ export const TaskList = () => {
                     <div className="flex items-center justify-between mb-3 w-full">
                       <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                         <CheckSquare className="w-4 h-4 text-blue-600" />
-                        Steps ({task.steps.filter(s => s.is_completed).length}/{task.steps.length})
+                        Steps ({task.steps.filter(s => (s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps) && s.is_completed).length}/{task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length})
                       </h4>
+                      {/* Add Step - Locked for assigned users */}
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setAddStepDialog({ isOpen: true, taskId: task.id, taskTitle: task.title });
+                          if (isTaskCreator(task)) {
+                            setAddStepDialog({ isOpen: true, taskId: task.id, taskTitle: task.title });
+                          }
                         }}
-                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        title="Add a new step to this task"
+                        disabled={!isTaskCreator(task)}
+                        className={`${
+                          isTaskCreator(task) 
+                            ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer' 
+                            : 'text-gray-400 opacity-50 cursor-not-allowed'
+                        }`}
+                        title={isTaskCreator(task) ? 'Add a new step to this task' : '🔒 Only task creator can add steps'}
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Add Step
@@ -961,22 +1021,20 @@ export const TaskList = () => {
                     
                     <SortableContext items={task.steps.map(step => `step-${step.id}`)} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2 min-h-[50px] w-full">
-                        {task.steps.length === 0 ? (
+                        {task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length === 0 ? (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                             <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
                             <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
                             <p className="text-xs text-blue-700">
-                              Break down this task into smaller steps for better tracking
-                            </p>
-                            <p className="text-xs text-blue-600 mt-2">
-                              👆 Click "Add Step" button above to get started
+                              Steps will appear here once created or assigned to you
                             </p>
                           </div>
                         ) : (
                           task.steps
+                            .filter(step => step.assigned_to === currentEmployee?.id || step.created_by === user?.id || step.has_assigned_substeps) // Show assigned steps OR steps created by user OR steps with assigned sub-steps
                             .sort((a, b) => a.order - b.order)
                             .map((step, index) => (
-                              <TaskStep key={step.id} step={step} index={index} />
+                              <TaskStep key={step.id} step={step} index={index} taskCreatedBy={task.created_by} />
                             ))
                         )}
                       </div>

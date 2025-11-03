@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface Employee {
   id: string;
@@ -31,21 +32,14 @@ interface AssignStepDialogProps {
 }
 
 export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: AssignStepDialogProps) => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
   const [dueDate, setDueDate] = useState<string>('');
   const [savingDue, setSavingDue] = useState<boolean>(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
-
-  useEffect(() => {
-    if (organizationId) {
-      fetchEmployees();
-    }
-  }, [organizationId]);
+  const { data: employees = [], isLoading: loading } = useAvailableEmployees();
 
   // Load current assignment and due date (if any)
   useEffect(() => {
@@ -98,42 +92,6 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
       setFilteredEmployees(filtered);
     }
   }, [searchTerm, employees]);
-
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
-      
-      if (!organizationId) {
-        console.log('No organization ID available');
-        return;
-      }
-
-      console.log('Fetching employees for organization:', organizationId);
-
-      // Fetch employees from the same organization
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, full_name, email, status')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
-        .order('full_name');
-
-      if (error) throw error;
-
-      console.log('Fetched employees:', data);
-      setEmployees(data || []);
-      setFilteredEmployees(data || []);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch employees',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const resolveDueDateIso = (): string | null => {
     return dueDate ? new Date(dueDate).toISOString() : null;

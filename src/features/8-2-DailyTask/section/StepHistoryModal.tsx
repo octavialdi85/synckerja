@@ -53,7 +53,9 @@ interface StepHistory {
   brief_type: string | null;
   created_at: string;
   created_by: string;
+  task_steps_to_steps_id?: string | null;
   created_by_employee?: { id: string; full_name: string; email?: string };
+  sub_step?: { id: string; title: string } | null;
 }
 
 interface StepHistoryModalProps {
@@ -149,10 +151,32 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         }
       }
 
-      // Add employee data to history entries
+      // Get unique sub-step IDs from history
+      const subStepIds = [...new Set((data || []).map((entry: any) => entry.task_steps_to_steps_id).filter(Boolean))];
+      
+      // Fetch sub-step data for these IDs
+      let subStepsData = {};
+      if (subStepIds.length > 0) {
+        const { data: subSteps, error: subStepError } = await (supabase as any)
+          .from('task_steps_to_steps')
+          .select('id, title')
+          .in('id', subStepIds);
+        
+        if (subStepError) {
+          console.warn('Failed to fetch sub-steps:', subStepError);
+        } else {
+          subStepsData = subSteps?.reduce((acc: any, sub: any) => {
+            acc[sub.id] = sub;
+            return acc;
+          }, {}) || {};
+        }
+      }
+
+      // Add employee data and sub-step data to history entries
       const historyWithEmployees = (data || []).map((entry: any) => ({
         ...entry,
-        created_by_employee: employeesData[entry.created_by] || null
+        created_by_employee: employeesData[entry.created_by] || null,
+        sub_step: entry.task_steps_to_steps_id ? subStepsData[entry.task_steps_to_steps_id] : null
       }));
 
       setHistory(historyWithEmployees);
@@ -653,6 +677,12 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                               {entry.blocker_severity && getSeverityBadge(entry.blocker_severity)}
                               {entry.new_value && entry.action_type === 'status_change' && getStatusBadge(entry.new_value)}
                             </div>
+                            {/* Show sub-step title if available */}
+                            {entry.sub_step && (
+                              <p className="text-sm font-semibold text-blue-600 mb-1">
+                                "{entry.sub_step.title}"
+                              </p>
+                            )}
                             {entry.description && (
                               <p className="text-sm text-gray-600 mb-2">{entry.description}</p>
                             )}

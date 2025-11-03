@@ -18,9 +18,10 @@ interface StepLink {
 interface StepLinksProps {
   taskStepId: string;
   isExpanded: boolean;
+  onLinksChange?: () => void;
 }
 
-export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) => {
+export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, onLinksChange }) => {
   const [links, setLinks] = useState<StepLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -40,6 +41,11 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
 
       if (error) throw error;
       setLinks(data || []);
+      
+      // Notify parent component about links change
+      if (onLinksChange) {
+        onLinksChange();
+      }
     } catch (error: any) {
       console.error('Error fetching links:', error);
       toast({
@@ -70,8 +76,8 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
         description: 'Link deleted successfully',
       });
 
-      // Refresh links
-      fetchLinks();
+      // Refresh links and notify parent
+      await fetchLinks();
     } catch (error: any) {
       console.error('Error deleting link:', error);
       toast({
@@ -90,8 +96,8 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded }) 
     setEditingLink(link);
   };
 
-  const handleUpdateLink = () => {
-    fetchLinks();
+  const handleUpdateLink = async () => {
+    await fetchLinks();
     setEditingLink(null);
   };
 

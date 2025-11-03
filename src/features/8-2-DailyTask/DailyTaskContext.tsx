@@ -36,9 +36,17 @@ export interface TaskStep {
   order: number;
   created_at: string;
   updated_at: string;
+  created_by?: string | null;
   files?: TaskFile[];
   links?: TaskLink[];
   history?: TaskStepHistory[];
+  assigned_to?: string | null;
+  assigned_employee?: {
+    id: string;
+    full_name: string;
+    email?: string;
+  } | null;
+  has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
 }
 
 export interface TaskFile {
@@ -280,22 +288,104 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const fetchTasks = async (force = false) => {
     if (!organizationId) return;
 
-    // Check cache first (60 seconds cache - INCREASED to save IO)
-    const cacheKey = `tasks_${organizationId}`;
-    if (!force) {
-      const cached = getCached<any[]>(cacheKey, 60000); // 60s instead of 30s
-      if (cached) {
-        setTasks(cached);
-        return;
-      }
-    }
-
     try {
       console.log('🔍 Fetching tasks for organization:', organizationId);
       trackQuery('fetch_tasks');
       
+      // Get current user to filter personal tasks only
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('⚠️ No authenticated user found');
+        setTasks([]);
+        return;
+      }
+
+      // Check cache first (60 seconds cache - INCREASED to save IO)
+      // Cache key includes user ID to ensure user-specific caching
+      const cacheKey = `tasks_${organizationId}_${user.id}`;
+      if (!force) {
+        const cached = getCached<any[]>(cacheKey, 60000); // 60s instead of 30s
+        if (cached) {
+          setTasks(cached);
+          return;
+        }
+      }
+
+      // Get current employee ID to filter assigned tasks
+      const { data: currentEmployee } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+      console.log('👤 Current user:', user.id);
+      console.log('👨‍💼 Current employee:', currentEmployee?.id);
+
+      // Get tasks assigned to current user at TASK level
+      let assignedTaskIds: string[] = [];
+      if (currentEmployee?.id) {
+        const { data: assignedTasks } = await supabase
+          .from('daily_tasks_assigned')
+          .select('daily_task_id')
+          .eq('employee_id', currentEmployee.id);
+        
+        assignedTaskIds = (assignedTasks || []).map((a: any) => a.daily_task_id);
+        console.log('📋 Task-level assigned IDs:', assignedTaskIds);
+      }
+
+      // Get tasks where current user is assigned to any STEP
+      let stepAssignedTaskIds: string[] = [];
+      if (currentEmployee?.id) {
+        const { data: assignedSteps } = await supabase
+          .from('task_steps_assigned')
+          .select(`
+            task_step_id,
+            task_steps!inner(task_id)
+          `)
+          .eq('employee_id', currentEmployee.id);
+        
+        if (assignedSteps && assignedSteps.length > 0) {
+          stepAssignedTaskIds = [...new Set(
+            (assignedSteps || [])
+              .map((s: any) => s.task_steps?.task_id)
+              .filter(Boolean)
+          )];
+          console.log('📋 Step-level assigned task IDs:', stepAssignedTaskIds);
+        }
+      }
+
+      // Get tasks where current user is assigned to any SUB-STEP
+      let subStepAssignedTaskIds: string[] = [];
+      if (currentEmployee?.id) {
+        const { data: assignedSubSteps } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .select(`
+            task_steps_to_steps_id,
+            task_steps_to_steps!inner(
+              parent_step_id,
+              task_steps!inner(task_id)
+            )
+          `)
+          .eq('employee_id', currentEmployee.id);
+        
+        if (assignedSubSteps && assignedSubSteps.length > 0) {
+          subStepAssignedTaskIds = [...new Set(
+            (assignedSubSteps || [])
+              .map((s: any) => s.task_steps_to_steps?.task_steps?.task_id)
+              .filter(Boolean)
+          )];
+          console.log('📋 Sub-step-level assigned task IDs:', subStepAssignedTaskIds);
+        }
+      }
+
+      // Combine task-level, step-level, and sub-step-level assignments
+      const allAssignedTaskIds = [...new Set([...assignedTaskIds, ...stepAssignedTaskIds, ...subStepAssignedTaskIds])];
+      console.log('📋 Combined assigned task IDs (task + step + sub-step):', allAssignedTaskIds);
+      
       // ULTRA-SIMPLIFIED QUERY: No nested joins to prevent timeout (error 57014)
       // Strategy: Fetch basic data only, load related data separately if needed
+      // FILTER: Only show tasks created by user OR assigned to user (task, step, or sub-step level)
       const { data, error } = await supabase
         .from('daily_tasks')
         .select(`
@@ -314,6 +404,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           updated_at
         `)
         .eq('organization_id', organizationId)
+        .or(`created_by.eq.${user.id}${allAssignedTaskIds.length > 0 ? `,id.in.(${allAssignedTaskIds.join(',')})` : ''}`)
         .order('created_at', { ascending: false })
         .limit(50); // Increased back to 50 since we removed expensive joins
 
@@ -355,7 +446,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           status,
           priority,
           created_at,
-          updated_at
+          updated_at,
+          created_by
         `)
         .in('task_id', taskIds)
         .order('order', { ascending: true });
@@ -389,13 +481,79 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       console.log('✅ Fetched task assignments:', assignmentsData?.length || 0);
 
+      // Fetch step assignments separately to get PIC information for each step
+      const stepIds = (stepsData || []).map(s => s.id);
+      console.log('🔍 Fetching step assignments for steps:', stepIds.length);
+      
+      let stepAssignmentsData: any[] = [];
+      if (stepIds.length > 0) {
+        const { data: stepAssigns, error: stepAssignsError } = await supabase
+          .from('task_steps_assigned')
+          .select(`
+            id,
+            task_step_id,
+            employee_id,
+            assigned_by,
+            assigned_at,
+            employee:employees!employee_id(id, full_name, email)
+          `)
+          .in('task_step_id', stepIds)
+          .order('assigned_at', { ascending: false });
+
+        if (stepAssignsError) {
+          console.error('❌ Error fetching step assignments:', stepAssignsError);
+        } else {
+          stepAssignmentsData = stepAssigns || [];
+          console.log('✅ Fetched step assignments:', stepAssignmentsData.length);
+        }
+      }
+
+      // Fetch sub-step assignments to know which parent steps have assigned sub-steps
+      let subStepParentIds: string[] = [];
+      if (currentEmployee?.id && stepIds.length > 0) {
+        const { data: mySubStepAssignments } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .select(`
+            task_steps_to_steps_id,
+            task_steps_to_steps!inner(parent_step_id)
+          `)
+          .eq('employee_id', currentEmployee.id);
+        
+        if (mySubStepAssignments && mySubStepAssignments.length > 0) {
+          subStepParentIds = [...new Set(
+            mySubStepAssignments
+              .map((a: any) => a.task_steps_to_steps?.parent_step_id)
+              .filter(Boolean)
+          )];
+          console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
+        }
+      }
+
+      // Group step assignments by task_step_id (only keep the latest one per step)
+      const stepAssignmentsByStepId: Record<string, any> = {};
+      stepAssignmentsData.forEach(assignment => {
+        if (!stepAssignmentsByStepId[assignment.task_step_id]) {
+          stepAssignmentsByStepId[assignment.task_step_id] = assignment;
+        }
+      });
+
       // Group steps by task_id
       const stepsByTaskId: Record<string, any[]> = {};
       (stepsData || []).forEach(step => {
         if (!stepsByTaskId[step.task_id]) {
           stepsByTaskId[step.task_id] = [];
         }
-        stepsByTaskId[step.task_id].push(step);
+        
+        // Add assignment data to step if exists
+        const stepAssignment = stepAssignmentsByStepId[step.id];
+        const hasAssignedSubSteps = subStepParentIds.includes(step.id);
+        
+        stepsByTaskId[step.task_id].push({
+          ...step,
+          assigned_to: stepAssignment?.employee_id || null,
+          assigned_employee: stepAssignment?.employee || null,
+          has_assigned_substeps: hasAssignedSubSteps // Flag to show step if it has assigned sub-steps
+        });
       });
 
       // Group assignments by daily_task_id
@@ -425,10 +583,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             files: [], // Load separately on demand
             links: [], // Load separately on demand
             history: [], // Load separately on demand
-            assigned_to: null,
-            assigned_employee: null,
-            assigned_by_employee: null,
-            assigned_due_date: null,
+            // Keep assignment data that was already set in stepsByTaskId
+            // assigned_to and assigned_employee are already in step from previous mapping
           })),
           deadline_history: [], // Load separately on demand
           progress_percentage: progress,
@@ -605,8 +761,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Task added successfully'
       });
       
-      // Clear cache and refresh data immediately
-      clearCache(`tasks_${organizationId}`);
+      // Clear cache for all users and refresh data immediately
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error adding task:', error);
@@ -632,8 +788,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Task updated successfully'
       });
       
-      // Clear cache and refresh data immediately
-      clearCache(`tasks_${organizationId}`);
+      // Clear cache for all users and refresh data immediately
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error updating task:', error);
@@ -659,8 +815,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Task deleted successfully'
       });
       
-      // Clear cache and refresh data immediately
-      clearCache(`tasks_${organizationId}`);
+      // Clear cache for all users and refresh data immediately
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -674,6 +830,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const addTaskStep = async (taskId: string, title: string) => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Get current max order for this task
       const { data: existingSteps } = await supabase
         .from('task_steps')
@@ -692,7 +851,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           task_id: taskId,
           title,
           is_completed: false,
-          order: nextOrder
+          order: nextOrder,
+          created_by: user?.id || null
         });
 
       if (error) throw error;
@@ -702,7 +862,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Step added successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error adding step:', error);
@@ -804,7 +964,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Step updated successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error: any) {
       console.error('Error updating step:', error);
@@ -827,6 +987,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const assignTaskStep = async (stepId: string, employeeId: string | null, dueDateIso?: string | null) => {
     try {
+      console.log('🎯 Assigning step:', { stepId, employeeId, dueDateIso });
+      
       // Get current user to set assigned_by
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
@@ -836,6 +998,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .select('id')
         .eq('user_id', user.id)
         .single();
+
+      console.log('👤 Current employee ID:', currentEmployee?.id);
 
       if (employeeId) {
         // delete any existing assignment rows (we only keep latest)
@@ -870,33 +1034,46 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           .single();
         if (error) throw error;
 
+        console.log('✅ Step assigned successfully. Assignment ID:', (inserted as any)?.id);
+
         // Save due date if provided
         if (dueDateIso) {
-          await supabase
+          const { data: dueDateRecord, error: dueDateError } = await supabase
             .from('task_steps_assigned_duedate')
             .insert({
               organization_id: (taskOrg as any)?.organization_id || null,
               task_steps_assigned_id: (inserted as any).id,
               due_date: dueDateIso,
-            });
+            })
+            .select()
+            .single();
+          
+          if (dueDateError) {
+            console.error('❌ Error saving due date:', dueDateError);
+          } else {
+            console.log('✅ Due date saved:', dueDateRecord);
+          }
         }
       } else {
         // unassign by deleting assignment rows for this step
+        console.log('🔓 Unassigning step:', stepId);
         const { error } = await supabase
           .from('task_steps_assigned')
           .delete()
           .eq('task_step_id', stepId);
         if (error) throw error;
+        console.log('✅ Step unassigned successfully');
       }
-
 
       toast({
         title: 'Success',
         description: employeeId ? 'Step assigned successfully' : 'Step unassigned successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      console.log('🔄 Refreshing tasks...');
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
+      console.log('✅ Tasks refreshed');
     } catch (error) {
       console.error('Error assigning step:', error);
       toast({
@@ -921,7 +1098,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Step deleted successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error deleting step:', error);
@@ -950,7 +1127,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Steps reordered successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error reordering steps:', error);
@@ -1056,7 +1233,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'File uploaded successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -1108,7 +1285,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'File deleted successfully'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error deleting file:', error);
@@ -1151,7 +1328,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Deadline extension request submitted'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error requesting deadline extension:', error);
@@ -1195,7 +1372,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Deadline extension approved'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error approving deadline extension:', error);
@@ -1225,7 +1402,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Deadline extension rejected'
       });
       
-      clearCache(`tasks_${organizationId}`);
+      clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);
     } catch (error) {
       console.error('Error rejecting deadline extension:', error);
@@ -1257,7 +1434,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     const throttledRefresh = throttle(() => {
       console.log('🔄 Throttled refresh triggered');
       fetchTasks(true); // Force refresh to bypass cache
-      clearCache(`tasks_${organizationId}`); // Clear cache to get fresh data
+      clearCache(`tasks_${organizationId}_*`); // Clear cache for all users to get fresh data
     }, 5000); // 5 seconds instead of 3 to save more IO
 
     // OPTIMIZED: Only subscribe to main tasks table

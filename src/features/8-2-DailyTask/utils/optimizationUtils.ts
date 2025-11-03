@@ -94,11 +94,28 @@ export function setCache<T>(key: string, data: T): void {
 /**
  * Clear specific cache entry or all cache
  * @param key Optional cache key to clear. If not provided, clears all cache
+ *            Supports wildcard '*' to clear multiple matching keys
  */
 export function clearCache(key?: string): void {
   if (key) {
-    cache.delete(key);
-    console.log(`🗑️ Cleared cache: ${key}`);
+    // Support wildcard pattern matching
+    if (key.includes('*')) {
+      const pattern = key.replace(/\*/g, '.*');
+      const regex = new RegExp(`^${pattern}$`);
+      let cleared = 0;
+      
+      for (const cacheKey of cache.keys()) {
+        if (regex.test(cacheKey)) {
+          cache.delete(cacheKey);
+          cleared++;
+        }
+      }
+      
+      console.log(`🗑️ Cleared ${cleared} cache entries matching: ${key}`);
+    } else {
+      cache.delete(key);
+      console.log(`🗑️ Cleared cache: ${key}`);
+    }
   } else {
     cache.clear();
     console.log(`🗑️ Cleared all cache`);
