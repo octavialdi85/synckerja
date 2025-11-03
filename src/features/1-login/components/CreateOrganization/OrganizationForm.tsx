@@ -92,7 +92,8 @@ const OrganizationForm = () => {
       const orgData = orgResult.data as any;
       const profileData = profileResult.data;
 
-      // Step 2: Create department, user_organizations, user_roles, and employee in parallel
+      // Step 2: Create department, user_organizations, and user_roles
+      // Note: Create department manually since trigger might not work consistently
       const [deptResult, userOrgResult, roleResult] = await Promise.all([
         supabase
           .from('departments')
@@ -101,7 +102,10 @@ const OrganizationForm = () => {
             description: 'Default department',
             organization_id: orgData.id,
             is_default: true,
+            is_active: true,
             created_by: userId,
+            created_at: timestamp,
+            updated_at: timestamp
           })
           .select('id')
           .single(),
@@ -126,9 +130,27 @@ const OrganizationForm = () => {
           })
       ]);
 
+      // Handle department creation result
+      let defaultDeptId = null;
       if (deptResult.error) {
         console.error('Error creating default department:', deptResult.error);
-        throw new Error('Failed to create default department');
+        // Don't throw - try to continue without department
+        // Check if trigger created it
+        const { data: existingDept } = await supabase
+          .from('departments')
+          .select('id')
+          .eq('organization_id', orgData.id)
+          .eq('is_default', true)
+          .maybeSingle();
+        
+        defaultDeptId = existingDept?.id || null;
+        
+        if (!defaultDeptId) {
+          console.warn('No default department found - continuing without department');
+        }
+      } else {
+        defaultDeptId = deptResult.data?.id || null;
+        console.log('Default department created successfully:', defaultDeptId);
       }
 
       if (userOrgResult.error) {
@@ -150,7 +172,7 @@ const OrganizationForm = () => {
             organization_id: orgData.id,
             full_name: profileData?.full_name || 'User',
             email: profileData?.email || null,
-            department_id: deptResult.data?.id || null,
+            department_id: defaultDeptId,
             created_at: timestamp,
             updated_at: timestamp,
             created_by: userId,
