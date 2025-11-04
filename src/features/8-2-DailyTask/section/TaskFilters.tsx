@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Search, FilterX } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
@@ -12,7 +12,27 @@ import {
 import { useDailyTask } from '../DailyTaskContext';
 
 export const TaskFilters = () => {
-  const { filters, setFilters } = useDailyTask();
+  const { filters, setFilters, tasks } = useDailyTask();
+
+  // Get unique employees from all task steps for PIC filter
+  const availableEmployees = useMemo(() => {
+    const employeeMap = new Map<string, { id: string; full_name: string }>();
+    
+    tasks.forEach(task => {
+      task.steps?.forEach(step => {
+        if (step.assigned_employee && step.assigned_employee.id) {
+          employeeMap.set(step.assigned_employee.id, {
+            id: step.assigned_employee.id,
+            full_name: step.assigned_employee.full_name || 'Unknown'
+          });
+        }
+      });
+    });
+    
+    return Array.from(employeeMap.values()).sort((a, b) => 
+      a.full_name.localeCompare(b.full_name)
+    );
+  }, [tasks]);
 
   const handleSearchChange = (value: string) => {
     setFilters(prev => ({ ...prev, search: value }));
@@ -26,12 +46,17 @@ export const TaskFilters = () => {
     setFilters(prev => ({ ...prev, priority: value }));
   };
 
+  const handlePicChange = (value: string) => {
+    setFilters(prev => ({ ...prev, pic: value === "all" ? "" : value }));
+  };
+
   const clearFilters = () => {
     setFilters({
       search: '',
       status: '',
       priority: '',
-      dateFilter: ''
+      dateFilter: '',
+      pic: ''
     });
   };
 
@@ -76,8 +101,23 @@ export const TaskFilters = () => {
         </SelectContent>
       </Select>
 
+      {/* PIC Filter */}
+      <Select value={filters.pic || "all"} onValueChange={handlePicChange}>
+        <SelectTrigger className="w-40 border border-gray-200 rounded-lg">
+          <SelectValue placeholder="All PIC" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All PIC</SelectItem>
+          {availableEmployees.map((employee) => (
+            <SelectItem key={employee.id} value={employee.id}>
+              {employee.full_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
       {/* Clear Filters Button */}
-      {(filters.search || filters.status || filters.priority) && (
+      {(filters.search || filters.status || filters.priority || filters.pic) && (
         <Button
           variant="ghost"
           size="sm"

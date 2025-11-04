@@ -28,6 +28,22 @@ export interface TaskStepHistory {
   created_by?: string;
 }
 
+export interface TaskSubStep {
+  id: string;
+  parent_step_id: string;
+  title: string;
+  is_completed: boolean;
+  order: number;
+  created_at: string;
+  updated_at: string;
+  assigned_to?: string | null;
+  assigned_employee?: {
+    id: string;
+    full_name: string;
+    email?: string;
+  } | null;
+}
+
 export interface TaskStep {
   id: string;
   task_id: string;
@@ -47,6 +63,7 @@ export interface TaskStep {
     email?: string;
   } | null;
   has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
+  sub_steps?: TaskSubStep[]; // Sub-steps for this step
 }
 
 export interface TaskFile {
@@ -119,6 +136,7 @@ interface Filters {
   status: string;
   priority: string;
   dateFilter: string;
+  pic: string;
 }
 
 interface RecentStepFilters {
@@ -184,7 +202,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     search: '',
     status: '',
     priority: '',
-    dateFilter: ''
+    dateFilter: '',
+    pic: ''
   });
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
     dateRange: 'today',
@@ -385,7 +404,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       
       // ULTRA-SIMPLIFIED QUERY: No nested joins to prevent timeout (error 57014)
       // Strategy: Fetch basic data only, load related data separately if needed
-      // FILTER: Only show tasks created by user OR assigned to user (task, step, or sub-step level)
+      // FILTER: Show ALL tasks in organization (filtering by PIC will be handled by client-side filter)
+      // This allows users to see all tasks assigned to a specific PIC regardless of who created the task
       const { data, error } = await supabase
         .from('daily_tasks')
         .select(`
@@ -404,9 +424,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           updated_at
         `)
         .eq('organization_id', organizationId)
-        .or(`created_by.eq.${user.id}${allAssignedTaskIds.length > 0 ? `,id.in.(${allAssignedTaskIds.join(',')})` : ''}`)
-        .order('created_at', { ascending: false })
-        .limit(50); // Increased back to 50 since we removed expensive joins
+        .order('created_at', { ascending: false });
+        // Removed limit to fetch all tasks
 
       if (error) {
         console.error('❌ Error fetching tasks:', error);
@@ -508,21 +527,71 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
+      // Fetch ALL sub-steps (task_steps_to_steps) for all steps
+      console.log('🔍 Fetching sub-steps (task_steps_to_steps) for steps:', stepIds.length);
+      let subStepsData: any[] = [];
+      if (stepIds.length > 0) {
+        const { data: subSteps, error: subStepsError } = await supabase
+          .from('task_steps_to_steps')
+          .select(`
+            id,
+            parent_step_id,
+            title,
+            is_completed,
+            order,
+            created_at,
+            updated_at
+          `)
+          .in('parent_step_id', stepIds)
+          .order('order', { ascending: true });
+
+        if (subStepsError) {
+          console.error('❌ Error fetching sub-steps:', subStepsError);
+        } else {
+          subStepsData = subSteps || [];
+          console.log('✅ Fetched sub-steps:', subStepsData.length);
+        }
+      }
+
       // Fetch sub-step assignments to know which parent steps have assigned sub-steps
       let subStepParentIds: string[] = [];
-      if (currentEmployee?.id && stepIds.length > 0) {
-        const { data: mySubStepAssignments } = await supabase
+      let subStepAssignmentsData: any[] = [];
+      if (stepIds.length > 0 && subStepsData.length > 0) {
+        const subStepIds = subStepsData.map(s => s.id);
+        
+        // Fetch assignments for all sub-steps (not just current employee)
+        const { data: subStepAssigns, error: subStepAssignsError } = await supabase
           .from('task_steps_to_steps_assigned')
           .select(`
+            id,
             task_steps_to_steps_id,
-            task_steps_to_steps!inner(parent_step_id)
+            employee_id,
+            assigned_by,
+            assigned_at,
+            employee:employees!employee_id(id, full_name, email)
           `)
-          .eq('employee_id', currentEmployee.id);
-        
-        if (mySubStepAssignments && mySubStepAssignments.length > 0) {
+          .in('task_steps_to_steps_id', subStepIds)
+          .order('assigned_at', { ascending: false });
+
+        if (subStepAssignsError) {
+          console.error('❌ Error fetching sub-step assignments:', subStepAssignsError);
+        } else {
+          subStepAssignmentsData = subStepAssigns || [];
+          console.log('✅ Fetched sub-step assignments:', subStepAssignmentsData.length);
+          
+          // Group sub-step assignments by sub-step ID
+          const subStepAssignmentsBySubStepId: Record<string, any> = {};
+          subStepAssignmentsData.forEach(assignment => {
+            if (!subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id]) {
+              subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id] = assignment;
+            }
+          });
+
+          // Get parent step IDs that have assigned sub-steps (for current employee or any employee)
           subStepParentIds = [...new Set(
-            mySubStepAssignments
-              .map((a: any) => a.task_steps_to_steps?.parent_step_id)
+            subStepsData
+              .filter(subStep => subStepAssignmentsBySubStepId[subStep.id])
+              .map(subStep => subStep.parent_step_id)
               .filter(Boolean)
           )];
           console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
@@ -537,6 +606,23 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       });
 
+      // Group sub-steps by parent_step_id
+      const subStepsByParentStepId: Record<string, any[]> = {};
+      subStepsData.forEach(subStep => {
+        if (!subStepsByParentStepId[subStep.parent_step_id]) {
+          subStepsByParentStepId[subStep.parent_step_id] = [];
+        }
+        subStepsByParentStepId[subStep.parent_step_id].push(subStep);
+      });
+
+      // Group sub-step assignments by sub-step ID
+      const subStepAssignmentsBySubStepId: Record<string, any> = {};
+      subStepAssignmentsData.forEach(assignment => {
+        if (!subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id]) {
+          subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id] = assignment;
+        }
+      });
+
       // Group steps by task_id
       const stepsByTaskId: Record<string, any[]> = {};
       (stepsData || []).forEach(step => {
@@ -548,11 +634,22 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const stepAssignment = stepAssignmentsByStepId[step.id];
         const hasAssignedSubSteps = subStepParentIds.includes(step.id);
         
+        // Get sub-steps for this step
+        const subSteps = (subStepsByParentStepId[step.id] || []).map((subStep: any) => {
+          const subStepAssignment = subStepAssignmentsBySubStepId[subStep.id];
+          return {
+            ...subStep,
+            assigned_to: subStepAssignment?.employee_id || null,
+            assigned_employee: subStepAssignment?.employee || null
+          };
+        });
+
         stepsByTaskId[step.task_id].push({
           ...step,
           assigned_to: stepAssignment?.employee_id || null,
           assigned_employee: stepAssignment?.employee || null,
-          has_assigned_substeps: hasAssignedSubSteps // Flag to show step if it has assigned sub-steps
+          has_assigned_substeps: hasAssignedSubSteps, // Flag to show step if it has assigned sub-steps
+          sub_steps: subSteps // Include sub-steps data
         });
       });
 

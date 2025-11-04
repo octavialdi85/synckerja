@@ -263,9 +263,21 @@ export const TaskList = () => {
       if (filters.priority && task.priority !== filters.priority) {
         return false;
       }
+      
+      // PIC filter - check if any step is assigned to the selected employee
+      if (filters.pic) {
+        const hasStepAssignedToPic = task.steps?.some(step => 
+          step.assigned_employee?.id === filters.pic
+        ) || false;
+        
+        if (!hasStepAssignedToPic) {
+          return false;
+        }
+      }
+      
       return true;
     });
-  }, [tasks, filters.search, filters.status, filters.priority]);
+  }, [tasks, filters.search, filters.status, filters.priority, filters.pic]);
 
   // Compute blocker counts per task to mirror report page
   // Create stable string of task IDs and step counts to use as dependency
@@ -447,8 +459,11 @@ export const TaskList = () => {
   };
 
   // Calculate progress only for visible steps (assigned OR created by user OR has assigned substeps)
+  // When PIC filter is active, calculate progress for steps assigned to that PIC
   const calculateAssignedStepsProgress = (task: Task): number => {
-    const visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+    const visibleSteps = filters.pic 
+      ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
+      : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
     if (visibleSteps.length === 0) return 0;
     const completedVisibleSteps = visibleSteps.filter(s => s.is_completed).length;
     return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
@@ -897,14 +912,25 @@ export const TaskList = () => {
                         <TableCell className="px-2 py-3" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                           <div className="flex flex-col items-center gap-1">
                             <div className="text-xs text-gray-500">
-                    {task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length > 0 ? `${calculateAssignedStepsProgress(task)}%` : 'No steps'}
+                        {(() => {
+                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
+                          const visibleSteps = filters.pic 
+                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
+                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          return visibleSteps.length > 0 ? `${calculateAssignedStepsProgress(task)}%` : 'No steps';
+                        })()}
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div 
                       className={`h-1.5 rounded-full transition-all duration-300 ${
                         calculateAssignedStepsProgress(task) === 100 ? 'bg-green-500' : 'bg-blue-600'
                       }`}
-                      style={{ width: `${task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length > 0 ? calculateAssignedStepsProgress(task) : 0}%` }}
+                      style={{ width: `${(() => {
+                        const visibleSteps = filters.pic 
+                          ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
+                          : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                        return visibleSteps.length > 0 ? calculateAssignedStepsProgress(task) : 0;
+                      })()}` }}
                     />
                   </div>
                 </div>
@@ -995,7 +1021,14 @@ export const TaskList = () => {
                     <div className="flex items-center justify-between mb-3 w-full">
                       <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                         <CheckSquare className="w-4 h-4 text-blue-600" />
-                        Steps ({task.steps.filter(s => (s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps) && s.is_completed).length}/{task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length})
+                        Steps ({(() => {
+                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
+                          const visibleSteps = filters.pic 
+                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
+                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          const completedCount = visibleSteps.filter(s => s.is_completed).length;
+                          return `${completedCount}/${visibleSteps.length}`;
+                        })()})
                       </h4>
                       {/* Add Step - Locked for assigned users */}
                       <Button
@@ -1021,22 +1054,32 @@ export const TaskList = () => {
                     
                     <SortableContext items={task.steps.map(step => `step-${step.id}`)} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2 min-h-[50px] w-full">
-                        {task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length === 0 ? (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                            <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
-                            <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
-                            <p className="text-xs text-blue-700">
-                              Steps will appear here once created or assigned to you
-                            </p>
-                          </div>
-                        ) : (
-                          task.steps
-                            .filter(step => step.assigned_to === currentEmployee?.id || step.created_by === user?.id || step.has_assigned_substeps) // Show assigned steps OR steps created by user OR steps with assigned sub-steps
+                        {(() => {
+                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
+                          const visibleSteps = filters.pic 
+                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
+                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          
+                          if (visibleSteps.length === 0) {
+                            return (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                                <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
+                                <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
+                                <p className="text-xs text-blue-700">
+                                  {filters.pic 
+                                    ? 'No steps assigned to selected PIC'
+                                    : 'Steps will appear here once created or assigned to you'}
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          return visibleSteps
                             .sort((a, b) => a.order - b.order)
                             .map((step, index) => (
                               <TaskStep key={step.id} step={step} index={index} taskCreatedBy={task.created_by} />
-                            ))
-                        )}
+                            ));
+                        })()}
                       </div>
                     </SortableContext>
                   </div>

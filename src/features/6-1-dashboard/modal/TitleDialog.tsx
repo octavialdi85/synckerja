@@ -68,12 +68,13 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         return;
       }
 
-      // Fetch plan data to get service and post_date
+      // Fetch plan data to get service, content_type, and post_date
       const { data: planData, error: planError } = await supabase
         .from('social_media_plans')
         .select(`
           post_date,
-          service:services(name)
+          service:services(name),
+          content_type:content_types(name)
         `)
         .eq('id', socialMediaPlanId)
         .single();
@@ -84,15 +85,20 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         return;
       }
 
-      // Format the title: "Content" + {service} + ({tanggal postdate}) + {title}
+      // Format the title: "Content" + {service} + "-" + {content type} + "-" + ({tanggal postdate}) + {title}
       const serviceName = planData.service?.name || '';
+      const contentTypeName = planData.content_type?.name || '';
       const postDate = planData.post_date 
         ? format(new Date(planData.post_date), 'yyyy-MM-dd')
         : '';
       
-      const formattedTitle = postDate 
-        ? `Content ${serviceName} (${postDate}) ${titleText.trim()}`.trim()
-        : `Content ${serviceName} ${titleText.trim()}`.trim();
+      // Build formatted title
+      let formattedTitle = `Content ${serviceName} - ${contentTypeName}`.trim();
+      if (postDate) {
+        formattedTitle += ` - (${postDate})`;
+      }
+      formattedTitle += ` ${titleText.trim()}`;
+      formattedTitle = formattedTitle.trim();
 
       // Get current employee (active profile)
       const { data: currentEmployee, error: employeeError } = await supabase
