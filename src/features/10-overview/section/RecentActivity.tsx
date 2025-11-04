@@ -22,9 +22,16 @@ export const RecentActivity = memo(({ subscriptionStatus }: RecentActivityProps)
             <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
               <Clock className="h-5 w-5 text-orange-600" />
               <div>
-                <p className="font-medium text-orange-700">Trial Period Active</p>
+                <p className="font-medium text-orange-700">
+                  {subscriptionStatus.days_until_expiry < 0 ? 'Trial Period Expired' : 'Trial Period Active'}
+                </p>
                 <p className="text-sm text-orange-600">
-                  Your trial expires in {Math.max(0, subscriptionStatus.days_until_expiry)} days
+                  {subscriptionStatus.days_until_expiry < 0 
+                    ? `Expired ${Math.abs(subscriptionStatus.days_until_expiry)} days ago`
+                    : subscriptionStatus.days_until_expiry === 0
+                    ? 'Expires today'
+                    : `Expires in ${subscriptionStatus.days_until_expiry} days`
+                  }
                 </p>
               </div>
             </div>

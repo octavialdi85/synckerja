@@ -83,7 +83,12 @@ export const CurrentSubscription = memo(({
                 {expiryDate && formatDate(expiryDate)}
               </p>
               <p className={`text-xs ${(subscriptionStatus.days_until_expiry || 0) <= 3 ? 'text-red-600' : 'text-gray-500'}`}>
-                {Math.max(0, subscriptionStatus.days_until_expiry || 0)} days remaining
+                {subscriptionStatus.days_until_expiry < 0
+                  ? `Expired ${Math.abs(subscriptionStatus.days_until_expiry)} days ago`
+                  : subscriptionStatus.days_until_expiry === 0
+                  ? 'Expires today'
+                  : `${subscriptionStatus.days_until_expiry} days remaining`
+                }
               </p>
             </div>
           </div>

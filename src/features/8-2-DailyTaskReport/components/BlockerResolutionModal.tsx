@@ -1,27 +1,72 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/features/ui/use-toast';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   blocker: { id: string; blocker_type?: string; description?: string; created_at: string; taskTitle?: string; stepTitle?: string; subStepTitle?: string | null } | null;
+  onResolutionComplete?: () => void; // Callback after resolution is saved
 }
 
-export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, blocker }) => {
+export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, blocker, onResolutionComplete }) => {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   const handleSave = async () => {
     if (!blocker) return;
+    if (!note.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please provide resolution details',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
-      await supabase.from('task_step_history_blocker_resolved').insert({
-        task_step_history_id: blocker.id,
-        description: note,
+      // Use RPC function to insert resolution (bypasses RLS overhead)
+      const { data: resolutionId, error: insertError } = await (supabase as any).rpc('save_blocker_resolution', {
+        p_task_step_history_id: blocker.id,
+        p_description: note.trim()
       });
+
+      if (insertError) {
+        console.error('Error inserting blocker resolution:', insertError);
+        toast({
+          title: 'Error',
+          description: `Failed to save resolution: ${insertError.message}`,
+          variant: 'destructive',
+        });
+        setSaving(false);
+        return;
+      }
+      
+      console.log('✅ Blocker resolution saved with ID:', resolutionId);
+      
+      // Trigger callback if provided (to update is_resolved flag)
+      if (onResolutionComplete) {
+        await onResolutionComplete();
+      }
+      
       onOpenChange(false);
       setNote('');
+      
+      toast({
+        title: 'Success',
+        description: 'Blocker resolution saved successfully',
+      });
+    } catch (error: any) {
+      console.error('Unexpected error saving blocker resolution:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+      setSaving(false);
     } finally {
       setSaving(false);
     }

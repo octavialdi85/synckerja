@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
-import { Plus, Edit, Trash2, History } from 'lucide-react';
+import { Plus, Edit, Trash2, History, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { StepHistoryModal } from './StepHistoryModal';
+import { AssignSubStepDialog } from './AssignSubStepDialog';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 interface SubStep {
   id: string;
@@ -18,6 +21,13 @@ interface SubStep {
   order: number;
   created_at: string;
   updated_at?: string;
+  created_by?: string | null;
+  assigned_to?: string | null;
+  assigned_employee?: {
+    id: string;
+    full_name: string;
+    email?: string;
+  } | null;
 }
 
 interface ModalViewSubStepsProps {
@@ -26,9 +36,10 @@ interface ModalViewSubStepsProps {
   parentStepId: string;
   parentStepTitle: string;
   onParentCompletionChange?: (completed: boolean) => void;
+  taskCreatedBy?: string; // Task creator user ID for permission check
 }
 
-export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStepTitle, onParentCompletionChange }: ModalViewSubStepsProps) => {
+export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStepTitle, onParentCompletionChange, taskCreatedBy }: ModalViewSubStepsProps) => {
   const [loading, setLoading] = useState(false);
   const [subSteps, setSubSteps] = useState<SubStep[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -37,39 +48,131 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 	const [editTitle, setEditTitle] = useState('');
   const [showHistoryForSubStep, setShowHistoryForSubStep] = useState<string | null>(null);
   const [historyCounts, setHistoryCounts] = useState<Record<string, number>>({});
+  const [assignDialogSubStep, setAssignDialogSubStep] = useState<SubStep | null>(null);
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
+  const { user } = useCurrentUser();
+  const { data: currentEmployee } = useCurrentEmployee();
+
+  // Check if current user is the creator of the task
+  const isTaskCreator = taskCreatedBy === user?.id;
 
   const fetchSubSteps = async () => {
-    if (!organizationId || !parentStepId) return;
+    console.log('🔍 Fetching sub-steps:', { organizationId, parentStepId });
+    
+    if (!organizationId || !parentStepId) {
+      console.warn('⚠️ Missing organizationId or parentStepId');
+      return;
+    }
+    
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // First attempt: with organization_id filter
+      let { data, error } = await supabase
         .from('task_steps_to_steps')
         .select('*')
         .eq('organization_id', organizationId)
         .eq('parent_step_id', parentStepId)
         .order('order', { ascending: true })
         .order('created_at', { ascending: true });
-      if (error) throw error;
-      setSubSteps((data || []) as SubStep[]);
-      await syncParentCompletion((data || []) as SubStep[]);
+      
+      console.log('📊 Sub-steps query result (with org filter):', { data, error, count: data?.length });
+      
+      // If no data found with organization_id, try without it (fallback)
+      if (!error && (!data || data.length === 0)) {
+        console.log('🔄 No data with org filter, trying without org filter...');
+        const fallbackResult = await supabase
+          .from('task_steps_to_steps')
+          .select('*')
+          .eq('parent_step_id', parentStepId)
+          .order('order', { ascending: true })
+          .order('created_at', { ascending: true });
+        
+        console.log('📊 Sub-steps fallback query result:', { 
+          data: fallbackResult.data, 
+          error: fallbackResult.error, 
+          count: fallbackResult.data?.length 
+        });
+        
+        if (!fallbackResult.error && fallbackResult.data) {
+          data = fallbackResult.data;
+          error = fallbackResult.error;
+        }
+      }
+      
+      if (error) {
+        console.error('❌ Error fetching sub-steps:', error);
+        throw error;
+      }
+      
+      // Fetch assignments for these sub-steps
+      const subStepIds = (data || []).map((d: any) => d.id);
+      let subStepsWithAssignment = (data || []) as SubStep[];
+      
+      if (subStepIds.length > 0) {
+        const { data: assignments, error: assignError } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .select(`
+            id,
+            task_steps_to_steps_id,
+            employee_id,
+            employee:employees!employee_id(id, full_name, email)
+          `)
+          .in('task_steps_to_steps_id', subStepIds)
+          .order('assigned_at', { ascending: false });
+        
+        if (!assignError && assignments) {
+          // Group assignments by task_steps_to_steps_id (keep only latest)
+          const assignmentMap: Record<string, any> = {};
+          assignments.forEach((a: any) => {
+            if (!assignmentMap[a.task_steps_to_steps_id]) {
+              assignmentMap[a.task_steps_to_steps_id] = a;
+            }
+          });
+          
+          // Merge assignment data with sub-steps
+          subStepsWithAssignment = (data || []).map((s: any) => ({
+            ...s,
+            assigned_to: assignmentMap[s.id]?.employee_id || null,
+            assigned_employee: assignmentMap[s.id]?.employee || null
+          }));
+        }
+      }
+      
+      setSubSteps(subStepsWithAssignment);
+      console.log('✅ Sub-steps set to state:', subStepsWithAssignment.length || 0, 'items');
+      
+      await syncParentCompletion(subStepsWithAssignment);
 
-      // Fetch history counts for these sub-steps
+      // Fetch history counts for these sub-steps (with graceful degradation)
       const ids = (data || []).map((d: any) => d.id);
       if (ids.length > 0) {
-        const { data: historyRows, error: histErr } = await supabase
-          .from('task_step_history')
-          .select('task_steps_to_steps_id')
-          .in('task_steps_to_steps_id', ids);
-        if (!histErr) {
-          const tally: Record<string, number> = {};
-          (historyRows || []).forEach((row: any) => {
-            const key = row.task_steps_to_steps_id;
-            tally[key] = (tally[key] || 0) + 1;
-          });
-          setHistoryCounts(tally);
-        }
+        // OPTIMIZATION: Make this non-blocking with timeout protection
+        // This is a non-critical UI enhancement that can fail gracefully
+        Promise.race([
+          supabase
+            .from('task_step_history')
+            .select('task_steps_to_steps_id')
+            .in('task_steps_to_steps_id', ids),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('History count timeout')), 3000)
+          )
+        ])
+        .then((result: any) => {
+          if (result?.data && !result?.error) {
+            const tally: Record<string, number> = {};
+            (result.data || []).forEach((row: any) => {
+              const key = row.task_steps_to_steps_id;
+              tally[key] = (tally[key] || 0) + 1;
+            });
+            setHistoryCounts(tally);
+          }
+        })
+        .catch((err) => {
+          console.warn('History count fetch failed (non-critical):', err);
+          setHistoryCounts({}); // Show sub-steps without counts - graceful degradation
+        });
       } else {
         setHistoryCounts({});
       }
@@ -222,12 +325,77 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 		}
 	};
 
+  const handleAssignSubStep = async (subStepId: string, employeeId: string | null) => {
+    try {
+      console.log('🎯 Assigning sub-step:', { subStepId, employeeId });
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: currentEmployee } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+      if (employeeId) {
+        // Delete existing assignments
+        await supabase
+          .from('task_steps_to_steps_assigned')
+          .delete()
+          .eq('task_steps_to_steps_id', subStepId);
+
+        // Create new assignment
+        const { error } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .insert({
+            organization_id: organizationId,
+            task_steps_to_steps_id: subStepId,
+            employee_id: employeeId,
+            assigned_by: currentEmployee?.id || null,
+            assigned_at: new Date().toISOString()
+          });
+
+        if (error) throw error;
+        console.log('✅ Sub-step assigned successfully');
+      } else {
+        // Unassign
+        const { error } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .delete()
+          .eq('task_steps_to_steps_id', subStepId);
+
+        if (error) throw error;
+        console.log('✅ Sub-step unassigned successfully');
+      }
+
+      toast({
+        title: 'Success',
+        description: employeeId ? 'Sub-step assigned successfully' : 'Sub-step unassigned successfully'
+      });
+
+      // Refresh sub-steps to get updated assignment
+      await fetchSubSteps();
+      setAssignDialogSubStep(null);
+    } catch (error) {
+      console.error('Error assigning sub-step:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to assign sub-step',
+        variant: 'destructive'
+      });
+    }
+  };
+
   useEffect(() => {
     if (open) fetchSubSteps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, parentStepId, organizationId]);
 
-  const completedCount = subSteps.filter(s => s.is_completed).length;
+  // Filter visible sub-steps based on assignment or creation
+  const visibleSubSteps = subSteps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || isTaskCreator);
+  const completedCount = visibleSubSteps.filter(s => s.is_completed).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,10 +404,13 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           <DialogTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <span>Steps</span>
-              <Badge variant="secondary">{completedCount}/{subSteps.length}</Badge>
+              <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
             </span>
             <span className="text-xs text-gray-500 truncate max-w-[60%]" title={parentStepTitle}>{parentStepTitle}</span>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Manage sub-steps for {parentStepTitle}. Add, edit, complete, or delete individual steps.
+          </DialogDescription>
         </DialogHeader>
 
 		<div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -263,15 +434,18 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 		  <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
 		  {loading ? (
 					<div className="text-sm text-gray-500">Loading...</div>
-				) : subSteps.length === 0 ? (
+				) : visibleSubSteps.length === 0 ? (
 					<div className="text-sm text-gray-500 italic">No steps yet</div>
 				) : (
 					<ul className="space-y-2">
-						{subSteps.map((s) => (
+						{visibleSubSteps.map((s) => (
                 <li key={s.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200 hover:bg-gray-50">
-								<button onClick={() => toggleCompleted(s.id, s.is_completed)} className="text-gray-400 hover:text-gray-600">
-									<Checkbox checked={s.is_completed} onCheckedChange={() => toggleCompleted(s.id, s.is_completed)} />
-								</button>
+								{/* Fixed: Removed button wrapper to prevent button nesting - Checkbox is already a button */}
+								<Checkbox 
+									checked={s.is_completed} 
+									onCheckedChange={() => toggleCompleted(s.id, s.is_completed)}
+									className="text-gray-400 hover:text-gray-600"
+								/>
                   {editingId === s.id ? (
 									<div className="flex items-center gap-2 flex-1">
 										<Input
@@ -299,6 +473,31 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
                         )}
                       </div>
 										<div className="flex items-center gap-1">
+                      {/* Assign - Locked for non-task-creators */}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => isTaskCreator && setAssignDialogSubStep(s)}
+                        disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 relative ${
+                          isTaskCreator
+                            ? `hover:text-gray-600 ${s.assigned_to ? 'text-green-500' : 'text-gray-400'}`
+                            : 'opacity-40 cursor-not-allowed text-gray-400'
+                        }`}
+                        title={
+                          isTaskCreator
+                            ? (s.assigned_to ? `Assigned to ${s.assigned_employee?.full_name || 'Unknown'}` : 'Assign sub-step')
+                            : '🔒 Only task creator can assign sub-steps'
+                        }
+                      >
+                        <Users className="w-3 h-3" />
+                        {s.assigned_to && (
+                          <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                            1
+                          </div>
+                        )}
+                      </Button>
+                      {/* History */}
                       <Button variant="ghost" size="sm" onClick={() => setShowHistoryForSubStep(s.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-purple-600 relative" title="History & Blockers">
                         <History className="w-3 h-3" />
                         {historyCounts[s.id] ? (
@@ -307,10 +506,34 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
                           </div>
                         ) : null}
                       </Button>
-											<Button variant="ghost" size="sm" onClick={() => startEdit(s.id, s.title)} className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600" title="Edit">
+                      {/* Edit - Locked for assigned users */}
+											<Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => isTaskCreator && startEdit(s.id, s.title)}
+                        disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 ${
+                          isTaskCreator 
+                            ? 'text-gray-400 hover:text-gray-600 cursor-pointer' 
+                            : 'text-gray-300 opacity-40 cursor-not-allowed'
+                        }`}
+                        title={isTaskCreator ? 'Edit sub-step' : '🔒 Only task creator can edit sub-steps'}
+                      >
 												<Edit className="w-3 h-3" />
 											</Button>
-											<Button variant="ghost" size="sm" onClick={() => deleteSubStep(s.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-red-600" title="Delete">
+                      {/* Delete - Locked for assigned users */}
+											<Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => isTaskCreator && deleteSubStep(s.id)}
+                        disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 ${
+                          isTaskCreator 
+                            ? 'text-gray-400 hover:text-red-600 cursor-pointer' 
+                            : 'text-gray-300 opacity-40 cursor-not-allowed'
+                        }`}
+                        title={isTaskCreator ? 'Delete sub-step' : '🔒 Only task creator can delete sub-steps'}
+                      >
 												<Trash2 className="w-3 h-3" />
 											</Button>
 										</div>
@@ -345,6 +568,16 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
                 setHistoryCounts(prev => ({ ...prev, [showHistoryForSubStep]: count || 0 }));
               } catch (_) {}
             }}
+          />
+        )}
+
+        {/* Assign Sub-Step Dialog */}
+        {assignDialogSubStep && (
+          <AssignSubStepDialog
+            subStep={assignDialogSubStep}
+            onAssign={(employeeId) => handleAssignSubStep(assignDialogSubStep.id, employeeId)}
+            onUnassign={() => handleAssignSubStep(assignDialogSubStep.id, null)}
+            onClose={() => setAssignDialogSubStep(null)}
           />
         )}
       </DialogContent>

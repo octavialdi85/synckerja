@@ -18,31 +18,73 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     flowType: 'pkce',
   },
   global: {
-    // Better error handling for network issues
-    fetch: (url, options = {}) => {
-      // Create abort controller for timeout if not already provided
-      const controller = options.signal ? undefined : new AbortController();
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 10000) : undefined; // 10 second timeout
+    // Better error handling for network issues with retry logic
+    fetch: async (url, options = {}) => {
+      const MAX_RETRIES = 2;
+      const TIMEOUT_MS = 30000; // Increased to 30 seconds for better reliability
       
-      return fetch(url, {
-        ...options,
-        signal: options.signal || controller?.signal,
-      }).catch((error) => {
-        // Clear timeout if request completes
-        if (timeoutId) clearTimeout(timeoutId);
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // Create abort controller for timeout if not already provided
+        const controller = options.signal ? undefined : new AbortController();
+        const timeoutId = controller ? setTimeout(() => controller.abort(), TIMEOUT_MS) : undefined;
         
-        // Map network errors to be more descriptive
-        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-          throw new Error('Network request timeout');
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: options.signal || controller?.signal,
+          });
+          
+          // Clear timeout on success
+          if (timeoutId) clearTimeout(timeoutId);
+
+          // CRITICAL: Handle 504 Gateway Timeout from auth service
+          // This occurs when Supabase infrastructure is overloaded (36+ second response time)
+          if (response.status === 504 && url.includes('/auth/v1/user')) {
+            console.warn('⚠️ Auth service timeout (504) - infrastructure overloaded');
+            
+            // If this is not the last retry, continue to retry
+            if (attempt < MAX_RETRIES) {
+              const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
+              console.log(`Retrying auth check after 504 (attempt ${attempt + 1}/${MAX_RETRIES + 1}), waiting ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue; // Retry
+            }
+            
+            // Last attempt failed - dispatch event for auth cleanup
+            console.error('❌ Auth service 504 on final attempt, triggering session cleanup');
+            window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
+              detail: { status: 504, message: 'Auth service timeout', url }
+            }));
+          }
+          
+          return response;
+        } catch (error: any) {
+          // Clear timeout
+          if (timeoutId) clearTimeout(timeoutId);
+          
+          // If this is the last attempt or error is not retryable, throw
+          const isTimeout = error.name === 'AbortError' || error.name === 'TimeoutError';
+          const isNetworkError = error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError');
+          
+          if (attempt === MAX_RETRIES || (!isTimeout && !isNetworkError)) {
+            // Map network errors to be more descriptive
+            if (isTimeout) {
+              throw new Error(`Network request timeout after ${TIMEOUT_MS / 1000} seconds`);
+            }
+            if (isNetworkError) {
+              throw new Error('Network request failed - please check your connection');
+            }
+            throw error;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+          console.log(`Supabase request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
-        if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-          throw new Error('Network request failed - please check your connection');
-        }
-        throw error;
-      }).finally(() => {
-        // Clear timeout on success too
-        if (timeoutId) clearTimeout(timeoutId);
-      });
+      }
+      
+      throw new Error('Max retries exceeded');
     },
   },
 });

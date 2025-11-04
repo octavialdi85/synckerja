@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { queryManager } from '@/utils/queryManager';
 
 export interface SubscriptionExpiryStatus {
   isExpired: boolean;
@@ -16,6 +17,7 @@ export interface SubscriptionExpiryStatus {
 /**
  * Hook to check if subscription or trial has expired
  * Checks both trial_end_date and subscription_end_date from organization_subscriptions table
+ * Now with aggressive caching and query deduplication
  */
 export const useSubscriptionExpiry = () => {
   const { organizationId, loading: orgLoading } = useCurrentOrg();
@@ -40,221 +42,109 @@ export const useSubscriptionExpiry = () => {
         };
       }
 
-      // CRITICAL: Get subscription data from organization_subscriptions table
-      // Include organization_id in select for verification to prevent cross-organization data leaks
-      const { data: subscription, error: subError } = await supabase
-        .from('organization_subscriptions')
-        .select('trial_end_date, subscription_end_date, is_trial, status, organization_id')
-        .eq('organization_id', organizationId) // STRICT filter per organization
-        .maybeSingle();
-
-      if (subError) {
-        if (import.meta.env.DEV) {
-          console.error('❌ Error checking subscription expiry for org:', organizationId, subError);
-        }
-        // If error, don't block access - return safe default
-        return {
-          isExpired: false,
-          isTrialExpired: false,
-          isSubscriptionExpired: false,
-          trialEndDate: null,
-          subscriptionEndDate: null,
-          expiredDate: null,
-          daysExpired: 0,
-          status: 'checking'
-        };
-      }
-
-      if (!subscription) {
-        // No subscription found, allow access (might be new organization)
-        if (import.meta.env.DEV) {
-          console.log('ℹ️ No subscription found for org:', organizationId, '- Allowing access');
-        }
-        return {
-          isExpired: false,
-          isTrialExpired: false,
-          isSubscriptionExpired: false,
-          trialEndDate: null,
-          subscriptionEndDate: null,
-          expiredDate: null,
-          daysExpired: 0,
-          status: 'active'
-        };
-      }
-
-      // Type assertion for subscription data - use any to avoid type issues
-      const subData = subscription as any;
-
-      // CRITICAL: Verify the returned data belongs to requested organization
-      // This is a security check to prevent cross-organization data leaks
-      if (subData.organization_id !== organizationId) {
-        // Always log security errors
-        console.error('🚨 SECURITY ERROR: Subscription data mismatch!', {
-          requestedOrgId: organizationId,
-          receivedOrgId: subData.organization_id,
-          subscriptionData: subData
-        });
-        // Return safe default instead of throwing error (to prevent app crash)
-        // But log error for security monitoring
-        return {
-          isExpired: false,
-          isTrialExpired: false,
-          isSubscriptionExpired: false,
-          trialEndDate: null,
-          subscriptionEndDate: null,
-          expiredDate: null,
-          daysExpired: 0,
-          status: 'checking'
-        };
-      }
-
-      const now = new Date();
-      let isExpired = false;
-      let isTrialExpired = false;
-      let isSubscriptionExpired = false;
-      let expiredDate: string | null = null;
-      let daysExpired = 0;
-
-      // STRICT EXPIRY CHECK LOGIC:
-      // 1. If subscription_end_date exists, check subscription expiry first (regardless of is_trial)
-      //    This handles cases where user upgraded from trial to subscription
-      // 2. If subscription_end_date doesn't exist or subscription expired, check trial_end_date
-      // 3. Subscription_end_date takes priority when both exist
-      // 4. Both dates are checked in UTC to avoid timezone issues
-      // 5. IMPORTANT: Only check expiry based on DATE comparison, not on status field
-
-      // Log raw data for debugging with organization context
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 [Subscription Expiry] Raw subscription data from DB:', {
-          organizationId,
-          organization_id_from_db: subData.organization_id,
-          is_trial: subData.is_trial,
-          trial_end_date: subData.trial_end_date,
-          subscription_end_date: subData.subscription_end_date,
-          status: subData.status,
-          verification: subData.organization_id === organizationId ? '✅ MATCH' : '❌ MISMATCH'
-        });
-      }
-
-      // Normalize dates to UTC for accurate comparison
-      // Use actual timestamp comparison (not just day-based) for precision
-      const parseDate = (dateString: string | null): Date | null => {
-        if (!dateString) return null;
-        try {
-          return new Date(dateString);
-        } catch (e) {
-          console.error('Error parsing date:', dateString, e);
-          return null;
-        }
-      };
-
-      // Use the 'now' variable already declared above (line 82)
-      const nowTime = now.getTime();
-
-      // Check subscription expiry first (if subscription_end_date exists)
-      // This is the PRIMARY check for active subscriptions
-      if (subData.subscription_end_date) {
-        const subscriptionEnd = parseDate(subData.subscription_end_date);
-        if (subscriptionEnd) {
-          const subscriptionEndTime = subscriptionEnd.getTime();
-          if (nowTime > subscriptionEndTime) {
-            isSubscriptionExpired = true;
-            isExpired = true;
-            expiredDate = subData.subscription_end_date;
-            daysExpired = Math.floor((nowTime - subscriptionEndTime) / (1000 * 60 * 60 * 24));
-            console.warn('🔒 Subscription expired - subscription_end_date check:', {
-              subscriptionEndDate: subData.subscription_end_date,
-              subscriptionEndTime,
-              nowTime,
-              now: now.toISOString(),
-              subscriptionEnd: subscriptionEnd.toISOString(),
-              daysExpired
+      // Use query manager to deduplicate and cache this query
+      return queryManager.execute(
+        `subscription-expiry-${organizationId}`,
+        async () => {
+          // OPTIMIZATION: Use RPC function instead of direct table query
+          // The RPC function is already optimized and cached
+          let subscription: any = null;
+          
+          try {
+            const { data: rpcData, error: rpcError } = await supabase.rpc('get_subscription_status', {
+              org_id: organizationId  // Fixed: parameter name must match RPC function definition
             });
-          } else {
-            console.log('✅ Subscription still active - subscription_end_date in future:', {
-              subscriptionEndDate: subData.subscription_end_date,
-              subscriptionEndTime,
-              nowTime,
-              daysRemaining: Math.floor((subscriptionEndTime - nowTime) / (1000 * 60 * 60 * 24))
-            });
-          }
-        }
-      }
 
-      // Check trial expiry only if:
-      // - subscription_end_date doesn't exist OR subscription already expired
-      // - is_trial = true (handle both boolean true and string 'true')
-      // - trial_end_date exists
-      // This is the SECONDARY check for trial subscriptions
-      const isTrialActive = subData.is_trial === true || subData.is_trial === 'true' || (subData.status === 'trial' && subData.trial_end_date);
-      
-      if ((!subData.subscription_end_date || isSubscriptionExpired) && isTrialActive && subData.trial_end_date) {
-        const trialEnd = parseDate(subData.trial_end_date);
-        if (trialEnd) {
-          const trialEndTime = trialEnd.getTime();
-          if (nowTime > trialEndTime) {
-            isTrialExpired = true;
-            // Only set expired if subscription_end_date doesn't exist
-            // If subscription_end_date exists but expired, we already set isExpired above
-            if (!subData.subscription_end_date) {
-              isExpired = true;
-              expiredDate = subData.trial_end_date;
-              daysExpired = Math.floor((nowTime - trialEndTime) / (1000 * 60 * 60 * 24));
-              console.warn('🔒 Trial expired - trial_end_date check:', {
-                trialEndDate: subData.trial_end_date,
-                trialEndTime,
-                nowTime,
-                now: now.toISOString(),
-                trialEnd: trialEnd.toISOString(),
-                daysExpired
-              });
+            if (!rpcError && rpcData && rpcData.length > 0) {
+              // Use RPC data (already includes all needed fields)
+              subscription = rpcData[0];
             }
-          } else {
-            console.log('✅ Trial still active - trial_end_date in future:', {
-              trialEndDate: subData.trial_end_date,
-              trialEndTime,
-              nowTime,
-              daysRemaining: Math.floor((trialEndTime - nowTime) / (1000 * 60 * 60 * 24))
-            });
+          } catch (rpcErr) {
+            console.warn('RPC get_subscription_status failed, using fallback', rpcErr);
           }
+
+          // FALLBACK: If RPC failed, try direct query with timeout protection
+          if (!subscription) {
+            try {
+              const { data: directData, error: subError } = await Promise.race([
+                supabase
+                  .from('organization_subscriptions')
+                  .select('trial_end_date, subscription_end_date, is_trial, status, organization_id')
+                  .eq('organization_id', organizationId)
+                  .maybeSingle(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Query timeout')), 5000)
+                )
+              ]) as any;
+
+              if (!subError && directData) {
+                subscription = directData;
+              }
+            } catch (fallbackErr) {
+              console.warn('Direct subscription query also failed', fallbackErr);
+            }
+          }
+
+          // If both methods failed, return safe default
+          if (!subscription) {
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ Could not fetch subscription for org:', organizationId, '- Using safe default');
+            }
+            // If error, don't block access - return safe default
+            return {
+              isExpired: false,
+              isTrialExpired: false,
+              isSubscriptionExpired: false,
+              trialEndDate: null,
+              subscriptionEndDate: null,
+              expiredDate: null,
+              daysExpired: 0,
+              status: 'active' // Allow access if we can't determine status
+            };
+          }
+
+          // Continue with normal expiry check logic...
+          const now = new Date();
+          const trialEndDate = subscription.trial_end_date ? new Date(subscription.trial_end_date) : null;
+          const subscriptionEndDate = subscription.subscription_end_date ? new Date(subscription.subscription_end_date) : null;
+
+          // Check if trial expired
+          const isTrialExpired = subscription.is_trial && trialEndDate ? trialEndDate < now : false;
+
+          // Check if subscription expired
+          const isSubscriptionExpired = !subscription.is_trial && subscriptionEndDate ? subscriptionEndDate < now : false;
+
+          const isExpired = isTrialExpired || isSubscriptionExpired;
+          const expiredDate = isTrialExpired ? subscription.trial_end_date : 
+                            isSubscriptionExpired ? subscription.subscription_end_date : null;
+
+          // Calculate days expired
+          let daysExpired = 0;
+          if (expiredDate) {
+            const expDate = new Date(expiredDate);
+            daysExpired = Math.floor((now.getTime() - expDate.getTime()) / (1000 * 60 * 60 * 24));
+          }
+
+          return {
+            isExpired,
+            isTrialExpired,
+            isSubscriptionExpired,
+            trialEndDate: subscription.trial_end_date,
+            subscriptionEndDate: subscription.subscription_end_date,
+            expiredDate,
+            daysExpired,
+            status: isExpired ? 'expired' : 'active'
+          };
+        },
+        {
+          cacheTTL: 60000 // Cache for 60 seconds - subscription status doesn't change frequently
         }
-      }
-
-      const result = {
-        isExpired,
-        isTrialExpired,
-        isSubscriptionExpired,
-        trialEndDate: subData.trial_end_date,
-        subscriptionEndDate: subData.subscription_end_date,
-        expiredDate,
-        daysExpired: Math.max(0, daysExpired),
-        status: isExpired ? 'expired' as const : 'active' as const
-      };
-
-      // Log expiry status for debugging (in development)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📊 [Subscription Expiry] Check Result for Organization:', {
-          organizationId,
-          isExpired: result.isExpired,
-          isTrialExpired: result.isTrialExpired,
-          isSubscriptionExpired: result.isSubscriptionExpired,
-          trialEndDate: result.trialEndDate,
-          subscriptionEndDate: result.subscriptionEndDate,
-          expiredDate: result.expiredDate,
-          daysExpired: result.daysExpired,
-          status: result.status,
-          isTrial: subData.is_trial,
-          subscriptionStatus: subData.status,
-          action: result.isExpired ? '🔒 ACCESS BLOCKED' : '✅ ACCESS ALLOWED'
-        });
-      }
-
-      return result;
+      );
     },
-    enabled: !!organizationId && !orgLoading, // Only run when orgId is available and not loading
-    refetchInterval: 60 * 1000, // Check every 1 minute for stricter expiry detection
-    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more accurate checks
-    gcTime: 5 * 60 * 1000, // 5 minutes cache
+    enabled: !orgLoading && !!organizationId,
+    staleTime: 60000, // Consider data fresh for 60 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    retry: false // Don't retry on failure - use cached/default value
   });
 
   return {
@@ -268,7 +158,7 @@ export const useSubscriptionExpiry = () => {
       daysExpired: 0,
       status: orgLoading ? 'checking' as const : 'active' as const
     },
-    isLoading: isLoading || orgLoading, // Include org loading state
+    isLoading: isLoading || orgLoading,
     error
   };
 };

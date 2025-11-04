@@ -122,27 +122,58 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         console.log('🔍 Fetching individual objectives:', { organizationId, cycleIds });
       }
       
+      // OPTIMIZATION: Simplified query to prevent timeout
+      // Only select essential fields, reduced joins depth
       let query = supabase
         .from('individual_objectives')
         .select(`
-          *,
-          employees!inner(full_name, email),
-          department_objectives(title, description),
-          okr_cycles!inner(name, year, quarter),
-          key_results!fk_key_results_individual_objective(id, current_value, target_value, progress_percentage, metric_type)
+          id,
+          title,
+          description,
+          status,
+          progress_percentage,
+          weight,
+          start_date,
+          end_date,
+          cycle_id,
+          department_objective_id,
+          employee_id,
+          organization_id,
+          created_at,
+          updated_at,
+          employees!inner(full_name),
+          okr_cycles!inner(name, year, quarter)
         `)
-        .eq('organization_id', organizationId);
+        .eq('organization_id', organizationId)
+        .limit(50); // Limit results to prevent timeout
 
       // Filter by multiple cycle IDs if provided
       if (cycleIds && cycleIds.length > 0) {
         query = query.in('cycle_id', cycleIds);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // TIMEOUT PROTECTION: Add timeout to prevent hanging
+      const queryPromise = query.order('created_at', { ascending: false });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Individual objectives query timeout')), 8000)
+      );
+
+      let data: any;
+      let error: any;
+      
+      try {
+        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        data = result.data;
+        error = result.error;
+      } catch (timeoutError: any) {
+        console.warn('⚠️ Individual objectives query timed out, using empty array');
+        return []; // Graceful degradation - return empty array
+      }
 
       if (error) {
         console.error('❌ Error fetching individual objectives:', error);
-        throw error;
+        // Graceful degradation - return empty array instead of throwing
+        return [];
       }
 
       if (process.env.NODE_ENV === 'development') {

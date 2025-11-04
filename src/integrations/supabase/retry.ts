@@ -11,15 +11,20 @@ interface RetryOptions {
 }
 
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 2,
-  initialDelay: 500, // 500ms
-  maxDelay: 2000, // 2 seconds
+  maxRetries: 3,
+  initialDelay: 1000, // 1 second
+  maxDelay: 5000, // 5 seconds
   retryableErrors: [
     'Failed to fetch',
     'ERR_CONNECTION_CLOSED',
     'NetworkError',
     'Network request failed',
+    'Network request timeout',
     'AuthRetryableFetchError',
+    'ERR_FAILED',
+    'CORS',
+    '520',
+    'timeout',
   ],
 };
 
@@ -29,11 +34,21 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
 export function isRetryableError(error: any): boolean {
   if (!error) return false;
   
-  const errorMessage = error.message || error.toString();
+  const errorMessage = error.message || error.toString() || '';
   const errorName = error.name || '';
+  const errorCode = error.code || '';
+  const errorDetails = error.details || '';
+  
+  // Check if it's a 520 error or timeout
+  if (errorMessage.includes('520') || errorCode === '520') return true;
+  if (errorMessage.toLowerCase().includes('timeout')) return true;
+  if (errorMessage.toLowerCase().includes('cors')) return true;
   
   return DEFAULT_OPTIONS.retryableErrors.some(pattern => 
-    errorMessage.includes(pattern) || errorName.includes(pattern)
+    errorMessage.includes(pattern) || 
+    errorName.includes(pattern) ||
+    errorCode.includes(pattern) ||
+    errorDetails.includes(pattern)
   );
 }
 
@@ -96,6 +111,21 @@ export async function retryableAuthOperation<T>(
     maxRetries: 1, // Only 1 retry for auth operations to avoid delays
     initialDelay: 300,
     maxDelay: 1000,
+    ...options,
+  });
+}
+
+/**
+ * Wrapper for Supabase database query operations with retry logic
+ */
+export async function retryableQuery<T>(
+  operation: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  return withRetry(operation, {
+    maxRetries: 3,
+    initialDelay: 1000,
+    maxDelay: 5000,
     ...options,
   });
 }

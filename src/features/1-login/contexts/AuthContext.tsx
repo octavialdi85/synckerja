@@ -106,6 +106,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
+    // CRITICAL: Handle 403 session_not_found errors from Supabase client
+    // This event is dispatched when the server returns 403 with session_not_found code
+    const handleSessionExpired = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { code, status } = customEvent.detail || {};
+      
+      if (status === 403 && code === 'session_not_found') {
+        console.warn('⚠️ AuthContext: Session expired (403), forcing logout');
+        if (mounted) {
+          forceAuthReset();
+        }
+      }
+    };
+
+    // CRITICAL: Handle 504 Gateway Timeout from auth service
+    // This event is dispatched when auth service is overloaded (36+ second response)
+    const handleAuthTimeout = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { status, message } = customEvent.detail || {};
+      
+      if (status === 504) {
+        console.error('⚠️ AuthContext: Auth service timeout (504) - infrastructure overloaded');
+        console.warn('⏰ Session validation failed due to timeout, forcing logout for safety');
+        if (mounted) {
+          forceAuthReset();
+        }
+      }
+    };
+    
+    window.addEventListener('supabase-session-expired', handleSessionExpired);
+    window.addEventListener('supabase-auth-timeout', handleAuthTimeout);
+
     // Get initial session with stale auth detection
     const getInitialSession = async () => {
       try {
@@ -288,6 +320,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       mounted = false;
       subscription.unsubscribe();
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('supabase-session-expired', handleSessionExpired);
+      window.removeEventListener('supabase-auth-timeout', handleAuthTimeout);
     };
   }, []);
 

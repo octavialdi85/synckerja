@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Flag, User, Target } from 'lucide-react';
+import { Plus, Flag, User, Target, UserPlus } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
 } from '@/features/ui/tooltip';
 import { useDailyTask } from '../DailyTaskContext';
-import { DueDatePicker } from './DueDatePicker';
+import { AssignTaskModal } from './AssignTaskModal';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
@@ -42,17 +42,22 @@ export const TaskForm = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
-  const [dueDate, setDueDate] = useState<string>('');
-  const [assignedTo, setAssignedTo] = useState<string>('');
   const [objectiveId, setObjectiveId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Assignment state - will be set via modal
+  const [assignment, setAssignment] = useState<{
+    employeeId: string | null;
+    deadline: string | null;
+  }>({
+    employeeId: null,
+    deadline: null
+  });
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
-  // Auto-assign to current employee when component mounts
-  useEffect(() => {
-    if (currentEmployee && !assignedTo) {
-      setAssignedTo((currentEmployee as any).id);
-    }
-  }, [currentEmployee, assignedTo]);
+  const handleAssign = (newAssignment: { employeeId: string | null; deadline: string | null }) => {
+    setAssignment(newAssignment);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +76,8 @@ export const TaskForm = () => {
         title: title.trim(),
         description: description.trim(),
         priority: priority as 'low' | 'medium' | 'high' | 'urgent',
-        due_date: dueDate || null,
-        assigned_to: assignedTo || null,
+        due_date: assignment.deadline || null,
+        assigned_to: assignment.employeeId || null,
         objective_id: objectiveId,
         status: 'pending'
       } as any);
@@ -81,9 +86,8 @@ export const TaskForm = () => {
       setTitle('');
       setDescription('');
       setPriority('medium');
-      setDueDate('');
-      setAssignedTo('');
       setObjectiveId('');
+      setAssignment({ employeeId: null, deadline: null });
     } catch (error) {
       console.error('Error adding task:', error);
     } finally {
@@ -92,7 +96,8 @@ export const TaskForm = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <>
+      <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex items-start gap-4">
         {/* Task Title */}
         <div className="flex-1">
@@ -138,15 +143,6 @@ export const TaskForm = () => {
               </SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        {/* Due Date */}
-        <div className="w-40">
-          <DueDatePicker
-            value={dueDate}
-            onChange={setDueDate}
-            disabled={isSubmitting}
-          />
         </div>
 
         {/* Individual Objective */}
@@ -216,43 +212,34 @@ export const TaskForm = () => {
           </Select>
         </div>
 
-        {/* Assign To */}
+        {/* Assign Button */}
         <div className="w-48">
-          <Select value={assignedTo || 'unassigned'} onValueChange={(value) => setAssignedTo(value === 'unassigned' ? '' : value)} disabled={isSubmitting}>
-            <SelectTrigger className="border border-gray-200 rounded-lg">
-              <SelectValue placeholder="Assign to...">
-                {assignedTo && assignedTo !== 'unassigned' ? (
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">
-                      {employees.find(e => e.id === assignedTo)?.full_name || 'Select...'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-500" />
-                    <span className="text-gray-500 text-sm">Assign to...</span>
-                  </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAssignModal(true)}
+            disabled={isSubmitting}
+            className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+          >
+            {assignment.employeeId ? (
+              <div className="flex items-center gap-2 w-full">
+                <User className="w-4 h-4 text-blue-600" />
+                <span className="text-sm truncate flex-1 text-left">
+                  {employees.find(e => e.id === assignment.employeeId)?.full_name || 'Assigned'}
+                </span>
+                {assignment.deadline && (
+                  <span className="text-xs text-gray-500">
+                    {new Date(assignment.deadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                  </span>
                 )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-400" />
-                  Unassigned
-                </div>
-              </SelectItem>
-              {employees.map((employee) => (
-                <SelectItem key={employee.id} value={employee.id}>
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-blue-600" />
-                    {employee.full_name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-500 text-sm">Assign</span>
+              </div>
+            )}
+          </Button>
         </div>
 
         {/* Submit Button */}
@@ -287,7 +274,16 @@ export const TaskForm = () => {
           />
         </div>
       )}
-    </form>
+      </form>
+
+      {/* Assign Task Modal */}
+      <AssignTaskModal
+        open={showAssignModal}
+        onOpenChange={setShowAssignModal}
+        onAssign={handleAssign}
+        currentAssignment={assignment}
+      />
+    </>
   );
 };
 

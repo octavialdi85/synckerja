@@ -45,6 +45,7 @@ interface BlockerDisplayProps {
   weekEnd: string;   // Format: "2025-10-30"
   organizationId: string;
   objectiveId?: string; // Optional objective ID filter
+  objectiveType?: 'individual' | 'department' | 'company'; // Type of objective
   onBlockerUpdate?: () => void;
 }
 
@@ -53,6 +54,7 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
   weekEnd,
   organizationId,
   objectiveId,
+  objectiveType = 'individual',
   onBlockerUpdate
 }) => {
   const [blockers, setBlockers] = useState<Blocker[]>([]);
@@ -66,83 +68,81 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
   const [tab, setTab] = useState<'list' | 'resolved'>('list');
   const [resolutionFor, setResolutionFor] = useState<Blocker | null>(null);
   const [resolvedRows, setResolvedRows] = useState<Array<{ id: string; task_step_history_id: string; description: string; created_at: string; blocker_description?: string; taskTitle?: string; stepTitle?: string }>>([]);
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
+  const [blockerCount, setBlockerCount] = useState<number | null>(null);
+  const [countLoading, setCountLoading] = useState(false);
   
   const { toast } = useToast();
+  
+  // Cache key for this specific query
+  const cacheKey = `blockers_${organizationId}_${objectiveId}_${objectiveType}_${weekStart}_${weekEnd}`;
 
   const fetchBlockers = async () => {
     if (!organizationId) return;
     
     setLoading(true);
     try {
-      let objectiveIds = [];
+      let blockersData = null;
+      let error = null;
+
+      // Use different RPC function based on objective type
+      if (objectiveType === 'department' && objectiveId) {
+        // For department objectives, get blockers from all related individual objectives
+        const result = await (supabase as any).rpc('get_blockers_for_department_objective', {
+          p_organization_id: organizationId,
+          p_week_start: `${weekStart}T00:00:00.000Z`,
+          p_week_end: `${weekEnd}T23:59:59.999Z`,
+          p_department_objective_id: objectiveId,
+          p_limit: 100
+        });
+        blockersData = result.data;
+        error = result.error;
+      } else {
+        // For individual/company objectives or no objective filter
+        const result = await (supabase as any).rpc('get_blockers_for_period', {
+          p_organization_id: organizationId,
+          p_week_start: `${weekStart}T00:00:00.000Z`,
+          p_week_end: `${weekEnd}T23:59:59.999Z`,
+          p_objective_id: objectiveId || null,
+          p_limit: 100
+        });
+        blockersData = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        console.error('Error fetching blockers via RPC:', error);
+        throw error;
+      }
+
+      console.log(`🔍 Blockers fetched via efficient RPC function (${objectiveType}):`, blockersData);
+
+      // Blockers are already filtered by organization and objective in the database function
+      if (!blockersData || blockersData.length === 0) {
+        setBlockers([]);
+        setLoading(false);
+        return;
+      }
+
+      const stepIds = [...new Set(blockersData.map((b: any) => b.task_step_id).filter(Boolean))];
       
-      // If objectiveId is provided, check if it's a department objective
-      if (objectiveId) {
-        // First, check if this is a department objective
-        const { data: departmentObjective } = await (supabase as any)
-          .from('department_objectives')
-          .select('id, title')
-          .eq('id', objectiveId)
-          .single();
-        
-        if (departmentObjective) {
-          // This is a department objective, get related individual objectives
-          const { data: individualObjectives } = await (supabase as any)
-            .from('individual_objectives')
-            .select('id, title')
-            .eq('department_objective_id', objectiveId);
-          
-          // Add department objective ID and all related individual objective IDs
-          objectiveIds = [objectiveId, ...(individualObjectives?.map((io: any) => io.id) || [])];
-          
-          console.log('🔍 Department objective found:', departmentObjective.title);
-          console.log('🔍 Related individual objectives:', individualObjectives?.map((io: any) => io.title) || []);
-        } else {
-          // This is not a department objective, use as is
-          objectiveIds = [objectiveId];
-        }
-      }
+      // Fetch task steps with tasks in separate query (simpler join)
+      const { data: stepsData } = await supabase
+        .from('task_steps')
+        .select('id, title, task_id, daily_tasks!inner(id, title, organization_id, objective_id)')
+        .in('id', stepIds)
+        .eq('daily_tasks.organization_id', organizationId);
 
-      // Build the query for blockers
-      let query = (supabase as any)
-        .from('task_step_history')
-        .select(`
-          id,
-          task_step_id,
-          description,
-          blocker_type,
-          blocker_severity,
-          created_at,
-          created_by,
-          is_resolved,
-          task_steps!inner(
-            title,
-            daily_tasks!inner(
-              title,
-              organization_id,
-              objective_id
-            )
-          )
-        `)
-        .eq('action_type', 'blocker_added')
-        .eq('task_steps.daily_tasks.organization_id', organizationId)
-        .gte('created_at', `${weekStart}T00:00:00.000Z`)
-        .lte('created_at', `${weekEnd}T23:59:59.999Z`);
+      console.log('🔍 Fetched steps data:', stepsData?.length || 0);
 
-      // Add objective filter if provided
-      if (objectiveIds.length > 0) {
-        query = query.in('task_steps.daily_tasks.objective_id', objectiveIds);
-      }
+      // Create step mapping for quick lookup
+      const stepMap: Record<string, any> = {};
+      (stepsData || []).forEach((s: any) => {
+        stepMap[s.id] = s;
+      });
 
-      const { data: blockersData, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      console.log('🔍 Raw blocker data:', blockersData);
-      console.log('🔍 Filtering by objective IDs:', objectiveIds);
-
-      // Get unique user IDs from blockers
-      const userIds = [...new Set(blockersData?.map((blocker: any) => blocker.created_by).filter(Boolean))];
+      // Get unique user IDs from filtered blockers
+      const userIds = [...new Set(filteredBlockers.map((blocker: any) => blocker.created_by).filter(Boolean))];
       
       // Fetch employee data for these user IDs
       let employeesData = {};
@@ -164,20 +164,26 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
 
       console.log('🔍 Employees data:', employeesData);
 
-      const formattedBlockers = (blockersData || []).map((blocker: any) => ({
-        id: blocker.id,
-        task_step_id: blocker.task_step_id,
-        description: blocker.description,
-        blocker_type: blocker.blocker_type,
-        blocker_severity: blocker.blocker_severity,
-        created_at: blocker.created_at,
-        created_by: blocker.created_by,
-        created_by_employee: employeesData[blocker.created_by] || null,
-        step_title: blocker.task_steps?.title || 'Unknown Step',
-        task_title: blocker.task_steps?.daily_tasks?.title || 'Unknown Task',
-        objective_id: blocker.task_steps?.daily_tasks?.objective_id || 'Unknown Objective',
-        is_resolved: blocker.is_resolved || false
-      }));
+      // Map blocker data with step and task information
+      const formattedBlockers = blockersData.map((blocker: any) => {
+        const step = stepMap[blocker.task_step_id];
+        const task = step?.daily_tasks;
+        
+        return {
+          id: blocker.id,
+          task_step_id: blocker.task_step_id,
+          description: blocker.description,
+          blocker_type: blocker.blocker_type,
+          blocker_severity: blocker.blocker_severity,
+          created_at: blocker.created_at,
+          created_by: blocker.created_by,
+          created_by_employee: employeesData[blocker.created_by] || null,
+          step_title: step?.title || 'Unknown Step',
+          task_title: task?.title || 'Unknown Task',
+          objective_id: task?.objective_id || null,
+          is_resolved: blocker.is_resolved || false
+        };
+      });
 
       console.log('🔍 Formatted blockers:', formattedBlockers);
 
@@ -186,28 +192,33 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
       const objectiveInfoMap: Record<string, { title: string; type: 'department' | 'individual' }> = {};
       
       for (const objId of uniqueObjectiveIds) {
-        if (objId === 'Unknown Objective') continue;
+        if (!objId || objId === 'Unknown Objective') continue;
         
-        // Check if it's a department objective
-        const { data: deptObj } = await (supabase as any)
-          .from('department_objectives')
-          .select('id, title')
-          .eq('id', objId)
-          .single();
-        
-        if (deptObj) {
-          objectiveInfoMap[objId] = { title: deptObj.title, type: 'department' };
-        } else {
-          // Check if it's an individual objective
-          const { data: indObj } = await (supabase as any)
-            .from('individual_objectives')
+        try {
+          // Check if it's a department objective (use maybeSingle to avoid 406 errors)
+          const { data: deptObj, error: deptError } = await (supabase as any)
+            .from('department_objectives')
             .select('id, title')
             .eq('id', objId)
-            .single();
+            .maybeSingle();
           
-          if (indObj) {
-            objectiveInfoMap[objId] = { title: indObj.title, type: 'individual' };
+          if (!deptError && deptObj) {
+            objectiveInfoMap[objId] = { title: deptObj.title, type: 'department' };
+          } else {
+            // Check if it's an individual objective (use maybeSingle to avoid 406 errors)
+            const { data: indObj, error: indError } = await (supabase as any)
+              .from('individual_objectives')
+              .select('id, title')
+              .eq('id', objId)
+              .maybeSingle();
+            
+            if (!indError && indObj) {
+              objectiveInfoMap[objId] = { title: indObj.title, type: 'individual' };
+            }
           }
+        } catch (err) {
+          console.warn(`⚠️ Error fetching objective info for ${objId}:`, err);
+          // Continue with other objectives
         }
       }
       
@@ -215,22 +226,106 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
       setBlockers(formattedBlockers);
     } catch (error: any) {
       console.error('Error fetching blockers:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to fetch blockers: ${error.message}`,
-        variant: 'destructive',
-      });
+      
+      // Graceful degradation for timeout errors (don't show toast, just log)
+      const isTimeout = error.message?.includes('timeout') || error.code === '57014';
+      
+      if (isTimeout) {
+        console.warn('⚠️ Blocker query timeout - using empty results for graceful degradation');
+        setBlockers([]);
+      } else {
+        // Only show toast for non-timeout errors
+        toast({
+          title: 'Error',
+          description: `Failed to fetch blockers: ${error.message}`,
+          variant: 'destructive',
+        });
+        setBlockers([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch blocker COUNT on mount (lightweight query)
+  // This shows the badge count without loading full data
+  const fetchBlockerCount = async () => {
+    if (!organizationId) return;
+    
+    setCountLoading(true);
+    try {
+      let count = 0;
+      let error = null;
+
+      // Use different RPC function based on objective type
+      if (objectiveType === 'department' && objectiveId) {
+        // For department objectives, get blockers from all related individual objectives
+        const result = await (supabase as any).rpc('get_blocker_count_for_department_objective', {
+          p_organization_id: organizationId,
+          p_week_start: `${weekStart}T00:00:00.000Z`,
+          p_week_end: `${weekEnd}T23:59:59.999Z`,
+          p_department_objective_id: objectiveId
+        });
+        count = result.data;
+        error = result.error;
+      } else {
+        // For individual/company objectives or no objective filter
+        const result = await (supabase as any).rpc('get_blocker_count_for_period', {
+          p_organization_id: organizationId,
+          p_week_start: `${weekStart}T00:00:00.000Z`,
+          p_week_end: `${weekEnd}T23:59:59.999Z`,
+          p_objective_id: objectiveId || null
+        });
+        count = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        console.error('❌ Error fetching blocker count:', error);
+        setBlockerCount(null);
+      } else {
+        setBlockerCount(count || 0);
+        console.log(`✅ Blocker count loaded (${objectiveType}):`, {
+          count,
+          weekStart,
+          weekEnd,
+          objectiveId,
+          organizationId
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchBlockerCount:', error);
+      setBlockerCount(null);
+    } finally {
+      setCountLoading(false);
+    }
+  };
+
+  // Auto-fetch COUNT on mount (lightweight)
   useEffect(() => {
-    fetchBlockers();
-  }, [weekStart, weekEnd, organizationId, objectiveId]);
+    console.log('🔄 BlockerDisplay mounted:', { 
+      weekStart, 
+      weekEnd, 
+      organizationId, 
+      objectiveId, 
+      objectiveType 
+    });
+    fetchBlockerCount();
+    setHasInitialLoad(false);
+  }, [weekStart, weekEnd, organizationId, objectiveId, objectiveType]);
+
+  // Manual fetch triggered by user action (full data)
+  const handleShowBlockers = () => {
+    if (!hasInitialLoad) {
+      fetchBlockers();
+      setHasInitialLoad(true);
+    }
+    setShowModal(true);
+  };
 
   useEffect(() => {
-    let filtered = blockers;
+    // Filter out resolved blockers FIRST (client-side double protection)
+    let filtered = blockers.filter(blocker => !blocker.is_resolved);
 
     if (selectedSeverity !== 'all') {
       filtered = filtered.filter(blocker => blocker.blocker_severity === selectedSeverity);
@@ -286,10 +381,80 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
   };
 
   const markResolved = async (b: Blocker) => {
-    await (supabase as any).from('task_step_history').update({ is_resolved: true }).eq('id', b.id);
-    setBlockers(prev => prev.map(x => x.id === b.id ? { ...x, is_resolved: true } : x));
+    // Open resolution modal to get resolution details
+    // Modal will handle inserting to task_step_history_blocker_resolved
     setResolutionFor(b);
-    setTab('resolved');
+  };
+
+  const handleResolutionComplete = async () => {
+    if (!resolutionFor) return;
+    
+    try {
+      // Update is_resolved flag in task_step_history
+      // NOTE: This is called AFTER resolution details are inserted to task_step_history_blocker_resolved
+      const { error } = await (supabase as any)
+        .from('task_step_history')
+        .update({ is_resolved: true })
+        .eq('id', resolutionFor.id);
+      
+      if (error) {
+        console.error('Error updating blocker resolution status:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to mark blocker as resolved: ${error.message}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      // Verify that resolution was actually saved to task_step_history_blocker_resolved
+      const { data: resolutionCheck, error: checkError } = await (supabase as any)
+        .rpc('get_blocker_resolutions', {
+          p_task_step_history_ids: [resolutionFor.id]
+        });
+      
+      if (checkError) {
+        console.error('Error verifying blocker resolution:', checkError);
+      } else if (!resolutionCheck || resolutionCheck.length === 0) {
+        console.warn('⚠️ Blocker marked as resolved but no resolution entry found in task_step_history_blocker_resolved');
+        toast({
+          title: 'Warning',
+          description: 'Blocker marked as resolved but resolution details may not have been saved',
+          variant: 'destructive',
+        });
+      } else {
+        console.log('✅ Resolution verified:', resolutionCheck[0]);
+      }
+      
+      // Update local state to remove from active blockers list
+      setBlockers(prev => prev.filter(x => x.id !== resolutionFor.id));
+      
+      // Update count
+      if (blockerCount !== null && blockerCount > 0) {
+        setBlockerCount(blockerCount - 1);
+      }
+      
+      // Close modal
+      setResolutionFor(null);
+      
+      // Refresh blockers to show updated state
+      await fetchBlockers();
+      
+      // Switch to resolved tab to show the newly resolved blocker
+      setTab('resolved');
+      
+      // Trigger parent callback if provided
+      if (onBlockerUpdate) {
+        onBlockerUpdate();
+      }
+    } catch (error: any) {
+      console.error('Unexpected error in handleResolutionComplete:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while updating blocker status',
+        variant: 'destructive',
+      });
+    }
   };
 
   useEffect(() => {
@@ -297,23 +462,37 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
       if (!showModal) return;
       const ids = blockers.map(b => b.id);
       if (ids.length === 0) { setResolvedRows([]); return; }
-      const { data } = await (supabase as any)
-        .from('task_step_history_blocker_resolved')
-        .select('id, task_step_history_id, description, created_at, task_step_history(description)')
-        .in('task_step_history_id', ids);
-      const mapped = (data || []).map((row: any) => {
-        const src = blockers.find(b => b.id === row.task_step_history_id);
-        return {
-          id: row.id,
-          task_step_history_id: row.task_step_history_id,
-          description: row.description,
-          created_at: row.created_at,
-          blocker_description: row.task_step_history?.description || null,
-          taskTitle: src?.task_title || '-',
-          stepTitle: src?.step_title || '-',
-        };
-      });
-      setResolvedRows(mapped);
+      
+      try {
+        // Use RPC function to fetch resolved blockers (bypasses RLS overhead)
+        const { data, error } = await (supabase as any).rpc('get_blocker_resolutions', {
+          p_task_step_history_ids: ids
+        });
+        
+        if (error) {
+          console.error('Error loading resolved blockers:', error);
+          setResolvedRows([]);
+          return;
+        }
+        
+        const mapped = (data || []).map((row: any) => {
+          const src = blockers.find(b => b.id === row.task_step_history_id);
+          return {
+            id: row.id,
+            task_step_history_id: row.task_step_history_id,
+            description: row.description,
+            created_at: row.created_at,
+            blocker_description: src?.description || null,
+            taskTitle: src?.task_title || '-',
+            stepTitle: src?.step_title || '-',
+          };
+        });
+        setResolvedRows(mapped);
+        console.log('✅ Loaded resolved blockers:', mapped.length);
+      } catch (error) {
+        console.error('Error in loadResolved:', error);
+        setResolvedRows([]);
+      }
     };
     loadResolved();
   }, [showModal, blockers]);
@@ -322,24 +501,39 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Blocker Summary - Only show button if there are blockers */}
-      {blockers.length > 0 ? (
-        <div className="w-full">
-          <Button
-            variant="outline"
-            onClick={() => setShowModal(true)}
-            className="w-full h-9 px-3 text-sm text-purple-600 hover:text-purple-700 border-purple-200 hover:border-purple-300 justify-between"
-          >
-            <span>Found {blockers.length} Blocker{blockers.length > 1 ? 's' : ''}</span>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-      ) : (
-        <div className="w-full h-9 px-3 py-2 text-sm text-gray-500 border border-gray-300 rounded-md bg-gray-50 flex items-center gap-2 overflow-hidden">
-          <AlertTriangle className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <span className="truncate">No blockers reported this week</span>
-        </div>
-      )}
+      {/* Blocker Summary - Show count immediately, lazy load full data on click */}
+      <div className="w-full">
+        <Button
+          variant="outline"
+          onClick={handleShowBlockers}
+          disabled={loading || countLoading}
+          className="w-full h-9 px-3 text-sm text-purple-600 hover:text-purple-700 border-purple-200 hover:border-purple-300 justify-between disabled:opacity-70"
+        >
+          {countLoading ? (
+            <span className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+              Loading count...
+            </span>
+          ) : loading ? (
+            <span className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
+              Loading details...
+            </span>
+          ) : blockerCount !== null && blockerCount > 0 ? (
+            <>
+              <span>Found {blockerCount} Blocker{blockerCount > 1 ? 's' : ''}</span>
+              <ChevronRight className="w-4 h-4" />
+            </>
+          ) : blockerCount === 0 ? (
+            <span className="text-gray-500">No blockers this week</span>
+          ) : (
+            <>
+              <span>Check Blockers</span>
+              <ChevronRight className="w-4 h-4" />
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* Blocker Details Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
@@ -538,7 +732,11 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
       </Dialog>
       <BlockerResolutionModal
         open={!!resolutionFor}
-        onOpenChange={(o) => !o && setResolutionFor(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setResolutionFor(null);
+          }
+        }}
         blocker={resolutionFor ? {
           id: resolutionFor.id,
           blocker_type: resolutionFor.blocker_type,
@@ -548,6 +746,7 @@ export const BlockerDisplay: React.FC<BlockerDisplayProps> = ({
           stepTitle: resolutionFor.step_title,
           subStepTitle: null,
         } : null}
+        onResolutionComplete={handleResolutionComplete}
       />
     </div>
   );

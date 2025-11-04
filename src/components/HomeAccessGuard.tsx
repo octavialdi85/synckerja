@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, WifiOff } from 'lucide-react';
 import { useAuth } from '@/features/1-login';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,7 +36,8 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     hasOrganization, 
     organization, 
     isEmailVerified,
-    loading: userDataLoading 
+    loading: userDataLoading,
+    error: userDataError
   } = useCentralizedUserData();
   
   // ADDITIONAL LAYER: Check subscription expiry based on trial_end_date and subscription_end_date
@@ -45,12 +46,28 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [loadingStartTime, setLoadingStartTime] = useState<number>(Date.now());
+  const [showSlowConnectionWarning, setShowSlowConnectionWarning] = useState(false);
 
   // Check if user is coming from email verification (bypass email verification check)
   const emailJustVerified = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('emailJustVerified') === 'true';
   
   // Check if organization was just created (skip redirect to create-organization)
   const organizationJustCreated = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('organizationJustCreated') === 'true';
+
+  // Track loading time and show slow connection warning after 5 seconds
+  useEffect(() => {
+    if (authLoading || userDataLoading || loadingSubscription || expiryLoading) {
+      setLoadingStartTime(Date.now());
+      const timer = setTimeout(() => {
+        setShowSlowConnectionWarning(true);
+      }, 5000); // Show warning after 5 seconds
+
+      return () => clearTimeout(timer);
+    } else {
+      setShowSlowConnectionWarning(false);
+    }
+  }, [authLoading, userDataLoading, loadingSubscription, expiryLoading]);
 
   // Clear emailJustVerified flag once we've verified email and passed all checks
   useEffect(() => {
@@ -115,9 +132,33 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   if (authLoading || userDataLoading || loadingSubscription || expiryLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Memeriksa akses...</p>
+        <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+          <p className="text-base text-gray-700 font-medium">Memeriksa akses...</p>
+          {showSlowConnectionWarning && (
+            <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <WifiOff className="h-6 w-6 text-yellow-600" />
+              <p className="text-sm text-yellow-800 text-center">
+                Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
+              </p>
+              <p className="text-xs text-yellow-600 text-center">
+                Sistem akan mencoba ulang hingga {((Date.now() - loadingStartTime) / 1000).toFixed(0)} detik
+              </p>
+            </div>
+          )}
+          {userDataError && (
+            <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-sm text-red-800 text-center">
+                Terjadi kesalahan: {userDataError.message}
+              </p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+              >
+                Muat Ulang Halaman
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

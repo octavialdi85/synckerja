@@ -12,6 +12,7 @@ import { StepHistoryModal } from './StepHistoryModal';
 import { ModalViewSubSteps } from './ModalViewSubSteps';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 
 interface TaskFile {
   id: string;
@@ -39,6 +40,7 @@ interface TaskStepProps {
     order: number;
     created_at: string;
     updated_at?: string;
+    created_by?: string | null;
     assigned_to?: string | null;
     assigned_at?: string | null;
     assigned_by?: string | null;
@@ -47,6 +49,7 @@ interface TaskStepProps {
     files?: TaskFile[];
     links?: TaskLink[];
     assigned_due_date?: string | null;
+    has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
     // Relations
     assigned_employee?: {
       id: string;
@@ -60,9 +63,10 @@ interface TaskStepProps {
     };
   };
   index: number;
+  taskCreatedBy?: string; // Task creator user ID for permission check
 }
 
-export const TaskStep = ({ step, index }: TaskStepProps) => {
+export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep } = useDailyTask();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(step.title);
@@ -75,12 +79,27 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [subStepCount, setSubStepCount] = useState<number>(0);
   const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
+  const [historyCount, setHistoryCount] = useState<number>(0);
+  const [linkCount, setLinkCount] = useState<number>(0);
   const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
 
-  // Check if step has notifications (files or links)
+  // Check if current user is the creator of the task
+  const isTaskCreator = taskCreatedBy === user?.id;
+
+  // Check if current user is the creator of this step
+  const isStepCreator = step.created_by === user?.id;
+
+  // Check if current user is assigned to this step
+  const isAssignedToMe = step.assigned_to === user?.id;
+
+  // Permission: Creator can do everything, assigned user can only complete
+  const canEdit = isTaskCreator;
+  const canDelete = isTaskCreator;
+  const canAssign = isTaskCreator;
+
+  // Check if step has notifications (files)
   const fileCount = step.files?.length || 0;
-  const linkCount = step.links?.length || 0;
-  const historyCount = step.history?.length || 0; // Has updates
 
   // Use sortable hook for drag and drop
   const {
@@ -121,6 +140,48 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
     const lateDays = Math.ceil(diffMs / dayMs);
     return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'inline-flex items-center whitespace-normal break-words bg-red-100 text-red-700 border border-red-200 rounded px-1.5 py-0.5' };
   };
+
+  // Load history count and link count for badges
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        // Fetch history count using RPC
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Count timeout')), 3000)
+        );
+
+        const countPromise = (supabase as any).rpc('get_step_history_count', {
+          p_task_step_id: step.id
+        });
+
+        const { data: count, error } = await Promise.race([
+          countPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (!error) {
+          setHistoryCount(count || 0);
+        } else {
+          setHistoryCount(0);
+        }
+        
+        // Fetch link count from task_step_links table
+        const { count: linksCount, error: linksError } = await supabase
+          .from('task_step_links')
+          .select('*', { count: 'exact', head: true })
+          .eq('task_step_id', step.id);
+        
+        if (!linksError) {
+          setLinkCount(linksCount || 0);
+        }
+      } catch (error: any) {
+        // Graceful degradation for timeout or other errors
+        setHistoryCount(0);
+      }
+    };
+
+    fetchCounts();
+  }, [step.id]);
 
   // Load sub-steps stats (total and completed)
   useEffect(() => {
@@ -323,11 +384,29 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
       ) : (
         <>
           <div className="flex-1">
-            <span className={`text-sm ${
-              step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
-            }`}>
-              {step.title}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm ${
+                step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
+              }`}>
+                {step.title}
+              </span>
+              {/* Badge to indicate assignment status */}
+              {isAssignedToMe && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">
+                  Assigned to you
+                </Badge>
+              )}
+              {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300">
+                  Assigned to {step.assigned_employee?.full_name || 'other'}
+                </Badge>
+              )}
+              {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-300">
+                  Sub-step assigned to you
+                </Badge>
+              )}
+            </div>
             {subStepCount > 0 && (
               <div className="mt-1">
                 <div className="w-full h-1.5 bg-blue-100 rounded">
@@ -412,14 +491,22 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
                 </div>
               )}
             </Button>
+            {/* Assign - Locked for assigned users */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowAssignDialog(true)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
-                step.assigned_to ? 'text-green-500' : 'text-gray-400'
+              onClick={() => canAssign && setShowAssignDialog(true)}
+              disabled={!canAssign}
+              className={`h-6 w-6 p-0 relative ${
+                canAssign
+                  ? `hover:text-gray-600 ${step.assigned_to ? 'text-green-500' : 'text-gray-400'}`
+                  : 'opacity-40 cursor-not-allowed text-gray-400'
               }`}
-              title={step.assigned_to ? `Assigned to ${step.assigned_employee?.full_name || 'Unknown'}` : 'Assign step'}
+              title={
+                canAssign
+                  ? (step.assigned_to ? `Assigned to ${step.assigned_employee?.full_name || 'Unknown'}` : 'Assign step')
+                  : '🔒 Only task creator can assign steps'
+              }
             >
               <Users className="w-3 h-3" />
               {step.assigned_to && (
@@ -444,19 +531,33 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
               </div>
             )}
           </Button>
+            {/* Edit - Locked for assigned users */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsEditing(true)}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+              onClick={() => canEdit && setIsEditing(true)}
+              disabled={!canEdit}
+              className={`h-6 w-6 p-0 ${
+                canEdit 
+                  ? 'text-gray-400 hover:text-gray-600 cursor-pointer' 
+                  : 'text-gray-300 opacity-40 cursor-not-allowed'
+              }`}
+              title={canEdit ? 'Edit step' : '🔒 Only task creator can edit steps'}
             >
               <Edit className="w-3 h-3" />
             </Button>
+            {/* Delete - Locked for assigned users */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDelete}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+              onClick={() => canDelete && handleDelete()}
+              disabled={!canDelete}
+              className={`h-6 w-6 p-0 ${
+                canDelete 
+                  ? 'text-gray-400 hover:text-red-600 cursor-pointer' 
+                  : 'text-gray-300 opacity-40 cursor-not-allowed'
+              }`}
+              title={canDelete ? 'Delete step' : '🔒 Only task creator can delete steps'}
             >
               <Trash2 className="w-3 h-3" />
             </Button>
@@ -540,6 +641,18 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
       <StepLinks
         taskStepId={step.id}
         isExpanded={showLinks}
+        onLinksChange={async () => {
+          // Refresh link count when links change
+          try {
+            const { count: linksCount } = await supabase
+              .from('task_step_links')
+              .select('*', { count: 'exact', head: true })
+              .eq('task_step_id', step.id);
+            setLinkCount(linksCount || 0);
+          } catch (error) {
+            console.error('Error refreshing link count:', error);
+          }
+        }}
       />
     )}
 
@@ -563,8 +676,21 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
         currentStatus={step.status || 'pending'}
         currentPriority={step.priority || 'medium'}
         taskId={step.task_id}
-        onHistoryUpdate={() => {
-          // Refresh step data if needed
+        onHistoryUpdate={async () => {
+          // Refresh history count after adding entry using RPC
+          try {
+            const { data: count, error } = await (supabase as any).rpc('get_step_history_count', {
+              p_task_step_id: step.id
+            });
+            
+            if (error) {
+              console.error('Error refreshing history count:', error);
+            } else {
+              setHistoryCount(count || 0);
+            }
+          } catch (error) {
+            console.error('Error refreshing history count:', error);
+          }
         }}
       />
     )}
@@ -573,6 +699,7 @@ export const TaskStep = ({ step, index }: TaskStepProps) => {
       onOpenChange={setIsViewSubStepsOpen}
       parentStepId={step.id}
       parentStepTitle={step.title}
+      taskCreatedBy={taskCreatedBy}
       onParentCompletionChange={async (completed) => {
         try {
           const payload: any = { is_completed: completed };
