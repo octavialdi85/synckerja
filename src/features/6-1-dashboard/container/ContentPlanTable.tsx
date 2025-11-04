@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { ContentPlan, ContentType, Service, SubService, ContentPillar } from '../types/social-media';
 import { TableHeader } from './table/TableHeader';
 import { ContentPlanRow } from './table/ContentPlanRow';
-import { Skeleton } from '@/features/ui/skeleton';
+import { LoadingDots } from '@/components/LoadingDots';
 
 interface ContentPlanTableProps {
   contentPlans: ContentPlan[];
@@ -132,22 +132,11 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
-  // Loading skeleton
+  // Loading state
   if (loading) {
     return (
-      <div className="w-full seamless-scroll overflow-auto" style={{ height: '100%', maxHeight: 'calc(100vh - 400px)' }}>
-        <table className="w-full border-collapse table-fixed">
-          <TableHeader />
-          <tbody>
-            {[...Array(5)].map((_, index) => (
-              <tr key={index} className="border-b border-gray-200">
-                <td colSpan={24} className="p-4">
-                  <Skeleton className="h-12 w-full" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="w-full seamless-scroll overflow-auto flex items-center justify-center" style={{ height: '100%', maxHeight: 'calc(100vh - 400px)', minHeight: '300px' }}>
+        <LoadingDots size="lg" />
       </div>
     );
   }

@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
-import { Skeleton } from '@/features/ui/skeleton';
+import { LoadingDots } from '@/components/LoadingDots';
 import { getPhotoUrl, getInitials } from '../hooks/photoUtils';
 import { EmployeeActionsDropdown } from './EmployeeActionsDropdown';
 import type { Employee } from '../hooks/useEmployees';
@@ -20,46 +20,6 @@ interface EmployeeTableProps {
   isLoading?: boolean;
 }
 
-// Memoized loading skeleton row
-const LoadingRow = memo(() => (
-  <TableRow className="h-12">
-    <TableCell className="w-64 px-4">
-      <div className="flex items-center space-x-2">
-        <Skeleton className="h-8 w-8 rounded-full" />
-        <div>
-          <Skeleton className="h-4 w-32 mb-1" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-      </div>
-    </TableCell>
-    <TableCell className="w-32 px-3">
-      <Skeleton className="h-4 w-20" />
-    </TableCell>
-    <TableCell className="w-40 px-3">
-      <Skeleton className="h-4 w-24" />
-    </TableCell>
-    <TableCell className="w-36 px-3">
-      <Skeleton className="h-4 w-28" />
-    </TableCell>
-    <TableCell className="w-32 px-3">
-      <Skeleton className="h-4 w-20" />
-    </TableCell>
-    <TableCell className="w-36 px-3">
-      <Skeleton className="h-6 w-16" />
-    </TableCell>
-    <TableCell className="w-32 px-3">
-      <Skeleton className="h-4 w-20" />
-    </TableCell>
-    <TableCell className="w-36 px-3">
-      <Skeleton className="h-4 w-24" />
-    </TableCell>
-    <TableCell className="w-20 px-3">
-      <Skeleton className="h-8 w-8" />
-    </TableCell>
-  </TableRow>
-));
-
-LoadingRow.displayName = 'LoadingRow';
 
 // Memoized row component for performance
 const EmployeeRow = memo(({ 
@@ -210,9 +170,6 @@ export const EmployeeTable = memo(({
     { key: 'actions', label: 'Actions', width: 'w-20' },
   ], []);
 
-  const renderLoadingRows = useMemo(() => (
-    Array(5).fill(0).map((_, index) => <LoadingRow key={`loading-${index}`} />)
-  ), []);
 
   const renderEmployeeRows = useMemo(() => (
     employees.map((employee) => (
@@ -258,7 +215,13 @@ export const EmployeeTable = memo(({
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                renderLoadingRows
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-12">
+                    <div className="flex items-center justify-center">
+                      <LoadingDots size="lg" />
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : employees.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">

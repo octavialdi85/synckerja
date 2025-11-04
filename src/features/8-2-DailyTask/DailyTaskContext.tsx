@@ -136,7 +136,11 @@ interface Filters {
   status: string;
   priority: string;
   dateFilter: string;
+  dateRange?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+  customStartDate?: string;
+  customEndDate?: string;
   pic: string;
+  myTask?: 'all' | 'my_task';
 }
 
 interface RecentStepFilters {
@@ -203,7 +207,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     status: '',
     priority: '',
     dateFilter: '',
-    pic: ''
+    dateRange: undefined,
+    customStartDate: undefined,
+    customEndDate: undefined,
+    pic: '',
+    myTask: 'my_task' // Default to "My Task"
   });
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
     dateRange: 'today',

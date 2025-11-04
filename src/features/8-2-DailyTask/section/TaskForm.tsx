@@ -23,6 +23,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
+import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
 import './TaskForm.css';
 
 export const TaskForm = () => {
@@ -43,7 +44,13 @@ export const TaskForm = () => {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [objectiveId, setObjectiveId] = useState<string>('');
+  const [objectiveContext, setObjectiveContext] = useState<{
+    companyTitle?: string;
+    departmentTitle?: string;
+    individualTitle: string;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isObjectiveDialogOpen, setIsObjectiveDialogOpen] = useState(false);
   
   // Assignment state - will be set via modal
   const [assignment, setAssignment] = useState<{
@@ -87,6 +94,7 @@ export const TaskForm = () => {
       setDescription('');
       setPriority('medium');
       setObjectiveId('');
+      setObjectiveContext(null);
       setAssignment({ employeeId: null, deadline: null });
     } catch (error) {
       console.error('Error adding task:', error);
@@ -147,69 +155,36 @@ export const TaskForm = () => {
 
         {/* Individual Objective */}
         <div className="w-64">
-          <Select value={objectiveId} onValueChange={setObjectiveId} disabled={isSubmitting}>
-            <SelectTrigger className="border border-gray-200 rounded-lg h-10">
-              <SelectValue placeholder="Select Individual Objective">
-                {objectiveId ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                    <span className="text-sm truncate min-w-0">
-                      {individualObjectives.find(obj => obj.id === objectiveId)?.title || 'Select...'}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsObjectiveDialogOpen(true)}
+            disabled={isSubmitting}
+            className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+          >
+            {objectiveId && objectiveContext ? (
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <div className="flex flex-col min-w-0 flex-1 text-left">
+                  <span className="text-sm truncate font-medium text-gray-900">
+                    {objectiveContext.individualTitle}
+                  </span>
+                  {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
+                    <span className="text-xs text-gray-500 truncate">
+                      {objectiveContext.companyTitle && objectiveContext.departmentTitle
+                        ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
+                        : objectiveContext.companyTitle || objectiveContext.departmentTitle}
                     </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    <span className="text-gray-500 text-sm">Individual Objective</span>
-                  </div>
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="objective-dropdown min-w-80 max-w-96 w-auto z-50">
-              {individualObjectives.length === 0 ? (
-                <SelectItem value="no-objectives" disabled>
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-500">No objectives available</span>
-                  </div>
-                </SelectItem>
-              ) : (
-                individualObjectives.map((objective) => {
-                  const isLongTitle = objective.title.length > 50;
-                  return (
-                    <SelectItem key={objective.id} value={objective.id} className="text-left py-3 px-3">
-                      <div className="flex items-start gap-3 w-full text-left min-w-0">
-                        <Target className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex flex-col min-w-0 flex-1 text-left">
-                          <div 
-                            className={`objective-title text-sm font-medium text-gray-900 ${
-                              isLongTitle ? 'leading-relaxed' : 'leading-tight'
-                            }`}
-                            style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: isLongTitle ? 'normal' : 'nowrap',
-                              maxWidth: '100%',
-                              lineHeight: isLongTitle ? '1.4' : '1.25',
-                              display: '-webkit-box',
-                              WebkitLineClamp: isLongTitle ? 2 : 1,
-                              WebkitBoxOrient: 'vertical'
-                            }}
-                            title={objective.title}
-                          >
-                            {objective.title}
-                          </div>
-                          <div className="text-xs text-gray-500 text-left mt-1">
-                            Individual • {objective.status}
-                          </div>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  );
-                })
-              )}
-            </SelectContent>
-          </Select>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <span className="text-gray-500 text-sm">Select Individual Objective</span>
+              </div>
+            )}
+          </Button>
         </div>
 
         {/* Assign Button */}
@@ -282,6 +257,19 @@ export const TaskForm = () => {
         onOpenChange={setShowAssignModal}
         onAssign={handleAssign}
         currentAssignment={assignment}
+      />
+
+      {/* Objective Hierarchy Dialog */}
+      <ObjectiveHierarchyDialog
+        open={isObjectiveDialogOpen}
+        onOpenChange={setIsObjectiveDialogOpen}
+        onSelect={(id, context) => {
+          setObjectiveId(id);
+          setObjectiveContext(context);
+        }}
+        selectedObjectiveId={objectiveId}
+        organizationId={organizationId || ''}
+        cycleIds={activeCycleIds}
       />
     </>
   );

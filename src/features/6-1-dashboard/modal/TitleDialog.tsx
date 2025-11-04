@@ -1,13 +1,13 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import DailyTaskSelectorDialog from './DailyTaskSelectorDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface TitleDialogProps {
@@ -29,6 +29,180 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   const [isDailyTaskDialogOpen, setIsDailyTaskDialogOpen] = useState(false);
   const { organizationId } = useCurrentOrg();
 
+  // ===== OPTIMIZATION 1: Cache planData with React Query =====
+  const { data: planData, isLoading: isLoadingPlanData } = useQuery({
+    queryKey: ['social-media-plan', socialMediaPlanId],
+    queryFn: async () => {
+      if (!socialMediaPlanId) return null;
+      
+      const { data, error } = await supabase
+        .from('social_media_plans')
+        .select(`
+          post_date,
+          service:services(name),
+          content_type:content_types(name)
+        `)
+        .eq('id', socialMediaPlanId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!socialMediaPlanId && isOpen,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  // ===== OPTIMIZATION 2: Memoize formattedTitle calculation =====
+  const formattedTitle = useMemo(() => {
+    if (!planData || !titleText.trim()) return null;
+
+    const serviceName = planData.service?.name || '';
+    const contentTypeName = planData.content_type?.name || '';
+    const postDate = planData.post_date 
+      ? format(new Date(planData.post_date), 'yyyy-MM-dd')
+      : '';
+    
+    let formatted = `Content ${serviceName} - ${contentTypeName}`.trim();
+    if (postDate) {
+      formatted += ` - (${postDate})`;
+    }
+    formatted += ` ${titleText.trim()}`;
+    return formatted.trim();
+  }, [planData, titleText]);
+
+  // Memoize old format title for backward compatibility
+  const oldFormatTitle = useMemo(() => {
+    if (!planData || !titleText.trim()) return null;
+
+    const serviceName = planData.service?.name || '';
+    const postDate = planData.post_date 
+      ? format(new Date(planData.post_date), 'yyyy-MM-dd')
+      : '';
+    
+    if (serviceName && postDate) {
+      return `Content ${serviceName} (${postDate}) ${titleText.trim()}`.trim();
+    }
+    return null;
+  }, [planData, titleText]);
+
+  // ===== OPTIMIZATION 3: Use React Query for duplicate check =====
+  const { data: duplicateCheck, isLoading: isCheckingDuplicate, isFetching: isFetchingDuplicate } = useQuery({
+    queryKey: ['task-step-duplicate-check', formattedTitle, oldFormatTitle, organizationId],
+    queryFn: async () => {
+      // Check if we have at least one format to check
+      if (!organizationId || (!formattedTitle && !oldFormatTitle)) return null;
+
+      // Query to check both formats
+      // Use .or() with proper format: "column.eq.value,column.eq.value2"
+      let query = supabase
+        .from('task_steps')
+        .select(`
+          id,
+          created_by,
+          created_at,
+          task_id,
+          title,
+          daily_tasks!inner(
+            id,
+            organization_id
+          ),
+          task_steps_assigned!left(
+            employee:employees!employee_id(
+              id,
+              full_name
+            )
+          )
+        `)
+        .eq('daily_tasks.organization_id', organizationId);
+
+      // Build OR condition for both formats
+      // Supabase .or() syntax: "column.eq.value,column.eq.value2"
+      // For string values, we can use .in() for multiple values which is simpler
+      if (formattedTitle && oldFormatTitle) {
+        // Both formats exist - use .in() for multiple title checks
+        query = query.in('title', [formattedTitle, oldFormatTitle]);
+      } else if (oldFormatTitle) {
+        // Only old format exists
+        query = query.eq('title', oldFormatTitle);
+      } else if (formattedTitle) {
+        // Only new format exists
+        query = query.eq('title', formattedTitle);
+      } else {
+        return null;
+      }
+
+      console.log('🔍 Checking duplicate with:', { formattedTitle, oldFormatTitle, organizationId });
+      const { data: existingSteps, error } = await query;
+
+      if (error) {
+        console.error('❌ Error checking duplicate:', error);
+        return null;
+      }
+
+      console.log('📊 Duplicate check result:', { found: existingSteps?.length || 0, steps: existingSteps });
+
+      // If no existing steps found, return null (no duplicate)
+      if (!existingSteps || existingSteps.length === 0) {
+        return null;
+      }
+
+      // Filter steps that actually match the title (exact match)
+      // Because we used .or() with multiple formats, we need to verify exact match
+      const matchingSteps = existingSteps.filter(step => {
+        const stepTitle = step.title?.trim() || '';
+        // Check against both formats if they exist
+        const matchesNewFormat = formattedTitle && stepTitle === formattedTitle;
+        const matchesOldFormat = oldFormatTitle && stepTitle === oldFormatTitle;
+        return matchesNewFormat || matchesOldFormat;
+      });
+
+      if (matchingSteps.length === 0) {
+        return null;
+      }
+
+      // Get the most recent existing step (sort by created_at)
+      const existingStep = matchingSteps.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+
+      // Get employee name from assignment or creator
+      let employeeName: string | null = null;
+
+      // Check assignment first
+      if (existingStep.task_steps_assigned && existingStep.task_steps_assigned.length > 0) {
+        const assignment = existingStep.task_steps_assigned[0];
+        if (assignment.employee) {
+          employeeName = assignment.employee.full_name;
+        }
+      }
+
+      // Fallback to creator if no assignment
+      if (!employeeName && existingStep.created_by) {
+        const { data: creatorEmployee } = await supabase
+          .from('employees')
+          .select('full_name')
+          .eq('user_id', existingStep.created_by)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+        if (creatorEmployee) {
+          employeeName = creatorEmployee.full_name;
+        }
+      }
+
+      return {
+        exists: true,
+        employeeName: employeeName || 'Unknown Employee'
+      };
+    },
+    enabled: !!(formattedTitle || oldFormatTitle) && !!organizationId && isOpen && titleText.trim().length > 0 && !!planData,
+    staleTime: 30 * 1000, // 30 seconds cache
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+
   // FIXED: Reset state when dialog opens/closes or when socialMediaPlanId changes
   useEffect(() => {
     if (isOpen) {
@@ -37,7 +211,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       // Clear all state when closing
       setTitleText('');
     }
-  }, [isOpen, title, socialMediaPlanId]);
+  }, [isOpen, title]);
 
   const handleSave = () => {
     onSave(titleText.trim());
@@ -60,6 +234,17 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       return;
     }
 
+    // Final check before insert - use cached duplicateCheck from React Query
+    if (duplicateCheck?.exists) {
+      toast.error(`Content title ini sudah ditambahkan sebagai daily task step oleh ${duplicateCheck.employeeName}`);
+      return;
+    }
+
+    if (!formattedTitle) {
+      toast.error('Failed to format title');
+      return;
+    }
+
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -67,38 +252,6 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         toast.error('User not authenticated');
         return;
       }
-
-      // Fetch plan data to get service, content_type, and post_date
-      const { data: planData, error: planError } = await supabase
-        .from('social_media_plans')
-        .select(`
-          post_date,
-          service:services(name),
-          content_type:content_types(name)
-        `)
-        .eq('id', socialMediaPlanId)
-        .single();
-
-      if (planError || !planData) {
-        console.error('Error fetching plan data:', planError);
-        toast.error('Failed to fetch plan data');
-        return;
-      }
-
-      // Format the title: "Content" + {service} + "-" + {content type} + "-" + ({tanggal postdate}) + {title}
-      const serviceName = planData.service?.name || '';
-      const contentTypeName = planData.content_type?.name || '';
-      const postDate = planData.post_date 
-        ? format(new Date(planData.post_date), 'yyyy-MM-dd')
-        : '';
-      
-      // Build formatted title
-      let formattedTitle = `Content ${serviceName} - ${contentTypeName}`.trim();
-      if (postDate) {
-        formattedTitle += ` - (${postDate})`;
-      }
-      formattedTitle += ` ${titleText.trim()}`;
-      formattedTitle = formattedTitle.trim();
 
       // Get current employee (active profile)
       const { data: currentEmployee, error: employeeError } = await supabase
@@ -124,6 +277,48 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       const nextOrder = existingSteps && existingSteps.length > 0 
         ? (existingSteps[0].order || 0) + 1 
         : 1;
+
+      // Final check before insert (race condition prevention)
+      // Check both new and old formats
+      let finalCheckQuery = supabase
+        .from('task_steps')
+        .select(`
+          id,
+          title,
+          daily_tasks!inner(organization_id)
+        `)
+        .eq('daily_tasks.organization_id', organizationId);
+
+      // Use .in() for multiple title checks (same as duplicate check)
+      if (formattedTitle && oldFormatTitle) {
+        finalCheckQuery = finalCheckQuery.in('title', [formattedTitle, oldFormatTitle]);
+      } else if (oldFormatTitle) {
+        finalCheckQuery = finalCheckQuery.eq('title', oldFormatTitle);
+      } else if (formattedTitle) {
+        finalCheckQuery = finalCheckQuery.eq('title', formattedTitle);
+      }
+
+      const { data: finalCheckData } = await finalCheckQuery;
+      
+      // Filter to exact match
+      const finalCheck = finalCheckData?.find((step: any) => 
+        step.title?.trim() === formattedTitle || (oldFormatTitle && step.title?.trim() === oldFormatTitle)
+      );
+
+      if (finalCheck) {
+        // Get employee name for error message
+        const { data: assignmentData } = await supabase
+          .from('task_steps_assigned')
+          .select(`
+            employee:employees!employee_id(full_name)
+          `)
+          .eq('task_step_id', finalCheck.id)
+          .maybeSingle();
+
+        const employeeName = assignmentData?.employee?.full_name || 'employee lain';
+        toast.error(`Content title ini sudah ditambahkan sebagai daily task step oleh ${employeeName}`);
+        return;
+      }
 
       // Insert into task_steps table with formatted title
       const { data: taskStep, error: stepError } = await supabase
@@ -181,7 +376,6 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-2 block">Content Title</label>
             <Textarea
               value={titleText}
               onChange={(e) => setTitleText(e.target.value)}
@@ -195,9 +389,29 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
               variant="outline"
               onClick={() => setIsDailyTaskDialogOpen(true)}
               className="flex items-center gap-2"
+              disabled={
+                isLoadingPlanData ||
+                isCheckingDuplicate || 
+                isFetchingDuplicate || 
+                !!duplicateCheck?.exists || 
+                !titleText.trim() ||
+                !formattedTitle ||
+                !planData
+              }
             >
-              <Plus className="h-4 w-4" />
-              Add as Daily Task
+              {isCheckingDuplicate || isFetchingDuplicate ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking...
+                </>
+              ) : duplicateCheck?.exists ? (
+                `Already taken by ${duplicateCheck.employeeName}`
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Add as Daily Task
+                </>
+              )}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>

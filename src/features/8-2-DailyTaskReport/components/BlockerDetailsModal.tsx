@@ -17,6 +17,7 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
   const [resolutionFor, setResolutionFor] = useState<Props['items'][number] | null>(null);
   const [resolvedRows, setResolvedRows] = useState<Array<{ id: string; task_step_history_id: string; description: string; created_at: string; blocker_description?: string; taskTitle?: string; stepTitle?: string; subStepTitle?: string | null }>>([]);
   const [tab, setTab] = useState<'list' | 'resolved'>(initialTab);
+  const [isLoadingResolved, setIsLoadingResolved] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -101,9 +102,11 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
       const ids = (localItems || []).map(b => b.id).filter(Boolean);
       if (!open || ids.length === 0) {
         setResolvedRows([]);
+        setIsLoadingResolved(false);
         return;
       }
       
+      setIsLoadingResolved(true);
       try {
         // Use RPC function to fetch resolved blockers (bypasses RLS overhead)
         const { data, error } = await (supabase as any).rpc('get_blocker_resolutions', {
@@ -134,6 +137,8 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
       } catch (error) {
         console.error('Error in loadResolved:', error);
         setResolvedRows([]);
+      } finally {
+        setIsLoadingResolved(false);
       }
     };
     loadResolved();
@@ -153,7 +158,17 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
           </TabsList>
           <TabsContent value="list" className="flex-1 min-h-0">
             <div className="flex-1 min-h-0 seamless-scroll overflow-auto space-y-2">
-              {localItems.filter(b => !b.is_resolved).length === 0 ? (
+              {localItems.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              ) : localItems.filter(b => !b.is_resolved).length === 0 ? (
                 <div className="text-sm text-gray-500">No unresolved blockers.</div>
               ) : (
                 localItems.filter(b => !b.is_resolved).map((b) => (
@@ -189,34 +204,46 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
           </TabsContent>
           <TabsContent value="resolved" className="flex-1 min-h-0">
             <div className="flex-1 min-h-0 seamless-scroll overflow-auto overflow-x-auto">
-              <table className="text-sm min-w-max">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Task</th>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Step</th>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Sub-step</th>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Resolved At</th>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Blocker</th>
-                    <th className="text-left px-3 py-2 whitespace-nowrap">Resolution Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resolvedRows.length === 0 ? (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500 whitespace-nowrap">No resolved records</td></tr>
-                  ) : (
-                    resolvedRows.map((row) => (
-                      <tr key={row.id} className="border-t">
-                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.taskTitle || '-'}</td>
-                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.stepTitle || '-'}</td>
-                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.subStepTitle || '-'}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
-                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.blocker_description || '-'}</td>
-                        <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.description}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              {isLoadingResolved ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <table className="text-sm min-w-max">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Task</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Step</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Sub-step</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Resolved At</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Blocker</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Resolution Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resolvedRows.length === 0 ? (
+                      <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500 whitespace-nowrap">No resolved records</td></tr>
+                    ) : (
+                      resolvedRows.map((row) => (
+                        <tr key={row.id} className="border-t">
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.taskTitle || '-'}</td>
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.stepTitle || '-'}</td>
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.subStepTitle || '-'}</td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.blocker_description || '-'}</td>
+                          <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.description}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </TabsContent>
         </Tabs>

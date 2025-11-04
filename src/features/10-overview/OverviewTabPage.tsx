@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOptimizedPerformanceMonitor } from '@/features/10-management/hooks/useOptimizedPerformanceMonitor';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { Skeleton } from '@/features/ui/skeleton';
+import { LoadingDots } from '@/components/LoadingDots';
 import { useOptimizedSubscription } from '@/features/10-management/hooks/useOptimizedSubscription';
 import { useSubscriptionAnalytics } from '@/features/10-overview/hooks/useSubscriptionAnalytics';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -215,35 +216,23 @@ const OverviewTabPage = memo(() => {
                   <Suspense fallback={
                     <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                       <div className="col-span-9">
-                        <Skeleton className="h-full w-full" />
+                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+                          <LoadingDots size="lg" />
+                        </div>
                       </div>
                       <div className="col-span-3">
-                        <Skeleton className="h-full w-full" />
+                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+                          <LoadingDots size="lg" />
+                        </div>
                       </div>
                     </div>
                   }>
-                    {/* Optimized Loading Logic */}
-                    {(isLoading || orgLoading) && !subscriptionStatus ? (
-                      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                        <div className="col-span-9">
-                          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col items-center justify-center">
-                            <Skeleton className="h-8 w-48 mb-2" />
-                            <Skeleton className="h-4 w-32" />
-                            <p className="text-sm text-gray-500 mt-4">Loading subscription data...</p>
-                          </div>
-                        </div>
-                        <div className="col-span-3">
-                          <Skeleton className="h-full w-full" />
-                        </div>
-                      </div>
-                    ) : (
-                      <OverviewTabContent 
-                        subscriptionStatus={subscriptionStatus}
-                        analytics={analytics}
-                        analyticsLoading={analyticsLoading}
-                        refreshSubscriptionStatus={refreshSubscriptionStatus}
-                      />
-                    )}
+                    <OverviewTabContent 
+                      subscriptionStatus={subscriptionStatus}
+                      analytics={analytics}
+                      analyticsLoading={analyticsLoading}
+                      refreshSubscriptionStatus={refreshSubscriptionStatus}
+                    />
                   </Suspense>
                 </div>
             </div>

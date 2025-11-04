@@ -204,9 +204,14 @@ export const BlockersAndUpdatesPanel = () => {
     }
   };
 
+  // Filter out resolved blockers from display
+  const unresolvedBlockers = useMemo(() => {
+    return (blockers || []).filter((b: any) => !b.is_resolved && !locResolved[b.id] && !locDeleted[b.id]);
+  }, [blockers, locResolved, locDeleted]);
+
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, any[]>> = {};
-    (blockers || []).forEach((b: any) => {
+    unresolvedBlockers.forEach((b: any) => {
       const task = b.taskTitle || '-';
       const step = b.stepTitle || '-';
       map[task] = map[task] || {};
@@ -214,7 +219,7 @@ export const BlockersAndUpdatesPanel = () => {
       map[task][step].push(b);
     });
     return map;
-  }, [blockers]);
+  }, [unresolvedBlockers]);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh-60px)]">
@@ -226,9 +231,9 @@ export const BlockersAndUpdatesPanel = () => {
               className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none px-3 py-2 text-sm font-medium"
             >
               Blockers
-              {blockers && blockers.length > 0 && (
+              {unresolvedBlockers && unresolvedBlockers.length > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded-full font-semibold">
-                  {blockers.length}
+                  {unresolvedBlockers.length}
                 </span>
               )}
             </TabsTrigger>
@@ -259,7 +264,7 @@ export const BlockersAndUpdatesPanel = () => {
                     <div className="text-sm text-gray-500">Loading...</div>
                   </div>
                 </div>
-              ) : (blockers || []).length === 0 ? (
+              ) : unresolvedBlockers.length === 0 ? (
                 <div className="text-sm text-gray-500">No blockers reported.</div>
               ) : (
                 Object.entries(grouped).map(([taskTitle, steps]) => (

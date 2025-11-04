@@ -80,7 +80,7 @@ import { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 import { EditTaskDialog } from './EditTaskDialog';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import './TaskList.css';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval } from 'date-fns';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -243,6 +243,14 @@ export const TaskList = () => {
   // Filter tasks based on filters - memoized to prevent unnecessary recalculations
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
+      // My Task filter - show only tasks created by current user (owned by user)
+      if (filters.myTask === 'my_task') {
+        const isTaskCreatedByUser = task.created_by === user?.id;
+        if (!isTaskCreatedByUser) {
+          return false;
+        }
+      }
+      
       // Search filter - now includes both task title and step titles
       if (filters.search) {
         const searchTerm = filters.search.toLowerCase();
@@ -275,9 +283,60 @@ export const TaskList = () => {
         }
       }
       
+      // Date range filter - filter by task due_date
+      if (filters.dateRange) {
+        if (!task.due_date) {
+          // If task has no due_date and a date filter is active, exclude it
+          return false;
+        }
+        
+        const taskDueDate = new Date(task.due_date);
+        let startDate: Date;
+        let endDate: Date;
+        
+        switch (filters.dateRange) {
+          case 'today':
+            startDate = startOfDay(new Date());
+            endDate = endOfDay(new Date());
+            break;
+          case 'yesterday':
+            const yesterday = subDays(new Date(), 1);
+            startDate = startOfDay(yesterday);
+            endDate = endOfDay(yesterday);
+            break;
+          case 'this_week':
+            startDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+            endDate = endOfWeek(new Date(), { weekStartsOn: 1 }); // Sunday
+            break;
+          case 'this_month':
+            startDate = startOfMonth(new Date());
+            endDate = endOfMonth(new Date());
+            break;
+          case 'last_month':
+            const lastMonth = subMonths(new Date(), 1);
+            startDate = startOfMonth(lastMonth);
+            endDate = endOfMonth(lastMonth);
+            break;
+          case 'custom':
+            if (filters.customStartDate && filters.customEndDate) {
+              startDate = startOfDay(new Date(filters.customStartDate));
+              endDate = endOfDay(new Date(filters.customEndDate));
+            } else {
+              return true; // If custom dates not set, show all
+            }
+            break;
+          default:
+            return true;
+        }
+        
+        if (!isWithinInterval(taskDueDate, { start: startDate, end: endDate })) {
+          return false;
+        }
+      }
+      
       return true;
     });
-  }, [tasks, filters.search, filters.status, filters.priority, filters.pic]);
+  }, [tasks, filters.search, filters.status, filters.priority, filters.pic, filters.dateRange, filters.customStartDate, filters.customEndDate, filters.myTask, user?.id, currentEmployee?.id]);
 
   // Compute blocker counts per task to mirror report page
   // Create stable string of task IDs and step counts to use as dependency
@@ -460,10 +519,19 @@ export const TaskList = () => {
 
   // Calculate progress only for visible steps (assigned OR created by user OR has assigned substeps)
   // When PIC filter is active, calculate progress for steps assigned to that PIC
+  // When All PIC is selected, calculate progress for ALL steps
   const calculateAssignedStepsProgress = (task: Task): number => {
-    const visibleSteps = filters.pic 
-      ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
-      : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+    let visibleSteps: typeof task.steps;
+    if (filters.pic) {
+      // Individual PIC selected - show steps assigned to that PIC
+      visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
+    } else if (filters.myTask === 'all') {
+      // All PIC mode - show ALL steps
+      visibleSteps = task.steps;
+    } else {
+      // My Task mode - show steps assigned to current employee or created by user
+      visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+    }
     if (visibleSteps.length === 0) return 0;
     const completedVisibleSteps = visibleSteps.filter(s => s.is_completed).length;
     return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
@@ -911,29 +979,36 @@ export const TaskList = () => {
                         {/* Progress */}
                         <TableCell className="px-2 py-3" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                           <div className="flex flex-col items-center gap-1">
-                            <div className="text-xs text-gray-500">
-                        {(() => {
-                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
-                          const visibleSteps = filters.pic 
-                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
-                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-                          return visibleSteps.length > 0 ? `${calculateAssignedStepsProgress(task)}%` : 'No steps';
-                        })()}
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div 
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        calculateAssignedStepsProgress(task) === 100 ? 'bg-green-500' : 'bg-blue-600'
-                      }`}
-                      style={{ width: `${(() => {
-                        const visibleSteps = filters.pic 
-                          ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
-                          : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-                        return visibleSteps.length > 0 ? calculateAssignedStepsProgress(task) : 0;
-                      })()}` }}
-                    />
-                  </div>
-                </div>
+                            {(() => {
+                              // Calculate progress once and reuse for both display and bar
+                              const progress = calculateAssignedStepsProgress(task);
+                              // Determine visible steps to check if we should show "No steps"
+                              let visibleSteps: typeof task.steps;
+                              if (filters.pic) {
+                                visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
+                              } else if (filters.myTask === 'all') {
+                                visibleSteps = task.steps;
+                              } else {
+                                visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                              }
+                              
+                              return (
+                                <>
+                                  <div className="text-xs text-gray-500">
+                                    {visibleSteps.length > 0 ? `${progress}%` : 'No steps'}
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div 
+                                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                                        progress === 100 ? 'bg-green-500' : 'bg-blue-600'
+                                      }`}
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                 
                 {/* Actions */}
@@ -1022,10 +1097,18 @@ export const TaskList = () => {
                       <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                         <CheckSquare className="w-4 h-4 text-blue-600" />
                         Steps ({(() => {
-                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
-                          const visibleSteps = filters.pic 
-                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
-                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          // Determine visible steps based on filters
+                          let visibleSteps: typeof task.steps;
+                          if (filters.pic) {
+                            // Individual PIC selected - show steps assigned to that PIC
+                            visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
+                          } else if (filters.myTask === 'all') {
+                            // All PIC mode - show ALL steps
+                            visibleSteps = task.steps;
+                          } else {
+                            // My Task mode - show steps assigned to current employee or created by user
+                            visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          }
                           const completedCount = visibleSteps.filter(s => s.is_completed).length;
                           return `${completedCount}/${visibleSteps.length}`;
                         })()})
@@ -1055,10 +1138,18 @@ export const TaskList = () => {
                     <SortableContext items={task.steps.map(step => `step-${step.id}`)} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2 min-h-[50px] w-full">
                         {(() => {
-                          // When PIC filter is active, show steps assigned to that PIC, otherwise show steps assigned to current employee
-                          const visibleSteps = filters.pic 
-                            ? task.steps.filter(s => s.assigned_employee?.id === filters.pic)
-                            : task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          // Determine visible steps based on filters
+                          let visibleSteps: typeof task.steps;
+                          if (filters.pic) {
+                            // Individual PIC selected - show steps assigned to that PIC
+                            visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
+                          } else if (filters.myTask === 'all') {
+                            // All PIC mode - show ALL steps
+                            visibleSteps = task.steps;
+                          } else {
+                            // My Task mode - show steps assigned to current employee or created by user
+                            visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+                          }
                           
                           if (visibleSteps.length === 0) {
                             return (

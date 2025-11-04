@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+import { LoadingDots } from '@/components/LoadingDots';
 import { HeaderAndTab } from './HeaderAndTab';
 import { useEmployees } from './hooks/useEmployees';
 import { useReprimands } from './hooks/useReprimands';
@@ -221,7 +222,7 @@ export const ReprimandManagementPage = () => {
                   <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                     <div className="col-span-9 h-full">
                       <div className="flex items-center justify-center min-h-96">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                        <LoadingDots size="lg" />
                       </div>
                     </div>
                     <div className="col-span-3 h-full">

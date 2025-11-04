@@ -14,6 +14,7 @@ import { PendingChangesCard } from './section/PendingChangesCard';
 import { UpgradeOptionsModal } from './modal/UpgradeOptionsModal';
 import { PlansHeader, PlanCard, TrustIndicators } from './section';
 import { Card, CardContent, CardHeader } from '@/features/ui/card';
+import { LoadingDots } from '@/components/LoadingDots';
 
 const HRISSubscriptionPlansTab = () => {
   const [memberCounts, setMemberCounts] = useState<{ [key: string]: number }>({});
@@ -322,19 +323,17 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
   };
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader>
-              <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-20 bg-gray-200 rounded mb-4"></div>
-              <div className="h-10 bg-gray-200 rounded"></div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+        <div className="col-span-9">
+          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+            <LoadingDots size="lg" />
+          </div>
+        </div>
+        <div className="col-span-3">
+          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+            <LoadingDots size="lg" />
+          </div>
+        </div>
       </div>
     );
   }

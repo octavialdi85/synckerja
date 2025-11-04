@@ -14,7 +14,7 @@ import { Password, PasswordFormData, Category } from './types';
 import { getPasswordStrength } from './section/PasswordStrengthMeter';
 import { Button } from '@/features/ui/button';
 import { useToast, usePasswords } from './hooks';
-import { Skeleton } from '@/features/ui/skeleton';
+import { LoadingDots } from '@/components/LoadingDots';
 
 const PasswordManagerPage: React.FC = () => {
   const { toast } = useToast();
@@ -133,8 +133,8 @@ const PasswordManagerPage: React.FC = () => {
       <StandardLayout>
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
           <div className="flex flex-col items-center space-y-4">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <Skeleton className="h-4 w-32" />
+            <LoadingDots size="lg" />
+            <p className="text-sm text-gray-500">Loading passwords...</p>
           </div>
         </div>
       </StandardLayout>
