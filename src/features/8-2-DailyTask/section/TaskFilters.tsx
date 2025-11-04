@@ -12,7 +12,7 @@ import {
 import { useDailyTask } from '../DailyTaskContext';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { format } from 'date-fns';
-import { useCentralizedUserData } from '@/Features/1-login/contexts/CentralizedUserDataContext';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 export const TaskFilters = () => {
   const { filters, setFilters, tasks } = useDailyTask();
