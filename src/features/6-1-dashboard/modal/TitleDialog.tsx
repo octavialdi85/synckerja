@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { Separator } from '@/features/ui/separator';
-import { MessageCircle, Send, Trash2 } from 'lucide-react';
-import { useLinkComments } from '../hook/useLinkComments';
-import { formatDistanceToNow } from 'date-fns';
+import { Plus } from 'lucide-react';
+import { format } from 'date-fns';
+import DailyTaskSelectorDialog from './DailyTaskSelectorDialog';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { toast } from 'sonner';
 
 interface TitleDialogProps {
   isOpen: boolean;
@@ -24,41 +26,143 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   socialMediaPlanId
 }) => {
   const [titleText, setTitleText] = useState('');
-  const [newComment, setNewComment] = useState('');
+  const [isDailyTaskDialogOpen, setIsDailyTaskDialogOpen] = useState(false);
+  const { organizationId } = useCurrentOrg();
 
   // FIXED: Reset state when dialog opens/closes or when socialMediaPlanId changes
   useEffect(() => {
     if (isOpen) {
       setTitleText(title || '');
-      setNewComment(''); // Clear comment input when opening
     } else {
       // Clear all state when closing
       setTitleText('');
-      setNewComment('');
     }
   }, [isOpen, title, socialMediaPlanId]);
-
-  const {
-    comments,
-    isLoading: commentsLoading,
-    addComment,
-    deleteComment
-  } = useLinkComments(socialMediaPlanId || '', 'title');
 
   const handleSave = () => {
     onSave(titleText.trim());
     onClose();
   };
 
-  const handleAddComment = async () => {
-    if (!newComment.trim() || !socialMediaPlanId) return;
-    
-    await addComment({ commentText: newComment.trim() });
-    setNewComment(''); // Clear after adding
-  };
+  const handleAddAsDailyTask = async (dailyTaskId: string, taskTitle: string) => {
+    if (!titleText.trim()) {
+      toast.error('Please enter a content title first');
+      return;
+    }
 
-  const handleDeleteComment = async (commentId: string) => {
-    await deleteComment(commentId);
+    if (!organizationId) {
+      toast.error('Organization not found');
+      return;
+    }
+
+    if (!socialMediaPlanId) {
+      toast.error('Social media plan ID not found');
+      return;
+    }
+
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('User not authenticated');
+        return;
+      }
+
+      // Fetch plan data to get service and post_date
+      const { data: planData, error: planError } = await supabase
+        .from('social_media_plans')
+        .select(`
+          post_date,
+          service:services(name)
+        `)
+        .eq('id', socialMediaPlanId)
+        .single();
+
+      if (planError || !planData) {
+        console.error('Error fetching plan data:', planError);
+        toast.error('Failed to fetch plan data');
+        return;
+      }
+
+      // Format the title: "Content" + {service} + ({tanggal postdate}) + {title}
+      const serviceName = planData.service?.name || '';
+      const postDate = planData.post_date 
+        ? format(new Date(planData.post_date), 'yyyy-MM-dd')
+        : '';
+      
+      const formattedTitle = postDate 
+        ? `Content ${serviceName} (${postDate}) ${titleText.trim()}`.trim()
+        : `Content ${serviceName} ${titleText.trim()}`.trim();
+
+      // Get current employee (active profile)
+      const { data: currentEmployee, error: employeeError } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+
+      if (employeeError || !currentEmployee) {
+        toast.error('Failed to get current employee');
+        return;
+      }
+
+      // Get the maximum order for steps in this task
+      const { data: existingSteps } = await supabase
+        .from('task_steps')
+        .select('order')
+        .eq('task_id', dailyTaskId)
+        .order('order', { ascending: false })
+        .limit(1);
+
+      const nextOrder = existingSteps && existingSteps.length > 0 
+        ? (existingSteps[0].order || 0) + 1 
+        : 1;
+
+      // Insert into task_steps table with formatted title
+      const { data: taskStep, error: stepError } = await supabase
+        .from('task_steps')
+        .insert({
+          task_id: dailyTaskId,
+          title: formattedTitle,
+          is_completed: false,
+          order: nextOrder,
+          status: 'pending',
+          priority: 'medium',
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+      if (stepError) {
+        console.error('Error creating task step:', stepError);
+        toast.error('Failed to create task step');
+        return;
+      }
+
+      // Insert into task_steps_assigned table
+      const { error: assignError } = await supabase
+        .from('task_steps_assigned')
+        .insert({
+          organization_id: organizationId,
+          task_step_id: taskStep.id,
+          employee_id: currentEmployee.id,
+          assigned_by: currentEmployee.id,
+          assigned_at: new Date().toISOString()
+        });
+
+      if (assignError) {
+        console.error('Error assigning task step:', assignError);
+        toast.error('Failed to assign task step');
+        return;
+      }
+
+      toast.success('Content title added as daily task step successfully');
+      setIsDailyTaskDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding as daily task:', error);
+      toast.error('Failed to add as daily task');
+    }
   };
 
   return (
@@ -80,85 +184,32 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
             />
           </div>
 
-          {socialMediaPlanId && (
-            <>
-              <Separator />
-              
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4" />
-                  <span className="font-medium text-sm">Comments</span>
-                </div>
-
-                <div className="flex gap-2">
-                  <Textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment..."
-                    className="min-h-[60px] resize-none"
-                  />
-                  <Button
-                    onClick={handleAddComment}
-                    disabled={!newComment.trim()}
-                    size="sm"
-                    className="self-end"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="space-y-3 max-h-[300px] overflow-y-auto seamless-scroll">
-                  {commentsLoading ? (
-                    <div className="text-sm text-gray-500">Loading comments...</div>
-                  ) : comments.length === 0 ? (
-                    <div className="text-sm text-gray-500">No comments yet</div>
-                  ) : (
-                    comments.map((comment) => (
-                      <div key={comment.id} className="bg-gray-50 p-3 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-blue-600">
-                                {comment.creator?.full_name?.charAt(0) || 'U'}
-                              </span>
-                            </div>
-                            <span className="font-medium text-sm">
-                              {comment.creator?.full_name || 'Unknown User'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteComment(comment.id)}
-                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-sm">{comment.comment_text}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
+          <div className="flex justify-between items-center">
+            <Button
+              variant="outline"
+              onClick={() => setIsDailyTaskDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add as Daily Task
             </Button>
-            <Button onClick={handleSave}>
-              Save
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave}>
+                Save
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
+
+      <DailyTaskSelectorDialog
+        isOpen={isDailyTaskDialogOpen}
+        onClose={() => setIsDailyTaskDialogOpen(false)}
+        onSelect={handleAddAsDailyTask}
+      />
     </Dialog>
   );
 };

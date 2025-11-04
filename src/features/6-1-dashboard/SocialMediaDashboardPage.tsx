@@ -917,7 +917,8 @@ const SocialMediaContent = () => {
             isOpen={titleDialog.isOpen} 
             onClose={closeTitleDialog} 
             title={titleDialog.title || ""} 
-            onSave={saveTitle} 
+            onSave={saveTitle}
+            socialMediaPlanId={titleDialog.id}
           />
 
           <EditTargetDialog 
