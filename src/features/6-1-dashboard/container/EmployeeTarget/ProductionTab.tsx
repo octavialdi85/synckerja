@@ -5,7 +5,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit, Target } fro
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from 'date-fns';
-import { ContentManager } from '@/types/social-media';
+import { ContentManager } from '../../types/social-media';
 import { useDigitalMarketingEmployees } from '../../hook/useDigitalMarketingEmployees';
 import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
 import { useEmployeeTargets } from '../../hook/useEmployeeTargets';

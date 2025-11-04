@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { PillarData } from '@/types/social-media';
+import { PillarData } from '../types/social-media';
 
 export const useContentPillarData = () => {
   const { organizationId } = useCurrentOrg();

@@ -1,5 +1,5 @@
 
-import { ContentPlan } from '@/types/social-media';
+import { ContentPlan } from '../../../types/social-media';
 
 export const validateRequiredFields = (planData: ContentPlan) => {
   const missingFields = [];

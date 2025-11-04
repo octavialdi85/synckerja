@@ -13,7 +13,7 @@ import { ServiceManager } from './dropdowns/ServiceManager';
 import { SubServiceManager } from './dropdowns/SubServiceManager';
 import { ContentPillarManager } from './dropdowns/ContentPillarManager';
 import { SocialMediaNameManager } from './dropdowns/SocialMediaNameManager';
-import { Service } from '@/types/social-media';
+import { Service } from '../../types/social-media';
 
 interface MasterDataToolbarProps {
   onContentTypeDataChange: () => void;

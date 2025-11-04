@@ -6,7 +6,7 @@ import { Button } from '@/features/ui/button';
 import { EllipsisVertical, Plus, Edit, Trash2, Lock, Search } from 'lucide-react';
 
 import { useMasterData } from '../../../hook/useMasterData';
-import { SubService, Service } from '@/types/social-media';
+import { SubService, Service } from '../../../types/social-media';
 
 interface SubServiceManagerProps {
   onDataChange: () => void;

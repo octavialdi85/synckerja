@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from '@/features/ui/button';
 import { MoreVertical, Plus, Edit, Trash2, Lock } from 'lucide-react';
 import { useMasterData } from '../../../hook/useMasterData';
-import { Service } from '@/types/social-media';
+import { Service } from '../../../types/social-media';
 
 interface ServiceManagerProps {
   onDataChange: () => void;

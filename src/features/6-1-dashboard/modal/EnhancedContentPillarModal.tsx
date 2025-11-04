@@ -5,7 +5,7 @@ import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
-import { ContentPillar } from '@/types/social-media';
+import { ContentPillar } from '../types/social-media';
 
 interface EnhancedContentPillarModalProps {
   open: boolean;

@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from '@/features/ui/button';
 import { EllipsisVertical, Plus, Edit, Trash2, Lock, Search } from 'lucide-react';
 import { useMasterData } from '../../../hook/useMasterData';
-import { ContentPillar } from '@/types/social-media';
+import { ContentPillar } from '../../../types/social-media';
 import { EnhancedContentPillarModal } from '../../../modal/EnhancedContentPillarModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/features/ui/input';
