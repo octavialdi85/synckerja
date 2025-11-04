@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { LinkComment } from './useLinkCommentsQuery';
+import { devLog } from '@/config/logger';
 
 export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) => {
   const queryClient = useQueryClient();
@@ -15,29 +16,33 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
     }: {
       commentText: string;
     }) => {
-      console.log('💬 Adding comment - START:', {
+      // Defensive validation - check for undefined, null, or empty
+      if (commentText === undefined || commentText === null) {
+        devLog.debug('⚠️ Comment validation: commentText is undefined or null');
+        throw new Error('Comment text is required');
+      }
+
+      // Early validation - skip logging for empty comments (already validated in UI)
+      if (!commentText.trim()) {
+        devLog.debug('⚠️ Comment validation: empty text provided (should be caught by UI)');
+        throw new Error('Comment text is required');
+      }
+
+      devLog.debug('💬 Adding comment:', {
         socialMediaPlanId,
         linkUrl,
         effectiveLinkUrl,
-        commentTextLength: commentText?.length
+        commentTextLength: commentText.length
       });
-
-      if (!commentText?.trim()) {
-        console.error('❌ No comment text provided');
-        throw new Error('Comment text is required');
-      }
 
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error('❌ User not authenticated:', userError);
+        devLog.debug('❌ User not authenticated:', userError);
         throw new Error('User not authenticated');
       }
 
-      console.log('👤 Current user:', user.id);
-
       // First, let's check if the social_media_plan exists and user has access
-      console.log('🔍 Checking social_media_plan access...');
       const { data: planData, error: planError } = await supabase
         .from('social_media_plans')
         .select('id, organization_id')
@@ -45,11 +50,9 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
         .single();
 
       if (planError || !planData) {
-        console.error('❌ Social media plan not found or no access:', planError);
+        devLog.debug('❌ Social media plan not found or no access:', planError);
         throw new Error('Social media plan not found or no access');
       }
-
-      console.log('✅ Social media plan found:', planData);
 
       // Check user's active organization
       const { data: profileData, error: profileError } = await supabase
@@ -59,18 +62,15 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
         .single();
 
       if (profileError || !profileData) {
-        console.error('❌ Profile not found:', profileError);
+        devLog.debug('❌ Profile not found:', profileError);
         throw new Error('Profile not found');
       }
 
-      console.log('👤 User profile:', {
-        activeOrgId: profileData.active_organization_id,
-        planOrgId: planData.organization_id,
-        match: profileData.active_organization_id === planData.organization_id
-      });
-
       if (profileData.active_organization_id !== planData.organization_id) {
-        console.error('❌ Organization mismatch');
+        devLog.debug('❌ Organization mismatch:', {
+          userOrg: profileData.active_organization_id,
+          planOrg: planData.organization_id
+        });
         throw new Error('User not authorized for this organization');
       }
 
@@ -81,12 +81,6 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
         created_by: user.id
       };
 
-      console.log('📝 Inserting comment data:', {
-        ...insertData,
-        originalLinkUrl: linkUrl,
-        effectiveLinkUrl
-      });
-
       const { data, error } = await supabase
         .from('link_comments')
         .insert(insertData)
@@ -94,17 +88,15 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
         .single();
 
       if (error) {
-        console.error('❌ Error inserting comment:', error);
-        console.error('❌ Error details:', {
+        devLog.debug('❌ Error inserting comment:', {
           message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+          code: error.code,
+          details: error.details
         });
         throw error;
       }
 
-      console.log('✅ Comment inserted successfully:', data.id);
+      devLog.debug('✅ Comment inserted successfully:', data.id);
 
       // Fetch creator info separately
       try {
@@ -113,14 +105,12 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
           email: user.email || ''
         };
 
-        console.log('👤 Creator info:', creatorInfo);
-
         return {
           ...data,
           creator: creatorInfo
         } as LinkComment;
       } catch (err) {
-        console.warn('Could not fetch creator info for new comment');
+        devLog.debug('⚠️ Could not fetch creator info for new comment');
         return {
           ...data,
           creator: undefined
@@ -128,16 +118,7 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
       }
     },
     onSuccess: (newComment) => {
-      console.log('✅ Comment added successfully:', newComment.id);
-      console.log('🔄 Invalidating queries with key:', queryKey);
-      console.log('📊 New comment data:', {
-        id: newComment.id,
-        text: newComment.comment_text?.substring(0, 50) + '...',
-        socialMediaPlanId: newComment.social_media_plan_id,
-        linkUrl: newComment.link_url,
-        originalLinkUrl: linkUrl,
-        effectiveLinkUrl
-      });
+      devLog.debug('✅ Comment added successfully:', newComment.id);
       
       // Invalidate and refetch immediately
       queryClient.invalidateQueries({
@@ -151,18 +132,26 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
         exact: true
       });
       
-      console.log('🔄 Query invalidation and refetch completed');
       toast.success('Comment added successfully');
     },
     onError: (error: any) => {
-      console.error('❌ Error adding comment:', error);
-      console.error('❌ Full error object:', JSON.stringify(error, null, 2));
+      // Don't log validation errors (already handled in UI)
+      const isValidationError = error.message?.includes('Comment text is required');
+      
+      if (!isValidationError) {
+        devLog.debug('❌ Error adding comment:', {
+          message: error.message,
+          code: error.code
+        });
+      }
       
       let errorMessage = 'Failed to add comment';
       if (error.message?.includes('auth')) {
         errorMessage = 'Authentication required';
       } else if (error.message?.includes('Comment text')) {
         errorMessage = 'Comment text is required';
+        // Don't show toast for validation errors (already shown in UI)
+        return;
       } else if (error.message?.includes('organization')) {
         errorMessage = 'Organization access denied';
       } else if (error.message?.includes('row-level security')) {
@@ -186,7 +175,7 @@ export const useUpdateLinkComment = (socialMediaPlanId: string, linkUrl: string)
       commentId: string;
       commentText: string;
     }) => {
-      console.log('✏️ Updating comment:', commentId);
+      devLog.debug('✏️ Updating comment:', commentId);
 
       const updates = {
         comment_text: commentText,
@@ -201,7 +190,7 @@ export const useUpdateLinkComment = (socialMediaPlanId: string, linkUrl: string)
         .single();
 
       if (error) {
-        console.error('❌ Error updating comment:', error);
+        devLog.debug('❌ Error updating comment:', error);
         throw error;
       }
 
@@ -225,14 +214,14 @@ export const useUpdateLinkComment = (socialMediaPlanId: string, linkUrl: string)
       }
     },
     onSuccess: () => {
-      console.log('✅ Comment updated successfully');
+      devLog.debug('✅ Comment updated successfully');
       queryClient.invalidateQueries({
         queryKey
       });
       toast.success('Comment updated successfully');
     },
     onError: (error) => {
-      console.error('❌ Error updating comment:', error);
+      devLog.debug('❌ Error updating comment:', error);
       toast.error('Failed to update comment');
     }
   });
@@ -244,7 +233,7 @@ export const useDeleteLinkComment = (socialMediaPlanId: string, linkUrl: string)
 
   return useMutation({
     mutationFn: async (commentId: string) => {
-      console.log('🗑️ Deleting comment:', commentId);
+      devLog.debug('🗑️ Deleting comment:', commentId);
 
       const { error } = await supabase
         .from('link_comments')
@@ -252,11 +241,11 @@ export const useDeleteLinkComment = (socialMediaPlanId: string, linkUrl: string)
         .eq('id', commentId);
 
       if (error) {
-        console.error('❌ Error deleting comment:', error);
+        devLog.debug('❌ Error deleting comment:', error);
         throw error;
       }
 
-      console.log('✅ Comment deleted successfully');
+      devLog.debug('✅ Comment deleted successfully');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -265,7 +254,7 @@ export const useDeleteLinkComment = (socialMediaPlanId: string, linkUrl: string)
       toast.success('Comment deleted successfully');
     },
     onError: (error) => {
-      console.error('❌ Error deleting comment:', error);
+      devLog.debug('❌ Error deleting comment:', error);
       toast.error('Failed to delete comment');
     }
   });

@@ -31,11 +31,12 @@ export const useOptimizedSocialMediaMutations = () => {
         }
       }
 
+      // Use select with all fields to ensure we get complete updated data
       const { data, error } = await (supabase as any)
         .from('social_media_plans')
         .update(updates)
         .eq('id', id)
-        .select()
+        .select('*')
         .single();
 
       if (error) {
@@ -53,9 +54,16 @@ export const useOptimizedSocialMediaMutations = () => {
       }
       return data;
     },
-      onSuccess: (updatedData) => {
+      onSuccess: (updatedData, variables) => {
+        // variables contains { id, updates } passed to mutationFn
+        const updates = variables.updates;
+        
         // Google Sheets style - update cache directly without refetch
         if (organizationId && updatedData) {
+          // Get old data from cache to compare
+          const oldData = queryClient.getQueryData(['social-media-plans', organizationId]) as any[];
+          const oldPlan = oldData?.find((plan: any) => plan.id === updatedData.id);
+          
           // Optimistic update - update cache directly with new data
           queryClient.setQueryData(
             ['social-media-plans', organizationId],
@@ -66,6 +74,24 @@ export const useOptimizedSocialMediaMutations = () => {
               );
             }
           );
+          
+          // Also invalidate queries to ensure UI updates immediately
+          // Use 'active' to force refetch for active queries to ensure real-time updates
+          queryClient.invalidateQueries({ 
+            queryKey: ['social-media-plans', organizationId],
+            refetchType: 'active' // Force refetch for active queries to ensure real-time updates
+          });
+          
+          // If done status or actual_post_date changed, also invalidate all-social-media-links for ContentPostTab
+          const doneChanged = updates.done !== undefined && (oldPlan?.done !== updates.done);
+          const actualPostDateChanged = updates.actual_post_date !== undefined && (oldPlan?.actual_post_date !== updates.actual_post_date);
+          
+          if (doneChanged || actualPostDateChanged) {
+            queryClient.invalidateQueries({ 
+              queryKey: ['all-social-media-links'],
+              refetchType: 'active' // Force refetch for active queries
+            });
+          }
           
           devLog.debug('✅ Data updated in cache without reload');
         }

@@ -92,20 +92,88 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
     };
   }, [monthlyTargetDate]);
 
-  // Calculate daily approved count for specific PIC and exact date
-  const calculateDailyApproved = (picId: string, targetDate: Date) => {
-    const targetDateString = format(targetDate, 'yyyy-MM-dd');
+  // Helper function to extract date string from date value (same as ProductionTab)
+  const getDateString = (dateValue: string | Date | null | undefined): string | null => {
+    if (!dateValue) return null;
     
-    const filteredPlans = contentPlans.filter(plan => {
-      const isCorrectPIC = plan.pic_id === picId;
-      const isApproved = plan.approved === true;
-      const hasPostDate = plan.post_date !== null && plan.post_date !== undefined;
-      const dateMatches = plan.post_date === targetDateString;
+    try {
+      if (typeof dateValue === 'string') {
+        // If already in YYYY-MM-DD format, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+          return dateValue;
+        }
+        // If contains 'T', split and take date part
+        if (dateValue.includes('T')) {
+          return dateValue.split('T')[0];
+        }
+        // If contains space, split and take date part (format: "YYYY-MM-DD HH:mm:ss")
+        if (dateValue.includes(' ')) {
+          return dateValue.split(' ')[0];
+        }
+        // Otherwise, try to parse it
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
       
-      return isCorrectPIC && isApproved && hasPostDate && dateMatches;
-    });
+      if (dateValue instanceof Date) {
+        if (!isNaN(dateValue.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = dateValue.getFullYear();
+          const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+          const day = String(dateValue.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
+    } catch (e) {
+      // Silently fail and return null
+    }
+    
+    return null;
+  };
 
-    return filteredPlans.length;
+  // Calculate daily approved count for specific PIC and exact date
+  // Logic matches SocialMediaDashboardPage metrics: filter by completion_date or post_date
+  const calculateDailyApproved = (picId: string, targetDate: Date) => {
+    // Use local date to avoid timezone issues (same as ProductionTab)
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    const targetDateString = `${year}-${month}-${day}`;
+    
+    return contentPlans.filter(plan => {
+      // Must have pic_id
+      if (!plan.pic_id || plan.pic_id !== picId) {
+        return false;
+      }
+
+      // Must be approved
+      if (plan.approved !== true) {
+        return false;
+      }
+
+      // Priority: completion_date > post_date (if approved)
+      // Check completion_date first (most reliable - this is when content planner approved)
+      const completionDateStr = getDateString(plan.completion_date);
+      if (completionDateStr && completionDateStr === targetDateString) {
+        return true;
+      }
+
+      // Fallback: if approved is true and post_date matches target date
+      if (plan.post_date) {
+        const postDateStr = getDateString(plan.post_date);
+        if (postDateStr && postDateStr === targetDateString) {
+          return true;
+        }
+      }
+
+      return false;
+    }).length;
   };
 
   // Calculate monthly approved count for specific PIC and month/year

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -212,6 +212,9 @@ export const SocialMediaNameManager: React.FC<SocialMediaNameManagerProps> = ({ 
             <DialogTitle>
               {editingName ? 'Edit Social Media Name' : 'Add Social Media Name'}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingName ? 'Edit social media name details' : 'Add a new social media name'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">

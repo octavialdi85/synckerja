@@ -175,13 +175,42 @@ const useAddSnipingImage = (socialMediaPlanId: string, linkUrl: string) => {
         .single();
 
       if (error) {
-        // If table doesn't exist, show warning but don't throw
-        if (error.code === '42P01') {
-          console.warn('⚠️ sniping_images table does not exist yet');
-          toast.error('Image upload feature is not available yet. Please contact administrator.');
-          throw new Error('Table does not exist');
+        // Check for table not found - could be PostgreSQL error code, PostgREST error, or HTTP 404
+        const isTableNotFound = 
+          error.code === '42P01' || // PostgreSQL table not found
+          error.code === 'PGRST116' || // PostgREST table not found  
+          error.status === 404 || // HTTP 404 Not Found
+          error.statusCode === 404 ||
+          error.message?.includes('does not exist') ||
+          error.message?.includes('relation "sniping_images" does not exist') ||
+          error.message?.includes('Not Found');
+        
+        if (isTableNotFound) {
+          // Cache that table doesn't exist
+          tableExistsCache.set('sniping_images_table_exists', false);
+          devLog.debug('⚠️ sniping_images table does not exist - image uploaded to storage but not saved to database', {
+            errorCode: error.code,
+            errorStatus: error.status,
+            errorMessage: error.message
+          });
+          
+          // Image was uploaded to storage successfully, but can't save to database
+          // Return a mock object so the UI doesn't break and user knows image was uploaded
+          return {
+            id: `temp-${Date.now()}`,
+            social_media_plan_id: socialMediaPlanId,
+            link_url: effectiveLinkUrl,
+            image_path: imagePath,
+            image_name: imageName,
+            image_type: imageType,
+            image_size: imageSize,
+            link_comments_id: linkCommentsId || null,
+            created_by: user.id,
+            created_at: new Date().toISOString()
+          } as SnipingImage;
         }
-        console.error('❌ Error adding sniping image:', error);
+        
+        devLog.debug('❌ Error adding sniping image:', error);
         throw error;
       }
 
@@ -192,8 +221,21 @@ const useAddSnipingImage = (socialMediaPlanId: string, linkUrl: string) => {
       queryClient.refetchQueries({ queryKey });
     },
     onError: (error: any) => {
-      console.error('❌ Error adding sniping image:', error);
-      toast.error('Failed to add image');
+      // Check if it's a table not found error (already handled in mutationFn)
+      const isTableNotFound = 
+        error.code === '42P01' ||
+        error.code === 'PGRST116' ||
+        error.status === 404 ||
+        error.statusCode === 404 ||
+        error.message?.includes('does not exist') ||
+        error.message?.includes('Table does not exist') ||
+        error.message?.includes('Not Found');
+      
+      if (!isTableNotFound) {
+        devLog.debug('❌ Error adding sniping image:', error);
+        toast.error('Failed to add image to database');
+      }
+      // Don't show error toast for table not found - image was uploaded to storage
     }
   });
 };

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Button } from '@/features/ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit, Target } from 'lucide-react';
@@ -84,19 +84,100 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
     };
   }, [monthlyTargetDate]);
 
-  // Calculate daily production count for specific PIC and exact date
-  const calculateDailyProduction = (picId: string, targetDate: Date) => {
-    const targetDateString = targetDate.toISOString().split('T')[0];
+  // Helper function to extract date string from date value (same as SocialMediaDashboardPage)
+  const getDateString = (dateValue: string | Date | null | undefined): string | null => {
+    if (!dateValue) return null;
     
-    return contentPlans.filter(plan => {
-      return plan.pic_production_id === picId && 
-             plan.post_date === targetDateString &&
-             (plan.production_status === 'Approved' || plan.production_approved === true);
-    }).length;
+    try {
+      if (typeof dateValue === 'string') {
+        // If already in YYYY-MM-DD format, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+          return dateValue;
+        }
+        // If contains 'T', split and take date part
+        if (dateValue.includes('T')) {
+          return dateValue.split('T')[0];
+        }
+        // If contains space, split and take date part (format: "YYYY-MM-DD HH:mm:ss")
+        if (dateValue.includes(' ')) {
+          return dateValue.split(' ')[0];
+        }
+        // Otherwise, try to parse it
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
+      
+      if (dateValue instanceof Date) {
+        if (!isNaN(dateValue.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = dateValue.getFullYear();
+          const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+          const day = String(dateValue.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
+    } catch (e) {
+      // Silently fail and return null
+    }
+    
+    return null;
   };
 
+  // Calculate daily production count for specific PIC and exact date
+  // Logic matches SocialMediaDashboardPage metrics: filter by production_approved_date or production_completion_date
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateDailyProduction = useCallback((picId: string, targetDate: Date) => {
+    // Use local date to avoid timezone issues (same as metrics)
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    const targetDateString = `${year}-${month}-${day}`;
+    
+    return contentPlans.filter(plan => {
+      // Must have pic_production_id
+      if (!plan.pic_production_id || plan.pic_production_id !== picId) {
+        return false;
+      }
+
+      // Must be approved
+      if (plan.production_approved !== true) {
+        return false;
+      }
+
+      // Priority: production_approved_date > production_completion_date > post_date (if approved)
+      // Check production_approved_date first (most reliable)
+      const approvedDateStr = getDateString(plan.production_approved_date);
+      if (approvedDateStr && approvedDateStr === targetDateString) {
+        return true;
+      }
+
+      // Check production_completion_date second
+      const completionDateStr = getDateString(plan.production_completion_date);
+      if (completionDateStr && completionDateStr === targetDateString) {
+        return true;
+      }
+
+      // Fallback: if production_approved is true and post_date is today
+      if (plan.post_date) {
+        const postDateStr = getDateString(plan.post_date);
+        if (postDateStr && postDateStr === targetDateString) {
+          return true;
+        }
+      }
+
+      return false;
+    }).length;
+  }, [contentPlans]);
+
   // Calculate monthly production count for specific PIC and month/year - FIXED: Only count if production_approved is true
-  const calculateMonthlyProduction = (picId: string, targetDate: Date) => {
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateMonthlyProduction = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
@@ -113,10 +194,11 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
       // FIXED: Only count when production_approved is true
       return plan.production_approved === true;
     }).length;
-  };
+  }, [contentPlans]);
 
   // Calculate on time rate for production - FIXED: Use production_approved_date instead of production_completion_date
-  const calculateProductionOnTimeRate = (picId: string, targetDate: Date) => {
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateProductionOnTimeRate = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
@@ -147,13 +229,14 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
     });
 
     return Math.round((onTimePlans.length / monthlyPlans.length) * 100);
-  };
+  }, [contentPlans]);
 
   // Track logged calculations to avoid duplicate logs
   const loggedCalculationsRef = useRef<Set<string>>(new Set());
 
   // Calculate effective rate based on production revision counts - FIXED: Only count approved production
-  const calculateProductionEffectiveRate = (picId: string, targetDate: Date) => {
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateProductionEffectiveRate = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
@@ -202,7 +285,7 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
     }
 
     return effectiveRate;
-  };
+  }, [contentPlans]);
 
   // Get target for specific employee
   const getEmployeeTarget = (employeeId: string) => {
@@ -221,7 +304,8 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
   };
 
   // Get actual Production PIC names from content plans with calculated metrics
-  const getActualProductionPICData = () => {
+  // Use useMemo to ensure recalculation when contentPlans or dates change (same structure as ContentPostTab)
+  const actualProductionPICData = useMemo(() => {
     const picData = [];
     
     const uniquePICs = new Set();
@@ -264,9 +348,9 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
     });
     
     return picData;
-  };
+  }, [contentPlans, dailyTargetDate, monthlyTargetDate, digitalEmployees, targets, calculateDailyProduction, calculateMonthlyProduction, calculateProductionOnTimeRate, calculateProductionEffectiveRate]);
 
-  const displayData = getActualProductionPICData().slice(currentPICPage * 2, (currentPICPage + 1) * 2);
+  const displayData = actualProductionPICData.slice(currentPICPage * 2, (currentPICPage + 1) * 2);
   
   while (displayData.length < 2) {
     displayData.push({
@@ -307,7 +391,7 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
   };
 
   const handleNextPIC = () => {
-    const actualPICCount = getActualProductionPICData().length;
+    const actualPICCount = actualProductionPICData.length;
     const maxPage = Math.ceil(actualPICCount / 2) - 1;
     setCurrentPICPage(Math.min(maxPage, currentPICPage + 1));
   };
@@ -343,7 +427,7 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
                       size="sm"
                       onClick={handleNextPIC}
                       className="h-5 w-5 p-0"
-                      disabled={currentPICPage >= Math.ceil(getActualProductionPICData().length / 2) - 1}
+                      disabled={currentPICPage >= Math.ceil(actualProductionPICData.length / 2) - 1}
                     >
                       <ChevronRight className="h-3 w-3" />
                     </Button>

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { useRealtimeSocialMedia } from './useRealtimeSocialMedia';
 import { SocialMediaProvider } from '../SocialMediaContext';
+import { RealtimeSocialMediaSubscriber } from './RealtimeSocialMediaSubscriber';
 
 interface RealtimeSocialMediaProviderProps {
   children: React.ReactNode;
@@ -10,12 +10,11 @@ interface RealtimeSocialMediaProviderProps {
 export const RealtimeSocialMediaProvider: React.FC<RealtimeSocialMediaProviderProps> = ({ 
   children 
 }) => {
-  // Setup realtime subscriptions
-  useRealtimeSocialMedia();
-
   return (
     <SocialMediaProvider>
-      {children}
+      <RealtimeSocialMediaSubscriber>
+        {children}
+      </RealtimeSocialMediaSubscriber>
     </SocialMediaProvider>
   );
 };

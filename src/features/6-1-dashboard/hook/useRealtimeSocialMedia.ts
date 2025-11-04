@@ -48,10 +48,15 @@ export const useRealtimeSocialMedia = () => {
         (payload) => {
           console.log('📡 Social media links changed:', payload.eventType);
           
-          // Smart cache update - invalidate only
+          // Smart cache update - invalidate social media plans and all-social-media-links
           queryClient.invalidateQueries({ 
             queryKey: ['social-media-plans', organizationId],
             refetchType: 'none'
+          });
+          // Invalidate all-social-media-links to refresh ContentPostTab immediately
+          queryClient.invalidateQueries({ 
+            queryKey: ['all-social-media-links'],
+            refetchType: 'active' // Force refetch for active queries
           });
           
           console.log('✅ Links cache invalidated');

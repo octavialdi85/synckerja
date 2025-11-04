@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -219,6 +219,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
           <DialogTitle className="flex items-center gap-2">
             <span>Social Media Links</span>
           </DialogTitle>
+          <DialogDescription className="sr-only">Manage social media links for this content</DialogDescription>
           {planTitle && (
             <p className="text-sm text-gray-600 mt-1">
               Content: {planTitle}

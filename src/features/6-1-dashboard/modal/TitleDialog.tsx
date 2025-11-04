@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { Separator } from '@/features/ui/separator';
@@ -66,6 +66,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto seamless-scroll">
         <DialogHeader>
           <DialogTitle>Content Title</DialogTitle>
+          <DialogDescription className="sr-only">Edit content title and manage comments</DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">

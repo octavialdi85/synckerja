@@ -72,7 +72,7 @@ export const useOptimizedSocialMediaData = () => {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 0, // No stale time - always fetch fresh data
+    staleTime: 0, // Always consider data stale to ensure fresh updates
     gcTime: 0, // No cache time - always fetch fresh data
     refetchOnWindowFocus: true, // Refetch when user switches tabs
     refetchOnMount: true, // Allow refetch on component mount to ensure fresh data

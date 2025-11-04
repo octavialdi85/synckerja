@@ -112,6 +112,11 @@ export const useSocialMediaLinks = (planId?: string) => {
       
       // Invalidate content plans to refresh the table
       queryClient.invalidateQueries({ queryKey: ['content-plans'] });
+      // Invalidate all-social-media-links query to refresh ContentPostTab immediately
+      queryClient.invalidateQueries({ 
+        queryKey: ['all-social-media-links'],
+        refetchType: 'active' // Force refetch for active queries
+      });
       
       toast.success('Social media link added successfully');
     },
@@ -140,6 +145,11 @@ export const useSocialMediaLinks = (planId?: string) => {
         (old: SocialMediaLink[] = []) =>
           old.map(link => link.id === updatedLink.id ? updatedLink : link)
       );
+      // Invalidate all-social-media-links query to refresh ContentPostTab immediately
+      queryClient.invalidateQueries({ 
+        queryKey: ['all-social-media-links'],
+        refetchType: 'active' // Force refetch for active queries
+      });
       toast.success('Social media link updated successfully');
     },
     onError: (error) => {
@@ -176,6 +186,11 @@ export const useSocialMediaLinks = (planId?: string) => {
         // Invalidate content plans to refresh the table
         queryClient.invalidateQueries({ queryKey: ['content-plans'] });
       }
+      // Invalidate all-social-media-links query to refresh ContentPostTab immediately
+      queryClient.invalidateQueries({ 
+        queryKey: ['all-social-media-links'],
+        refetchType: 'active' // Force refetch for active queries
+      });
       toast.success('Social media link deleted successfully');
     },
     onError: (error) => {
@@ -208,6 +223,11 @@ export const useSocialMediaLinks = (planId?: string) => {
         // Invalidate content plans to refresh the table
         queryClient.invalidateQueries({ queryKey: ['content-plans'] });
       }
+      // Invalidate all-social-media-links query to refresh ContentPostTab immediately
+      queryClient.invalidateQueries({ 
+        queryKey: ['all-social-media-links'],
+        refetchType: 'active' // Force refetch for active queries
+      });
       toast.success(`${newLinks.length} social media links added successfully`);
     },
     onError: (error) => {

@@ -4,8 +4,9 @@ import { Textarea } from '@/features/ui/textarea';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/features/ui/avatar';
 import { Badge } from '@/features/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Trash2, Edit, Save, X, MessageSquare, Loader2, Image as ImageIcon, Camera } from 'lucide-react';
-import { useLinkComments } from '../hook/useLinkComments';
+import { useLinkComments, type LinkComment } from '../hook/useLinkComments';
 import { useSnippingImages } from '../hook/useSnippingImages';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -15,6 +16,75 @@ interface OptimizedCommentPanelProps {
   socialMediaPlanId: string;
   linkUrl: string;
 }
+
+// Image Preview Modal Component
+interface ImagePreviewModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  imageUrl: string;
+  imageName: string;
+  createdAt: string;
+  creatorName?: string;
+}
+
+const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
+  isOpen,
+  onClose,
+  imageUrl,
+  imageName,
+  createdAt,
+  creatorName
+}) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Image Preview</DialogTitle>
+          <DialogDescription>
+            Preview of {imageName}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-3xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="text-sm text-gray-500 mt-1">
+                  {format(new Date(createdAt), 'PPp')}
+                  {creatorName && (
+                    <span className="ml-2">by {creatorName}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="border rounded-lg overflow-hidden bg-gray-50">
+              <img
+                src={imageUrl}
+                alt={imageName}
+                className="w-full h-auto max-h-[70vh] object-contain"
+                onError={(e) => {
+                  devLog.debug('❌ Error loading image:', imageUrl);
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    parent.innerHTML = `
+                      <div class="p-8 text-center text-gray-500">
+                        <p class="mb-2">Failed to load image</p>
+                        <a href="${imageUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                          Open image in new tab
+                        </a>
+                      </div>
+                    `;
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 const CommentItem = React.memo<{
   comment: LinkComment;
   editingCommentId: string | null;
@@ -260,25 +330,31 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
     const trimmedComment = newComment.trim();
     devLog.debug('🚀 handleAddComment called:', {
       trimmedComment: trimmedComment?.substring(0, 50) + '...',
+      trimmedCommentLength: trimmedComment.length,
       pastedImagesCount: pastedImages.length,
       socialMediaPlanId,
       linkUrl,
       effectiveLinkUrl: linkUrl || 'default-link'
     });
     
+    // Early return with validation - prevent any mutation call if both are empty
     if (!trimmedComment && pastedImages.length === 0) {
+      devLog.debug('⚠️ Validation failed: both comment and images are empty');
       toast.error('Please enter a comment or add an image');
       return;
     }
+
     try {
       let commentId: string | null = null;
 
-      // Add the comment first if there's text
-      if (trimmedComment) {
-        devLog.debug('📝 Adding comment with text...');
-        const commentResult = await addComment(trimmedComment);
+      // Add the comment first if there's text - with explicit validation
+      if (trimmedComment && trimmedComment.length > 0) {
+        devLog.debug('📝 Adding comment with text...', { textLength: trimmedComment.length });
+        const commentResult = await addComment({ commentText: trimmedComment });
         commentId = commentResult?.id;
         devLog.debug('✅ Comment added with ID:', commentId);
+      } else {
+        devLog.debug('ℹ️ No comment text provided, skipping text comment (images only)');
       }
 
       // Upload images if any
@@ -302,24 +378,53 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
             contentType: image.file.type
           });
           if (error) {
-            console.error('Upload error:', error);
+            devLog.debug('Upload error:', error);
             toast.error(`Failed to upload ${image.file.name}`);
             continue;
           }
 
           // Add to database with comment reference
-          await addImage(filePath, fileName, image.file.type, image.file.size, commentId);
+          try {
+            await addImage(filePath, fileName, image.file.type, image.file.size, commentId);
+            devLog.debug('✅ Image metadata saved to database');
+          } catch (imageError: any) {
+            // If table doesn't exist, image is still in storage, just can't track in DB
+            if (imageError?.message?.includes('does not exist') || 
+                imageError?.code === '42P01' || 
+                imageError?.code === 'PGRST116') {
+              devLog.debug('⚠️ Image uploaded to storage but database table not available');
+              // Continue - image is in storage, just not tracked in DB
+            } else {
+              // Re-throw other errors
+              throw imageError;
+            }
+          }
         }
       }
       setNewComment('');
       setPastedImages([]);
       devLog.debug('🎉 Comment addition process completed successfully');
-      toast.success('Comment and images added successfully!');
-    } catch (error) {
-      console.error('❌ Error adding comment with images:', error);
+      
+      // Show appropriate success message
+      if (trimmedComment && pastedImages.length > 0) {
+        toast.success('Comment and images added successfully!');
+      } else if (trimmedComment) {
+        toast.success('Comment added successfully!');
+      } else if (pastedImages.length > 0) {
+        toast.success('Images uploaded successfully!');
+      }
+    } catch (error: any) {
+      devLog.debug('❌ Error adding comment with images:', error);
+      
+      // Don't show error toast for validation errors (already handled)
+      if (error?.message?.includes('Comment text is required')) {
+        devLog.debug('⚠️ Validation error caught in catch block (should not happen)');
+        return;
+      }
+      
       toast.error('Failed to add comment');
     }
-  }, [newComment, addComment, pastedImages, addImage]);
+  }, [newComment, addComment, pastedImages, addImage, socialMediaPlanId, linkUrl]);
   const handleEditComment = useCallback((comment: LinkComment) => {
     setEditingCommentId(comment.id);
     setEditingText(comment.comment_text || '');
@@ -528,7 +633,11 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
               </span>
               {/* SnippingTool temporarily disabled - component not available */}
             </div>
-            <Button onClick={handleAddComment} disabled={isAddingComment || !newComment.trim() && pastedImages.length === 0} className="h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
+            <Button 
+              onClick={handleAddComment} 
+              disabled={isAddingComment || (!newComment.trim() && pastedImages.length === 0)} 
+              className="h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+            >
               {isAddingComment ? <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Menambahkan...

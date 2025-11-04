@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Button } from '@/features/ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit, Target } from 'lucide-react';
@@ -56,6 +56,9 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
       return data || [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    staleTime: 0, // Always consider data stale to ensure fresh updates
   });
 
   // Auto-revert functionality for daily date
@@ -105,44 +108,144 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
     };
   }, [monthlyTargetDate]);
 
-  // Calculate daily posted content count for specific PIC and exact date
-  const calculateDailyPosted = (picId: string, targetDate: Date) => {
-    const targetDateString = targetDate.toISOString().split('T')[0];
+  // Helper function to extract date string from date value (same as ProductionTab and ContentPlannerTab)
+  // Enhanced to handle DD/MM/YYYY format
+  const getDateString = (dateValue: string | Date | null | undefined): string | null => {
+    if (!dateValue) return null;
     
-    return contentPlans.filter(plan => {
-      if (plan.pic_id !== picId || plan.post_date !== targetDateString) {
-        return false;
+    try {
+      if (typeof dateValue === 'string') {
+        // If already in YYYY-MM-DD format, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+          return dateValue;
+        }
+        // Handle DD/MM/YYYY format (e.g., "04/11/2025")
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+          const [day, month, year] = dateValue.split('/');
+          return `${year}-${month}-${day}`;
+        }
+        // If contains 'T', split and take date part
+        if (dateValue.includes('T')) {
+          return dateValue.split('T')[0];
+        }
+        // If contains space, split and take date part (format: "YYYY-MM-DD HH:mm:ss")
+        if (dateValue.includes(' ')) {
+          return dateValue.split(' ')[0];
+        }
+        // Otherwise, try to parse it
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
       }
       
-      // Check if content is posted (either done=true OR has social media links)
-      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
-      return plan.done === true || hasLinks;
-    }).length;
+      if (dateValue instanceof Date) {
+        if (!isNaN(dateValue.getTime())) {
+          // Use local date to avoid timezone issues
+          const year = dateValue.getFullYear();
+          const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+          const day = String(dateValue.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      }
+    } catch (e) {
+      // Silently fail and return null
+    }
+    
+    return null;
   };
 
+  // Calculate daily posted content count for specific PIC and exact date
+  // Logic: count when done=true (toggle Done = On) OR has social media links
+  // Priority: actual_post_date > post_date for date matching
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateDailyPosted = useCallback((picId: string, targetDate: Date) => {
+    // Use local date to avoid timezone issues (same as ProductionTab and ContentPlannerTab)
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    const targetDateString = `${year}-${month}-${day}`;
+    
+    return contentPlans.filter(plan => {
+      // Must have pic_id
+      if (!plan.pic_id || plan.pic_id !== picId) {
+        return false;
+      }
+
+      // Check if content is posted: done=true (toggle Done = On) OR has social media links
+      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+      const isPosted = plan.done === true || hasLinks;
+      
+      if (!isPosted) {
+        return false;
+      }
+
+      // Priority: actual_post_date > post_date for date matching
+      // Check actual_post_date first (most reliable - when content was actually posted)
+      if (plan.actual_post_date) {
+        const actualPostDateStr = getDateString(plan.actual_post_date);
+        if (actualPostDateStr && actualPostDateStr === targetDateString) {
+          return true;
+        }
+      }
+
+      // Fallback: check post_date if actual_post_date doesn't match or doesn't exist
+      // Also check post_date if actual_post_date is null/undefined but content is posted
+      if (plan.post_date) {
+        const postDateStr = getDateString(plan.post_date);
+        if (postDateStr && postDateStr === targetDateString) {
+          return true;
+        }
+      }
+
+      // If no actual_post_date and post_date doesn't match, but content is posted (done=true or has links)
+      // and we're looking at today's date, we might want to count it
+      // But for now, we require date match - so return false
+      return false;
+    }).length;
+  }, [contentPlans, allSocialMediaLinks]);
+
   // Calculate monthly posted content count for specific PIC and month/year
-  const calculateMonthlyPosted = (picId: string, targetDate: Date) => {
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculateMonthlyPosted = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
     return contentPlans.filter(plan => {
-      if (!plan.pic_id || plan.pic_id !== picId || !plan.post_date) {
+      // Must have pic_id
+      if (!plan.pic_id || plan.pic_id !== picId) {
+        return false;
+      }
+
+      // Must have post_date
+      if (!plan.post_date) {
         return false;
       }
       
-      const planDate = new Date(plan.post_date);
+      // Parse post_date and check if it matches target month/year
+      const postDateStr = getDateString(plan.post_date);
+      if (!postDateStr) {
+        return false;
+      }
+      
+      const planDate = new Date(postDateStr + 'T00:00:00');
       if (planDate.getFullYear() !== targetYear || planDate.getMonth() !== targetMonth) {
         return false;
       }
       
-      // Check if content is posted (either done=true OR has social media links)
+      // Check if content is posted: done=true (toggle Done = On) OR has social media links
       const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
       return plan.done === true || hasLinks;
     }).length;
-  };
+  }, [contentPlans, allSocialMediaLinks]);
 
   // Calculate on time rate for content posting
-  const calculatePostingOnTimeRate = (picId: string, targetDate: Date) => {
+  // Use useCallback to memoize function and ensure it updates when dependencies change
+  const calculatePostingOnTimeRate = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
@@ -173,7 +276,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
     });
 
     return Math.round((onTimePlans.length / monthlyPlans.length) * 100);
-  };
+  }, [contentPlans, allSocialMediaLinks]);
 
   // Get target for specific employee
   const getEmployeeTarget = (employeeId: string) => {
@@ -185,7 +288,8 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
   };
 
   // Get actual PIC names from content plans with calculated metrics
-  const getActualPostingPICData = () => {
+  // Use useMemo to recalculate when contentPlans, allSocialMediaLinks, or dates change
+  const actualPostingPICData = useMemo(() => {
     const picData = [];
     
     // Get unique PICs from content plans
@@ -229,9 +333,9 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
     });
     
     return picData;
-  };
+  }, [contentPlans, allSocialMediaLinks, dailyTargetDate, monthlyTargetDate, digitalEmployees, targets, calculateDailyPosted, calculateMonthlyPosted, calculatePostingOnTimeRate]);
 
-  const displayData = getActualPostingPICData().slice(currentPICPage * 2, (currentPICPage + 1) * 2);
+  const displayData = actualPostingPICData.slice(currentPICPage * 2, (currentPICPage + 1) * 2);
   
   // Ensure exactly 2 rows
   while (displayData.length < 2) {
@@ -272,7 +376,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
   };
 
   const handleNextPIC = () => {
-    const actualPICCount = getActualPostingPICData().length;
+    const actualPICCount = actualPostingPICData.length;
     const maxPage = Math.ceil(actualPICCount / 2) - 1;
     setCurrentPICPage(Math.min(maxPage, currentPICPage + 1));
   };
@@ -308,7 +412,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
                       size="sm"
                       onClick={handleNextPIC}
                       className="h-5 w-5 p-0"
-                      disabled={currentPICPage >= Math.ceil(getActualPostingPICData().length / 2) - 1}
+                      disabled={currentPICPage >= Math.ceil(actualPostingPICData.length / 2) - 1}
                     >
                       <ChevronRight className="h-3 w-3" />
                     </Button>

@@ -10,6 +10,8 @@ import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthBut
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 // Helper function to get embed URL (defined before component)
 const getEmbedUrl = (url: string) => {
@@ -161,6 +163,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 }) => {
   const [currentLink, setCurrentLink] = useState(googleDriveLink);
   const [canShowApprovalButtons, setCanShowApprovalButtons] = useState(false);
+  const queryClient = useQueryClient();
+  const { organizationId } = useCurrentOrg();
   
   // Check approval access for prod_approved column based on configuration
   const checkApprovalAccess = async () => {
@@ -302,27 +306,91 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
   // POINT 1: Handle close with production status update
   const handleClose = async () => {
-    // If link is filled, set production status to "Need Review" and record completion date
-    if (currentLink && currentLink.trim() !== '') {
+    // Save any pending changes before closing - this ensures all updates go through proper mutation
+    if (currentLink !== googleDriveLink) {
+      // Call onSave to ensure changes are saved through proper mutation (which updates cache)
+      // onSave will trigger handleFieldChange which handles clearing production_completion_date
+      onSave(currentLink);
+    } else if (currentLink && currentLink.trim() !== '') {
+      // If link is filled and unchanged, ensure production status is updated
       try {
         const {
           supabase
         } = await import('@/integrations/supabase/client');
         const completionDate = new Date().toISOString();
         const {
+          data,
           error
         } = await supabase.from('social_media_plans').update({
           production_status: 'Need Review',
           production_completion_date: completionDate
-        }).eq('id', socialMediaPlanId);
+        }).eq('id', socialMediaPlanId)
+        .select()
+        .single();
+        
         if (error) {
           console.error('Error updating production status:', error);
           toast.error('Failed to update production status');
         } else {
           devLog.debug('Production status updated to Need Review with completion date');
+          // Update cache with new data using correct query key
+          if (organizationId && data) {
+            queryClient.setQueryData(
+              ['social-media-plans', organizationId],
+              (oldData: any) => {
+                if (!oldData) return oldData;
+                return oldData.map((plan: any) => 
+                  plan.id === socialMediaPlanId ? { ...plan, ...data } : plan
+                );
+              }
+            );
+            // Also invalidate to ensure all related queries refresh
+            queryClient.invalidateQueries({ queryKey: ['social-media-plans', organizationId] });
+          }
         }
       } catch (error) {
         console.error('Error in handleClose:', error);
+      }
+    } else if (googleDriveLink && (!currentLink || currentLink.trim() === '')) {
+      // If link was removed (had link before, but now empty), clear production_completion_date
+      // This should be handled by onSave, but we do it here as backup
+      try {
+        const {
+          supabase
+        } = await import('@/integrations/supabase/client');
+        const {
+          data,
+          error
+        } = await supabase.from('social_media_plans').update({
+          production_completion_date: null
+        }).eq('id', socialMediaPlanId)
+        .select()
+        .single();
+        
+        if (error) {
+          console.error('Error clearing production completion date:', error);
+        } else {
+          devLog.debug('Production completion date cleared when Google Drive link was removed');
+          // Update cache with new data using correct query key
+          if (organizationId && data) {
+            queryClient.setQueryData(
+              ['social-media-plans', organizationId],
+              (oldData: any) => {
+                if (!oldData) return oldData;
+                return oldData.map((plan: any) => 
+                  plan.id === socialMediaPlanId ? { ...plan, production_completion_date: null } : plan
+                );
+              }
+            );
+            // Also invalidate to ensure all related queries refresh
+            queryClient.invalidateQueries({ queryKey: ['social-media-plans', organizationId] });
+          } else {
+            // Fallback: invalidate all social-media-plans queries
+            queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
+          }
+        }
+      } catch (error) {
+        console.error('Error in handleClose (clearing date):', error);
       }
     }
     onClose();
@@ -452,9 +520,9 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
   return <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-[98vw] w-[98vw] max-h-[95vh] h-[95vh] overflow-hidden flex flex-col bg-white border-0 shadow-2xl rounded-2xl">
-        <DialogHeader className="sr-only">
-          <DialogTitle>Google Drive Link</DialogTitle>
-          <DialogDescription>Manage Google Drive link and comments for this content plan</DialogDescription>
+        <DialogHeader>
+          <DialogTitle className="sr-only">Google Drive Link</DialogTitle>
+          <DialogDescription className="sr-only">Manage Google Drive link and comments for this content plan</DialogDescription>
         </DialogHeader>
         <div className="flex flex-1 gap-6 min-h-0 py-4">
           {/* Left side - Preview area with full width/height */}

@@ -988,14 +988,16 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         link
       });
       // Always call onFieldChange for google_drive_link - this will trigger auto-populate/clear logic in SocialMedia.tsx
+      // handleFieldChange in SocialMedia.tsx will handle clearing pic_production_id and production_completion_date
       onFieldChange(plan.id, 'google_drive_link', link);
       if (link && link.length > 0) {
         // Set production status to Need Review when link is added
         onProductionStatusChange(plan.id, 'Need Review');
       } else {
         // Clear production status when link is removed
-        // Note: PIC Production clearing is handled by SocialMedia.tsx handleFieldChange
+        // Also explicitly clear production_completion_date here as backup (handleFieldChange should also do this)
         onProductionStatusChange(plan.id, '');
+        onFieldChange(plan.id, 'production_completion_date', null);
       }
     }} socialMediaPlanId={plan.id} planTitle={plan.title} contentTitle={plan.title} contentType={contentTypeName} postDate={plan.post_date}
     // POINT 3: Add handlers for production approval sync

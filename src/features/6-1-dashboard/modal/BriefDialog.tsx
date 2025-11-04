@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { Separator } from '@/features/ui/separator';
@@ -294,6 +294,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden">
+        <DialogTitle className="sr-only absolute">Content Brief</DialogTitle>
+        <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
         <div className="flex flex-col h-full">
           <div className="flex flex-1 overflow-hidden">
             {/* Left Section - Comments (Narrower) */}

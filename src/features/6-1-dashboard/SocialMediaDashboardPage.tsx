@@ -4,6 +4,7 @@ import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
+import { useQuery } from '@tanstack/react-query';
 import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { SocialMediaErrorBoundary } from "./hook/ErrorBoundary";
 import { RealtimeSocialMediaProvider } from "./hook/RealtimeSocialMediaProvider";
@@ -66,6 +67,24 @@ const SocialMediaContent = () => {
   const { data: currentEmployee } = useCurrentEmployee(); // Get employee ID for pic_production_id
   const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { data: creativeEmployees = [] } = useCreativeEmployees();
+
+  // Fetch all social media links for Content Post metrics (same logic as ContentPostTab)
+  const { data: allSocialMediaLinks = [] } = useQuery({
+    queryKey: ['all-social-media-links'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('social_media_links')
+        .select('*');
+      
+      if (error) {
+        console.error('Error fetching social media links:', error);
+        return [];
+      }
+      
+      return data || [];
+    },
+    refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates
+  });
 
   // State hooks
   const [activeMainTab, setActiveMainTab] = useState("dashboard");
@@ -136,7 +155,7 @@ const SocialMediaContent = () => {
     statusFilter
   );
 
-  // Calculate metrics from contentPlans
+  // Calculate metrics from contentPlans filtered by active performance tab
   const metrics = React.useMemo(() => {
     if (!contentPlans.length) {
       return {
@@ -152,48 +171,387 @@ const SocialMediaContent = () => {
     }
 
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+    // Use local date to avoid timezone issues
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayDateString = `${year}-${month}-${day}`; // Format: YYYY-MM-DD (local timezone)
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
-    const currentDay = today.getDate();
 
-    // Filter plans by day
-    const dailyContentPlans = contentPlans.filter(plan => {
+    // Filter plans based on active performance tab
+    let filteredPlans = contentPlans;
+    
+    if (activePerformanceTab === 'content-planner') {
+      // Content Planner: Filter by pic_id (content planner PIC)
+      filteredPlans = contentPlans.filter(plan => plan.pic_id !== null && plan.pic_id !== undefined);
+    } else if (activePerformanceTab === 'production') {
+      // Production: Filter by pic_production_id (production PIC)
+      filteredPlans = contentPlans.filter(plan => plan.pic_production_id !== null && plan.pic_production_id !== undefined);
+    } else if (activePerformanceTab === 'content-post') {
+      // Content Post: Filter by pic_id (same as Content Planner, but metrics will check done or social_media_links)
+      filteredPlans = contentPlans.filter(plan => plan.pic_id !== null && plan.pic_id !== undefined);
+    }
+    // else: show all plans (default behavior)
+
+    // Helper function to extract date string from date value (robust parsing)
+    const getDateString = (dateValue: string | Date | null | undefined): string | null => {
+      if (!dateValue) return null;
+      
+      try {
+        if (typeof dateValue === 'string') {
+          // If already in YYYY-MM-DD format, return as is
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+          }
+          // If contains 'T', split and take date part
+          if (dateValue.includes('T')) {
+            return dateValue.split('T')[0];
+          }
+          // If contains space, split and take date part (format: "YYYY-MM-DD HH:mm:ss")
+          if (dateValue.includes(' ')) {
+            return dateValue.split(' ')[0];
+          }
+          // Otherwise, try to parse it
+          const date = new Date(dateValue);
+          if (!isNaN(date.getTime())) {
+            // Use local date to avoid timezone issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+        }
+        
+        if (dateValue instanceof Date) {
+          if (!isNaN(dateValue.getTime())) {
+            // Use local date to avoid timezone issues
+            const year = dateValue.getFullYear();
+            const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const day = String(dateValue.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+        }
+      } catch (e) {
+        // Silently fail and return null
+      }
+      
+      return null;
+    };
+
+    // Filter plans by day - use today's date string for exact match
+    // For Production tab, filter by production_completion_date or production_approved_date
+    // For Content Post tab, filter by actual_post_date or post_date (same logic as ContentPostTab)
+    // For Content Planner tab, filter by post_date
+    const dailyContentPlans = filteredPlans.filter(plan => {
+      if (activePerformanceTab === 'production') {
+        // For Production: filter by production completion/approval date
+        // Priority: production_approved_date > production_completion_date > post_date (if approved)
+        // AND must have production_approved === true
+        
+        // Check production_approved_date first (most reliable)
+        const approvedDateStr = getDateString(plan.production_approved_date);
+        if (approvedDateStr && approvedDateStr === todayDateString && plan.production_approved === true) {
+          return true;
+        }
+
+        // Check production_completion_date second
+        const completionDateStr = getDateString(plan.production_completion_date);
+        if (completionDateStr && completionDateStr === todayDateString && plan.production_approved === true) {
+          return true;
+        }
+
+        // Fallback: if production_approved is true and post_date is today
+        if (plan.production_approved === true && plan.post_date) {
+          const postDateStr = getDateString(plan.post_date);
+          if (postDateStr && postDateStr === todayDateString) {
+            return true;
+          }
+        }
+
+        return false;
+      } else if (activePerformanceTab === 'content-post') {
+        // For Content Post: Priority actual_post_date > post_date (same logic as ContentPostTab)
+        // Check actual_post_date first (most reliable - when content was actually posted)
+        if (plan.actual_post_date) {
+          const actualPostDateStr = getDateString(plan.actual_post_date);
+          if (actualPostDateStr && actualPostDateStr === todayDateString) {
+            return true;
+          }
+        }
+
+        // Fallback: check post_date if actual_post_date doesn't match or doesn't exist
+        if (plan.post_date) {
+          const postDateStr = getDateString(plan.post_date);
+          if (postDateStr && postDateStr === todayDateString) {
+            return true;
+          }
+        }
+
+        return false;
+      } else if (activePerformanceTab === 'content-planner') {
+        // For Content Planner: Priority completion_date > post_date (same logic as ContentPlannerTab)
+        // Check completion_date first (most reliable - this is when content planner approved)
+        if (plan.completion_date) {
+          const completionDateStr = getDateString(plan.completion_date);
+          if (completionDateStr && completionDateStr === todayDateString) {
+            return true;
+          }
+        }
+
+        // Fallback: check post_date if completion_date doesn't match or doesn't exist
+        if (plan.post_date) {
+          const postDateStr = getDateString(plan.post_date);
+          if (postDateStr && postDateStr === todayDateString) {
+            return true;
+          }
+        }
+
+        return false;
+      } else {
+        // Default: filter by post_date
       if (!plan.post_date) return false;
-      const postDate = new Date(plan.post_date);
-      return postDate.getDate() === currentDay && 
-             postDate.getMonth() === currentMonth && 
-             postDate.getFullYear() === currentYear;
+        const postDateStr = getDateString(plan.post_date);
+        return postDateStr === todayDateString;
+      }
     });
 
     // Filter plans by month
-    const monthlyContentPlans = contentPlans.filter(plan => {
+    const monthlyContentPlans = filteredPlans.filter(plan => {
       if (!plan.post_date) return false;
       const postDate = new Date(plan.post_date);
       return postDate.getMonth() === currentMonth && 
              postDate.getFullYear() === currentYear;
     });
 
-    // Helper functions
-    const isOverdue = (plan: any) => {
-      if (!plan.post_date) return false;
-      const postDate = new Date(plan.post_date);
-      return postDate <= today && !plan.approved && !plan.done;
+    // Helper function to calculate on-time status (same logic as ContentPlanRow)
+    const calculateOnTimeStatus = (actualPostDate: string | null, postDate: string) => {
+      if (!actualPostDate || !postDate) return '';
+      
+      try {
+        const actual = new Date(actualPostDate);
+        const planned = new Date(postDate);
+        
+        if (isNaN(actual.getTime()) || isNaN(planned.getTime())) {
+          return '';
+        }
+        
+        const diffTime = actual.getTime() - planned.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 0) {
+          return 'Ontime';
+        } else {
+          return `Late ${diffDays} Day${diffDays > 1 ? 's' : ''}`;
+        }
+      } catch (error) {
+        return '';
+      }
     };
 
-    const isCompleted = (plan: any) => plan.approved || plan.done;
-    const needsRevision = (plan: any) => plan.status === 'Request Revisi' || plan.production_status === 'Request Revisi';
+    // Helper function to check if content is not completed based on tab
+    const isNotCompleted = (plan: any) => {
+      if (activePerformanceTab === 'content-planner') {
+        // Content Planner: Not completed = belum Approved
+        return plan.approved !== true;
+      } else if (activePerformanceTab === 'production') {
+        // Production: Not completed = belum Production Approved
+        return plan.production_approved !== true;
+      } else if (activePerformanceTab === 'content-post') {
+        // Content Post: Not completed = belum selesai Post (done === false AND tidak ada links)
+        const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+        return plan.done !== true && !hasLinks;
+      } else {
+        // Default: not completed if not approved
+        return plan.approved !== true;
+      }
+    };
+
+    // Helper function to calculate on-time status (same logic as ContentPlanRow)
+    const calculateOnTimeStatusForPlan = (plan: any): string => {
+      if (!plan.post_date) return '';
+      
+      // Determine actual post date (same logic as ContentPlanRow)
+      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+      const actualPostDate = hasLinks ? new Date().toISOString().split('T')[0] : plan.actual_post_date;
+      
+      if (!actualPostDate) return '';
+      
+      try {
+        const actual = new Date(actualPostDate);
+        const planned = new Date(plan.post_date);
+        
+        if (isNaN(actual.getTime()) || isNaN(planned.getTime())) {
+          return '';
+        }
+        
+        const diffTime = actual.getTime() - planned.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 0) {
+          return 'Ontime';
+        } else {
+          return `Late ${diffDays} Day${diffDays > 1 ? 's' : ''}`;
+        }
+      } catch (error) {
+        return '';
+      }
+    };
+
+    // Helper function to check if content is late using On Time Status calculation
+    // Content is late if calculated on_time_status contains "Late" (e.g., "Late 1 Day", "Late 2 Days")
+    // and must be in current month (bulan yang sedang berjalan)
+    const isLatePost = (plan: any) => {
+      if (!plan.post_date) return false;
+      
+      // Calculate on_time_status in real-time (same logic as ContentPlanRow)
+      const onTimeStatus = calculateOnTimeStatusForPlan(plan);
+      
+      // Check if calculated on_time_status contains "Late"
+      if (!onTimeStatus || !onTimeStatus.includes('Late')) {
+        return false;
+      }
+      
+      // Determine actual post date for month check
+      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+      const actualPostDate = hasLinks ? new Date().toISOString().split('T')[0] : plan.actual_post_date;
+      
+      if (!actualPostDate) return false;
+      
+      // Late Post must be in current month (bulan yang sedang berjalan)
+      // Use actual_post_date to determine which month the content was posted
+      const actualPostDateObj = new Date(actualPostDate);
+      actualPostDateObj.setHours(0, 0, 0, 0);
+      
+      const isInCurrentMonth = actualPostDateObj.getMonth() === currentMonth && 
+                               actualPostDateObj.getFullYear() === currentYear;
+      if (!isInCurrentMonth) return false;
+      
+      // Content with "Late" on_time_status is considered late post
+      return true;
+    };
+
+    // Helper function to check if content is approaching deadline
+    // Works for all tabs: Content Planner, Production, and Content Post
+    // Content approaching deadline: post_date in the next 7 days (today + 1 to today + 7) and not posted
+    // Same logic for all tabs: content must not be done and must not have social media links
+    // This ensures consistent "Upcoming Deadlines" value across all tabs
+    const isApproachingDeadline = (plan: any) => {
+      if (!plan.post_date) return false;
+      
+      const postDate = new Date(plan.post_date);
+      postDate.setHours(0, 0, 0, 0);
+      
+      // Calculate days until deadline
+      const daysUntilDeadline = Math.ceil((postDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Content is approaching deadline if post_date is between tomorrow and 7 days from now
+      // AND in the current month (bulan yang sedang berjalan)
+      const isInCurrentMonth = postDate.getMonth() === currentMonth && 
+                               postDate.getFullYear() === currentYear;
+      
+      if (!isInCurrentMonth) return false;
+      
+      // Approaching deadline: 1 to 7 days from now (tomorrow to next week)
+      const isApproaching = daysUntilDeadline >= 1 && daysUntilDeadline <= 7;
+      if (!isApproaching) return false;
+      
+      // For "Upcoming Deadlines", use same logic for all tabs:
+      // Content must not be posted (not done and no social media links)
+      // This ensures the same value is displayed in Content Planner, Production, and Content Post tabs
+      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+      return plan.done !== true && !hasLinks;
+    };
+
+    // Helper function to check if content is overdue (includes both late post and approaching deadline)
+    const isOverdue = (plan: any) => {
+      if (!plan.post_date) return false;
+      
+      // Check if content is late post (post_date < today)
+      if (isLatePost(plan)) return true;
+      
+      // Check if content is approaching deadline (1-7 days from now)
+      if (isApproachingDeadline(plan)) return true;
+      
+      return false;
+    };
+
+    // For daily overdue, count only Late Post (post_date < today and not completed)
+    const dailyLatePostPlans = filteredPlans.filter(plan => {
+      if (!plan.post_date) return false;
+      // Only count late post (post_date < today)
+      return isLatePost(plan);
+    });
+
+    // For monthly overdue, count only Approaching Deadline (post_date in next 7 days and not completed)
+    // IMPORTANT: Use all contentPlans (not filteredPlans) to ensure same value across all tabs
+    // This ensures "Upcoming Deadlines" shows the same value in Content Planner, Production, and Content Post tabs
+    // Only filter by approaching deadline logic (post_date in 1-7 days, not posted)
+    const monthlyApproachingDeadlinePlans = contentPlans.filter(plan => {
+      if (!plan.post_date) return false;
+      // Only count approaching deadline (today + 1 to today + 7, in current month, not posted)
+      // isApproachingDeadline uses same logic for all tabs (not done and no links)
+      return isApproachingDeadline(plan);
+    });
+
+    const isCompleted = (plan: any) => {
+      if (activePerformanceTab === 'content-planner') {
+        return plan.approved === true || plan.done === true;
+      } else if (activePerformanceTab === 'production') {
+        // For Production: content is completed if production_approved is true
+        // Note: dailyContentPlans already filtered by date, so we just need to check approval status
+        return plan.production_approved === true || plan.done === true;
+      } else if (activePerformanceTab === 'content-post') {
+        // Content is completed if done=true OR has social media links (same logic as ContentPostTab)
+        const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
+        return plan.done === true || hasLinks;
+      }
+      return plan.approved === true || plan.done === true;
+    };
+
+    const needsRevision = (plan: any) => {
+      if (activePerformanceTab === 'content-planner') {
+        // Under Revision: Count if status is "Request Revisi" OR "Need Review"
+        return plan.status === 'Request Revisi' || plan.status === 'Need Review';
+      } else if (activePerformanceTab === 'production') {
+        // Under Revision: Count if production_status is "Request Revision" OR "Need Review"
+        return plan.production_status === 'Request Revision' || plan.production_status === 'Need Review';
+      } else if (activePerformanceTab === 'content-post') {
+        // Content post might not have revision status, return false for now
+        return false;
+      }
+      return plan.status === 'Request Revisi' || plan.status === 'Need Review' || 
+             plan.production_status === 'Request Revision' || plan.production_status === 'Need Review';
+    };
+
+    // For "Under Revision" daily, count content with Need Review or Request Revisi/Revision status
+    // that have post_date matching today (post_date is the most reliable date for all content)
+    // This is simpler and more consistent - all content has post_date, so we use that for daily filtering
+    const dailyRevisedPlans = filteredPlans.filter(plan => {
+      // First check if it has revision status
+      if (!needsRevision(plan)) {
+        return false;
+      }
+      
+      // Then check if it has post_date matching today
+      // post_date is the scheduled date and is present on all content, making it the most reliable filter
+      if (!plan.post_date) return false;
+      const postDateStr = getDateString(plan.post_date);
+      return postDateStr === todayDateString;
+    });
 
     return {
-      dailyOverdueContent: dailyContentPlans.filter(isOverdue).length,
+      dailyOverdueContent: dailyLatePostPlans.length,
       dailyCompletedContent: dailyContentPlans.filter(isCompleted).length,
-      dailyRevisedContent: dailyContentPlans.filter(needsRevision).length,
+      dailyRevisedContent: dailyRevisedPlans.length,
       dailyTotalContent: dailyContentPlans.length,
-      monthlyOverdueContent: monthlyContentPlans.filter(isOverdue).length,
+      monthlyOverdueContent: monthlyApproachingDeadlinePlans.length,
       monthlyCompletedContent: monthlyContentPlans.filter(isCompleted).length,
       monthlyRevisedContent: monthlyContentPlans.filter(needsRevision).length,
       monthlyTotalContent: monthlyContentPlans.length
     };
-  }, [contentPlans]);
+  }, [contentPlans, activePerformanceTab, allSocialMediaLinks]);
 
   // Callback handlers
   const handleSelectItem = useCallback((id: string, checked: boolean) => {
@@ -249,15 +607,16 @@ const SocialMediaContent = () => {
           pic_production_id: employeeId
         });
       } else if (field === 'google_drive_link' && (!value || value.length === 0)) {
-        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production:', {
+        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production and production completion date:', {
           planId: id,
           link: value
         });
         
-        // Clear both google_drive_link and pic_production_id
+        // Clear google_drive_link, pic_production_id, and production_completion_date
         updateContentPlan(id, { 
           [field]: value,
-          pic_production_id: null
+          pic_production_id: null,
+          production_completion_date: null
         });
       } else {
         // Regular field update
