@@ -25,7 +25,6 @@ export const SocialMediaMetrics = React.memo<SocialMediaMetricsProps>(({ metrics
           <div className="flex items-center justify-between mb-2">
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-600">Overdue Content</p>
-              <p className="text-xs text-gray-400 mt-0.5">Late Submissions + Upcoming Deadlines</p>
             </div>
             <AlertTriangle className="h-6 w-6 text-red-600" />
           </div>
