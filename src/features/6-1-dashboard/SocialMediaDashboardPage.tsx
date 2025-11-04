@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { SocialMediaErrorBoundary } from "./hook/ErrorBoundary";
 import { RealtimeSocialMediaProvider } from "./hook/RealtimeSocialMediaProvider";
@@ -29,7 +30,7 @@ import { useOptimizedFiltering } from "./hook/useOptimizedFiltering";
 import { useUserData } from "./hook/useUserData";
 import { useDigitalMarketingEmployees } from "./hook/useDigitalMarketingEmployees";
 import { useCreativeEmployees } from "./hook/useCreativeEmployees";
-// import { useCurrentEmployee } from "@/features/1-login/hooks/useUserData"; // Commented out - not available
+import { useCurrentEmployee } from "@/features/share/hooks/useCurrentEmployee";
 
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
@@ -62,9 +63,9 @@ const SocialMediaContent = () => {
   const { contentPlanners } = useContentPlannerEmployees();
   const { creativeProductionMembers } = useCreativeProductionEmployees();
   const { profile } = useUserData();
+  const { data: currentEmployee } = useCurrentEmployee(); // Get employee ID for pic_production_id
   const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { data: creativeEmployees = [] } = useCreativeEmployees();
-  // const { data: profile } = useCurrentEmployee(); // Commented out - hook not available
 
   // State hooks
   const [activeMainTab, setActiveMainTab] = useState("dashboard");
@@ -224,20 +225,31 @@ const SocialMediaContent = () => {
   const handleFieldChange = useCallback((id: string, field: string, value: any) => {
     try {
       // Auto-assign PIC Production when Google Drive link is added
-      if (field === 'google_drive_link' && value && value.length > 0 && profile?.id) {
-        console.log('🔗 Google Drive link added, auto-assigning PIC Production:', {
+      if (field === 'google_drive_link' && value && value.length > 0) {
+        // Use employee ID instead of profile ID to avoid foreign key constraint violation
+        const employeeId = currentEmployee?.id;
+        
+        if (!employeeId) {
+          devLog.debug('⚠️ Cannot auto-assign PIC Production: Employee ID not found');
+          // Still update google_drive_link, but don't set pic_production_id
+          updateContentPlan(id, { [field]: value });
+          toast.warning('Google Drive link saved, but could not auto-assign PIC Production (employee not found)');
+          return;
+        }
+        
+        devLog.debug('🔗 Google Drive link added, auto-assigning PIC Production:', {
           planId: id,
           link: value,
-          profileId: profile.id
+          employeeId: employeeId
         });
         
-        // Update both google_drive_link and pic_production_id
+        // Update both google_drive_link and pic_production_id with valid employee ID
         updateContentPlan(id, { 
           [field]: value,
-          pic_production_id: profile.id
+          pic_production_id: employeeId
         });
       } else if (field === 'google_drive_link' && (!value || value.length === 0)) {
-        console.log('🔗 Google Drive link cleared, clearing PIC Production:', {
+        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production:', {
           planId: id,
           link: value
         });
@@ -255,7 +267,7 @@ const SocialMediaContent = () => {
       console.error('Error in handleFieldChange:', error);
       toast.error('Error updating field');
     }
-  }, [updateContentPlan, profile?.id]);
+  }, [updateContentPlan, currentEmployee?.id]);
 
   const handleAddContent = useCallback(async () => {
     if (!organizationId) {

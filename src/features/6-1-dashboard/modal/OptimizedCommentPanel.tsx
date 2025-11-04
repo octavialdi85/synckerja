@@ -6,9 +6,11 @@ import { Avatar, AvatarFallback } from '@/features/ui/avatar';
 import { Badge } from '@/features/ui/badge';
 import { Trash2, Edit, Save, X, MessageSquare, Loader2, Image as ImageIcon, Camera } from 'lucide-react';
 import { useLinkComments } from '../hook/useLinkComments';
+import { useSnippingImages } from '../hook/useSnippingImages';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 interface OptimizedCommentPanelProps {
   socialMediaPlanId: string;
   linkUrl: string;
@@ -152,14 +154,14 @@ const CommentImages = React.memo<{
       const baseUrl = supabase.storage.from('sniping-images').getPublicUrl(image.image_path).data.publicUrl;
       const version = new Date((image as any).updated_at || image.created_at).getTime();
       const imageUrl = `${baseUrl}?v=${version}`;
-      console.log('Comment image details:', {
+      devLog.debug('Comment image details:', {
         imageName: image.image_name,
         imagePath: image.image_path,
         imageUrl,
         commentId: image.link_comments_id
       });
       return <div key={image.id} className="cursor-pointer hover:opacity-80 transition-opacity">
-            <img src={imageUrl} alt={image.image_name || 'Comment image'} className="w-20 h-20 rounded-lg border object-cover shadow-sm" onClick={() => onImageClick(imageUrl, image.image_name, image.created_at)} loading="lazy" onLoad={() => console.log('✅ Image loaded successfully:', imageUrl)} onError={e => {
+            <img src={imageUrl} alt={image.image_name || 'Comment image'} className="w-20 h-20 rounded-lg border object-cover shadow-sm" onClick={() => onImageClick(imageUrl, image.image_name, image.created_at)} loading="lazy" onLoad={() => devLog.debug('✅ Image loaded successfully:', imageUrl)} onError={e => {
           console.error('❌ Failed to load comment image:', {
             imagePath: image.image_path,
             imageUrl,
@@ -173,7 +175,7 @@ const CommentImages = React.memo<{
             if (error) {
               console.error('❌ Image not found in storage:', error);
             } else {
-              console.log('✅ Image exists in storage but failed to load via URL');
+              devLog.debug('✅ Image exists in storage but failed to load via URL');
             }
           });
 
@@ -211,20 +213,34 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
     isUpdatingComment,
     isDeletingComment,
     error
-  } = useOptimizedLinkComments(socialMediaPlanId, linkUrl);
+  } = useLinkComments(socialMediaPlanId, linkUrl);
 
-  // Debug logging
+  // Debug logging - only log when there's a significant change or error
+  const prevPropsRef = React.useRef<{ socialMediaPlanId?: string; linkUrl?: string; commentsCount?: number }>({});
   React.useEffect(() => {
-    console.log('🔍 OptimizedCommentPanel - Props changed:', {
-      socialMediaPlanId,
-      linkUrl,
-      effectiveLinkUrl: linkUrl || 'default-link',
-      commentsCount: comments?.length || 0,
-      isLoading,
-      error: error?.message,
-      comments: comments?.map(c => ({ id: c.id, text: c.comment_text?.substring(0, 30) + '...' }))
-    });
-  }, [socialMediaPlanId, linkUrl, comments?.length, isLoading, error, comments]);
+    const prevProps = prevPropsRef.current;
+    const hasSignificantChange = 
+      prevProps.socialMediaPlanId !== socialMediaPlanId ||
+      prevProps.linkUrl !== linkUrl ||
+      prevProps.commentsCount !== (comments?.length || 0) ||
+      error !== null;
+    
+    if (hasSignificantChange) {
+      devLog.debug('🔍 OptimizedCommentPanel - Significant change:', {
+        socialMediaPlanId,
+        linkUrl,
+        effectiveLinkUrl: linkUrl || 'default-link',
+        commentsCount: comments?.length || 0,
+        isLoading,
+        error: error?.message
+      });
+      prevPropsRef.current = {
+        socialMediaPlanId,
+        linkUrl,
+        commentsCount: comments?.length || 0
+      };
+    }
+  }, [socialMediaPlanId, linkUrl, comments?.length, isLoading, error]);
   const {
     images,
     isLoading: isLoadingImages,
@@ -242,7 +258,7 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
   }>>([]);
   const handleAddComment = useCallback(async () => {
     const trimmedComment = newComment.trim();
-    console.log('🚀 handleAddComment called:', {
+    devLog.debug('🚀 handleAddComment called:', {
       trimmedComment: trimmedComment?.substring(0, 50) + '...',
       pastedImagesCount: pastedImages.length,
       socialMediaPlanId,
@@ -259,10 +275,10 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
 
       // Add the comment first if there's text
       if (trimmedComment) {
-        console.log('📝 Adding comment with text...');
+        devLog.debug('📝 Adding comment with text...');
         const commentResult = await addComment(trimmedComment);
         commentId = commentResult?.id;
-        console.log('✅ Comment added with ID:', commentId);
+        devLog.debug('✅ Comment added with ID:', commentId);
       }
 
       // Upload images if any
@@ -297,7 +313,7 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
       }
       setNewComment('');
       setPastedImages([]);
-      console.log('🎉 Comment addition process completed successfully');
+      devLog.debug('🎉 Comment addition process completed successfully');
       toast.success('Comment and images added successfully!');
     } catch (error) {
       console.error('❌ Error adding comment with images:', error);
@@ -408,11 +424,12 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
 
   // Memoize rendered comments to prevent unnecessary re-renders
   const renderedComments = useMemo(() => {
-    console.log('🎨 Rendering comments:', {
-      commentsCount: comments.length,
-      commentIds: comments.map(c => c.id),
-      commentTexts: comments.map(c => c.comment_text?.substring(0, 20) + '...')
-    });
+    // Only log if comments count changed significantly (avoid spam)
+    if (comments.length > 0) {
+      devLog.debug('🎨 Rendering comments:', {
+        commentsCount: comments.length
+      });
+    }
     return comments.map(comment => <CommentItem key={comment.id} comment={comment} editingCommentId={editingCommentId} editingText={editingText} isUpdatingComment={isUpdatingComment} isDeletingComment={isDeletingComment} onEditComment={handleEditComment} onSaveEdit={handleSaveEdit} onCancelEdit={handleCancelEdit} onDeleteComment={handleDeleteComment} onEditingTextChange={setEditingText} onImageClick={(imageUrl, imageName, createdAt) => setPreviewImage({
       url: imageUrl,
       name: imageName,
@@ -509,7 +526,7 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
               <span className="text-xs text-gray-500">
                 {comments.length} komentar, {images.length} gambar
               </span>
-              <SnippingTool onImageCaptured={handleImageCaptured} disabled={isAddingImage} />
+              {/* SnippingTool temporarily disabled - component not available */}
             </div>
             <Button onClick={handleAddComment} disabled={isAddingComment || !newComment.trim() && pastedImages.length === 0} className="h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
               {isAddingComment ? <>

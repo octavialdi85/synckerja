@@ -12,6 +12,7 @@ import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState
 import { useEmployeeTargets } from '../../hook/useEmployeeTargets';
 import { ProgressBar } from '@/features/share/ProgressBar';
 import EditTargetDialog from '../../modal/EditTargetDialog';
+import { devLog } from '@/config/logger';
 
 interface ContentPlannerTabProps {
   contentManagers: ContentManager[];
@@ -157,6 +158,9 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
     return Math.round((onTimePlans.length / monthlyPlans.length) * 100);
   };
 
+  // Track logged calculations to avoid duplicate logs
+  const loggedCalculationsRef = useRef<Set<string>>(new Set());
+
   // Calculate effective rate based on content produced and revision counts
   const calculateEffectiveRate = (picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
@@ -187,13 +191,22 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
     const averageRevisionsPerContent = totalRevisions / monthlyPlans.length;
     const effectiveRate = Math.max(0, Math.round(100 - (averageRevisionsPerContent * 10)));
     
-    console.log('📊 Effective Rate Calculation (Content Planning):', {
-      picId,
-      totalContent: monthlyPlans.length,
-      totalRevisions,
-      averageRevisionsPerContent,
-      effectiveRate
-    });
+    // Only log once per unique calculation (picId + month combination)
+    const logKey = `${picId}-${targetYear}-${targetMonth}-${effectiveRate}`;
+    if (!loggedCalculationsRef.current.has(logKey)) {
+      loggedCalculationsRef.current.add(logKey);
+      // Clear old entries periodically to prevent memory leak
+      if (loggedCalculationsRef.current.size > 100) {
+        loggedCalculationsRef.current.clear();
+      }
+      devLog.debug('📊 Effective Rate Calculation (Content Planning):', {
+        picId,
+        totalContent: monthlyPlans.length,
+        totalRevisions,
+        averageRevisionsPerContent,
+        effectiveRate
+      });
+    }
 
     return effectiveRate;
   };

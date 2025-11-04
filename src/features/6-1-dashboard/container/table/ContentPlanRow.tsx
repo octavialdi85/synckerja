@@ -21,6 +21,12 @@ import { useCurrentUserRole } from '../../hook/useCurrentUserRole';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useSocialMediaLinks } from '@/features/6-1-dashboard/hook/useSocialMediaLinks';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
+
+// Simple in-memory cache for approval/revision checks to avoid repeated DB queries
+const approvalCheckCache = new Map<string, { result: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+
 interface ContentPlanRowProps {
   plan: ContentPlan;
   contentTypes: ContentType[];
@@ -86,34 +92,26 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     links
   } = useSocialMediaLinks(plan.id);
 
-  // Check approval access and revision configuration on component mount
+  // Check approval access and revision configuration on component mount (cached)
   React.useEffect(() => {
     const checkApprovalVisibility = async () => {
       try {
-        console.log('🔍 Checking approval visibility...');
         const statusAccess = await checkAnyUserHasApprovalAccess('approved');
         const productionStatusAccess = await checkAnyUserHasApprovalAccess('production_approved');
         const productionApprovalAccess = await checkAnyUserHasApprovalAccess('prod_approved');
-        console.log('📊 Approval visibility results:', {
-          statusAccess,
-          productionStatusAccess,
-          productionApprovalAccess
-        });
         setShowApprovalOptions({
           status: statusAccess,
           production_status: productionStatusAccess
         });
         setCanApproveProduction(productionApprovalAccess);
 
-        // Check revision access based on roles and exceptions
+        // Check revision access based on roles and exceptions (cached)
         const revisionAccess = await checkRevisionAccess();
         setRevisionConfigActive(revisionAccess);
-        console.log('🔧 Revision config active:', revisionAccess);
 
-        // Check production revision access based on roles and exceptions
+        // Check production revision access based on roles and exceptions (cached)
         const productionRevisionAccess = await checkProductionRevisionAccess();
         setProductionRevisionConfigActive(productionRevisionAccess);
-        console.log('🔧 Production revision config active:', productionRevisionAccess);
         
         setConfigLoaded(true);
       } catch (error) {
@@ -131,7 +129,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   const { data: currentUserRole } = useCurrentUserRole();
   const isAdmin = currentUserRole === 'admin' || currentUserRole === 'owner';
 
-  // Function to check approval access based on configuration
+  // Function to check approval access based on configuration (with caching)
   const checkApprovalAccess = async (columnType: string) => {
     try {
       // Get current user
@@ -150,6 +148,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       if (profileError || !profile?.active_organization_id) {
         console.error('Error fetching user profile:', profileError);
         return false;
+      }
+
+      // Check cache first
+      const cacheKey = `approval_${columnType}_${user.id}_${profile.active_organization_id}`;
+      const cached = approvalCheckCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        // Cache hit - return without logging
+        return cached.result;
       }
 
       // Get user's role in the organization
@@ -179,8 +185,10 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', columnType).eq('is_active', true).single();
       if (configError || !config) {
         // If no configuration found, fall back to admin-only access
-        console.log('No approval configuration found, falling back to admin access');
-        return userRole.role === 'owner' || userRole.role === 'admin';
+        const result = userRole.role === 'owner' || userRole.role === 'admin';
+        // Cache the result
+        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
 
       // Check if user's role is in the allowed roles
@@ -188,17 +196,19 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       // Check if user is in the exceptions list
       const isException = config.exceptions?.includes(employee.id);
-      console.log('🔐 Approval access check:', {
+      const result = hasRoleAccess || isException;
+      
+      // Cache the result (only log on cache miss)
+      approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+      devLog.debug('🔐 Approval access check (cached):', {
         columnType,
         userRole: userRole.role,
         employeeId: employee.id,
-        allowedRoles: config.allowed_roles,
-        exceptions: config.exceptions,
-        hasRoleAccess,
-        isException,
-        finalAccess: hasRoleAccess || isException
+        result,
+        cached: false
       });
-      return hasRoleAccess || isException;
+      
+      return result;
     } catch (error) {
       console.error('Error checking approval access:', error);
       return false;
@@ -211,7 +221,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     return await checkApprovalAccess(columnType);
   };
 
-  // Function to check if current user has revision access based on roles and exceptions
+  // Function to check if current user has revision access based on roles and exceptions (with caching)
   const checkRevisionAccess = async () => {
     try {
       // Get current user
@@ -230,6 +240,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       if (profileError || !profile?.active_organization_id) {
         console.error('Error fetching user profile:', profileError);
         return false;
+      }
+
+      // Check cache first
+      const cacheKey = `revision_${user.id}_${profile.active_organization_id}`;
+      const cached = approvalCheckCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        // Cache hit - return without logging
+        return cached.result;
       }
 
       // Get user's role in the organization
@@ -260,8 +278,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       // If any configuration exists but is inactive, hide refresh icon
       if (anyConfig && !anyConfig.is_active) {
-        console.log('Revision configuration exists but is inactive, hiding refresh icon');
-        return false;
+        const result = false;
+        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
 
       // Get revision configuration for the organization (only active ones)
@@ -270,8 +289,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: configError
       } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'revision').eq('is_active', true).single();
       if (configError || !config) {
-        console.log('No active revision configuration found, falling back to admin access');
-        return userRole.role === 'owner' || userRole.role === 'admin';
+        const result = userRole.role === 'owner' || userRole.role === 'admin';
+        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
 
       // Check if user's role is in the allowed roles
@@ -279,23 +299,19 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       // Check if user is in the exceptions list
       const isException = config.exceptions?.includes(employee.id);
-      console.log('🔧 Revision access check:', {
-        userRole: userRole.role,
-        employeeId: employee.id,
-        allowedRoles: config.allowed_roles,
-        exceptions: config.exceptions,
-        hasRoleAccess,
-        isException,
-        finalAccess: hasRoleAccess || isException
-      });
-      return hasRoleAccess || isException;
+      const result = hasRoleAccess || isException;
+      
+      // Cache the result
+      approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+      
+      return result;
     } catch (error) {
       console.error('Error checking revision access:', error);
       return false;
     }
   };
 
-  // Function to check if current user has production revision access based on roles and exceptions
+  // Function to check if current user has production revision access based on roles and exceptions (with caching)
   const checkProductionRevisionAccess = async () => {
     try {
       // Get current user
@@ -314,6 +330,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       if (profileError || !profile?.active_organization_id) {
         console.error('Error fetching user profile:', profileError);
         return false;
+      }
+
+      // Check cache first
+      const cacheKey = `production_revision_${user.id}_${profile.active_organization_id}`;
+      const cached = approvalCheckCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        // Cache hit - return without logging
+        return cached.result;
       }
 
       // Get user's role in the organization
@@ -344,8 +368,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       // If any configuration exists but is inactive, hide refresh icon
       if (anyConfig && !anyConfig.is_active) {
-        console.log('Production revision configuration exists but is inactive, hiding refresh icon');
-        return false;
+        const result = false;
+        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
 
       // Get production revision configuration for the organization (only active ones)
@@ -354,8 +379,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: configError
       } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'production_revision').eq('is_active', true).single();
       if (configError || !config) {
-        console.log('No active production revision configuration found, falling back to admin access');
-        return userRole.role === 'owner' || userRole.role === 'admin';
+        const result = userRole.role === 'owner' || userRole.role === 'admin';
+        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
 
       // Check if user's role is in the allowed roles
@@ -363,16 +389,12 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       // Check if user is in the exceptions list
       const isException = config.exceptions?.includes(employee.id);
-      console.log('🔧 Production Revision access check:', {
-        userRole: userRole.role,
-        employeeId: employee.id,
-        allowedRoles: config.allowed_roles,
-        exceptions: config.exceptions,
-        hasRoleAccess,
-        isException,
-        finalAccess: hasRoleAccess || isException
-      });
-      return hasRoleAccess || isException;
+      const result = hasRoleAccess || isException;
+      
+      // Cache the result
+      approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+      
+      return result;
     } catch (error) {
       console.error('Error checking production revision access:', error);
       return false;
@@ -390,16 +412,15 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     full_name: plan.pic_production.full_name,
     id: plan.pic_production.id
   } : digitalEmployees.find(emp => emp.id === plan.pic_production_id);
-  console.log('🔒 PIC Production Lock Check:', {
-    plan_id: plan.id,
-    pic_production_id: plan.pic_production_id,
-    pic_production_from_db: plan.pic_production,
-    digitalEmployeesCount: digitalEmployees?.length || 0,
-    selectedProductionPIC: selectedProductionPIC ? {
-      id: selectedProductionPIC.id,
-      name: selectedProductionPIC.full_name
-    } : 'not found'
-  });
+  
+  // Only log if there's a mismatch (pic_production_id exists but employee not found)
+  if (plan.pic_production_id && !selectedProductionPIC) {
+    devLog.debug('⚠️ PIC Production employee not found:', {
+      plan_id: plan.id,
+      pic_production_id: plan.pic_production_id,
+      digitalEmployeesCount: digitalEmployees?.length || 0
+    });
+  }
 
   // Get content type name for display
   const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name || '';
@@ -577,7 +598,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
   // Handle status updates from BriefDialog - REAL-TIME UPDATE
   const handleBriefStatusUpdate = (planId: string, updates: any) => {
-    console.log('Brief status update - applying real-time:', {
+    devLog.debug('Brief status update - applying real-time:', {
       planId,
       updates
     });
@@ -597,18 +618,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     onFieldChange(plan.id, 'brief', brief);
     setIsBriefDialogOpen(false);
   };
-  console.log('🔒 PIC Lock Check:', {
-    plan_id: plan.id,
-    pic_id: plan.pic_id,
-    isPICLocked,
-    selectedPIC: selectedPIC?.full_name
-  });
-  console.log('🔒 PIC Production Lock Check:', {
-    plan_id: plan.id,
-    pic_production_id: plan.pic_production_id,
-    isPICProductionLocked,
-    selectedProductionPIC: selectedProductionPIC?.full_name
-  });
+  
+  // Only log PIC checks if there's a mismatch (pic_id exists but employee not found)
+  if (plan.pic_id && !selectedPIC) {
+    devLog.debug('⚠️ PIC employee not found:', {
+      plan_id: plan.id,
+      pic_id: plan.pic_id
+    });
+  }
   return <>
       <tr className="hover:bg-gray-50">
         {/* Checkbox */}
@@ -966,7 +983,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       {/* POINT 3: Google Drive Link Dialog - Pass sync handlers for production approval */}
       <GoogleDriveLinkDialog isOpen={isGoogleDriveDialogOpen} onClose={() => setIsGoogleDriveDialogOpen(false)} googleDriveLink={plan.google_drive_link || ''} onSave={link => {
-      console.log('📝 GoogleDriveLinkDialog onSave called:', {
+      devLog.debug('📝 GoogleDriveLinkDialog onSave called:', {
         planId: plan.id,
         link
       });

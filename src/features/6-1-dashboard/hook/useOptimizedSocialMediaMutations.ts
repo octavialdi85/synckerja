@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { ContentPlan } from '../types/social-media';
+import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 
 export const useOptimizedSocialMediaMutations = () => {
   const queryClient = useQueryClient();
@@ -10,6 +12,25 @@ export const useOptimizedSocialMediaMutations = () => {
   // Update content plan mutation
   const updateContentPlanMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<ContentPlan> }) => {
+      // Validate pic_production_id if it's being updated
+      if (updates.pic_production_id !== undefined && updates.pic_production_id !== null) {
+        // Verify that the employee exists before updating
+        const { data: employeeExists, error: checkError } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('id', updates.pic_production_id)
+          .maybeSingle();
+        
+        if (checkError || !employeeExists) {
+          const errorMsg = `Invalid employee ID: ${updates.pic_production_id}. Employee not found in database.`;
+          devLog.error('❌ Foreign key constraint validation failed:', {
+            pic_production_id: updates.pic_production_id,
+            error: checkError
+          });
+          throw new Error(errorMsg);
+        }
+      }
+
       const { data, error } = await (supabase as any)
         .from('social_media_plans')
         .update(updates)
@@ -17,7 +38,19 @@ export const useOptimizedSocialMediaMutations = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Handle foreign key constraint violations specifically
+        if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
+          const fieldName = error.message?.includes('pic_production_id') ? 'PIC Production' : 'related field';
+          devLog.error('❌ Foreign key constraint violation:', {
+            code: error.code,
+            message: error.message,
+            updates
+          });
+          throw new Error(`Invalid ${fieldName} ID. Please select a valid employee.`);
+        }
+        throw error;
+      }
       return data;
     },
       onSuccess: (updatedData) => {
@@ -34,8 +67,14 @@ export const useOptimizedSocialMediaMutations = () => {
             }
           );
           
-          console.log('✅ Data updated in cache without reload');
+          devLog.debug('✅ Data updated in cache without reload');
         }
+      },
+      onError: (error: any) => {
+        // Show user-friendly error message
+        const errorMessage = error?.message || 'Failed to update content plan';
+        toast.error(errorMessage);
+        devLog.error('❌ Error updating content plan:', error);
       },
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -9,6 +9,125 @@ import GoogleDriveFolderCarousel from './GoogleDriveFolderCarousel';
 import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthButton';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
+
+// Helper function to get embed URL (defined before component)
+const getEmbedUrl = (url: string) => {
+  if (!url) return '';
+  if (url.includes('drive.google.com/file/d/')) {
+    const fileId = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/)?.[1];
+    if (fileId) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+  }
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    return null;
+  }
+  return url;
+};
+
+// Component to handle Google Drive file preview with CSP error fallback
+const GoogleDriveFilePreview: React.FC<{ link: string }> = ({ link }) => {
+  const [iframeError, setIframeError] = useState(false);
+  const embedUrl = getEmbedUrl(link);
+
+  const handleIframeError = () => {
+    devLog.debug('⚠️ Google Drive iframe failed to load (CSP error), showing fallback');
+    setIframeError(true);
+  };
+
+  if (iframeError || !embedUrl) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+        <div className="text-center p-8">
+          <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ExternalLink className="h-8 w-8 text-blue-600" />
+          </div>
+          <p className="text-sm text-gray-700 mb-4 max-w-sm">
+            Google Drive preview is not available due to security restrictions.
+          </p>
+          <Button 
+            onClick={() => window.open(link, '_blank')} 
+            variant="outline" 
+            size="sm" 
+            className="rounded-lg"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open in Google Drive
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Use useEffect to detect CSP errors immediately
+  // Note: CSP errors are browser security violations that cannot be suppressed
+  // They are expected from Google Drive and don't affect functionality
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      // If iframe hasn't loaded after 1 second, likely CSP blocked it
+      // Check for CSP errors by trying to access iframe
+      try {
+        const iframe = document.querySelector(`iframe[data-embed-url="${embedUrl}"]`) as HTMLIFrameElement;
+        if (iframe) {
+          // Try to access contentWindow - will throw if CSP blocked
+          try {
+            iframe.contentWindow?.location; // This will throw if CSP blocked
+          } catch (e) {
+            // CSP error detected - show fallback UI silently
+            // Don't log as this is expected behavior from Google Drive
+            handleIframeError();
+          }
+        }
+      } catch (e) {
+        // CSP error detected - show fallback UI silently
+        handleIframeError();
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [embedUrl]);
+
+  return (
+    <div className="w-full h-full relative">
+      <iframe 
+        src={embedUrl} 
+        data-embed-url={embedUrl}
+        className="w-full h-full border-0 rounded-lg" 
+        title="Google Drive Preview" 
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups" 
+        loading="lazy"
+        onError={handleIframeError}
+        onLoad={() => {
+          // Iframe loaded successfully
+          devLog.debug('✅ Google Drive iframe loaded successfully');
+        }}
+      />
+      {/* Error overlay - will show if CSP blocks */}
+      {iframeError && (
+        <div className="absolute inset-0 bg-gray-50 rounded-lg flex items-center justify-center z-10">
+          <div className="text-center p-8">
+            <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ExternalLink className="h-8 w-8 text-blue-600" />
+            </div>
+            <p className="text-sm text-gray-700 mb-4 max-w-sm">
+              Google Drive preview is not available due to security restrictions.
+            </p>
+            <Button 
+              onClick={() => window.open(link, '_blank')} 
+              variant="outline" 
+              size="sm" 
+              className="rounded-lg"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open in Google Drive
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface GoogleDriveLinkDialogProps {
   isOpen: boolean;
@@ -99,7 +218,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
       if (configError || !config) {
         // If no configuration found, fall back to admin-only access
-        console.log('No prod_approved configuration found, falling back to admin access');
+        devLog.debug('No prod_approved configuration found, falling back to admin access');
         return userRole.role === 'owner' || userRole.role === 'admin';
       }
 
@@ -109,7 +228,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
       // Check if user is in the exceptions list
       const isException = config.exceptions?.includes(employee.id);
 
-      console.log('🔐 Prod approval access check:', {
+      devLog.debug('🔐 Prod approval access check:', {
         userRole: userRole.role,
         employeeId: employee.id,
         allowedRoles: config.allowed_roles,
@@ -133,14 +252,29 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     }
   }, [isOpen]);
 
+  // Track previous link to only log on actual changes
+  const prevLinkRef = useRef<string | undefined>(undefined);
+  const isInitialMount = useRef(true);
+  
   // Update currentLink when googleDriveLink prop changes
   useEffect(() => {
-    console.log('🔗 GoogleDriveLinkDialog - googleDriveLink changed:', {
-      googleDriveLink,
-      socialMediaPlanId,
-      currentLink,
-      effectiveLinkUrl: googleDriveLink || 'default-link'
-    });
+    // Skip log on initial mount (prevLinkRef is undefined)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      prevLinkRef.current = googleDriveLink;
+      setCurrentLink(googleDriveLink);
+      return;
+    }
+    
+    // Only log if link actually changed (not initial mount)
+    if (prevLinkRef.current !== googleDriveLink) {
+      devLog.debug('🔗 GoogleDriveLinkDialog - googleDriveLink changed:', {
+        previousLink: prevLinkRef.current,
+        newLink: googleDriveLink,
+        socialMediaPlanId
+      });
+      prevLinkRef.current = googleDriveLink;
+    }
     setCurrentLink(googleDriveLink);
   }, [googleDriveLink, socialMediaPlanId]);
 
@@ -185,7 +319,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
           console.error('Error updating production status:', error);
           toast.error('Failed to update production status');
         } else {
-          console.log('Production status updated to Need Review with completion date');
+          devLog.debug('Production status updated to Need Review with completion date');
         }
       } catch (error) {
         console.error('Error in handleClose:', error);
@@ -222,7 +356,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         toast.error('Failed to update production status');
       } else {
         toast.success('Production status updated to Request Revision');
-        console.log('Production completion date cleared and status set to Request Revision');
+        devLog.debug('Production completion date cleared and status set to Request Revision');
       }
     } catch (error) {
       console.error('Error in handleRevision:', error);
@@ -260,7 +394,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         toast.error('Failed to update production status');
       } else {
         toast.success('Production approved successfully');
-        console.log('Production status set to Approved, production_approved turned ON, and approved date recorded at:', approvedDate);
+        devLog.debug('Production status set to Approved, production_approved turned ON, and approved date recorded at:', approvedDate);
       }
     } catch (error) {
       console.error('Error in handleApprove:', error);
@@ -275,19 +409,6 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   };
   const isFileLink = (url: string) => {
     return url.includes('drive.google.com/file/d/');
-  };
-  const getEmbedUrl = (url: string) => {
-    if (!url) return '';
-    if (url.includes('drive.google.com/file/d/')) {
-      const fileId = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/)?.[1];
-      if (fileId) {
-        return `https://drive.google.com/file/d/${fileId}/preview`;
-      }
-    }
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      return null;
-    }
-    return url;
   };
   const isYouTubeLink = (url: string) => {
     return url.includes('youtube.com') || url.includes('youtu.be');
@@ -331,6 +452,10 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
   return <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-[98vw] w-[98vw] max-h-[95vh] h-[95vh] overflow-hidden flex flex-col bg-white border-0 shadow-2xl rounded-2xl">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Google Drive Link</DialogTitle>
+          <DialogDescription>Manage Google Drive link and comments for this content plan</DialogDescription>
+        </DialogHeader>
         <div className="flex flex-1 gap-6 min-h-0 py-4">
           {/* Left side - Preview area with full width/height */}
           <div className="flex-[2] flex flex-col min-h-0">
@@ -375,9 +500,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                             Open YouTube Link
                           </Button>
                         </div>
-                      </div> : isFileLink(currentLink) ? <div className="w-full h-full">
-                        <iframe src={getEmbedUrl(currentLink)} className="w-full h-full border-0 rounded-lg" title="Google Drive Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy" />
-                      </div> : <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                      </div> : isFileLink(currentLink) ? <GoogleDriveFilePreview link={currentLink} /> : <div className="w-full h-full flex items-center justify-center bg-gray-50">
                         <div className="text-center p-8">
                           <div className="h-16 w-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                             <LinkIcon className="h-8 w-8 text-gray-400" />

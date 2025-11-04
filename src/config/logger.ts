@@ -46,6 +46,16 @@ export const logger = {
   }
 };
 
+// Alias for devLog (to maintain consistency with existing codebase)
+export const devLog = {
+  debug: logger.debug,
+  info: logger.info,
+  warn: logger.warn,
+  error: logger.error,
+  log: logger.debug, // Alias for console.log replacement
+};
+
+// Export default logger
 export default logger;
 
 
