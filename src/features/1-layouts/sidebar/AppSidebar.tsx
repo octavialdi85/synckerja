@@ -5,7 +5,7 @@ import { useSidebarState } from "./useSidebarState";
 import { useSmartNavigation } from "./useSmartNavigation";
 import { useDepartmentAccess } from "./useDepartmentAccess";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
-import { Building2, ChevronRight, X, Loader2 } from "lucide-react";
+import { Building2, ChevronRight, X, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 // Sub-sidebar component (merged from SubSidebar.tsx)
 interface SubSidebarProps {
@@ -72,7 +72,8 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
   };
 
   // Determine if a sidebar item should be accessible
-  const isItemAccessible = (itemUrl: string): boolean => {
+  // For sub-sidebar items, we only check direct access (no sub-path fallback)
+  const isItemAccessible = (itemUrl: string, checkSubPaths: boolean = false): boolean => {
     // SPECIFIC DEBUG FOR PAGE ACCESS
     if (itemUrl === '/access-permissions/page-access') {
       console.group('🔍 PAGE ACCESS SIDEBAR DEBUG');
@@ -80,6 +81,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
       console.log('User Role:', userRole);
       console.log('Is Owner:', isOwner);
       console.log('Is Admin:', isAdmin);
+      console.log('Check Sub Paths:', checkSubPaths);
     }
 
     // OWNER OVERRIDE - Owner can see all menu items
@@ -115,7 +117,17 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
       return true;
     }
     
-    // If direct access is denied, check if any sub-paths are accessible
+    // For sub-sidebar items, don't check sub-paths - only direct access matters
+    // This ensures padlock appears correctly for items that are locked
+    if (!checkSubPaths) {
+      if (itemUrl === '/access-permissions/page-access') {
+        console.log('❌ SUB-SIDEBAR ITEM: Direct access denied - item will be locked');
+        console.groupEnd();
+      }
+      return false;
+    }
+    
+    // If direct access is denied, check if any sub-paths are accessible (only for main sidebar items)
     const subPathAccess = hasAnyAccessibleSubItem(itemUrl);
     if (itemUrl === '/access-permissions/page-access') {
       console.log('🔍 Sub-path Access Result:', subPathAccess);
@@ -149,7 +161,9 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
         <div className="flex-1 pt-2 overflow-y-auto seamless-scroll">
           <nav className="space-y-0">
             {items.map((item, index) => {
-              const hasAccess = isItemAccessible(item.url);
+              // For sub-sidebar items, only check direct access (no sub-path fallback)
+              // This ensures padlock appears correctly for locked items
+              const hasAccess = isItemAccessible(item.url, false);
               const isActive = location.pathname === item.url;
               
               return (
@@ -212,7 +226,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
                   
                   {/* Locked indicator - Only show for non-Owner/Admin when not loading */}
                   {!configLoading && (!hasAccess && !isOwner && !isAdmin && userRole !== 'owner' && userRole !== 'admin') && (
-                    <X className="w-2 h-2 text-red-500 flex-shrink-0" />
+                    <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
                   )}
                   
                   {/* Active indicator - positioned at the very left edge */}
@@ -241,7 +255,33 @@ export function AppSidebar() {
     handleSubSidebarMouseEnter,
     handleSubSidebarMouseLeave
   } = useSidebarState();
+  const { canAccessPage, configLoading } = useDepartmentAccess();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
   const currentPath = location.pathname;
+
+  // Check if a sidebar item (without sub-sidebar) is locked
+  const isItemLocked = (item: MenuItem): boolean => {
+    // Don't show padlock for items with sub-sidebar
+    if (item.hasSubSidebar) {
+      return false;
+    }
+
+    // Owner/Admin can access all items
+    if (isOwner || userRole === 'owner' || isAdmin || userRole === 'admin') {
+      return false;
+    }
+
+    // If item has URL, check if it's accessible
+    if (item.url && item.url !== "#") {
+      // During loading, don't show padlock
+      if (configLoading) {
+        return false;
+      }
+      return !canAccessPage(item.url);
+    }
+
+    return false;
+  };
   return <div className="relative flex h-full">
       <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className="transition-all duration-300 ease-out group">
         <Sidebar collapsible="icon" className="border-r h-full bg-white shadow-none border-gray-200 transition-all duration-300 ease-out top-16 fixed left-0" style={{
@@ -267,6 +307,9 @@ export function AppSidebar() {
                           </span>
                         </div>
                         {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
+                        {!item.hasSubSidebar && isItemLocked(item) && (
+                          <Lock className={cn("h-3 w-3 text-gray-400 flex-shrink-0 ml-auto", "group-data-[collapsible=icon]:hidden")} />
+                        )}
                       </button> : <div className={cn("flex items-center font-medium transition-all duration-150 relative group cursor-pointer", "hover:bg-gray-100 hover:scale-105 rounded-lg", "py-2.5 px-2", "group-data-[collapsible=icon]:justify-center justify-between", activeSubSidebar === item.title ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "")}>
                         <div className="flex items-center min-w-0">
                           <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-transform duration-150", "group-data-[collapsible=icon]:mx-auto mr-3", "group-hover:scale-110")} />
