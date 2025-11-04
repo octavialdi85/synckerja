@@ -13,7 +13,7 @@ interface ContentPillarManagerProps {
   onDataChange: () => void;
 }
 
-export const ContentPillarManager: React.FC<ContentPillarManagerProps> = ({ onDataChange }) => {
+export const ContentPillarManager: React.FC<ContentPillarManagerProps> = React.memo(({ onDataChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalData, setModalData] = useState<{
@@ -29,9 +29,12 @@ export const ContentPillarManager: React.FC<ContentPillarManagerProps> = ({ onDa
   const [contentPillars, setContentPillars] = useState<ContentPillar[]>([]);
   const { loading, fetchData, addData, updateData, deleteData } = useMasterData('content_pillars');
   const queryClient = useQueryClient();
+  const hasLoadedRef = React.useRef(false);
 
-  // Stable load function
+  // Stable load function - only load once on mount
   const loadContentPillars = useCallback(async () => {
+    if (hasLoadedRef.current) return; // Prevent duplicate loads
+    hasLoadedRef.current = true;
     console.log('Loading content pillars...');
     const data = await fetchData();
     console.log('Content pillars loaded:', data);
@@ -41,7 +44,7 @@ export const ContentPillarManager: React.FC<ContentPillarManagerProps> = ({ onDa
   // Load data only once on mount
   useEffect(() => {
     loadContentPillars();
-  }, [loadContentPillars]);
+  }, []); // Empty deps - only run on mount
 
   const invalidateQueries = useCallback(() => {
     // Invalidate related queries to trigger auto-refresh
@@ -49,11 +52,6 @@ export const ContentPillarManager: React.FC<ContentPillarManagerProps> = ({ onDa
     queryClient.invalidateQueries({ queryKey: ['contentPillars'] });
     queryClient.invalidateQueries({ queryKey: ['masterData'] });
   }, [queryClient]);
-
-  // Load data only once on mount
-  useEffect(() => {
-    loadContentPillars();
-  }, [loadContentPillars]);
 
   const handleAdd = useCallback(() => {
     setModalData({
@@ -255,4 +253,6 @@ export const ContentPillarManager: React.FC<ContentPillarManagerProps> = ({ onDa
       />
     </>
   );
-};
+});
+
+ContentPillarManager.displayName = 'ContentPillarManager';

@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Loader2, WifiOff } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { useAuth } from '@/features/1-login';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
+import { LoadingDots } from './LoadingDots';
 
 interface HomeAccessGuardProps {
   children: ReactNode;
@@ -133,8 +134,8 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-          <p className="text-base text-gray-700 font-medium">Memeriksa akses...</p>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
           {showSlowConnectionWarning && (
             <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <WifiOff className="h-6 w-6 text-yellow-600" />
@@ -195,8 +196,8 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Memuat data organisasi...</p>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
         </div>
       </div>
     );

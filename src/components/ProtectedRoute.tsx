@@ -1,10 +1,11 @@
 import { ReactNode } from 'react';
 import { useAuth } from '@/features/1-login';
 import { Navigate, useLocation } from 'react-router-dom';
-import { Loader2, XCircle } from 'lucide-react';
+import { XCircle } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
+import { LoadingDots } from './LoadingDots';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -46,16 +47,15 @@ export const ProtectedRoute = ({
   // Also wait for organization data to load when permissions are required
   const isLoadingOrgData = requiresPermissions && user && !organization && hasOrganization;
   
-  if (loading || (requiresPermissions && configLoading) || isLoadingOrgData) {
+  // Unified loading state - combine all loading checks into one simple message
+  const isLoading = loading || (requiresPermissions && configLoading) || isLoadingOrgData;
+  
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">
-            {loading ? 'Memeriksa autentikasi...' : 
-             isLoadingOrgData ? 'Memuat data organisasi...' : 
-             'Memeriksa izin akses...'}
-          </p>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
         </div>
       </div>
     );
@@ -163,13 +163,13 @@ export const PublicRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Show loading spinner while checking auth state
+  // Show loading while checking auth state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Memeriksa autentikasi...</p>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
         </div>
       </div>
     );

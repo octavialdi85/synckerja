@@ -23,7 +23,7 @@ interface MasterDataToolbarProps {
   services: Service[];
 }
 
-export const MasterDataToolbar: React.FC<MasterDataToolbarProps> = ({
+export const MasterDataToolbar: React.FC<MasterDataToolbarProps> = React.memo(({
   onContentTypeDataChange,
   onServiceDataChange,
   onContentPillarDataChange,
@@ -65,4 +65,6 @@ export const MasterDataToolbar: React.FC<MasterDataToolbarProps> = ({
       </div>
     </div>
   );
-};
+});
+
+MasterDataToolbar.displayName = 'MasterDataToolbar';

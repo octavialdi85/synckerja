@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2, XCircle, Shield } from 'lucide-react';
+import { XCircle, Shield } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { useAuth } from '@/features/1-login';
+import { LoadingDots } from './LoadingDots';
 
 interface UniversalProtectedRouteProps {
   children: ReactNode;
@@ -105,22 +106,15 @@ export const UniversalProtectedRoute = ({
     requiresAuth
   ]);
 
-  // Loading state while validating
-  if (loading || (requiresAuth && configLoading) || isValidating) {
+  // Unified loading state - combine all loading checks into one simple message
+  const isLoading = loading || (requiresAuth && configLoading) || isValidating;
+  
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <div className="text-center">
-            <p className="text-sm text-gray-600 font-medium">
-              {loading ? 'Checking authentication...' : 
-               configLoading ? 'Loading page configurations...' : 
-               'Validating universal access...'}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Universal Route Protection System
-            </p>
-          </div>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
         </div>
       </div>
     );

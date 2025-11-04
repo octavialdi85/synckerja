@@ -11,7 +11,7 @@ interface ServiceManagerProps {
   onDataChange: () => void;
 }
 
-export const ServiceManager: React.FC<ServiceManagerProps> = ({ onDataChange }) => {
+export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDataChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [modalData, setModalData] = useState<{
     open: boolean;
@@ -25,9 +25,12 @@ export const ServiceManager: React.FC<ServiceManagerProps> = ({ onDataChange }) 
 
   const [services, setServices] = useState<Service[]>([]);
   const { loading, fetchData, addData, updateData, deleteData } = useMasterData('services');
+  const hasLoadedRef = React.useRef(false);
 
-  // Stable load function
+  // Stable load function - only load once on mount
   const loadServices = useCallback(async () => {
+    if (hasLoadedRef.current) return; // Prevent duplicate loads
+    hasLoadedRef.current = true;
     console.log('Loading services...');
     const data = await fetchData();
     console.log('Services loaded:', data);
@@ -37,7 +40,7 @@ export const ServiceManager: React.FC<ServiceManagerProps> = ({ onDataChange }) 
   // Load data only once on mount
   useEffect(() => {
     loadServices();
-  }, [loadServices]);
+  }, []); // Empty deps - only run on mount
 
   const handleAdd = useCallback(() => {
     setModalData({
@@ -244,4 +247,6 @@ export const ServiceManager: React.FC<ServiceManagerProps> = ({ onDataChange }) 
       )}
     </>
   );
-};
+});
+
+ServiceManager.displayName = 'ServiceManager';

@@ -72,10 +72,10 @@ export const useOptimizedSocialMediaData = () => {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 0, // Always consider data stale to ensure fresh updates
-    gcTime: 0, // No cache time - always fetch fresh data
+    staleTime: 30000, // 30 seconds - data is fresh for 30s, reduces flicker on initial load
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data for 5 minutes
     refetchOnWindowFocus: true, // Refetch when user switches tabs
-    refetchOnMount: true, // Allow refetch on component mount to ensure fresh data
+    refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces flicker)
     refetchInterval: false, // No polling - rely on realtime updates and manual mutations
     retry: 1, // Reduced retry attempts
     retryDelay: attemptIndex => Math.min(500 * 2 ** attemptIndex, 5000), // Faster retry
@@ -149,17 +149,30 @@ export const useOptimizedSocialMediaData = () => {
       
       return result;
     },
-    staleTime: 0, // No stale time - always fetch fresh data
-    gcTime: 0, // No cache time - always fetch fresh data
-    refetchOnWindowFocus: true, // Refetch when user switches tabs
-    refetchOnMount: true, // Allow refetch on component mount to ensure fresh data
+    staleTime: 5 * 60 * 1000, // 5 minutes - master data rarely changes, cache for 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep cached master data for 10 minutes
+    refetchOnWindowFocus: false, // Master data rarely changes, don't refetch on focus
+    refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces flicker)
     refetchInterval: false, // No polling - master data rarely changes
     retry: 2,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   // Combine loading states efficiently
-  const isLoading = contentPlansQuery.isLoading || masterDataQuery.isLoading;
+  // Use isPending for initial load (smooth loading), isFetching for background updates
+  const isPending = contentPlansQuery.isPending || masterDataQuery.isPending;
+  const isFetching = contentPlansQuery.isFetching || masterDataQuery.isFetching;
+  
+  // More strict loading check - only show loading if BOTH queries are pending AND no data exists
+  // This prevents flicker when one query completes but the other is still loading
+  const hasContentPlans = contentPlansQuery.data && contentPlansQuery.data.length > 0;
+  const hasMasterData = masterDataQuery.data && 
+    (masterDataQuery.data.contentTypes?.length > 0 || 
+     masterDataQuery.data.services?.length > 0 || 
+     masterDataQuery.data.contentPillars?.length > 0);
+  
+  // Only show loading if we're truly in initial load state (no data at all)
+  const isLoading = isPending && !hasContentPlans && !hasMasterData;
   const error = contentPlansQuery.error || masterDataQuery.error;
   
 
@@ -174,6 +187,7 @@ export const useOptimizedSocialMediaData = () => {
     
     // States
     isLoading,
+    isFetching, // Background updates
     error,
     organizationId,
     

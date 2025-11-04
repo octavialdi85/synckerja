@@ -10,7 +10,7 @@ interface TableFooterProps {
   services: any[];
 }
 
-export const TableFooter: React.FC<TableFooterProps> = ({
+export const TableFooter = React.memo<TableFooterProps>(({
   onContentTypeDataChange,
   onServiceDataChange,
   onContentPillarDataChange,
@@ -30,4 +30,6 @@ export const TableFooter: React.FC<TableFooterProps> = ({
       </SocialMediaErrorBoundary>
     </div>
   );
-};
+});
+
+TableFooter.displayName = 'TableFooter';

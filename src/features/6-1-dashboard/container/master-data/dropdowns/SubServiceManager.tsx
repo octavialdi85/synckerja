@@ -13,7 +13,7 @@ interface SubServiceManagerProps {
   services: Service[];
 }
 
-export const SubServiceManager: React.FC<SubServiceManagerProps> = ({ onDataChange, services }) => {
+export const SubServiceManager: React.FC<SubServiceManagerProps> = React.memo(({ onDataChange, services }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalData, setModalData] = useState<{
@@ -29,9 +29,12 @@ export const SubServiceManager: React.FC<SubServiceManagerProps> = ({ onDataChan
   const [subServices, setSubServices] = useState<SubService[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const { loading, fetchData, addData, updateData, deleteData } = useMasterData('sub_services');
+  const hasLoadedRef = React.useRef(false);
 
-  // Stable load function
+  // Stable load function - only load once on mount
   const loadSubServices = useCallback(async () => {
+    if (hasLoadedRef.current) return; // Prevent duplicate loads
+    hasLoadedRef.current = true;
     console.log('Loading sub services...');
     const data = await fetchData();
     console.log('Sub services loaded:', data);
@@ -41,7 +44,7 @@ export const SubServiceManager: React.FC<SubServiceManagerProps> = ({ onDataChan
   // Load data only once on mount
   useEffect(() => {
     loadSubServices();
-  }, [loadSubServices]);
+  }, []); // Empty deps - only run on mount
 
   const handleAdd = useCallback(() => {
     setModalData({
@@ -345,4 +348,6 @@ export const SubServiceManager: React.FC<SubServiceManagerProps> = ({ onDataChan
       )}
     </>
   );
-};
+});
+
+SubServiceManager.displayName = 'SubServiceManager';

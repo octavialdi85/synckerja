@@ -22,6 +22,8 @@ const Header = memo(() => {
     if (shouldLog) console.log("Profile clicked");
   }, []);
 
+  // Show skeleton header instead of blocking - header should always render
+  // The actual loading state is handled by ProtectedRoute
   if (loading) {
     return (
       <header className="border-b bg-white fixed top-0 left-0 right-0 z-30 w-full shadow-sm">

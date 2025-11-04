@@ -1,10 +1,10 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/features/1-login';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { useSubscriptionExpiryRealtime } from '@/hooks/useSubscriptionExpiryRealtime';
 import SubscriptionExpiredPage from '@/features/1-login/pages/SubscriptionExpiredPage';
+import { LoadingDots } from './LoadingDots';
 
 interface SubscriptionExpiryGuardProps {
   children: ReactNode;
@@ -100,13 +100,15 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     location.pathname
   ]);
 
-  // Show loading while checking
-  if (authLoading || isLoading || isChecking) {
+  // Unified loading state - combine all loading checks into one simple message
+  const isAnyLoading = authLoading || isLoading || isChecking;
+  
+  if (isAnyLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Memeriksa status subscription...</p>
+          <LoadingDots size="lg" />
+          <p className="text-sm text-gray-600">Memuat halaman...</p>
         </div>
       </div>
     );

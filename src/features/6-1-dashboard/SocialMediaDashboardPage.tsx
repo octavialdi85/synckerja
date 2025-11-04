@@ -18,6 +18,7 @@ import { SocialMediaFilters } from './container/SocialMediaFilters';
 import { ContentPlanTable } from './container/ContentPlanTable';
 import { TableFooter } from './container/TableFooter';
 import { SidebarContainer } from './container/RightSection/SidebarContainer';
+import { DashboardLoadingWrapper } from './container/DashboardLoadingWrapper';
 
 import BriefDialog from './modal/BriefDialog';
 import TitleDialog from './modal/TitleDialog';
@@ -83,7 +84,11 @@ const SocialMediaContent = () => {
       
       return data || [];
     },
-    refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates
+    staleTime: 10000, // 10 seconds - data is fresh for 10s, reduces unnecessary refetches
+    gcTime: 2 * 60 * 1000, // 2 minutes - keep cached data
+    refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates (only if stale)
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch on focus (already polling)
   });
 
   // State hooks
@@ -148,7 +153,7 @@ const SocialMediaContent = () => {
     navigate(`/digital-marketing/social-media/${newTab}`);
   };
 
-  // Filtered content plans
+  // Filtered content plans - use empty array during loading to prevent flicker
   const filteredContentPlans = useOptimizedFiltering(
     loading ? [] : contentPlans, 
     searchTerm, 
@@ -156,8 +161,10 @@ const SocialMediaContent = () => {
   );
 
   // Calculate metrics from contentPlans filtered by active performance tab
+  // Return default metrics during loading to prevent flicker
   const metrics = React.useMemo(() => {
-    if (!contentPlans.length) {
+    // Return default metrics during initial load to prevent flicker
+    if (loading || !contentPlans.length) {
       return {
         dailyOverdueContent: 0,
         dailyCompletedContent: 0,
@@ -551,7 +558,7 @@ const SocialMediaContent = () => {
       monthlyRevisedContent: monthlyContentPlans.filter(needsRevision).length,
       monthlyTotalContent: monthlyContentPlans.length
     };
-  }, [contentPlans, activePerformanceTab, allSocialMediaLinks]);
+  }, [contentPlans, activePerformanceTab, allSocialMediaLinks, loading]); // Add loading to prevent flicker
 
   // Callback handlers
   const handleSelectItem = useCallback((id: string, checked: boolean) => {
@@ -823,75 +830,77 @@ const SocialMediaContent = () => {
                       </div>
 
                       {/* Main Grid Layout - Metrics, Table, and Sidebar */}
-                      <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
-                {/* Left Section - Main Content (75% width / 9 cols) */}
-                <div className="col-span-9 space-y-2 flex flex-col seamless-scroll h-full">
-                  {/* Social Media Metrics */}
-                  <div className="flex-shrink-0">
-                    <SocialMediaErrorBoundary>
-                      <SocialMediaMetrics metrics={metrics} />
-                    </SocialMediaErrorBoundary>
-                  </div>
+                      <DashboardLoadingWrapper isLoading={loading}>
+                        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
+                          {/* Left Section - Main Content (75% width / 9 cols) */}
+                          <div className="col-span-9 space-y-2 flex flex-col seamless-scroll h-full">
+                            {/* Social Media Metrics */}
+                            <div className="flex-shrink-0">
+                              <SocialMediaErrorBoundary>
+                                <SocialMediaMetrics metrics={metrics} isLoading={false} />
+                              </SocialMediaErrorBoundary>
+                            </div>
 
-                  {/* Social Media Plan Table */}
-                  <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative seamless-scroll h-full">
-                    {/* Filters Section - Sticky at top */}
-                    <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
-                      <SocialMediaErrorBoundary>
-                        <SocialMediaFilters 
-                          searchTerm={searchTerm} 
-                          setSearchTerm={setSearchTerm} 
-                          statusFilter={statusFilter} 
-                          setStatusFilter={setStatusFilter} 
-                          selectedItems={selectedItems} 
-                          onAddContent={handleAddContent} 
-                          onDeleteSelected={handleDeleteSelected} 
-                        />
-                      </SocialMediaErrorBoundary>
-                    </div>
-                    
-                    {/* Scrollable Content Area */}
-                    <div className="flex-1 min-h-0 overflow-auto seamless-scroll">
-                      <SocialMediaErrorBoundary>
-                        <ContentPlanTable 
-                          contentPlans={Array.isArray(filteredContentPlans) ? filteredContentPlans : []} 
-                          contentTypes={Array.isArray(contentTypes) ? contentTypes : []} 
-                          services={Array.isArray(services) ? services : []} 
-                          subServices={Array.isArray(subServices) ? subServices : []} 
-                          contentPillars={Array.isArray(contentPillars) ? contentPillars : []} 
-                          onSelectItem={handleSelectItem} 
-                          selectedItems={selectedItems} 
-                          onFieldChange={handleFieldChange} 
-                          onOpenBriefDialog={openBriefDialog} 
-                          onOpenTitleDialog={openTitleDialog} 
-                          onContentTypeDataChange={handleMasterDataChange} 
-                          onServiceDataChange={handleMasterDataChange} 
-                          onContentPillarDataChange={handleMasterDataChange} 
-                          loading={loading} 
-                        />
-                      </SocialMediaErrorBoundary>
-                    </div>
+                            {/* Social Media Plan Table */}
+                            <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative seamless-scroll h-full">
+                              {/* Filters Section - Sticky at top */}
+                              <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
+                                <SocialMediaErrorBoundary>
+                                  <SocialMediaFilters 
+                                    searchTerm={searchTerm} 
+                                    setSearchTerm={setSearchTerm} 
+                                    statusFilter={statusFilter} 
+                                    setStatusFilter={setStatusFilter} 
+                                    selectedItems={selectedItems} 
+                                    onAddContent={handleAddContent} 
+                                    onDeleteSelected={handleDeleteSelected} 
+                                  />
+                                </SocialMediaErrorBoundary>
+                              </div>
+                              
+                              {/* Scrollable Content Area */}
+                              <div className="flex-1 min-h-0 overflow-auto seamless-scroll">
+                                <SocialMediaErrorBoundary>
+                                  <ContentPlanTable 
+                                    contentPlans={Array.isArray(filteredContentPlans) ? filteredContentPlans : []} 
+                                    contentTypes={Array.isArray(contentTypes) ? contentTypes : []} 
+                                    services={Array.isArray(services) ? services : []} 
+                                    subServices={Array.isArray(subServices) ? subServices : []} 
+                                    contentPillars={Array.isArray(contentPillars) ? contentPillars : []} 
+                                    onSelectItem={handleSelectItem} 
+                                    selectedItems={selectedItems} 
+                                    onFieldChange={handleFieldChange} 
+                                    onOpenBriefDialog={openBriefDialog} 
+                                    onOpenTitleDialog={openTitleDialog} 
+                                    onContentTypeDataChange={handleMasterDataChange} 
+                                    onServiceDataChange={handleMasterDataChange} 
+                                    onContentPillarDataChange={handleMasterDataChange} 
+                                    loading={false} 
+                                  />
+                                </SocialMediaErrorBoundary>
+                              </div>
 
-                    {/* Table Footer - Sticky at bottom */}
-                    <div className="sticky bottom-0 left-0 right-0 flex-shrink-0 bg-white z-10 border-t border-gray-200">
-                      <TableFooter 
-                        onContentTypeDataChange={handleMasterDataChange} 
-                        onServiceDataChange={handleMasterDataChange} 
-                        onContentPillarDataChange={handleMasterDataChange} 
-                        onSocialMediaNameDataChange={() => {}} 
-                        services={Array.isArray(services) ? services : []} 
-                      />
-                    </div>
-                  </div>
-                </div>
+                              {/* Table Footer - Sticky at bottom */}
+                              <div className="sticky bottom-0 left-0 right-0 flex-shrink-0 bg-white z-10 border-t border-gray-200">
+                                <TableFooter 
+                                  onContentTypeDataChange={handleMasterDataChange} 
+                                  onServiceDataChange={handleMasterDataChange} 
+                                  onContentPillarDataChange={handleMasterDataChange} 
+                                  onSocialMediaNameDataChange={() => {}} 
+                                  services={Array.isArray(services) ? services : []} 
+                                />
+                              </div>
+                            </div>
+                          </div>
 
-                 {/* Right Section - Sidebar (25% width / 3 cols) */}
-                 <div className="col-span-3 space-y-2 seamless-scroll h-full">
-                   <div className="h-full flex flex-col">
-                     <SidebarContainer />
-                   </div>
-                 </div>
-              </div>
+                           {/* Right Section - Sidebar (25% width / 3 cols) */}
+                           <div className="col-span-3 space-y-2 seamless-scroll h-full">
+                             <div className="h-full flex flex-col">
+                               <SidebarContainer />
+                             </div>
+                           </div>
+                        </div>
+                      </DashboardLoadingWrapper>
             </TabsContent>
           </Tabs>
 

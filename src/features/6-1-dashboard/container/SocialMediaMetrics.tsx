@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent } from '@/features/ui/card';
+import { Skeleton } from '@/features/ui/skeleton';
 import { AlertTriangle, Target, TrendingUp, User } from 'lucide-react';
 
 interface MetricsData {
@@ -15,9 +16,37 @@ interface MetricsData {
 
 interface SocialMediaMetricsProps {
   metrics: MetricsData;
+  isLoading?: boolean;
 }
 
-export const SocialMediaMetrics = React.memo<SocialMediaMetricsProps>(({ metrics }) => {
+export const SocialMediaMetrics = React.memo<SocialMediaMetricsProps>(({ metrics, isLoading = false }) => {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+        {[...Array(4)].map((_, index) => (
+          <Card key={index}>
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-6 w-6 rounded" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
       <Card>
