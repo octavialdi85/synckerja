@@ -10,6 +10,7 @@ import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
 import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
+import { LoadingDots } from '@/components/LoadingDots';
 
 const DailyTaskPage = () => {
   return (
@@ -20,9 +21,23 @@ const DailyTaskPage = () => {
 };
 
 const DailyTaskContent = () => {
-  const { tasks, filters } = useDailyTask();
+  const { tasks, filters, isLoading } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
+
+  // Show loading state while initial data is being fetched
+  if (isLoading) {
+    return (
+      <StandardLayout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4">
+            <LoadingDots size="lg" />
+            <p className="text-sm text-gray-600">Memuat halaman...</p>
+          </div>
+        </div>
+      </StandardLayout>
+    );
+  }
 
   // Filter tasks based on filters
   const filteredTasks = tasks.filter(task => {
