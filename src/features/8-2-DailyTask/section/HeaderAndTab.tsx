@@ -18,19 +18,19 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       description: 'Manage your daily tasks and to-do lists',
       path: '/tools/daily-task'
     },
-    { 
-      id: 'meeting-notes', 
-      label: 'Meeting Notes', 
-      icon: FileText,
-      description: 'Track and manage meeting discussions and action items',
-      path: '/tools/meeting-notes'
-    },
     {
       id: 'daily-task-report',
       label: 'Daily Task Report',
       icon: FileText,
       description: 'Analyze completed tasks, on-time performance, and delays',
       path: '/tools/daily-task-report'
+    },
+    { 
+      id: 'meeting-notes', 
+      label: 'Meeting Notes', 
+      icon: FileText,
+      description: 'Track and manage meeting discussions and action items',
+      path: '/tools/meeting-notes'
     }
   ];
 
