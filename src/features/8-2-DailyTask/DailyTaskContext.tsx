@@ -959,6 +959,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       }
     }
     
+    // Extract assigned_to from data since it's not a column in daily_tasks table
+    const assignedTo = data.assigned_to;
+    const updateData = { ...data };
+    delete (updateData as any).assigned_to;
+    delete (updateData as any).assigned_to_name;
+    
     // Optimistic update: update local state immediately
     const previousTasks = [...tasks];
     setTasks(prevTasks => 
@@ -972,19 +978,88 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     );
 
     try {
+      // Update the task (excluding assigned_to which is handled separately)
       const { error } = await supabase
         .from('daily_tasks')
-        .update(data)
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
 
+      // Handle assignment separately using daily_tasks_assigned table
+      if (assignedTo !== undefined) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: assignedBy } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('user_id', user?.id)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+        if (assignedBy) {
+          // Check if assignment already exists
+          const { data: existingAssignment } = await supabase
+            .from('daily_tasks_assigned')
+            .select('id')
+            .eq('daily_task_id', id)
+            .maybeSingle();
+
+          if (assignedTo) {
+            // Update or create assignment
+            if (existingAssignment) {
+              // Update existing assignment
+              const { error: assignmentError } = await supabase
+                .from('daily_tasks_assigned')
+                .update({
+                  employee_id: assignedTo,
+                  assigned_by: assignedBy.id,
+                  assigned_at: new Date().toISOString()
+                })
+                .eq('id', existingAssignment.id);
+
+              if (assignmentError) {
+                console.error('Error updating assignment:', assignmentError);
+              }
+            } else {
+              // Create new assignment
+              const { error: assignmentError } = await supabase
+                .from('daily_tasks_assigned')
+                .insert({
+                  organization_id: organizationId,
+                  daily_task_id: id,
+                  employee_id: assignedTo,
+                  assigned_by: assignedBy.id,
+                  assigned_at: new Date().toISOString()
+                });
+
+              if (assignmentError) {
+                console.error('Error creating assignment:', assignmentError);
+              }
+            }
+          } else {
+            // Remove assignment if assignedTo is null/empty
+            if (existingAssignment) {
+              const { error: assignmentError } = await supabase
+                .from('daily_tasks_assigned')
+                .delete()
+                .eq('id', existingAssignment.id);
+
+              if (assignmentError) {
+                console.error('Error deleting assignment:', assignmentError);
+              }
+            }
+          }
+        }
+      }
+
       // For status updates (and has_reminder auto-update when completing), mark task as recently updated to skip real-time refresh
       // Check if update is primarily a status update (has_reminder might be auto-set to false)
+      // Also check if assignment changed (assigned_to is handled separately)
       const isStatusUpdate = data.status !== undefined;
-      const hasOnlyStatusOrReminder = Object.keys(data).every(key => key === 'status' || key === 'has_reminder' || key === 'finish_date');
+      const hasAssignmentChange = assignedTo !== undefined;
+      const hasOnlyStatusOrReminder = Object.keys(updateData).every(key => key === 'status' || key === 'has_reminder' || key === 'finish_date');
       
-      if (isStatusUpdate && hasOnlyStatusOrReminder) {
+      if (isStatusUpdate && hasOnlyStatusOrReminder && !hasAssignmentChange) {
         // Mark this task as recently updated to skip real-time refresh
         // For tasks without substeps, extend the skip time since they don't have progress-based sync
         const skipDuration = currentTask?.has_substeps === false ? 5000 : 3000;
@@ -994,7 +1069,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           recentlyUpdatedTasksRef.current.delete(id);
         }, skipDuration);
       } else {
-        // Only refresh for non-status updates (title, description, priority, etc.)
+        // Refresh for non-status updates (title, description, priority, assignment changes, etc.)
         clearCache(`tasks_${organizationId}_*`);
         fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
       }
