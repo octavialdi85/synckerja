@@ -242,8 +242,8 @@ export const PerformanceTable = () => {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 border-b bg-gray-50 flex items-center justify-between">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
+      <div className="px-3 py-2 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
         <span className="text-sm font-medium">
           {viewMode === 'performance' ? 'Assignments Performance' : 'Blocker Resolved'}
         </span>
@@ -272,19 +272,19 @@ export const PerformanceTable = () => {
           )}
         </div>
       </div>
-      <div className="seamless-scroll max-h-[calc(100vh-300px)] overflow-auto">
+      <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
         {viewMode === 'performance' ? (
           /* Assignments Performance Table */
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
+            <thead className="bg-gray-50 text-gray-600 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="text-left px-3 py-2">PIC</th>
-                <th className="text-left px-3 py-2">Task</th>
-                <th className="text-left px-3 py-2">Step</th>
-                <th className="text-left px-3 py-2">Blocker</th>
-                <th className="text-left px-3 py-2">Due Date</th>
-                <th className="text-left px-3 py-2">Finished</th>
-                <th className="text-left px-3 py-2">Status</th>
+                <th className="text-left px-3 py-2 bg-gray-50">PIC</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Task</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Step</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Blocker</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Due Date</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Finished</th>
+                <th className="text-left px-3 py-2 bg-gray-50">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -330,16 +330,16 @@ export const PerformanceTable = () => {
         ) : (
           /* Blocker Resolved Table */
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
+            <thead className="bg-gray-50 text-gray-600 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="text-left px-3 py-2 w-[15%]">Task</th>
-                <th className="text-left px-3 py-2 w-[12%]">Step</th>
-                <th className="text-left px-3 py-2 w-[12%]">Sub-step</th>
-                <th className="text-left px-3 py-2 w-[10%]">Resolved At</th>
-                <th className="text-left px-3 py-2 w-[18%]">Blocker</th>
-                <th className="text-left px-3 py-2 w-[18%]">Resolution Details</th>
-                <th className="text-center px-3 py-2 w-[10%]">Days Resolved</th>
-                <th className="text-center px-3 py-2 w-[5%]">Actions</th>
+                <th className="text-left px-3 py-2 w-[15%] bg-gray-50">Task</th>
+                <th className="text-left px-3 py-2 w-[12%] bg-gray-50">Step</th>
+                <th className="text-left px-3 py-2 w-[12%] bg-gray-50">Sub-step</th>
+                <th className="text-left px-3 py-2 w-[10%] bg-gray-50">Resolved At</th>
+                <th className="text-left px-3 py-2 w-[18%] bg-gray-50">Blocker</th>
+                <th className="text-left px-3 py-2 w-[18%] bg-gray-50">Resolution Details</th>
+                <th className="text-center px-3 py-2 w-[10%] bg-gray-50">Days Resolved</th>
+                <th className="text-center px-3 py-2 w-[5%] bg-gray-50">Actions</th>
               </tr>
             </thead>
             <tbody>

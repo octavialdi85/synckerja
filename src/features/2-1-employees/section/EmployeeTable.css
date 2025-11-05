@@ -4,6 +4,9 @@
 .employee-table {
   position: relative;
   width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1000px;
 }
 
 .employee-table thead {
@@ -17,12 +20,7 @@
 .employee-table thead th {
   background: #f9fafb !important;
   border: none !important;
-}
-
-/* Remove all borders from table */
-.employee-table {
-  border-collapse: separate;
-  border-spacing: 0;
+  white-space: nowrap !important;
 }
 
 .employee-table th,
@@ -68,31 +66,3 @@
   background-color: #e2e8f0;
 }
 
-/* Enhanced horizontal scroll for wide tables */
-.employee-table {
-  min-width: 1000px;
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: auto;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-  scroll-behavior: smooth;
-}
-
-.employee-table::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-.employee-table::-webkit-scrollbar-track {
-  display: none !important;
-}
-
-.employee-table::-webkit-scrollbar-thumb {
-  display: none !important;
-}
-
-.employee-table::-webkit-scrollbar-corner {
-  display: none !important;
-}

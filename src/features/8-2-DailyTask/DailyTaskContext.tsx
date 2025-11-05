@@ -4,6 +4,7 @@ import { retryableQuery } from '@/integrations/supabase/retry';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { debounce, throttle, getCached, setCache, clearCache, trackQuery } from './utils/optimizationUtils';
+import { useTaskFilterState, TaskFilters } from './hooks/useTaskFilterState';
 
 export interface TaskLink {
   id: string;
@@ -134,17 +135,9 @@ interface SummaryData {
   completedSteps: number;
 }
 
-interface Filters {
-  search: string;
-  status: string;
-  priority: string;
-  dateFilter: string;
-  dateRange?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
-  customStartDate?: string;
-  customEndDate?: string;
-  pic: string;
-  myTask?: 'all' | 'my_task';
-}
+// Filters interface moved to useTaskFilterState hook
+// Keeping for backward compatibility
+type Filters = TaskFilters;
 
 interface RecentStepFilters {
   dateRange: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
@@ -159,13 +152,13 @@ export interface DailyTaskContextType {
   recentStepUpdates: RecentStepUpdate[];
   filteredRecentStepUpdates: RecentStepUpdate[];
   recentStepFilters: RecentStepFilters;
-  filters: Filters;
+  filters: TaskFilters;
   isLoading: boolean;
   expandedTasks: Set<string>;
   setExpandedTasks: (expandedTasks: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
   highlightedTask: string | null;
   setHighlightedTask: (taskId: string | null) => void;
-  setFilters: (filters: Filters | ((prev: Filters) => Filters)) => void;
+  setFilters: (filters: TaskFilters | ((prev: TaskFilters) => TaskFilters)) => void;
   setRecentStepFilters: (filters: RecentStepFilters | ((prev: RecentStepFilters) => RecentStepFilters)) => void;
   addTask: (data: Partial<Task>) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
@@ -209,17 +202,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const recentlyUpdatedTasksRef = useRef<Set<string>>(new Set());
   // Track tasks that have been auto-fixed for has_reminder to avoid duplicate updates
   const autoFixedReminderRef = useRef<Set<string>>(new Set());
-  const [filters, setFilters] = useState<Filters>({
-    search: '',
-    status: '',
-    priority: '',
-    dateFilter: '',
-    dateRange: undefined,
-    customStartDate: undefined,
-    customEndDate: undefined,
-    pic: '',
-    myTask: 'my_task' // Default to "My Task"
-  });
+  
+  // Use custom hook for filter state with localStorage persistence
+  const { filters, setFilters } = useTaskFilterState();
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
     dateRange: 'today',
     actionType: 'all'

@@ -48,6 +48,7 @@ import {
 } from '@/features/ui/popover';
 import { CustomDatePicker } from '@/features/share/calendar';
 import { useDailyTask, type Task } from '../DailyTaskContext';
+import { useTaskFilters } from '../hooks/useTaskFilters';
 import { supabase } from '@/integrations/supabase/client';
 import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';
 import {
@@ -81,7 +82,7 @@ import { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 import { EditTaskDialog } from './EditTaskDialog';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import './TaskList.css';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval, differenceInDays } from 'date-fns';
+import { format, differenceInDays, startOfDay } from 'date-fns';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -97,6 +98,14 @@ export const TaskList = () => {
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
   const { toast } = useToast();
+  
+  // Use custom hook for filtering logic
+  const { filteredTasks, getVisibleSteps } = useTaskFilters({
+    tasks,
+    filters,
+    currentUserId: user?.id,
+    currentEmployeeId: currentEmployee?.id,
+  });
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
   const [reminderPendingTaskId, setReminderPendingTaskId] = useState<string | null>(null);
@@ -143,26 +152,7 @@ export const TaskList = () => {
     }
   }, [highlightedTask]);
   
-  // Helper function to determine visible steps based on filters and task assignment
-  // If task is assigned at task level to current user, show ALL steps
-  // Otherwise, show only steps assigned to current user or created by user
-  const getVisibleSteps = (task: Task): typeof task.steps => {
-    if (filters.pic) {
-      // Individual PIC selected - show steps assigned to that PIC
-      return task.steps.filter(s => s.assigned_employee?.id === filters.pic);
-    } else if (filters.myTask === 'all') {
-      // All PIC mode - show ALL steps
-      return task.steps;
-    } else {
-      // My Task mode
-      // If task is assigned at task level to current employee, show ALL steps
-      if (task.assigned_to === currentEmployee?.id) {
-        return task.steps;
-      }
-      // Otherwise, show steps assigned to current employee or created by user or has assigned substeps
-      return task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-    }
-  };
+  // getVisibleSteps now comes from useTaskFilters hook
 
   const openTaskBlockers = async (task: Task) => {
     // OPTIMIZATION: Open modal immediately with loading state
@@ -170,7 +160,7 @@ export const TaskList = () => {
     setBlockerModalOpen(true);
 
     try {
-      // Fix: Use proper filter to show steps - if task is assigned at task level, show all steps
+      // Use getVisibleSteps from hook to show steps based on filters
       const visibleSteps = getVisibleSteps(task);
       const stepIds = visibleSteps.map(s => s.id);
       
@@ -265,110 +255,7 @@ export const TaskList = () => {
   };
 
 
-  // Filter tasks based on filters - memoized to prevent unnecessary recalculations
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
-      // My Task filter - show tasks created by current user OR assigned to current user (at task level or step level)
-      if (filters.myTask === 'my_task') {
-        const isTaskCreatedByUser = task.created_by === user?.id;
-        const isTaskAssignedToCurrentUser = task.assigned_to === currentEmployee?.id;
-        const hasStepAssignedToCurrentUser = task.steps?.some(step => 
-          step.assigned_to === currentEmployee?.id || 
-          step.sub_steps?.some(subStep => subStep.assigned_to === currentEmployee?.id)
-        ) || false;
-        
-        // Show task if: created by user OR assigned to user at task level OR has any step/sub-step assigned to user
-        if (!isTaskCreatedByUser && !isTaskAssignedToCurrentUser && !hasStepAssignedToCurrentUser) {
-          return false;
-        }
-      }
-      
-      // Search filter - now includes both task title and step titles
-      if (filters.search) {
-        const searchTerm = filters.search.toLowerCase();
-        const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
-        const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
-        const stepMatch = task.steps?.some(step => 
-          step.title?.toLowerCase().includes(searchTerm)
-        ) || false;
-        
-        if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
-          return false;
-        }
-      }
-      
-      if (filters.status && task.status !== filters.status) {
-        return false;
-      }
-      if (filters.priority && task.priority !== filters.priority) {
-        return false;
-      }
-      
-      // PIC filter - check if any step is assigned to the selected employee
-      if (filters.pic) {
-        const hasStepAssignedToPic = task.steps?.some(step => 
-          step.assigned_employee?.id === filters.pic
-        ) || false;
-        
-        if (!hasStepAssignedToPic) {
-          return false;
-        }
-      }
-      
-      // Date range filter - filter by task due_date
-      if (filters.dateRange) {
-        if (!task.due_date) {
-          // If task has no due_date and a date filter is active, exclude it
-          return false;
-        }
-        
-        const taskDueDate = new Date(task.due_date);
-        let startDate: Date;
-        let endDate: Date;
-        
-        switch (filters.dateRange) {
-          case 'today':
-            startDate = startOfDay(new Date());
-            endDate = endOfDay(new Date());
-            break;
-          case 'yesterday':
-            const yesterday = subDays(new Date(), 1);
-            startDate = startOfDay(yesterday);
-            endDate = endOfDay(yesterday);
-            break;
-          case 'this_week':
-            startDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
-            endDate = endOfWeek(new Date(), { weekStartsOn: 1 }); // Sunday
-            break;
-          case 'this_month':
-            startDate = startOfMonth(new Date());
-            endDate = endOfMonth(new Date());
-            break;
-          case 'last_month':
-            const lastMonth = subMonths(new Date(), 1);
-            startDate = startOfMonth(lastMonth);
-            endDate = endOfMonth(lastMonth);
-            break;
-          case 'custom':
-            if (filters.customStartDate && filters.customEndDate) {
-              startDate = startOfDay(new Date(filters.customStartDate));
-              endDate = endOfDay(new Date(filters.customEndDate));
-            } else {
-              return true; // If custom dates not set, show all
-            }
-            break;
-          default:
-            return true;
-        }
-        
-        if (!isWithinInterval(taskDueDate, { start: startDate, end: endDate })) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
-  }, [tasks, filters.search, filters.status, filters.priority, filters.pic, filters.dateRange, filters.customStartDate, filters.customEndDate, filters.myTask, user?.id, currentEmployee?.id]);
+  // filteredTasks and getVisibleSteps now come from useTaskFilters hook
 
   // Compute blocker counts per task to mirror report page
   // Create stable string of task IDs and step counts to use as dependency
@@ -986,26 +873,6 @@ export const TaskList = () => {
                                       <Calendar className="w-3 h-3" />
                                       <span className="text-sm">{formatDate(task.due_date)}</span>
                                     </div>
-                                    {(() => {
-                                      const daysRemaining = getDaysRemaining(task.due_date, task.status);
-                                      if (daysRemaining !== null) {
-                                        const daysText = formatDaysRemaining(daysRemaining);
-                                        return (
-                                          <span className={`text-xs ${
-                                            daysRemaining < 0 
-                                              ? 'text-red-500 font-medium' 
-                                              : daysRemaining === 0 
-                                              ? 'text-orange-500 font-medium' 
-                                              : daysRemaining <= 3 
-                                              ? 'text-yellow-600' 
-                                              : 'text-gray-500'
-                                          }`}>
-                                            {daysText}
-                                          </span>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
                                     {isOverdueTask && (
                                       <span className="text-xs text-red-500">Overdue</span>
                                     )}

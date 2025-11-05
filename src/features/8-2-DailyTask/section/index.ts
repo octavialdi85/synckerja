@@ -11,6 +11,7 @@ export { TaskStep } from './TaskStep';
 export { FileUpload } from './FileUpload';
 export { DueDatePicker } from './DueDatePicker';
 export { EditTaskDialog } from './EditTaskDialog';
+export { CreateTaskDialog } from './CreateTaskDialog';
 export { DeadlineExtensionDialog } from './DeadlineExtensionDialog';
 export { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 export { ModalAddTaskStep } from './ModalAddTaskStep';

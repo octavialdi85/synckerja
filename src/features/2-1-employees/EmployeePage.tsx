@@ -11,6 +11,8 @@ import { EmployeeSidebarFooter } from './section/EmployeeSidebarFooter';
 import { useEmployees } from './hooks/useEmployees';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/features/ui/button';
+import { Plus } from 'lucide-react';
 
 export const EmployeePage = () => {
   const [activeTab, setActiveTab] = useState('employees');
@@ -30,6 +32,10 @@ export const EmployeePage = () => {
   const handleRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  const handleAddEmployee = useCallback(() => {
+    navigate('/employees/add');
+  }, [navigate]);
 
   return (
     <StandardLayout>
@@ -86,8 +92,19 @@ export const EmployeePage = () => {
                     <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
-                        <h3 className="text-sm font-semibold text-gray-900">Employee Overview</h3>
-                        <p className="text-xs text-gray-500 mt-1">Summary of employee data</p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-semibold text-gray-900">Employee Overview</h3>
+                            <p className="text-xs text-gray-500 mt-1">Summary of employee data</p>
+                          </div>
+                          <Button
+                            onClick={handleAddEmployee}
+                            className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Employee
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Scrollable Sidebar Content */}

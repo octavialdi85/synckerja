@@ -5,7 +5,6 @@ import { TaskFilters } from './section/TaskFilters';
 import { TaskList } from './section/TaskList';
 import TaskSummaryCards from './section/TaskSummaryCards';
 import TaskInitiative, { InitiativeStats } from './section/TaskInitiative';
-import { TaskForm } from './section/TaskForm';
 import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
 import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
@@ -102,11 +101,6 @@ const DailyTaskContent = () => {
                         {/* Filters Section */}
                         <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200 flex items-center">
                           <TaskFilters />
-                        </div>
-
-                        {/* Form Section */}
-                        <div className="flex-shrink-0 p-3 border-b border-gray-200">
-                          <TaskForm />
                         </div>
 
                         {/* Scrollable Task Content */}

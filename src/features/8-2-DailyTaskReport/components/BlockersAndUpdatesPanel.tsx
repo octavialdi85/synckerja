@@ -222,8 +222,8 @@ export const BlockersAndUpdatesPanel = () => {
   }, [unresolvedBlockers]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh-60px)]">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'blockers' | 'updates')} className="flex flex-col flex-shrink-0">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'blockers' | 'updates')} className="flex flex-col flex-shrink-0 h-full">
         <div className="border-b bg-gray-50">
           <TabsList className="w-full h-auto bg-transparent p-0 rounded-none border-none">
             <TabsTrigger 
@@ -250,11 +250,10 @@ export const BlockersAndUpdatesPanel = () => {
             </TabsTrigger>
           </TabsList>
         </div>
-      </Tabs>
 
-      {/* Shared Content Area - displays blockers or updates based on activeTab */}
-      <div className="flex-1 overflow-hidden flex flex-col m-0 min-h-0">
-        <div className="p-3 space-y-2 seamless-scroll flex-1 overflow-auto max-h-[calc(100vh-160px)]">
+        {/* Shared Content Area - displays blockers or updates based on activeTab */}
+        <div className="flex-1 overflow-hidden flex flex-col m-0 min-h-0">
+          <div className="p-3 space-y-2 seamless-scroll flex-1 overflow-auto min-h-0">
           {activeTab === 'blockers' ? (
             <>
               {loading ? (
@@ -362,8 +361,9 @@ export const BlockersAndUpdatesPanel = () => {
               )}
             </>
           )}
+          </div>
         </div>
-      </div>
+      </Tabs>
 
       {/* Modals */}
       <BlockerDetailsModal open={open} onOpenChange={setOpen} items={blockers || []} initialTab={initialTab} />

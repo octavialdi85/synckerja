@@ -20,7 +20,9 @@ const DailyTaskReportPage = () => {
               <div className="col-span-9 flex flex-col min-h-0">
                 <OverviewCards />
                 <div className="flex-shrink-0 px-0 pb-1"><Filters /></div>
-                <PerformanceTable />
+                <div className="flex-1 min-h-0">
+                  <PerformanceTable />
+                </div>
               </div>
               <div className="col-span-3 flex flex-col gap-2 min-h-0">
                 <BlockersAndUpdatesPanel />

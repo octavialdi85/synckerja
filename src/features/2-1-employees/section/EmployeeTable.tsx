@@ -1,9 +1,6 @@
 import { memo, useMemo, useCallback } from 'react';
-import { Plus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Badge } from '@/features/ui/badge';
-import { Button } from '@/features/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
 import { LoadingDots } from '@/components/LoadingDots';
 import { getPhotoUrl, getInitials } from '../hooks/photoUtils';
@@ -11,6 +8,7 @@ import { EmployeeActionsDropdown } from './EmployeeActionsDropdown';
 import type { Employee } from '../hooks/useEmployees';
 import { useOptimizedPerformanceMonitor } from '../hooks/useOptimizedPerformanceMonitor';
 import { EmployeeTableFooter } from './EmployeeTableFooter';
+import './EmployeeTable.css';
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -118,12 +116,12 @@ const EmployeeRow = memo(({
           {employee.job_level_name || '-'}
         </span>
       </TableCell>
-      <TableCell className="w-36 px-3">
+      <TableCell className="w-40 px-3">
         <Badge className={`${getStatusColor(displayStatus)} text-xs px-2 py-1 border`}>
           {displayStatus}
         </Badge>
       </TableCell>
-      <TableCell className="w-32 px-3 text-sm">{formatDate(employee.join_date)}</TableCell>
+      <TableCell className="w-36 px-3 text-sm whitespace-nowrap">{formatDate(employee.join_date)}</TableCell>
       <TableCell className="w-36 px-3 text-sm">
         <span className="truncate block" title={employee.mobile_phone || '-'}>
           {employee.mobile_phone || '-'}
@@ -151,11 +149,6 @@ export const EmployeeTable = memo(({
   isLoading = false
 }: EmployeeTableProps) => {
   useOptimizedPerformanceMonitor('EmployeeTable');
-  const navigate = useNavigate();
-
-  const handleAddEmployee = useCallback(() => {
-    navigate('/employees/add');
-  }, [navigate]);
 
   // Memoize the table headers to prevent re-renders
   const tableHeaders = useMemo(() => [
@@ -164,8 +157,8 @@ export const EmployeeTable = memo(({
     { key: 'department', label: 'Department', width: 'w-40' },
     { key: 'position', label: 'Job Position', width: 'w-36' },
     { key: 'level', label: 'Job Level', width: 'w-32' },
-    { key: 'status', label: 'Employment Status', width: 'w-36' },
-    { key: 'join_date', label: 'Join Date', width: 'w-32' },
+    { key: 'status', label: 'Employment Status', width: 'w-40' },
+    { key: 'join_date', label: 'Join Date', width: 'w-36' },
     { key: 'phone', label: 'Phone', width: 'w-36' },
     { key: 'actions', label: 'Actions', width: 'w-20' },
   ], []);
@@ -184,60 +177,42 @@ export const EmployeeTable = memo(({
   ), [employees, currentUserEmail, onRefresh, onViewEmployee]);
 
   return (
-    <div className="flex flex-col h-full max-h-[calc(100vh-360px)]">
-      <div className="p-4 border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <h2 className="text-sm font-semibold text-gray-900">Employee List</h2>
-            <p className="text-xs text-gray-500 mt-1">Manage and view employee information</p>
-          </div>
-          <Button
-            onClick={handleAddEmployee}
-            className="h-9 px-3 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Employee
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-x-auto overflow-y-auto seamless-scroll min-h-0">
-        <div className="min-w-max">
-          <Table className="employee-table">
-            <TableHeader>
-              <TableRow className="bg-gray-50 h-10 border-b">
-                {tableHeaders.map((header) => (
-                  <TableHead key={header.key} className={`text-xs font-medium text-gray-700 ${header.width} px-3`}>
-                    {header.label}
-                  </TableHead>
-                ))}
+    <div className="h-full flex flex-col">
+      <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+        <table className="w-full caption-bottom text-sm employee-table">
+          <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
+            <TableRow className="hover:bg-transparent">
+              {tableHeaders.map((header) => (
+                <TableHead key={header.key} className={`text-xs font-medium text-gray-700 ${header.width} px-3 bg-gray-50 whitespace-nowrap`}>
+                  {header.label}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-12">
+                  <div className="flex items-center justify-center">
+                    <LoadingDots size="lg" />
+                  </div>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12">
-                    <div className="flex items-center justify-center">
-                      <LoadingDots size="lg" />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : employees.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="text-lg">👥</div>
-                      <div>No employees found</div>
-                      <div className="text-xs text-gray-400">Try adjusting your filters or search terms</div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                renderEmployeeRows
-              )}
-            </TableBody>
-          </Table>
-        </div>
+            ) : employees.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">
+                  <div className="flex flex-col items-center space-y-2">
+                    <div className="text-lg">👥</div>
+                    <div>No employees found</div>
+                    <div className="text-xs text-gray-400">Try adjusting your filters or search terms</div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              renderEmployeeRows
+            )}
+          </TableBody>
+        </table>
       </div>
 
       {/* Table Footer */}

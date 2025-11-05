@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Search, FilterX, CalendarIcon } from 'lucide-react';
+import { Search, FilterX, CalendarIcon, Plus } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
 import {
@@ -13,10 +13,16 @@ import { useDailyTask } from '../DailyTaskContext';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { format } from 'date-fns';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { CreateTaskDialog } from './CreateTaskDialog';
 
-export const TaskFilters = () => {
+interface TaskFiltersProps {
+  onAddTask?: () => void;
+}
+
+export const TaskFilters = ({ onAddTask }: TaskFiltersProps = {}) => {
   const { filters, setFilters, tasks } = useDailyTask();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
+  const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
   const { isOwner } = useCentralizedUserData();
 
   // Get unique employees from all task steps for PIC filter
@@ -117,7 +123,7 @@ export const TaskFilters = () => {
       customStartDate: undefined,
       customEndDate: undefined,
       pic: '',
-      myTask: 'my_task' // Reset to default "My Task"
+      myTask: filters.myTask || 'my_task' // Preserve myTask preference (from localStorage)
     });
   };
 
@@ -238,6 +244,15 @@ export const TaskFilters = () => {
         </Button>
       )}
 
+      {/* Add Task Button */}
+      <Button
+        onClick={() => setIsCreateTaskDialogOpen(true)}
+        className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 flex items-center gap-2"
+      >
+        <Plus className="w-4 h-4" />
+        Add Task
+      </Button>
+
       {/* Custom Date Picker Dialog */}
       <CustomDatePicker
         isOpen={isCustomDatePickerOpen}
@@ -245,6 +260,17 @@ export const TaskFilters = () => {
         onDateRangeSelect={handleCustomDateRangeSelect}
         initialStartDate={filters.customStartDate ? new Date(filters.customStartDate) : undefined}
         initialEndDate={filters.customEndDate ? new Date(filters.customEndDate) : undefined}
+      />
+
+      {/* Create Task Dialog */}
+      <CreateTaskDialog
+        open={isCreateTaskDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateTaskDialogOpen(open);
+          if (onAddTask && !open) {
+            onAddTask();
+          }
+        }}
       />
     </div>
   );
