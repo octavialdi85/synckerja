@@ -115,6 +115,9 @@ export interface Task {
   created_by: string;
   assigned_to?: string;
   assigned_to_name?: string | null;
+  has_reminder?: boolean;
+  has_steps?: boolean;
+  has_substeps?: boolean;
   steps: TaskStep[];
   files: TaskFile[];
   deadline_history: DeadlineHistory[];
@@ -202,6 +205,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const [recentStepUpdates, setRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
   const [filteredRecentStepUpdates, setFilteredRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Track recently updated tasks to skip real-time refresh (optimization for status updates)
+  const recentlyUpdatedTasksRef = useRef<Set<string>>(new Set());
+  // Track tasks that have been auto-fixed for has_reminder to avoid duplicate updates
+  const autoFixedReminderRef = useRef<Set<string>>(new Set());
   const [filters, setFilters] = useState<Filters>({
     search: '',
     status: '',
@@ -428,6 +435,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           created_by,
           objective_id,
           has_substeps,
+          has_reminder,
           created_at,
           updated_at
         `)
@@ -674,12 +682,42 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const tasksWithProgress = (data || []).map((task: any) => {
         const taskSteps = stepsByTaskId[task.id] || [];
         const progress = calculateProgress(taskSteps);
-        const synchronizedStatus = determineStatusFromProgress(progress, task.status);
+        
+        // For tasks without substeps (has_substeps = false), respect the manual status
+        // Don't auto-synchronize status based on progress since they can be checked directly
+        let synchronizedStatus: string;
+        if (task.has_substeps === false) {
+          // Respect the status from database for tasks without substeps
+          synchronizedStatus = task.status;
+        } else {
+          // For tasks with substeps, synchronize based on progress
+          synchronizedStatus = determineStatusFromProgress(progress, task.status);
+        }
         
         // Get assignment data for this task
         const assignment = assignmentsByTaskId[task.id];
         const assignedEmployeeName = assignment?.employee?.full_name || null;
         const assignedEmployeeId = assignment?.employee_id || null;
+        
+        // Auto-fix: If task is completed but has_reminder is true, set it to false
+        let hasReminder = task.has_reminder;
+        if (synchronizedStatus === 'completed' && hasReminder === true) {
+          hasReminder = false;
+          // Auto-fix in database (non-blocking, only once per task)
+          if (!autoFixedReminderRef.current.has(task.id)) {
+            autoFixedReminderRef.current.add(task.id);
+            supabase
+              .from('daily_tasks')
+              .update({ has_reminder: false })
+              .eq('id', task.id)
+              .then(({ error }) => {
+                if (error) {
+                  console.warn('Failed to auto-fix has_reminder for task:', task.id, error);
+                  autoFixedReminderRef.current.delete(task.id); // Retry on next fetch
+                }
+              });
+          }
+        }
         
         return {
           ...task,
@@ -696,6 +734,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           status: synchronizedStatus,
           assigned_to: assignedEmployeeId,
           assigned_to_name: assignedEmployeeName,
+          has_reminder: hasReminder, // Use corrected value
+          has_steps: taskSteps.length > 0, // Set based on actual steps count
           files: []
         };
       });
@@ -721,17 +761,34 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     try {
       const updatesNeeded = synchronizedTasks.filter((task, index) => {
         const originalTask = originalTasks[index];
+        // Don't sync status for tasks without substeps - they can be manually set
+        if (task.has_substeps === false) {
+          return false;
+        }
         return originalTask && task.status !== originalTask.status;
       });
 
       if (updatesNeeded.length > 0) {
         console.log('Syncing task statuses in database:', updatesNeeded.map(t => ({ id: t.id, oldStatus: originalTasks.find(ot => ot.id === t.id)?.status, newStatus: t.status })));
         
-        // Update status for each task that needs synchronization
+        // Update status and finish_date for each task that needs synchronization
         for (const task of updatesNeeded) {
+          const updateData: any = { status: task.status };
+          
+          // Ensure finish_date logic: if status is not 'completed', finish_date must be NULL
+          // If status is 'completed' and finish_date is not set, set it to current timestamp
+          if (task.status === 'completed') {
+            if (!task.finish_date) {
+              updateData.finish_date = new Date().toISOString();
+            }
+          } else {
+            // If status is not completed, ensure finish_date is NULL
+            updateData.finish_date = null;
+          }
+          
           const { error } = await supabase
             .from('daily_tasks')
-            .update({ status: task.status })
+            .update(updateData)
             .eq('id', task.id);
           
           if (error) {
@@ -880,6 +937,40 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const updateTask = async (id: string, data: Partial<Task>) => {
+    // Find the current task to check has_reminder value
+    const currentTask = tasks.find(t => t.id === id);
+    
+    // If status is being set to "completed" and has_reminder is true, set it to false
+    if (data.status === 'completed' && currentTask?.has_reminder === true) {
+      data.has_reminder = false;
+    }
+    
+    // Ensure finish_date logic: if status is not 'completed', finish_date must be NULL
+    // If status is 'completed' and finish_date is not set, set it to current timestamp
+    if (data.status !== undefined) {
+      if (data.status === 'completed') {
+        // If status is being set to completed and finish_date is not provided, set it
+        if (!data.finish_date) {
+          data.finish_date = new Date().toISOString();
+        }
+      } else {
+        // If status is not completed, ensure finish_date is NULL
+        data.finish_date = null;
+      }
+    }
+    
+    // Optimistic update: update local state immediately
+    const previousTasks = [...tasks];
+    setTasks(prevTasks => 
+      prevTasks.map(task => {
+        if (task.id === id) {
+          // Simply apply the update directly - no complex logic needed for optimistic update
+          return { ...task, ...data };
+        }
+        return task;
+      })
+    );
+
     try {
       const { error } = await supabase
         .from('daily_tasks')
@@ -888,15 +979,36 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       if (error) throw error;
 
-      toast({
-        title: 'Success',
-        description: 'Task updated successfully'
-      });
+      // For status updates (and has_reminder auto-update when completing), mark task as recently updated to skip real-time refresh
+      // Check if update is primarily a status update (has_reminder might be auto-set to false)
+      const isStatusUpdate = data.status !== undefined;
+      const hasOnlyStatusOrReminder = Object.keys(data).every(key => key === 'status' || key === 'has_reminder' || key === 'finish_date');
       
-      // Clear cache for all users and refresh data immediately
-      clearCache(`tasks_${organizationId}_*`);
-      await fetchTasks(true);
+      if (isStatusUpdate && hasOnlyStatusOrReminder) {
+        // Mark this task as recently updated to skip real-time refresh
+        // For tasks without substeps, extend the skip time since they don't have progress-based sync
+        const skipDuration = currentTask?.has_substeps === false ? 5000 : 3000;
+        recentlyUpdatedTasksRef.current.add(id);
+        // Clear after specified duration (enough time for real-time event to arrive)
+        setTimeout(() => {
+          recentlyUpdatedTasksRef.current.delete(id);
+        }, skipDuration);
+      } else {
+        // Only refresh for non-status updates (title, description, priority, etc.)
+        clearCache(`tasks_${organizationId}_*`);
+        fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
+      }
+      
+      // Don't show toast for status updates to reduce noise
+      if (!data.status) {
+        toast({
+          title: 'Success',
+          description: 'Task updated successfully'
+        });
+      }
     } catch (error) {
+      // Rollback on error
+      setTasks(previousTasks);
       console.error('Error updating task:', error);
       toast({
         title: 'Error',
@@ -961,6 +1073,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         });
 
       if (error) throw error;
+
+      // Update has_steps to true (optimistic update - trigger will handle it, but we do it for consistency)
+      const { error: updateError } = await supabase
+        .from('daily_tasks')
+        .update({ has_steps: true })
+        .eq('id', taskId);
+      
+      if (updateError) {
+        console.warn('Failed to update has_steps:', updateError);
+      }
 
       toast({
         title: 'Success',
@@ -1191,12 +1313,37 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const deleteTaskStep = async (stepId: string) => {
     try {
+      // Get task_id before deleting
+      const { data: stepData } = await supabase
+        .from('task_steps')
+        .select('task_id')
+        .eq('id', stepId)
+        .single();
+
       const { error } = await supabase
         .from('task_steps')
         .delete()
         .eq('id', stepId);
 
       if (error) throw error;
+
+      // Check if task still has steps after deletion
+      if (stepData?.task_id) {
+        const { data: remainingSteps } = await supabase
+          .from('task_steps')
+          .select('id')
+          .eq('task_id', stepData.task_id)
+          .limit(1);
+
+        const { error: updateError } = await supabase
+          .from('daily_tasks')
+          .update({ has_steps: (remainingSteps?.length || 0) > 0 })
+          .eq('id', stepData.task_id);
+        
+        if (updateError) {
+          console.warn('Failed to update has_steps:', updateError);
+        }
+      }
 
       toast({
         title: 'Success',
@@ -1556,6 +1703,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         },
         (payload) => {
           console.log('📡 Real-time tasks update:', payload.eventType);
+          
+          // Skip refresh if this task was recently updated by us (optimization for status updates)
+          const taskId = payload.new?.id || payload.old?.id;
+          if (taskId && recentlyUpdatedTasksRef.current.has(taskId)) {
+            console.log('⏭️ Skipping refresh for recently updated task:', taskId);
+            return;
+          }
+          
           throttledRefresh();
         }
       )

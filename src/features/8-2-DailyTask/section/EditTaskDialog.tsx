@@ -110,7 +110,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
               placeholder="Add description (optional)..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="min-h-[100px] border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="min-h-[100px] border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
               disabled={isSubmitting}
             />
           </div>

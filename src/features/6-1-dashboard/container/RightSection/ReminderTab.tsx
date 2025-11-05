@@ -4,11 +4,15 @@ import { Badge } from '@/features/ui/badge';
 import { Separator } from '@/features/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
-import { Calendar } from 'lucide-react';
+import { Calendar, Bell, Clock } from 'lucide-react';
 import { HolidayEvent } from '../../types/social-media';
 import { ContentPillarTracker } from './ContentPillarTracker';
 // import { useOptimizedNationalHolidays } from '@/hooks/useOptimizedAttendanceData'; // Commented out - not available
-import { format } from 'date-fns';
+import { format, differenceInDays, startOfDay } from 'date-fns';
+import { id } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 const ReminderTab: React.FC = () => {
   // const { data: nationalHolidays = [], isLoading } = useOptimizedNationalHolidays(); // Commented out - hook not available
@@ -17,6 +21,34 @@ const ReminderTab: React.FC = () => {
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
+  
+  // Get current organization
+  const { organizationId } = useCurrentOrg();
+  
+  // Fetch daily tasks with reminders
+  const { data: reminderTasks = [], isLoading: isLoadingReminders } = useQuery({
+    queryKey: ['daily-tasks-reminders', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      
+      const { data, error } = await supabase
+        .from('daily_tasks')
+        .select('id, title, description, due_date, finish_date, status')
+        .eq('organization_id', organizationId)
+        .eq('has_reminder', true)
+        .order('due_date', { ascending: true, nullsFirst: false });
+      
+      if (error) {
+        console.error('Error fetching reminder tasks:', error);
+        return [];
+      }
+      
+      return data || [];
+    },
+    enabled: !!organizationId,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+  });
 
   // Helper function to determine holiday type based on name or country code
   const getHolidayType = (name: string, countryCode: string | null): 'national' | 'international' | 'religious' => {
@@ -110,6 +142,22 @@ const ReminderTab: React.FC = () => {
     }
   };
 
+  // Helper functions for calculating days remaining
+  const getDaysRemaining = (dueDate: Date | null, isCompleted: boolean): number | null => {
+    if (!dueDate || isCompleted) return null;
+    const today = startOfDay(new Date());
+    const due = startOfDay(dueDate);
+    return differenceInDays(due, today);
+  };
+
+  const formatDaysRemaining = (days: number | null): string => {
+    if (days === null) return '';
+    if (days < 0) return `${Math.abs(days)} hari lalu`;
+    if (days === 0) return 'Hari ini';
+    if (days === 1) return 'Besok';
+    return `${days} hari lagi`;
+  };
+
   return (
     <Card className="h-full flex flex-col seamless-scroll">
       <CardContent className="p-0 h-full flex flex-col seamless-scroll overflow-hidden">
@@ -131,6 +179,106 @@ const ReminderTab: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="pengingat" className="flex-1 p-2 space-y-3 m-0 overflow-y-auto seamless-scroll min-h-0">
+            {/* Daily Task Reminders */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-yellow-600" />
+                Pengingat Tugas
+              </h3>
+              <div className="space-y-2">
+                {isLoadingReminders ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="text-sm text-gray-500">Memuat pengingat...</div>
+                  </div>
+                ) : reminderTasks.length === 0 ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="text-sm text-gray-500">Tidak ada pengingat tugas</div>
+                  </div>
+                ) : (
+                  reminderTasks.map((task: any) => {
+                    const dueDate = task.due_date ? new Date(task.due_date) : null;
+                    const isCompleted = task.status === 'completed';
+                    const isOverdue = dueDate && dueDate < new Date() && !isCompleted;
+                    const daysRemaining = getDaysRemaining(dueDate, isCompleted);
+                    
+                    return (
+                      <div 
+                        key={task.id} 
+                        className={`flex items-start gap-2 p-2 border rounded ${
+                          isOverdue 
+                            ? 'bg-red-50 border-red-200' 
+                            : isCompleted 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-yellow-50 border-yellow-200'
+                        }`}
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <Bell className={`w-4 h-4 ${
+                            isOverdue 
+                              ? 'text-red-600' 
+                              : isCompleted 
+                              ? 'text-green-600' 
+                              : 'text-yellow-600'
+                          }`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm text-gray-900 mb-1">
+                            {task.title || 'Tanpa Judul'}
+                          </h4>
+                          {task.description && (
+                            <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                              {task.description}
+                            </p>
+                          )}
+                          {dueDate && (
+                            <div className="flex flex-col gap-1 text-xs">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-gray-500" />
+                                <span className={
+                                  isOverdue 
+                                    ? 'text-red-600 font-medium' 
+                                    : isCompleted 
+                                    ? 'text-green-600' 
+                                    : 'text-gray-600'
+                                }>
+                                  Jatuh tempo: {format(dueDate, 'dd MMM yyyy', { locale: id })}
+                                </span>
+                              </div>
+                              {daysRemaining !== null && (
+                                <span className={`text-xs ml-4 ${
+                                  daysRemaining < 0 
+                                    ? 'text-red-500 font-medium' 
+                                    : daysRemaining === 0 
+                                    ? 'text-orange-500 font-medium' 
+                                    : daysRemaining <= 3 
+                                    ? 'text-yellow-600' 
+                                    : 'text-gray-500'
+                                }`}>
+                                  {formatDaysRemaining(daysRemaining)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {isOverdue && (
+                            <Badge className="mt-1 text-xs bg-red-100 text-red-800">
+                              Terlambat
+                            </Badge>
+                          )}
+                          {isCompleted && !isOverdue && (
+                            <Badge className="mt-1 text-xs bg-green-100 text-green-800">
+                              Selesai
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Current Month Holidays */}
             <div>
               <h3 className="font-semibold text-sm mb-2">

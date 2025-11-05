@@ -16,7 +16,8 @@ import {
   History,
   Clock3,
   Paperclip,
-  Target
+  Target,
+  Bell
 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -80,13 +81,14 @@ import { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 import { EditTaskDialog } from './EditTaskDialog';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import './TaskList.css';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval, differenceInDays } from 'date-fns';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { useToast } from '@/features/ui/use-toast';
 
 export const TaskList = () => {
   const context = useDailyTask();
@@ -94,8 +96,10 @@ export const TaskList = () => {
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
+  const { toast } = useToast();
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
+  const [reminderPendingTaskId, setReminderPendingTaskId] = useState<string | null>(null);
   const [deadlineDialog, setDeadlineDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [historyDialog, setHistoryDialog] = useState<{ isOpen: boolean; taskId: string | null }>({ isOpen: false, taskId: null });
   const [addStepDialog, setAddStepDialog] = useState<{ isOpen: boolean; taskId: string | null; taskTitle: string }>({ isOpen: false, taskId: null, taskTitle: '' });
@@ -537,12 +541,56 @@ export const TaskList = () => {
     return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
   };
 
-  const handleStatusToggle = async (task: Task) => {
+  const handleStatusToggle = (task: Task) => {
+    // If task has no substeps (has_substeps = FALSE), allow direct toggle
+    if (task.has_substeps === false) {
+      const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+      if (newStatus !== task.status) {
+        // Show notification
+        toast({
+          title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
+          description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
+        });
+        // Fire and forget - optimistic update will handle UI immediately
+        updateTask(task.id, { status: newStatus }).catch(err => {
+          console.error('Error updating task status:', err);
+          toast({
+            title: 'Error',
+            description: 'Failed to update task status',
+            variant: 'destructive',
+          });
+        });
+      }
+      return;
+    }
+    
+    // If task has substeps, require all steps to be completed first
     const assignedProgress = calculateAssignedStepsProgress(task);
     const isFullComplete = (task.steps?.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length || 0) > 0 && assignedProgress === 100;
     const newStatus = isFullComplete ? (task.status === 'completed' ? 'pending' : 'completed') : 'pending';
     if (newStatus !== task.status) {
-      await updateTask(task.id, { status: newStatus });
+      // Show notification
+      toast({
+        title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
+        description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
+      });
+      // Fire and forget - optimistic update will handle UI immediately
+      updateTask(task.id, { status: newStatus }).catch(err => {
+        console.error('Error updating task status:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to update task status',
+          variant: 'destructive',
+        });
+      });
+    } else if (!isFullComplete && task.status !== 'completed' && task.status !== 'cancelled') {
+      // Show notification if user tries to complete task but steps are not done
+      // Only show if task is not already completed or cancelled
+      toast({
+        title: 'Cannot Complete Task',
+        description: 'Please complete all assigned steps first',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -590,8 +638,31 @@ export const TaskList = () => {
     return new Date(dueDate) < new Date();
   };
 
+  const getDaysRemaining = (dueDate: string | null, status: string): number | null => {
+    if (!dueDate || status === 'completed') return null;
+    const today = startOfDay(new Date());
+    const due = startOfDay(new Date(dueDate));
+    return differenceInDays(due, today);
+  };
+
+  const formatDaysRemaining = (days: number | null): string => {
+    if (days === null) return '';
+    if (days < 0) return `${Math.abs(days)} hari lalu`;
+    if (days === 0) return 'Hari ini';
+    if (days === 1) return 'Besok';
+    return `${days} hari lagi`;
+  };
+
   const handleDateChange = async (taskId: string, date: Date) => {
-    await updateTask(taskId, { due_date: format(date, 'yyyy-MM-dd') });
+    const updateData: Partial<Task> = { due_date: format(date, 'yyyy-MM-dd') };
+    
+    // Jika date picker dibuka karena user klik reminder, aktifkan reminder juga
+    if (reminderPendingTaskId === taskId) {
+      updateData.has_reminder = true;
+      setReminderPendingTaskId(null);
+    }
+    
+    await updateTask(taskId, updateData);
     setDatePickerOpen(null);
   };
 
@@ -621,6 +692,20 @@ export const TaskList = () => {
 
   const handleCancelDelete = () => {
     setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
+  };
+
+  const handleToggleReminder = async (task: Task) => {
+    const currentValue = task.has_reminder ?? false;
+    const newReminderValue = !currentValue;
+    
+    // Jika ingin mengaktifkan reminder tapi belum ada due_date, buka date picker dulu
+    if (newReminderValue && !task.due_date) {
+      setReminderPendingTaskId(task.id);
+      setDatePickerOpen(task.id);
+      return;
+    }
+    
+    await updateTask(task.id, { has_reminder: newReminderValue });
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -754,18 +839,37 @@ export const TaskList = () => {
                           </Button>
                         </TableCell>
 
-                {/* Checkbox */}
+                        {/* Checkbox */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                           <button
-                            onClick={() => handleStatusToggle(task)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleStatusToggle(task);
+                            }}
                             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-                            title={calculateAssignedStepsProgress(task) === 100 ? 'Mark complete / reopen' : 'Complete all assigned steps to mark task complete'}
+                            title={
+                              task.has_substeps === false
+                                ? (task.status === 'completed' ? 'Mark incomplete' : 'Mark complete')
+                                : (calculateAssignedStepsProgress(task) === 100 ? 'Mark complete / reopen' : 'Complete all assigned steps to mark task complete')
+                            }
                           >
-                            {calculateAssignedStepsProgress(task) === 100 ? (
-                              <CheckSquare className="w-5 h-5 text-green-600" />
-                            ) : (
-                              <Square className="w-5 h-5" />
-                            )}
+                            {(() => {
+                              // If task has no substeps, show checkbox based on task status directly
+                              if (task.has_substeps === false) {
+                                return task.status === 'completed' ? (
+                                  <CheckSquare className="w-5 h-5 text-green-600" />
+                                ) : (
+                                  <Square className="w-5 h-5" />
+                                );
+                              }
+                              // If task has substeps, show checkbox based on progress
+                              return calculateAssignedStepsProgress(task) === 100 ? (
+                                <CheckSquare className="w-5 h-5 text-green-600" />
+                              ) : (
+                                <Square className="w-5 h-5" />
+                              );
+                            })()}
                           </button>
                         </TableCell>
 
@@ -775,7 +879,10 @@ export const TaskList = () => {
                             <TooltipTrigger asChild>
                               <div 
                                 className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
-                                  calculateAssignedStepsProgress(task) === 100 ? 'line-through text-gray-500' : 'text-gray-900'
+                                  (task.has_substeps === false && task.status === 'completed') || 
+                                  (task.has_substeps !== false && calculateAssignedStepsProgress(task) === 100)
+                                    ? 'line-through text-gray-500' 
+                                    : 'text-gray-900'
                                 }`}
                                 onClick={() => toggleTaskExpansion(task.id)}
                               >
@@ -836,9 +943,15 @@ export const TaskList = () => {
 
                         {/* Due Date */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          <Popover 
+                            <Popover 
                             open={datePickerOpen === task.id} 
-                            onOpenChange={(open) => setDatePickerOpen(open ? task.id : null)}
+                            onOpenChange={(open) => {
+                              setDatePickerOpen(open ? task.id : null);
+                              // Reset reminder pending jika popover ditutup tanpa set date
+                              if (!open && reminderPendingTaskId === task.id) {
+                                setReminderPendingTaskId(null);
+                              }
+                            }}
                           >
                             <PopoverTrigger asChild>
                               <Button
@@ -853,6 +966,26 @@ export const TaskList = () => {
                                       <Calendar className="w-3 h-3" />
                                       <span className="text-sm">{formatDate(task.due_date)}</span>
                                     </div>
+                                    {(() => {
+                                      const daysRemaining = getDaysRemaining(task.due_date, task.status);
+                                      if (daysRemaining !== null) {
+                                        const daysText = formatDaysRemaining(daysRemaining);
+                                        return (
+                                          <span className={`text-xs ${
+                                            daysRemaining < 0 
+                                              ? 'text-red-500 font-medium' 
+                                              : daysRemaining === 0 
+                                              ? 'text-orange-500 font-medium' 
+                                              : daysRemaining <= 3 
+                                              ? 'text-yellow-600' 
+                                              : 'text-gray-500'
+                                          }`}>
+                                            {daysText}
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                     {isOverdueTask && (
                                       <span className="text-xs text-red-500">Overdue</span>
                                     )}
@@ -867,6 +1000,11 @@ export const TaskList = () => {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="center">
                               <div className="p-2">
+                                {reminderPendingTaskId === task.id && !task.due_date && (
+                                  <div className="mb-2 px-2 py-1.5 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                                    Set due date untuk mengaktifkan pengingat
+                                  </div>
+                                )}
                                 <CustomDatePicker
                                   selected={task.due_date ? new Date(task.due_date) : undefined}
                                   onSelect={(date) => handleDateChange(task.id, date)}
@@ -1014,6 +1152,27 @@ export const TaskList = () => {
                 {/* Actions */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
                           <div className="flex items-center justify-center gap-1">
+                            {/* Reminder Icon (Pengingat) */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleReminder(task)}
+                              className={`h-7 w-7 p-0 ${
+                                (task.has_reminder ?? false)
+                                  ? 'text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700'
+                                  : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                              }`}
+                              title={
+                                (task.has_reminder ?? false) 
+                                  ? 'Pengingat aktif' 
+                                  : task.due_date 
+                                  ? 'Aktifkan pengingat' 
+                                  : 'Set due date terlebih dahulu untuk mengaktifkan pengingat'
+                              }
+                            >
+                              <Bell className={`w-3 h-3 ${(task.has_reminder ?? false) ? 'fill-current' : ''}`} />
+                            </Button>
+                            
                             {/* History Icon */}
                             {task.deadline_history && task.deadline_history.length > 0 && (
                               <Button
