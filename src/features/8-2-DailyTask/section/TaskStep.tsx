@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History, Plus, ListChecks } from 'lucide-react';
+import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History, Plus, ListChecks, FileEdit } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
@@ -10,6 +10,7 @@ import { AssignStepDialog } from './AssignStepDialog';
 import { StepLinks } from './StepLinks';
 import { StepHistoryModal } from './StepHistoryModal';
 import { ModalViewSubSteps } from './ModalViewSubSteps';
+import UpdateHistoryDialog from '@/features/8-1-meeting-notes/modal/UpdateHistoryDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
@@ -83,6 +84,15 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   const [linkCount, setLinkCount] = useState<number>(0);
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+
+  // States for meeting point integration
+  const [isFromMeetingPoint, setIsFromMeetingPoint] = useState(false);
+  const [solutionId, setSolutionId] = useState<string | null>(null);
+  const [meetingPointId, setMeetingPointId] = useState<string | null>(null);
+  const [discussionPoint, setDiscussionPoint] = useState<string>('');
+  const [isUpdateHistoryOpen, setIsUpdateHistoryOpen] = useState(false);
+  const [isCheckingMeetingPoint, setIsCheckingMeetingPoint] = useState(false);
+  const [updateHistoryCount, setUpdateHistoryCount] = useState<number>(0);
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -237,6 +247,126 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
       })();
     }
   }, [isViewSubStepsOpen, organizationId, step.id]);
+
+  // Check if step is from meeting point
+  useEffect(() => {
+    const checkIfFromMeetingPoint = async () => {
+      if (!organizationId || !step.title) {
+        setIsFromMeetingPoint(false);
+        return;
+      }
+
+      setIsCheckingMeetingPoint(true);
+      try {
+        // First, query solution with solution_description that matches step.title
+        const { data: solution, error: solutionError } = await supabase
+          .from('meeting_point_solutions')
+          .select('id, meeting_point_id, solution_description')
+          .eq('solution_description', step.title)
+          .maybeSingle();
+
+        if (solutionError) {
+          console.error('Error checking meeting point solution:', solutionError);
+          setIsFromMeetingPoint(false);
+          return;
+        }
+
+        if (!solution || !solution.meeting_point_id) {
+          setIsFromMeetingPoint(false);
+          return;
+        }
+
+        // Found solution - now verify it belongs to current organization
+        const { data: meetingPoint, error: meetingPointError } = await supabase
+          .from('meeting_points')
+          .select('id, discussion_point, organization_id')
+          .eq('id', solution.meeting_point_id)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+        if (meetingPointError) {
+          console.error('Error checking meeting point:', meetingPointError);
+          setIsFromMeetingPoint(false);
+          return;
+        }
+
+        if (meetingPoint && meetingPoint.organization_id === organizationId) {
+          // Step is from meeting point - set all required data
+          console.log('✅ Step is from meeting point:', {
+            stepTitle: step.title,
+            solutionId: solution.id,
+            meetingPointId: solution.meeting_point_id,
+            discussionPoint: meetingPoint.discussion_point
+          });
+          setIsFromMeetingPoint(true);
+          setSolutionId(solution.id);
+          setMeetingPointId(solution.meeting_point_id);
+          setDiscussionPoint(meetingPoint.discussion_point || '');
+        } else {
+          setIsFromMeetingPoint(false);
+        }
+      } catch (error) {
+        console.error('Error checking meeting point:', error);
+        setIsFromMeetingPoint(false);
+      } finally {
+        setIsCheckingMeetingPoint(false);
+      }
+    };
+
+    checkIfFromMeetingPoint();
+  }, [step.title, organizationId]);
+
+  // Fetch update history count for solution
+  useEffect(() => {
+    const fetchUpdateCount = async () => {
+      if (!solutionId || !isFromMeetingPoint) {
+        setUpdateHistoryCount(0);
+        return;
+      }
+
+      try {
+        const { count, error } = await supabase
+          .from('meeting_point_updates')
+          .select('*', { count: 'exact', head: true })
+          .eq('meeting_point_solution_id', solutionId);
+
+        if (error) {
+          console.error('Error fetching update count:', error);
+          setUpdateHistoryCount(0);
+          return;
+        }
+
+        setUpdateHistoryCount(count || 0);
+      } catch (error) {
+        console.error('Error fetching update count:', error);
+        setUpdateHistoryCount(0);
+      }
+    };
+
+    fetchUpdateCount();
+  }, [solutionId, isFromMeetingPoint]);
+
+  // Refresh update count when dialog closes (in case updates were added/removed)
+  useEffect(() => {
+    if (!isUpdateHistoryOpen && solutionId && isFromMeetingPoint) {
+      const fetchUpdateCount = async () => {
+        try {
+          const { count, error } = await supabase
+            .from('meeting_point_updates')
+            .select('*', { count: 'exact', head: true })
+            .eq('meeting_point_solution_id', solutionId);
+
+          if (!error) {
+            setUpdateHistoryCount(count || 0);
+          }
+        } catch (error) {
+          console.error('Error refreshing update count:', error);
+        }
+      };
+
+      fetchUpdateCount();
+    }
+  }, [isUpdateHistoryOpen, solutionId, isFromMeetingPoint]);
 
   const handleToggleComplete = async () => {
     const next = !step.is_completed;
@@ -531,6 +661,25 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
               </div>
             )}
           </Button>
+          {/* Update History from Meeting Point - Only show if step is from meeting point */}
+          {isFromMeetingPoint && solutionId && meetingPointId && discussionPoint && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsUpdateHistoryOpen(true)}
+              className={`h-6 w-6 p-0 relative ${
+                updateHistoryCount > 0 ? 'text-blue-600 hover:text-blue-700' : 'text-blue-500 hover:text-blue-600'
+              }`}
+              title={`Update History from Meeting Notes ${updateHistoryCount > 0 ? `(${updateHistoryCount})` : ''}`}
+            >
+              <FileEdit className="w-3 h-3" />
+              {updateHistoryCount > 0 && (
+                <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {updateHistoryCount > 99 ? '99+' : updateHistoryCount}
+                </div>
+              )}
+            </Button>
+          )}
             {/* Edit - Locked for assigned users */}
             <Button
               variant="ghost"
@@ -712,6 +861,17 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
         }
       }}
     />
+
+    {/* Update History Dialog from Meeting Point */}
+    {isFromMeetingPoint && solutionId && meetingPointId && discussionPoint && (
+      <UpdateHistoryDialog
+        isOpen={isUpdateHistoryOpen}
+        onClose={() => setIsUpdateHistoryOpen(false)}
+        meetingPointId={meetingPointId}
+        solutionId={solutionId}
+        discussionPoint={discussionPoint}
+      />
+    )}
     </div>
   );
 };

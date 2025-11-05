@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, Clock, FileText, History } from 'lucide-react';
+import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, Clock, FileText, History, CheckSquare } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
@@ -22,6 +22,7 @@ import {
 } from '@/features/ui/table';
 import { useMeetingNotes } from '../MeetingNotesContext';
 import UpdateHistoryDialog from './UpdateHistoryDialog';
+import { AddSolutionAsDailyTaskModal } from './AddSolutionAsDailyTaskModal';
 
 interface IssuesDialogProps {
   isOpen: boolean;
@@ -67,6 +68,10 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
   const [editingSolutionNotes, setEditingSolutionNotes] = useState('');
   const [updateHistorySolutionId, setUpdateHistorySolutionId] = useState<string | null>(null);
   const [solutionUpdateCounts, setSolutionUpdateCounts] = useState<Record<string, number>>({});
+  
+  // Add as Daily Task modal state
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [selectedSolutionForTask, setSelectedSolutionForTask] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
@@ -249,6 +254,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
   const handleCancelSolutionNotes = () => {
     setNotesSolutionId(null);
     setEditingSolutionNotes('');
+  };
+
+  const handleAddAsDailyTask = (solution: any) => {
+    setSelectedSolutionForTask(solution);
+    setIsAddTaskModalOpen(true);
   };
 
   const formatDateTime = (dateString: string) => {
@@ -443,19 +453,19 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                     Select Issue
                   </Label>
                   <Select value={selectedIssueId} onValueChange={setSelectedIssueId}>
-                    <SelectTrigger className="bg-white border border-gray-200 focus:border-green-300">
+                    <SelectTrigger className="bg-white border border-gray-200 focus:border-green-300 w-full">
                       <SelectValue placeholder="Select an issue to add solution..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border shadow-lg max-h-[200px]">
+                    <SelectContent className="bg-white border shadow-lg max-h-[200px] min-w-[400px]">
                       {issues.length === 0 ? (
                         <div className="px-2 py-4 text-sm text-gray-500 text-center">
                           No issues available. Add an issue first.
                         </div>
                       ) : (
                         issues.map((issue) => (
-                          <SelectItem key={issue.id} value={issue.id}>
-                            <div className="max-w-md">
-                              <p className="text-sm truncate">{issue.issue_description}</p>
+                          <SelectItem key={issue.id} value={issue.id} className="whitespace-normal">
+                            <div className="w-full">
+                              <p className="text-sm break-words">{issue.issue_description}</p>
                             </div>
                           </SelectItem>
                         ))
@@ -585,6 +595,15 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAddAsDailyTask(solution)}
+                                className="h-7 w-7 p-0 hover:bg-purple-50 hover:text-purple-600"
+                                title="Add as Daily task"
+                              >
+                                <CheckSquare className="w-3.5 h-3.5" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -722,6 +741,20 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
           discussionPoint={discussionPoint}
           meetingPointId={meetingPointId}
           solutionId={updateHistorySolutionId}
+        />
+      )}
+
+      {/* Add Solution as Daily Task Modal */}
+      {selectedSolutionForTask && (
+        <AddSolutionAsDailyTaskModal
+          isOpen={isAddTaskModalOpen}
+          onClose={() => {
+            setIsAddTaskModalOpen(false);
+            setSelectedSolutionForTask(null);
+          }}
+          solution={selectedSolutionForTask}
+          meetingPointId={meetingPointId}
+          discussionPoint={discussionPoint}
         />
       )}
     </Dialog>

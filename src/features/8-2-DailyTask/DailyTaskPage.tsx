@@ -10,13 +10,16 @@ import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
 import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
+import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
 
 const DailyTaskPage = () => {
   return (
-    <DailyTaskProvider>
-      <DailyTaskContent />
-    </DailyTaskProvider>
+    <MeetingNotesProvider>
+      <DailyTaskProvider>
+        <DailyTaskContent />
+      </DailyTaskProvider>
+    </MeetingNotesProvider>
   );
 };
 
