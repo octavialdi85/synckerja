@@ -36,6 +36,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { TaskStep } from '@/features/8-2-DailyTask/section/TaskStep';
 import { AssignStepDialog } from '@/features/8-2-DailyTask/section/AssignStepDialog';
 import { AddStepModal } from './AddStepModal';
+import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 
 interface TaskFile {
   id: string;
@@ -209,16 +210,14 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
     try {
       setLoading(true);
 
+      // Fetch tasks without the old assigned_to relationship
       const { data, error } = await (supabase as any)
         .from('daily_tasks')
         .select(`
           *,
-          employees!assigned_to(id, full_name, email),
           task_steps (
             *,
-            task_files (*),
-            assigned_employee:employees!assigned_to(id, full_name, email),
-            assigned_by_employee:employees!assigned_by(id, full_name, email)
+            task_files (*)
           )
         `)
         .eq('organization_id', organizationId)
@@ -226,18 +225,94 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch task assignments separately
+      const taskIds = (data || []).map((task: any) => task.id);
+      let assignmentsData: any[] = [];
       
-      const transformedTasks = (data || []).map(task => {
-        const steps = (task.task_steps || []).map((step: any) => ({
-          ...step,
-          files: step.task_files || []
-        }));
+      if (taskIds.length > 0) {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from('daily_tasks_assigned')
+          .select(`
+            daily_task_id,
+            employee_id,
+            employee:employees!employee_id(id, full_name, email)
+          `)
+          .in('daily_task_id', taskIds);
+
+        if (!assignmentsError && assignments) {
+          assignmentsData = assignments;
+        }
+      }
+
+      // Fetch step assignments separately
+      const allStepIds: string[] = [];
+      (data || []).forEach((task: any) => {
+        if (task.task_steps) {
+          task.task_steps.forEach((step: any) => {
+            if (step.id) allStepIds.push(step.id);
+          });
+        }
+      });
+
+      let stepAssignmentsData: any[] = [];
+      if (allStepIds.length > 0) {
+        const { data: stepAssignments, error: stepAssignmentsError } = await supabase
+          .from('task_steps_assigned')
+          .select(`
+            task_step_id,
+            employee_id,
+            assigned_by,
+            assigned_at,
+            employee:employees!employee_id(id, full_name, email)
+          `)
+          .in('task_step_id', allStepIds);
+
+        if (!stepAssignmentsError && stepAssignments) {
+          stepAssignmentsData = stepAssignments;
+        }
+      }
+
+      // Create a map of assignments by task ID
+      const assignmentsByTaskId: Record<string, any> = {};
+      assignmentsData.forEach((assignment: any) => {
+        if (!assignmentsByTaskId[assignment.daily_task_id]) {
+          assignmentsByTaskId[assignment.daily_task_id] = assignment;
+        }
+      });
+
+      // Create a map of assignments by step ID
+      const assignmentsByStepId: Record<string, any> = {};
+      stepAssignmentsData.forEach((assignment: any) => {
+        if (!assignmentsByStepId[assignment.task_step_id]) {
+          assignmentsByStepId[assignment.task_step_id] = assignment;
+        }
+      });
+      
+      const transformedTasks = (data || []).map((task: any) => {
+        const steps = (task.task_steps || []).map((step: any) => {
+          // Get step assignment info from the separate assignments query
+          const stepAssignment = assignmentsByStepId[step.id];
+          
+          return {
+            ...step,
+            files: step.task_files || [],
+            assigned_employee: stepAssignment?.employee || null,
+            assigned_to: stepAssignment?.employee_id || null,
+            assigned_by: stepAssignment?.assigned_by || null
+          };
+        });
+
+        // Get assignment info from the separate assignments query
+        const assignment = assignmentsByTaskId[task.id];
+        const assignedEmployee = assignment?.employee;
 
         return {
           ...task,
           steps,
           progress_percentage: calculateProgress(steps),
-          assigned_to_name: task.employees?.full_name || null
+          assigned_to: assignment?.employee_id || null,
+          assigned_to_name: assignedEmployee?.full_name || null
         };
       });
 
@@ -644,14 +719,17 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">Loading activities...</div>
-      </div>
+      <MeetingNotesProvider>
+        <div className="flex items-center justify-center p-8">
+          <div className="text-gray-500">Loading activities...</div>
+        </div>
+      </MeetingNotesProvider>
     );
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    <MeetingNotesProvider>
+      <div className="flex-1 min-h-0 flex flex-col">
       {/* Header Section */}
       <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
@@ -1058,6 +1136,7 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
           }}
         />
       )}
-    </div>
+      </div>
+    </MeetingNotesProvider>
   );
 };

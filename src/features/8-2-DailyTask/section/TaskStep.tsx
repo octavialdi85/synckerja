@@ -513,9 +513,9 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
         </div>
       ) : (
         <>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-sm ${
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`text-sm truncate min-w-0 ${
                 step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
               }`}>
                 {step.title}
