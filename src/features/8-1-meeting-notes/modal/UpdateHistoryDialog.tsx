@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { History, Clock, User, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import {
@@ -14,17 +14,24 @@ import {
 } from '@/features/ui/select';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { useMeetingNotes } from '../MeetingNotesContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UpdateHistoryDialogProps {
   isOpen: boolean;
   onClose: () => void;
   discussionPoint: string;
   meetingPointId: string;
+  solutionId?: string; // Optional: if provided, show updates only for this solution
 }
 
-const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId }: UpdateHistoryDialogProps) => {
-  const { getUpdateHistory, addUpdate, updateUpdate, deleteUpdate } = useMeetingNotes();
+const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, solutionId }: UpdateHistoryDialogProps) => {
+  const { getUpdateHistoryByMeetingPoint, getUpdateHistory, addUpdate, updateUpdate, deleteUpdate, getIssueHistory } = useMeetingNotes();
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
+  const [issues, setIssues] = useState<any[]>([]);
+  const [solutions, setSolutions] = useState<any[]>([]);
+  const [allSolutions, setAllSolutions] = useState<any[]>([]); // Store all solutions for filtering
+  const [selectedIssueId, setSelectedIssueId] = useState<string>('');
+  const [selectedSolutionId, setSelectedSolutionId] = useState<string>('');
   const [newUpdate, setNewUpdate] = useState('');
   const [newStatus, setNewStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,15 +41,131 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
+      if (!solutionId) {
+        // Only load issues if not called from IssuesDialog (no solutionId)
+        loadIssues();
+      }
+      loadSolutions();
+      // Don't load update history here, let the other useEffect handle it after solutions are loaded
+    } else if (!isOpen) {
+      // Reset states when dialog closes
+      setSelectedIssueId('');
+      setSelectedSolutionId('');
+      setIssues([]);
+      setSolutions([]);
+      setAllSolutions([]);
+      setUpdateHistory([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, meetingPointId, solutionId]);
+
+  // Filter solutions when issue is selected
+  useEffect(() => {
+    if (selectedIssueId && allSolutions.length > 0) {
+      const filtered = allSolutions.filter(sol => sol.meeting_point_issue_id === selectedIssueId);
+      setSolutions(filtered);
+      // Reset selected solution if it's not in the filtered list
+      if (selectedSolutionId && !filtered.find(s => s.id === selectedSolutionId)) {
+        setSelectedSolutionId('');
+      } else if (filtered.length > 0 && !selectedSolutionId) {
+        // Auto-select first solution if available
+        setSelectedSolutionId(filtered[0].id);
+      }
+    } else if (!selectedIssueId && allSolutions.length > 0) {
+      // Show all solutions if no issue is selected
+      setSolutions(allSolutions);
+      // Auto-select first solution if available and not already selected
+      if (allSolutions.length > 0 && !selectedSolutionId) {
+        setSelectedSolutionId(allSolutions[0].id);
+      }
+    }
+  }, [selectedIssueId, allSolutions, selectedSolutionId]);
+
+  // Reload update history when selectedIssueId or selectedSolutionId changes
+  useEffect(() => {
+    if (isOpen && meetingPointId && allSolutions.length > 0) {
+      // Only reload if we have solutions loaded
       loadUpdateHistory();
     }
-  }, [isOpen, meetingPointId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIssueId, selectedSolutionId, allSolutions.length]);
+
+  const loadIssues = async () => {
+    try {
+      const issuesData = await getIssueHistory(meetingPointId);
+      setIssues(issuesData);
+      
+      // Auto-select first issue if available
+      if (issuesData.length > 0 && !selectedIssueId) {
+        setSelectedIssueId(issuesData[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading issues:', error);
+    }
+  };
+
+  const loadSolutions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('meeting_point_solutions')
+        .select('id, solution_description, meeting_point_issue_id')
+        .eq('meeting_point_id', meetingPointId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setAllSolutions(data || []);
+      
+      // If solutionId is provided, use it and filter solutions
+      if (solutionId) {
+        setSelectedSolutionId(solutionId);
+        // Find the solution to get its issue_id
+        const solution = data?.find(s => s.id === solutionId);
+        if (solution) {
+          setSelectedIssueId(solution.meeting_point_issue_id);
+          setSolutions([solution]);
+        }
+      } else {
+        // If no solutionId, solutions will be filtered by selectedIssueId in useEffect
+        // Don't auto-select here, let the useEffect handle it
+      }
+    } catch (error) {
+      console.error('Error loading solutions:', error);
+    }
+  };
 
   const loadUpdateHistory = async () => {
     setIsLoading(true);
     try {
-      const history = await getUpdateHistory(meetingPointId);
-      setUpdateHistory(history);
+      // If solutionId is provided, get updates only for that solution
+      if (solutionId) {
+        const history = await getUpdateHistory(solutionId);
+        setUpdateHistory(history);
+      } else if (selectedSolutionId) {
+        // If solution is selected, get updates only for that solution
+        const history = await getUpdateHistory(selectedSolutionId);
+        setUpdateHistory(history);
+      } else if (selectedIssueId) {
+        // If issue is selected but no solution, get updates for all solutions of that issue
+        const issueSolutions = allSolutions.filter(sol => sol.meeting_point_issue_id === selectedIssueId);
+        if (issueSolutions.length > 0) {
+          const solutionIds = issueSolutions.map(s => s.id);
+          const { data, error } = await supabase
+            .from('meeting_point_updates')
+            .select('*')
+            .in('meeting_point_solution_id', solutionIds)
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          setUpdateHistory(data || []);
+        } else {
+          setUpdateHistory([]);
+        }
+      } else {
+        // If nothing is selected, get all updates for the meeting point
+        const history = await getUpdateHistoryByMeetingPoint(meetingPointId);
+        setUpdateHistory(history);
+      }
     } catch (error) {
       console.error('Error loading update history:', error);
     } finally {
@@ -52,11 +175,22 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
 
   const handleAddUpdate = async () => {
     if (!newUpdate.trim()) return;
+    
+    // If no solution selected and solutions exist, select the first one
+    if (!selectedSolutionId && solutions.length > 0) {
+      setSelectedSolutionId(solutions[0].id);
+    }
+    
+    // If still no solution, show alert
+    if (!selectedSolutionId) {
+      alert('Please create a solution first before adding updates. You can create solutions in the Issues dialog.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const statusToSet = newStatus || 'On Going';
-      await addUpdate(meetingPointId, newUpdate, statusToSet);
+      await addUpdate(selectedSolutionId, newUpdate, statusToSet);
       
       // Reload the update history to show the new update
       await loadUpdateHistory();
@@ -130,9 +264,9 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
               <History className="w-5 h-5 text-blue-600" />
               Update History
             </DialogTitle>
-            <p className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
+            <DialogDescription className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
               {discussionPoint}
-            </p>
+            </DialogDescription>
           </div>
         </DialogHeader>
 
@@ -145,6 +279,73 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
             </h4>
             
             <div className="space-y-4">
+              {/* Show Issues dropdown only if not called from IssuesDialog (no solutionId) */}
+              {!solutionId && (
+                <div>
+                  <Label htmlFor="issue-select" className="text-sm font-medium text-gray-700 mb-2 block">
+                    Select Issue
+                  </Label>
+                  {issues.length === 0 ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                      <p>No issues available. Please create an issue first in the Issues dialog.</p>
+                    </div>
+                  ) : (
+                    <Select 
+                      value={selectedIssueId} 
+                      onValueChange={setSelectedIssueId}
+                    >
+                      <SelectTrigger className="bg-white border border-gray-200 focus:border-blue-300">
+                        <SelectValue placeholder="Select an issue..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border shadow-lg max-h-[200px]">
+                        {issues.map((issue) => (
+                          <SelectItem key={issue.id} value={issue.id}>
+                            <div className="max-w-md">
+                              <p className="text-sm truncate">{issue.issue_description}</p>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {solutions.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                  <p className="font-medium mb-1">No solutions available</p>
+                  {!solutionId && selectedIssueId ? (
+                    <p>No solutions found for the selected issue. Please create a solution first in the Issues dialog.</p>
+                  ) : (
+                    <p>Please create a solution first in the Issues dialog before adding updates.</p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="solution-select" className="text-sm font-medium text-gray-700 mb-2 block">
+                    {solutionId ? 'Solution' : 'Select Solution'}
+                  </Label>
+                  <Select 
+                    value={selectedSolutionId} 
+                    onValueChange={setSelectedSolutionId}
+                    disabled={!!solutionId}
+                  >
+                    <SelectTrigger className="bg-white border border-gray-200 focus:border-blue-300">
+                      <SelectValue placeholder="Select a solution..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border shadow-lg max-h-[200px]">
+                      {solutions.map((solution) => (
+                        <SelectItem key={solution.id} value={solution.id}>
+                          {solution.solution_description.length > 60 
+                            ? `${solution.solution_description.substring(0, 60)}...` 
+                            : solution.solution_description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
               <div>
                 <Label htmlFor="new-update" className="text-sm font-medium text-gray-700 mb-2 block">
                   Update Details
@@ -155,6 +356,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
                   value={newUpdate}
                   onChange={(e) => setNewUpdate(e.target.value)}
                   className="min-h-[80px] resize-none bg-white border border-gray-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  disabled={solutions.length === 0}
                 />
               </div>
 
@@ -178,7 +380,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
 
                 <Button
                   onClick={handleAddUpdate}
-                  disabled={!newUpdate.trim() || isSubmitting}
+                  disabled={!newUpdate.trim() || isSubmitting || solutions.length === 0}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 font-medium"
                 >
                   {isSubmitting ? 'Adding...' : 'Add Update'}

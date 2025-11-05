@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, Clock, FileText, History } from 'lucide-react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import {
@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/features/ui/table';
 import { useMeetingNotes } from '../MeetingNotesContext';
+import UpdateHistoryDialog from './UpdateHistoryDialog';
 
 interface IssuesDialogProps {
   isOpen: boolean;
@@ -41,7 +42,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     addSolution,
     updateSolution,
     updateSolutionNotes,
-    deleteSolution
+    deleteSolution,
+    getUpdateHistory
   } = useMeetingNotes();
   
   const [issues, setIssues] = useState<any[]>([]);
@@ -63,6 +65,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
   const [editingSolutionText, setEditingSolutionText] = useState('');
   const [notesSolutionId, setNotesSolutionId] = useState<string | null>(null);
   const [editingSolutionNotes, setEditingSolutionNotes] = useState('');
+  const [updateHistorySolutionId, setUpdateHistorySolutionId] = useState<string | null>(null);
+  const [solutionUpdateCounts, setSolutionUpdateCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
@@ -82,6 +86,19 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       if (onIssueCountChange) {
         onIssueCountChange(issuesData.length);
       }
+      
+      // Load update counts for each solution
+      const updateCounts: Record<string, number> = {};
+      for (const solution of solutionsData) {
+        try {
+          const updates = await getUpdateHistory(solution.id);
+          updateCounts[solution.id] = updates.length;
+        } catch (error) {
+          console.error(`Error loading update count for solution ${solution.id}:`, error);
+          updateCounts[solution.id] = 0;
+        }
+      }
+      setSolutionUpdateCounts(updateCounts);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -258,9 +275,9 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
             <AlertCircle className="w-5 h-5 text-orange-600" />
             Issues & Solutions
           </DialogTitle>
-          <p className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
+          <DialogDescription className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
             {discussionPoint}
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
@@ -486,20 +503,21 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                       <TableHead>Issue Reference</TableHead>
                       <TableHead>Solution Description</TableHead>
                       <TableHead className="w-[150px]">Created</TableHead>
+                      <TableHead className="w-[100px]">Updates</TableHead>
                       <TableHead className="w-[120px]">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8">
+                        <TableCell colSpan={6} className="text-center py-8">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto mb-2"></div>
                           Loading...
                         </TableCell>
                       </TableRow>
                     ) : solutions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                           <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                           <p className="font-medium">No solutions yet</p>
                           <p className="text-sm">Add the first solution above to get started.</p>
@@ -552,6 +570,18 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           </TableCell>
                           <TableCell className="text-xs text-gray-500">
                             {formatDateTime(solution.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setUpdateHistorySolutionId(solution.id)}
+                              className="h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 text-blue-600 border border-blue-200"
+                              title="View update history"
+                            >
+                              <History className="w-3 h-3 mr-1" />
+                              {solutionUpdateCounts[solution.id] || 0}
+                            </Button>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -678,6 +708,21 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Update History Dialog */}
+      {updateHistorySolutionId && (
+        <UpdateHistoryDialog
+          isOpen={!!updateHistorySolutionId}
+          onClose={() => {
+            setUpdateHistorySolutionId(null);
+            // Reload data to refresh update counts
+            loadData();
+          }}
+          discussionPoint={discussionPoint}
+          meetingPointId={meetingPointId}
+          solutionId={updateHistorySolutionId}
+        />
       )}
     </Dialog>
   );

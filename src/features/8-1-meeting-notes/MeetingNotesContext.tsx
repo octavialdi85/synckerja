@@ -16,13 +16,14 @@ interface MeetingPoint {
 
 interface MeetingPointUpdate {
   id: string;
-  meeting_point_id: string;
+  meeting_point_solution_id: string;
   update_details: string;
   created_at: string;
   created_by: string | null;
-  meeting_points?: {
-    organization_id: string;
-    discussion_point: string;
+  meeting_point_solutions?: {
+    solution_description: string;
+    meeting_point_id: string;
+    meeting_point_issue_id: string;
   };
 }
 
@@ -79,8 +80,9 @@ interface MeetingNotesContextType {
   addMeetingPoint: (data: Partial<MeetingPoint>) => Promise<void>;
   updateMeetingPoint: (id: string, data: Partial<MeetingPoint>) => Promise<void>;
   deleteMeetingPoint: (id: string) => Promise<void>;
-  getUpdateHistory: (meetingPointId: string) => Promise<MeetingPointUpdate[]>;
-  addUpdate: (meetingPointId: string, updateDetails: string, newStatus?: string) => Promise<void>;
+  getUpdateHistory: (solutionId: string) => Promise<MeetingPointUpdate[]>;
+  getUpdateHistoryByMeetingPoint: (meetingPointId: string) => Promise<MeetingPointUpdate[]>;
+  addUpdate: (solutionId: string, updateDetails: string, newStatus?: string) => Promise<void>;
   updateUpdate: (updateId: string, updateDetails: string) => Promise<void>;
   deleteUpdate: (updateId: string) => Promise<void>;
   getUpdateCount: (meetingPointId: string) => number;
@@ -158,13 +160,26 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     if (!organizationId) return;
 
     try {
+      // First get all solutions for this organization's meeting points
+      const { data: solutions, error: solutionsError } = await supabase
+        .from('meeting_point_solutions')
+        .select('id, meeting_point_id, meeting_points!inner(organization_id, discussion_point)')
+        .eq('meeting_points.organization_id', organizationId);
+
+      if (solutionsError) throw solutionsError;
+
+      if (!solutions || solutions.length === 0) {
+        setRecentUpdates([]);
+        return;
+      }
+
+      const solutionIds = solutions.map(s => s.id);
+
+      // Then get all updates for these solutions
       const { data, error } = await supabase
         .from('meeting_point_updates')
-        .select(`
-          *,
-          meeting_points!inner(organization_id, discussion_point)
-        `)
-        .eq('meeting_points.organization_id', organizationId)
+        .select('*, meeting_point_solutions(solution_description, meeting_point_id)')
+        .in('meeting_point_solution_id', solutionIds)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -274,12 +289,12 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     }
   };
 
-  const getUpdateHistory = async (meetingPointId: string): Promise<MeetingPointUpdate[]> => {
+  const getUpdateHistory = async (solutionId: string): Promise<MeetingPointUpdate[]> => {
     try {
       const { data, error } = await supabase
         .from('meeting_point_updates')
         .select('*')
-        .eq('meeting_point_id', meetingPointId)
+        .eq('meeting_point_solution_id', solutionId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -295,14 +310,59 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     }
   };
 
-  const addUpdate = async (meetingPointId: string, updateDetails: string, newStatus?: string) => {
+  const getUpdateHistoryByMeetingPoint = async (meetingPointId: string): Promise<MeetingPointUpdate[]> => {
+    try {
+      // First get all solutions for this meeting point
+      const { data: solutions, error: solutionsError } = await supabase
+        .from('meeting_point_solutions')
+        .select('id')
+        .eq('meeting_point_id', meetingPointId);
+
+      if (solutionsError) throw solutionsError;
+      
+      if (!solutions || solutions.length === 0) {
+        return [];
+      }
+
+      const solutionIds = solutions.map(s => s.id);
+
+      // Then get all updates for these solutions
+      const { data, error } = await supabase
+        .from('meeting_point_updates')
+        .select('*')
+        .in('meeting_point_solution_id', solutionIds)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching update history by meeting point:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load update history',
+        variant: 'destructive'
+      });
+      return [];
+    }
+  };
+
+  const addUpdate = async (solutionId: string, updateDetails: string, newStatus?: string) => {
     if (!organizationId) return;
 
     try {
+      // First, get the solution to find the meeting_point_id
+      const { data: solution, error: solutionError } = await supabase
+        .from('meeting_point_solutions')
+        .select('meeting_point_id')
+        .eq('id', solutionId)
+        .single();
+
+      if (solutionError) throw solutionError;
+
       const { error } = await supabase
         .from('meeting_point_updates')
         .insert({
-          meeting_point_id: meetingPointId,
+          meeting_point_solution_id: solutionId,
           update_details: updateDetails,
           organization_id: organizationId,
           created_by: (await supabase.auth.getUser()).data.user?.id || null
@@ -311,11 +371,13 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
 
       // Update meeting point status if provided, or auto-change to "On Going" if status is "Not Started"
-      const currentPoint = meetingPoints.find(p => p.id === meetingPointId);
-      const statusToUpdate = newStatus || (currentPoint?.status === 'Not Started' ? 'On Going' : currentPoint?.status);
-      
-      if (statusToUpdate && statusToUpdate !== currentPoint?.status) {
-        await updateMeetingPoint(meetingPointId, { status: statusToUpdate });
+      if (solution?.meeting_point_id) {
+        const currentPoint = meetingPoints.find(p => p.id === solution.meeting_point_id);
+        const statusToUpdate = newStatus || (currentPoint?.status === 'Not Started' ? 'On Going' : currentPoint?.status);
+        
+        if (statusToUpdate && statusToUpdate !== currentPoint?.status) {
+          await updateMeetingPoint(solution.meeting_point_id, { status: statusToUpdate });
+        }
       }
 
       // Refresh updates data
@@ -390,7 +452,12 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
   };
 
   const getUpdateCount = (meetingPointId: string): number => {
-    return recentUpdates.filter(update => update.meeting_point_id === meetingPointId).length;
+    // Count updates from recentUpdates that belong to solutions of this meeting point
+    // This uses the cached recentUpdates data for performance
+    return recentUpdates.filter(update => {
+      const solution = (update as any).meeting_point_solutions;
+      return solution?.meeting_point_id === meetingPointId;
+    }).length;
   };
 
   // ========== ISSUES FUNCTIONS ==========
@@ -759,6 +826,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     updateMeetingPoint,
     deleteMeetingPoint,
     getUpdateHistory,
+    getUpdateHistoryByMeetingPoint,
     addUpdate,
     updateUpdate,
     deleteUpdate,
