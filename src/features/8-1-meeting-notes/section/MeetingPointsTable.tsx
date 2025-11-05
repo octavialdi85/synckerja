@@ -1,6 +1,6 @@
 
-import { useState } from 'react';
-import { Edit, Trash2, History, MoreHorizontal, User, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Edit, Trash2, History, MoreHorizontal, User, Clock, AlertCircle } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import {
   Table,
@@ -27,15 +27,34 @@ import { useMeetingNotes } from '../MeetingNotesContext';
 import EditMeetingPointDialog from '../modal/EditMeetingPointDialog';
 import DeleteMeetingPointDialog from '../modal/DeleteMeetingPointDialog';
 import UpdateHistoryDialog from '../modal/UpdateHistoryDialog';
+import IssuesDialog from '../modal/IssuesDialog';
 import './MeetingPointsTable.css';
 
 const MeetingPointsTable = () => {
-  const { meetingPoints, filters, updateMeetingPoint, deleteMeetingPoint, getUpdateCount } = useMeetingNotes();
+  const { meetingPoints, filters, updateMeetingPoint, deleteMeetingPoint, getUpdateCount, getIssueHistory } = useMeetingNotes();
   const [editingPoint, setEditingPoint] = useState<any>(null);
   const [deletingPoint, setDeletingPoint] = useState<any>(null);
   const [historyPoint, setHistoryPoint] = useState<any>(null);
+  const [issuesPoint, setIssuesPoint] = useState<any>(null);
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
 
   console.log('Meeting points in table:', meetingPoints); // Debug log
+
+  // Load issue counts for all meeting points
+  useEffect(() => {
+    const loadIssueCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const point of meetingPoints) {
+        const issues = await getIssueHistory(point.id);
+        counts[point.id] = issues.length;
+      }
+      setIssueCounts(counts);
+    };
+
+    if (meetingPoints.length > 0) {
+      loadIssueCounts();
+    }
+  }, [meetingPoints, getIssueHistory]);
 
   // Filter meeting points based on filters
   const filteredPoints = meetingPoints.filter(point => {
@@ -87,6 +106,13 @@ const MeetingPointsTable = () => {
     setHistoryPoint(point);
   };
 
+  const handleShowIssues = async (point: any) => {
+    setIssuesPoint(point);
+    // Fetch issue count when opening dialog
+    const issues = await getIssueHistory(point.id);
+    setIssueCounts(prev => ({ ...prev, [point.id]: issues.length }));
+  };
+
   const handleEditSuccess = async (id: string, data: any) => {
     await updateMeetingPoint(id, data);
     setEditingPoint(null);
@@ -111,6 +137,9 @@ const MeetingPointsTable = () => {
                   <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '400px', minWidth: '400px', maxWidth: '400px' }}>
                     Discussion Point
                   </TableHead>
+                  <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '70px', minWidth: '70px', maxWidth: '70px' }}>
+                    Issues
+                  </TableHead>
                   <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
                     Request By
                   </TableHead>
@@ -128,7 +157,7 @@ const MeetingPointsTable = () => {
               <TableBody>
               {filteredPoints.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     <div className="flex flex-col items-center">
                       <Clock className="w-8 h-8 mb-2 text-gray-300" />
                       <p>No meeting points found</p>
@@ -174,6 +203,21 @@ const MeetingPointsTable = () => {
                           {point.discussion_point}
                         </div>
                       )}
+                    </TableCell>
+                    <TableCell className="px-2 py-3 text-center">
+                      <div className="flex items-center justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleShowIssues(point)}
+                          className="h-8 px-2 hover:bg-orange-50 hover:text-orange-600 flex items-center gap-1"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-xs font-semibold bg-orange-100 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center">
+                            {issueCounts[point.id] ?? 0}
+                          </span>
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="px-2 py-3 text-center">
                       <div className="flex items-center justify-center gap-1 text-gray-600">
@@ -252,6 +296,18 @@ const MeetingPointsTable = () => {
           onClose={() => setHistoryPoint(null)}
           discussionPoint={historyPoint.discussion_point}
           meetingPointId={historyPoint.id}
+        />
+      )}
+
+      {issuesPoint && (
+        <IssuesDialog
+          isOpen={!!issuesPoint}
+          onClose={() => setIssuesPoint(null)}
+          discussionPoint={issuesPoint.discussion_point}
+          meetingPointId={issuesPoint.id}
+          onIssueCountChange={(count) => {
+            setIssueCounts(prev => ({ ...prev, [issuesPoint.id]: count }));
+          }}
         />
       )}
     </>

@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Edit, User, FileText, X } from 'lucide-react';
+import { Edit, User, FileText } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Input } from '@/features/ui/input';
@@ -77,20 +77,10 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="w-5 h-5 text-blue-600" />
-              Edit Meeting Point
-            </DialogTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="flex-shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          <DialogTitle className="flex items-center gap-2">
+            <Edit className="w-5 h-5 text-blue-600" />
+            Edit Meeting Point
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

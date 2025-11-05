@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { History, Clock, User, Plus, X, Edit, Trash2 } from 'lucide-react';
+import { History, Clock, User, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
@@ -125,24 +125,14 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 pr-4">
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                <History className="w-5 h-5 text-blue-600" />
-                Update History
-              </DialogTitle>
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
-                {discussionPoint}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="flex-shrink-0 h-8 w-8 p-0 hover:bg-gray-100"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+          <div className="flex-1 pr-4">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <History className="w-5 h-5 text-blue-600" />
+              Update History
+            </DialogTitle>
+            <p className="text-sm text-gray-600 mt-1 line-clamp-2 font-medium">
+              {discussionPoint}
+            </p>
           </div>
         </DialogHeader>
 

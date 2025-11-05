@@ -26,6 +26,33 @@ interface MeetingPointUpdate {
   };
 }
 
+interface MeetingPointIssue {
+  id: string;
+  meeting_point_id: string;
+  organization_id: string;
+  issue_description: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+interface MeetingPointSolution {
+  id: string;
+  meeting_point_issue_id: string;
+  meeting_point_id: string;
+  organization_id: string;
+  solution_description: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  // Joined data from issue
+  issue?: {
+    issue_description: string;
+  };
+}
+
 interface SummaryData {
   notStarted: number;
   onGoing: number;
@@ -57,6 +84,18 @@ interface MeetingNotesContextType {
   updateUpdate: (updateId: string, updateDetails: string) => Promise<void>;
   deleteUpdate: (updateId: string) => Promise<void>;
   getUpdateCount: (meetingPointId: string) => number;
+  // Issues & Solutions functions
+  getIssueHistory: (meetingPointId: string) => Promise<MeetingPointIssue[]>;
+  addIssue: (meetingPointId: string, issueDescription: string) => Promise<void>;
+  updateIssue: (issueId: string, issueDescription: string) => Promise<void>;
+  updateIssueNotes: (issueId: string, notes: string) => Promise<void>;
+  deleteIssue: (issueId: string) => Promise<void>;
+  getIssueCount: (meetingPointId: string) => number;
+  getSolutionHistory: (meetingPointId: string) => Promise<MeetingPointSolution[]>;
+  addSolution: (issueId: string, meetingPointId: string, solutionDescription: string) => Promise<void>;
+  updateSolution: (solutionId: string, solutionDescription: string) => Promise<void>;
+  updateSolutionNotes: (solutionId: string, notes: string) => Promise<void>;
+  deleteSolution: (solutionId: string) => Promise<void>;
 }
 
 const MeetingNotesContext = createContext<MeetingNotesContextType | undefined>(undefined);
@@ -76,6 +115,8 @@ interface MeetingNotesProviderProps {
 export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) => {
   const [meetingPoints, setMeetingPoints] = useState<MeetingPoint[]>([]);
   const [recentUpdates, setRecentUpdates] = useState<MeetingPointUpdate[]>([]);
+  const [issues, setIssues] = useState<MeetingPointIssue[]>([]);
+  const [solutions, setSolutions] = useState<MeetingPointSolution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -352,6 +393,271 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     return recentUpdates.filter(update => update.meeting_point_id === meetingPointId).length;
   };
 
+  // ========== ISSUES FUNCTIONS ==========
+  const getIssueHistory = async (meetingPointId: string): Promise<MeetingPointIssue[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('meeting_point_issues')
+        .select('*')
+        .eq('meeting_point_id', meetingPointId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching issue history:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load issue history',
+        variant: 'destructive'
+      });
+      return [];
+    }
+  };
+
+  const addIssue = async (meetingPointId: string, issueDescription: string) => {
+    if (!organizationId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('meeting_point_issues')
+        .insert({
+          meeting_point_id: meetingPointId,
+          organization_id: organizationId,
+          issue_description: issueDescription,
+          created_by: user?.id || null
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Issue added successfully'
+      });
+    } catch (error) {
+      console.error('Error adding issue:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add issue',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const updateIssue = async (issueId: string, issueDescription: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_issues')
+        .update({ issue_description: issueDescription })
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Issue updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating issue:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update issue',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const updateIssueNotes = async (issueId: string, notes: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_issues')
+        .update({ notes: notes || null })
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Issue notes updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating issue notes:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update issue notes',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const deleteIssue = async (issueId: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_issues')
+        .delete()
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Issue deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete issue',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const getIssueCount = (meetingPointId: string): number => {
+    return issues.filter(issue => issue.meeting_point_id === meetingPointId).length;
+  };
+
+  // ========== SOLUTIONS FUNCTIONS ==========
+  const getSolutionHistory = async (meetingPointId: string): Promise<MeetingPointSolution[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('meeting_point_solutions')
+        .select(`
+          *,
+          issue:meeting_point_issues!meeting_point_issue_id(issue_description)
+        `)
+        .eq('meeting_point_id', meetingPointId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      // Transform the data to match our interface
+      return (data || []).map((solution: any) => ({
+        ...solution,
+        issue: solution.issue ? { issue_description: solution.issue.issue_description } : undefined
+      }));
+    } catch (error) {
+      console.error('Error fetching solution history:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load solution history',
+        variant: 'destructive'
+      });
+      return [];
+    }
+  };
+
+  const addSolution = async (issueId: string, meetingPointId: string, solutionDescription: string) => {
+    if (!organizationId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('meeting_point_solutions')
+        .insert({
+          meeting_point_issue_id: issueId,
+          meeting_point_id: meetingPointId,
+          organization_id: organizationId,
+          solution_description: solutionDescription,
+          created_by: user?.id || null
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Solution added successfully'
+      });
+    } catch (error) {
+      console.error('Error adding solution:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add solution',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const updateSolution = async (solutionId: string, solutionDescription: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_solutions')
+        .update({ solution_description: solutionDescription })
+        .eq('id', solutionId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Solution updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating solution:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update solution',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const updateSolutionNotes = async (solutionId: string, notes: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_solutions')
+        .update({ notes: notes || null })
+        .eq('id', solutionId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Solution notes updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating solution notes:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update solution notes',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
+  const deleteSolution = async (solutionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('meeting_point_solutions')
+        .delete()
+        .eq('id', solutionId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Solution deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting solution:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete solution',
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
   // Real-time subscriptions
   useEffect(() => {
     if (!organizationId) return;
@@ -399,10 +705,46 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       )
       .subscribe();
 
+    const issuesChannel = supabase
+      .channel('meeting-issues-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meeting_point_issues',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        () => {
+          // Refresh issues for all meeting points
+          // Individual issues will be fetched on-demand when dialog opens
+        }
+      )
+      .subscribe();
+
+    const solutionsChannel = supabase
+      .channel('meeting-solutions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meeting_point_solutions',
+          filter: `organization_id=eq.${organizationId}`
+        },
+        () => {
+          // Refresh solutions for all meeting points
+          // Individual solutions will be fetched on-demand when dialog opens
+        }
+      )
+      .subscribe();
+
     // Cleanup subscriptions
     return () => {
       supabase.removeChannel(meetingPointsChannel);
       supabase.removeChannel(updatesChannel);
+      supabase.removeChannel(issuesChannel);
+      supabase.removeChannel(solutionsChannel);
     };
   }, [organizationId]);
 
@@ -420,7 +762,19 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     addUpdate,
     updateUpdate,
     deleteUpdate,
-    getUpdateCount
+    getUpdateCount,
+    // Issues & Solutions
+    getIssueHistory,
+    addIssue,
+    updateIssue,
+    updateIssueNotes,
+    deleteIssue,
+    getIssueCount,
+    getSolutionHistory,
+    addSolution,
+    updateSolution,
+    updateSolutionNotes,
+    deleteSolution
   };
 
   return (
