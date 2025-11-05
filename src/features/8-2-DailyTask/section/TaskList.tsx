@@ -143,6 +143,26 @@ export const TaskList = () => {
     }
   }, [highlightedTask]);
   
+  // Helper function to determine visible steps based on filters and task assignment
+  // If task is assigned at task level to current user, show ALL steps
+  // Otherwise, show only steps assigned to current user or created by user
+  const getVisibleSteps = (task: Task): typeof task.steps => {
+    if (filters.pic) {
+      // Individual PIC selected - show steps assigned to that PIC
+      return task.steps.filter(s => s.assigned_employee?.id === filters.pic);
+    } else if (filters.myTask === 'all') {
+      // All PIC mode - show ALL steps
+      return task.steps;
+    } else {
+      // My Task mode
+      // If task is assigned at task level to current employee, show ALL steps
+      if (task.assigned_to === currentEmployee?.id) {
+        return task.steps;
+      }
+      // Otherwise, show steps assigned to current employee or created by user or has assigned substeps
+      return task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
+    }
+  };
 
   const openTaskBlockers = async (task: Task) => {
     // OPTIMIZATION: Open modal immediately with loading state
@@ -150,8 +170,9 @@ export const TaskList = () => {
     setBlockerModalOpen(true);
 
     try {
-      // Fix: Use proper filter to only show steps assigned to current user
-      const stepIds = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).map(s => s.id);
+      // Fix: Use proper filter to show steps - if task is assigned at task level, show all steps
+      const visibleSteps = getVisibleSteps(task);
+      const stepIds = visibleSteps.map(s => s.id);
       
       // OPTIMIZATION: Fetch sub-steps and history in PARALLEL
       const subStepsPromise = stepIds.length > 0 
@@ -247,10 +268,17 @@ export const TaskList = () => {
   // Filter tasks based on filters - memoized to prevent unnecessary recalculations
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
-      // My Task filter - show only tasks created by current user (owned by user)
+      // My Task filter - show tasks created by current user OR assigned to current user (at task level or step level)
       if (filters.myTask === 'my_task') {
         const isTaskCreatedByUser = task.created_by === user?.id;
-        if (!isTaskCreatedByUser) {
+        const isTaskAssignedToCurrentUser = task.assigned_to === currentEmployee?.id;
+        const hasStepAssignedToCurrentUser = task.steps?.some(step => 
+          step.assigned_to === currentEmployee?.id || 
+          step.sub_steps?.some(subStep => subStep.assigned_to === currentEmployee?.id)
+        ) || false;
+        
+        // Show task if: created by user OR assigned to user at task level OR has any step/sub-step assigned to user
+        if (!isTaskCreatedByUser && !isTaskAssignedToCurrentUser && !hasStepAssignedToCurrentUser) {
           return false;
         }
       }
@@ -524,18 +552,9 @@ export const TaskList = () => {
   // Calculate progress only for visible steps (assigned OR created by user OR has assigned substeps)
   // When PIC filter is active, calculate progress for steps assigned to that PIC
   // When All PIC is selected, calculate progress for ALL steps
+  // When task is assigned at task level, calculate progress for ALL steps
   const calculateAssignedStepsProgress = (task: Task): number => {
-    let visibleSteps: typeof task.steps;
-    if (filters.pic) {
-      // Individual PIC selected - show steps assigned to that PIC
-      visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
-    } else if (filters.myTask === 'all') {
-      // All PIC mode - show ALL steps
-      visibleSteps = task.steps;
-    } else {
-      // My Task mode - show steps assigned to current employee or created by user
-      visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-    }
+    const visibleSteps = getVisibleSteps(task);
     if (visibleSteps.length === 0) return 0;
     const completedVisibleSteps = visibleSteps.filter(s => s.is_completed).length;
     return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
@@ -566,7 +585,8 @@ export const TaskList = () => {
     
     // If task has substeps, require all steps to be completed first
     const assignedProgress = calculateAssignedStepsProgress(task);
-    const isFullComplete = (task.steps?.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps).length || 0) > 0 && assignedProgress === 100;
+    const visibleSteps = getVisibleSteps(task);
+    const isFullComplete = visibleSteps.length > 0 && assignedProgress === 100;
     const newStatus = isFullComplete ? (task.status === 'completed' ? 'pending' : 'completed') : 'pending';
     if (newStatus !== task.status) {
       // Show notification
@@ -1121,14 +1141,7 @@ export const TaskList = () => {
                               // Calculate progress once and reuse for both display and bar
                               const progress = calculateAssignedStepsProgress(task);
                               // Determine visible steps to check if we should show "No steps"
-                              let visibleSteps: typeof task.steps;
-                              if (filters.pic) {
-                                visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
-                              } else if (filters.myTask === 'all') {
-                                visibleSteps = task.steps;
-                              } else {
-                                visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-                              }
+                              const visibleSteps = getVisibleSteps(task);
                               
                               return (
                                 <>
@@ -1257,17 +1270,7 @@ export const TaskList = () => {
                         <CheckSquare className="w-4 h-4 text-blue-600" />
                         Steps ({(() => {
                           // Determine visible steps based on filters
-                          let visibleSteps: typeof task.steps;
-                          if (filters.pic) {
-                            // Individual PIC selected - show steps assigned to that PIC
-                            visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
-                          } else if (filters.myTask === 'all') {
-                            // All PIC mode - show ALL steps
-                            visibleSteps = task.steps;
-                          } else {
-                            // My Task mode - show steps assigned to current employee or created by user
-                            visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-                          }
+                          const visibleSteps = getVisibleSteps(task);
                           const completedCount = visibleSteps.filter(s => s.is_completed).length;
                           return `${completedCount}/${visibleSteps.length}`;
                         })()})
@@ -1298,17 +1301,7 @@ export const TaskList = () => {
                       <div className="space-y-2 min-h-[50px] w-full">
                         {(() => {
                           // Determine visible steps based on filters
-                          let visibleSteps: typeof task.steps;
-                          if (filters.pic) {
-                            // Individual PIC selected - show steps assigned to that PIC
-                            visibleSteps = task.steps.filter(s => s.assigned_employee?.id === filters.pic);
-                          } else if (filters.myTask === 'all') {
-                            // All PIC mode - show ALL steps
-                            visibleSteps = task.steps;
-                          } else {
-                            // My Task mode - show steps assigned to current employee or created by user
-                            visibleSteps = task.steps.filter(s => s.assigned_to === currentEmployee?.id || s.created_by === user?.id || s.has_assigned_substeps);
-                          }
+                          const visibleSteps = getVisibleSteps(task);
                           
                           if (visibleSteps.length === 0) {
                             return (
