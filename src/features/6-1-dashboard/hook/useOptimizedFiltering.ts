@@ -30,6 +30,8 @@ export const useOptimizedFiltering = (
           matchesStatus = plan.status === "Request Revision" || plan.production_status === "Request Revision";
         } else if (statusFilter === "Approved") {
           matchesStatus = plan.status === "Approved" || plan.production_status === "Approved";
+        } else if (statusFilter === "Ready To Post") {
+          matchesStatus = plan.approved === true && plan.production_approved === true;
         } else {
           matchesStatus = plan.status === statusFilter || plan.production_status === statusFilter;
         }

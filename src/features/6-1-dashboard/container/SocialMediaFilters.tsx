@@ -60,6 +60,7 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
             <SelectItem value="Need Review">Need Review</SelectItem>
             <SelectItem value="Request Revision">Request Revision</SelectItem>
             <SelectItem value="Approved">Approved</SelectItem>
+            <SelectItem value="Ready To Post">Ready To Post</SelectItem>
           </SelectContent>
         </Select>
         <Button 
