@@ -149,13 +149,13 @@ const EmployeePayroll = () => {
 
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative overflow-hidden">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-2 overflow-hidden">
             <div className="h-full flex flex-col overflow-hidden">
                 {/* Header with Actions */}
-                <div className="flex-shrink-0 mt-2 mb-2">
+                <div className="flex-shrink-0 mt-1 mb-1">
                   <Button 
                     variant="outline" 
                     onClick={handleBackToEmployees} 
@@ -169,8 +169,8 @@ const EmployeePayroll = () => {
                 {/* Content Area - Grid Layout */}
                 <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                   {/* Left Column - Employee Overview Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm h-full flex flex-col max-h-[calc(100vh-135px)]">
+                  <div className="col-span-3 flex flex-col min-h-0">
+                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col h-full">
                       {/* Employee Profile Card */}
                       <div className="p-6 text-center border-b border-gray-200 flex-shrink-0">
                         <div className="mb-4 flex justify-center">
@@ -246,23 +246,30 @@ const EmployeePayroll = () => {
                   <div className="col-span-9 flex flex-col min-h-0">
                     {/* Main Content Section */}
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-135px)]">
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-6">
-                            {/* Header */}
-                            <div className="flex items-center justify-between mb-6">
-                              <h2 className="text-xl font-semibold text-gray-900">Payroll Information</h2>
+                      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col h-full">
+                        {/* Header Section - Fixed */}
+                        <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900">Payroll Information</h2>
+                          </div>
+                        </div>
+                        
+                        {/* Scrollable Content */}
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                          <div className="h-full overflow-y-auto seamless-scroll">
+                            <div className="p-4">
+                              <PayrollInfoTab employee={employee} isEditMode={isEditMode} onUpdate={() => {}} />
                             </div>
-                            
-                            <PayrollInfoTab employee={employee} isEditMode={isEditMode} onUpdate={() => {}} />
                           </div>
                         </div>
 
-                        {/* Table Footer */}
-                        <PayrollTableFooter 
-                          currentMonth={currentMonth}
-                          totalSalary={totalSalary}
-                        />
+                        {/* Table Footer - Fixed */}
+                        <div className="flex-shrink-0">
+                          <PayrollTableFooter 
+                            currentMonth={currentMonth}
+                            totalSalary={totalSalary}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

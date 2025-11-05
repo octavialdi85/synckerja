@@ -168,8 +168,8 @@ const EmployeeLeavePermit = () => {
                 {/* Content Area - Grid Layout */}
                 <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                   {/* Left Column - Employee Overview Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm h-full flex flex-col max-h-[calc(100vh-135px)]">
+                  <div className="col-span-3 flex flex-col min-h-0">
+                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col h-full">
                       {/* Employee Profile Card */}
                       <div className="p-6 text-center border-b border-gray-200 flex-shrink-0">
                         <div className="mb-4 flex justify-center">
@@ -245,7 +245,7 @@ const EmployeeLeavePermit = () => {
                   <div className="col-span-9 flex flex-col min-h-0">
                     {/* Main Content Section */}
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-135px)]">
+                      <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col h-full">
                         <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
                           <div className="p-6">
                             {/* Header */}
