@@ -8,7 +8,7 @@ import { useToast } from '@/features/ui/use-toast';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: Array<{ id: string; blocker_type?: string; description?: string; created_at: string; subStepTitle?: string | null; is_resolved?: boolean }>
+  items: Array<{ id: string; blocker_type?: string; description?: string; created_at: string; subStepTitle?: string | null; is_resolved?: boolean; created_by_employee?: { full_name: string } | null }>
   initialTab?: 'list' | 'resolved';
 }
 
@@ -181,6 +181,9 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
                     <div className="text-sm text-red-800 font-medium mt-1">{b.blocker_type || 'Blocker'}</div>
                     {b.description && (
                       <div className="text-sm text-red-900">{b.description}</div>
+                    )}
+                    {b.created_by_employee?.full_name && (
+                      <div className="text-xs text-gray-600 mt-1">created by : <span className="font-medium">{b.created_by_employee.full_name}</span></div>
                     )}
                     <div className="flex items-center justify-between mt-1">
                       <div className="text-xs text-red-600">{new Date(b.created_at).toLocaleString()}</div>

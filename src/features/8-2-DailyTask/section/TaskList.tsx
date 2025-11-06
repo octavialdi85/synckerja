@@ -236,14 +236,40 @@ export const TaskList = () => {
       // Sort combined history by created_at
       allHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
+      // Get unique created_by user IDs
+      const createdByUserIds = [...new Set(allHistory.map((h: any) => h.created_by).filter(Boolean))];
+      
+      // Fetch employee data for created_by users
+      let employeeMap: Record<string, any> = {};
+      if (createdByUserIds.length > 0) {
+        try {
+          const { data: employeesData, error: employeesError } = await supabase
+            .from('employees')
+            .select('id, full_name, user_id')
+            .in('user_id', createdByUserIds);
+          
+          if (!employeesError && employeesData) {
+            employeesData.forEach((emp: any) => {
+              if (emp.user_id) {
+                employeeMap[emp.user_id] = emp;
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('Error fetching employee data for created_by:', error);
+        }
+      }
+      
       const enriched = allHistory.map((h: any) => {
         const step = task.steps.find(s => s.id === h.task_step_id) || null;
         const sub = h.task_steps_to_steps_id ? subById[h.task_steps_to_steps_id] : null;
+        const createdByEmployee = h.created_by ? employeeMap[h.created_by] : null;
         return {
           ...h,
           taskTitle: task.title,
           stepTitle: step?.title || (sub ? (task.steps.find(s => s.id === sub.parent_step_id)?.title || '-') : '-'),
           subStepTitle: sub?.title || null,
+          created_by_employee: createdByEmployee ? { full_name: createdByEmployee.full_name } : null,
         };
       });
       
