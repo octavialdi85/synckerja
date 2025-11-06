@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef } from 'react';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -27,6 +27,12 @@ import { devLog } from '@/config/logger';
 const approvalCheckCache = new Map<string, { result: boolean; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
+interface ApprovalAccess {
+  approved: boolean;
+  prodApproved: boolean;
+  loading: boolean;
+}
+
 interface ContentPlanRowProps {
   plan: ContentPlan;
   contentTypes: ContentType[];
@@ -46,6 +52,7 @@ interface ContentPlanRowProps {
   getFilteredSubServices: (serviceId: string | null) => SubService[];
   formatDateTime: (date: string | Date) => string;
   formatDateOnly: (date: string | Date) => string;
+  approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
 }
 export const ContentPlanRow = memo<ContentPlanRowProps>(({
   plan,
@@ -65,7 +72,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   onOpenLink,
   getFilteredSubServices,
   formatDateTime,
-  formatDateOnly
+  formatDateOnly,
+  approvalAccess
 }) => {
   const {
     data: digitalEmployees = []
@@ -92,18 +100,28 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     links
   } = useSocialMediaLinks(plan.id);
 
-  // Check approval access and revision configuration on component mount (cached)
+  // Use batch-checked approval access from parent if available, otherwise fallback to individual checks
   React.useEffect(() => {
     const checkApprovalVisibility = async () => {
       try {
-        const statusAccess = await checkAnyUserHasApprovalAccess('approved');
-        const productionStatusAccess = await checkAnyUserHasApprovalAccess('production_approved');
-        const productionApprovalAccess = await checkAnyUserHasApprovalAccess('prod_approved');
+        let statusAccess: boolean;
+        let prodApprovalAccess: boolean;
+
+        if (approvalAccess && !approvalAccess.loading) {
+          // Use batch-checked approval access from parent (optimized)
+          statusAccess = approvalAccess.approved;
+          prodApprovalAccess = approvalAccess.prodApproved;
+        } else {
+          // Fallback to individual checks if approvalAccess not provided or still loading
+          statusAccess = await checkAnyUserHasApprovalAccess('approved');
+          prodApprovalAccess = await checkAnyUserHasApprovalAccess('prod_approved');
+        }
+
         setShowApprovalOptions({
           status: statusAccess,
-          production_status: productionStatusAccess
+          production_status: prodApprovalAccess
         });
-        setCanApproveProduction(productionApprovalAccess);
+        setCanApproveProduction(prodApprovalAccess);
 
         // Check revision access based on roles and exceptions (cached)
         const revisionAccess = await checkRevisionAccess();
@@ -123,7 +141,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       }
     };
     checkApprovalVisibility();
-  }, []);
+  }, [approvalAccess]);
 
   // Get current user role
   const { data: currentUserRole } = useCurrentUserRole();
@@ -554,11 +572,18 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     }
   };
 
-  // POINT 3: Handle Production Approved change - FIXED: Clear approved date when unchecked
+  // POINT 3: Handle Production Approved change - OPTIMIZED: Batch updates and prevent double-clicks
+  const [isUpdatingProductionApproved, setIsUpdatingProductionApproved] = useState(false);
+  
   const handleProductionApprovedChange = async (checked: boolean) => {
-    // Check if user has approval access based on configuration
-    const hasApprovalAccess = await checkApprovalAccess('prod_approved');
-    if (!hasApprovalAccess) {
+    // Prevent double-clicks and concurrent updates
+    if (isUpdatingProductionApproved) {
+      return;
+    }
+
+    // Quick access check using cached value first (non-blocking for better UX)
+    // Use canApproveProduction which is already checked on mount
+    if (!canApproveProduction) {
       toast({
         variant: "destructive",
         title: "Access Denied",
@@ -566,20 +591,66 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       });
       return;
     }
-    onFieldChange(plan.id, 'production_approved', checked);
-    if (checked) {
-      // When production approved is checked, automatically set production status to "Approved"
-      // and set the approved date
-      const approvedDate = new Date().toISOString();
-      onProductionStatusChange(plan.id, 'Approved');
-      onFieldChange(plan.id, 'production_approved_date', approvedDate);
-    } else {
-      // FIXED: When production approved is unchecked, clear the approved date and change production status to "Need Review"
-      onFieldChange(plan.id, 'production_approved_date', null);
-      // If current production status is "Approved", change it to "Need Review"
-      if (plan.production_status === 'Approved') {
-        onProductionStatusChange(plan.id, 'Need Review');
+
+    setIsUpdatingProductionApproved(true);
+    
+    try {
+      // Double-check access (async but should be fast due to caching)
+      const hasApprovalAccess = await checkApprovalAccess('prod_approved');
+      if (!hasApprovalAccess) {
+        toast({
+          variant: "destructive",
+          title: "Access Denied",
+          description: "You don't have permission to approve production"
+        });
+        setIsUpdatingProductionApproved(false);
+        return;
       }
+
+      // Prepare all updates in a single batch
+      const batchUpdates: any = {
+        production_approved: checked
+      };
+
+      if (checked) {
+        // When production approved is checked, automatically set production status to "Approved"
+        // and set the approved date
+        const approvedDate = new Date().toISOString();
+        batchUpdates.production_status = 'Approved';
+        batchUpdates.production_approved_date = approvedDate;
+      } else {
+        // When production approved is unchecked, clear the approved date
+        batchUpdates.production_approved_date = null;
+        // If current production status is "Approved", change it to "Need Review"
+        if (plan.production_status === 'Approved') {
+          batchUpdates.production_status = 'Need Review';
+        }
+      }
+
+      // OPTIMIZED: Single update call with all fields batched
+      // This reduces database roundtrips and trigger executions
+      // The batch update in handleFieldChange will collect these and send as one mutation
+      onFieldChange(plan.id, 'production_approved', checked);
+      
+      // Update related fields - these will be batched together by handleFieldChange
+      if (batchUpdates.production_status) {
+        onProductionStatusChange(plan.id, batchUpdates.production_status);
+      }
+      if (batchUpdates.production_approved_date !== undefined) {
+        onFieldChange(plan.id, 'production_approved_date', batchUpdates.production_approved_date);
+      }
+    } catch (error) {
+      console.error('Error updating production approved:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update production approved status"
+      });
+    } finally {
+      // Reset loading state quickly for better UX
+      setTimeout(() => {
+        setIsUpdatingProductionApproved(false);
+      }, 150);
     }
   };
   const handleGoogleDriveLinkClick = () => {
@@ -892,7 +963,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '120px',
         maxWidth: '120px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <Switch checked={plan.production_approved || false} onCheckedChange={handleProductionApprovedChange} disabled={!canApproveProduction} />
+          <Switch 
+            checked={plan.production_approved || false} 
+            onCheckedChange={handleProductionApprovedChange} 
+            disabled={!canApproveProduction || isUpdatingProductionApproved}
+          />
           {!canApproveProduction}
         </td>
 

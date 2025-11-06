@@ -12,6 +12,8 @@ export interface TaskLink {
   title: string;
   url: string;
   created_at: string;
+  is_auto_synced?: boolean;
+  source_social_media_plan_id?: string | null;
 }
 
 export interface TaskStepHistory {
@@ -54,6 +56,7 @@ export interface TaskStep {
   created_at: string;
   updated_at: string;
   created_by?: string | null;
+  social_media_plan_id?: string | null;
   files?: TaskFile[];
   links?: TaskLink[];
   history?: TaskStepHistory[];

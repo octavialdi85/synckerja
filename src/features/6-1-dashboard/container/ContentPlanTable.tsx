@@ -4,6 +4,12 @@ import { TableHeader } from './table/TableHeader';
 import { ContentPlanRow } from './table/ContentPlanRow';
 import { LoadingDots } from '@/components/LoadingDots';
 
+interface ApprovalAccess {
+  approved: boolean;
+  prodApproved: boolean;
+  loading: boolean;
+}
+
 interface ContentPlanTableProps {
   contentPlans: ContentPlan[];
   contentTypes: ContentType[];
@@ -19,6 +25,7 @@ interface ContentPlanTableProps {
   onServiceDataChange: () => void;
   onContentPillarDataChange: () => void;
   loading?: boolean;
+  approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
 }
 
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
@@ -32,7 +39,8 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onFieldChange,
   onOpenBriefDialog,
   onOpenTitleDialog,
-  loading = false
+  loading = false,
+  approvalAccess
 }) => {
   // Helper function to filter sub-services based on service
   const getFilteredSubServices = useCallback(
@@ -185,6 +193,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
               getFilteredSubServices={getFilteredSubServices}
               formatDateTime={formatDateTime}
               formatDateOnly={formatDateOnly}
+              approvalAccess={approvalAccess}
             />
           ))}
         </tbody>

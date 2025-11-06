@@ -330,7 +330,8 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
           order: nextOrder,
           status: 'pending',
           priority: 'medium',
-          created_by: user.id
+          created_by: user.id,
+          social_media_plan_id: socialMediaPlanId || null
         })
         .select()
         .single();

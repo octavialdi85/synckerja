@@ -80,6 +80,7 @@ export interface Database {
           is_completed: boolean
           order: number
           priority: string | null
+          social_media_plan_id: string | null
           started_at: string | null
           status: string | null
           task_id: string
@@ -103,6 +104,7 @@ export interface Database {
           is_completed?: boolean
           order?: number
           priority?: string | null
+          social_media_plan_id?: string | null
           started_at?: string | null
           status?: string | null
           task_id: string
@@ -126,6 +128,7 @@ export interface Database {
           is_completed?: boolean
           order?: number
           priority?: string | null
+          social_media_plan_id?: string | null
           started_at?: string | null
           status?: string | null
           task_id?: string
@@ -416,6 +419,8 @@ export interface Database {
           updated_at: string | null
           description?: string | null
           created_by?: string | null
+          is_auto_synced?: boolean | null
+          source_social_media_plan_id?: string | null
         }
         Insert: {
           id?: string
@@ -426,6 +431,8 @@ export interface Database {
           updated_at?: string | null
           description?: string | null
           created_by?: string | null
+          is_auto_synced?: boolean | null
+          source_social_media_plan_id?: string | null
         }
         Update: {
           id?: string
@@ -436,6 +443,8 @@ export interface Database {
           updated_at?: string | null
           description?: string | null
           created_by?: string | null
+          is_auto_synced?: boolean | null
+          source_social_media_plan_id?: string | null
         }
       }
       task_step_history: {

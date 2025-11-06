@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link, X } from 'lucide-react';
+import { Link, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
+import { Alert, AlertDescription } from '@/features/ui/alert';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,6 +14,8 @@ interface StepLink {
   url: string;
   description?: string;
   created_at: string;
+  is_auto_synced?: boolean;
+  source_social_media_plan_id?: string | null;
 }
 
 interface EditLinkModalProps {
@@ -32,7 +35,37 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isAutoSynced, setIsAutoSynced] = useState(false);
+  const [isFetchingLinkDetails, setIsFetchingLinkDetails] = useState(false);
   const { toast } = useToast();
+
+  // Fetch link details to check if it's auto-synced
+  useEffect(() => {
+    const fetchLinkDetails = async () => {
+      if (!link) return;
+      
+      setIsFetchingLinkDetails(true);
+      try {
+        const { data, error } = await (supabase as any)
+          .from('task_step_links')
+          .select('is_auto_synced, source_social_media_plan_id')
+          .eq('id', link.id)
+          .single();
+
+        if (error) throw error;
+        
+        setIsAutoSynced(data?.is_auto_synced === true);
+      } catch (error: any) {
+        console.error('Error fetching link details:', error);
+        // If error, assume not auto-synced to allow editing
+        setIsAutoSynced(false);
+      } finally {
+        setIsFetchingLinkDetails(false);
+      }
+    };
+
+    fetchLinkDetails();
+  }, [link]);
 
   // Populate form when link changes
   useEffect(() => {
@@ -40,6 +73,10 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
       setTitle(link.title);
       setUrl(link.url);
       setDescription(link.description || '');
+      // Also check if link already has is_auto_synced property
+      if (link.is_auto_synced !== undefined) {
+        setIsAutoSynced(link.is_auto_synced);
+      }
     }
   }, [link]);
 
@@ -47,6 +84,16 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
     e.preventDefault();
     
     if (!link) return;
+    
+    // Prevent editing auto-synced links
+    if (isAutoSynced) {
+      toast({
+        title: 'Cannot Edit',
+        description: 'This link is auto-synced from Social Media Plan and cannot be edited manually. Changes to the link will be automatically synced from the source.',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     if (!title.trim() || !url.trim()) {
       toast({
@@ -127,13 +174,22 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isAutoSynced && (
+            <Alert variant="default" className="bg-yellow-50 border-yellow-200">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-sm text-yellow-800">
+                This link is automatically synced from a Social Media Plan. Changes to the link will be automatically updated from the source. Manual editing is disabled.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div>
             <label className="text-sm font-medium">Title *</label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter link title"
-              disabled={isLoading}
+              disabled={isLoading || isAutoSynced}
               required
             />
           </div>
@@ -145,7 +201,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
               type="url"
-              disabled={isLoading}
+              disabled={isLoading || isAutoSynced}
               required
             />
           </div>
@@ -156,7 +212,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter link description"
-              disabled={isLoading}
+              disabled={isLoading || isAutoSynced}
               rows={3}
             />
           </div>
@@ -172,7 +228,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !title.trim() || !url.trim()}
+              disabled={isLoading || isAutoSynced || !title.trim() || !url.trim()}
             >
               {isLoading ? 'Updating...' : 'Update Link'}
             </Button>

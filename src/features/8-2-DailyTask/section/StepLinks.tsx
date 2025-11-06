@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, ExternalLink, Trash2, Edit } from 'lucide-react';
+import { Link, ExternalLink, Trash2, Edit, RefreshCw } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { useToast } from '@/features/ui/use-toast';
@@ -13,6 +13,8 @@ interface StepLink {
   url: string;
   description?: string;
   created_at: string;
+  is_auto_synced?: boolean;
+  source_social_media_plan_id?: string | null;
 }
 
 interface StepLinksProps {
@@ -35,7 +37,7 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, on
     try {
       const { data, error } = await (supabase as any)
         .from('task_step_links')
-        .select('*')
+        .select('id, title, url, description, created_at, is_auto_synced, source_social_media_plan_id')
         .eq('task_step_id', taskStepId)
         .order('created_at', { ascending: false });
 
@@ -63,6 +65,18 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, on
   }, [taskStepId, isExpanded]);
 
   const deleteLink = async (linkId: string) => {
+    // Find the link to check if it's auto-synced
+    const linkToDelete = links.find(l => l.id === linkId);
+    
+    if (linkToDelete?.is_auto_synced) {
+      toast({
+        title: 'Cannot Delete',
+        description: 'This link is auto-synced from Social Media Plan. It will be automatically removed when the plan is unapproved or the link is removed from the source.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const { error } = await (supabase as any)
         .from('task_step_links')
@@ -132,13 +146,23 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, on
           {links.map((link) => (
             <div
               key={link.id}
-              className="flex items-center gap-2 p-2 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors"
+              className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
+                link.is_auto_synced 
+                  ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' 
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              }`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-900 truncate">
                     {link.title}
                   </span>
+                  {link.is_auto_synced && (
+                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Auto-synced
+                    </Badge>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -164,7 +188,8 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, on
                   size="sm"
                   onClick={() => handleEditLink(link)}
                   className="h-5 w-5 p-0 text-gray-400 hover:text-blue-600"
-                  title="Edit link"
+                  title={link.is_auto_synced ? "Auto-synced links cannot be edited" : "Edit link"}
+                  disabled={link.is_auto_synced}
                 >
                   <Edit className="w-3 h-3" />
                 </Button>
@@ -173,7 +198,8 @@ export const StepLinks: React.FC<StepLinksProps> = ({ taskStepId, isExpanded, on
                   size="sm"
                   onClick={() => deleteLink(link.id)}
                   className="h-5 w-5 p-0 text-gray-400 hover:text-red-600"
-                  title="Delete link"
+                  title={link.is_auto_synced ? "Auto-synced links cannot be deleted manually" : "Delete link"}
+                  disabled={link.is_auto_synced}
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>

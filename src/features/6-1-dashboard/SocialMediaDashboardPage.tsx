@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ import { useUserData } from "./hook/useUserData";
 import { useDigitalMarketingEmployees } from "./hook/useDigitalMarketingEmployees";
 import { useCreativeEmployees } from "./hook/useCreativeEmployees";
 import { useCurrentEmployee } from "@/features/share/hooks/useCurrentEmployee";
+import { useBatchApprovalAccess } from "./hook/useBatchApprovalAccess";
 
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
@@ -68,6 +69,9 @@ const SocialMediaContent = () => {
   const { data: currentEmployee } = useCurrentEmployee(); // Get employee ID for pic_production_id
   const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { data: creativeEmployees = [] } = useCreativeEmployees();
+  
+  // Batch check approval access (optimized - single check for all rows)
+  const approvalAccess = useBatchApprovalAccess();
 
   // Fetch all social media links for Content Post metrics (same logic as ContentPostTab)
   const { data: allSocialMediaLinks = [] } = useQuery({
@@ -587,8 +591,39 @@ const SocialMediaContent = () => {
     }
   }, [selectedItems, deleteContentPlan]);
 
+  // Batch updates for production_approved related fields to reduce database calls
+  const pendingBatchUpdatesRef = useRef<Map<string, { updates: any; timeout: NodeJS.Timeout }>>(new Map());
+
   const handleFieldChange = useCallback((id: string, field: string, value: any) => {
     try {
+      // OPTIMIZED: Batch production_approved related fields to reduce database roundtrips
+      // This prevents multiple trigger executions and improves performance
+      if (field === 'production_approved' || field === 'production_approved_date' || field === 'production_status') {
+        // Clear existing timeout for this plan
+        const existing = pendingBatchUpdatesRef.current.get(id);
+        if (existing) {
+          clearTimeout(existing.timeout);
+        }
+
+        // Get or create pending updates
+        const pending = pendingBatchUpdatesRef.current.get(id) || { updates: {}, timeout: null as any };
+        pending.updates[field] = value;
+
+        // Very short debounce (30ms) for immediate feel while still batching rapid changes
+        // This ensures toggle feels instant but still batches multiple field updates
+        const timeout = setTimeout(() => {
+          const batch = pendingBatchUpdatesRef.current.get(id);
+          if (batch && Object.keys(batch.updates).length > 0) {
+            updateContentPlan(id, batch.updates);
+            pendingBatchUpdatesRef.current.delete(id);
+          }
+        }, 30);
+
+        pending.timeout = timeout;
+        pendingBatchUpdatesRef.current.set(id, pending);
+        return;
+      }
+
       // Auto-assign PIC Production when Google Drive link is added
       if (field === 'google_drive_link' && value && value.length > 0) {
         // Use employee ID instead of profile ID to avoid foreign key constraint violation
@@ -875,7 +910,8 @@ const SocialMediaContent = () => {
                                     onContentTypeDataChange={handleMasterDataChange} 
                                     onServiceDataChange={handleMasterDataChange} 
                                     onContentPillarDataChange={handleMasterDataChange} 
-                                    loading={false} 
+                                    loading={false}
+                                    approvalAccess={approvalAccess}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
