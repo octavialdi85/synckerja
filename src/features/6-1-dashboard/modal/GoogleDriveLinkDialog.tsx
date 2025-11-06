@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
-import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag } from 'lucide-react';
+import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock } from 'lucide-react';
 import { OptimizedCommentPanel } from './OptimizedCommentPanel';
 import GoogleDriveFolderCarousel from './GoogleDriveFolderCarousel';
 import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthButton';
@@ -145,6 +145,7 @@ interface GoogleDriveLinkDialogProps {
   contentTitle?: string;
   contentType?: string;
   postDate?: string;
+  productionApproved?: boolean; // Lock input field if production is approved
 }
 
 const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
@@ -159,7 +160,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   status = 'draft',
   contentTitle,
   contentType,
-  postDate
+  postDate,
+  productionApproved = false
 }) => {
   const [currentLink, setCurrentLink] = useState(googleDriveLink);
   const [canShowApprovalButtons, setCanShowApprovalButtons] = useState(false);
@@ -282,8 +284,13 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     setCurrentLink(googleDriveLink);
   }, [googleDriveLink, socialMediaPlanId]);
 
-  // Auto-save functionality with debouncing
+  // Auto-save functionality with debouncing (disabled when production is approved)
   useEffect(() => {
+    // Don't auto-save if production is approved (field is locked)
+    if (productionApproved) {
+      return;
+    }
+
     const timeoutId = setTimeout(() => {
       if (currentLink !== googleDriveLink) {
         onSave(currentLink);
@@ -296,7 +303,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     }, 1000); // 1 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [currentLink, googleDriveLink, onSave]);
+  }, [currentLink, googleDriveLink, onSave, productionApproved]);
 
   const openLink = () => {
     if (currentLink) {
@@ -306,6 +313,12 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
   // POINT 1: Handle close with production status update
   const handleClose = async () => {
+    // Don't save if production is approved (field is locked)
+    if (productionApproved) {
+      onClose();
+      return;
+    }
+
     // Save any pending changes before closing - this ensures all updates go through proper mutation
     if (currentLink !== googleDriveLink) {
       // Call onSave to ensure changes are saved through proper mutation (which updates cache)
@@ -611,10 +624,27 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
             <div className="flex-1 max-w-2xl">
 
               <div className="space-y-1">
-                
+                {productionApproved && (
+                  <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                    <Lock className="h-3 w-3" />
+                    <span>Link is locked because production is approved. Set production approved to false to edit.</span>
+                  </div>
+                )}
                 <div className="flex gap-2">
-                  <Input value={currentLink} onChange={e => setCurrentLink(e.target.value)} placeholder="Paste Google Drive link here..." className="flex-1 h-9 border-gray-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-lg" />
-                  <Button variant="outline" onClick={openLink} disabled={!currentLink} className="h-9 px-3 border-gray-200 hover:bg-gray-50 rounded-lg">
+                  <div className="flex-1 relative">
+                    <Input 
+                      value={currentLink} 
+                      onChange={e => setCurrentLink(e.target.value)} 
+                      placeholder="Paste Google Drive link here..." 
+                      className={`flex-1 h-9 border-gray-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-lg ${productionApproved ? 'bg-gray-50 cursor-not-allowed pr-8' : ''}`}
+                      disabled={productionApproved}
+                      readOnly={productionApproved}
+                    />
+                    {productionApproved && (
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                  <Button variant="outline" onClick={openLink} disabled={!currentLink || productionApproved} className="h-9 px-3 border-gray-200 hover:bg-gray-50 rounded-lg">
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>

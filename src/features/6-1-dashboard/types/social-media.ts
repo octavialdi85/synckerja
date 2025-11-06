@@ -16,7 +16,7 @@ export interface ContentPlan {
   completion_date: string | null;
   pic_production_id: string | null;
   google_drive_link: string | null;
-  production_status: string;
+  production_status: string | null;
   production_revision_count: number;
   production_completion_date: string | null;
   production_approved: boolean;

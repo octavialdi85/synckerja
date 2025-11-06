@@ -23,6 +23,10 @@ export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
     );
   }
 
+  // Normalize: Treat both null and empty string as empty for consistent display
+  // This ensures consistent placeholder regardless of whether value is null or ''
+  const hasLink = googleDriveLink && googleDriveLink.trim().length > 0;
+
   return (
     <Button
       variant="ghost"
@@ -30,9 +34,9 @@ export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
       onClick={onClick}
     >
       <span className="truncate">
-        {googleDriveLink ? 'Google Drive Link Added' : 'Click to add Google Drive link...'}
+        {hasLink ? 'Google Drive Link Added' : 'Click to add Google Drive link...'}
       </span>
-      {googleDriveLink && (
+      {hasLink && (
         <ExternalLink className="h-3 w-3 ml-1 flex-shrink-0" />
       )}
     </Button>

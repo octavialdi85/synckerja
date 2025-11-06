@@ -100,7 +100,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   );
 
   const handleProductionStatusChange = useCallback(
-    (id: string, value: string) => {
+    (id: string, value: string | null) => {
       // Find the current plan to get current production status and revision count
       const currentPlan = contentPlans.find(plan => plan.id === id);
       
@@ -111,7 +111,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
           onFieldChange(id, 'production_status', value);
           onFieldChange(id, 'production_revision_count', newProductionRevisionCount);
         } else {
-          // Regular production status change
+          // Regular production status change (can be null for "No Status")
           onFieldChange(id, 'production_status', value);
         }
       } else {

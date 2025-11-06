@@ -648,17 +648,20 @@ const SocialMediaContent = () => {
           [field]: value,
           pic_production_id: employeeId
         });
-      } else if (field === 'google_drive_link' && (!value || value.length === 0)) {
-        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production and production completion date:', {
+      } else if (field === 'google_drive_link' && (!value || value.trim().length === 0)) {
+        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production, production completion date, and resetting production status:', {
           planId: id,
           link: value
         });
         
-        // Clear google_drive_link, pic_production_id, and production_completion_date
+        // Clear google_drive_link, pic_production_id, production_completion_date, and reset production_status
+        // production_status should not be "Need Review" when google_drive_link is empty
+        // Standardize: Save as null instead of empty string for consistency
         updateContentPlan(id, { 
-          [field]: value,
+          [field]: null, // Standardize to null instead of empty string
           pic_production_id: null,
-          production_completion_date: null
+          production_completion_date: null,
+          production_status: null // Reset to null/empty when link is removed
         });
       } else {
         // Regular field update

@@ -45,7 +45,7 @@ interface ContentPlanRowProps {
   onOpenBriefDialog: (id: string, brief: string | null) => void;
   onOpenTitleDialog: (id: string, title: string | null) => void;
   onStatusChange: (id: string, value: string) => void;
-  onProductionStatusChange: (id: string, value: string) => void;
+  onProductionStatusChange: (id: string, value: string | null) => void;
   onStatusContentChange: (id: string, value: string) => void;
   onResetRevision: (id: string, field: 'revision_count' | 'production_revision_count') => void;
   onOpenLink: (url: string) => void;
@@ -516,15 +516,19 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
   // UPDATED: Handle Google Drive Link change with auto-save and production status logic
   const handleGoogleDriveLinkChange = (value: string) => {
-    if (value && value.length > 0) {
+    // Normalize: Convert empty string to null for consistency
+    const normalizedValue = value && value.trim().length > 0 ? value : null;
+    
+    if (normalizedValue) {
       // If link is being added, trigger the existing auto-assignment logic and set production status to "Need Review"
-      onFieldChange(plan.id, 'google_drive_link', value);
+      onFieldChange(plan.id, 'google_drive_link', normalizedValue);
       onProductionStatusChange(plan.id, 'Need Review');
     } else {
-      // If link is being cleared, also clear PIC Production and set production status to "No Status" (empty string)
-      onFieldChange(plan.id, 'google_drive_link', '');
+      // If link is being cleared, also clear PIC Production and set production status to null
+      // Standardize: Save as null instead of empty string for consistency
+      onFieldChange(plan.id, 'google_drive_link', null);
       onFieldChange(plan.id, 'pic_production_id', null);
-      onProductionStatusChange(plan.id, '');
+      onProductionStatusChange(plan.id, null); // Also standardize to null
     }
   };
 
@@ -605,6 +609,20 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         });
         setIsUpdatingProductionApproved(false);
         return;
+      }
+
+      // Validate: Cannot set production_approved to true if google_drive_link is NULL or EMPTY
+      if (checked) {
+        const googleDriveLink = plan.google_drive_link;
+        if (!googleDriveLink || googleDriveLink.trim() === '') {
+          toast({
+            variant: "destructive",
+            title: "Cannot Approve Production",
+            description: "Please provide a Google Drive link before approving production. The Google Drive link is required for production approval."
+          });
+          setIsUpdatingProductionApproved(false);
+          return;
+        }
       }
 
       // Prepare all updates in a single batch
@@ -929,13 +947,14 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <Select value={plan.production_status || 'none'} onValueChange={value => {
           if (value === 'none') {
-            onProductionStatusChange(plan.id, '');
+            // Standardize: Save as null instead of empty string for consistency
+            onProductionStatusChange(plan.id, null);
           } else {
             onProductionStatusChange(plan.id, value);
           }
         }}>
               <SelectTrigger className="h-8 text-xs border-gray-200 text-left">
-                <SelectValue />
+                <SelectValue placeholder="No Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No Status</SelectItem>
@@ -1057,23 +1076,26 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       </tr>
 
       {/* POINT 3: Google Drive Link Dialog - Pass sync handlers for production approval */}
-      <GoogleDriveLinkDialog isOpen={isGoogleDriveDialogOpen} onClose={() => setIsGoogleDriveDialogOpen(false)} googleDriveLink={plan.google_drive_link || ''} onSave={link => {
-      devLog.debug('📝 GoogleDriveLinkDialog onSave called:', {
-        planId: plan.id,
-        link
-      });
-      // Always call onFieldChange for google_drive_link - this will trigger auto-populate/clear logic in SocialMedia.tsx
-      // handleFieldChange in SocialMedia.tsx will handle clearing pic_production_id and production_completion_date
-      onFieldChange(plan.id, 'google_drive_link', link);
-      if (link && link.length > 0) {
-        // Set production status to Need Review when link is added
-        onProductionStatusChange(plan.id, 'Need Review');
-      } else {
-        // Clear production status when link is removed
-        // Also explicitly clear production_completion_date here as backup (handleFieldChange should also do this)
-        onProductionStatusChange(plan.id, '');
-        onFieldChange(plan.id, 'production_completion_date', null);
-      }
+      <GoogleDriveLinkDialog isOpen={isGoogleDriveDialogOpen} onClose={() => setIsGoogleDriveDialogOpen(false)} googleDriveLink={plan.google_drive_link || ''} productionApproved={plan.production_approved || false} onSave={link => {
+        // Normalize: Convert empty string to null for consistency
+        const normalizedLink = link && link.trim().length > 0 ? link : null;
+        devLog.debug('📝 GoogleDriveLinkDialog onSave called:', {
+          planId: plan.id,
+          link: normalizedLink
+        });
+        // Always call onFieldChange for google_drive_link - this will trigger auto-populate/clear logic in SocialMedia.tsx
+        // handleFieldChange in SocialMedia.tsx will handle clearing pic_production_id, production_completion_date, and production_status
+        // Use normalizedLink to ensure consistency (null instead of empty string)
+        onFieldChange(plan.id, 'google_drive_link', normalizedLink);
+        if (normalizedLink) {
+          // Set production status to Need Review when link is added (only if link is not empty)
+          onProductionStatusChange(plan.id, 'Need Review');
+        } else {
+          // Clear production status when link is removed or empty
+          // handleFieldChange in SocialMediaDashboardPage will handle resetting production_status to null
+          // This ensures production_status is not "Need Review" when google_drive_link is empty
+          onProductionStatusChange(plan.id, null);
+        }
     }} socialMediaPlanId={plan.id} planTitle={plan.title} contentTitle={plan.title} contentType={contentTypeName} postDate={plan.post_date}
     // POINT 3: Add handlers for production approval sync
     onApprove={() => {
