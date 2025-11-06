@@ -33,6 +33,7 @@ import MeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
 import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
+import UserSettingsPage from "./features/Settings/SettingsPage";
 import ManagementTabPage from "./features/10-management/pages/ManagementTabPage";
 import OverviewTabPage from "./features/10-overview/OverviewTabPage";
 import PlansTabPage from "./features/10-Plans/PlansTabPage";
@@ -473,6 +474,13 @@ const App = () => (
               <Route path="/reports" element={
                 <ProtectedRoute>
                   <MobileReports />
+                </ProtectedRoute>
+              } />
+
+              {/* User Settings Route */}
+              <Route path="/settings/*" element={
+                <ProtectedRoute>
+                  <UserSettingsPage />
                 </ProtectedRoute>
               } />
               
