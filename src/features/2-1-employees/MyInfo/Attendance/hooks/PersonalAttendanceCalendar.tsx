@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/features/ui/button';
+import { Progress } from '@/features/ui/progress';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { formatToRupiah } from '../utils/formatCurrency';
 import { useWorkScheduleSettings } from './useWorkScheduleSettings';
@@ -272,7 +273,12 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
             <span className="font-medium text-gray-900">{userData?.full_name || 'Loading...'}</span>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
               <span>Hari Kerja: <strong className="text-gray-800">{totalWorkingDays}</strong></span>
-              <span>Tingkat Kehadiran: <strong className="text-emerald-600">{attendanceRate}%</strong></span>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span>Tingkat Kehadiran: <strong className="text-emerald-600">{attendanceRate}%</strong></span>
+                </div>
+                <Progress value={attendanceRate} className="h-2 w-full sm:w-32" />
+              </div>
               <span className="hidden sm:inline">Denda Bulan Ini: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
               <span className="sm:hidden">Denda: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
             </div>
@@ -309,7 +315,7 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
       </div>
 
       {/* Calendar */}
-      <div className="flex-1 overflow-auto max-h-[400px]">
+      <div className="flex-1 overflow-auto max-h-[750px]">
         <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-b-lg overflow-hidden min-w-[280px]">
           {/* Days of week header */}
           {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map(day => (
