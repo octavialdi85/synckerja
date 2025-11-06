@@ -35,7 +35,7 @@ export const SectionActiveObjectives = ({
         </div>
       </div>
       
-      <div className="p-0 max-h-[350px] overflow-y-auto seamless-scroll scrollbar-hide">
+      <div className="p-0 max-h-[450px] overflow-y-auto seamless-scroll scrollbar-hide">
         <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective}>
           {activeObjectives.map(objective => renderObjectiveCard(objective, 'active', 'border-l-green-500', 'text-green-600'))}
         </Accordion>

@@ -548,6 +548,7 @@ export const CompanyObjectivesDetailView = ({
                           <ObjectiveCheckinForm
                             objectiveId={kr.id}
                             objectiveTitle={kr.title}
+                            disableActivitiesTab={true}
                             trigger={
                               <div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 text-blue-600 h-7 px-3 text-xs cursor-pointer">
                                 <Calendar className="h-3 w-3 mr-1" />
