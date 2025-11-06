@@ -599,6 +599,40 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
+      // Fetch task files for all steps
+      console.log('🔍 Fetching task files for steps:', stepIds.length);
+      let taskFilesData: any[] = [];
+      if (stepIds.length > 0) {
+        const { data: filesData, error: filesError } = await supabase
+          .from('task_files')
+          .select(`
+            id,
+            task_steps_id,
+            filename,
+            file_url,
+            file_size,
+            created_at
+          `)
+          .in('task_steps_id', stepIds)
+          .order('created_at', { ascending: false });
+
+        if (filesError) {
+          console.error('❌ Error fetching task files:', filesError);
+        } else {
+          taskFilesData = filesData || [];
+          console.log('✅ Fetched task files:', taskFilesData.length);
+        }
+      }
+
+      // Group task files by step_id
+      const filesByStepId: Record<string, any[]> = {};
+      taskFilesData.forEach(file => {
+        if (!filesByStepId[file.task_steps_id]) {
+          filesByStepId[file.task_steps_id] = [];
+        }
+        filesByStepId[file.task_steps_id].push(file);
+      });
+
       // Group step assignments by task_step_id (only keep the latest one per step)
       const stepAssignmentsByStepId: Record<string, any> = {};
       stepAssignmentsData.forEach(assignment => {
@@ -650,7 +684,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           assigned_to: stepAssignment?.employee_id || null,
           assigned_employee: stepAssignment?.employee || null,
           has_assigned_substeps: hasAssignedSubSteps, // Flag to show step if it has assigned sub-steps
-          sub_steps: subSteps // Include sub-steps data
+          sub_steps: subSteps, // Include sub-steps data
+          files: filesByStepId[step.id] || [] // Include files for this step
         });
       });
 
@@ -708,7 +743,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           ...task,
           steps: taskSteps.map((step: any) => ({
             ...step,
-            files: [], // Load separately on demand
+            // files are already included from stepsByTaskId mapping
             links: [], // Load separately on demand
             history: [], // Load separately on demand
             // Keep assignment data that was already set in stepsByTaskId
