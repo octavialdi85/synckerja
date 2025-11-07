@@ -220,14 +220,50 @@ export const ObjectiveCheckinForm = ({
         }
         krError = deptObjError;
       } else if (deptObj) {
-        // For department objectives, use actual key results
+        // For department objectives, prioritize actual key results from key_results table
+        // (these have the correct target_value, metric_type, unit, etc.)
         const {
           data: deptKeyResults,
           error: deptKRError
-        } = await supabase.from('key_results').select('id, title, target_value, current_value, unit, metric_type, progress_percentage').eq('department_objective_id', objectiveId).limit(1);
+        } = await supabase
+          .from('key_results')
+          .select('id, title, target_value, current_value, unit, metric_type, progress_percentage')
+          .eq('department_objective_id', objectiveId)
+          .limit(1);
         
-        keyResults = deptKeyResults;
-        krError = deptKRError;
+        if (deptKeyResults && deptKeyResults.length > 0) {
+          // Use actual key results from key_results table
+          keyResults = deptKeyResults;
+          krError = null;
+        } else {
+          // Fallback: use individual objectives as key results (for display purposes)
+          // (same as how they're displayed in the UI)
+          const {
+            data: indivObjectives,
+            error: indivObjError
+          } = await supabase
+            .from('individual_objectives')
+            .select('id, title, progress_percentage, weight, description')
+            .eq('department_objective_id', objectiveId)
+            .limit(1);
+          
+          // Convert individual objectives to key result format
+          if (indivObjectives && indivObjectives.length > 0) {
+            keyResults = indivObjectives.map(indiv => ({
+              id: indiv.id,
+              title: indiv.title,
+              target_value: 100, // Individual objectives are percentage-based
+              current_value: indiv.progress_percentage || 0,
+              unit: '%',
+              metric_type: 'percentage',
+              progress_percentage: indiv.progress_percentage || 0
+            }));
+            krError = null;
+          } else {
+            keyResults = null;
+            krError = deptKRError || indivObjError;
+          }
+        }
       } else if (indivObj) {
         const {
           data: indivKRs,
@@ -321,10 +357,33 @@ export const ObjectiveCheckinForm = ({
         metric_type: keyResult.metric_type || 'percentage',
         id: keyResultId
       });
+      // Check if keyResultId is an individual objective (used as key result for department objective)
+      const { data: isIndivAsKR } = await supabase
+        .from('individual_objectives')
+        .select('id')
+        .eq('id', keyResultId)
+        .maybeSingle();
+      
+      // Build query to find check-ins
+      // If keyResultId is an individual objective, also search by individual_objective_id
+      let checkinQuery = supabase
+        .from('weekly_checkins')
+        .select('*')
+        .eq('organization_id', profile.active_organization_id)
+        .eq('employee_id', employee.id);
+      
+      if (isIndivAsKR) {
+        // For individual objectives used as key results, search by individual_objective_id
+        checkinQuery = checkinQuery.or(`key_result_id.eq.${keyResultId},individual_objective_id.eq.${keyResultId},individual_objective_id.eq.${objectiveId}`);
+      } else {
+        // For regular key results, search normally
+        checkinQuery = checkinQuery.or(`key_result_id.eq.${keyResultId},individual_objective_id.eq.${objectiveId}`);
+      }
+      
       const {
         data: existingCheckins,
         error
-      } = await supabase.from('weekly_checkins').select('*').eq('organization_id', profile.active_organization_id).eq('employee_id', employee.id).or(`key_result_id.eq.${keyResultId},individual_objective_id.eq.${objectiveId}`);
+      } = await checkinQuery;
       if (error) {
         console.error('Error loading existing check-ins:', error);
         return;

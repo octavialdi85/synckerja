@@ -377,7 +377,11 @@ export const DepartmentObjectivesView = ({
                   }} 
                 />
                 <Badge variant="outline" className="text-xs">
-                  {objective.key_results?.length || 0} KRs
+                  {(() => {
+                    const keyResultsCount = objective.key_results?.length || 0;
+                    const individualObjsCount = getIndividualObjectivesForDepartment(objective.id).length;
+                    return keyResultsCount + individualObjsCount;
+                  })()} KRs
                 </Badge>
                 <Badge variant="outline" className={`text-xs ${status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : status === 'draft' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                   {status === 'active' ? 'Active' : status === 'draft' ? 'Draft' : 'Completed'}
@@ -408,19 +412,6 @@ export const DepartmentObjectivesView = ({
           </div>
         </AccordionTrigger>
         <AccordionContent className="px-4 pb-4">
-          {/* Progress Bar Overview for Key Results */}
-          {objective.key_results && objective.key_results.length > 0 && <div className="mb-4 bg-gray-50 p-3 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <h5 className="text-xs font-medium text-gray-700 uppercase tracking-wide">
-                  Progress Overview
-                </h5>
-                <span className="text-xs font-medium text-gray-600">
-                  {Math.round(objective.key_results.reduce((acc: number, kr: any) => acc + (kr.progress_percentage || 0), 0) / objective.key_results.length)}% Average
-                </span>
-              </div>
-              <Progress value={Math.round(objective.key_results.reduce((acc: number, kr: any) => acc + (kr.progress_percentage || 0), 0) / objective.key_results.length)} className="h-3" />
-            </div>}
-
           <div className="border-t pt-3">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wide">
@@ -432,57 +423,94 @@ export const DepartmentObjectivesView = ({
               </Button>
             </div>
              
-             {objective.key_results && objective.key_results.length > 0 ? <div className="space-y-2">
-                 {objective.key_results.map((kr: any) => <div key={kr.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                     <div className="flex items-center justify-between mb-2">
-                       <span className="text-sm font-medium text-purple-900">{kr.title}</span>
-                       <div className="flex items-center space-x-2">
-                         <Badge variant="outline" className="text-xs">
-                           {kr.progress_percentage || 0}%
-                         </Badge>
-                         <ObjectiveCheckinForm 
-                           objectiveId={objective.id} 
-                           objectiveTitle={objective.title} 
-                           objectiveType="department"
-                           trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs cursor-pointer">
-                               <Calendar className="h-3 w-3 mr-1" />
-                               Check-in
-                             </div>} 
-                           onSuccess={() => {
-                             // console.log('✅ KR weekly check-in saved successfully');
-                           }} 
-                         />
-                       </div>
-                     </div>
-                     
-                     <div className="space-y-1">
-                       <div className="flex items-center justify-between text-xs">
-                         <span className="text-purple-700 font-medium">Progress</span>
-                         <span className="text-purple-900 font-medium">
-                           {kr.current_value || 0} / {kr.target_value} {kr.unit || ''}
-                         </span>
-                       </div>
-                       <Progress value={kr.progress_percentage || 0} className="h-2 bg-purple-200" />
-                     </div>
-                   </div>)}
-               </div> : <>
-                 {/* Display Individual Objectives as Key Results */}
-                 {(() => {
+             {(() => {
+              // Get all key results (from key_results table)
+              const keyResults = objective.key_results || [];
+              
+              // Get individual objectives for this department objective
               const individualObjs = getIndividualObjectivesForDepartment(objective.id);
-              return individualObjs.length > 0 ? <div className="space-y-2">
-                       <div className="text-xs text-gray-600 mb-2 italic">Individual Objectives contributing to this Department Objective:</div>
-                       {individualObjs.map((indObj: any) => (
-                         <IndividualObjectiveCard key={indObj.id} indObj={indObj} />
-                       ))}
-                     </div> : <div className="border border-dashed border-gray-300 rounded-lg p-4">
-                       <p className="text-sm text-gray-500 text-center">No key results or individual objectives yet</p>
-                       <Button variant="outline" size="sm" onClick={() => handleCreateKR(objective)} className="mt-2 w-full">
-                         <Plus className="h-4 w-4 mr-1" />
-                         Add First Key Result
-                       </Button>
-                     </div>;
+              
+              // Convert individual objectives to key result format for display
+              const individualAsKeyResults = individualObjs.map((indObj: any) => ({
+                id: indObj.id,
+                title: indObj.title,
+                current_value: indObj.progress_percentage || 0,
+                target_value: 100,
+                progress_percentage: indObj.progress_percentage || 0,
+                unit: '%',
+                metric_type: 'percentage',
+                source_type: 'individual_objective'
+              }));
+              
+              // Combine key results and individual objectives
+              const allKeyResults = [...keyResults, ...individualAsKeyResults];
+              
+              if (allKeyResults.length > 0) {
+                return (
+                  <div className="space-y-2">
+                    {/* Display key results from key_results table */}
+                    {keyResults.map((kr: any) => (
+                      <div key={kr.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-purple-900">{kr.title}</span>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs">
+                              {kr.progress_percentage || 0}%
+                            </Badge>
+                            <ObjectiveCheckinForm 
+                              objectiveId={objective.id} 
+                              objectiveTitle={objective.title} 
+                              objectiveType="department"
+                              trigger={<div className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs cursor-pointer">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  Check-in
+                                </div>} 
+                              onSuccess={() => {
+                                // console.log('✅ KR weekly check-in saved successfully');
+                              }} 
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-purple-700 font-medium">Progress</span>
+                            <span className="text-purple-900 font-medium">
+                              {kr.current_value || 0} / {kr.target_value} {kr.unit || ''}
+                            </span>
+                          </div>
+                          <Progress value={kr.progress_percentage || 0} className="h-2 bg-purple-200" />
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Display Individual Objectives as Key Results */}
+                    {individualObjs.length > 0 && (
+                      <>
+                        {keyResults.length > 0 && (
+                          <div className="text-xs text-gray-600 mb-2 italic mt-4">
+                            Individual Objectives contributing to this Department Objective:
+                          </div>
+                        )}
+                        {individualObjs.map((indObj: any) => (
+                          <IndividualObjectiveCard key={indObj.id} indObj={indObj} />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="border border-dashed border-gray-300 rounded-lg p-4">
+                    <p className="text-sm text-gray-500 text-center">No key results or individual objectives yet</p>
+                    <Button variant="outline" size="sm" onClick={() => handleCreateKR(objective)} className="mt-2 w-full">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add First Key Result
+                    </Button>
+                  </div>
+                );
+              }
             })()}
-               </>}
           </div>
         </AccordionContent>
       </AccordionItem>;

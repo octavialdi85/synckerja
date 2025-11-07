@@ -170,7 +170,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
         })) || [];
         
       } else if (level === 'department') {
-        // Get from department_objectives with individual objectives as key results
+        // Get from department_objectives with individual objectives and key results
         let query = supabase
           .from('department_objectives')
           .select(`
@@ -192,11 +192,45 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
         const { data: deptData, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
         
-        data = deptData?.map(obj => ({
-          ...obj,
-          why_important: obj.why_important || '',
-          level: 'department' as const,
-          key_results: (obj.individual_objectives || []).map((indiv: any) => ({
+        // Fetch key_results for all department objectives
+        // Only get key results that are specifically for department objectives (not for company objectives)
+        const deptIds = deptData?.map(obj => obj.id) || [];
+        let keyResultsData: any[] = [];
+        if (deptIds.length > 0) {
+          const { data: krData } = await supabase
+            .from('key_results')
+            .select('id, title, target_value, current_value, unit, metric_type, progress_percentage, weight, department_objective_id, company_objective_id')
+            .in('department_objective_id', deptIds)
+            .is('company_objective_id', null); // Only get key results that are NOT for company objectives
+          keyResultsData = krData || [];
+        }
+        
+        // Group key results by department_objective_id
+        const keyResultsByDeptId = new Map<string, any[]>();
+        keyResultsData?.forEach(kr => {
+          if (kr.department_objective_id) {
+            const existing = keyResultsByDeptId.get(kr.department_objective_id) || [];
+            existing.push(kr);
+            keyResultsByDeptId.set(kr.department_objective_id, existing);
+          }
+        });
+        
+        data = deptData?.map(obj => {
+          // Get actual key results from key_results table
+          const allKeyResultsFromDB = keyResultsByDeptId.get(obj.id) || [];
+          
+          // Filter out key results that have the same title as the department objective
+          // (these are duplicates created for company objectives)
+          const actualKeyResults = allKeyResultsFromDB.filter((kr: any) => {
+            // Exclude if title matches exactly (case-insensitive)
+            const titleMatches = kr.title?.toLowerCase().trim() === obj.title?.toLowerCase().trim();
+            // Also exclude if it has company_objective_id (should already be filtered, but double-check)
+            const hasCompanyObjectiveId = kr.company_objective_id !== null && kr.company_objective_id !== undefined;
+            return !titleMatches && !hasCompanyObjectiveId;
+          });
+          
+          // Convert individual objectives to key result format (for display purposes)
+          const individualAsKeyResults = (obj.individual_objectives || []).map((indiv: any) => ({
             id: indiv.id,
             title: indiv.title,
             current_value: indiv.progress_percentage,
@@ -205,15 +239,27 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
             weight: indiv.weight,
             status: indiv.status,
             metric_type: 'percentage',
-            unit: '%'
-          })),
-          child_objectives: [],
-          parent_objective: null,
-          entity_id: null,
-          parent_objective_id: obj.company_objective_id,
-          derived_from_kr_id: null,
-          weight: obj.weight || 100
-        })) || [];
+            unit: '%',
+            source_type: 'individual_objective'
+          }));
+          
+          // Combine actual key results with individual objectives
+          // Prioritize actual key results, then add individual objectives
+          const allKeyResults = [...actualKeyResults, ...individualAsKeyResults];
+          
+          return {
+            ...obj,
+            why_important: obj.why_important || '',
+            level: 'department' as const,
+            key_results: allKeyResults,
+            child_objectives: [],
+            parent_objective: null,
+            entity_id: null,
+            parent_objective_id: obj.company_objective_id,
+            derived_from_kr_id: null,
+            weight: obj.weight || 100
+          };
+        }) || [];
         
       } else if (level === 'individual') {
         // Get from individual_objectives with related key results

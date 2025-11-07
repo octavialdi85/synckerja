@@ -182,11 +182,55 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         throw error;
       }
 
+      // Fetch key_results for all department objectives
+      // Only get key results that are specifically for department objectives (not for company objectives)
+      const deptIds = data?.map((obj: any) => obj.id) || [];
+      let keyResultsData: any[] = [];
+      if (deptIds.length > 0) {
+        const { data: krData } = await supabase
+          .from('key_results')
+          .select('id, title, target_value, current_value, unit, metric_type, progress_percentage, weight, department_objective_id, company_objective_id')
+          .in('department_objective_id', deptIds)
+          .is('company_objective_id', null); // Only get key results that are NOT for company objectives
+        keyResultsData = krData || [];
+      }
+
+      // Group key results by department_objective_id
+      const keyResultsByDeptId = new Map<string, any[]>();
+      keyResultsData.forEach(kr => {
+        if (kr.department_objective_id) {
+          const existing = keyResultsByDeptId.get(kr.department_objective_id) || [];
+          existing.push(kr);
+          keyResultsByDeptId.set(kr.department_objective_id, existing);
+        }
+      });
+
+      // Add key_results to each department objective
+      // Key results are already filtered to exclude those with company_objective_id
+      // Also filter out key results that have the same title as the department objective
+      // (these are duplicates created for company objectives)
+      const dataWithKeyResults = (data || []).map((obj: any) => {
+        const allKeyResults = keyResultsByDeptId.get(obj.id) || [];
+        // Filter out key results that have the same title as the department objective
+        // These are typically duplicates created for company objectives
+        const actualKeyResults = allKeyResults.filter((kr: any) => {
+          // Exclude if title matches exactly (case-insensitive)
+          const titleMatches = kr.title?.toLowerCase().trim() === obj.title?.toLowerCase().trim();
+          // Also exclude if it has company_objective_id (should already be filtered, but double-check)
+          const hasCompanyObjectiveId = kr.company_objective_id !== null && kr.company_objective_id !== undefined;
+          return !titleMatches && !hasCompanyObjectiveId;
+        });
+        return {
+          ...obj,
+          key_results: actualKeyResults
+        };
+      });
+
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Department objectives fetched:', data);
+        console.log('✅ Department objectives fetched:', dataWithKeyResults);
         
         // Check specifically for "te" objective
-        const teObjective = data?.find((obj: any) => obj.title === 'te');
+        const teObjective = dataWithKeyResults?.find((obj: any) => obj.title === 'te');
         if (teObjective) {
           console.log('🚨 FOUND "te" OBJECTIVE in database query:', {
             id: teObjective.id,
@@ -195,13 +239,14 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
             cycle_id: teObjective.cycle_id,
             organization_id: teObjective.organization_id,
             created_at: teObjective.created_at,
-            updated_at: teObjective.updated_at
+            updated_at: teObjective.updated_at,
+            key_results_count: teObjective.key_results?.length || 0
           });
         } else {
           console.log('✅ No "te" objective found in database query');
         }
       }
-      return data || [];
+      return dataWithKeyResults;
     },
     enabled: !!organizationId,
     staleTime: 0, // Always fetch fresh data

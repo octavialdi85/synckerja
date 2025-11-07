@@ -53,32 +53,61 @@ export const ModalAddDepartmentContribution = ({
 
   // Initialize form data when editObjective changes
   React.useEffect(() => {
-    if (editObjective && open) {
-      setFormData({
-        company_objective_id: editObjective.company_objective_id || '',
-        title: editObjective.title || '',
-        description: editObjective.description || '',
-        why_important: editObjective.why_important || '',
-        metric_type: 'number',
-        unit: '',
-        start_value: '0',
-        target_value: '100',
-        weight: editObjective.weight?.toString() || '100'
-      });
-    } else if (!editObjective && open) {
-      // Reset form for new objective
-      setFormData({
-        company_objective_id: '',
-        title: '',
-        description: '',
-        why_important: '',
-        metric_type: 'number',
-        unit: '',
-        start_value: '0',
-        target_value: '100',
-        weight: '100'
-      });
-    }
+    const loadEditData = async () => {
+      if (editObjective && open) {
+        // First, set basic data from editObjective
+        const initialData = {
+          company_objective_id: editObjective.company_objective_id || '',
+          title: editObjective.title || '',
+          description: editObjective.description || '',
+          why_important: editObjective.why_important || '',
+          metric_type: 'number' as 'number' | 'percentage' | 'currency' | 'boolean',
+          unit: '',
+          start_value: '0',
+          target_value: '100',
+          weight: editObjective.weight?.toString() || '100'
+        };
+
+        // Fetch key_results data from Supabase for this department objective
+        try {
+          const { data: keyResults, error: krError } = await supabase
+            .from('key_results')
+            .select('target_value, start_value, unit, metric_type')
+            .eq('department_objective_id', editObjective.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (!krError && keyResults) {
+            // Use data from key_results if available
+            initialData.target_value = keyResults.target_value?.toString() || '100';
+            initialData.start_value = keyResults.start_value?.toString() || '0';
+            initialData.unit = keyResults.unit || '';
+            initialData.metric_type = (keyResults.metric_type as 'number' | 'percentage' | 'currency' | 'boolean') || 'number';
+          } else {
+            console.log('No key results found for department objective, using defaults');
+          }
+        } catch (error) {
+          console.error('Error loading key results data:', error);
+        }
+
+        setFormData(initialData);
+      } else if (!editObjective && open) {
+        // Reset form for new objective
+        setFormData({
+          company_objective_id: '',
+          title: '',
+          description: '',
+          why_important: '',
+          metric_type: 'number',
+          unit: '',
+          start_value: '0',
+          target_value: '100',
+          weight: '100'
+        });
+      }
+    };
+
+    loadEditData();
   }, [editObjective, open]);
 
   // Get company objectives to show in dropdown
@@ -125,6 +154,68 @@ export const ModalAddDepartmentContribution = ({
           .single();
 
         if (error) throw error;
+
+        // Also update the corresponding key result
+        const { data: existingKeyResult } = await supabase
+          .from('key_results')
+          .select('id')
+          .eq('department_objective_id', editObjective.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingKeyResult) {
+          // Update existing key result
+          const { error: krUpdateError } = await supabase
+            .from('key_results')
+            .update({
+              title: formData.title,
+              description: formData.description,
+              metric_type: formData.metric_type || 'percentage',
+              start_value: parseFloat(formData.start_value) || 0,
+              target_value: parseFloat(formData.target_value) || 100,
+              unit: formData.unit || '%',
+              weight: parseFloat(formData.weight),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingKeyResult.id);
+
+          if (krUpdateError) {
+            console.error('Error updating key result:', krUpdateError);
+            toast({
+              title: 'Warning',
+              description: 'Department objective updated but key result update failed',
+              variant: 'destructive',
+            });
+          }
+        } else {
+          // Create new key result if it doesn't exist
+          const { error: krCreateError } = await supabase
+            .from('key_results')
+            .insert({
+              organization_id: organizationId,
+              department_objective_id: editObjective.id,
+              title: formData.title,
+              description: formData.description,
+              metric_type: formData.metric_type || 'percentage',
+              calculation_type: 'increase',
+              start_value: parseFloat(formData.start_value) || 0,
+              target_value: parseFloat(formData.target_value) || 100,
+              unit: formData.unit || '%',
+              current_value: 0,
+              weight: parseFloat(formData.weight),
+              created_by: currentUser?.id || '',
+              owner_level: 'department'
+            });
+
+          if (krCreateError) {
+            console.error('Error creating key result:', krCreateError);
+            toast({
+              title: 'Warning',
+              description: 'Department objective updated but key result creation failed',
+              variant: 'destructive',
+            });
+          }
+        }
 
         toast({
           title: 'Success',

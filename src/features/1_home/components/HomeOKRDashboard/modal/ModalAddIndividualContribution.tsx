@@ -64,32 +64,64 @@ export const ModalAddIndividualContribution = ({
 
   // Initialize form data when editObjective changes
   React.useEffect(() => {
-    if (editObjective && open) {
-      setFormData({
-        company_objective_id: editObjective.department_objective_id || '',
-        title: editObjective.title || '',
-        description: editObjective.description || '',
-        why_important: editObjective.why_important || '',
-        metric_type: 'number',
-        unit: '',
-        start_value: '0',
-        target_value: '100',
-        weight: editObjective.weight?.toString() || '100'
-      });
-    } else if (!editObjective && open) {
-      // Reset form for new objective
-      setFormData({
-        company_objective_id: '',
-        title: '',
-        description: '',
-        why_important: '',
-        metric_type: 'number',
-        unit: '',
-        start_value: '0',
-        target_value: '100',
-        weight: '100'
-      });
-    }
+    const loadEditData = async () => {
+      if (editObjective && open && editObjective.id) {
+        // Fetch key result data from database
+        try {
+          const { data: keyResultData, error: keyResultError } = await supabase
+            .from('key_results')
+            .select('unit, target_value, start_value, metric_type')
+            .eq('individual_objective_id', editObjective.id)
+            .maybeSingle();
+
+          if (keyResultError) {
+            console.error('Error fetching key result:', keyResultError);
+          }
+
+          // Use real data from key result if available, otherwise use defaults
+          setFormData({
+            company_objective_id: editObjective.department_objective_id || '',
+            title: editObjective.title || '',
+            description: editObjective.description || '',
+            why_important: editObjective.why_important || '',
+            metric_type: (keyResultData?.metric_type as 'number' | 'percentage' | 'currency' | 'boolean') || 'number',
+            unit: keyResultData?.unit || '',
+            start_value: keyResultData?.start_value?.toString() || '0',
+            target_value: keyResultData?.target_value?.toString() || '100',
+            weight: editObjective.weight?.toString() || '100'
+          });
+        } catch (error) {
+          console.error('Error loading edit data:', error);
+          // Fallback to basic data if fetch fails
+          setFormData({
+            company_objective_id: editObjective.department_objective_id || '',
+            title: editObjective.title || '',
+            description: editObjective.description || '',
+            why_important: editObjective.why_important || '',
+            metric_type: 'number',
+            unit: '',
+            start_value: '0',
+            target_value: '100',
+            weight: editObjective.weight?.toString() || '100'
+          });
+        }
+      } else if (!editObjective && open) {
+        // Reset form for new objective
+        setFormData({
+          company_objective_id: '',
+          title: '',
+          description: '',
+          why_important: '',
+          metric_type: 'number',
+          unit: '',
+          start_value: '0',
+          target_value: '100',
+          weight: '100'
+        });
+      }
+    };
+
+    loadEditData();
   }, [editObjective, open]);
 
   // Get department objectives to show in dropdown - using useObjectives hook
@@ -140,6 +172,84 @@ export const ModalAddIndividualContribution = ({
             weight: parseFloat(formData.weight),
           }
         });
+
+        // Update corresponding key result for the individual objective (edit mode)
+        try {
+          // First, find the existing key result
+          const { data: existingKeyResult, error: findError } = await supabase
+            .from('key_results')
+            .select('id')
+            .eq('individual_objective_id', editObjective.id)
+            .maybeSingle();
+
+          if (findError) {
+            console.error('Error finding key result:', findError);
+          }
+
+          if (existingKeyResult) {
+            // Update existing key result
+            const { error: updateKeyResultError } = await supabase
+              .from('key_results')
+              .update({
+                title: formData.title,
+                description: formData.description,
+                metric_type: formData.metric_type || 'number',
+                start_value: parseFloat(formData.start_value) || 0,
+                target_value: parseFloat(formData.target_value) || 100,
+                unit: formData.unit || '',
+                weight: parseFloat(formData.weight),
+              })
+              .eq('id', existingKeyResult.id);
+
+            if (updateKeyResultError) {
+              console.error('Error updating key result:', updateKeyResultError);
+              toast({
+                title: 'Warning',
+                description: 'Individual objective updated but key result update failed. Please check the logs.',
+                variant: 'destructive',
+              });
+            } else {
+              console.log('✅ Key result updated successfully');
+            }
+          } else {
+            // Create key result if it doesn't exist
+            const { error: createKeyResultError } = await supabase
+              .from('key_results')
+              .insert({
+                organization_id: organizationId,
+                individual_objective_id: editObjective.id,
+                title: formData.title,
+                description: formData.description,
+                metric_type: formData.metric_type || 'number',
+                calculation_type: 'increase',
+                start_value: parseFloat(formData.start_value) || 0,
+                target_value: parseFloat(formData.target_value) || 100,
+                unit: formData.unit || '',
+                current_value: 0,
+                weight: parseFloat(formData.weight),
+                created_by: currentUser?.id || '',
+                owner_level: 'individual'
+              });
+
+            if (createKeyResultError) {
+              console.error('Error creating key result:', createKeyResultError);
+              toast({
+                title: 'Warning',
+                description: 'Individual objective updated but key result creation failed. Please check the logs.',
+                variant: 'destructive',
+              });
+            } else {
+              console.log('✅ Key result created successfully');
+            }
+          }
+        } catch (keyResultError) {
+          console.error('Error updating key result:', keyResultError);
+          toast({
+            title: 'Warning',
+            description: 'Individual objective updated but key result update failed. Please check the logs.',
+            variant: 'destructive',
+          });
+        }
       } else {
         const individualObjective = await createObjective.mutateAsync({
           organization_id: organizationId,
@@ -227,7 +337,7 @@ export const ModalAddIndividualContribution = ({
         variant: 'destructive',
       });
     }
-  }, [currentEmployee, formData, departmentObjectives, createObjective, currentUser, organizationId, cycleId, toast, onSuccess, onOpenChange]);
+  }, [currentEmployee, formData, departmentObjectives, createObjective, updateObjective, editObjective, currentUser, organizationId, cycleId, toast, onSuccess, onOpenChange]);
 
   const handleCancel = useCallback(() => {
     // Reset form
