@@ -57,72 +57,312 @@ const PaymentHistory = () => {
     }
   };
 
-  const downloadReceipt = (payment: any) => {
-    const doc = new jsPDF();
+  const downloadReceipt = async (payment: any) => {
+    // Fetch organization data
+    let orgData = null;
+    if (organizationId) {
+      const { data } = await supabase
+        .from('organizations')
+        .select('company_name, email, address')
+        .eq('id', organizationId)
+        .single();
+      orgData = data;
+    }
     
-    // Header
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    // Color scheme
+    const greenColor = [34, 197, 94]; // Green-500 for PAID status
+    const darkGray = [55, 65, 81]; // Gray-700
+    
+    // Total amount (no VAT for early stage)
+    const totalAmount = payment.amount || 0;
+    
+    // Format currency helper
+    const formatCurrency = (amount: number) => {
+      return formatIDR(amount);
+    };
+    
+    // Header - Logo and Company Name
+    let currentY = 20;
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('INVOICE / RECEIPT', 20, 20);
+    doc.setTextColor(0, 0, 0);
+    doc.text('ProfitLoop', margin, currentY);
     
-    // Company info
-    doc.setFontSize(12);
+    // Company information (FROM section)
+    currentY += 8;
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text('ProfitLoop App', 20, 35);
-    doc.text('Subscription Management System', 20, 42);
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('ProfitLoop App', margin, currentY);
+    currentY += 5;
+    doc.text('Subscription Management System', margin, currentY);
+    currentY += 5;
+    doc.text('Email: support@profitloop.app', margin, currentY);
+    currentY += 5;
+    doc.text('Website: https://app.profitloop.id/', margin, currentY);
     
-    // Invoice details
-    const invoiceDate = new Date().toLocaleDateString('id-ID');
+    // Invoice details (right side)
+    currentY = 20;
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    const invoiceLabel = 'INVOICE';
+    const invoiceLabelWidth = doc.getTextWidth(invoiceLabel);
+    doc.text(invoiceLabel, pageWidth - margin - invoiceLabelWidth, currentY);
+    
+    currentY += 10;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    
+    const invoiceDate = new Date().toLocaleDateString('id-ID', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
     const paymentDate = payment.created_at ? 
       format(new Date(payment.created_at), 'dd MMMM yyyy', { locale: id }) : 
       '-';
     
-    doc.text(`Invoice Date: ${invoiceDate}`, 120, 35);
-    doc.text(`Payment Date: ${paymentDate}`, 120, 42);
-    doc.text(`Order ID: ${payment.order_id}`, 120, 49);
+    // Calculate next billing date - use same format as invoiceDate
+    const nextBillingDate = payment.created_at ? 
+      new Date(new Date(payment.created_at).setMonth(new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1))).toLocaleDateString('id-ID', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }) : 
+      '-';
     
-    if (payment.transaction_id) {
-      doc.text(`Transaction ID: ${payment.transaction_id}`, 120, 56);
+    // Invoice details (right side) - calculate proper position to avoid truncation
+    const invoiceDetailsStartX = pageWidth / 2 + 10; // Start from middle + offset
+    const maxInvoiceDetailsWidth = pageWidth - margin - invoiceDetailsStartX; // Max width available
+    const labelColumnWidth = 50; // Fixed width for labels
+    const valueColumnWidth = maxInvoiceDetailsWidth - labelColumnWidth - 5; // Remaining for values
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    
+    // Invoice #
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Invoice #:', invoiceDetailsStartX, currentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const invoiceNumber = payment.order_id || 'N/A';
+    const invoiceNumberWidth = doc.getTextWidth(invoiceNumber);
+    const invoiceNumberX = Math.min(invoiceDetailsStartX + labelColumnWidth, pageWidth - margin - invoiceNumberWidth);
+    doc.text(invoiceNumber, invoiceNumberX, currentY);
+    
+    currentY += 6;
+    // Invoice Issued
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Invoice Issued:', invoiceDetailsStartX, currentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const invoiceDateWidth = doc.getTextWidth(invoiceDate);
+    const invoiceDateX = Math.min(invoiceDetailsStartX + labelColumnWidth, pageWidth - margin - invoiceDateWidth);
+    doc.text(invoiceDate, invoiceDateX, currentY);
+    
+    currentY += 6;
+    // Next Billing Date (moved below Invoice Issued)
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Next Billing Date:', invoiceDetailsStartX, currentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const nextBillingDateWidth = doc.getTextWidth(nextBillingDate);
+    const nextBillingDateX = Math.min(invoiceDetailsStartX + labelColumnWidth, pageWidth - margin - nextBillingDateWidth);
+    doc.text(nextBillingDate, nextBillingDateX, currentY);
+    
+    currentY += 6;
+    // Invoice Amount (without IDR) - right aligned
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Invoice Amount:', invoiceDetailsStartX, currentY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const invoiceAmountText = formatCurrency(totalAmount);
+    const invoiceAmountWidth = doc.getTextWidth(invoiceAmountText);
+    // Right align: position at pageWidth - margin - textWidth
+    const invoiceAmountX = pageWidth - margin - invoiceAmountWidth;
+    doc.text(invoiceAmountText, invoiceAmountX, currentY);
+    
+    currentY += 6;
+    // Status (label aligned left with other labels, value right aligned)
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Status:', invoiceDetailsStartX, currentY);
+    doc.setFont('helvetica', 'normal');
+    const isPaid = payment.status?.toLowerCase() === 'settlement' || 
+                   payment.status?.toLowerCase() === 'success' || 
+                   payment.status?.toLowerCase() === 'paid';
+    if (isPaid) {
+      doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+    } else {
+      doc.setTextColor(0, 0, 0);
     }
+    const statusText = (payment.status || 'PENDING').toUpperCase();
+    // Status value right aligned
+    const statusWidth = doc.getTextWidth(statusText);
+    const statusX = pageWidth - margin - statusWidth;
+    doc.text(statusText, statusX, currentY);
     
-    // Line separator
-    doc.line(20, 65, 190, 65);
+    // BILLED TO section
+    currentY = 70;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text('BILLED TO', margin, currentY);
     
-    // Payment details table
+    currentY += 7;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    // Get organization name from orgData or use default
+    const orgName = orgData?.company_name || 'Customer';
+    doc.text(orgName, margin, currentY);
+    currentY += 5;
+    doc.text('Indonesia', margin, currentY);
+    // Try to get email from orgData
+    const customerEmail = orgData?.email || 'customer@example.com';
+    currentY += 5;
+    doc.text(customerEmail, margin, currentY);
+    
+    // Line items table
+    const billingCycleText = payment.billing_cycle === 'yearly' ? 'billed every year' : 
+                            payment.billing_cycle === 'monthly' ? 'billed every month' : 
+                            'billed every month';
+    
+    const periodStart = payment.created_at ? 
+      format(new Date(payment.created_at), 'MMM dd, yyyy', { locale: id }) : 
+      '-';
+    const periodEnd = nextBillingDate;
+    
     const tableData = [
-      ['Plan Name', payment.subscription_plans?.name || 'N/A'],
-      ['Amount', formatIDR(payment.amount || 0)],
-      ['Member Count', payment.member_count?.toString() || '0'],
-      ['Billing Cycle', payment.billing_cycle || 'Monthly'],
-      ['Payment Type', payment.payment_type || 'midtrans'],
-      ['Status', payment.status || 'Pending'],
+      [
+        `${payment.subscription_plans?.name || 'Subscription Plan'} (${billingCycleText})\nPeriod: ${periodStart} to ${periodEnd}`,
+        `${formatCurrency(totalAmount)} x 1`,
+        '-',
+        formatCurrency(totalAmount)
+      ]
     ];
     
     autoTable(doc, {
-      startY: 75,
-      head: [['Description', 'Details']],
+      startY: currentY + 10,
+      head: [['DESCRIPTION', 'PRICE', 'DISCOUNT', 'AMOUNT (IDR)']],
       body: tableData,
-      theme: 'striped',
+      margin: { left: margin, right: margin },
       styles: {
-        fontSize: 10,
-        cellPadding: 5,
+        fontSize: 8,
+        cellPadding: 4,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+        textColor: [0, 0, 0],
       },
       headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontStyle: 'bold',
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'normal',
+        fontSize: 8,
+        cellPadding: 4,
+      },
+      columnStyles: {
+        0: { cellWidth: 80, fontStyle: 'normal' },
+        1: { cellWidth: 35, halign: 'right' },
+        2: { cellWidth: 25, halign: 'right' },
+        3: { cellWidth: 35, halign: 'right', fontStyle: 'normal' },
+      },
+      didParseCell: (data: any) => {
+        // Make header "AMOUNT (IDR)" right aligned
+        if (data.section === 'head' && data.column.index === 3) {
+          data.cell.styles.halign = 'right';
+        }
       },
     });
     
-    // Footer
+    // Summary section (bottom right) - simplified without VAT
     const finalY = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(10);
+    let summaryY = finalY + 15;
+    
+    // Calculate summary position to avoid truncation
+    const summaryStartX = pageWidth / 2 + 10; // Start from middle + offset
+    const summaryLabelWidth = 60; // Width for labels
+    const maxSummaryValueWidth = pageWidth - margin - summaryStartX - summaryLabelWidth; // Max width for values
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    
+    // Subtotal
+    doc.text('Subtotal:', summaryStartX, summaryY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const subtotalText = formatCurrency(totalAmount);
+    const subtotalTextWidth = doc.getTextWidth(subtotalText);
+    const subtotalX = Math.min(summaryStartX + summaryLabelWidth, pageWidth - margin - subtotalTextWidth);
+    doc.text(subtotalText, subtotalX, summaryY);
+    
+    summaryY += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Total:', summaryStartX, summaryY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const totalText = formatCurrency(totalAmount);
+    const totalTextWidth = doc.getTextWidth(totalText);
+    const totalX = Math.min(summaryStartX + summaryLabelWidth, pageWidth - margin - totalTextWidth);
+    doc.text(totalText, totalX, summaryY);
+    
+    summaryY += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Payments:', summaryStartX, summaryY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const paymentText = isPaid ? `(${formatCurrency(totalAmount)})` : '-';
+    const paymentTextWidth = doc.getTextWidth(paymentText);
+    const paymentX = Math.min(summaryStartX + summaryLabelWidth, pageWidth - margin - paymentTextWidth);
+    doc.text(paymentText, paymentX, summaryY);
+    
+    summaryY += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('Amount Due (IDR):', summaryStartX, summaryY);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    const amountDue = isPaid ? 0 : totalAmount;
+    const amountDueText = formatCurrency(amountDue);
+    const amountDueTextWidth = doc.getTextWidth(amountDueText);
+    const amountDueX = Math.min(summaryStartX + summaryLabelWidth, pageWidth - margin - amountDueTextWidth);
+    doc.text(amountDueText, amountDueX, summaryY);
+    
+    // Footer
+    const footerY = summaryY + 15;
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'italic');
-    doc.text('Thank you for your subscription!', 20, finalY + 20);
-    doc.text('This is a computer generated invoice.', 20, finalY + 27);
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+    doc.text('This is a computer generated invoice.', margin, footerY);
+    
+    // Page number
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
     
     // Save the PDF
-    doc.save(`receipt-${payment.order_id}.pdf`);
+    doc.save(`invoice-${payment.order_id}.pdf`);
   };
 
   if (isLoading) {
