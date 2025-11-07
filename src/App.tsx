@@ -40,6 +40,7 @@ import PlansTabPage from "./features/10-Plans/PlansTabPage";
 import EmployeePage from "./features/2-1-employees/EmployeePage";
 import AddEmployeePage from "./features/2-1-employees/add-employee/AddEmployeePage";
 import FirstLogin from "./features/2-1-employees/employee-invitation/FirstLogin";
+import OKRPage from "./features/1-okr/OKRPage";
 import EmployeePersonalInfo from "./features/2-1-employees/MyInfo/PersonalInformation/pages/EmployeePersonalInfo";
 import EmployeeAddressInfo from "./features/2-1-employees/MyInfo/AddressInformation/pages/EmployeeAddressInfo";
 import EmployeeEmploymentInfo from "./features/2-1-employees/MyInfo/Employment/pages/EmployeeEmploymentInfo";
@@ -276,6 +277,23 @@ const App = () => (
               <Route path="/employees/reprimand" element={
                 <ProtectedRoute>
                   <ReprimandManagementPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* OKR Routes - PROTECTED */}
+              <Route path="/okr/company-objective" element={
+                <ProtectedRoute>
+                  <OKRPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/okr/department-objective" element={
+                <ProtectedRoute>
+                  <OKRPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/okr/individual-objective" element={
+                <ProtectedRoute>
+                  <OKRPage />
                 </ProtectedRoute>
               } />
               

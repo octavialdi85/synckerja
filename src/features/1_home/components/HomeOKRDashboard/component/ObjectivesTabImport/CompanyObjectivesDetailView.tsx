@@ -651,10 +651,10 @@ export const CompanyObjectivesDetailView = ({
       </AccordionItem>
     );
   };
-  return <div className="h-full flex flex-col max-h-[calc(100vh-450px)] overflow-hidden">
+  return <div className="h-full flex flex-col max-h-[calc(100vh-120px)] overflow-hidden">
 
       {/* Status Groups */}
-      <div className="h-[50vh] space-y-2 seamless-scroll overflow-y-auto scrollbar-hide min-h-0 mt-1">
+      <div className="flex-1 space-y-2 seamless-scroll overflow-y-auto scrollbar-hide min-h-0 mt-1">
         {/* Active Objectives */}
         <SectionActiveObjectives
           activeObjectives={activeObjectives}

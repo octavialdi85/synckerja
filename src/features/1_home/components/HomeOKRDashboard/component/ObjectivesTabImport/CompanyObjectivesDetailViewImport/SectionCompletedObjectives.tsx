@@ -20,7 +20,7 @@ export const SectionCompletedObjectives = ({
 
   return (
     <div className="border border-gray-200 rounded-lg">
-      <div className="bg-blue-50 px-4 py-2 border-b border-gray-200">
+      <div className="bg-blue-50 px-4 py-2 border-b border-r border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <CheckCircle className="h-4 w-4 text-blue-600" />
@@ -35,7 +35,7 @@ export const SectionCompletedObjectives = ({
         </div>
       </div>
       
-      <div className="p-0 max-h-[250px] overflow-y-auto seamless-scroll scrollbar-hide">
+      <div className="p-0 overflow-y-auto seamless-scroll scrollbar-hide border-r border-gray-200">
         <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective}>
           {completedObjectives.map(objective => renderObjectiveCard(objective, 'completed', 'border-l-blue-500', 'text-blue-600'))}
         </Accordion>

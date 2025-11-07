@@ -1,12 +1,18 @@
 
 import React from "react";
-import { Home, Wrench, Megaphone, CreditCard, Users } from "lucide-react";
+import { Home, Wrench, Megaphone, CreditCard, Users, Target } from "lucide-react";
 
 export const menuItems: MenuItem[] = [
   {
     title: "Home",
     icon: Home,
     url: "/",
+    hasSubSidebar: false,
+  },
+  {
+    title: "OKR",
+    icon: Target,
+    url: "/okr/company-objective",
     hasSubSidebar: false,
   },
   {
