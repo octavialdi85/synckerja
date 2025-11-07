@@ -644,7 +644,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     )}
                   </div>
-                  <Button variant="outline" onClick={openLink} disabled={!currentLink || productionApproved} className="h-9 px-3 border-gray-200 hover:bg-gray-50 rounded-lg">
+                  <Button variant="outline" onClick={openLink} disabled={!currentLink} className="h-9 px-3 border-gray-200 hover:bg-gray-50 rounded-lg">
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>
