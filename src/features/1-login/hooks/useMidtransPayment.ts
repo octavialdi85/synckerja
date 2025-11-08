@@ -160,11 +160,6 @@ export const useMidtransPayment = () => {
         }
       };
 
-      snapConfig.finishRedirectUrl = successRedirectUrl;
-      snapConfig.unfinishRedirectUrl = fallbackRedirectUrl;
-      snapConfig.errorRedirectUrl = fallbackRedirectUrl;
-      snapConfig.closeRedirectUrl = fallbackRedirectUrl;
-
       window.snap.pay(data.token, snapConfig);
 
     } catch (error: any) {

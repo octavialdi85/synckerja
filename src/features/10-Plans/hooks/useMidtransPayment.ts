@@ -219,11 +219,6 @@ export const useMidtransPayment = () => {
         }
       };
 
-      snapConfig.finishRedirectUrl = successRedirectUrl;
-      snapConfig.unfinishRedirectUrl = fallbackRedirectUrl;
-      snapConfig.errorRedirectUrl = fallbackRedirectUrl;
-      snapConfig.closeRedirectUrl = fallbackRedirectUrl;
-
       // Open Midtrans payment popup with error handling
       try {
         window.snap.pay(data.token, snapConfig);
