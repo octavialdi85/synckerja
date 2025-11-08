@@ -21,6 +21,10 @@ export const OfficeScheduleCard = () => {
         return 'bg-muted border-border text-muted-foreground';
       case 'completed':
         return 'bg-success/10 border-success/30 text-success';
+      case 'holiday':
+        return 'bg-destructive/10 border-destructive/30 text-destructive';
+      case 'off':
+        return 'bg-muted border-border text-muted-foreground';
       default:
         return 'bg-muted border-border text-muted-foreground';
     }
@@ -33,6 +37,10 @@ export const OfficeScheduleCard = () => {
         return 'Nanti';
       case 'completed':
         return 'Selesai';
+      case 'holiday':
+        return 'Libur';
+      case 'off':
+        return 'Libur';
       default:
         return '';
     }
@@ -116,8 +124,20 @@ export const OfficeScheduleCard = () => {
         
         {/* Schedule Items */}
         <div className="max-h-64 overflow-y-auto">
-          {scheduleData.map((item, index) => <div key={index} className={`grid grid-cols-5 p-3 border-b border-border text-xs ${item.status === 'active' ? 'bg-primary/5' : ''}`}>
-              <div className={`font-medium ${item.isWorkingDay ? 'text-foreground' : 'text-muted-foreground'}`}>
+          {scheduleData.map((item, index) => (
+            <div
+              key={index}
+              className={`grid grid-cols-5 p-3 border-b border-border text-xs ${
+                item.status === 'active'
+                  ? 'bg-primary/5'
+                  : item.status === 'holiday'
+                    ? 'bg-destructive/5'
+                    : ''
+              }`}
+            >
+              <div
+                className={`font-medium ${item.isWorkingDay ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
                 {item.day}
               </div>
               <div className="text-muted-foreground">{item.date}</div>
@@ -128,13 +148,12 @@ export const OfficeScheduleCard = () => {
                 {item.endTime}
               </div>
               <div>
-                {item.isWorkingDay ? <span className={`px-2 py-1 rounded-full text-xs border ${getStatusColor(item.status)}`}>
-                    {getStatusLabel(item.status)}
-                  </span> : <span className="px-2 py-1 rounded-full text-xs border bg-muted border-border text-muted-foreground">
-                    Libur
-                  </span>}
+                <span className={`px-2 py-1 rounded-full text-xs border ${getStatusColor(item.status)}`}>
+                  {getStatusLabel(item.status)}
+                </span>
               </div>
-            </div>)}
+            </div>
+          ))}
         </div>
       </div>
       

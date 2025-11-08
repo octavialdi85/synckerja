@@ -106,13 +106,41 @@ export const useAttendanceData = () => {
         workScheduleData = fallbackSchedule;
       }
 
+      const { data: holidaysData } = await supabase
+        .from("national_holidays")
+        .select("id, name, date, is_recurring, is_active, applies_to_attendance, country_code")
+        .or(`organization_id.eq.${employee.organization_id},organization_id.is.null`)
+        .eq("is_active", true)
+        .eq("applies_to_attendance", true);
+
+      const activeHolidays = holidaysData ?? [];
+
+      const todayDate = new Date();
+      const todayIso = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(
+        todayDate.getDate(),
+      ).padStart(2, "0")}`;
+
+      const matchHoliday = activeHolidays.find((holiday) => {
+        if (!holiday.is_active || !holiday.applies_to_attendance) return false;
+        if (holiday.is_recurring || holiday.country_code) {
+          const holidayDate = new Date(holiday.date);
+          return (
+            holidayDate.getMonth() === todayDate.getMonth() &&
+            holidayDate.getDate() === todayDate.getDate()
+          );
+        }
+        return holiday.date === todayIso;
+      });
+
       if (workScheduleData) {
         setWorkSchedule(workScheduleData);
         
         // Check if today is a working day - convert JS day (0=Sunday) to DB day (7=Sunday)
         const currentDay = new Date().getDay(); // 0=Sunday, 1=Monday, etc.
         const dbDay = currentDay === 0 ? 7 : currentDay; // Convert Sunday from 0 to 7
-        const isWorkingDay = workScheduleData.working_days?.includes(dbDay);
+        const scheduledWorkingDay = workScheduleData.working_days?.includes(dbDay);
+        const isHoliday = Boolean(matchHoliday);
+        const isWorkingDay = scheduledWorkingDay && !isHoliday;
         console.log(`🔍 Current day: ${currentDay}, DB day: ${dbDay}, Working days: ${JSON.stringify(workScheduleData.working_days)}, Is working day: ${isWorkingDay}`);
         
         setTodaySchedule({
@@ -120,8 +148,16 @@ export const useAttendanceData = () => {
           endTime: workScheduleData.end_time?.substring(0, 5) || "17:00",
           location: officeLocation?.name || "Kantor Pusat",
           department: employee?.departments?.name || "IT Department",
-          notes: isWorkingDay ? "Hari kerja sesuai jadwal" : "Hari ini libur",
+          notes: isHoliday
+            ? matchHoliday?.name
+              ? `Hari libur: ${matchHoliday.name}`
+              : "Hari ini libur"
+            : isWorkingDay
+              ? "Hari kerja sesuai jadwal"
+              : "Hari ini libur",
           isWorkingDay,
+          isHoliday,
+          holidayName: matchHoliday?.name ?? null,
           lateToleranceMinutes: workScheduleData.late_tolerance_minutes || 0,
           breakStartTime: workScheduleData.break_start_time?.substring(0, 5),
           breakEndTime: workScheduleData.break_end_time?.substring(0, 5)
@@ -135,6 +171,8 @@ export const useAttendanceData = () => {
           department: employee?.departments?.name || "IT Department",
           notes: "Jadwal kerja default",
           isWorkingDay: true,
+          isHoliday: false,
+          holidayName: null,
           lateToleranceMinutes: 0
         });
       }

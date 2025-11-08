@@ -79,9 +79,12 @@ export const AttendanceHistoryTable = ({
             <div className="flex-shrink-0 text-center" style={{
             flexBasis: '12%'
           }}>Min</div>
-            <div className="flex-shrink-0 text-center px-2" style={{
-            flexBasis: '100px'
-          }}>Penalty</div>
+            <div
+              className="flex-shrink-0 text-right pr-1"
+              style={{ flexBasis: "90px" }}
+            >
+              Penalty
+            </div>
           </div>
           
           {/* Table Body with ScrollArea - Fixed height */}
@@ -126,9 +129,10 @@ export const AttendanceHistoryTable = ({
                   }} title={lateMinutes}>
                           {lateMinutes}
                         </div>
-                        <div className={`flex-shrink-0 font-semibold px-2 ${penalty === "•" ? "text-muted-foreground" : "text-destructive"}`} style={{
-                    flexBasis: '100px'
-                  }}>
+                        <div
+                          className={`flex-shrink-0 font-semibold ${penalty === "•" ? "text-muted-foreground" : "text-destructive"} text-right`}
+                          style={{ flexBasis: "90px" }}
+                        >
                           {penalty}
                         </div>
                       </div>;

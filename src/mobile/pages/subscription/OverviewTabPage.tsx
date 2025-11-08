@@ -166,9 +166,9 @@ const OverviewTabPage = memo(() => {
 
         {subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
 
-        <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
+              <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
 
-        <FeatureUsageChart data={analytics?.feature_usage || []} isLoading={analyticsLoading} />
+              <FeatureUsageChart data={analytics?.feature_usage || []} isLoading={analyticsLoading} />
 
         <UsageMetricsCards metrics={analytics?.usage_metrics || null} isLoading={analyticsLoading} />
 

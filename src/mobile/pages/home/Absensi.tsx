@@ -175,11 +175,12 @@ const Absensi = () => {
 
   const handleClockIn = () => {
     if (todayAttendance?.check_in_time) {
-      toast({
-        title: "Sudah Clock In",
-        description: "Anda sudah melakukan clock in hari ini",
-        variant: "destructive"
-      });
+        toast({
+          title: "Sudah Clock In",
+          description: "Anda sudah melakukan clock in hari ini",
+          variant: "destructive",
+          duration: 4000,
+        });
       return;
     }
 
@@ -188,7 +189,8 @@ const Absensi = () => {
       toast({
         title: "Hari Libur",
         description: "Hari ini adalah hari libur sesuai jadwal kerja",
-        variant: "destructive"
+        variant: "destructive",
+        duration: 4000,
       });
       return;
     }
@@ -206,7 +208,8 @@ const Absensi = () => {
         toast({
           title: "Terlalu Dini",
           description: `Waktu clock in belum dimulai. Jadwal kerja mulai ${workSchedule.start_time}`,
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -216,7 +219,8 @@ const Absensi = () => {
         toast({
           title: "Waktu Kerja Berakhir",
           description: `Waktu kerja sudah berakhir jam ${workSchedule.end_time}`,
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -244,7 +248,8 @@ const Absensi = () => {
       toast({
         title: "Belum Clock In",
         description: "Anda harus clock in terlebih dahulu",
-        variant: "destructive"
+        variant: "destructive",
+        duration: 4000,
       });
       return;
     }
@@ -252,7 +257,8 @@ const Absensi = () => {
       toast({
         title: "Sudah Clock Out",
         description: "Anda sudah melakukan clock out hari ini",
-        variant: "destructive"
+        variant: "destructive",
+        duration: 4000,
       });
       return;
     }
@@ -267,8 +273,11 @@ const Absensi = () => {
       if (workedHours < 4) {
         toast({
           title: "Belum Cukup Waktu Kerja",
-          description: `Anda baru bekerja ${Math.floor(workedHours)} jam ${Math.floor(workedHours % 1 * 60)} menit. Minimal 4 jam kerja.`,
-          variant: "destructive"
+          description: `Anda baru bekerja ${Math.floor(workedHours)} jam ${Math.floor(
+            (workedHours % 1) * 60,
+          )} menit. Minimal 4 jam kerja.`,
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -339,7 +348,8 @@ const Absensi = () => {
         toast({
           title: "Error",
           description: "User tidak ditemukan",
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -353,9 +363,10 @@ const Absensi = () => {
 
       if (!profile?.active_organization_id) {
         toast({
-          title: "Error", 
+          title: "Error",
           description: "Organisasi aktif tidak ditemukan",
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -373,7 +384,8 @@ const Absensi = () => {
         toast({
           title: "Error",
           description: "Data karyawan tidak ditemukan",
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -388,7 +400,8 @@ const Absensi = () => {
         toast({
           title: "Error",
           description: "Gagal mengambil data kantor",
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -415,7 +428,8 @@ const Absensi = () => {
         toast({
           title: "Lokasi Tidak Valid",
           description: "Anda tidak berada dalam radius area kantor yang diizinkan",
-          variant: "destructive"
+          variant: "destructive",
+          duration: 4000,
         });
         return;
       }
@@ -455,7 +469,8 @@ const Absensi = () => {
           toast({
             title: "Jadwal Kerja Tidak Ditemukan",
             description: "Silakan hubungi admin untuk mengatur jadwal kerja aktif.",
-            variant: "destructive"
+            variant: "destructive",
+            duration: 4000,
           });
           return;
         }
@@ -534,7 +549,8 @@ const Absensi = () => {
           toast({
             title: "Clock In Gagal",
             description: "Terjadi kesalahan saat menyimpan data",
-            variant: "destructive"
+            variant: "destructive",
+            duration: 4000,
           });
           return;
         }
@@ -563,9 +579,10 @@ const Absensi = () => {
         }
 
         toast({
-          title: "🎉 Clock In Berhasil!",
+          title: "Clock In Berhasil",
           description: "Selamat! Anda telah berhasil melakukan clock in",
-          className: "bg-success text-success-foreground"
+          variant: "default",
+          duration: 3000,
         });
 
         // Trigger confetti celebration
@@ -593,18 +610,20 @@ const Absensi = () => {
 
         if (updateError) {
           console.error('Clock out error:', updateError);
-          toast({
-            title: "Clock Out Gagal",
-            description: "Terjadi kesalahan saat menyimpan data",
-            variant: "destructive"
-          });
+        toast({
+          title: "Clock Out Gagal",
+          description: "Terjadi kesalahan saat menyimpan data",
+          variant: "destructive",
+          duration: 4000,
+        });
           return;
         }
 
         toast({
-          title: "🎉 Clock Out Berhasil!",
+          title: "Clock Out Berhasil",
           description: "Selamat! Anda telah menyelesaikan hari kerja",
-          className: "bg-success text-success-foreground"
+          variant: "default",
+          duration: 3000,
         });
 
         // Trigger confetti celebration
@@ -620,7 +639,8 @@ const Absensi = () => {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Terjadi kesalahan tidak terduga",
-        variant: "destructive"
+        variant: "destructive",
+        duration: 4000,
       });
     }
   };

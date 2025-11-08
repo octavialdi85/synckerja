@@ -7,6 +7,9 @@ interface TodayScheduleProps {
     location: string;
     department: string;
     notes?: string;
+    isWorkingDay?: boolean;
+    isHoliday?: boolean;
+    holidayName?: string | null;
   };
 }
 
@@ -20,6 +23,20 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
   };
 
   const isCurrentlyWorkTime = () => {
+    if (schedule.isHoliday) {
+      return {
+        status: "holiday",
+        message: schedule.holidayName ? `Hari libur: ${schedule.holidayName}` : "Hari ini libur",
+      };
+    }
+
+    if (schedule.isWorkingDay === false) {
+      return {
+        status: "off",
+        message: "Tidak ada jadwal kerja untuk hari ini",
+      };
+    }
+
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     const [startHour, startMin] = schedule.startTime.split(':').map(Number);
@@ -58,6 +75,16 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
   };
 
   const timeStatus = getTimeStatus();
+  const statusColor =
+    timeStatus.status === "active"
+      ? "bg-success/10 border-success/30 text-success"
+      : timeStatus.status === "upcoming"
+        ? "bg-warning/10 border-warning/30 text-warning"
+        : timeStatus.status === "holiday"
+          ? "bg-destructive/10 border-destructive/30 text-destructive"
+          : timeStatus.status === "off"
+            ? "bg-muted/50 border-border text-muted-foreground"
+            : "bg-muted/50 border-border text-muted-foreground";
 
   return (
     <div className="bg-card rounded-lg border border-border p-4">
@@ -67,16 +94,11 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
       </div>
       
       {/* Time Status */}
-      <div className={`p-3 rounded-lg mb-3 border ${
-        timeStatus.status === 'active' 
-          ? 'bg-success/10 border-success/30 text-success' 
-          : timeStatus.status === 'upcoming'
-          ? 'bg-warning/10 border-warning/30 text-warning'
-          : 'bg-muted/50 border-border text-muted-foreground'
-      }`}>
+      <div className={`p-3 rounded-lg mb-3 border ${statusColor}`}>
         <div className="flex items-center gap-2">
           {timeStatus.status === 'upcoming' && <AlertCircle className="h-4 w-4" />}
           {timeStatus.status === 'active' && <Clock className="h-4 w-4" />}
+          {timeStatus.status === 'holiday' && <AlertCircle className="h-4 w-4" />}
           <span className="text-sm font-medium">{timeStatus.message}</span>
         </div>
       </div>
@@ -86,7 +108,9 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Jam Kerja</span>
           <span className="text-sm font-medium text-foreground">
-            {schedule.startTime} - {schedule.endTime}
+            {timeStatus.status === "holiday" || timeStatus.status === "off"
+              ? "-"
+              : `${schedule.startTime} - ${schedule.endTime}`}
           </span>
         </div>
         

@@ -18,14 +18,28 @@ interface WorkSchedule {
   organization_id: string;
 }
 
+interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  is_recurring: boolean;
+  is_active: boolean;
+  applies_to_attendance: boolean;
+  country_code?: string | null;
+}
+
+type ScheduleStatus = "active" | "upcoming" | "completed" | "off" | "holiday";
+
 interface ScheduleDay {
   day: string;
   date: string;
   startTime: string;
   endTime: string;
-  status: 'active' | 'upcoming' | 'completed';
+  status: ScheduleStatus;
   location: string;
   isWorkingDay: boolean;
+  isHoliday: boolean;
+  holidayName?: string | null;
 }
 
 export const useWorkSchedule = () => {
@@ -38,7 +52,7 @@ export const useWorkSchedule = () => {
 
   const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
-  const generateWeeklySchedule = (schedule: WorkSchedule): ScheduleDay[] => {
+  const generateWeeklySchedule = (schedule: WorkSchedule, holidays: Holiday[]): ScheduleDay[] => {
     const today = new Date();
     const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const schedules: ScheduleDay[] = [];
@@ -53,24 +67,63 @@ export const useWorkSchedule = () => {
       const dbDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
       
       // Check if this day is in working_days array - make sure schedule exists and has working_days
-      const isWorkingDay = schedule && schedule.working_days && Array.isArray(schedule.working_days) && schedule.working_days.includes(dbDayOfWeek);
-      console.log(`📅 Day ${dayOfWeek} (DB: ${dbDayOfWeek}): isWorkingDay = ${isWorkingDay}, working_days = ${JSON.stringify(schedule?.working_days)}, schedule exists = ${!!schedule}`);
-      
-      let status: 'active' | 'upcoming' | 'completed' = 'upcoming';
-      if (date.toDateString() === today.toDateString()) {
-        status = 'active';
-      } else if (date < today) {
-        status = 'completed';
+      const isScheduledDay =
+        schedule &&
+        Array.isArray(schedule.working_days) &&
+        schedule.working_days.includes(dbDayOfWeek);
+      console.log(
+        `📅 Day ${dayOfWeek} (DB: ${dbDayOfWeek}): isScheduledDay = ${isScheduledDay}, working_days = ${JSON.stringify(
+          schedule?.working_days,
+        )}, schedule exists = ${!!schedule}`,
+      );
+
+      const isoDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+        date.getDate(),
+      ).padStart(2, "0")}`;
+
+      const matchedHoliday = holidays.find((holiday) => {
+        if (!holiday.is_active || !holiday.applies_to_attendance) return false;
+
+        if (holiday.is_recurring || holiday.country_code) {
+          const holidayDate = new Date(holiday.date);
+          return (
+            holidayDate.getMonth() === date.getMonth() &&
+            holidayDate.getDate() === date.getDate()
+          );
+        }
+
+        return holiday.date === isoDate;
+      });
+
+      const isHoliday = Boolean(matchedHoliday);
+
+      let status: ScheduleStatus = "off";
+      if (isHoliday) {
+        status = "holiday";
+      } else if (isScheduledDay) {
+        if (date.toDateString() === today.toDateString()) {
+          status = "active";
+        } else if (date < today) {
+          status = "completed";
+        } else {
+          status = "upcoming";
+        }
       }
+
+      const isWorkingDay = isScheduledDay && !isHoliday;
 
       schedules.push({
         day: dayNames[dayOfWeek],
         date: date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
-        startTime: isWorkingDay ? schedule.start_time.slice(0, 5) : '-',
-        endTime: isWorkingDay ? schedule.end_time.slice(0, 5) : '-',
-        status: isWorkingDay ? status : 'upcoming',
+        startTime:
+          isWorkingDay && status !== "holiday" ? schedule.start_time.slice(0, 5) : "-",
+        endTime:
+          isWorkingDay && status !== "holiday" ? schedule.end_time.slice(0, 5) : "-",
+        status,
         location: 'Kantor',
-        isWorkingDay
+        isWorkingDay,
+        isHoliday,
+        holidayName: matchedHoliday?.name ?? null,
       });
     }
 
@@ -169,11 +222,21 @@ export const useWorkSchedule = () => {
         throw scheduleError;
       }
 
+      // Fetch active holidays that apply to attendance
+      const { data: holidaysData } = await supabase
+        .from("national_holidays")
+        .select("id, name, date, is_recurring, is_active, applies_to_attendance, country_code")
+        .or(`organization_id.eq.${employeeData.organization_id},organization_id.is.null`)
+        .eq("is_active", true)
+        .eq("applies_to_attendance", true);
+
+      const activeHolidays: Holiday[] = holidaysData ?? [];
+
       if (scheduleData) {
         console.log('✅ Setting work schedule:', scheduleData);
         console.log('🕐 Late tolerance minutes:', scheduleData.late_tolerance_minutes);
         setWorkSchedule(scheduleData);
-        const weekly = generateWeeklySchedule(scheduleData);
+        const weekly = generateWeeklySchedule(scheduleData, activeHolidays);
         setScheduleData(weekly);
         // Update cache
         try {
