@@ -110,8 +110,12 @@ export const useMidtransPayment = () => {
       // Delay to ensure cleanup is complete
       await new Promise(resolve => setTimeout(resolve, 200));
 
+      const appOrigin = window.location.origin;
+      const successRedirectUrl = `${appOrigin}/subscription/overview`;
+      const fallbackRedirectUrl = `${appOrigin}/subscription/plans`;
+
       // Open Midtrans payment popup
-      window.snap.pay(data.token, {
+      const snapConfig: any = {
         onSuccess: (result) => {
           console.log('Payment success:', result);
           setIsPopupOpen(false);
@@ -126,7 +130,7 @@ export const useMidtransPayment = () => {
           
           // Refresh subscription data and redirect to subscription page
           setTimeout(() => {
-            window.location.href = '/subscription/overview';
+            window.location.href = successRedirectUrl;
           }, 2000);
         },
         onPending: (result) => {
@@ -139,24 +143,29 @@ export const useMidtransPayment = () => {
           
           // Redirect to overview page
           setTimeout(() => {
-            window.location.href = '/subscription/overview';
+            window.location.href = successRedirectUrl;
           }, 1000);
         },
         onError: (result) => {
           console.error('Payment error:', result);
           setIsPopupOpen(false);
           toast.error('Pembayaran gagal. Silakan gunakan metode pembayaran yang berbeda atau coba lagi nanti.');
-          
-          // Don't reload automatically, let user retry manually
+          window.location.href = fallbackRedirectUrl;
         },
         onClose: () => {
           console.log('Payment popup closed');
           setIsPopupOpen(false);
           toast.info('Pembayaran dibatalkan');
-          
-          // Stay on current page
+          window.location.href = fallbackRedirectUrl;
         }
-      });
+      };
+
+      snapConfig.finishRedirectUrl = successRedirectUrl;
+      snapConfig.unfinishRedirectUrl = fallbackRedirectUrl;
+      snapConfig.errorRedirectUrl = fallbackRedirectUrl;
+      snapConfig.closeRedirectUrl = fallbackRedirectUrl;
+
+      window.snap.pay(data.token, snapConfig);
 
     } catch (error: any) {
       console.error('Payment initiation error:', error);

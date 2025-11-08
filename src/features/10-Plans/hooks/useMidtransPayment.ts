@@ -161,6 +161,10 @@ export const useMidtransPayment = () => {
       await new Promise(resolve => setTimeout(resolve, 200));
 
       // Configure Snap with proper error handling for localhost
+      const appOrigin = window.location.origin;
+      const successRedirectUrl = `${appOrigin}/subscription/overview`;
+      const fallbackRedirectUrl = `${appOrigin}/subscription/plans`;
+
       const snapConfig: any = {
         onSuccess: (result: any) => {
           console.log('✅ Payment success:', result);[
@@ -187,7 +191,7 @@ export const useMidtransPayment = () => {
           localStorage.setItem('lastOrderId', data.order_id);
           
           setTimeout(() => {
-            window.location.href = '/subscription/overview';
+            window.location.href = successRedirectUrl;
           }, 2000);
         },
         onPending: (result: any) => {
@@ -198,20 +202,27 @@ export const useMidtransPayment = () => {
           localStorage.setItem('lastOrderId', data.order_id);
           
           setTimeout(() => {
-            window.location.href = '/subscription/overview';
+            window.location.href = successRedirectUrl;
           }, 1000);
         },
         onError: (result: any) => {
           console.error('❌ Payment error:', result);
           setIsPopupOpen(false);
           toast.error('Pembayaran gagal. Silakan coba lagi.');
+          window.location.href = fallbackRedirectUrl;
         },
         onClose: () => {
           console.log('🔒 Payment popup closed');
           setIsPopupOpen(false);
           toast.info('Pembayaran dibatalkan');
+          window.location.href = fallbackRedirectUrl;
         }
       };
+
+      snapConfig.finishRedirectUrl = successRedirectUrl;
+      snapConfig.unfinishRedirectUrl = fallbackRedirectUrl;
+      snapConfig.errorRedirectUrl = fallbackRedirectUrl;
+      snapConfig.closeRedirectUrl = fallbackRedirectUrl;
 
       // Open Midtrans payment popup with error handling
       try {

@@ -85,3 +85,4 @@ export const generateFaceDescriptor = async (imageData: string) => {
 
   return createDeterministicDescriptor(imageData);
 };
+
