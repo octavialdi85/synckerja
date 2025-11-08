@@ -235,6 +235,33 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     notes: 'Maps to /employee-management permission configuration'
   },
   {
+    path: '/attendance',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/attendance-management',
+    description: 'Attendance dashboard - requires admin/owner permissions',
+    defaultRoles: ['owner', 'admin'],
+    notes: 'Maps to /attendance-management permission configuration'
+  },
+  {
+    path: '/attendance/attendance',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/attendance-management',
+    description: 'Attendance records - requires admin/owner permissions',
+    defaultRoles: ['owner', 'admin'],
+    notes: 'Maps to /attendance-management permission configuration'
+  },
+  {
+    path: '/attendance/settings',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/attendance-management',
+    description: 'Attendance settings - requires admin/owner permissions',
+    defaultRoles: ['owner', 'admin'],
+    notes: 'Maps to /attendance-management permission configuration'
+  },
+  {
     path: '/access-permissions/page-access',
     requiresAuth: true,
     requiresPermissions: false,

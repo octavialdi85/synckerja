@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrg } from '../../hooks/useCurrentOrg';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 export const useEmployeeAttendanceStats = () => {
   const { currentOrg } = useCurrentOrg();

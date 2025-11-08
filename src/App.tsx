@@ -2,7 +2,7 @@ import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
@@ -34,9 +34,12 @@ import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashbo
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
 import UserSettingsPage from "./features/Settings/SettingsPage";
-import ManagementTabPage from "./features/10-management/pages/ManagementTabPage";
-import OverviewTabPage from "./features/10-overview/OverviewTabPage";
-import PlansTabPage from "./features/10-Plans/PlansTabPage";
+import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
+import OverviewTabPageDesktop from "./features/10-overview/OverviewTabPage";
+import PlansTabPageDesktop from "./features/10-Plans/PlansTabPage";
+import ManagementTabPageMobile from "./mobile/pages/subscription/ManagementTabPage";
+import OverviewTabPageMobile from "./mobile/pages/subscription/OverviewTabPage";
+import PlansTabPageMobile from "./mobile/pages/subscription/PlansTabPage";
 import EmployeePage from "./features/2-1-employees/EmployeePage";
 import AddEmployeePage from "./features/2-1-employees/add-employee/AddEmployeePage";
 import FirstLogin from "./features/2-1-employees/employee-invitation/FirstLogin";
@@ -55,6 +58,7 @@ import EmployeePayroll from "./features/2-1-employees/MyInfo/Payroll/pages/Emplo
 import { ReprimandManagementPage } from "./features/2-1-reprimand";
 import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
+import AttendancePage from "./features/2-3-attendance/AttendancePage";
 // Removed legacy imports - using ProtectedRoute instead
 // import { AccessPermissionsGuard } from "./features/2-9-PageAccess/guards/AccessPermissionsGuard";
 // import { AccessPermissionsRedirector } from "./features/2-9-PageAccess/redirectors/AccessPermissionsRedirector";
@@ -108,11 +112,29 @@ const CreateOrganizationRouteElement = () => {
 };
 
 // Route element selector for Profile
-const ProfileRouteElement = () => {
+const useMobileDetection = () => {
   const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileProfile /> : <MobileProfile />;
+  const isMobileUserAgent = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+  return isViewportMobile || isMobileUserAgent;
+};
+
+const ProfileRouteElement = () => {
+  return <MobileProfile />;
+};
+
+const SubscriptionOverviewRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <OverviewTabPageMobile /> : <OverviewTabPageDesktop />;
+};
+
+const SubscriptionPlansRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <PlansTabPageMobile /> : <PlansTabPageDesktop />;
+};
+
+const SubscriptionManagementRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <ManagementTabPageMobile /> : <ManagementTabPageDesktop />;
 };
 
 const App = () => (
@@ -244,22 +266,22 @@ const App = () => (
               {/* Subscription Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
               <Route path="/subscription" element={
                 <ProtectedRoute>
-                  <OverviewTabPage />
+                  <Navigate to="/subscription/overview" replace />
                 </ProtectedRoute>
               } />
               <Route path="/subscription/overview" element={
                 <ProtectedRoute>
-                  <OverviewTabPage />
+                  <SubscriptionOverviewRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/subscription/plans" element={
                 <ProtectedRoute>
-                  <PlansTabPage />
+                  <SubscriptionPlansRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/subscription/management" element={
                 <ProtectedRoute>
-                  <ManagementTabPage />
+                  <SubscriptionManagementRouteElement />
                 </ProtectedRoute>
               } />
               
@@ -277,6 +299,23 @@ const App = () => (
               <Route path="/employees/reprimand" element={
                 <ProtectedRoute>
                   <ReprimandManagementPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Attendance Routes - PROTECTED */}
+              <Route path="/attendance" element={
+                <ProtectedRoute>
+                  <AttendancePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/attendance/attendance" element={
+                <ProtectedRoute>
+                  <AttendancePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/attendance/settings" element={
+                <ProtectedRoute>
+                  <AttendancePage />
                 </ProtectedRoute>
               } />
               

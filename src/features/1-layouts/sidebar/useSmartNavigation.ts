@@ -68,6 +68,21 @@ export const useSmartNavigation = () => {
         }
       }
       
+      // For /attendance specifically, try to find accessible tab
+      if (targetPath === '/attendance') {
+        const attendanceTabs = ['/attendance/attendance', '/attendance/settings'];
+        const firstAccessibleTab = findFirstAccessiblePath(attendanceTabs);
+        if (firstAccessibleTab) {
+          console.log('✅ Redirecting to accessible attendance tab:', firstAccessibleTab);
+          navigate(firstAccessibleTab);
+          return;
+        }
+        // Fallback to /attendance (dashboard) if no accessible tab found
+        // This will show access denied if user doesn't have permission
+        navigate('/attendance');
+        return;
+      }
+      
       // For other main sections, try common sub-paths
       const commonSubPaths = [`${targetPath}/overview`, `${targetPath}/dashboard`, `${targetPath}/list`, `${targetPath}/management`];
       const firstAccessibleSubPath = findFirstAccessiblePath(commonSubPaths);

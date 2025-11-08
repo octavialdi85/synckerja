@@ -35,6 +35,11 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
         '/employee-management',  // Maps to /employees in routing
         '/access-permissions/page-access'
       ],
+      '/attendance': [
+        '/attendance',
+        '/attendance/attendance',
+        '/attendance/settings'
+      ],
       '/tools': [
         '/password-manager',
         '/tools/daily-task'

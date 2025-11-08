@@ -27,6 +27,11 @@ export const menuItems: MenuItem[] = [
         description: "Manage employee information and records"
       },
       {
+        title: "Attendance",
+        url: "/attendance",
+        description: "Manage employee attendance, analytics, and settings"
+      },
+      {
         title: "Page Access",
         url: "/access-permissions/page-access",
         description: "Manage user access permissions and page restrictions"

@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useOkrCycles } from '@/hooks/organized/okr';
-import { useCurrentOrg } from '@/hooks/organized/utils';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import type { OkrCycle } from '@/types/okr';
 import type { OkrFilterState } from '@/types/okr-filter';
 

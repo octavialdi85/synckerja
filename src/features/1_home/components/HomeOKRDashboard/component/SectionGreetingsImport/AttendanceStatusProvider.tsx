@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrg } from '@/hooks/organized/utils';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 interface AttendanceStatusContextType {
   hasCheckedIn: boolean;

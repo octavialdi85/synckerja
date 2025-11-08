@@ -1,0 +1,100 @@
+import { ChangeEvent, useCallback } from 'react';
+import { Search, RefreshCw, Calendar as CalendarIcon } from 'lucide-react';
+import { Input } from '@/features/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
+import { Button } from '@/features/ui/button';
+import { AttendanceViewToggle } from '@/features/2-3-employee-attendance';
+
+interface AttendanceToolbarProps {
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  status: string;
+  onStatusChange: (value: string) => void;
+  dateRange?: { from?: Date; to?: Date };
+  onDateChange?: (value: { from?: Date; to?: Date }) => void;
+  onOpenDatePicker?: () => void;
+  dateRangeLabel?: string;
+  onClear?: () => void;
+  currentView: 'table' | 'calendar';
+  onViewChange: (view: 'table' | 'calendar') => void;
+}
+
+export const AttendanceToolbar = ({
+  searchTerm,
+  onSearchChange,
+  status,
+  onStatusChange,
+  dateRange,
+  onDateChange,
+  onOpenDatePicker,
+  dateRangeLabel,
+  onClear,
+  currentView,
+  onViewChange,
+}: AttendanceToolbarProps) => {
+  const handleSearch = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onSearchChange(event.target.value);
+    },
+    [onSearchChange],
+  );
+
+  return (
+    <div className="bg-white border border-gray-200 p-2 rounded-md">
+      <div className="flex flex-wrap items-center gap-1">
+        <div className="relative flex-1 min-w-[200px]">
+          <Input
+            placeholder="Cari nama karyawan..."
+            value={searchTerm}
+            onChange={handleSearch}
+            className="h-9 w-full pl-4 pr-10 text-sm border border-gray-300 focus-visible:ring-blue-500 focus-visible:border-blue-500"
+          />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        </div>
+
+        <Select value={status} onValueChange={onStatusChange}>
+          <SelectTrigger className="w-full sm:w-40 h-9 text-sm text-left">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="present">Present</SelectItem>
+            <SelectItem value="absent">Absent</SelectItem>
+            <SelectItem value="late">Late</SelectItem>
+            <SelectItem value="leave">Leave</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {onDateChange && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenDatePicker}
+            className="h-9 px-3 flex items-center gap-2 text-sm"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            {dateRange?.from && dateRange?.to
+              ? dateRangeLabel ?? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
+              : dateRangeLabel ?? 'Pilih rentang tanggal'}
+          </Button>
+        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {onClear && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClear}
+              className="h-9 px-3 flex items-center gap-2 text-sm"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reset
+            </Button>
+          )}
+          <AttendanceViewToggle currentView={currentView} onViewChange={onViewChange} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
