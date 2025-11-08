@@ -512,7 +512,7 @@ export const CompanyObjectivesDetailView = ({
             
             {/* Display All Key Results (Company + Department Objectives) */}
             {objective.all_key_results && objective.all_key_results.length > 0 && (
-              <div className="space-y-2 mb-4 max-h-80 overflow-y-auto">
+              <div className="space-y-2 mb-4 max-h-[520px] overflow-y-auto pr-2">
                 {objective.all_key_results.map((kr: any) => {
                   const actualKRProgress = getActualProgress(kr);
                   const isDepartmentObjective = kr.source_type === 'department_objective';
