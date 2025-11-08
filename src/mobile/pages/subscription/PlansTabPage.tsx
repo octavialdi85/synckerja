@@ -4,7 +4,6 @@ import { BarChart3, Layers, Settings2 } from "lucide-react";
 import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mobile/components/ui/card";
 import HRISSubscriptionPlansTab from "@/mobile/pages/subscription/section/HRISSubscriptionPlansTab";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 import { cn } from "@/lib/utils";
@@ -64,7 +63,7 @@ const SubscriptionBottomTabs = memo(
 
     return (
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="grid grid-cols-3 max-w-md mx-auto">
+        <div className="grid grid-cols-3 w-full">
           {tabItems.map(({ key, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
@@ -90,7 +89,7 @@ const SubscriptionBottomTabs = memo(
 
 SubscriptionBottomTabs.displayName = "SubscriptionBottomTabs";
 
-const PlansTabPage = memo(() => {
+const PlansTabPage = () => {
   useOptimizedPerformanceMonitor("PlansTabPageMobile");
   const { t } = useAppTranslation();
   const navigate = useNavigate();
@@ -114,28 +113,15 @@ const PlansTabPage = memo(() => {
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
-          <main className="flex-1 bg-background pb-24 flex flex-col">
-            <div className="flex items-center justify-between p-3 bg-card border-b border-border">
+          <main className="flex-1 bg-background pb-20 flex flex-col">
+            <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
               <SidebarTrigger />
               <div className="text-sm font-semibold text-foreground">{t("subscription.plans.pageTitle", "Subscription Plans")}</div>
             </div>
 
             <div className="flex-1 px-3 pb-4">
-              <div className="h-full overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] space-y-3 pb-6 pt-4">
-                <Card className="border border-border">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{t("subscription.plans.choosePlan", "Pilih plan yang sesuai")}</CardTitle>
-                    <CardDescription>
-                      {t(
-                        "subscription.plans.choosePlanDescription",
-                        "Sesuaikan jumlah anggota dan siklus billing sebelum melanjutkan pembayaran.",
-                      )}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <HRISSubscriptionPlansTab />
-                  </CardContent>
-                </Card>
+              <div className="h-full overflow-y-auto seamless-scroll max-h-[calc(100vh-80px)] space-y-3 pb-16 pt-4">
+                <HRISSubscriptionPlansTab />
               </div>
             </div>
 
@@ -145,8 +131,6 @@ const PlansTabPage = memo(() => {
       </SidebarProvider>
     </DesktopWarning>
   );
-});
-
-PlansTabPage.displayName = "PlansTabPage";
+};
 
 export default PlansTabPage;

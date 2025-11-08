@@ -13,21 +13,16 @@ import { id as localeID } from "date-fns/locale";
 import { Download, History } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import type { Tables } from "@/mobile/integrations/supabase/types";
 
-interface PaymentRecord {
-  id: string;
-  amount: number;
-  status: string;
-  created_at: string;
-  order_id: string;
-  billing_cycle: string;
-  notes: string | null;
+type PaymentRecord = Tables<"payments"> & {
   subscription_plans: {
     id: string;
     name: string;
     base_price_per_member: number;
   } | null;
-}
+  notes?: string | null;
+};
 
 const statusBadgeVariant = (status: string) => {
   switch (status?.toLowerCase()) {
@@ -60,13 +55,7 @@ export const MobilePaymentHistory = memo(() => {
         .from("payments")
         .select(
           `
-          id,
-          amount,
-          status,
-          created_at,
-          order_id,
-          billing_cycle,
-          notes,
+          *,
           subscription_plans (
             id,
             name,

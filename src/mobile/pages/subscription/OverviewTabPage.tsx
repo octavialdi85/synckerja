@@ -13,13 +13,9 @@ import { useSubscriptionAnalytics } from "@/features/10-overview/hooks/useSubscr
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import {
   CurrentSubscription,
-  MetricCards,
   EmployeeGrowthChart,
   FeatureUsageChart,
   UsageMetricsCards,
-  OverviewSidebar,
-  OverviewFooter,
-  OverviewSidebarFooter,
 } from "@/features/10-overview/section";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +74,7 @@ const SubscriptionBottomTabs = memo(
 
     return (
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="grid grid-cols-3 max-w-md mx-auto">
+        <div className="grid grid-cols-3 w-full">
           {tabItems.map(({ key, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
@@ -110,7 +106,6 @@ const OverviewTabPage = memo(() => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<SubscriptionTabKey>(() => getTabKeyFromPath(location.pathname));
-  const [lastUpdated, setLastUpdated] = useState(() => new Date());
 
   const { organizationId } = useCurrentOrg();
 
@@ -123,11 +118,6 @@ const OverviewTabPage = memo(() => {
     setActiveTab(getTabKeyFromPath(location.pathname));
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (!isLoading && subscriptionStatus) {
-      setLastUpdated(new Date());
-    }
-  }, [isLoading, subscriptionStatus]);
 
   useEffect(() => {
     if (organizationId && isLoading && !subscriptionStatus && !statusError) {
@@ -176,77 +166,12 @@ const OverviewTabPage = memo(() => {
 
         {subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
 
-        <Card className="border border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              {t("subscription.overview.metricsTitle", "Subscription Metrics")}
-            </CardTitle>
-            <CardDescription>
-              {subscriptionStatus?.plan_name
-                ? t("subscription.overview.currentPlan", "Plan saat ini: {{plan}}", { plan: subscriptionStatus.plan_name })
-                : t("subscription.overview.noPlan", "Belum ada plan aktif")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <MetricCards subscriptionStatus={subscriptionStatus ?? null} />
-          </CardContent>
-          <OverviewFooter
-            totalMetrics={4}
-            lastUpdated={lastUpdated}
-            onRefresh={refreshSubscriptionStatus}
-            isRefreshing={isLoading}
-          />
-        </Card>
+        <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
 
-        <div className="grid grid-cols-1 gap-3">
-          <Card className="border border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                {t("subscription.overview.employeeGrowth", "Pertumbuhan Karyawan")}
-              </CardTitle>
-              <CardDescription>
-                {t("subscription.overview.employeeGrowthDescription", "Pantau perkembangan jumlah karyawan aktif.")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
-            </CardContent>
-          </Card>
-
-          <Card className="border border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                {t("subscription.overview.featureUsage", "Penggunaan Fitur")}
-              </CardTitle>
-              <CardDescription>
-                {t("subscription.overview.featureUsageDescription", "Fitur yang paling sering digunakan oleh tim Anda.")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <FeatureUsageChart data={analytics?.feature_usage || []} isLoading={analyticsLoading} />
-            </CardContent>
-          </Card>
-        </div>
+        <FeatureUsageChart data={analytics?.feature_usage || []} isLoading={analyticsLoading} />
 
         <UsageMetricsCards metrics={analytics?.usage_metrics || null} isLoading={analyticsLoading} />
 
-        <Card className="border border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              {t("subscription.overview.quickSummary", "Ringkasan Cepat")}
-            </CardTitle>
-            <CardDescription>
-              {t("subscription.overview.quickSummaryDescription", "Snapshot singkat subscription Anda.")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <OverviewSidebar subscriptionStatus={subscriptionStatus} />
-          </CardContent>
-          <OverviewSidebarFooter
-            activeEmployees={subscriptionStatus?.employee_count || 0}
-            totalFeatures={analytics?.feature_usage?.length || 0}
-          />
-        </Card>
       </div>
     );
   };
@@ -257,7 +182,7 @@ const OverviewTabPage = memo(() => {
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
           <main className="flex-1 bg-background pb-24 flex flex-col">
-            <div className="flex items-center justify-between p-3 bg-card border-b border-border">
+            <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
               <SidebarTrigger />
               <div className="text-sm font-semibold text-foreground">
                 {t("subscription.overview.pageTitle", "Subscription Overview")}

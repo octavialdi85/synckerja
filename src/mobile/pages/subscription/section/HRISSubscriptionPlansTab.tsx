@@ -5,7 +5,6 @@ import {
   Shield,
   Star,
   Check,
-  Crown,
   ArrowRight,
   CalendarDays,
   Info,
@@ -39,8 +38,6 @@ import {
 import { Badge } from "@/mobile/components/ui/badge";
 import { Slider } from "@/mobile/components/ui/slider";
 import { Switch } from "@/mobile/components/ui/switch";
-import { Label } from "@/mobile/components/ui/label";
-import { Separator } from "@/mobile/components/ui/separator";
 import { LoadingDots } from "@/components/LoadingDots";
 import { cn } from "@/lib/utils";
 import { MobileUpgradeConfirmationModal } from "./modal/MobileUpgradeConfirmationModal";
@@ -373,6 +370,42 @@ const PlanCard = memo(
             )}
           </div>
 
+          <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>Jumlah member</span>
+                <span className="text-sm font-semibold text-foreground">{memberCount} anggota</span>
+              </div>
+              <Slider
+                value={[memberCount]}
+                min={1}
+                max={maxMembers}
+                step={1}
+                onValueChange={(value) => onMemberCountChange(plan.id, value[0])}
+                disabled={isComingSoon || (isTrial && isCurrent)}
+              />
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span>1 member</span>
+                <span>{maxMembers} member</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Pembayaran Tahunan</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {plan.annual_discount_percentage
+                    ? `Hemat hingga ${plan.annual_discount_percentage}%`
+                    : "Bayar bulanan atau tahunan"}
+                </p>
+              </div>
+              <Switch
+                checked={billingCycle === "yearly"}
+                onCheckedChange={(checked) => onBillingCycleChange(plan.id, checked)}
+                disabled={isComingSoon}
+              />
+            </div>
+          </div>
+
           <div className="rounded-xl border border-border bg-card/60 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Fitur yang disertakan
@@ -443,8 +476,8 @@ const HRISSubscriptionPlansTab = () => {
   const proRateCalculation = useProRateCalculation();
   const schedulePlanChange = useSchedulePlanChange();
 
-  const [memberCount, setMemberCount] = useState<number>(5);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [billingCycles, setBillingCycles] = useState<Record<string, BillingCycle>>({});
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [isConfirmationOpen, setConfirmationOpen] = useState(false);
   const [isOptionsOpen, setOptionsOpen] = useState(false);
@@ -453,16 +486,40 @@ const HRISSubscriptionPlansTab = () => {
   const [selectedMemberCount, setSelectedMemberCount] = useState(1);
 
   useEffect(() => {
-    if (!subscriptionStatus) return;
-    const defaultMembers =
-      subscriptionStatus.member_count ||
-      Math.max(currentEmployeeCount, 1) ||
-      memberCount;
-    setMemberCount(defaultMembers);
-    setSelectedMemberCount(defaultMembers);
-    setBillingCycle((subscriptionStatus.billing_cycle as BillingCycle) || "monthly");
-    setIsYearly(subscriptionStatus.billing_cycle === "yearly");
-  }, [subscriptionStatus, currentEmployeeCount]);
+    if (!plans) return;
+    setMemberCounts((prev) => {
+      if (Object.keys(prev).length) return prev;
+      const next: Record<string, number> = {};
+      plans.forEach((plan) => {
+        const isTrial = plan.name === "Trial" || plan.base_price_per_member === 0;
+        const maxMembers = isTrial ? getEmployeeLimitFromFeatures(plan.features) : 100;
+        const isCurrent =
+          subscriptionStatus?.plan_name &&
+          subscriptionStatus.plan_name.toLowerCase() === plan.name.toLowerCase();
+        if (isCurrent) {
+          next[plan.id] = subscriptionStatus?.member_count || currentEmployeeCount || 1;
+        } else if (isTrial) {
+          next[plan.id] = maxMembers;
+        } else {
+          next[plan.id] = 5;
+        }
+      });
+      return next;
+    });
+    setBillingCycles((prev) => {
+      if (Object.keys(prev).length) return prev;
+      const next: Record<string, BillingCycle> = {};
+      plans.forEach((plan) => {
+        const isCurrent =
+          subscriptionStatus?.plan_name &&
+          subscriptionStatus.plan_name.toLowerCase() === plan.name.toLowerCase();
+        next[plan.id] = (isCurrent
+          ? subscriptionStatus?.billing_cycle
+          : plan.billing_cycle) as BillingCycle || "monthly";
+      });
+      return next;
+    });
+  }, [plans, subscriptionStatus, currentEmployeeCount]);
 
   const planMetaList: PlanMeta[] = useMemo(() => {
     if (!plans) return [];
@@ -484,39 +541,19 @@ const HRISSubscriptionPlansTab = () => {
     });
   }, [planMetaList]);
 
-  const maxSliderValue = useMemo(() => {
-    if (sortedPlans.length === 0) return 100;
-    const maxPlan = sortedPlans.reduce(
-      (max, meta) => Math.max(max, meta.maxMembers),
-      0,
-    );
-    return Math.max(maxPlan, memberCount, currentEmployeeCount || 1);
-  }, [sortedPlans, memberCount, currentEmployeeCount]);
-
-  useEffect(() => {
-    if (memberCount > maxSliderValue) {
-      setMemberCount(maxSliderValue);
-    }
-  }, [maxSliderValue, memberCount]);
-
-  const handleMemberCountChange = useCallback((value: number[]) => {
-    const next = value[0];
-    setMemberCount(next);
-    setSelectedMemberCount(next);
+  const handleMemberCountChange = useCallback((planId: string, count: number) => {
+    setMemberCounts((prev) => ({ ...prev, [planId]: count }));
   }, []);
 
-  const handleBillingCycleToggle = useCallback(
-    (checked: boolean) => {
-      setBillingCycle(checked ? "yearly" : "monthly");
-      setIsYearly(checked);
-    },
-    [setBillingCycle],
-  );
+  const handleBillingCycleToggle = useCallback((planId: string, checked: boolean) => {
+    setBillingCycles((prev) => ({ ...prev, [planId]: checked ? "yearly" : "monthly" }));
+  }, []);
 
   const handleUpgrade = useCallback(
-    async (plan: SubscriptionPlan) => {
+    async (plan: SubscriptionPlan, memberCount: number, billingCycle: BillingCycle) => {
       setSelectedPlan(plan);
       setSelectedMemberCount(memberCount);
+      setIsYearly(billingCycle === "yearly");
       const targetPlanId =
         plan.id ||
         subscriptionPlans?.find((p) => p.name === plan.name)?.id ||
@@ -549,7 +586,7 @@ const HRISSubscriptionPlansTab = () => {
         setConfirmationOpen(true);
       }
     },
-    [memberCount, proRateCalculation, subscriptionPlans],
+    [proRateCalculation, subscriptionPlans],
   );
 
   const handleConfirmUpgrade = useCallback(async () => {
@@ -562,7 +599,7 @@ const HRISSubscriptionPlansTab = () => {
           ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
           : getMonthlyPriceForMembers(basePrice, selectedMemberCount));
 
-      await initiateMidtransPayment({
+       await initiateMidtransPayment({
         planId: selectedPlan.id,
         planName: selectedPlan.name,
         amount,
@@ -650,53 +687,19 @@ const HRISSubscriptionPlansTab = () => {
   return (
     <>
       <div className="space-y-4">
-        <div className="sticky top-[-1px] z-20 space-y-3 border-b border-border bg-background/95 pb-3 pt-2 backdrop-blur">
-          <div className="flex items-start gap-2 px-1">
-            <div className="rounded-xl bg-primary/10 p-2 text-primary">
-              <Crown className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Pilih Paket Subscription</h2>
-              <p className="text-xs text-muted-foreground">
-                Atur jumlah member dan siklus pembayaran, lalu bandingkan semua paket yang tersedia.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-4 rounded-2xl border border-border bg-card/70 p-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                <span>Jumlah member</span>
-                <span className="text-sm font-semibold text-foreground">{memberCount} anggota</span>
-              </div>
-              <Slider
-                value={[memberCount]}
-                min={1}
-                max={Math.max(1, maxSliderValue)}
-                step={1}
-                onValueChange={handleMemberCountChange}
-              />
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-                <span>1 member</span>
-                <span>{maxSliderValue} member</span>
-              </div>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Pembayaran Tahunan</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Hemat hingga {planMetaList[0]?.plan.annual_discount_percentage || 15}% dengan paket tahunan
-                </p>
-              </div>
-              <Switch checked={billingCycle === "yearly"} onCheckedChange={handleBillingCycleToggle} />
-            </div>
-          </div>
-        </div>
-
         <MobilePendingChangesCard />
 
         <div className="space-y-4">
           {sortedPlans.map(({ plan, isCurrent, isPopular, isTrial, maxMembers }) => {
+            const description = plan.description?.toLowerCase() ?? "";
+            const memberCount =
+              memberCounts[plan.id] ??
+              (isCurrent
+                ? subscriptionStatus?.member_count || currentEmployeeCount || 1
+                : isTrial
+                  ? maxMembers
+                  : 5);
+            const billingCycle = billingCycles[plan.id] || "monthly";
             const membersWithinLimit = memberCount <= maxMembers;
             const totalPrice = calculatePlanPrice(plan, memberCount, billingCycle);
             const monthlyPrice = plan.base_price_per_member * memberCount;
@@ -707,7 +710,7 @@ const HRISSubscriptionPlansTab = () => {
               billingCycle,
               subscriptionStatus,
             );
-            const description = plan.description?.toLowerCase() ?? "";
+            const beings = plan.description?.toLowerCase() ?? "";
             const isComingSoon =
               description.includes("coming soon") ||
               description.includes("comming soon") ||
@@ -733,7 +736,7 @@ const HRISSubscriptionPlansTab = () => {
                 membersWithinLimit={membersWithinLimit}
                 memberCount={memberCount}
                 billingCycle={billingCycle}
-                onSelect={() => handleUpgrade(plan)}
+                onSelect={() => handleUpgrade(plan, memberCount, billingCycle)}
                 disabled={disabled}
                 buttonText={buttonText}
                 maxMembers={maxMembers}
@@ -741,6 +744,8 @@ const HRISSubscriptionPlansTab = () => {
                 currentEmployeeCount={currentEmployeeCount}
                 subscriptionStatus={subscriptionStatus}
                 isComingSoon={isComingSoon}
+                onMemberCountChange={handleMemberCountChange}
+                onBillingCycleChange={handleBillingCycleToggle}
               />
             );
           })}
