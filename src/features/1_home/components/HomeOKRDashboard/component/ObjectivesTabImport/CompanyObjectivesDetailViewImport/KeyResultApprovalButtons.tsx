@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Check, X, Clock } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import { useApproveKeyResult, useRejectKeyResult, useGetKeyResultApproval, useCreateKeyResultApproval } from '../../../../../hooks/useKeyResultApprovals';
@@ -171,6 +171,9 @@ export const KeyResultApprovalButtons: React.FC<KeyResultApprovalButtonsProps> =
             <DialogContent className="sm:max-w-[400px]">
               <DialogHeader>
                 <DialogTitle>Reject Key Result</DialogTitle>
+                <DialogDescription className="text-sm text-gray-600">
+                  Berikan alasan dan catatan tambahan sebelum menolak Key Result ini.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/features/ui/button";
 import { Input } from "@/features/ui/input";
 import { Separator } from "@/features/ui/separator";
-import { Sheet, SheetContent } from "@/features/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/features/ui/sheet";
 import { Skeleton } from "@/features/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/features/ui/tooltip";
 
@@ -164,6 +164,10 @@ const Sidebar = React.forwardRef<
           }
           side={side}
         >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Mobile Navigation Sidebar</SheetTitle>
+            <SheetDescription>Use this sidebar to access application sections</SheetDescription>
+          </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -129,6 +129,9 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
             <DialogTitle className="text-lg font-semibold text-gray-900">
               Pengajuan Cuti Karyawan
             </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              Ajukan permohonan cuti dengan melengkapi informasi karyawan, jenis cuti, dan periode yang diinginkan.
+            </DialogDescription>
           </DialogHeader>
         </div>
 

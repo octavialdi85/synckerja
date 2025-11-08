@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/features/ui/dialog';
@@ -363,6 +364,9 @@ export const ModalAddIndividualContribution = ({
             <Target className="h-5 w-5 text-orange-600" />
             <span>{editObjective ? 'Edit Individual Contribution' : 'Create Individual Contribution'}</span>
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Hubungkan kontribusi individu dengan tujuan departemen dan tetapkan target yang terukur.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

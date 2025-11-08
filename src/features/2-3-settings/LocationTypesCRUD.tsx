@@ -5,7 +5,7 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
 import { Badge } from '@/features/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Plus, Edit, Trash2, MoreVertical, MapPin, Building, Users, Hammer } from 'lucide-react';
@@ -225,6 +225,9 @@ export const LocationTypesCRUD = () => {
             <DialogTitle>
               {editingType ? 'Edit Location Type' : 'Add Location Type'}
             </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              Kelola nama, deskripsi, dan ikon untuk tipe lokasi yang dapat dipilih karyawan saat mencatat absensi.
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-4">

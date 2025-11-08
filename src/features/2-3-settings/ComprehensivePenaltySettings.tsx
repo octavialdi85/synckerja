@@ -7,7 +7,7 @@ import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Switch } from '@/features/ui/switch';
 import { Badge } from '@/features/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
@@ -638,6 +638,9 @@ export const ComprehensivePenaltySettings = () => {
                   <DialogTitle>
                     {editingExemption ? 'Edit Pengecualian' : 'Tambah Pengecualian'}
                   </DialogTitle>
+                  <DialogDescription className="text-sm text-gray-600">
+                    Berikan pengecualian denda untuk karyawan tertentu, atur periode berlaku, dan tentukan aturan yang dikecualikan.
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>

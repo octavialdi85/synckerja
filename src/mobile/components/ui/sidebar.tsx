@@ -8,7 +8,13 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/mobile/components/ui/button"
 import { Input } from "@/mobile/components/ui/input"
 import { Separator } from "@/mobile/components/ui/separator"
-import { Sheet, SheetContent } from "@/mobile/components/ui/sheet"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/mobile/components/ui/sheet"
 import { Skeleton } from "@/mobile/components/ui/skeleton"
 import {
   Tooltip,
@@ -204,6 +210,12 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
+            <SheetHeader className="sr-only">
+              <SheetTitle>Mobile Navigation Sidebar</SheetTitle>
+              <SheetDescription>
+                Use this sidebar to browse the application sections
+              </SheetDescription>
+            </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>

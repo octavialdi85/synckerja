@@ -5,7 +5,7 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Badge } from '@/features/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Switch } from '@/features/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
@@ -297,6 +297,9 @@ export const EmployeeShiftAssignment = () => {
               <DialogTitle>
                 {editingAssignment ? 'Edit Penugasan Shift' : 'Tugaskan Shift Baru'}
               </DialogTitle>
+              <DialogDescription className="text-sm text-gray-600">
+                Pilih karyawan, tentukan shift, dan setel periode berlakunya penugasan.
+              </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -142,6 +142,9 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Office Location</DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Perbarui detail lokasi kantor termasuk alamat, koordinat, serta pengaturan radius dan kontak yang relevan.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

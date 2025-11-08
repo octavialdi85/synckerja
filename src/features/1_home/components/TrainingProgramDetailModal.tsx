@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Card, CardContent } from '@/features/ui/card';
@@ -93,10 +93,13 @@ export const TrainingProgramDetailModal = ({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+          <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
               <GraduationCap className="h-5 w-5 text-blue-600" />
               {program.name}
             </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Tinjau detail program pelatihan, kuota peserta, dan lakukan pendaftaran jika tersedia.
+          </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">

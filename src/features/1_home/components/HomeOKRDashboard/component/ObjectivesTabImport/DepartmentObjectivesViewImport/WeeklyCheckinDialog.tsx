@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -121,11 +121,11 @@ export const WeeklyCheckinDialog: React.FC<WeeklyCheckinDialogProps> = ({
             <Calendar className="h-5 w-5" />
             Weekly Check-in
           </DialogTitle>
-          <div className="space-y-1 text-sm text-gray-600">
+          <DialogDescription className="space-y-1 text-sm text-gray-600">
             <p>Week of {new Date(weekDates.start).toLocaleDateString()}</p>
             <p className="font-medium">{keyResult.objective.title}</p>
             <p>{keyResult.title}</p>
-          </div>
+          </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { Checkbox } from '@/features/ui/checkbox';
@@ -98,6 +98,9 @@ export const TrainingRegistrationModal = ({
           <DialogTitle className="text-lg font-semibold">
             Pendaftaran Program Pelatihan
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Sampaikan alasan mengikuti pelatihan dan lengkapi persetujuan agar pendaftaran Anda dapat diproses.
+          </DialogDescription>
           <p className="text-sm text-gray-600 mt-1">
             {programName}
           </p>

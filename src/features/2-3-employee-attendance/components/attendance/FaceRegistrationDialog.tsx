@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Camera, User } from 'lucide-react';
 
@@ -34,6 +34,9 @@ export const FaceRegistrationDialog: React.FC<FaceRegistrationDialogProps> = ({
             <User className="h-5 w-5" />
             Face Registration
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Capture the employee&apos;s face image to enable attendance validation.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">

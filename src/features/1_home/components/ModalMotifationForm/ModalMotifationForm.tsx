@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { Checkbox } from '@/features/ui/checkbox';
@@ -98,6 +98,9 @@ export const ModalMotifationForm = ({ isOpen, onClose, profileName, editingMotiv
             <PlusCircle className="h-5 w-5 text-primary" />
             {editingMotivation ? 'Edit Motivasi' : 'Tulis Motivasi'}
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Tulis pesan motivasi untuk dibagikan ke tim atau edit motivasi yang sudah pernah dibuat.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">

@@ -6,7 +6,7 @@ import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
 import { Badge } from '@/features/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { Switch } from '@/features/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
@@ -218,6 +218,9 @@ export const ShiftManagement = () => {
               <DialogTitle>
                 {editingShift ? 'Edit Shift' : 'Tambah Shift Baru'}
               </DialogTitle>
+              <DialogDescription className="text-sm text-gray-600">
+                Tentukan nama shift, jam kerja, serta toleransi untuk jadwal kerja karyawan.
+              </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">

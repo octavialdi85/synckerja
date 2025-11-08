@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -305,6 +305,9 @@ export const AddObjectiveDialog = ({
           <DialogTitle className="flex items-center gap-2">
             {editObjective ? 'Edit' : 'Create'} Objective for {level.charAt(0).toUpperCase() + level.slice(1)}
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Tetapkan target OKR baru atau ubah objective yang sudah ada untuk level organisasi yang dipilih.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

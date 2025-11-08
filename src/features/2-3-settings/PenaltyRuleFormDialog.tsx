@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -203,6 +203,9 @@ export const PenaltyRuleFormDialog = ({
             <Target className="h-5 w-5" />
             {editingRule ? 'Edit Aturan Denda' : 'Buat Aturan Denda Baru'}
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Tentukan jenis pelanggaran, perhitungan denda, dan aturan tambahan untuk kebijakan keterlambatan organisasi.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">

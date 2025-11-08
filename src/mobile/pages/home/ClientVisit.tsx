@@ -771,7 +771,7 @@ export default function ClientVisit() {
         <AppSidebar />
         
         <main className="flex-1 bg-background pb-20">
-          <div className="flex items-center justify-between p-3 bg-card border-b border-border">
+          <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <RealtimeStatusIndicator 

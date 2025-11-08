@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/mobile/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/mobile/components/ui/dialog";
 import { Button } from "@/mobile/components/ui/button";
 import { Badge } from "@/mobile/components/ui/badge";
 import { Separator } from "@/mobile/components/ui/separator";
@@ -148,9 +148,9 @@ export const MobileUpgradeConfirmationModal = ({
                 ? "Konfirmasi Pembayaran Prorate"
                 : "Konfirmasi Upgrade"}
           </DialogTitle>
-          <p className="text-xs text-muted-foreground">
+          <DialogDescription className="text-xs text-muted-foreground">
             Pastikan detail di bawah sudah sesuai sebelum melanjutkan ke pembayaran.
-          </p>
+          </DialogDescription>
         </DialogHeader>
         <Separator />
         <div className="flex-1 overflow-y-auto px-6 py-4">

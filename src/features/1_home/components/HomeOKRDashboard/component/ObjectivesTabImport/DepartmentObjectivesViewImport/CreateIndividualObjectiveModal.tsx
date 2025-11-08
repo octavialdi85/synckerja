@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -205,9 +205,9 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
             <User className="h-5 w-5 text-purple-600" />
             <span>Create Individual Objective for {employeeName}</span>
           </DialogTitle>
-          <p className="text-sm text-gray-600">
-            Create a personal objective that {employeeName} will be responsible for achieving
-          </p>
+          <DialogDescription className="text-sm text-gray-600">
+            Create a personal objective that {employeeName} will be responsible for achieving.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

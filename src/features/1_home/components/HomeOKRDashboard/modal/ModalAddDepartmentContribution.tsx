@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/features/ui/dialog';
@@ -359,6 +360,9 @@ export const ModalAddDepartmentContribution = ({
             <Building className="h-5 w-5 text-orange-600" />
             <span>{editObjective ? 'Edit Department Contribution' : 'Create Department Contribution'}</span>
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Hubungkan kontribusi departemen dengan objective perusahaan dan tetapkan metrik pencapaiannya.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

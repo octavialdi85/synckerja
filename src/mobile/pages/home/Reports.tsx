@@ -224,11 +224,11 @@ const Reports = () => {
   return (
     <DesktopWarning>
       <SidebarProvider>
-      <div className="min-h-screen flex w-full overflow-hidden">
+      <div className="min-h-screen flex w-full">
         <AppSidebar />
         
-        <main className="flex-1 bg-background pb-20 overflow-hidden">
-          <div className="flex items-center justify-between p-3 bg-card border-b border-border">
+        <main className="flex-1 bg-background pb-20">
+          <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <RealtimeStatusIndicator 

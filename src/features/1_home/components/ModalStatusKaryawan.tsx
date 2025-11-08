@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -114,6 +114,9 @@ export const ModalStatusKaryawan = ({
           <DialogTitle className="text-base font-semibold text-gray-900 leading-snug">
             {isEditMode ? 'Edit Status' : 'Buat Status Baru'}
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Bagikan status kegiatan atau lokasi Anda saat ini agar tim dapat memantau aktivitas karyawan.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">

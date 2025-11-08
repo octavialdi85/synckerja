@@ -4,7 +4,7 @@ import { Camera, User, CheckCircle, X, AlertCircle, Loader2 } from 'lucide-react
 import { Button } from '@/features/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Alert, AlertDescription } from '@/features/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Progress } from '@/features/ui/progress';
 import { useEnhancedFaceRegistration } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useEnhancedFaceRegistration';
 import { validateFaceQuality, generateFaceDescriptor, areModelsLoaded, initializeFaceAPI } from '@/utils/faceRecognition';
@@ -212,6 +212,9 @@ export const EnhancedFaceRegistration = () => {
                 <Camera className="h-5 w-5" />
                 <span>Face Registration</span>
               </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Ikuti langkah-langkah berikut untuk merekam ulang wajah Anda dan mengaktifkan validasi absensi berbasis wajah.
+          </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">

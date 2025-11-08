@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -76,6 +76,9 @@ export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientM
             <Building className="h-5 w-5" />
             Add New Client
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Lengkapi informasi utama klien untuk menambahkan perusahaan baru ke organisasi Anda.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
