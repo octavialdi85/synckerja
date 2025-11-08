@@ -109,25 +109,21 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
             
             setIsCheckingLocation(false);
             
-            if (inArea) {
-              toast({
-                title: "Lokasi Valid",
-                description: `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`,
-                className: "bg-success text-success-foreground"
-              });
-            } else {
-              toast({
-                title: "Diluar Area Kantor",
-                description: `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
-                className: "bg-destructive text-destructive-foreground"
-              });
-            }
+            toast({
+              title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+              description: inArea
+                ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
+                : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+              variant: inArea ? "default" : "destructive",
+              duration: 4000,
+            });
           } else {
             setIsCheckingLocation(false);
             toast({
               title: "Error",
               description: "Tidak dapat menemukan data kantor",
-              className: "bg-destructive text-destructive-foreground"
+              variant: "destructive",
+              duration: 4000,
             });
           }
         },
@@ -136,7 +132,8 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
           toast({
             title: "Error Lokasi",
             description: "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
-            className: "bg-destructive text-destructive-foreground"
+            variant: "destructive",
+            duration: 5000,
           });
         },
         {
@@ -150,7 +147,8 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
       toast({
         title: "GPS Tidak Didukung",
         description: "Browser tidak mendukung geolokasi",
-        className: "bg-destructive text-destructive-foreground"
+        variant: "destructive",
+        duration: 4000,
       });
     }
   };
@@ -295,25 +293,21 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
             
             setIsCheckingLocation(false);
             
-            if (inArea) {
-              toast({
-                title: "Lokasi Valid",
-                description: `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`,
-                className: "bg-success text-success-foreground"
-              });
-            } else {
-              toast({
-                title: "Diluar Area Kantor",
-                description: `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
-                className: "bg-destructive text-destructive-foreground"
-              });
-            }
+            toast({
+              title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+              description: inArea
+                ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
+                : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+              variant: inArea ? "default" : "destructive",
+              duration: 4000,
+            });
           } else {
             setIsCheckingLocation(false);
             toast({
               title: "Error",
               description: "Tidak dapat menemukan data kantor",
-              className: "bg-destructive text-destructive-foreground"
+              variant: "destructive",
+              duration: 4000,
             });
           }
         },
@@ -322,7 +316,8 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
           toast({
             title: "Error Lokasi",
             description: "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
-            className: "bg-destructive text-destructive-foreground"
+            variant: "destructive",
+            duration: 5000,
           });
         },
         {
@@ -336,7 +331,8 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
       toast({
         title: "GPS Tidak Didukung",
         description: "Browser tidak mendukung geolokasi",
-        className: "bg-destructive text-destructive-foreground"
+        variant: "destructive",
+        duration: 4000,
       });
     }
   };
