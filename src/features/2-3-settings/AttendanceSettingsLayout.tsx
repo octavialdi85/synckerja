@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { MapPin, Clock, Shield, Users, Settings as SettingsIcon, Building, Calendar, ClipboardList, AlertTriangle, DollarSign, UserCog, Wifi } from 'lucide-react';
+import { MapPin, Clock, Shield, Users, Building, Calendar, ClipboardList, AlertTriangle, DollarSign, UserCog, Wifi } from 'lucide-react';
 import { Badge } from '@/features/ui/badge';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { OptimizedOfficeLocationsList } from './OptimizedOfficeLocationsList';
@@ -93,13 +93,6 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
       icon: Wifi,
       status: 'active',
       component: <IPAddressSettings />
-    },
-    {
-      id: 'general',
-      title: 'Pengaturan Umum',
-      description: 'Konfigurasi absensi tingkat sistem',
-      icon: SettingsIcon,
-      status: 'active'
     }
   ];
 
