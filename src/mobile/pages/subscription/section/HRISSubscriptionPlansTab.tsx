@@ -272,6 +272,8 @@ const PlanCard = memo(
     currentEmployeeCount,
     subscriptionStatus,
     isComingSoon,
+    onMemberCountChange,
+    onBillingCycleChange,
   }: {
     plan: SubscriptionPlan;
     totalPrice: number;
@@ -290,6 +292,8 @@ const PlanCard = memo(
     currentEmployeeCount: number;
     subscriptionStatus: ReturnType<typeof useOptimizedSubscription>["subscriptionStatus"];
     isComingSoon: boolean;
+    onMemberCountChange: (planId: string, count: number) => void;
+    onBillingCycleChange: (planId: string, checked: boolean) => void;
   }) => {
     const IconComponent = getPlanIcon(plan.name);
     return (
@@ -381,8 +385,10 @@ const PlanCard = memo(
                 min={1}
                 max={maxMembers}
                 step={1}
-                onValueChange={(value) => onMemberCountChange(plan.id, value[0])}
-                disabled={isComingSoon || (isTrial && isCurrent)}
+                onValueChange={
+                  isTrial ? undefined : (value) => onMemberCountChange(plan.id, value[0])
+                }
+                disabled={isTrial}
               />
               <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
                 <span>1 member</span>
@@ -711,11 +717,12 @@ const HRISSubscriptionPlansTab = () => {
               subscriptionStatus,
             );
             const beings = plan.description?.toLowerCase() ?? "";
-            const isComingSoon =
+            const isComingSoonRaw =
               description.includes("coming soon") ||
               description.includes("comming soon") ||
               plan.demo_required ||
               plan.name.toLowerCase().includes("business");
+            const isComingSoon = !isCurrent && isComingSoonRaw;
             const disabled =
               (!membersWithinLimit && !isCurrent) ||
               (isCurrent &&
@@ -774,8 +781,8 @@ const HRISSubscriptionPlansTab = () => {
           }
           newPlan={selectedPlan}
           subscriptionStatus={subscriptionStatus}
-          billingCycle={billingCycle}
-          currentMemberCount={subscriptionStatus.member_count || memberCount}
+          billingCycle={isYearly ? "yearly" : "monthly"}
+          currentMemberCount={subscriptionStatus.member_count || 0}
           newMemberCount={selectedMemberCount}
           proRatedData={proRatedData}
         />
