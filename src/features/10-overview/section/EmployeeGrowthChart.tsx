@@ -11,40 +11,34 @@ interface EmployeeGrowthChartProps {
 export const EmployeeGrowthChart = memo(({ data, isLoading }: EmployeeGrowthChartProps) => {
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="h-5 bg-slate-200 rounded animate-pulse w-32"></div>
-          <div className="h-4 bg-slate-200 rounded animate-pulse w-48"></div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-slate-100 rounded animate-pulse"></div>
-        </CardContent>
+      <Card className="p-4">
+        <div className="space-y-2">
+          <div className="h-4 bg-slate-200 rounded animate-pulse w-24" />
+          <div className="h-3 bg-slate-200 rounded animate-pulse w-32" />
+        </div>
+        <div className="h-44 bg-slate-100 rounded animate-pulse mt-3" />
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5" />
-          Employee Growth
-        </CardTitle>
-        <CardDescription>Employee registration over the last 6 months</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Area type="monotone" dataKey="count" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
+    <Card className="p-4">
+      <div className="flex items-center gap-2 text-base font-semibold">
+        <TrendingUp className="h-4 w-4" />
+        Employee Growth
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">Employee registration over the last 6 months</p>
+      <div className="h-44 mt-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="month" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} />
+            <YAxis fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} width={32} />
+            <Tooltip />
+            <Area type="monotone" dataKey="count" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </Card>
   );
 });

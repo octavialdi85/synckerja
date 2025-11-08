@@ -9,12 +9,7 @@ import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/u
 import { useOptimizedSubscription } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { useSubscriptionAnalytics } from "@/features/10-overview/hooks/useSubscriptionAnalytics";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
-import {
-  CurrentSubscription,
-  EmployeeGrowthChart,
-  FeatureUsageChart,
-  UsageMetricsCards,
-} from "@/features/10-overview/section";
+import { CurrentSubscription, EmployeeGrowthChart, UsageMetricsCards } from "@/features/10-overview/section";
 import { SubscriptionBottomTabs, useSubscriptionTabs } from "@/mobile/pages/subscription/shared/SubscriptionTabs";
 
 const useAppTranslation = () => ({
@@ -76,11 +71,7 @@ const OverviewTabPage = memo(() => {
         )}
 
         {subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
-
-              <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
-
-              <FeatureUsageChart data={analytics?.feature_usage || []} isLoading={analyticsLoading} />
-
+        <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
         <UsageMetricsCards metrics={analytics?.usage_metrics || null} isLoading={analyticsLoading} />
 
       </div>
