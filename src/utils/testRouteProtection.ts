@@ -63,6 +63,7 @@ const getExistingRoutes = (): string[] => {
     '/daily-task',
     '/tools/daily-task',
     '/tools/meeting-notes',
+    '/tools/campaign-calculator',
     '/my-info/personal',
     '/my-info/address',
     '/my-info/employment',

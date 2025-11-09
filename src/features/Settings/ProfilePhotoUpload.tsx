@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import { toast } from 'sonner';
 import { getPhotoUrl, getInitials } from '@/features/2-1-employees/hooks/photoUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface ProfilePhotoUploadProps {
   currentPhotoUrl?: string | null;
@@ -21,10 +22,11 @@ export const ProfilePhotoUpload = ({
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { t } = useAppTranslation();
 
   const uploadPhoto = useCallback(async (file: File) => {
     if (!user?.id) {
-      toast.error('User tidak terautentikasi');
+      toast.error(t('settings.profile.photo.toast.authError', 'User is not authenticated'));
       return;
     }
 
@@ -32,13 +34,13 @@ export const ProfilePhotoUpload = ({
     try {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        throw new Error('Silakan pilih file gambar');
+        throw new Error(t('settings.profile.photo.toast.invalidType', 'Please choose an image file'));
       }
 
       // Validate file size (max 5MB)
       const maxSize = 5 * 1024 * 1024;
       if (file.size > maxSize) {
-        throw new Error('Ukuran file maksimal 5MB');
+        throw new Error(t('settings.profile.photo.toast.fileTooLarge', 'Maximum file size is 5MB'));
       }
 
       // Generate unique filename
@@ -72,15 +74,15 @@ export const ProfilePhotoUpload = ({
 
       const publicUrl = getPhotoUrl(data.path);
       onPhotoUpdate(publicUrl);
-      toast.success('Foto profil berhasil diperbarui');
+      toast.success(t('settings.profile.photo.toast.uploadSuccess', 'Profile photo updated successfully'));
 
     } catch (err: any) {
       console.error('Upload error:', err);
-      toast.error(err.message || 'Gagal mengupload foto');
+      toast.error(err.message || t('settings.profile.photo.toast.uploadError', 'Failed to upload photo'));
     } finally {
       setUploading(false);
     }
-  }, [user?.id, currentPhotoUrl, onPhotoUpdate]);
+  }, [user?.id, currentPhotoUrl, onPhotoUpdate, t]);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -116,15 +118,15 @@ export const ProfilePhotoUpload = ({
       }
 
       onPhotoUpdate(null);
-      toast.success('Foto profil berhasil dihapus');
+      toast.success(t('settings.profile.photo.toast.deleteSuccess', 'Profile photo removed successfully'));
 
     } catch (err: any) {
       console.error('Delete error:', err);
-      toast.error(err.message || 'Gagal menghapus foto');
+      toast.error(err.message || t('settings.profile.photo.toast.deleteError', 'Failed to delete photo'));
     } finally {
       setDeleting(false);
     }
-  }, [user?.id, currentPhotoUrl, onPhotoUpdate]);
+  }, [user?.id, currentPhotoUrl, onPhotoUpdate, t]);
 
   const displayPhotoUrl = getPhotoUrl(currentPhotoUrl);
 
@@ -194,7 +196,7 @@ export const ProfilePhotoUpload = ({
       
       <div className="mt-3 text-center">
         <p className="text-sm text-muted-foreground">
-          JPG, PNG hingga 5MB
+          {t('settings.profile.photo.supportedFormats', 'JPG, PNG up to 5MB')}
         </p>
       </div>
     </div>

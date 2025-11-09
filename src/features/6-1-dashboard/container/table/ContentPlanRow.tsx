@@ -480,22 +480,22 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
   // Calculate on-time status for display
   const displayOnTimeStatus = () => {
-    // If there are links, use current date as actual post date
-    if (links && links.length > 0) {
-      const currentDate = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      return calculateOnTimeStatus(currentDate, plan.post_date || '');
+    if (!plan.post_date) {
+      return '';
     }
-    // Otherwise use the stored actual_post_date
-    return calculateOnTimeStatus(plan.actual_post_date, plan.post_date || '');
+
+    // Prefer using stored on_time_status from database when available
+    if (plan.on_time_status && plan.on_time_status.trim().length > 0) {
+      return plan.on_time_status;
+    }
+
+    // Fallback: compute using actual_post_date value
+    return calculateOnTimeStatus(plan.actual_post_date, plan.post_date);
   };
 
   // Calculate actual post date for display
   const displayActualPostDate = () => {
     // If there are links, show current date
-    if (links && links.length > 0) {
-      return formatDateOnly(new Date());
-    }
-    // Otherwise show stored actual_post_date
     return plan.actual_post_date ? formatDateOnly(plan.actual_post_date) : '-';
   };
   const handleCheckboxChange = (checked: boolean) => {

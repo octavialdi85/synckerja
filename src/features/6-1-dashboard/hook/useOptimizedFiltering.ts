@@ -31,7 +31,61 @@ export const useOptimizedFiltering = (
         } else if (statusFilter === "Approved") {
           matchesStatus = plan.status === "Approved" || plan.production_status === "Approved";
         } else if (statusFilter === "Ready To Post") {
-          matchesStatus = plan.approved === true && plan.production_approved === true;
+          const hasGoogleDriveLink =
+            plan.google_drive_link !== null &&
+            plan.google_drive_link !== undefined &&
+            String(plan.google_drive_link).trim().length > 0;
+          matchesStatus =
+            plan.approved === true &&
+            plan.production_approved === true &&
+            hasGoogleDriveLink &&
+            plan.done === false;
+        } else if (statusFilter === "Content Need Review") {
+          const hasEmptyGoogleDriveLink =
+            plan.google_drive_link === null ||
+            plan.google_drive_link === undefined ||
+            String(plan.google_drive_link).trim().length === 0;
+          matchesStatus =
+            plan.status === "Need Review" &&
+            plan.approved === false &&
+            hasEmptyGoogleDriveLink &&
+            plan.production_approved === false &&
+            plan.done === false;
+        } else if (statusFilter === "Content Revision") {
+          const hasEmptyGoogleDriveLink =
+            plan.google_drive_link === null ||
+            plan.google_drive_link === undefined ||
+            String(plan.google_drive_link).trim().length === 0;
+          matchesStatus =
+            plan.status === "Request Revision" &&
+            plan.approved === false &&
+            hasEmptyGoogleDriveLink &&
+            plan.production_approved === false &&
+            plan.done === false;
+        } else if (statusFilter === "Prod Revision") {
+          const hasGoogleDriveLink =
+            plan.google_drive_link !== null &&
+            plan.google_drive_link !== undefined &&
+            String(plan.google_drive_link).trim().length > 0;
+          matchesStatus =
+            plan.status === "Approved" &&
+            plan.approved === true &&
+            hasGoogleDriveLink &&
+            plan.production_status === "Request Revision" &&
+            plan.production_approved === false &&
+            plan.done === false;
+        } else if (statusFilter === "Prod Need Review") {
+          const hasGoogleDriveLink =
+            plan.google_drive_link !== null &&
+            plan.google_drive_link !== undefined &&
+            String(plan.google_drive_link).trim().length > 0;
+          matchesStatus =
+            plan.status === "Approved" &&
+            plan.approved === true &&
+            hasGoogleDriveLink &&
+            plan.production_status === "Need Review" &&
+            plan.production_approved === false &&
+            plan.done === false;
         } else {
           matchesStatus = plan.status === statusFilter || plan.production_status === statusFilter;
         }

@@ -7,18 +7,22 @@ import { useDepartmentAccess } from "./useDepartmentAccess";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { Building2, ChevronRight, X, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 // Sub-sidebar component (merged from SubSidebar.tsx)
 interface SubSidebarProps {
   items: SubMenuItem[];
   isOpen: boolean;
   title: string;
+  titleKey?: string;
 }
 
-function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
+function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps) {
   const location = useLocation();
   const { smartNavigate } = useSmartNavigation();
   const { canAccessPage, configLoading } = useDepartmentAccess();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  const { t } = useAppTranslation();
+  const resolvedTitle = t(titleKey, title);
 
   // Check if any sub-item is accessible for a main section
   const hasAnyAccessibleSubItem = (mainPath: string) => {
@@ -42,7 +46,8 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
       ],
       '/tools': [
         '/password-manager',
-        '/tools/daily-task'
+        '/tools/daily-task',
+        '/tools/campaign-calculator'
       ],
       '/digital-marketing': [
         '/digital-marketing',
@@ -158,7 +163,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
         {/* Header with main navigation title */}
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
           <h3 className="text-sm font-semibold text-gray-900 truncate">
-            {title}
+            {resolvedTitle}
           </h3>
         </div>
 
@@ -173,7 +178,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
               
               return (
                 <button
-                  key={item.title}
+                  key={item.url}
                   onClick={() => {
                     // ENHANCED NAVIGATION - Owner/Admin always can navigate
                     if (isOwner || userRole === 'owner' || isAdmin || userRole === 'admin') {
@@ -221,7 +226,7 @@ function SubSidebarInternal({ items, isOpen, title }: SubSidebarProps) {
                     }
                   `} />
                   <span className="truncate flex-1">
-                    {item.title}
+                    {t(item.titleKey, item.title)}
                   </span>
                   
                   {/* Loading indicator */}
@@ -263,6 +268,7 @@ export function AppSidebar() {
   const { canAccessPage, configLoading } = useDepartmentAccess();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
   const currentPath = location.pathname;
+  const { t } = useAppTranslation();
 
   // Check if a sidebar item (without sub-sidebar) is locked
   const isItemLocked = (item: MenuItem): boolean => {
@@ -299,7 +305,9 @@ export function AppSidebar() {
           <SidebarContent className="overflow-hidden">
             <div className="flex-1 py-4 overflow-y-auto seamless-scroll">
               <div className="space-y-1 px-1">
-                {menuItems.map((item, index) => <div key={item.title}>
+                {menuItems.map((item, index) => {
+                  const localizedTitle = t(item.titleKey, item.title);
+                  return <div key={item.title}>
                     <div onMouseEnter={() => handleMenuItemHover(item.title, item.hasSubSidebar || false)} className="relative group/item">
                       {item.url && item.url !== "#" ? <button
                         onClick={() => smartNavigate(item.url!)}
@@ -308,7 +316,7 @@ export function AppSidebar() {
                         <div className="flex items-center min-w-0">
                           <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-transform duration-150", "group-data-[collapsible=icon]:mx-auto mr-3", "group-hover:scale-110")} />
                           <span className={cn("transition-all duration-150 text-sm font-medium whitespace-nowrap", "group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:overflow-hidden w-auto opacity-100")}>
-                            {item.title}
+                            {localizedTitle}
                           </span>
                         </div>
                         {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
@@ -319,13 +327,14 @@ export function AppSidebar() {
                         <div className="flex items-center min-w-0">
                           <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-transform duration-150", "group-data-[collapsible=icon]:mx-auto mr-3", "group-hover:scale-110")} />
                           <span className={cn("transition-all duration-150 text-sm font-medium whitespace-nowrap", "group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:overflow-hidden w-auto opacity-100")}>
-                            {item.title}
+                            {localizedTitle}
                           </span>
                         </div>
                         {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
                       </div>}
                     </div>
-                  </div>)}
+                  </div>;
+                })}
               </div>
             </div>
           </SidebarContent>
@@ -334,7 +343,17 @@ export function AppSidebar() {
 
       {/* Sub-sidebar */}
       {activeSubSidebar && <div onMouseEnter={handleSubSidebarMouseEnter} onMouseLeave={handleSubSidebarMouseLeave}>
-          {menuItems.map(item => item.title === activeSubSidebar && item.subSidebarItems && item.hasSubSidebar ? <SubSidebarInternal key={item.title} items={item.subSidebarItems} isOpen={true} title={item.title} /> : null)}
+          {menuItems.map(item =>
+            item.title === activeSubSidebar && item.subSidebarItems && item.hasSubSidebar ? (
+              <SubSidebarInternal
+                key={item.title}
+                items={item.subSidebarItems}
+                isOpen={true}
+                title={item.title}
+                titleKey={item.titleKey}
+              />
+            ) : null,
+          )}
         </div>}
     </div>;
 }

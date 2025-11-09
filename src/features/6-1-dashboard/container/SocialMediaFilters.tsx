@@ -57,10 +57,11 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Need Review">Need Review</SelectItem>
-            <SelectItem value="Request Revision">Request Revision</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
             <SelectItem value="Ready To Post">Ready To Post</SelectItem>
+            <SelectItem value="Content Need Review">Content Need Review</SelectItem>
+            <SelectItem value="Content Revision">Content Revision</SelectItem>
+            <SelectItem value="Prod Revision">Prod Revision</SelectItem>
+            <SelectItem value="Prod Need Review">Prod Need Review</SelectItem>
           </SelectContent>
         </Select>
         <Button 

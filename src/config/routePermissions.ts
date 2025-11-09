@@ -110,6 +110,12 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     requiresPermissions: false,
     description: 'Meeting notes - accessible to all authenticated users'
   },
+  {
+    path: '/tools/campaign-calculator',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Campaign calculator - accessible to all authenticated users'
+  },
 
   // Employee Self-Service (accessible to all authenticated users)
   {

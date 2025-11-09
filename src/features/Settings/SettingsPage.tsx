@@ -4,16 +4,18 @@ import { User, Shield } from 'lucide-react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import ProfileSettings from './ProfileSettings';
 import SecuritySettings from './SecuritySettings';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 // Tab configuration
 const TAB_CONFIG = [
-  { value: 'profile', label: 'Profile', icon: User, route: '/settings' },
-  { value: 'security', label: 'Security', icon: Shield, route: '/settings/security' },
+  { value: 'profile', labelKey: 'settings.tabs.profile', fallback: 'Profile', icon: User, route: '/settings' },
+  { value: 'security', labelKey: 'settings.tabs.security', fallback: 'Security', icon: Shield, route: '/settings/security' },
 ] as const;
 
 const SettingsPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useAppTranslation();
   
   // Memoize current tab calculation
   const currentTab = useMemo(() => {
@@ -39,8 +41,12 @@ const SettingsPage = () => {
                 <div className="px-1 py-3">
                   {/* Header Section */}
                   <div className="mb-3">
-                    <h1 className="text-xl font-bold text-gray-900 mb-0.5">Settings</h1>
-                    <p className="text-xs text-gray-600">Manage your account and application preferences</p>
+                    <h1 className="text-xl font-bold text-gray-900 mb-0.5">
+                      {t('settings.page.title', 'Settings')}
+                    </h1>
+                    <p className="text-xs text-gray-600">
+                      {t('settings.page.subtitle', 'Manage your account and application preferences')}
+                    </p>
                   </div>
 
                   {/* Tabs Section */}
@@ -62,7 +68,7 @@ const SettingsPage = () => {
                             style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}
                           >
                             <Icon className="w-4 h-4" />
-                            <span>{tab.label}</span>
+                          <span>{t(tab.labelKey, tab.fallback)}</span>
                           </div>
                         );
                       })}

@@ -20,6 +20,7 @@ const UNRESTRICTED_DURING_LOADING = [
   '/password-manager',              // Password management tools
   '/tools/daily-task',              // Daily task management
   '/tools/meeting-notes',           // Meeting notes management
+  '/tools/campaign-calculator',     // Campaign calculator tool
   '/tools'                          // Tools section
   // REMOVED: /employees and /employees/add - these should be restricted by database config
 ];

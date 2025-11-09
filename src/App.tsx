@@ -67,6 +67,7 @@ import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
 import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
 import DailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
+import CampaignCalculator from "./features/8-3-campaign-calculator/pages/CampaignCalculator";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -233,6 +234,11 @@ const App = () => (
               <Route path="/tools/meeting-notes" element={
                 <UniversalProtectedRoute>
                   <MeetingNotesPage />
+                </UniversalProtectedRoute>
+              } />
+              <Route path="/tools/campaign-calculator" element={
+                <UniversalProtectedRoute>
+                  <CampaignCalculator />
                 </UniversalProtectedRoute>
               } />
               <Route path="/tools/daily-task-report" element={

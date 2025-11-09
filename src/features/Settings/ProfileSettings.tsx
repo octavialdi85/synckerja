@@ -5,6 +5,7 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
 import { Separator } from '@/features/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { ProfilePhotoUpload } from './ProfilePhotoUpload';
 import { useProfile } from '@/features/2-1-employees/MyInfo/Documents/hooks/useProfile';
 import { useAvatarSync } from '@/features/2-1-employees/MyInfo/PersonalInformation/hooks/useAvatarSync';
@@ -12,6 +13,9 @@ import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useLanguage } from '@/features/share/i18n/LanguageProvider';
+import type { AppLanguage } from '@/features/share/i18n/translations';
 
 export type ProfileUpdateData = {
   full_name: string;
@@ -23,7 +27,9 @@ export type ProfileUpdateData = {
   profile_photo_url: string | null;
 };
 
-const useUpdateProfile = () => {
+type TranslateFn = ReturnType<typeof useAppTranslation>['t'];
+
+const useUpdateProfile = (t: TranslateFn) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -60,18 +66,20 @@ const useUpdateProfile = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      toast.success('Profil berhasil diperbarui');
+      toast.success(t('settings.profile.toast.updateSuccess', 'Profile updated successfully'));
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Gagal memperbarui profil');
+      toast.error(error.message || t('settings.profile.toast.updateError', 'Failed to update profile'));
     }
   });
 };
 
 const ProfileSettings = () => {
   const { data: profile, isLoading, error } = useProfile();
-  const updateProfile = useUpdateProfile();
   const { syncAvatarAcrossApp } = useAvatarSync();
+  const { t } = useAppTranslation();
+  const updateProfile = useUpdateProfile(t);
+  const { language, setLanguage } = useLanguage();
   
   const [formData, setFormData] = useState<ProfileUpdateData>({
     full_name: '',
@@ -167,9 +175,47 @@ const ProfileSettings = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Foto Profil</CardTitle>
+          <CardTitle>{t("settings.profile.language.title", "Application Language")}</CardTitle>
           <CardDescription>
-            Upload foto profil Anda. Foto akan terlihat di seluruh aplikasi.
+            {t(
+              "settings.profile.language.description",
+              "Choose the language you want to use across the application",
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-xs">
+            <Label className="mb-2 block" htmlFor="language-select">
+              {t("settings.profile.language.title", "Application Language")}
+            </Label>
+            <Select
+              value={language}
+              onValueChange={(value) => setLanguage(value as AppLanguage)}
+            >
+              <SelectTrigger id="language-select" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="id">
+                  {t("settings.profile.language.option.id", "Indonesian")}
+                </SelectItem>
+                <SelectItem value="en">
+                  {t("settings.profile.language.option.en", "English")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.profile.photo.title", "Profile Photo")}</CardTitle>
+          <CardDescription>
+            {t(
+              "settings.profile.photo.description",
+              "Upload your profile photo. It will appear across the app."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
@@ -183,71 +229,104 @@ const ProfileSettings = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Informasi Personal</CardTitle>
+          <CardTitle>{t("settings.profile.personal.title", "Personal Information")}</CardTitle>
           <CardDescription>
-            Perbarui informasi personal dan kontak Anda
+            {t(
+              "settings.profile.personal.description",
+              "Update your personal and contact information"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="full_name">Nama Lengkap</Label>
+              <Label htmlFor="full_name">
+                {t("settings.profile.form.fullNameLabel", "Full Name")}
+              </Label>
               <Input
                 id="full_name"
                 value={formData.full_name}
                 onChange={(e) => handleInputChange('full_name', e.target.value)}
-                placeholder="Masukkan nama lengkap"
+                placeholder={t(
+                  "settings.profile.form.fullNamePlaceholder",
+                  "Enter your full name"
+                )}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Nomor Telepon</Label>
+              <Label htmlFor="phone">
+                {t("settings.profile.form.phoneLabel", "Phone Number")}
+              </Label>
               <Input
                 id="phone"
                 value={formData.phone}
                 onChange={(e) => handleInputChange('phone', e.target.value)}
-                placeholder="Masukkan nomor telepon"
+                placeholder={t(
+                  "settings.profile.form.phonePlaceholder",
+                  "Enter your phone number"
+                )}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="job_title">Jabatan</Label>
+              <Label htmlFor="job_title">
+                {t("settings.profile.form.jobTitleLabel", "Job Title")}
+              </Label>
               <Input
                 id="job_title"
                 value={formData.job_title}
                 onChange={(e) => handleInputChange('job_title', e.target.value)}
-                placeholder="Masukkan jabatan"
+                placeholder={t(
+                  "settings.profile.form.jobTitlePlaceholder",
+                  "Enter your job title"
+                )}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location">Lokasi</Label>
+              <Label htmlFor="location">
+                {t("settings.profile.form.locationLabel", "Location")}
+              </Label>
               <Input
                 id="location"
                 value={formData.location}
                 onChange={(e) => handleInputChange('location', e.target.value)}
-                placeholder="Masukkan lokasi"
+                placeholder={t(
+                  "settings.profile.form.locationPlaceholder",
+                  "Enter your location"
+                )}
               />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="website">Website</Label>
+              <Label htmlFor="website">
+                {t("settings.profile.form.websiteLabel", "Website")}
+              </Label>
               <Input
                 id="website"
                 value={formData.website}
                 onChange={(e) => handleInputChange('website', e.target.value)}
-                placeholder="https://website-anda.com"
+                placeholder={t(
+                  "settings.profile.form.websitePlaceholder",
+                  "https://your-website.com"
+                )}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bio">Bio</Label>
+            <Label htmlFor="bio">
+              {t("settings.profile.form.bioLabel", "Bio")}
+            </Label>
             <Textarea
               id="bio"
               value={formData.bio}
               onChange={(e) => handleInputChange('bio', e.target.value)}
-              placeholder="Ceritakan sedikit tentang diri Anda..."
+              placeholder={t(
+                "settings.profile.form.bioPlaceholder",
+                "Tell us a little about yourself..."
+              )}
               rows={4}
             />
           </div>
@@ -256,7 +335,9 @@ const ProfileSettings = () => {
 
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {hasChanges ? 'Ada perubahan yang belum disimpan' : 'Semua perubahan telah disimpan'}
+              {hasChanges
+                ? t("settings.profile.status.changesPending", "You have unsaved changes")
+                : t("settings.profile.status.noChanges", "All changes have been saved")}
             </div>
             <div className="flex space-x-3">
               {hasChanges && (
@@ -265,7 +346,7 @@ const ProfileSettings = () => {
                   onClick={handleReset}
                   disabled={updateProfile.isPending}
                 >
-                  Reset
+                  {t("settings.profile.actions.reset", "Reset")}
                 </Button>
               )}
               <Button
@@ -275,12 +356,12 @@ const ProfileSettings = () => {
                 {updateProfile.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Menyimpan...
+                    {t("settings.profile.actions.saving", "Saving...")}
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    Simpan Perubahan
+                    {t("settings.profile.actions.save", "Save Changes")}
                   </>
                 )}
               </Button>

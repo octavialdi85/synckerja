@@ -7,6 +7,9 @@ import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Eye, EyeOff, Shield, Key, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+
+type TranslateFn = ReturnType<typeof useAppTranslation>['t'];
 
 const SecuritySettings = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -22,28 +25,32 @@ const SecuritySettings = () => {
     confirm?: string;
     general?: string;
   }>({});
+  const { t } = useAppTranslation();
 
   const validatePasswords = () => {
     const newErrors: typeof errors = {};
 
     if (!currentPassword) {
-      newErrors.current = 'Current password is required';
+      newErrors.current = t('settings.security.validation.currentRequired', 'Current password is required');
     }
 
     if (!newPassword) {
-      newErrors.new = 'New password is required';
+      newErrors.new = t('settings.security.validation.newRequired', 'New password is required');
     } else if (newPassword.length < 6) {
-      newErrors.new = 'Password must be at least 6 characters';
+      newErrors.new = t('settings.security.validation.newTooShort', 'Password must be at least 6 characters');
     }
 
     if (!confirmPassword) {
-      newErrors.confirm = 'Please confirm your new password';
+      newErrors.confirm = t('settings.security.validation.confirmRequired', 'Please confirm your new password');
     } else if (newPassword !== confirmPassword) {
-      newErrors.confirm = 'Passwords do not match';
+      newErrors.confirm = t('settings.security.validation.confirmMismatch', 'Passwords do not match');
     }
 
     if (currentPassword && newPassword && currentPassword === newPassword) {
-      newErrors.new = 'New password must be different from current password';
+      newErrors.new = t(
+        'settings.security.validation.sameAsCurrent',
+        'New password must be different from current password'
+      );
     }
 
     setErrors(newErrors);
@@ -62,7 +69,7 @@ const SecuritySettings = () => {
       // First verify current password by attempting to sign in
       const { data: user } = await supabase.auth.getUser();
       if (!user.user?.email) {
-        throw new Error('Unable to verify current user');
+        throw new Error(t('settings.security.error.unableVerify', 'Unable to verify current user'));
       }
 
       // Update password
@@ -72,7 +79,7 @@ const SecuritySettings = () => {
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
-          setErrors({ current: 'Current password is incorrect' });
+          setErrors({ current: t('settings.security.validation.currentIncorrect', 'Current password is incorrect') });
         } else {
           setErrors({ general: error.message });
         }
@@ -80,19 +87,21 @@ const SecuritySettings = () => {
       }
 
       // Success
-      toast.success('Password updated successfully');
+      toast.success(t('settings.security.toast.updateSuccess', 'Password updated successfully'));
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       
     } catch (error: any) {
-      setErrors({ general: error.message || 'Failed to update password' });
+      setErrors({
+        general: error.message || t('settings.security.error.updateFailed', 'Failed to update password'),
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const PasswordStrengthIndicator = ({ password }: { password: string }) => {
+  const PasswordStrengthIndicator = ({ password, translate }: { password: string; translate: TranslateFn }) => {
     const getStrength = () => {
       let score = 0;
       if (password.length >= 6) score++;
@@ -106,10 +115,10 @@ const SecuritySettings = () => {
 
     const strength = getStrength();
     const getStrengthText = () => {
-      if (strength < 2) return 'Weak';
-      if (strength < 4) return 'Fair';
-      if (strength < 5) return 'Good';
-      return 'Strong';
+      if (strength < 2) return translate('settings.security.passwordStrength.weak', 'Weak');
+      if (strength < 4) return translate('settings.security.passwordStrength.fair', 'Fair');
+      if (strength < 5) return translate('settings.security.passwordStrength.good', 'Good');
+      return translate('settings.security.passwordStrength.strong', 'Strong');
     };
 
     const getStrengthColor = () => {
@@ -124,7 +133,9 @@ const SecuritySettings = () => {
     return (
       <div className="mt-2">
         <div className="flex items-center gap-2 mb-1">
-          <div className="text-sm text-muted-foreground">Password strength:</div>
+          <div className="text-sm text-muted-foreground">
+            {translate('settings.security.passwordStrength.label', 'Password strength:')}
+          </div>
           <div className="text-sm font-medium">{getStrengthText()}</div>
         </div>
         <div className="w-full bg-muted rounded-full h-2">
@@ -143,10 +154,15 @@ const SecuritySettings = () => {
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5 text-primary" />
-            <CardTitle>Change Password</CardTitle>
+            <CardTitle>
+              {t('settings.security.changePassword.title', 'Change Password')}
+            </CardTitle>
           </div>
           <CardDescription>
-            Update your password to keep your account secure
+            {t(
+              'settings.security.changePassword.description',
+              'Update your password to keep your account secure'
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -159,7 +175,9 @@ const SecuritySettings = () => {
 
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="current-password">Current Password</Label>
+              <Label htmlFor="current-password">
+                {t('settings.security.form.currentPasswordLabel', 'Current Password')}
+              </Label>
               <div className="relative">
                 <Input
                   id="current-password"
@@ -167,7 +185,10 @@ const SecuritySettings = () => {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className={errors.current ? 'border-destructive' : ''}
-                  placeholder="Enter your current password"
+                  placeholder={t(
+                    'settings.security.form.currentPasswordPlaceholder',
+                    'Enter your current password'
+                  )}
                 />
                 <Button
                   type="button"
@@ -189,7 +210,9 @@ const SecuritySettings = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
+              <Label htmlFor="new-password">
+                {t('settings.security.form.newPasswordLabel', 'New Password')}
+              </Label>
               <div className="relative">
                 <Input
                   id="new-password"
@@ -197,7 +220,10 @@ const SecuritySettings = () => {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className={errors.new ? 'border-destructive' : ''}
-                  placeholder="Enter your new password"
+                  placeholder={t(
+                    'settings.security.form.newPasswordPlaceholder',
+                    'Enter your new password'
+                  )}
                 />
                 <Button
                   type="button"
@@ -216,11 +242,13 @@ const SecuritySettings = () => {
               {errors.new && (
                 <p className="text-sm text-destructive">{errors.new}</p>
               )}
-              <PasswordStrengthIndicator password={newPassword} />
+              <PasswordStrengthIndicator password={newPassword} translate={t} />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Label htmlFor="confirm-password">
+                {t('settings.security.form.confirmPasswordLabel', 'Confirm New Password')}
+              </Label>
               <div className="relative">
                 <Input
                   id="confirm-password"
@@ -228,7 +256,10 @@ const SecuritySettings = () => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className={errors.confirm ? 'border-destructive' : ''}
-                  placeholder="Confirm your new password"
+                  placeholder={t(
+                    'settings.security.form.confirmPasswordPlaceholder',
+                    'Confirm your new password'
+                  )}
                 />
                 <Button
                   type="button"
@@ -258,12 +289,12 @@ const SecuritySettings = () => {
                 {isLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Updating...
+                    {t('settings.security.actions.updating', 'Updating...')}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="h-4 w-4" />
-                    Update Password
+                    {t('settings.security.actions.update', 'Update Password')}
                   </>
                 )}
               </Button>
@@ -278,7 +309,7 @@ const SecuritySettings = () => {
                 }}
                 disabled={isLoading}
               >
-                Cancel
+                {t('settings.security.actions.cancel', 'Cancel')}
               </Button>
             </div>
           </form>
@@ -289,29 +320,52 @@ const SecuritySettings = () => {
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            <CardTitle>Security Tips</CardTitle>
+            <CardTitle>{t('settings.security.tips.title', 'Security Tips')}</CardTitle>
           </div>
           <CardDescription>
-            Keep your account secure with these recommendations
+            {t(
+              'settings.security.tips.description',
+              'Keep your account secure with these recommendations'
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-              <p className="text-muted-foreground">Use a strong password with at least 8 characters</p>
+              <p className="text-muted-foreground">
+                {t(
+                  'settings.security.tips.strongPassword',
+                  'Use a strong password with at least 8 characters'
+                )}
+              </p>
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-              <p className="text-muted-foreground">Include uppercase, lowercase, numbers, and special characters</p>
+              <p className="text-muted-foreground">
+                {t(
+                  'settings.security.tips.complexity',
+                  'Include uppercase, lowercase, numbers, and special characters'
+                )}
+              </p>
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-              <p className="text-muted-foreground">Avoid using personal information in your password</p>
+              <p className="text-muted-foreground">
+                {t(
+                  'settings.security.tips.noPersonalInfo',
+                  'Avoid using personal information in your password'
+                )}
+              </p>
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-              <p className="text-muted-foreground">Change your password regularly</p>
+              <p className="text-muted-foreground">
+                {t(
+                  'settings.security.tips.changeRegularly',
+                  'Change your password regularly'
+                )}
+              </p>
             </div>
           </div>
         </CardContent>
