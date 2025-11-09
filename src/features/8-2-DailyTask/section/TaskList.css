@@ -196,6 +196,28 @@
   max-width: 120px;
 }
 
+.mobile-task-list .task-list-table {
+  table-layout: fixed;
+}
+
+@media (max-width: 768px) {
+  .mobile-task-list .task-list-table th,
+  .mobile-task-list .task-list-table td {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .mobile-task-list .task-list-table td:nth-child(1),
+  .mobile-task-list .task-list-table th:nth-child(1) {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+}
+
 /* Expanded row styling */
 .task-expanded-row {
   background-color: #f9fafb !important;

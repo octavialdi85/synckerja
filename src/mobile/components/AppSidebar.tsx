@@ -17,6 +17,7 @@ import { Separator } from "@/mobile/components/ui/separator";
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
   { title: "Subscription", url: "/subscription/overview", icon: CreditCard },
+  { title: "Daily Task", url: "/tools/daily-task", icon: Clock },
 ];
 
 export function AppSidebar() {

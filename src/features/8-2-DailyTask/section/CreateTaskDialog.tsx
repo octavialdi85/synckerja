@@ -241,9 +241,11 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0 w-full">
                       <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                      <span className="text-gray-500 text-sm">Select Individual Objective</span>
+                      <span className="text-gray-500 text-sm truncate text-left">
+                        Select Individual Objective
+                      </span>
                     </div>
                   )}
                 </Button>

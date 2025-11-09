@@ -91,3 +91,4 @@ COMMENT ON COLUMN campaign_kpi_templates.settings IS 'Serialized KPI calculator 
 COMMENT ON COLUMN campaign_kpi_templates.is_public IS 'When true, template is visible to everyone in the organization.';
 
 
+

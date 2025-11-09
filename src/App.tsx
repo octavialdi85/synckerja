@@ -28,8 +28,9 @@ import MobileSchedule from "./mobile/pages/home/Schedule";
 import MobileClientVisit from "./mobile/pages/home/ClientVisit";
 import MobileReports from "./mobile/pages/home/Reports";
 import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
-import DailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
-import MeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
+import DesktopDailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
+import MobileDailyTaskPage from "./mobile/pages/daily task/DailyTaskPage";
+import DesktopMeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
 import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
@@ -66,8 +67,10 @@ import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
 import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
 import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
-import DailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
+import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 import CampaignCalculator from "./features/8-3-campaign-calculator/pages/CampaignCalculator";
+import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
+import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -117,6 +120,21 @@ const useMobileDetection = () => {
   const isViewportMobile = useIsMobile();
   const isMobileUserAgent = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
   return isViewportMobile || isMobileUserAgent;
+};
+
+const DailyTaskRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <MobileDailyTaskPage /> : <DesktopDailyTaskPage />;
+};
+
+const DailyTaskReportRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <MobileDailyTaskReportPage /> : <DesktopDailyTaskReportPage />;
+};
+
+const MeetingNotesRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <MobileMeetingNotesPage /> : <DesktopMeetingNotesPage />;
 };
 
 const ProfileRouteElement = () => {
@@ -223,17 +241,17 @@ const App = () => (
               } />
               <Route path="/daily-task" element={
                 <UniversalProtectedRoute>
-                  <DailyTaskPage />
+                  <DesktopDailyTaskPage />
                 </UniversalProtectedRoute>
               } />
               <Route path="/tools/daily-task" element={
                 <UniversalProtectedRoute>
-                  <DailyTaskPage />
+                  <DailyTaskRouteElement />
                 </UniversalProtectedRoute>
               } />
               <Route path="/tools/meeting-notes" element={
                 <UniversalProtectedRoute>
-                  <MeetingNotesPage />
+                  <MeetingNotesRouteElement />
                 </UniversalProtectedRoute>
               } />
               <Route path="/tools/campaign-calculator" element={
@@ -243,7 +261,7 @@ const App = () => (
               } />
               <Route path="/tools/daily-task-report" element={
                 <UniversalProtectedRoute>
-                  <DailyTaskReportPage />
+                  <DailyTaskReportRouteElement />
                 </UniversalProtectedRoute>
               } />
               

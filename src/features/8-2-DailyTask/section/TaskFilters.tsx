@@ -17,9 +17,10 @@ import { CreateTaskDialog } from './CreateTaskDialog';
 
 interface TaskFiltersProps {
   onAddTask?: () => void;
+  showAddTaskButton?: boolean;
 }
 
-export const TaskFilters = ({ onAddTask }: TaskFiltersProps = {}) => {
+export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
   const { filters, setFilters, tasks } = useDailyTask();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
@@ -245,13 +246,15 @@ export const TaskFilters = ({ onAddTask }: TaskFiltersProps = {}) => {
       )}
 
       {/* Add Task Button */}
-      <Button
-        onClick={() => setIsCreateTaskDialogOpen(true)}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 flex items-center gap-2"
-      >
-        <Plus className="w-4 h-4" />
-        Add Task
-      </Button>
+      {showAddTaskButton && (
+        <Button
+          onClick={() => setIsCreateTaskDialogOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add Task
+        </Button>
+      )}
 
       {/* Custom Date Picker Dialog */}
       <CustomDatePicker
@@ -263,15 +266,17 @@ export const TaskFilters = ({ onAddTask }: TaskFiltersProps = {}) => {
       />
 
       {/* Create Task Dialog */}
-      <CreateTaskDialog
-        open={isCreateTaskDialogOpen}
-        onOpenChange={(open) => {
-          setIsCreateTaskDialogOpen(open);
-          if (onAddTask && !open) {
-            onAddTask();
-          }
-        }}
-      />
+      {showAddTaskButton && (
+        <CreateTaskDialog
+          open={isCreateTaskDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateTaskDialogOpen(open);
+            if (onAddTask && !open) {
+              onAddTask();
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
