@@ -1284,10 +1284,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           });
       }
 
-      toast({
-        title: 'Success',
-        description: 'Step updated successfully'
-      });
+      // Don't show toast notification - this is an internal update function
+      // Toast notifications should only appear for explicit user actions
+      // If toast is needed, it should be shown at the call site for user-initiated actions
       
       clearCache(`tasks_${organizationId}_*`);
       await fetchTasks(true);

@@ -147,16 +147,16 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[520px] rounded-none sm:rounded-none flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Blockers</DialogTitle>
+      <DialogContent className="max-w-none w-screen h-screen md:max-w-2xl md:max-h-[520px] m-0 rounded-none md:rounded-lg flex flex-col p-0">
+        <DialogHeader className="px-4 pt-4 pb-2 border-b flex-shrink-0">
+          <DialogTitle className="text-base md:text-lg">Blockers</DialogTitle>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 min-h-0 flex flex-col">
-          <TabsList className="mb-2">
-            <TabsTrigger value="list">Blockers</TabsTrigger>
-            <TabsTrigger value="resolved">Blocker Resolved</TabsTrigger>
+          <TabsList className="mb-2 mx-4 mt-2">
+            <TabsTrigger value="list" className="text-xs md:text-sm">Blockers</TabsTrigger>
+            <TabsTrigger value="resolved" className="text-xs md:text-sm">Blocker Resolved</TabsTrigger>
           </TabsList>
-          <TabsContent value="list" className="flex-1 min-h-0">
+          <TabsContent value="list" className="flex-1 min-h-0 px-4 pb-4">
             <div className="flex-1 min-h-0 seamless-scroll overflow-auto space-y-2">
               {localItems.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
@@ -169,7 +169,7 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
                   </div>
                 </div>
               ) : localItems.filter(b => !b.is_resolved).length === 0 ? (
-                <div className="text-sm text-gray-500">No unresolved blockers.</div>
+                <div className="text-xs md:text-sm text-gray-500">No unresolved blockers.</div>
               ) : (
                 localItems.filter(b => !b.is_resolved).map((b) => (
                   <div key={b.id} className="p-2 border border-red-200 bg-red-50 rounded">
@@ -178,14 +178,14 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
                     {b.subStepTitle && (
                       <div className="text-xs text-gray-700">Sub-step: <span className="font-medium">{b.subStepTitle}</span></div>
                     )}
-                    <div className="text-sm text-red-800 font-medium mt-1">{b.blocker_type || 'Blocker'}</div>
+                    <div className="text-xs md:text-sm text-red-800 font-medium mt-1">{b.blocker_type || 'Blocker'}</div>
                     {b.description && (
-                      <div className="text-sm text-red-900">{b.description}</div>
+                      <div className="text-xs md:text-sm text-red-900">{b.description}</div>
                     )}
                     {b.created_by_employee?.full_name && (
                       <div className="text-xs text-gray-600 mt-1">created by : <span className="font-medium">{b.created_by_employee.full_name}</span></div>
                     )}
-                    <div className="flex items-center justify-between mt-1">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between mt-2 gap-2">
                       <div className="text-xs text-red-600">{new Date(b.created_at).toLocaleString()}</div>
                       <div className="flex items-center gap-2">
                         {b.is_resolved && (
@@ -205,7 +205,7 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
               )}
             </div>
           </TabsContent>
-          <TabsContent value="resolved" className="flex-1 min-h-0">
+          <TabsContent value="resolved" className="flex-1 min-h-0 px-4 pb-4">
             <div className="flex-1 min-h-0 seamless-scroll overflow-auto overflow-x-auto">
               {isLoadingResolved ? (
                 <div className="flex items-center justify-center py-8">
@@ -217,8 +217,30 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
                     </div>
                   </div>
                 </div>
+              ) : resolvedRows.length === 0 ? (
+                <div className="text-xs md:text-sm text-gray-500 text-center py-8">No resolved records</div>
               ) : (
-                <table className="text-sm min-w-max">
+                <div className="space-y-2 md:hidden">
+                  {resolvedRows.map((row) => (
+                    <div key={row.id} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                      <div className="text-xs font-semibold text-gray-900">{row.taskTitle || '-'}</div>
+                      <div className="text-xs text-gray-700">{row.stepTitle || '-'}</div>
+                      <div className="text-xs text-gray-600">{row.subStepTitle || '-'}</div>
+                      <div className="text-xs text-gray-600">Resolved: {new Date(row.created_at).toLocaleString()}</div>
+                      <div className="text-xs text-gray-700">
+                        <div className="font-medium mb-1">Blocker:</div>
+                        <div>{row.blocker_description || '-'}</div>
+                      </div>
+                      <div className="text-xs text-gray-900">
+                        <div className="font-medium mb-1">Resolution:</div>
+                        <div>{row.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {resolvedRows.length > 0 && (
+                <table className="text-sm min-w-max hidden md:table">
                   <thead className="bg-gray-50 text-gray-600">
                     <tr>
                       <th className="text-left px-3 py-2 whitespace-nowrap">Task</th>
@@ -230,20 +252,16 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
                     </tr>
                   </thead>
                   <tbody>
-                    {resolvedRows.length === 0 ? (
-                      <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500 whitespace-nowrap">No resolved records</td></tr>
-                    ) : (
-                      resolvedRows.map((row) => (
-                        <tr key={row.id} className="border-t">
-                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.taskTitle || '-'}</td>
-                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.stepTitle || '-'}</td>
-                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.subStepTitle || '-'}</td>
-                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.blocker_description || '-'}</td>
-                          <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.description}</td>
-                        </tr>
-                      ))
-                    )}
+                    {resolvedRows.map((row) => (
+                      <tr key={row.id} className="border-t">
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.taskTitle || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.stepTitle || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.subStepTitle || '-'}</td>
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{row.blocker_description || '-'}</td>
+                        <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{row.description}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}

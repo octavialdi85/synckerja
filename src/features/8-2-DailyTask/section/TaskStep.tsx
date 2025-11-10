@@ -71,7 +71,7 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep } = useDailyTask();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(step.title);
-  const [showFiles, setShowFiles] = useState(step.files && step.files.length > 0);
+  const [showFiles, setShowFiles] = useState(false); // Default collapsed
   const [showLinks, setShowLinks] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
@@ -127,12 +127,7 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  // Update showFiles when step.files changes
-  useEffect(() => {
-    if (step.files && step.files.length > 0) {
-      setShowFiles(true);
-    }
-  }, [step.files]);
+  // Removed auto-expand effect - files section now defaults to collapsed
 
   // Compute on-time/late label for finished step vs due date
   const getFinishStatusLabel = (): { text: string; className: string } | null => {
@@ -594,27 +589,29 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
         ref={setNodeRef}
         style={style}
         data-step-id={step.id}
-        className={`flex items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
+        className={`flex items-start md:items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
           isDragging ? 'shadow-lg bg-blue-100' : ''
         }`}
       >
-      <button
-        onClick={handleToggleComplete}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
-      >
-        {step.is_completed ? (
-          <CheckSquare className="w-4 h-4 text-green-600" />
-        ) : (
-          <Square className="w-4 h-4" />
-        )}
-      </button>
+      <div className="flex items-start gap-2 flex-shrink-0 pt-0.5">
+        <button
+          onClick={handleToggleComplete}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          {step.is_completed ? (
+            <CheckSquare className="w-4 h-4 text-green-600" />
+          ) : (
+            <Square className="w-4 h-4" />
+          )}
+        </button>
 
-      <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing"
-      >
-        <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500" />
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing mt-0.5"
+        >
+          <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500" />
+        </div>
       </div>
 
       {isEditing ? (
@@ -651,30 +648,49 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
         </div>
       ) : (
         <>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className={`text-sm truncate min-w-0 ${
                 step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
               }`}>
                 {step.title}
               </span>
               {/* Badge to indicate assignment status */}
-              {isAssignedToMe && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">
-                  Assigned to you
-                </Badge>
-              )}
-              {!isAssignedToMe && step.assigned_to && isStepCreator && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300">
-                  Assigned to {step.assigned_employee?.full_name || 'other'}
-                </Badge>
-              )}
-              {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-300">
-                  Sub-step assigned to you
-                </Badge>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {isAssignedToMe && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">
+                    Assigned to you
+                  </Badge>
+                )}
+                {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300">
+                    Assigned to {step.assigned_employee?.full_name || 'other'}
+                  </Badge>
+                )}
+                {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-300">
+                    Sub-step assigned to you
+                  </Badge>
+                )}
+              </div>
             </div>
+            {/* Finished timestamp below title */}
+            {step.is_completed && step.updated_at && (
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-gray-500">Finished: {new Date(step.updated_at).toLocaleString()}</span>
+                {getFinishStatusLabel() && (
+                  <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
+                )}
+              </div>
+            )}
+            {/* Icons below title on mobile, to the right on desktop when no sub-steps */}
+            {subStepCount === 0 && (
+              <div className="mt-1 flex justify-end md:hidden">
+                <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
+                  {renderActionButtons()}
+                </div>
+              </div>
+            )}
             {subStepCount > 0 && (
               <div className="mt-1">
                 <div className="w-full h-1.5 bg-blue-100 rounded">
@@ -685,11 +701,6 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                   <div className="flex flex-wrap items-center gap-2">
-                    {step.is_completed && step.updated_at && (
-                      <span className="flex items-center gap-1">
-                        Finished: {new Date(step.updated_at).toLocaleString()}
-                      </span>
-                    )}
                     {step.assigned_due_date && (
                       <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
                     )}
@@ -705,30 +716,28 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
                   </div>
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1">
-                  {renderActionButtons()}
+                  <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
+                    {renderActionButtons()}
+                  </div>
                 </div>
               </div>
             )}
-            {subStepCount === 0 && (step.assigned_due_date || (step.is_completed && step.updated_at)) && (
+            {subStepCount === 0 && step.assigned_due_date && (
               <div className="mt-1 flex items-center gap-4 text-[10px] text-gray-500">
-                {step.assigned_due_date && (
-                  <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
-                )}
-                {step.is_completed && step.updated_at && (
-                  <span className="flex items-center gap-2">
-                    <span>Finished: {new Date(step.updated_at).toLocaleString()}</span>
-                    {getFinishStatusLabel() && (
-                      <span className={`ml-2 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
-                    )}
-                  </span>
+                <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                {getFinishStatusLabel() && (
+                  <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
                 )}
               </div>
             )}
           </div>
 
+          {/* Icons to the right on desktop when no sub-steps */}
           {subStepCount === 0 && (
-            <div className="mt-1 flex items-center justify-end gap-1">
-              {renderActionButtons()}
+            <div className="hidden md:flex items-center justify-end gap-1 flex-shrink-0">
+              <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
+                {renderActionButtons()}
+              </div>
             </div>
           )}
         </>

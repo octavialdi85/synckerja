@@ -74,11 +74,11 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg h-[520px] rounded-none sm:rounded-none flex flex-col">
-        <DialogHeader>
-          <DialogTitle>How was this blocker resolved?</DialogTitle>
+      <DialogContent className="max-w-none w-screen h-screen md:max-w-lg md:max-h-[520px] m-0 rounded-none md:rounded-lg flex flex-col p-0">
+        <DialogHeader className="px-4 pt-4 pb-2 border-b flex-shrink-0">
+          <DialogTitle className="text-base md:text-lg">How was this blocker resolved?</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 min-h-0 seamless-scroll overflow-auto space-y-3">
+        <div className="flex-1 min-h-0 seamless-scroll overflow-auto space-y-3 px-4 py-4">
           {blocker && (
             <div className="p-2 border border-gray-200 bg-gray-50 rounded">
               <div className="text-xs text-gray-700">Task: <span className="font-medium">{blocker.taskTitle || '-'}</span></div>
@@ -90,18 +90,18 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
             </div>
           )}
           <div>
-            <label className="text-sm text-gray-700">Resolution details</label>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Resolution details</label>
             <textarea
-              className="mt-1 w-full h-32 border rounded p-2 text-sm"
+              className="w-full min-h-[120px] border rounded p-2 text-sm"
               placeholder="Explain how this blocker was resolved..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
         </div>
-        <DialogFooter>
-          <button className="border px-3 py-2 rounded text-sm" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</button>
-          <button className={`ml-2 px-3 py-2 rounded text-sm text-white ${saving ? 'bg-green-400' : 'bg-green-600 hover:bg-green-700'}`} onClick={handleSave} disabled={saving || !note.trim()}>
+        <DialogFooter className="flex flex-col-reverse md:flex-row justify-end gap-2 px-4 py-3 border-t flex-shrink-0">
+          <button className="border px-4 py-2 rounded text-sm w-full md:w-auto" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</button>
+          <button className={`px-4 py-2 rounded text-sm text-white w-full md:w-auto ${saving ? 'bg-green-400' : 'bg-green-600 hover:bg-green-700'}`} onClick={handleSave} disabled={saving || !note.trim()}>
             Save
           </button>
         </DialogFooter>

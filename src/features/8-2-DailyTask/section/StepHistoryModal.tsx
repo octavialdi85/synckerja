@@ -182,11 +182,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
       setHistory(historyWithEmployees);
     } catch (error: any) {
       console.error('Error fetching step history:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to fetch step history: ${error.message}`,
-        variant: 'destructive',
-      });
+      // Don't show toast when just opening modal - only log to console
+      // Toast notifications should only appear for user actions (submits, updates, etc.)
     } finally {
       setLoading(false);
     }
@@ -416,8 +413,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-none w-screen h-screen md:max-w-4xl md:h-[90vh] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
+        <DialogHeader className="flex-shrink-0 p-4 md:p-0">
           <DialogTitle className="flex items-center gap-2">
             <History className="w-5 h-5 text-blue-600" />
             Step History & Updates
@@ -427,37 +424,39 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="brief" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Brief Updates
-              </TabsTrigger>
-              <TabsTrigger value="blocker" className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Blockers
-              </TabsTrigger>
-            {!subStepId && (
-            <TabsTrigger value="status" className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Status
-            </TabsTrigger>
-            )}
-            {!subStepId && (
-            <TabsTrigger value="dependencies" className="flex items-center gap-2">
-                <GitBranch className="w-4 h-4" />
-                Dependencies
-            </TabsTrigger>
-            )}
-              <TabsTrigger value="history" className="flex items-center gap-2">
-                <History className="w-4 h-4" />
-                Timeline
-              </TabsTrigger>
-            </TabsList>
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col min-h-0 px-4 md:px-0">
+            <div className="overflow-x-auto seamless-scroll mb-2 md:mb-8 w-full flex-shrink-0">
+              <TabsList className="inline-flex w-auto min-w-full md:min-w-0 md:w-full md:grid md:grid-cols-5 gap-3 md:gap-1.5 h-10 md:h-12 p-2 md:p-1">
+                <TabsTrigger value="brief" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[160px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
+                  <FileText className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
+                  <span className="truncate flex items-center">Brief Updates</span>
+                </TabsTrigger>
+                <TabsTrigger value="blocker" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[140px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
+                  <AlertTriangle className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
+                  <span className="truncate flex items-center">Blockers</span>
+                </TabsTrigger>
+                {!subStepId && (
+                <TabsTrigger value="status" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[120px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
+                  <Clock className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
+                  <span className="truncate flex items-center">Status</span>
+                </TabsTrigger>
+                )}
+                {!subStepId && (
+                <TabsTrigger value="dependencies" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[160px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
+                  <GitBranch className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
+                  <span className="truncate flex items-center">Dependencies</span>
+                </TabsTrigger>
+                )}
+                <TabsTrigger value="history" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[130px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
+                  <History className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
+                  <span className="truncate flex items-center">Timeline</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-            <div className="flex-1 overflow-auto mt-4">
-              <TabsContent value="blocker" className="space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <TabsContent value="blocker" className="space-y-4 pb-4">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" />
@@ -515,7 +514,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                 </div>
               </TabsContent>
 
-              <TabsContent value="brief" className="space-y-4">
+              <TabsContent value="brief" className="space-y-4 pb-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
@@ -557,7 +556,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
               </TabsContent>
 
               {!subStepId && (
-              <TabsContent value="status" className="space-y-4">
+              <TabsContent value="status" className="space-y-4 pb-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
@@ -626,7 +625,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
               )}
 
               {!subStepId && (
-              <TabsContent value="dependencies" className="space-y-4">
+              <TabsContent value="dependencies" className="space-y-4 pb-4">
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                   <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
                     <GitBranch className="w-4 h-4" />
@@ -646,7 +645,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
               </TabsContent>
               )}
 
-              <TabsContent value="history" className="space-y-4">
+              <TabsContent value="history" className="space-y-4 pb-4">
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <History className="w-4 h-4" />
@@ -707,8 +706,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
           </Tabs>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="flex-shrink-0 p-4 md:p-0 border-t md:border-t-0 mt-auto">
+          <Button variant="outline" onClick={onClose} className="w-full md:w-auto">
             Close
           </Button>
         </DialogFooter>

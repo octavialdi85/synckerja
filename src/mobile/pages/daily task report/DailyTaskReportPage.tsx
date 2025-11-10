@@ -4,10 +4,10 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { DailyTaskReportProvider, useDailyTaskReport } from '@/features/8-2-DailyTaskReport/context/ReportContext';
-import { OverviewCards } from '@/features/8-2-DailyTaskReport/components/OverviewCards';
-import { PerformanceTable } from '@/features/8-2-DailyTaskReport/components/PerformanceTable';
-import { BlockersAndUpdatesPanel } from '@/features/8-2-DailyTaskReport/components/BlockersAndUpdatesPanel';
-import { Filters } from '@/features/8-2-DailyTaskReport/components/Filters';
+import { OverviewCards } from './components/OverviewCards';
+import { PerformanceTable } from './components/PerformanceTable';
+import { BlockersAndUpdatesPanel } from './components/BlockersAndUpdatesPanel';
+import { Filters } from './components/Filters';
 import { LoadingDots } from '@/components/LoadingDots';
 
 const DailyTaskReportPage = () => {
@@ -18,18 +18,26 @@ const DailyTaskReportPage = () => {
           <div className="min-h-screen flex w-full bg-background">
             <AppSidebar />
 
-            <main className="flex-1 bg-background pb-20">
-              <div className="sticky top-0 z-30 flex items-center gap-3 p-3 bg-card border-b border-border">
-                <SidebarTrigger className="md:hidden" />
-                <div>
-                  <h1 className="text-base font-semibold text-foreground">Daily Task Report</h1>
-                  <p className="text-xs text-muted-foreground">Ringkasan performa dan progress tugas</p>
+            <main className="flex-1 bg-background overflow-x-hidden flex flex-col" style={{ height: '100vh' }}>
+              <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger className="md:hidden" />
+                  <div>
+                    <h1 className="text-base font-semibold text-foreground">Daily Task Report</h1>
+                    <p className="text-xs text-muted-foreground">Ringkasan performa dan progress tugas</p>
+                  </div>
                 </div>
+                <div></div>
               </div>
 
-              <DailyTaskReportContent />
+              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll" style={{ minHeight: 0 }}>
+                <DailyTaskReportContent />
+              </div>
 
-              <ToolsNavigationFooter />
+              {/* Footer is fixed, so we keep the space */}
+              <div className="flex-shrink-0" style={{ height: '80px' }}>
+                <ToolsNavigationFooter />
+              </div>
             </main>
           </div>
         </DailyTaskReportProvider>
@@ -63,7 +71,7 @@ const DailyTaskReportContent = () => {
       </div>
 
       <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-        <div className="px-3 py-3">
+        <div className="p-2 md:p-3">
           <PerformanceTable />
         </div>
       </div>
@@ -76,4 +84,3 @@ const DailyTaskReportContent = () => {
 };
 
 export default DailyTaskReportPage;
-

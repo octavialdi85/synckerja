@@ -9,7 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/features/ui/accordion';
-import { Search, Building2, Users, Check, Target, Loader2, ChevronDown } from 'lucide-react';
+import { Search, Building2, Users, Check, Target, Loader2, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useObjectives } from '@/features/1_home/components/HomeOKRDashboard/component/ObjectivesTabImport/useObjectives';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { Progress } from '@/features/ui/progress';
@@ -237,42 +237,55 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Select Individual Objective</DialogTitle>
-          <DialogDescription>
+      <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:max-w-2xl md:max-h-[80vh] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
+        <DialogHeader className="flex-shrink-0 p-4 md:p-0">
+          <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8 p-0 -ml-2 md:ml-0 hover:bg-gray-100 flex-shrink-0"
+              aria-label="Close"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <span>Select Individual Objective</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs md:text-sm mt-1">
             Choose an individual objective from the hierarchy. Only individual objectives can be selected.
           </DialogDescription>
         </DialogHeader>
 
         {/* Search Input */}
-        <div className="relative mb-2">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 z-10 pointer-events-none" />
-          <Input
-            placeholder="Search objectives..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-3 w-full"
-          />
+        <div className="px-4 md:px-0 flex-shrink-0 mb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 z-10 pointer-events-none" />
+            <Input
+              placeholder="Search objectives..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-3 text-sm md:text-base w-full"
+            />
+          </div>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 px-4 md:px-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-8 md:py-12">
               <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                <p className="text-sm text-gray-500">Loading objectives...</p>
+                <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin text-blue-600" />
+                <p className="text-xs md:text-sm text-gray-500">Loading objectives...</p>
               </div>
             </div>
           ) : !hasData ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Target className="h-12 w-12 text-gray-300 mb-4" />
-              <p className="text-sm font-medium text-gray-900 mb-1">No objectives available</p>
+            <div className="flex flex-col items-center justify-center py-8 md:py-12">
+              <Target className="h-10 w-10 md:h-12 md:w-12 text-gray-300 mb-3 md:mb-4" />
+              <p className="text-xs md:text-sm font-medium text-gray-900 mb-1">No objectives available</p>
               <p className="text-xs text-gray-500">Please create individual objectives first</p>
             </div>
           ) : (
-            <div className="space-y-4 overflow-x-hidden">
+            <div className="space-y-3 md:space-y-4 py-2 md:py-0 overflow-x-hidden">
               {/* Company Objectives with Departments */}
               {filteredHierarchy.length > 0 && (
                 <Accordion 
@@ -285,17 +298,17 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                   {filteredHierarchy.map((company) => (
                     <AccordionItem key={company.id} value={company.id} className="border-b border-gray-200 overflow-x-hidden">
                       <div className="overflow-x-hidden">
-                        <AccordionTrigger className="hover:no-underline py-3 px-4 [&>svg]:hidden overflow-x-hidden w-full">
-                          <div className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
-                            <Building2 className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 text-xs flex-shrink-0 whitespace-nowrap">
+                        <AccordionTrigger className="hover:no-underline py-2 md:py-3 px-2 md:px-4 [&>svg]:hidden overflow-x-hidden w-full">
+                          <div className="flex items-center gap-1.5 md:gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
+                            <Building2 className="h-3.5 w-3.5 md:h-4 md:w-4 text-blue-600 flex-shrink-0" />
+                            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 flex-shrink-0 whitespace-nowrap">
                               Company
                             </Badge>
-                            <div className="flex-1 min-w-0 max-w-full overflow-hidden pr-4">
+                            <div className="flex-1 min-w-0 max-w-full overflow-hidden">
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="text-sm font-medium text-gray-900 block text-left truncate w-full max-w-full">
+                                    <span className="text-xs md:text-sm font-medium text-gray-900 block text-left truncate w-full max-w-full">
                                       {company.title}
                                     </span>
                                   </TooltipTrigger>
@@ -305,25 +318,25 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                                 </Tooltip>
                               </TooltipProvider>
                             </div>
-                            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 text-gray-400 flex-shrink-0" />
+                            <ChevronDown className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 transition-transform duration-200 text-gray-400 flex-shrink-0" />
                           </div>
                         </AccordionTrigger>
-                        <div className="px-4 pb-2">
-                          <div className="flex items-center gap-2">
+                        <div className="px-2 md:px-4 pb-1.5 md:pb-2">
+                          <div className="flex items-center gap-1.5 md:gap-2">
                             <Progress 
                               value={company.progress_percentage || 0} 
-                              className="flex-1 h-2 min-w-0"
+                              className="flex-1 h-1.5 md:h-2 min-w-0"
                             />
-                            <span className="text-xs font-medium text-gray-600 w-12 text-right flex-shrink-0">
+                            <span className="text-[10px] md:text-xs font-medium text-gray-600 w-10 md:w-12 text-right flex-shrink-0">
                               {Math.round(company.progress_percentage || 0)}%
                             </span>
                           </div>
                         </div>
                       </div>
                       <AccordionContent>
-                        <div className="pl-6 space-y-2 overflow-x-hidden">
+                        <div className="pl-3 md:pl-6 space-y-1.5 md:space-y-2 overflow-x-hidden">
                           {company.departments.length === 0 ? (
-                            <p className="text-xs text-gray-500 italic">No departments yet</p>
+                            <p className="text-[10px] md:text-xs text-gray-500 italic">No departments yet</p>
                           ) : (
                             <Accordion 
                               type="single" 
@@ -335,17 +348,17 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                               {company.departments.map((dept) => (
                                 <AccordionItem key={dept.id} value={dept.id} className="border-b border-gray-100 overflow-x-hidden">
                                   <div className="overflow-x-hidden">
-                                    <AccordionTrigger className="hover:no-underline py-2 px-4 [&>svg]:hidden overflow-x-hidden w-full">
-                                      <div className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
-                                        <Users className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                                        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 text-xs flex-shrink-0 whitespace-nowrap">
+                                    <AccordionTrigger className="hover:no-underline py-1.5 md:py-2 px-2 md:px-4 [&>svg]:hidden overflow-x-hidden w-full">
+                                      <div className="flex items-center gap-1.5 md:gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
+                                        <Users className="h-3.5 w-3.5 md:h-4 md:w-4 text-orange-600 flex-shrink-0" />
+                                        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 flex-shrink-0 whitespace-nowrap">
                                           Department
                                         </Badge>
-                                        <div className="flex-1 min-w-0 max-w-full overflow-hidden pr-4">
+                                        <div className="flex-1 min-w-0 max-w-full overflow-hidden">
                                           <TooltipProvider>
                                             <Tooltip>
                                               <TooltipTrigger asChild>
-                                                <span className="text-sm text-gray-800 block text-left truncate w-full max-w-full">
+                                                <span className="text-xs md:text-sm text-gray-800 block text-left truncate w-full max-w-full">
                                                   {dept.title}
                                                 </span>
                                               </TooltipTrigger>
@@ -355,50 +368,50 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                                             </Tooltip>
                                           </TooltipProvider>
                                         </div>
-                                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 text-gray-400 flex-shrink-0" />
+                                        <ChevronDown className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 transition-transform duration-200 text-gray-400 flex-shrink-0" />
                                       </div>
                                     </AccordionTrigger>
-                                    <div className="px-4 pb-2">
-                                      <div className="flex items-center gap-2">
+                                    <div className="px-2 md:px-4 pb-1.5 md:pb-2">
+                                      <div className="flex items-center gap-1.5 md:gap-2">
                                         <Progress 
                                           value={dept.progress_percentage || 0} 
-                                          className="flex-1 h-2 min-w-0"
+                                          className="flex-1 h-1.5 md:h-2 min-w-0"
                                         />
-                                        <span className="text-xs font-medium text-gray-600 w-12 text-right flex-shrink-0">
+                                        <span className="text-[10px] md:text-xs font-medium text-gray-600 w-10 md:w-12 text-right flex-shrink-0">
                                           {Math.round(dept.progress_percentage || 0)}%
                                         </span>
                                       </div>
                                     </div>
                                   </div>
                                   <AccordionContent>
-                                    <div className="pl-6 pr-1 space-y-1 overflow-x-hidden">
+                                    <div className="pl-2 md:pl-6 space-y-1 md:space-y-1.5 pr-1 md:pr-0">
                                       {dept.individuals.length === 0 ? (
-                                        <p className="text-xs text-gray-500 italic">No individual objectives yet</p>
+                                        <p className="text-[10px] md:text-xs text-gray-500 italic">No individual objectives yet</p>
                                       ) : (
                                         dept.individuals.map((indiv) => (
                                           <button
                                             key={indiv.id}
                                             onClick={() => handleSelect(indiv, company.title, dept.title)}
                                             className={cn(
-                                              "w-full text-left p-2 rounded-md border transition-colors",
+                                              "w-full text-left p-1.5 md:p-2 rounded-md border transition-colors",
                                               "hover:bg-blue-50 hover:border-blue-300",
                                               selectedId === indiv.id
                                                 ? "bg-blue-100 border-blue-600 border-2"
                                                 : "bg-white border-gray-200"
                                             )}
-                                            style={{ maxWidth: 'calc(100% - 0.5rem)' }}
+                                            style={{ maxWidth: 'calc(100% - 0.25rem)' }}
                                           >
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5 md:space-y-2">
                                               {/* Title row with badge and title */}
-                                              <div className="flex items-center gap-2 min-w-0">
-                                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-xs flex-shrink-0">
+                                              <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+                                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 flex-shrink-0">
                                                   Individual
                                                 </Badge>
-                                                <div className="flex-1 min-w-0 pr-10">
+                                                <div className="flex-1 min-w-0 pr-2 md:pr-10">
                                                   <TooltipProvider>
                                                     <Tooltip>
                                                       <TooltipTrigger asChild>
-                                                        <span className="text-sm font-medium text-gray-900 block text-left truncate">
+                                                        <span className="text-xs md:text-sm font-medium text-gray-900 block text-left truncate">
                                                           {indiv.title}
                                                         </span>
                                                       </TooltipTrigger>
@@ -409,30 +422,30 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                                                   </TooltipProvider>
                                                 </div>
                                                 {selectedId === indiv.id && (
-                                                  <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                                  <Check className="h-3.5 w-3.5 md:h-4 md:w-4 text-blue-600 flex-shrink-0" />
                                                 )}
                                               </div>
                                               
                                               {/* Employee name */}
                                               {indiv.employees?.full_name && (
-                                                <div className="text-xs text-gray-500">
+                                                <div className="text-[10px] md:text-xs text-gray-500">
                                                   👤 {indiv.employees.full_name}
                                                 </div>
                                               )}
                                               
                                               {/* Progress bar - full width */}
-                                              <div className="flex items-center gap-2">
+                                              <div className="flex items-center gap-1.5 md:gap-2">
                                                 <Progress 
                                                   value={indiv.progress_percentage || 0} 
-                                                  className="flex-1 h-1.5 min-w-0"
+                                                  className="flex-1 h-1 md:h-1.5 min-w-0"
                                                 />
-                                                <span className="text-xs font-medium text-gray-600 w-10 text-right flex-shrink-0">
+                                                <span className="text-[10px] md:text-xs font-medium text-gray-600 w-8 md:w-10 text-right flex-shrink-0">
                                                   {Math.round(indiv.progress_percentage || 0)}%
                                                 </span>
                                               </div>
                                               
-                                              {/* Description - full width */}
-                                              <div className="text-xs text-gray-400">
+                                              {/* Description - hidden on mobile to save space */}
+                                              <div className="text-[10px] md:text-xs text-gray-400 hidden md:block">
                                                 📍 {company.title} → {dept.title} → {indiv.title}
                                               </div>
                                             </div>
@@ -454,36 +467,36 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
               {/* Standalone Individual Objectives */}
               {filteredStandalone.length > 0 && (
-                <div className="border-t border-gray-200 pt-4 overflow-x-hidden">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="h-4 w-4 text-gray-600" />
-                    <h3 className="text-sm font-semibold text-gray-900">Standalone Individual Objectives</h3>
+                <div className="border-t border-gray-200 pt-3 md:pt-4">
+                  <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
+                    <Target className="h-3.5 w-3.5 md:h-4 md:w-4 text-gray-600" />
+                    <h3 className="text-xs md:text-sm font-semibold text-gray-900">Standalone Individual Objectives</h3>
                   </div>
-                  <div className="space-y-1 overflow-x-hidden pr-1">
+                  <div className="space-y-1 md:space-y-1.5 pr-1 md:pr-0">
                     {filteredStandalone.map((indiv) => (
                       <button
                         key={indiv.id}
                         onClick={() => handleSelect(indiv)}
                         className={cn(
-                          "w-full text-left p-2 rounded-md border transition-colors",
+                          "w-full text-left p-1.5 md:p-2 rounded-md border transition-colors",
                           "hover:bg-blue-50 hover:border-blue-300",
                           selectedId === indiv.id
                             ? "bg-blue-100 border-blue-600 border-2"
                             : "bg-white border-gray-200"
                         )}
-                        style={{ maxWidth: 'calc(100% - 0.5rem)' }}
+                        style={{ maxWidth: 'calc(100% - 0.25rem)' }}
                       >
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 md:space-y-2">
                           {/* Title row with badge and title */}
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-xs flex-shrink-0">
+                          <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+                            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 flex-shrink-0">
                               Individual
                             </Badge>
-                            <div className="flex-1 min-w-0 pr-10">
+                            <div className="flex-1 min-w-0 pr-2 md:pr-10">
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="text-sm font-medium text-gray-900 block text-left truncate">
+                                    <span className="text-xs md:text-sm font-medium text-gray-900 block text-left truncate">
                                       {indiv.title}
                                     </span>
                                   </TooltipTrigger>
@@ -494,30 +507,30 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
                               </TooltipProvider>
                             </div>
                             {selectedId === indiv.id && (
-                              <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <Check className="h-3.5 w-3.5 md:h-4 md:w-4 text-blue-600 flex-shrink-0" />
                             )}
                           </div>
                           
                           {/* Employee name */}
                           {indiv.employees?.full_name && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-[10px] md:text-xs text-gray-500">
                               👤 {indiv.employees.full_name}
                             </div>
                           )}
                           
                           {/* Progress bar - full width */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 md:gap-2">
                             <Progress 
                               value={indiv.progress_percentage || 0} 
-                              className="flex-1 h-1.5 min-w-0"
+                              className="flex-1 h-1 md:h-1.5 min-w-0"
                             />
-                            <span className="text-xs font-medium text-gray-600 w-10 text-right flex-shrink-0">
+                            <span className="text-[10px] md:text-xs font-medium text-gray-600 w-8 md:w-10 text-right flex-shrink-0">
                               {Math.round(indiv.progress_percentage || 0)}%
                             </span>
                           </div>
                           
-                          {/* Description - full width */}
-                          <div className="text-xs text-gray-400 italic">
+                          {/* Description - hidden on mobile to save space */}
+                          <div className="text-[10px] md:text-xs text-gray-400 italic hidden md:block">
                             (No Department)
                           </div>
                         </div>
@@ -529,17 +542,17 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
               {/* No results after search */}
               {filteredHierarchy.length === 0 && filteredStandalone.length === 0 && searchQuery.trim() && (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <Search className="h-8 w-8 text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-500">No objectives found matching "{searchQuery}"</p>
+                <div className="flex flex-col items-center justify-center py-6 md:py-8">
+                  <Search className="h-6 w-6 md:h-8 md:w-8 text-gray-300 mb-2" />
+                  <p className="text-xs md:text-sm text-gray-500">No objectives found matching "{searchQuery}"</p>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex-shrink-0 p-4 md:p-0 border-t md:border-t-0 mt-auto">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
             Cancel
           </Button>
         </DialogFooter>
