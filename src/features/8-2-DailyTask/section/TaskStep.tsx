@@ -450,6 +450,144 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
     }
   };
 
+  const renderActionButtons = () => (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsViewSubStepsOpen(true)}
+        className="h-6 w-6 p-0 text-gray-400 hover:text-blue-600 relative"
+        title="View steps"
+      >
+        <ListChecks className="w-3 h-3" />
+        {subStepCount > 0 && (
+          <div className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+            {subStepCount}
+          </div>
+        )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setShowFiles(!showFiles)}
+        className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
+          step.files && step.files.length > 0 
+            ? 'text-blue-500' 
+            : 'text-gray-400'
+        }`}
+        title={`Toggle files ${step.files && step.files.length > 0 ? `(${step.files.length})` : ''}`}
+      >
+        <Paperclip className="w-3 h-3" />
+        {fileCount > 0 && (
+          <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+            {fileCount}
+          </div>
+        )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setShowLinks(!showLinks)}
+        className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
+          linkCount > 0 ? 'text-green-500' : 'text-gray-400'
+        }`}
+        title="Toggle links"
+      >
+        <Link className="w-3 h-3" />
+        {linkCount > 0 && (
+          <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+            {linkCount}
+          </div>
+        )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => canAssign && setShowAssignDialog(true)}
+        disabled={!canAssign}
+        className={`h-6 w-6 p-0 relative ${
+          canAssign
+            ? `hover:text-gray-600 ${step.assigned_to ? 'text-green-500' : 'text-gray-400'}`
+            : 'opacity-40 cursor-not-allowed text-gray-400'
+        }`}
+        title={
+          canAssign
+            ? (step.assigned_to ? `Assigned to ${step.assigned_employee?.full_name || 'Unknown'}` : 'Assign step')
+            : '🔒 Only task creator can assign steps'
+        }
+      >
+        <Users className="w-3 h-3" />
+        {step.assigned_to && (
+          <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+            1
+          </div>
+        )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setShowHistoryModal(true)}
+        className={`h-6 w-6 p-0 hover:text-purple-600 relative ${
+          historyCount > 0 ? 'text-purple-500' : 'text-gray-400'
+        }`}
+        title={`View history and manage blockers ${historyCount > 0 ? `(${historyCount})` : ''}`}
+      >
+        <History className="w-3 h-3" />
+        {historyCount > 0 && (
+          <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+            {historyCount}
+          </div>
+        )}
+      </Button>
+      {isFromMeetingPoint && solutionId && meetingPointId && discussionPoint && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsUpdateHistoryOpen(true)}
+          className={`h-6 w-6 p-0 relative ${
+            updateHistoryCount > 0 ? 'text-blue-600 hover:text-blue-700' : 'text-blue-500 hover:text-blue-600'
+          }`}
+          title={`Update History from Meeting Notes ${updateHistoryCount > 0 ? `(${updateHistoryCount})` : ''}`}
+        >
+          <FileEdit className="w-3 h-3" />
+          {updateHistoryCount > 0 && (
+            <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+              {updateHistoryCount > 99 ? '99+' : updateHistoryCount}
+            </div>
+          )}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => canEdit && setIsEditing(true)}
+        disabled={!canEdit}
+        className={`h-6 w-6 p-0 ${
+          canEdit 
+            ? 'text-gray-400 hover:text-gray-600 cursor-pointer' 
+            : 'text-gray-300 opacity-40 cursor-not-allowed'
+        }`}
+        title={canEdit ? 'Edit step' : '🔒 Only task creator can edit steps'}
+      >
+        <Edit className="w-3 h-3" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => canDelete && handleDelete()}
+        disabled={!canDelete}
+        className={`h-6 w-6 p-0 ${
+          canDelete 
+            ? 'text-gray-400 hover:text-red-600 cursor-pointer' 
+            : 'text-gray-300 opacity-40 cursor-not-allowed'
+        }`}
+        title={canDelete ? 'Delete step' : '🔒 Only task creator can delete steps'}
+      >
+        <Trash2 className="w-3 h-3" />
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-2">
       <div
@@ -545,17 +683,33 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
                     style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500">
-                    {subStepCompletedCount}/{subStepCount}
-                  </span>
-                  <span className="text-[10px] text-gray-500 font-medium">
-                    {Math.round((subStepCompletedCount / subStepCount) * 100)}%
-                  </span>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {step.is_completed && step.updated_at && (
+                      <span className="flex items-center gap-1">
+                        Finished: {new Date(step.updated_at).toLocaleString()}
+                      </span>
+                    )}
+                    {step.assigned_due_date && (
+                      <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                    )}
+                    {getFinishStatusLabel() && (
+                      <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>{subStepCompletedCount}/{subStepCount}</span>
+                    <span className="font-medium">
+                      {Math.round((subStepCompletedCount / subStepCount) * 100)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-1 flex items-center justify-end gap-1">
+                  {renderActionButtons()}
                 </div>
               </div>
             )}
-            {(step.assigned_due_date || (step.is_completed && step.updated_at)) && (
+            {subStepCount === 0 && (step.assigned_due_date || (step.is_completed && step.updated_at)) && (
               <div className="mt-1 flex items-center gap-4 text-[10px] text-gray-500">
                 {step.assigned_due_date && (
                   <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
@@ -571,146 +725,12 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
               </div>
             )}
           </div>
-          
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsViewSubStepsOpen(true)}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-blue-600 relative"
-              title="View steps"
-            >
-              <ListChecks className="w-3 h-3" />
-              {subStepCount > 0 && (
-                <div className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                  {subStepCount}
-                </div>
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFiles(!showFiles)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
-                step.files && step.files.length > 0 
-                  ? 'text-blue-500' 
-                  : 'text-gray-400'
-              }`}
-              title={`Toggle files ${step.files && step.files.length > 0 ? `(${step.files.length})` : ''}`}
-            >
-              <Paperclip className="w-3 h-3" />
-              {fileCount > 0 && (
-                <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                  {fileCount}
-                </div>
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowLinks(!showLinks)}
-              className={`h-6 w-6 p-0 hover:text-gray-600 relative ${
-                linkCount > 0 ? 'text-green-500' : 'text-gray-400'
-              }`}
-              title="Toggle links"
-            >
-              <Link className="w-3 h-3" />
-              {linkCount > 0 && (
-                <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                  {linkCount}
-                </div>
-              )}
-            </Button>
-            {/* Assign - Locked for assigned users */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => canAssign && setShowAssignDialog(true)}
-              disabled={!canAssign}
-              className={`h-6 w-6 p-0 relative ${
-                canAssign
-                  ? `hover:text-gray-600 ${step.assigned_to ? 'text-green-500' : 'text-gray-400'}`
-                  : 'opacity-40 cursor-not-allowed text-gray-400'
-              }`}
-              title={
-                canAssign
-                  ? (step.assigned_to ? `Assigned to ${step.assigned_employee?.full_name || 'Unknown'}` : 'Assign step')
-                  : '🔒 Only task creator can assign steps'
-              }
-            >
-              <Users className="w-3 h-3" />
-              {step.assigned_to && (
-                <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                  1
-                </div>
-              )}
-            </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHistoryModal(true)}
-            className={`h-6 w-6 p-0 hover:text-purple-600 relative ${
-              historyCount > 0 ? 'text-purple-500' : 'text-gray-400'
-            }`}
-            title={`View history and manage blockers ${historyCount > 0 ? `(${historyCount})` : ''}`}
-          >
-            <History className="w-3 h-3" />
-            {historyCount > 0 && (
-              <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                {historyCount}
-              </div>
-            )}
-          </Button>
-          {/* Update History from Meeting Point - Only show if step is from meeting point */}
-          {isFromMeetingPoint && solutionId && meetingPointId && discussionPoint && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsUpdateHistoryOpen(true)}
-              className={`h-6 w-6 p-0 relative ${
-                updateHistoryCount > 0 ? 'text-blue-600 hover:text-blue-700' : 'text-blue-500 hover:text-blue-600'
-              }`}
-              title={`Update History from Meeting Notes ${updateHistoryCount > 0 ? `(${updateHistoryCount})` : ''}`}
-            >
-              <FileEdit className="w-3 h-3" />
-              {updateHistoryCount > 0 && (
-                <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                  {updateHistoryCount > 99 ? '99+' : updateHistoryCount}
-                </div>
-              )}
-            </Button>
+
+          {subStepCount === 0 && (
+            <div className="mt-1 flex items-center justify-end gap-1">
+              {renderActionButtons()}
+            </div>
           )}
-            {/* Edit - Locked for assigned users */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => canEdit && setIsEditing(true)}
-              disabled={!canEdit}
-              className={`h-6 w-6 p-0 ${
-                canEdit 
-                  ? 'text-gray-400 hover:text-gray-600 cursor-pointer' 
-                  : 'text-gray-300 opacity-40 cursor-not-allowed'
-              }`}
-              title={canEdit ? 'Edit step' : '🔒 Only task creator can edit steps'}
-            >
-              <Edit className="w-3 h-3" />
-            </Button>
-            {/* Delete - Locked for assigned users */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => canDelete && handleDelete()}
-              disabled={!canDelete}
-              className={`h-6 w-6 p-0 ${
-                canDelete 
-                  ? 'text-gray-400 hover:text-red-600 cursor-pointer' 
-                  : 'text-gray-300 opacity-40 cursor-not-allowed'
-              }`}
-              title={canDelete ? 'Delete step' : '🔒 Only task creator can delete steps'}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </div>
         </>
       )}
       </div>
