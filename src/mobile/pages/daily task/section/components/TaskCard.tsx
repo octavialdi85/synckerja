@@ -56,14 +56,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             e.stopPropagation();
             onToggleStatus(task);
           }}
-          className="mt-1 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+          disabled={task.has_substeps !== false && task.status === 'completed'}
+          className={`mt-1 flex-shrink-0 transition-colors ${
+            task.has_substeps !== false && task.status === 'completed'
+              ? 'text-gray-300 cursor-not-allowed opacity-50'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
           title={
             task.has_substeps === false
               ? task.status === 'completed'
                 ? 'Mark incomplete'
                 : 'Mark complete'
+              : task.status === 'completed'
+              ? 'Cannot uncheck task with steps. Please manage steps individually.'
               : progress === 100
-              ? 'Mark complete / reopen'
+              ? 'Mark complete'
               : 'Complete all assigned steps to mark task complete'
           }
         >
@@ -129,7 +136,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  progress === 100 ? 'bg-emerald-500' : 'bg-primary'
+                  progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
                 }`}
                 style={{ width: `${progress}%` }}
               />

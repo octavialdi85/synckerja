@@ -82,6 +82,9 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
   const [historyCount, setHistoryCount] = useState<number>(0);
   const [linkCount, setLinkCount] = useState<number>(0);
+  // Optimistic update state for immediate UI feedback
+  const [optimisticCompleted, setOptimisticCompleted] = useState<boolean | null>(null);
+  const [optimisticUpdatedAt, setOptimisticUpdatedAt] = useState<string | null>(null);
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
 
@@ -93,6 +96,10 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   const [isUpdateHistoryOpen, setIsUpdateHistoryOpen] = useState(false);
   const [isCheckingMeetingPoint, setIsCheckingMeetingPoint] = useState(false);
   const [updateHistoryCount, setUpdateHistoryCount] = useState<number>(0);
+
+  // Use optimistic state if available, otherwise use step prop (for immediate UI feedback)
+  const isCompleted = optimisticCompleted !== null ? optimisticCompleted : step.is_completed;
+  const updatedAt = optimisticUpdatedAt !== null ? optimisticUpdatedAt : step.updated_at;
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -131,9 +138,9 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
 
   // Compute on-time/late label for finished step vs due date
   const getFinishStatusLabel = (): { text: string; className: string } | null => {
-    if (!step.assigned_due_date || !step.updated_at || !step.is_completed) return null;
+    if (!step.assigned_due_date || !updatedAt || !isCompleted) return null;
     const assigneeName = step.assigned_employee?.full_name || 'Assignee';
-    const finish = new Date(step.updated_at);
+    const finish = new Date(updatedAt);
     const dueEnd = new Date(step.assigned_due_date);
     // on time means finish is on/before 23:59:59 of due date
     dueEnd.setHours(23, 59, 59, 999);
@@ -364,13 +371,60 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
   }, [isUpdateHistoryOpen, solutionId, isFromMeetingPoint]);
 
   const handleToggleComplete = async () => {
+    // Jika step memiliki sub-step, tidak bisa di-toggle langsung
+    if (subStepCount > 0) {
+      // Jika step belum completed, cek apakah semua sub-step sudah selesai
+      if (!step.is_completed) {
+        const allSubStepsCompleted = subStepCompletedCount === subStepCount && subStepCount > 0;
+        if (!allSubStepsCompleted) {
+          // Tampilkan pesan bahwa semua sub-step harus diselesaikan terlebih dahulu
+          alert(`Please complete all ${subStepCount} sub-step(s) first. Currently ${subStepCompletedCount}/${subStepCount} completed.`);
+          return;
+        }
+      } else {
+        // Jika step sudah completed dan memiliki sub-step, tidak bisa di-uncheck
+        alert(`Cannot uncheck step with sub-steps. Please manage sub-steps individually.`);
+        return;
+      }
+    }
+
     const next = !step.is_completed;
     const payload: any = { is_completed: next };
+    const now = new Date().toISOString();
     if (next) {
-      payload.updated_at = new Date().toISOString();
+      payload.updated_at = now;
     }
-    await updateTaskStep(step.id, payload);
+
+    // Jika step tidak punya sub-step, langsung update UI (optimistic update) tanpa menunggu
+    if (subStepCount === 0) {
+      // Update UI immediately
+      setOptimisticCompleted(next);
+      if (next) {
+        setOptimisticUpdatedAt(now);
+      } else {
+        setOptimisticUpdatedAt(null);
+      }
+
+      // Update ke Supabase di background tanpa menunggu
+      updateTaskStep(step.id, payload).catch((error) => {
+        console.error('Error updating task step:', error);
+        // Revert optimistic update on error
+        setOptimisticCompleted(null);
+        setOptimisticUpdatedAt(null);
+      });
+    } else {
+      // Jika ada sub-step, tunggu validasi terlebih dahulu
+      await updateTaskStep(step.id, payload);
+    }
   };
+
+  // Reset optimistic state when step prop changes (after update completes)
+  useEffect(() => {
+    if (optimisticCompleted !== null && step.is_completed === optimisticCompleted) {
+      setOptimisticCompleted(null);
+      setOptimisticUpdatedAt(null);
+    }
+  }, [step.is_completed, step.updated_at, optimisticCompleted]);
 
   const handleSaveEdit = async () => {
     if (editTitle.trim() && editTitle !== step.title) {
@@ -596,9 +650,27 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
       <div className="flex items-start gap-2 flex-shrink-0 pt-0.5">
         <button
           onClick={handleToggleComplete}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
+          disabled={
+            (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
+            (subStepCount > 0 && isCompleted)
+          }
+          className={`transition-colors ${
+            (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
+            (subStepCount > 0 && isCompleted)
+              ? 'text-gray-300 cursor-not-allowed opacity-50'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          title={
+            subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted
+              ? `Please complete all ${subStepCount} sub-step(s) first. Currently ${subStepCompletedCount}/${subStepCount} completed.`
+              : subStepCount > 0 && isCompleted
+              ? 'Cannot uncheck step with sub-steps. Please manage sub-steps individually.'
+              : isCompleted
+              ? 'Mark incomplete'
+              : 'Mark complete'
+          }
         >
-          {step.is_completed ? (
+          {isCompleted ? (
             <CheckSquare className="w-4 h-4 text-green-600" />
           ) : (
             <Square className="w-4 h-4" />
@@ -650,8 +722,8 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
         <>
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <span className={`text-sm truncate min-w-0 ${
-                step.is_completed ? 'line-through text-gray-500' : 'text-gray-900'
+              <span className={`text-sm line-clamp-2 md:truncate min-w-0 ${
+                isCompleted ? 'line-through text-gray-500' : 'text-gray-900'
               }`}>
                 {step.title}
               </span>
@@ -674,10 +746,10 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
                 )}
               </div>
             </div>
-            {/* Finished timestamp below title */}
-            {step.is_completed && step.updated_at && (
-              <div className="mt-1 flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-gray-500">Finished: {new Date(step.updated_at).toLocaleString()}</span>
+            {/* Finished timestamp below title - Desktop only */}
+            {isCompleted && updatedAt && (
+              <div className="hidden md:flex -mt-0.5 md:mt-1 items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-gray-500">Finished: {new Date(updatedAt).toLocaleString()}</span>
                 {getFinishStatusLabel() && (
                   <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
                 )}
@@ -701,6 +773,10 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Finished timestamp for mobile - only show when completed */}
+                    {isCompleted && updatedAt && (
+                      <span className="md:hidden text-gray-500">Finished: {new Date(updatedAt).toLocaleString()}</span>
+                    )}
                     {step.assigned_due_date && (
                       <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
                     )}

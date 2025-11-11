@@ -68,19 +68,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="flex flex-1 flex-col">
-            <span className="text-sm font-semibold text-foreground">{task.title}</span>
+          <div className="flex flex-1 flex-col min-w-0">
+            <span className="text-sm font-semibold text-foreground break-words max-w-full">{task.title}</span>
             <span className="text-xs text-muted-foreground">{progress}% complete</span>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4">
           {task.description && (
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Description
               </span>
-              <p className="rounded-lg border border-border bg-background/50 p-3 text-sm text-muted-foreground">
+              <p className="rounded-lg border border-border bg-background/50 p-3 text-sm text-muted-foreground break-words max-w-full whitespace-pre-wrap overflow-hidden">
                 {task.description}
               </p>
             </div>
@@ -94,7 +94,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  progress === 100 ? 'bg-emerald-500' : 'bg-primary'
+                  progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
                 }`}
                 style={{ width: `${progress}%` }}
               />
@@ -115,14 +115,14 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
           <div className="space-y-3">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   PIC
                 </span>
-                <span className="inline-flex items-center gap-1 text-foreground">
-                  <User className="h-3.5 w-3.5 text-blue-500" />
+                <span className="inline-flex items-center gap-1 text-foreground min-w-0 max-w-full">
+                  <User className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
                   {task.assigned_to_name ? (
-                    task.assigned_to_name
+                    <span className="break-words min-w-0">{task.assigned_to_name}</span>
                   ) : (
                     <span className="italic text-muted-foreground">Unassigned</span>
                   )}
@@ -194,10 +194,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </span>
                 {task.due_date ? (
                   <div className="text-foreground">
-                    <span className="block font-medium text-sm">{formatDate(task.due_date)}</span>
-                    <span className={`text-xs ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-                      {formatDaysRemaining(daysRemaining)}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm">{formatDate(task.due_date)}</span>
+                      <span className={`text-xs ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {formatDaysRemaining(daysRemaining)}
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <span className="italic text-muted-foreground">No due date</span>

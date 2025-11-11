@@ -60,6 +60,15 @@ export const TaskList = () => {
 
   const calculateAssignedStepsProgress = useCallback(
     (task: Task): number => {
+      // Jika task tidak punya step dan sudah completed, progress = 100%
+      if (task.has_substeps === false && task.status === 'completed') {
+        return 100;
+      }
+      // Jika task tidak punya step dan belum completed, progress = 0%
+      if (task.has_substeps === false && task.status !== 'completed') {
+        return 0;
+      }
+      // Jika task punya step, hitung berdasarkan step yang completed
       const visibleSteps = getVisibleSteps(task);
       return calculateProgress(visibleSteps);
     },
@@ -119,7 +128,7 @@ export const TaskList = () => {
 
   const handleStatusToggle = useCallback(
     (task: Task) => {
-      // If task has no substeps (has_substeps = FALSE), allow direct toggle
+      // If task has no steps (has_substeps = FALSE), allow direct toggle with optimistic update
       if (task.has_substeps === false) {
         const newStatus = task.status === 'completed' ? 'pending' : 'completed';
         if (newStatus !== task.status) {
@@ -127,6 +136,7 @@ export const TaskList = () => {
             title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
             description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
           });
+          // Optimistic update: langsung update tanpa menunggu (updateTask sudah melakukan optimistic update di context)
           updateTask(task.id, { status: newStatus }).catch((err) => {
             console.error('Error updating task status:', err);
             toast({
@@ -139,34 +149,44 @@ export const TaskList = () => {
         return;
       }
 
-      // If task has substeps, require all steps to be completed first
+      // If task has steps, tidak bisa di-toggle langsung
       const assignedProgress = calculateAssignedStepsProgress(task);
       const visibleSteps = getVisibleSteps(task);
       const isFullComplete = visibleSteps.length > 0 && assignedProgress === 100;
-      const newStatus = isFullComplete
-        ? task.status === 'completed'
-          ? 'pending'
-          : 'completed'
-        : 'pending';
 
-      if (newStatus !== task.status) {
+      // Jika task sudah completed dan punya step, tidak bisa di-uncheck
+      if (task.status === 'completed' && task.has_substeps !== false) {
         toast({
-          title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
-          description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
+          title: 'Cannot Uncheck Task',
+          description: 'Cannot uncheck task with steps. Please manage steps individually.',
+          variant: 'destructive',
         });
-        updateTask(task.id, { status: newStatus }).catch((err) => {
+        return;
+      }
+
+      // Jika task belum completed, cek apakah semua step sudah selesai
+      if (!isFullComplete && task.status !== 'completed') {
+        toast({
+          title: 'Cannot Complete Task',
+          description: 'Please complete all assigned steps first',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Jika semua step sudah selesai, baru bisa checklist task
+      if (isFullComplete && task.status !== 'completed') {
+        toast({
+          title: 'Task Completed',
+          description: `"${task.title}" has been marked as completed`,
+        });
+        updateTask(task.id, { status: 'completed' }).catch((err) => {
           console.error('Error updating task status:', err);
           toast({
             title: 'Error',
             description: 'Failed to update task status',
             variant: 'destructive',
           });
-        });
-      } else if (!isFullComplete && task.status !== 'completed') {
-        toast({
-          title: 'Cannot Complete Task',
-          description: 'Please complete all assigned steps first',
-          variant: 'destructive',
         });
       }
     },
