@@ -14,6 +14,8 @@ import UpdateHistoryDialog from '@/features/8-1-meeting-notes/modal/UpdateHistor
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/MobileAssignStepDialog';
 
 interface TaskFile {
   id: string;
@@ -110,6 +112,9 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
 
   // Check if current user is assigned to this step
   const isAssignedToMe = step.assigned_to === user?.id;
+
+  // Check if mobile device
+  const isMobile = useIsMobile();
 
   // Permission: Creator can do everything, assigned user can only complete
   const canEdit = isTaskCreator;
@@ -913,12 +918,21 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
 
     {/* Assignment Dialog */}
     {showAssignDialog && (
-      <AssignStepDialog
-        step={step}
-        onAssign={handleAssignStep}
-        onUnassign={handleUnassignStep}
-        onClose={() => setShowAssignDialog(false)}
-      />
+      isMobile ? (
+        <MobileAssignStepDialog
+          step={step}
+          onAssign={handleAssignStep}
+          onUnassign={handleUnassignStep}
+          onClose={() => setShowAssignDialog(false)}
+        />
+      ) : (
+        <AssignStepDialog
+          step={step}
+          onAssign={handleAssignStep}
+          onUnassign={handleUnassignStep}
+          onClose={() => setShowAssignDialog(false)}
+        />
+      )
     )}
 
     {/* History Modal */}
