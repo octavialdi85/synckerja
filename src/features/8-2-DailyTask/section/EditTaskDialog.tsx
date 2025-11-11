@@ -78,14 +78,15 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-gray-900">
-            Edit Task
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-2xl border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%]">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-gray-900">
+              Edit Task
+            </DialogTitle>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           {/* Task Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -256,6 +257,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
             </Button>
           </div>
         </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
