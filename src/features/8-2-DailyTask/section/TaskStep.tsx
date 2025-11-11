@@ -65,9 +65,10 @@ interface TaskStepProps {
   };
   index: number;
   taskCreatedBy?: string; // Task creator user ID for permission check
+  autoReorder?: boolean; // Enable auto-reorder when step completion changes (for mobile)
 }
 
-export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
+export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: TaskStepProps) => {
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep } = useDailyTask();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(step.title);
@@ -406,7 +407,7 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
       }
 
       // Update ke Supabase di background tanpa menunggu
-      updateTaskStep(step.id, payload).catch((error) => {
+      updateTaskStep(step.id, payload, { autoReorder }).catch((error) => {
         console.error('Error updating task step:', error);
         // Revert optimistic update on error
         setOptimisticCompleted(null);
@@ -414,7 +415,7 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
       });
     } else {
       // Jika ada sub-step, tunggu validasi terlebih dahulu
-      await updateTaskStep(step.id, payload);
+      await updateTaskStep(step.id, payload, { autoReorder });
     }
   };
 
@@ -960,7 +961,7 @@ export const TaskStep = ({ step, index, taskCreatedBy }: TaskStepProps) => {
           if (completed) {
             payload.updated_at = new Date().toISOString();
           }
-          await updateTaskStep(step.id, payload);
+          await updateTaskStep(step.id, payload, { autoReorder });
         } catch (_) {
           // ignore
         }

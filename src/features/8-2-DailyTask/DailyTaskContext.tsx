@@ -1,153 +1,25 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { retryableQuery } from '@/integrations/supabase/retry';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { debounce, throttle, getCached, setCache, clearCache, trackQuery } from './utils/optimizationUtils';
-import { useTaskFilterState, TaskFilters } from './hooks/useTaskFilterState';
-
-export interface TaskLink {
-  id: string;
-  task_step_id: string;
-  title: string;
-  url: string;
-  created_at: string;
-  is_auto_synced?: boolean;
-  source_social_media_plan_id?: string | null;
-}
-
-export interface TaskStepHistory {
-  id: string;
-  task_step_id: string;
-  action_type: string;
-  old_value?: string;
-  new_value?: string;
-  description?: string;
-  blocker_type?: string;
-  blocker_severity?: string;
-  brief_type?: string;
-  created_at: string;
-  updated_at?: string;
-  created_by?: string;
-}
-
-export interface TaskSubStep {
-  id: string;
-  parent_step_id: string;
-  title: string;
-  is_completed: boolean;
-  order: number;
-  created_at: string;
-  updated_at: string;
-  assigned_to?: string | null;
-  assigned_employee?: {
-    id: string;
-    full_name: string;
-    email?: string;
-  } | null;
-}
-
-export interface TaskStep {
-  id: string;
-  task_id: string;
-  title: string;
-  is_completed: boolean;
-  order: number;
-  created_at: string;
-  updated_at: string;
-  created_by?: string | null;
-  social_media_plan_id?: string | null;
-  files?: TaskFile[];
-  links?: TaskLink[];
-  history?: TaskStepHistory[];
-  assigned_to?: string | null;
-  assigned_employee?: {
-    id: string;
-    full_name: string;
-    email?: string;
-  } | null;
-  has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
-  sub_steps?: TaskSubStep[]; // Sub-steps for this step
-}
-
-export interface TaskFile {
-  id: string;
-  task_id: string;
-  filename: string;
-  file_url: string;
-  file_size: number;
-  created_at: string;
-}
-
-export interface DeadlineHistory {
-  id: string;
-  task_id: string;
-  original_deadline: string;
-  new_deadline: string;
-  reason: string | null;
-  requested_by: string | null;
-  requested_at: string;
-  approved_by: string | null;
-  approved_at: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  updated_at: string;
-}
-
-export interface RecentStepUpdate {
-  id: string;
-  task_id: string;
-  step_id: string;
-  step_title: string;
-  task_title: string;
-  is_completed: boolean;
-  updated_at: string;
-  action: 'created' | 'updated' | 'completed' | 'reopened';
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  due_date: string | null;
-  finish_date: string | null;
-  created_at: string;
-  updated_at: string;
-  organization_id: string;
-  created_by: string;
-  assigned_to?: string;
-  assigned_to_name?: string | null;
-  has_reminder?: boolean;
-  has_steps?: boolean;
-  has_substeps?: boolean;
-  steps: TaskStep[];
-  files: TaskFile[];
-  deadline_history: DeadlineHistory[];
-  progress_percentage: number;
-}
-
-interface SummaryData {
-  pending: number;
-  inProgress: number;
-  completed: number;
-  cancelled: number;
-  overdue: number;
-  totalSteps: number;
-  completedSteps: number;
-}
-
-// Filters interface moved to useTaskFilterState hook
-// Keeping for backward compatibility
-type Filters = TaskFilters;
-
-interface RecentStepFilters {
-  dateRange: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
-  actionType: 'all' | 'completed' | 'updated' | 'created' | 'reopened';
-  customStartDate?: string;
-  customEndDate?: string;
-}
+import { getCached, setCache, clearCache, trackQuery } from './utils/optimizationUtils';
+import { useTaskFilterState } from './hooks/useTaskFilterState';
+import { TaskFilters } from './hooks/useTaskFilters';
+import { useTaskRealtime } from './hooks/useTaskRealtime';
+import {
+  Task,
+  TaskStep,
+  TaskLink,
+  TaskFile,
+  DeadlineHistory,
+  RecentStepUpdate,
+  SummaryData,
+  RecentStepFilters,
+} from './types';
+import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } from './utils/taskUtils';
+import { filterRecentStepUpdates } from './utils/filterUtils';
+import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
 
 export interface DailyTaskContextType {
   tasks: Task[];
@@ -167,7 +39,7 @@ export interface DailyTaskContextType {
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   addTaskStep: (taskId: string, title: string) => Promise<void>;
-  updateTaskStep: (stepId: string, data: Partial<TaskStep>) => Promise<void>;
+  updateTaskStep: (stepId: string, data: Partial<TaskStep>, options?: { autoReorder?: boolean }) => Promise<void>;
   deleteTaskStep: (stepId: string) => Promise<void>;
   assignTaskStep: (stepId: string, employeeId: string | null) => Promise<void>;
   reorderTaskSteps: (taskId: string, stepIds: string[]) => Promise<void>;
@@ -217,95 +89,17 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
 
-  // Filter recent step updates based on current filters
-  const filterRecentStepUpdates = (updates: RecentStepUpdate[], filters: RecentStepFilters) => {
-    let filtered = [...updates];
-
-    // Filter by action type
-    if (filters.actionType !== 'all') {
-      filtered = filtered.filter(update => update.action === filters.actionType);
-    }
-
-    // Filter by date range
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    filtered = filtered.filter(update => {
-      const updateDate = new Date(update.updated_at);
-      
-      switch (filters.dateRange) {
-        case 'today':
-          return updateDate >= today;
-        case 'yesterday':
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return updateDate >= yesterday && updateDate < today;
-        case 'this_week':
-          const weekStart = new Date(today);
-          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-          return updateDate >= weekStart;
-        case 'this_month':
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          return updateDate >= monthStart;
-        case 'last_month':
-          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-          return updateDate >= lastMonthStart && updateDate < lastMonthEnd;
-        case 'custom':
-          if (filters.customStartDate && filters.customEndDate) {
-            const startDate = new Date(filters.customStartDate);
-            const endDate = new Date(filters.customEndDate);
-            endDate.setHours(23, 59, 59, 999); // Include the entire end date
-            return updateDate >= startDate && updateDate <= endDate;
-          }
-          return true;
-        default:
-          return true;
-      }
-    });
-
-    return filtered;
-  };
-
   // Centralized fetch functions
-  const fetchRecentStepUpdates = async () => {
+  const fetchRecentStepUpdates = useCallback(async () => {
     if (!organizationId) return;
 
     try {
-      const { data, error } = await supabase
-        .from('task_steps')
-        .select(`
-          id,
-          task_id,
-          title,
-          is_completed,
-          updated_at,
-          daily_tasks!inner(title)
-        `)
-        .eq('daily_tasks.organization_id', organizationId)
-        .order('updated_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
-      const recentUpdates: RecentStepUpdate[] = (data || []).map((step: any) => ({
-        id: step.id,
-        task_id: step.task_id,
-        step_id: step.id, // Use step id as step_id
-        step_title: step.title,
-        task_title: step.daily_tasks.title,
-        is_completed: step.is_completed,
-        updated_at: step.updated_at,
-        action: step.is_completed ? 'completed' : 'updated'
-      }));
-
+      const recentUpdates = await fetchRecentStepUpdatesService(organizationId);
       setRecentStepUpdates(recentUpdates);
-      // Apply current filters to the new data
-      setFilteredRecentStepUpdates(filterRecentStepUpdates(recentUpdates, recentStepFilters));
     } catch (error) {
       console.error('Error fetching recent step updates:', error);
     }
-  };
+  }, [organizationId]);
 
   const fetchTasks = async (force = false) => {
     if (!organizationId) return;
@@ -824,19 +618,6 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
-  const calculateProgress = (steps: TaskStep[]): number => {
-    if (!steps || !Array.isArray(steps) || steps.length === 0) return 0;
-    const completedSteps = steps.filter(step => step && step.is_completed).length;
-    return Math.round((completedSteps / steps.length) * 100);
-  };
-
-  const determineStatusFromProgress = (progress: number, currentStatus: string): string => {
-    // Cancelled remains cancelled
-    if (currentStatus === 'cancelled') return 'cancelled';
-    if (progress >= 100) return 'completed';
-    if (progress <= 0) return 'pending';
-    return 'in_progress';
-  };
 
   // Calculate summary data from tasks
   const summaryData: SummaryData = {
@@ -1199,7 +980,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
-  const updateTaskStep = async (stepId: string, data: Partial<TaskStep>) => {
+  const updateTaskStep = async (stepId: string, data: Partial<TaskStep>, options?: { autoReorder?: boolean }) => {
     try {
       // Fetch existing to detect status change - with retry
       const { data: before } = await retryableQuery(async () => {
@@ -1231,12 +1012,23 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .eq('id', stepId)
         .single();
 
-      if (stepData) {
+      const taskId = (stepData as any)?.task_id;
+
+      // Check if completion status changed (before we update anything)
+      // Safely check if before exists and if completion status changed
+      const beforeCompleted = before ? (before as any).is_completed : false;
+      const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : beforeCompleted;
+      const completionChanged = typeof data.is_completed === 'boolean' && before && beforeCompleted !== data.is_completed;
+
+      // Track if we should skip refresh (for mobile auto-reorder)
+      let skipRefresh = false;
+
+      if (taskId) {
         // Get all steps for this task
         const { data: allSteps } = await supabase
           .from('task_steps')
           .select('is_completed')
-          .eq('task_id', (stepData as any).task_id);
+          .eq('task_id', taskId);
 
         if (allSteps) {
           // Calculate progress and determine new status
@@ -1247,7 +1039,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           const { data: currentTask } = await supabase
             .from('daily_tasks')
             .select('status')
-            .eq('id', (stepData as any).task_id)
+            .eq('id', taskId)
             .single();
           
           const finalStatus = determineStatusFromProgress(progress, (currentTask as any)?.status || 'pending');
@@ -1264,20 +1056,97 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           await supabase
             .from('daily_tasks')
             .update(updateData)
-            .eq('id', (stepData as any).task_id);
+            .eq('id', taskId);
+        }
+
+        // Auto-reorder steps if completion status changed and autoReorder is enabled
+        if (options?.autoReorder && completionChanged && taskId) {
+          // Auto-reorder steps and update local state without full reload
+          try {
+            const reorderResult = await autoReorderTaskSteps(taskId);
+            
+            if (reorderResult && reorderResult.length > 0) {
+              skipRefresh = true; // Mark to skip refresh
+              
+              // Update local state with new order and step completion without full reload
+              setTasks(prevTasks => {
+                return prevTasks.map(task => {
+                  if (task.id !== taskId) return task;
+                  
+                  // Create order mapping
+                  const orderMap = new Map<string, number>();
+                  reorderResult.forEach(r => {
+                    orderMap.set(r.stepId, r.newOrder);
+                  });
+                  
+                  // Update steps with new order, completion status, and sort
+                  const updatedSteps = task.steps
+                    .map(step => {
+                      const newOrder = orderMap.get(step.id);
+                      if (step.id === stepId) {
+                        // Update the toggled step's completion status
+                        return {
+                          ...step,
+                          order: newOrder !== undefined ? newOrder : step.order,
+                          is_completed: afterCompleted,
+                          updated_at: new Date().toISOString()
+                        };
+                      }
+                      // Update order for other steps
+                      return {
+                        ...step,
+                        order: newOrder !== undefined ? newOrder : step.order
+                      };
+                    })
+                    .sort((a, b) => a.order - b.order);
+                  
+                  // Recalculate progress
+                  const progress = calculateProgress(updatedSteps);
+                  
+                  return {
+                    ...task,
+                    steps: updatedSteps,
+                    progress_percentage: progress,
+                    status: determineStatusFromProgress(progress, task.status) as any
+                  };
+                });
+              });
+              
+              // Clear cache but don't refresh - we already updated local state
+              clearCache(`tasks_${organizationId}_*`);
+              
+              // Record history if completion status changed (async, don't wait)
+              if (completionChanged) {
+                supabase.auth.getUser().then(({ data: { user } }) => {
+                  (supabase as any)
+                    .from('task_step_history')
+                    .insert({
+                      task_step_id: stepId,
+                      action_type: 'status_change',
+                      old_value: beforeCompleted ? 'completed' : 'pending',
+                      new_value: afterCompleted ? 'completed' : 'pending',
+                      description: afterCompleted ? 'Step completed' : 'Step reopened',
+                      created_by: user?.id || null,
+                    });
+                }).catch(err => console.error('Error recording history:', err));
+              }
+            }
+          } catch (error) {
+            console.error('Error auto-reordering steps:', error);
+            // Don't throw - continue with normal flow even if reorder fails
+          }
         }
       }
-
-      // Record history if completion status changed
-      const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : (before as any)?.is_completed;
-      if (typeof data.is_completed === 'boolean' && before && (before as any).is_completed !== data.is_completed) {
+        
+      // Record history if completion status changed (only if auto-reorder didn't handle it)
+      if (completionChanged && !skipRefresh) {
         const { data: { user } } = await supabase.auth.getUser();
         await (supabase as any)
           .from('task_step_history')
           .insert({
             task_step_id: stepId,
             action_type: 'status_change',
-            old_value: (before as any).is_completed ? 'completed' : 'pending',
+            old_value: beforeCompleted ? 'completed' : 'pending',
             new_value: afterCompleted ? 'completed' : 'pending',
             description: afterCompleted ? 'Step completed' : 'Step reopened',
             created_by: user?.id || null,
@@ -1288,8 +1157,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Toast notifications should only appear for explicit user actions
       // If toast is needed, it should be shown at the call site for user-initiated actions
       
-      clearCache(`tasks_${organizationId}_*`);
-      await fetchTasks(true);
+      // Only refresh if we didn't skip it (for mobile auto-reorder)
+      // For mobile with auto-reorder, we skip fetchTasks to avoid reload that confuses users
+      if (!skipRefresh) {
+        // Normal update flow - clear cache and refresh
+        clearCache(`tasks_${organizationId}_*`);
+        await fetchTasks(true);
+      }
+      // If skipRefresh is true, we've already updated local state above, so skip fetchTasks
     } catch (error: any) {
       console.error('Error updating step:', error);
       
@@ -1763,86 +1638,33 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
-  // Real-time subscriptions (OPTIMIZED - Reduced channels & added throttling)
+  // Real-time subscriptions using custom hook
+  // Create a stable refresh callback that calls fetchTasks
+  const handleRefresh = useCallback(() => {
+    if (organizationId) {
+      // fetchTasks is defined in component scope and uses organizationId from closure
+      fetchTasks(true);
+    }
+  }, [organizationId]);
+
+  useTaskRealtime({
+    organizationId,
+    onRefresh: handleRefresh,
+    recentlyUpdatedTasksRef,
+  });
+
+  // Initial data fetch
   useEffect(() => {
     if (!organizationId) return;
 
-    // Initial data fetch
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([
-        fetchTasks(),
-        fetchRecentStepUpdates()
-      ]);
+      await Promise.all([fetchTasks(), fetchRecentStepUpdates()]);
       setIsLoading(false);
     };
 
     loadData();
-
-    // Create throttled refresh function (max once every 5 seconds - INCREASED)
-    const throttledRefresh = throttle(() => {
-      console.log('🔄 Throttled refresh triggered');
-      fetchTasks(true); // Force refresh to bypass cache
-      clearCache(`tasks_${organizationId}_*`); // Clear cache for all users to get fresh data
-    }, 5000); // 5 seconds instead of 3 to save more IO
-
-    // OPTIMIZED: Only subscribe to main tasks table
-    // All changes to steps, files, etc will be reflected through tasks
-    const tasksChannel = supabase
-      .channel('daily-tasks-main')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'daily_tasks',
-          filter: `organization_id=eq.${organizationId}`
-        },
-        (payload) => {
-          console.log('📡 Real-time tasks update:', payload.eventType);
-          
-          // Skip refresh if this task was recently updated by us (optimization for status updates)
-          const taskId = payload.new?.id || payload.old?.id;
-          if (taskId && recentlyUpdatedTasksRef.current.has(taskId)) {
-            console.log('⏭️ Skipping refresh for recently updated task:', taskId);
-            return;
-          }
-          
-          throttledRefresh();
-        }
-      )
-      .subscribe();
-
-    // DISABLED: Step subscription to save IO budget
-    // If you need real-time step updates, uncomment below
-    // const stepsChannel = supabase
-    //   .channel('task-steps-main')
-    //   .on(
-    //     'postgres_changes',
-    //     {
-    //       event: '*',
-    //       schema: 'public',
-    //       table: 'task_steps'
-    //     },
-    //     (payload) => {
-    //       console.log('📡 Real-time step update:', payload.eventType);
-    //       throttledRefresh();
-    //     }
-    //   )
-    //   .subscribe();
-
-    // REMOVED: filesChannel - not critical for real-time
-    // REMOVED: deadlineHistoryChannel - not critical for real-time
-    // These will be fetched when tasks are refreshed
-
-    console.log('✅ Real-time subscriptions setup (OPTIMIZED)');
-
-    // Cleanup subscriptions
-    return () => {
-      console.log('🧹 Cleaning up real-time subscriptions');
-      supabase.removeChannel(tasksChannel);
-      // supabase.removeChannel(stepsChannel); // Disabled
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
   // Apply filters when recentStepFilters or recentStepUpdates change

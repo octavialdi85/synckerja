@@ -357,6 +357,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         step={step as any}
                         index={index}
                         taskCreatedBy={task.created_by}
+                        autoReorder={true}
                       />
                     ))
                 )}

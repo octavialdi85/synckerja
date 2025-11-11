@@ -47,7 +47,8 @@ import {
   PopoverTrigger,
 } from '@/features/ui/popover';
 import { CustomDatePicker } from '@/features/share/calendar';
-import { useDailyTask, type Task } from '../DailyTaskContext';
+import { useDailyTask } from '../DailyTaskContext';
+import { type Task } from '../types';
 import { useTaskFilters } from '../hooks/useTaskFilters';
 import { supabase } from '@/integrations/supabase/client';
 import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';

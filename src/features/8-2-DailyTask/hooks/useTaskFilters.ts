@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { Task, TaskStep } from '../DailyTaskContext';
+import { Task, TaskStep } from '../types';
 
 export interface TaskFilters {
   search: string;
