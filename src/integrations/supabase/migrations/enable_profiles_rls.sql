@@ -106,3 +106,4 @@ COMMENT ON TABLE profiles IS 'User profiles with RLS enabled. Users can view the
 
 
 
+

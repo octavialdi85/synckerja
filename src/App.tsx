@@ -2,7 +2,7 @@ import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
@@ -71,6 +71,7 @@ import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/Dai
 import CampaignCalculator from "./features/8-3-campaign-calculator/pages/CampaignCalculator";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
+import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -124,6 +125,15 @@ const useMobileDetection = () => {
 
 const DailyTaskRouteElement = () => {
   const isMobile = useMobileDetection();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const view = searchParams.get('view');
+  
+  // If mobile and view=initiative, show Initiative page
+  if (isMobile && view === 'initiative') {
+    return <MobileInitiativePage />;
+  }
+  
   return isMobile ? <MobileDailyTaskPage /> : <DesktopDailyTaskPage />;
 };
 

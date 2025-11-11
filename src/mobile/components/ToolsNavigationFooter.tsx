@@ -1,10 +1,11 @@
-import { CheckSquare, FileBarChart, NotebookPen } from "lucide-react";
+import { CheckSquare, FileBarChart, NotebookPen, Target } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const navItems = [
   { icon: CheckSquare, label: "Daily Task", path: "/tools/daily-task" },
-  { icon: FileBarChart, label: "Daily Task Report", path: "/tools/daily-task-report" },
-  { icon: NotebookPen, label: "Meeting Notes", path: "/tools/meeting-notes" },
+  { icon: Target, label: "Initiative", path: "/tools/daily-task?view=initiative" },
+  { icon: FileBarChart, label: "Report", path: "/tools/daily-task-report" },
+  { icon: NotebookPen, label: "Notes", path: "/tools/meeting-notes" },
 ];
 
 export const ToolsNavigationFooter = () => {
@@ -13,9 +14,21 @@ export const ToolsNavigationFooter = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-      <div className="grid grid-cols-3 max-w-md mx-auto">
+      <div className="grid grid-cols-4 max-w-md mx-auto">
         {navItems.map(({ icon: Icon, label, path }) => {
-          const isActive = location.pathname === path;
+          // Check if current path matches
+          let isActive = false;
+          
+          if (label === "Initiative") {
+            // Initiative is active if path is /tools/daily-task and has view=initiative query param
+            isActive = location.pathname === "/tools/daily-task" && location.search === "?view=initiative";
+          } else if (label === "Daily Task") {
+            // Daily Task is active if path is /tools/daily-task and doesn't have view=initiative
+            isActive = location.pathname === "/tools/daily-task" && location.search !== "?view=initiative";
+          } else {
+            // For other items, check if pathname matches
+            isActive = location.pathname === path;
+          }
 
           return (
             <button
@@ -34,6 +47,7 @@ export const ToolsNavigationFooter = () => {
     </nav>
   );
 };
+
 
 
 

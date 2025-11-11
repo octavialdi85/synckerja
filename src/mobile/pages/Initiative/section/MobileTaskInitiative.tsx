@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Target, CheckCircle, Clock, User, ChevronRight, Loader2 } from 'lucide-react';
 import { LoadingDots } from '@/components/LoadingDots';
-import { useDailyTask } from '../DailyTaskContext';
+import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useToast } from '@/features/ui/use-toast';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
-import { DueDateDialog } from './DueDateDialog';
-import { AssignInitiativeItemDialog } from './AssignInitiativeItemDialog';
+import { MobileDueDateDialog } from '../components/MobileDueDateDialog';
+import { MobileAssignInitiativeItemDialog } from '../components/MobileAssignInitiativeItemDialog';
 
 // Export stats for parent component
 export interface InitiativeStats {
@@ -31,11 +31,11 @@ interface UncompletedItem {
   created_at: string;
 }
 
-interface TaskInitiativeProps {
+interface MobileTaskInitiativeProps {
   onStatsChange?: (stats: InitiativeStats) => void;
 }
 
-const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
+const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChange }) => {
   const { tasks, isLoading: tasksLoading } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
@@ -702,8 +702,8 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         )}
       </div>
 
-      {/* Due Date Dialog */}
-      <DueDateDialog
+      {/* Due Date Dialog - Mobile Version */}
+      <MobileDueDateDialog
         open={showDueDateDialog}
         onOpenChange={setShowDueDateDialog}
         onConfirm={handleTakeTaskWithDueDate}
@@ -712,8 +712,8 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         isLoading={takingTask === selectedItem?.id}
       />
 
-      {/* Assign Dialog */}
-      <AssignInitiativeItemDialog
+      {/* Assign Dialog - Mobile Version */}
+      <MobileAssignInitiativeItemDialog
         open={showAssignDialog}
         onOpenChange={setShowAssignDialog}
         item={selectedItemForAssign ? {
@@ -729,5 +729,5 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
   );
 };
 
-export default TaskInitiative;
+export default MobileTaskInitiative;
 
