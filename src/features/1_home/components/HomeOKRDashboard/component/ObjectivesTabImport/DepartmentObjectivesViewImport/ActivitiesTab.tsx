@@ -1011,6 +1011,7 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                                         .map((step, index) => (
                   <TaskStep
                     key={step.id}
+                    autoReorder={true}
                     step={{
                       id: step.id,
                       task_id: step.task_id,
