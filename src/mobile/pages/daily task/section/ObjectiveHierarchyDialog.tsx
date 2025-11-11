@@ -251,7 +251,7 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
             </Button>
             <span>Select Individual Objective</span>
           </DialogTitle>
-          <DialogDescription className="text-xs md:text-sm mt-1">
+          <DialogDescription className="text-xs md:text-sm mt-1 text-left">
             Choose an individual objective from the hierarchy. Only individual objectives can be selected.
           </DialogDescription>
         </DialogHeader>

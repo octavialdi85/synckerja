@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { ScrollArea } from '@/features/ui/scroll-area';
-import { useMeetingNotes } from '../MeetingNotesContext';
+import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { supabase } from '@/integrations/supabase/client';
 
 interface UpdateHistoryDialogProps {
