@@ -1,6 +1,7 @@
 -- Migration: Auto-set production_status and production_completion_date
 -- Description: Automatically sets production_status to "Need Review" and production_completion_date 
 --              when approved = TRUE, google_drive_link IS NOT NULL, and production_approved = FALSE
+--              BUT respects "Request Revision" status if it was explicitly set
 -- Created: 2025-01-XX
 
 -- Function to auto-set production status and completion date
@@ -11,10 +12,12 @@ BEGIN
   -- 1. approved = TRUE
   -- 2. google_drive_link IS NOT NULL (and not empty)
   -- 3. production_approved = FALSE
+  -- 4. production_status is NOT "Request Revision" (respect explicit "Request Revision" status)
   IF NEW.approved = TRUE 
      AND NEW.google_drive_link IS NOT NULL 
      AND TRIM(NEW.google_drive_link) != ''
-     AND (NEW.production_approved = FALSE OR NEW.production_approved IS NULL) THEN
+     AND (NEW.production_approved = FALSE OR NEW.production_approved IS NULL)
+     AND NEW.production_status != 'Request Revision' THEN
     
     -- Only update if production_status is not already "Need Review" or if production_completion_date is NULL
     -- This prevents unnecessary updates and overwriting existing completion dates

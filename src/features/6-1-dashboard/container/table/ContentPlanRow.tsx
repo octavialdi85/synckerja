@@ -1104,9 +1104,19 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       onFieldChange(plan.id, 'production_approved_date', approvedDate);
       onProductionStatusChange(plan.id, 'Approved');
     }} onRevision={() => {
-      // POINT 2: Clear completion date when requesting revision
-      onFieldChange(plan.id, 'production_completion_date', null);
+      // onProductionStatusChange already handles all required fields when value is "Request Revision":
+      // - production_status: 'Request Revision'
+      // - production_revision_count: incremented
+      // - production_completion_date: null
+      // - production_approved: false
+      // - production_approved_date: null
+      // So we just need to call it once
+      console.log('🔄 onRevision callback called for plan:', plan.id, {
+        currentStatus: plan.production_status,
+        currentApproved: plan.production_approved
+      });
       onProductionStatusChange(plan.id, 'Request Revision');
+      console.log('✅ onProductionStatusChange called with "Request Revision"');
     }} />
 
       {/* Social Media Links Dialog */}

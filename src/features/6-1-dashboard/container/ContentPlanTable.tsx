@@ -105,11 +105,40 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
       const currentPlan = contentPlans.find(plan => plan.id === id);
       
       if (currentPlan) {
-        // If changing to "Request Revision", increment production revision count
-        if (value === 'Request Revision' && currentPlan.production_status !== 'Request Revision') {
-          const newProductionRevisionCount = (currentPlan.production_revision_count || 0) + 1;
+        // If changing to "Request Revision", increment production revision count and clear completion date
+        if (value === 'Request Revision') {
+          // Only increment revision count if status is NOT already "Request Revision"
+          const shouldIncrement = currentPlan.production_status !== 'Request Revision';
+          const newProductionRevisionCount = shouldIncrement 
+            ? (currentPlan.production_revision_count || 0) + 1
+            : (currentPlan.production_revision_count || 0);
+          
+          console.log('🔄 handleProductionStatusChange: Setting to Request Revision', {
+            planId: id,
+            currentStatus: currentPlan.production_status,
+            currentApproved: currentPlan.production_approved,
+            newRevisionCount: newProductionRevisionCount,
+            shouldIncrement
+          });
+          
+          // Update all fields - these will be batched together (30ms debounce)
+          // IMPORTANT: Always clear production_completion_date when status is "Request Revision"
           onFieldChange(id, 'production_status', value);
-          onFieldChange(id, 'production_revision_count', newProductionRevisionCount);
+          
+          // Only update revision count if we're incrementing it
+          if (shouldIncrement) {
+            onFieldChange(id, 'production_revision_count', newProductionRevisionCount);
+          }
+          
+          // ALWAYS clear production_completion_date when status is "Request Revision"
+          // This ensures it's cleared even if status was already "Request Revision"
+          onFieldChange(id, 'production_completion_date', null);
+          
+          // Also reset production_approved and clear approved date
+          onFieldChange(id, 'production_approved', false);
+          onFieldChange(id, 'production_approved_date', null);
+          
+          console.log('✅ All fields queued for update (will be batched in 30ms)');
         } else {
           // Regular production status change (can be null for "No Status")
           onFieldChange(id, 'production_status', value);

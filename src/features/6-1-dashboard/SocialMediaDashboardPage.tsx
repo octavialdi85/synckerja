@@ -598,7 +598,7 @@ const SocialMediaContent = () => {
     try {
       // OPTIMIZED: Batch production_approved related fields to reduce database roundtrips
       // This prevents multiple trigger executions and improves performance
-      if (field === 'production_approved' || field === 'production_approved_date' || field === 'production_status') {
+      if (field === 'production_approved' || field === 'production_approved_date' || field === 'production_status' || field === 'production_completion_date') {
         // Clear existing timeout for this plan
         const existing = pendingBatchUpdatesRef.current.get(id);
         if (existing) {
@@ -608,6 +608,14 @@ const SocialMediaContent = () => {
         // Get or create pending updates
         const pending = pendingBatchUpdatesRef.current.get(id) || { updates: {}, timeout: null as any };
         pending.updates[field] = value;
+        
+        // IMPORTANT: If production_status is being set to "Request Revision", 
+        // automatically include production_completion_date = null in the batch
+        if (field === 'production_status' && value === 'Request Revision') {
+          pending.updates['production_completion_date'] = null;
+          pending.updates['production_approved'] = false;
+          pending.updates['production_approved_date'] = null;
+        }
 
         // Very short debounce (30ms) for immediate feel while still batching rapid changes
         // This ensures toggle feels instant but still batches multiple field updates

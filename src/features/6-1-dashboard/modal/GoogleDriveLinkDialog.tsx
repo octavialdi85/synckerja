@@ -416,35 +416,161 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
       return;
     }
 
-    if (onRevision) {
-      onRevision();
+    if (!socialMediaPlanId) {
+      toast.error('Plan ID is missing');
+      return;
     }
-    
+
     try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { error } = await supabase
+      // Get current production revision count
+      const { data: currentPlan, error: fetchError } = await supabase
         .from('social_media_plans')
-        .update({
-          production_status: 'Request Revision',
-          production_completion_date: null, // POINT 2: Clear completion date when requesting revision
-          production_approved: false, // Reset approval status
-          production_approved_date: null // Clear approved date
-        })
-        .eq('id', socialMediaPlanId);
+        .select('production_revision_count, production_status')
+        .eq('id', socialMediaPlanId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching current plan:', fetchError);
+        toast.error('Failed to fetch current data');
+        return;
+      }
+
+      // Only increment if status is not already "Request Revision"
+      const shouldIncrement = currentPlan.production_status !== 'Request Revision';
+      const newProductionRevisionCount = shouldIncrement 
+        ? (currentPlan.production_revision_count || 0) + 1
+        : (currentPlan.production_revision_count || 0);
+
+      // Update production status and related fields
+      const updateData: any = {
+        production_status: 'Request Revision',
+        production_completion_date: null, // POINT 2: Clear completion date when requesting revision
+        production_approved: false, // Reset approval status
+        production_approved_date: null, // Clear approved date
+      };
+
+      // Only update revision count if we're incrementing it
+      if (shouldIncrement) {
+        updateData.production_revision_count = newProductionRevisionCount;
+      }
+
+      console.log('📝 Updating database with:', updateData);
+      const { error, data } = await supabase
+        .from('social_media_plans')
+        .update(updateData)
+        .eq('id', socialMediaPlanId)
+        .select('production_status, production_approved, production_completion_date, production_revision_count')
+        .single();
         
       if (error) {
         console.error('Error updating production status for revision:', error);
         toast.error('Failed to update production status');
+        return;
+      }
+      
+      // Verify the update was successful
+      console.log('✅ Database update successful, verifying saved values:', {
+        production_status: data?.production_status,
+        production_approved: data?.production_approved,
+        production_completion_date: data?.production_completion_date,
+        production_revision_count: data?.production_revision_count
+      });
+      
+      // Double-check: If production_status is not "Request Revision", log a warning
+      if (data?.production_status !== 'Request Revision') {
+        console.warn('⚠️ WARNING: production_status was not saved as "Request Revision"!', {
+          expected: 'Request Revision',
+          actual: data?.production_status,
+          updateData
+        });
+      }
+
+      toast.success('Production status updated to Request Revision');
+      devLog.debug('Production completion date cleared and status set to Request Revision', {
+        planId: socialMediaPlanId,
+        newRevisionCount: newProductionRevisionCount,
+        wasIncremented: shouldIncrement
+      });
+
+      // Call onRevision callback FIRST to update parent state immediately (before refetch)
+      // This ensures UI updates immediately through onFieldChange mutations
+      // Note: onRevision callback uses onProductionStatusChange which batches updates (30ms debounce)
+      console.log('🔄 Calling onRevision callback for plan:', socialMediaPlanId);
+      if (onRevision) {
+        onRevision();
+        console.log('✅ onRevision callback executed');
       } else {
-        toast.success('Production status updated to Request Revision');
-        devLog.debug('Production completion date cleared and status set to Request Revision');
+        console.warn('⚠️ onRevision callback is not provided');
+      }
+
+      // Optimistic update cache immediately for instant UI feedback
+      if (queryClient && organizationId) {
+        const queryKey = ['social-media-plans', organizationId];
+        
+        // Get current cache data
+        const currentData = queryClient.getQueryData(queryKey) as any[];
+        
+        if (currentData) {
+          // Update cache optimistically with new values
+          queryClient.setQueryData(queryKey, (oldData: any) => {
+            if (!oldData) return oldData;
+            return oldData.map((plan: any) => {
+              if (plan.id === socialMediaPlanId) {
+                return {
+                  ...plan,
+                  production_status: 'Request Revision',
+                  production_completion_date: null,
+                  production_approved: false,
+                  production_approved_date: null,
+                  production_revision_count: newProductionRevisionCount
+                };
+              }
+              return plan;
+            });
+          });
+          
+          devLog.debug('✅ Cache updated optimistically for immediate UI feedback', {
+            planId: socialMediaPlanId,
+            production_status: 'Request Revision',
+            production_approved: false,
+            production_revision_count: newProductionRevisionCount
+          });
+        }
+        
+        // Also invalidate and refetch to ensure data consistency
+        // Use a delay to allow onRevision callback and batch updates (30ms debounce) to complete first
+        // IMPORTANT: Delay must be long enough for batch updates to complete and database to save
+        setTimeout(() => {
+          queryClient.invalidateQueries({ 
+            queryKey,
+            refetchType: 'active' // Force refetch for active queries to update UI immediately
+          });
+          
+          // Also invalidate all variations for backward compatibility
+          queryClient.invalidateQueries({ 
+            queryKey: ['social-media-plans'],
+            refetchType: 'active'
+          });
+          
+          // Force immediate refetch to ensure UI updates
+          queryClient.refetchQueries({ 
+            queryKey,
+            type: 'active'
+          });
+        }, 500); // Increased delay to 500ms to ensure batch updates (30ms) + database save + trigger execution complete
+      } else if (queryClient) {
+        // Fallback if organizationId is not available
+        queryClient.invalidateQueries({ 
+          queryKey: ['social-media-plans'],
+          refetchType: 'active'
+        });
       }
     } catch (error) {
       console.error('Error in handleRevision:', error);
       toast.error('Failed to update production status');
+    } finally {
+      onClose();
     }
-
-    onClose();
   };
 
   // POINT 1 & 3: Handle approve with production status update and set approved date

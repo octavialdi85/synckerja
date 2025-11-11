@@ -1,7 +1,7 @@
 # Auto-Set Production Status on Approval
 
 ## Overview
-This migration automatically sets `production_status` to "Need Review" and `production_completion_date` when specific conditions are met in the `social_media_plans` table.
+This migration automatically sets `production_status` to "Need Review" and `production_completion_date` when specific conditions are met in the `social_media_plans` table. **Important:** The trigger respects "Request Revision" status and will NOT overwrite it.
 
 ## Conditions
 The trigger automatically updates the following fields when **ALL** of these conditions are met:
