@@ -963,11 +963,13 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                       {/* Expanded Content Row */}
                       {expandedTasks.has(task.id) && (
                         <TableRow>
-                          <TableCell colSpan={10} className="w-full px-4 py-4 bg-blue-50 border-t border-blue-200">
+                          <TableCell colSpan={10} className="w-full px-4 py-4 bg-blue-50 border-t border-blue-200" style={{ minWidth: 0, maxWidth: '100%' }}>
                             {task.description && (
-                              <div className="mb-4">
+                              <div className="mb-4 min-w-0">
                                 <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>
-                                <p className="text-sm text-gray-600">{task.description}</p>
+                                <div className="max-h-48 overflow-y-auto seamless-scroll">
+                                  <p className="text-sm text-gray-600 break-words whitespace-pre-wrap overflow-wrap-anywhere" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{task.description}</p>
+                                </div>
                               </div>
                             )}
                             
