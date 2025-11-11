@@ -49,23 +49,30 @@ export const UniversalProtectedRoute = ({
   useEffect(() => {
     const validateUniversalAccess = async () => {
       const currentPath = location.pathname;
+      const isDev = import.meta.env.DEV;
       
-      console.group('🌍 UNIVERSAL ROUTE PROTECTION');
-      console.log('Validating Path:', currentPath);
-      console.log('User Context:', { userRole, isOwner, isAdmin });
+      if (isDev) {
+        console.group('🌍 UNIVERSAL ROUTE PROTECTION');
+        console.log('Validating Path:', currentPath);
+        console.log('User Context:', { userRole, isOwner, isAdmin });
+      }
 
       // Step 1: Authentication check
       if (requiresAuth && !user) {
-        console.log('❌ Authentication required but user not logged in');
-        console.groupEnd();
+        if (isDev) {
+          console.log('❌ Authentication required but user not logged in');
+          console.groupEnd();
+        }
         navigate(redirectTo, { state: { from: location }, replace: true });
         return;
       }
 
       // Step 2: Wait for configurations to load
       if (configLoading) {
-        console.log('⏳ Still loading page configurations...');
-        console.groupEnd();
+        if (isDev) {
+          console.log('⏳ Still loading page configurations...');
+          console.groupEnd();
+        }
         return; // Keep showing loading
       }
 
@@ -73,26 +80,32 @@ export const UniversalProtectedRoute = ({
       // Every authenticated route MUST check Page Access Configuration
       const hasAccess = canAccessPage(currentPath);
       
-      console.log('Database Access Check Result:', hasAccess);
-      console.log('Access Level:', getAccessLevel());
+      if (isDev) {
+        console.log('Database Access Check Result:', hasAccess);
+        console.log('Access Level:', getAccessLevel());
+      }
       
       if (!hasAccess) {
-        console.log('🚨 ACCESS DENIED by Page Access Configuration');
-        console.log('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
+        if (isDev) {
+          console.log('🚨 ACCESS DENIED by Page Access Configuration');
+          console.log('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
+          console.groupEnd();
+        }
         
         setAccessDenied(true);
         setDeniedReason(getDepartmentRestrictionMessage() || 'You do not have permission to access this page');
         setIsValidating(false);
-        console.groupEnd();
         return;
       }
 
       // Step 4: Access granted
-      console.log('✅ ACCESS GRANTED by Page Access Configuration');
+      if (isDev) {
+        console.log('✅ ACCESS GRANTED by Page Access Configuration');
+        console.groupEnd();
+      }
       setAccessDenied(false);
       setDeniedReason('');
       setIsValidating(false);
-      console.groupEnd();
     };
 
     validateUniversalAccess();

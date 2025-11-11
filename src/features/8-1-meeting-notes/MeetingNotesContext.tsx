@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
+const isDev = import.meta.env.DEV;
+
 interface MeetingPoint {
   id: string;
   meeting_date: string;
@@ -134,7 +136,9 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     if (!organizationId) return;
 
     try {
-      console.log('Fetching meeting points for organization:', organizationId); // Debug log
+      if (isDev) {
+        console.log('Fetching meeting points for organization:', organizationId); // Debug log
+      }
       
       const { data, error } = await supabase
         .from('meeting_points')
@@ -144,7 +148,9 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
       if (error) throw error;
       
-      console.log('Fetched meeting points:', data); // Debug log
+      if (isDev) {
+        console.log('Fetched meeting points:', data); // Debug log
+      }
       setMeetingPoints(data || []);
     } catch (error) {
       console.error('Error fetching meeting points:', error);
@@ -204,7 +210,9 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     if (!organizationId) return;
 
     try {
-      console.log('Adding meeting point to database:', { ...data, organization_id: organizationId }); // Debug log
+      if (isDev) {
+        console.log('Adding meeting point to database:', { ...data, organization_id: organizationId }); // Debug log
+      }
       
       const { error } = await supabase
         .from('meeting_points')
@@ -218,7 +226,9 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
       if (error) throw error;
 
-      console.log('Meeting point added successfully'); // Debug log
+      if (isDev) {
+        console.log('Meeting point added successfully'); // Debug log
+      }
       
       toast({
         title: 'Success',
@@ -750,7 +760,9 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('Real-time meeting points update:', payload); // Debug log
+          if (isDev) {
+            console.log('Real-time meeting points update:', payload); // Debug log
+          }
           fetchMeetingPoints();
         }
       )

@@ -38,19 +38,26 @@ const accessCache = new Map<string, { result: boolean; timestamp: number; config
 const ACCESS_CACHE_TTL = 30000; // 30 seconds - longer cache
 let lastClearTime = 0;
 const MIN_CLEAR_INTERVAL = 5000; // Minimum 5 seconds between clears
+const isDev = import.meta.env.DEV; // Define once at module level for performance
 
 // Smart cache clearing - only when necessary
 export const clearAccessCache = () => {
   const now = Date.now();
   if (now - lastClearTime < MIN_CLEAR_INTERVAL) {
-    console.log('🔄 CACHE: Skipping clear - too recent (', Math.round((now - lastClearTime) / 1000), 's ago)');
+    if (isDev) {
+      console.log('🔄 CACHE: Skipping clear - too recent (', Math.round((now - lastClearTime) / 1000), 's ago)');
+    }
     return;
   }
   
-  console.log('🧹 Smart clearing access cache with', accessCache.size, 'entries');
+  if (isDev) {
+    console.log('🧹 Smart clearing access cache with', accessCache.size, 'entries');
+  }
   accessCache.clear();
   lastClearTime = now;
-  console.log('✅ Access cache cleared');
+  if (isDev) {
+    console.log('✅ Access cache cleared');
+  }
 };
 
 // Debug function to inspect cache
@@ -95,25 +102,33 @@ export const useDepartmentAccess = () => {
     const lastConfigHash = accessCache.size > 0 ? 
       Array.from(accessCache.values())[0]?.configHash : '';
     
+    // isDev is defined at module level
     if (configHash !== lastConfigHash && configurations.length > 0) {
-      console.log('🔄 CONFIG CHANGED: Smart cache clear triggered');
+      if (isDev) {
+        console.log('🔄 CONFIG CHANGED: Smart cache clear triggered');
+      }
       clearAccessCache();
     }
     
     // Check if user can access a specific page
     const canAccessPage = (pagePath: string): boolean => {
+      // isDev is defined at module level
       // IMPORTANT PRINCIPLE FOR /access-permissions/page-access:
       // Access is determined ONLY by database configuration. If no restrictions are configured,
       // ANY AUTHENTICATED USER can access the page access configuration.
       
       // OWNER/ADMIN OVERRIDE - Always grant access immediately
       if (isOwner || userRole === 'owner') {
-        console.log('🔑 CAN ACCESS PAGE OVERRIDE: Owner full access to', pagePath);
+        if (isDev) {
+          console.log('🔑 CAN ACCESS PAGE OVERRIDE: Owner full access to', pagePath);
+        }
         return true;
       }
       
       if (isAdmin || userRole === 'admin') {
-        console.log('🔧 CAN ACCESS PAGE OVERRIDE: Admin full access to', pagePath);
+        if (isDev) {
+          console.log('🔧 CAN ACCESS PAGE OVERRIDE: Admin full access to', pagePath);
+        }
         return true;
       }
 
@@ -136,12 +151,16 @@ export const useDepartmentAccess = () => {
         });
         
         if (isUnrestrictedDuringLoading) {
-          console.log('✅ LOADING BYPASS: Allowing access to unrestricted path during loading:', pagePath);
+          if (isDev) {
+            console.log('✅ LOADING BYPASS: Allowing access to unrestricted path during loading:', pagePath);
+          }
           return true;
         }
         
-        console.log('⏳ Still loading configurations, deferring access decision for:', pagePath);
-        console.log('🔍 Tip: If this path should be accessible during loading, add it to UNRESTRICTED_DURING_LOADING array');
+        if (isDev) {
+          console.log('⏳ Still loading configurations, deferring access decision for:', pagePath);
+          console.log('🔍 Tip: If this path should be accessible during loading, add it to UNRESTRICTED_DURING_LOADING array');
+        }
         return false; // Deny access while loading to be safe for other paths
       }
       
@@ -163,11 +182,15 @@ export const useDepartmentAccess = () => {
         });
         
         if (isUnrestrictedDuringLoading) {
-          console.log('✅ USER LOADING BYPASS: Allowing access to unrestricted path during user loading:', pagePath);
+          if (isDev) {
+            console.log('✅ USER LOADING BYPASS: Allowing access to unrestricted path during user loading:', pagePath);
+          }
           return true;
         }
         
-        console.log('⏳ User role still loading, deferring access decision for:', pagePath);
+        if (isDev) {
+          console.log('⏳ User role still loading, deferring access decision for:', pagePath);
+        }
         return false; // Deny access while loading to be safe for other paths
       }
       
@@ -181,19 +204,22 @@ export const useDepartmentAccess = () => {
 
       const current = normalize(pagePath);
       
-      // Enhanced debug logging
-      console.group(`🔍 PERMISSION DEBUG: ${pagePath}`);
-      console.log('Path Details:', {
-        originalPath: pagePath,
-        normalizedPath: current,
-        userRole,
-        isOwner,
-        isAdmin,
-        employeeId: employee?.id,
-        organizationId: userData?.active_organization_id
-      });
-      console.log('All Configurations:', configurations);
-      console.log('Configuration Count:', configurations.length);
+      // Enhanced debug logging (development mode only)
+      // isDev is already defined at the start of canAccessPage function
+      if (isDev) {
+        console.group(`🔍 PERMISSION DEBUG: ${pagePath}`);
+        console.log('Path Details:', {
+          originalPath: pagePath,
+          normalizedPath: current,
+          userRole,
+          isOwner,
+          isAdmin,
+          employeeId: employee?.id,
+          organizationId: userData?.active_organization_id
+        });
+        console.log('All Configurations:', configurations);
+        console.log('Configuration Count:', configurations.length);
+      }
       
       // Check cache first with config hash validation
       const cacheKey = `${current}-${userRole}-${employee?.id || 'no-emp'}`;
@@ -201,10 +227,17 @@ export const useDepartmentAccess = () => {
       if (cached && 
           (Date.now() - cached.timestamp) < ACCESS_CACHE_TTL &&
           cached.configHash === configHash) {
-        console.log('📋 CACHE HIT: Using cached result:', cached.result);
+        if (isDev) {
+          console.log('📋 CACHE HIT: Using cached result:', cached.result);
+        }
+        if (isDev) {
+          console.groupEnd();
+        }
         return cached.result;
       } else if (cached && cached.configHash !== configHash) {
-        console.log('🔄 CACHE INVALIDATED: Config hash mismatch');
+        if (isDev) {
+          console.log('🔄 CACHE INVALIDATED: Config hash mismatch');
+        }
       }
 
       // Find matching configuration from database first (normalized match)
@@ -212,92 +245,109 @@ export const useDepartmentAccess = () => {
       const matchingConfigs = configurations.filter(c => {
         const base = normalize(c.page_path);
         const matches = current === base || current.startsWith(base + '/');
-        console.log('🔍 Path matching:', {
-          configPath: c.page_path,
-          normalizedBase: base,
-          current,
-          exactMatch: current === base,
-          prefixMatch: current.startsWith(base + '/'),
-          matches,
-          orgId: c.organization_id
-        });
+        if (isDev) {
+          console.log('🔍 Path matching:', {
+            configPath: c.page_path,
+            normalizedBase: base,
+            current,
+            exactMatch: current === base,
+            prefixMatch: current.startsWith(base + '/'),
+            matches,
+            orgId: c.organization_id
+          });
+        }
         return matches;
       });
 
-      console.log('Matching Configurations:', matchingConfigs);
+      if (isDev) {
+        console.log('Matching Configurations:', matchingConfigs);
+      }
       
       // Prioritize organization-specific config over system-wide config
       const orgSpecificConfig = matchingConfigs.find(c => c.organization_id !== null);
       const systemWideConfig = matchingConfigs.find(c => c.organization_id === null);
       const config = orgSpecificConfig || systemWideConfig;
       
-      console.log('Priority Selection:', {
-        orgSpecificConfig: orgSpecificConfig ? {
-          id: orgSpecificConfig.id,
-          path: orgSpecificConfig.page_path,
-          roles: orgSpecificConfig.roles_allowed,
-          orgId: orgSpecificConfig.organization_id
-        } : null,
-        systemWideConfig: systemWideConfig ? {
-          id: systemWideConfig.id,
-          path: systemWideConfig.page_path,
-          roles: systemWideConfig.roles_allowed,
-          orgId: systemWideConfig.organization_id
-        } : null,
-        selectedConfig: config ? {
-          id: config.id,
-          path: config.page_path,
-          roles: config.roles_allowed,
-          orgId: config.organization_id
-        } : null
-      });
+      if (isDev) {
+        console.log('Priority Selection:', {
+          orgSpecificConfig: orgSpecificConfig ? {
+            id: orgSpecificConfig.id,
+            path: orgSpecificConfig.page_path,
+            roles: orgSpecificConfig.roles_allowed,
+            orgId: orgSpecificConfig.organization_id
+          } : null,
+          systemWideConfig: systemWideConfig ? {
+            id: systemWideConfig.id,
+            path: systemWideConfig.page_path,
+            roles: systemWideConfig.roles_allowed,
+            orgId: systemWideConfig.organization_id
+          } : null,
+          selectedConfig: config ? {
+            id: config.id,
+            path: config.page_path,
+            roles: config.roles_allowed,
+            orgId: config.organization_id
+          } : null
+        });
+      }
       
       // If no configuration exists for this path, ALLOW ACCESS by default
       // This means Page Access Configuration is empty/not configured = NO RESTRICTIONS
       if (!config) {
-        console.log('🔓 NO CONFIG FOUND = DEFAULT ALLOW ACCESS');
-        console.log(`✅ Path "${current}" has NO PAGE ACCESS RESTRICTIONS configured`);
-        console.log('🎯 PRINCIPLE: Empty database = No restrictions = Allow all authenticated users');
-        
-        // SPECIAL LOG FOR PAGE ACCESS ROUTE
-        if (current === '/access-permissions/page-access') {
-          console.log('🔧 PAGE ACCESS MANAGEMENT: No restrictions configured - ANY AUTHENTICATED USER can access');
-          console.log('📋 This allows users to configure page access when database is empty');
+        if (isDev) {
+          console.log('🔓 NO CONFIG FOUND = DEFAULT ALLOW ACCESS');
+          console.log(`✅ Path "${current}" has NO PAGE ACCESS RESTRICTIONS configured`);
+          console.log('🎯 PRINCIPLE: Empty database = No restrictions = Allow all authenticated users');
+          
+          // SPECIAL LOG FOR PAGE ACCESS ROUTE
+          if (current === '/access-permissions/page-access') {
+            console.log('🔧 PAGE ACCESS MANAGEMENT: No restrictions configured - ANY AUTHENTICATED USER can access');
+            console.log('📋 This allows users to configure page access when database is empty');
+          }
+          
+          // CLEAR DEBUG: Show exact decision
+          console.log('🚀 DECISION: ALLOW ACCESS (No restrictions configured in database)');
+          console.log(`User ${userRole} can access "${current}" - no restrictions found`);
+          console.groupEnd();
         }
-        
-        // CLEAR DEBUG: Show exact decision
-        console.log('🚀 DECISION: ALLOW ACCESS (No restrictions configured in database)');
-        console.log(`User ${userRole} can access "${current}" - no restrictions found`);
-        
-        console.groupEnd();
         const result = true;
         accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
         return result;
       }
       
-      console.log('✅ Config found:', {
-        configPath: config.page_path,
-        configTitle: config.page_title,
-        rolesAllowed: config.roles_allowed,
-        userRole,
-        organizationId: config.organization_id,
-        configType: config.organization_id ? 'Organization-specific' : 'System-wide'
-      });
+      if (isDev) {
+        console.log('✅ Config found:', {
+          configPath: config.page_path,
+          configTitle: config.page_title,
+          rolesAllowed: config.roles_allowed,
+          userRole,
+          organizationId: config.organization_id,
+          configType: config.organization_id ? 'Organization-specific' : 'System-wide'
+        });
+      }
       
       // Check for exception paths first - if current path is in exception paths, allow access
-      console.log('Checking Exception Paths:', config.exception_paths);
+      if (isDev) {
+        console.log('Checking Exception Paths:', config.exception_paths);
+      }
       if (config.exception_paths && config.exception_paths.length > 0) {
         const isExceptionPath = config.exception_paths.some(exceptionPath => {
           const ex = normalize(exceptionPath);
           const matches = current === ex || current.startsWith(ex + '/');
-          console.log(`Exception path check: ${exceptionPath} (normalized: ${ex}) vs ${current} = ${matches}`);
+          if (isDev) {
+            console.log(`Exception path check: ${exceptionPath} (normalized: ${ex}) vs ${current} = ${matches}`);
+          }
           return matches;
         });
         
-        console.log('Is Exception Path:', isExceptionPath);
+        if (isDev) {
+          console.log('Is Exception Path:', isExceptionPath);
+        }
         if (isExceptionPath) {
-          console.log('✅ ALLOWED: Exception path access');
-          console.groupEnd();
+          if (isDev) {
+            console.log('✅ ALLOWED: Exception path access');
+            console.groupEnd();
+          }
           const result = true;
           accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
           return result;
@@ -309,25 +359,31 @@ export const useDepartmentAccess = () => {
       const isOwnerByFlag = isOwner === true;
       const isDefinitelyOwner = isOwnerByRole || isOwnerByFlag;
       
-      console.log('Enhanced Owner Check:', { 
-        isOwner, 
-        userRole, 
-        isOwnerByRole, 
-        isOwnerByFlag, 
-        isDefinitelyOwner 
-      });
+      if (isDev) {
+        console.log('Enhanced Owner Check:', { 
+          isOwner, 
+          userRole, 
+          isOwnerByRole, 
+          isOwnerByFlag, 
+          isDefinitelyOwner 
+        });
+      }
       
       if (isDefinitelyOwner) {
-        console.log('✅ ALLOWED: Owner always has full access (enhanced detection)');
-        console.groupEnd();
+        if (isDev) {
+          console.log('✅ ALLOWED: Owner always has full access (enhanced detection)');
+          console.groupEnd();
+        }
         const result = true;
         accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
         return result;
       }
       
       if (!userRole) {
-        console.log('❌ DENIED: No user role found');
-        console.groupEnd();
+        if (isDev) {
+          console.log('❌ DENIED: No user role found');
+          console.groupEnd();
+        }
         const result = false;
         accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
         return result;
@@ -335,40 +391,46 @@ export const useDepartmentAccess = () => {
       
       // Check if user's role is allowed based on database configuration
       const hasRoleAccess = (config.roles_allowed || []).includes(userRole);
-      console.log('Role Access Check:', {
-        userRole,
-        rolesAllowed: config.roles_allowed,
-        hasRoleAccess
-      });
-      
-      // SPECIAL LOGGING FOR PAGE ACCESS ROUTE
-      if (current === '/access-permissions/page-access') {
-        console.log('🎯 PAGE ACCESS ROUTE PERMISSION CHECK:');
-        console.log(`   User Role: ${userRole}`);
-        console.log(`   Allowed Roles: ${JSON.stringify(config.roles_allowed)}`);
-        console.log(`   Has Role Access: ${hasRoleAccess}`);
-        console.log(`   🔧 REMEMBER: If you want all roles to access this page, remove this restriction from database`);
+      if (isDev) {
+        console.log('Role Access Check:', {
+          userRole,
+          rolesAllowed: config.roles_allowed,
+          hasRoleAccess
+        });
+        
+        // SPECIAL LOGGING FOR PAGE ACCESS ROUTE
+        if (current === '/access-permissions/page-access') {
+          console.log('🎯 PAGE ACCESS ROUTE PERMISSION CHECK:');
+          console.log(`   User Role: ${userRole}`);
+          console.log(`   Allowed Roles: ${JSON.stringify(config.roles_allowed)}`);
+          console.log(`   Has Role Access: ${hasRoleAccess}`);
+          console.log(`   🔧 REMEMBER: If you want all roles to access this page, remove this restriction from database`);
+        }
       }
       
       // Exception: allow specific employees regardless of role permissions
       const isException = !!employee?.id && (config.exceptions || []).includes(employee.id);
-      console.log('Exception Check:', {
-        employeeId: employee?.id,
-        exceptions: config.exceptions,
-        isException
-      });
+      if (isDev) {
+        console.log('Exception Check:', {
+          employeeId: employee?.id,
+          exceptions: config.exceptions,
+          isException
+        });
+      }
       
       const finalResult = hasRoleAccess || isException;
       
-      console.log('🎯 FINAL ACCESS DECISION:', {
-        hasRoleAccess,
-        isException,
-        finalResult: finalResult ? 'ALLOWED' : 'DENIED',
-        userRole,
-        rolesAllowed: config.roles_allowed,
-        configType: config.organization_id ? 'Organization-specific' : 'System-wide'
-      });
-      console.groupEnd();
+      if (isDev) {
+        console.log('🎯 FINAL ACCESS DECISION:', {
+          hasRoleAccess,
+          isException,
+          finalResult: finalResult ? 'ALLOWED' : 'DENIED',
+          userRole,
+          rolesAllowed: config.roles_allowed,
+          configType: config.organization_id ? 'Organization-specific' : 'System-wide'
+        });
+        console.groupEnd();
+      }
       
       // Cache the result
       accessCache.set(cacheKey, { result: finalResult, timestamp: Date.now(), configHash });

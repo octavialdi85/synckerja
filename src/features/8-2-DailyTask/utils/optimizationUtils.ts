@@ -2,6 +2,9 @@
  * Optimization utilities for reducing database queries and improving performance
  */
 
+// Define isDev once at module level for performance
+const isDev = import.meta.env.DEV;
+
 // Cache management
 interface CacheEntry<T> {
   data: T;
@@ -74,7 +77,9 @@ export function getCached<T>(key: string, maxAge: number = 30000): T | null {
     return null;
   }
   
-  console.log(`📦 Cache hit for: ${key} (age: ${Math.round(age / 1000)}s)`);
+  if (isDev) {
+    console.log(`📦 Cache hit for: ${key} (age: ${Math.round(age / 1000)}s)`);
+  }
   return entry.data as T;
 }
 
@@ -88,7 +93,9 @@ export function setCache<T>(key: string, data: T): void {
     data,
     timestamp: Date.now()
   });
-  console.log(`💾 Cached: ${key}`);
+  if (isDev) {
+    console.log(`💾 Cached: ${key}`);
+  }
 }
 
 /**
@@ -111,14 +118,20 @@ export function clearCache(key?: string): void {
         }
       }
       
-      console.log(`🗑️ Cleared ${cleared} cache entries matching: ${key}`);
+      if (isDev) {
+        console.log(`🗑️ Cleared ${cleared} cache entries matching: ${key}`);
+      }
     } else {
       cache.delete(key);
-      console.log(`🗑️ Cleared cache: ${key}`);
+      if (isDev) {
+        console.log(`🗑️ Cleared cache: ${key}`);
+      }
     }
   } else {
     cache.clear();
-    console.log(`🗑️ Cleared all cache`);
+    if (isDev) {
+      console.log(`🗑️ Cleared all cache`);
+    }
   }
 }
 
@@ -153,13 +166,17 @@ let queryCounter = 0;
 
 export function trackQuery(name: string) {
   queryCounter++;
-  console.log(`📊 Query #${queryCounter}: ${name}`);
+  if (isDev) {
+    console.log(`📊 Query #${queryCounter}: ${name}`);
+  }
 }
 
 export function resetQueryCounter() {
   const count = queryCounter;
   queryCounter = 0;
-  console.log(`🔄 Query counter reset. Total queries: ${count}`);
+  if (isDev) {
+    console.log(`🔄 Query counter reset. Total queries: ${count}`);
+  }
   return count;
 }
 
@@ -167,8 +184,8 @@ export function getQueryCount() {
   return queryCounter;
 }
 
-// Log query count periodically
-if (typeof window !== 'undefined') {
+// Log query count periodically (development mode only)
+if (typeof window !== 'undefined' && isDev) {
   setInterval(() => {
     if (queryCounter > 0) {
       console.log(`📊 Total queries in last minute: ${queryCounter}`);

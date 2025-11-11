@@ -100,7 +100,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     
     // If force refresh, clear the flag and continue with data fetching
     if (forceRefresh) {
-      console.log('CentralizedUserDataContext: Force refresh detected, fetching fresh data...');
+      if (import.meta.env.DEV) {
+        console.log('CentralizedUserDataContext: Force refresh detected, fetching fresh data...');
+      }
       sessionStorage.removeItem('forceRefreshUserData');
       // Reset the fetching refs to allow fresh fetch
       fetchingRef.current = false;
@@ -109,7 +111,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     
     // If email verified flag exists, clear it and continue with data fetching
     if (emailVerifiedFlag) {
-      console.log('CentralizedUserDataContext: Email verified flag detected, fetching fresh data...');
+      if (import.meta.env.DEV) {
+        console.log('CentralizedUserDataContext: Email verified flag detected, fetching fresh data...');
+      }
       sessionStorage.removeItem('emailVerified');
       // Reset the fetching refs to allow fresh fetch
       fetchingRef.current = false;
@@ -118,14 +122,18 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
     // Skip if already fetched for this user, unless force refresh or email verified flag
     if (lastUserIdRef.current === user.id && !forceRefresh && !emailVerifiedFlag) {
-      console.log('CentralizedUserDataContext: Skipping fetch - already fetched for user:', user.id);
+      if (import.meta.env.DEV) {
+        console.log('CentralizedUserDataContext: Skipping fetch - already fetched for user:', user.id);
+      }
       setLoading(false);
       return;
     }
 
     // If force refresh or email verified flag, reset cache
     if (forceRefresh || emailVerifiedFlag) {
-      console.log('CentralizedUserDataContext: Force refresh or email verified - resetting cache for user:', user.id);
+      if (import.meta.env.DEV) {
+        console.log('CentralizedUserDataContext: Force refresh or email verified - resetting cache for user:', user.id);
+      }
       lastUserIdRef.current = '';
       fetchingRef.current = false;
     }
@@ -166,12 +174,14 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         timeoutPromise
       ]) as any;
       
-      console.log('CentralizedUserDataContext: Email verification check:', {
-        userId: user.id,
-        verificationToken,
-        verificationError,
-        verificationStatus: verificationToken?.email_verified
-      });
+      if (import.meta.env.DEV) {
+        console.log('CentralizedUserDataContext: Email verification check:', {
+          userId: user.id,
+          verificationToken,
+          verificationError,
+          verificationStatus: verificationToken?.email_verified
+        });
+      }
       
       const verificationStatus = verificationToken?.email_verified === true;
 

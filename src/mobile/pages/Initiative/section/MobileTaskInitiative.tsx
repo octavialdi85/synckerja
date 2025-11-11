@@ -66,13 +66,17 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
         }
         
         if (!user) {
-          console.log('No authenticated user found');
+          if (import.meta.env.DEV) {
+            console.log('No authenticated user found');
+          }
           return;
         }
 
         // Must have organization ID to fetch employee
         if (!organizationId) {
-          console.log('Waiting for organization ID...');
+          if (import.meta.env.DEV) {
+            console.log('Waiting for organization ID...');
+          }
           return;
         }
 
@@ -91,7 +95,9 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
 
         if (employee) {
           setCurrentEmployeeId(employee.id);
-          console.log('✅ Current employee ID loaded:', employee.id);
+          if (import.meta.env.DEV) {
+            console.log('✅ Current employee ID loaded:', employee.id);
+          }
         } else {
           console.warn('⚠️ No employee record found for current user in this organization');
           toast({
@@ -267,10 +273,10 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
           if (subStepError) {
             console.error('Error fetching sub-steps:', subStepError);
           } else if (incompleteSubSteps) {
-            console.log('📊 Fetched substeps:', incompleteSubSteps.length);
-            incompleteSubSteps.forEach((ss: any) => {
-              console.log('  - Substep:', ss.title, 'Assignment:', ss.task_steps_to_steps_assigned);
-            });
+            // Only log summary, not each item (performance optimization)
+            if (import.meta.env.DEV) {
+              console.log('📊 Fetched substeps:', incompleteSubSteps.length);
+            }
             
             // Fetch due dates for all substep assignments
             const substepAssignmentIds = incompleteSubSteps

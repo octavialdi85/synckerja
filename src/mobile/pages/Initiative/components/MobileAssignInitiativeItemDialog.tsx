@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -35,7 +35,6 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
   item,
   onAssign
 }) => {
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
@@ -49,6 +48,16 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
   // Check if user can assign employees (not employee role)
   const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
 
+  // Use useMemo to filter employees - prevents infinite loop
+  const filteredEmployees = useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    if (searchTerm.trim() === '') return employees;
+    return employees.filter(emp =>
+      emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [searchTerm, employees]);
+
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
@@ -58,18 +67,6 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
       setDueTime('23:59');
     }
   }, [open]);
-
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredEmployees(employees);
-    } else {
-      const filtered = employees.filter(emp =>
-        emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredEmployees(filtered);
-    }
-  }, [searchTerm, employees]);
 
   const handleAssign = async () => {
     if (!canAssignEmployees) {

@@ -267,10 +267,10 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
           if (subStepError) {
             console.error('Error fetching sub-steps:', subStepError);
           } else if (incompleteSubSteps) {
-            console.log('📊 Fetched substeps:', incompleteSubSteps.length);
-            incompleteSubSteps.forEach((ss: any) => {
-              console.log('  - Substep:', ss.title, 'Assignment:', ss.task_steps_to_steps_assigned);
-            });
+            // Only log summary, not each item (performance optimization)
+            if (import.meta.env.DEV) {
+              console.log('📊 Fetched substeps:', incompleteSubSteps.length);
+            }
             
             // Fetch due dates for all substep assignments
             const substepAssignmentIds = incompleteSubSteps

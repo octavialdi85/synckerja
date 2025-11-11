@@ -105,7 +105,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     if (!organizationId) return;
 
     try {
-      console.log('🔍 Fetching tasks for organization:', organizationId);
+      const isDev = import.meta.env.DEV;
+      if (isDev) {
+        console.log('🔍 Fetching tasks for organization:', organizationId);
+      }
       trackQuery('fetch_tasks');
       
       // Get current user to filter personal tasks only
@@ -135,8 +138,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .eq('organization_id', organizationId)
         .maybeSingle();
 
-      console.log('👤 Current user:', user.id);
-      console.log('👨‍💼 Current employee:', currentEmployee?.id);
+      if (isDev) {
+        console.log('👤 Current user:', user.id);
+        console.log('👨‍💼 Current employee:', currentEmployee?.id);
+      }
 
       // Get tasks assigned to current user at TASK level
       let assignedTaskIds: string[] = [];
@@ -147,7 +152,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           .eq('employee_id', currentEmployee.id);
         
         assignedTaskIds = (assignedTasks || []).map((a: any) => a.daily_task_id);
-        console.log('📋 Task-level assigned IDs:', assignedTaskIds);
+        if (isDev) {
+          console.log('📋 Task-level assigned IDs:', assignedTaskIds);
+        }
       }
 
       // Get tasks where current user is assigned to any STEP
@@ -167,7 +174,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               .map((s: any) => s.task_steps?.task_id)
               .filter(Boolean)
           )];
-          console.log('📋 Step-level assigned task IDs:', stepAssignedTaskIds);
+          if (isDev) {
+            console.log('📋 Step-level assigned task IDs:', stepAssignedTaskIds);
+          }
         }
       }
 
@@ -191,13 +200,17 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               .map((s: any) => s.task_steps_to_steps?.task_steps?.task_id)
               .filter(Boolean)
           )];
-          console.log('📋 Sub-step-level assigned task IDs:', subStepAssignedTaskIds);
+          if (isDev) {
+            console.log('📋 Sub-step-level assigned task IDs:', subStepAssignedTaskIds);
+          }
         }
       }
 
       // Combine task-level, step-level, and sub-step-level assignments
       const allAssignedTaskIds = [...new Set([...assignedTaskIds, ...stepAssignedTaskIds, ...subStepAssignedTaskIds])];
-      console.log('📋 Combined assigned task IDs (task + step + sub-step):', allAssignedTaskIds);
+      if (isDev) {
+        console.log('📋 Combined assigned task IDs (task + step + sub-step):', allAssignedTaskIds);
+      }
       
       // ULTRA-SIMPLIFIED QUERY: No nested joins to prevent timeout (error 57014)
       // Strategy: Fetch basic data only, load related data separately if needed
@@ -237,8 +250,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         throw error;
       }
       
-      console.log('✅ Fetched tasks (basic data):', data);
-      console.log('📊 Task count:', data?.length || 0);
+      if (isDev) {
+        console.log('✅ Fetched tasks (basic data):', data);
+        console.log('📊 Task count:', data?.length || 0);
+      }
       
       // Debug: Log if no tasks found
       if (!data || data.length === 0) {
@@ -250,7 +265,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       // Fetch task steps separately to avoid timeout
       const taskIds = data.map(task => task.id);
-      console.log('🔍 Fetching task steps for tasks:', taskIds);
+      if (isDev) {
+        console.log('🔍 Fetching task steps for tasks:', taskIds);
+      }
       
       const { data: stepsData, error: stepsError } = await supabase
         .from('task_steps')
@@ -274,10 +291,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         // Continue without steps data rather than failing completely
       }
 
-      console.log('✅ Fetched task steps:', stepsData?.length || 0);
+      if (isDev) {
+        console.log('✅ Fetched task steps:', stepsData?.length || 0);
+      }
 
       // Fetch task assignments separately to get PIC information
-      console.log('🔍 Fetching task assignments for tasks:', taskIds);
+      if (isDev) {
+        console.log('🔍 Fetching task assignments for tasks:', taskIds);
+      }
       
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from('daily_tasks_assigned')
@@ -296,11 +317,15 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         // Continue without assignment data rather than failing completely
       }
 
-      console.log('✅ Fetched task assignments:', assignmentsData?.length || 0);
+      if (isDev) {
+        console.log('✅ Fetched task assignments:', assignmentsData?.length || 0);
+      }
 
       // Fetch step assignments separately to get PIC information for each step
       const stepIds = (stepsData || []).map(s => s.id);
-      console.log('🔍 Fetching step assignments for steps:', stepIds.length);
+      if (isDev) {
+        console.log('🔍 Fetching step assignments for steps:', stepIds.length);
+      }
       
       let stepAssignmentsData: any[] = [];
       if (stepIds.length > 0) {
@@ -321,12 +346,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           console.error('❌ Error fetching step assignments:', stepAssignsError);
         } else {
           stepAssignmentsData = stepAssigns || [];
-          console.log('✅ Fetched step assignments:', stepAssignmentsData.length);
+          if (isDev) {
+            console.log('✅ Fetched step assignments:', stepAssignmentsData.length);
+          }
         }
       }
 
       // Fetch ALL sub-steps (task_steps_to_steps) for all steps
-      console.log('🔍 Fetching sub-steps (task_steps_to_steps) for steps:', stepIds.length);
+      if (isDev) {
+        console.log('🔍 Fetching sub-steps (task_steps_to_steps) for steps:', stepIds.length);
+      }
       let subStepsData: any[] = [];
       if (stepIds.length > 0) {
         const { data: subSteps, error: subStepsError } = await supabase
@@ -347,7 +376,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           console.error('❌ Error fetching sub-steps:', subStepsError);
         } else {
           subStepsData = subSteps || [];
-          console.log('✅ Fetched sub-steps:', subStepsData.length);
+          if (isDev) {
+            console.log('✅ Fetched sub-steps:', subStepsData.length);
+          }
         }
       }
 
@@ -375,7 +406,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           console.error('❌ Error fetching sub-step assignments:', subStepAssignsError);
         } else {
           subStepAssignmentsData = subStepAssigns || [];
-          console.log('✅ Fetched sub-step assignments:', subStepAssignmentsData.length);
+          if (isDev) {
+            console.log('✅ Fetched sub-step assignments:', subStepAssignmentsData.length);
+          }
           
           // Group sub-step assignments by sub-step ID
           const subStepAssignmentsBySubStepId: Record<string, any> = {};
@@ -392,12 +425,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               .map(subStep => subStep.parent_step_id)
               .filter(Boolean)
           )];
-          console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
+          if (isDev) {
+            console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
+          }
         }
       }
 
       // Fetch task files for all steps
-      console.log('🔍 Fetching task files for steps:', stepIds.length);
+      if (isDev) {
+        console.log('🔍 Fetching task files for steps:', stepIds.length);
+      }
       let taskFilesData: any[] = [];
       if (stepIds.length > 0) {
         const { data: filesData, error: filesError } = await supabase
@@ -417,7 +454,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           console.error('❌ Error fetching task files:', filesError);
         } else {
           taskFilesData = filesData || [];
-          console.log('✅ Fetched task files:', taskFilesData.length);
+          if (isDev) {
+            console.log('✅ Fetched task files:', taskFilesData.length);
+          }
         }
       }
 
