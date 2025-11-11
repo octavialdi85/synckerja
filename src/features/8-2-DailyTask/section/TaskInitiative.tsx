@@ -9,6 +9,7 @@ import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { DueDateDialog } from './DueDateDialog';
 import { AssignInitiativeItemDialog } from './AssignInitiativeItemDialog';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 // Export stats for parent component
 export interface InitiativeStats {
@@ -39,6 +40,10 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
   const { tasks, isLoading: tasksLoading } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  
+  // Check if user can assign employees (not employee role)
+  const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
   const [uncompletedItems, setUncompletedItems] = useState<UncompletedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [takingTask, setTakingTask] = useState<string | null>(null);
@@ -650,11 +655,16 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
                     </div>
                   ) : (
                     <div 
-                      className="flex items-center gap-1 text-xs text-amber-600 cursor-pointer hover:text-amber-700 transition-colors"
-                      onClick={() => {
+                      className={`flex items-center gap-1 text-xs text-amber-600 ${
+                        canAssignEmployees 
+                          ? 'cursor-pointer hover:text-amber-700 transition-colors' 
+                          : 'cursor-not-allowed opacity-75'
+                      }`}
+                      onClick={canAssignEmployees ? () => {
                         setSelectedItemForAssign(item);
                         setShowAssignDialog(true);
-                      }}
+                      } : undefined}
+                      title={!canAssignEmployees ? 'Only Admin, Owner, or HR can assign employees' : undefined}
                     >
                       <Clock className="w-3 h-3" />
                       <span>Unassigned</span>

@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 interface Employee {
   id: string;
@@ -43,6 +44,10 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
   const { data: employees = [], isLoading: loading } = useAvailableEmployees();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  
+  // Check if user can assign employees (not employee role)
+  const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -67,6 +72,15 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
   }, [searchTerm, employees]);
 
   const handleAssign = async () => {
+    if (!canAssignEmployees) {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only Admin, Owner, or HR can assign employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     if (!item || !selectedEmployee || !organizationId) {
       toast({
         title: 'Error',
