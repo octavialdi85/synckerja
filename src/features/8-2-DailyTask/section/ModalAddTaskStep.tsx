@@ -85,15 +85,16 @@ export const ModalAddTaskStep = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
-            <ListChecks className="h-5 w-5 text-blue-600" />
-            <span>Add New Step</span>
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-lg border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%]">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="flex items-center space-x-2">
+              <ListChecks className="h-5 w-5 text-blue-600" />
+              <span>Add New Step</span>
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-xs font-medium text-blue-900 mb-1">
             Task:
           </p>
@@ -178,6 +179,7 @@ export const ModalAddTaskStep = ({
             </Button>
           </div>
         </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
