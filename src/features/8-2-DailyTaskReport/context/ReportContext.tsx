@@ -109,7 +109,11 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         
         const taskIdList = (taskIds || []).map(t => t.id);
         
+        // Initialize step and sub-step lists outside the if block to avoid scope issues
+        let stepIdList: string[] = [];
+        let subStepIdList: string[] = [];
         let history: any[] = [];
+        
         if (taskIdList.length > 0) {
           // Get step IDs for these tasks
           const { data: stepIds } = await supabase
@@ -117,16 +121,17 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .select('id')
             .in('task_id', taskIdList);
           
-          const stepIdList = (stepIds || []).map(s => s.id);
+          stepIdList = (stepIds || []).map(s => s.id);
+          console.log(`📋 Found ${taskIdList.length} tasks, ${stepIdList.length} steps in organization`);
           
           // Get sub-step IDs for these steps
-          let subStepIdList: string[] = [];
           if (stepIdList.length > 0) {
             const { data: subSteps } = await supabase
               .from('task_steps_to_steps')
               .select('id')
               .in('parent_step_id', stepIdList);
             subStepIdList = (subSteps || []).map(s => s.id);
+            console.log(`📋 Found ${subStepIdList.length} sub-steps in organization`);
           }
           
           // Fetch history for steps and sub-steps in current organization
@@ -160,18 +165,96 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         
         const hist = history;
 
-        // Collect IDs for enrichment (both for blockers and updates)
-        // Filter: Only include unresolved blockers
-        const rawBlockers = hist.filter((h: any) => h.action_type === 'blocker_added' && !h.is_resolved);
-        const stepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
-        const subStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
-        // Also include from general history
+        // Fetch ALL unresolved blockers separately (no limit) to ensure all blockers are shown
+        // IMPORTANT: Use separate queries for steps and sub-steps (same as TaskList.tsx)
+        // This is more reliable than using .or() with complex conditions
+        let rawBlockers: any[] = [];
+        
+        // Query 1: Get blockers for steps
+        if (stepIdList.length > 0) {
+          try {
+            const { data: stepBlockersData, error: stepBlockersError } = await supabase
+              .from('task_step_history')
+              .select('*')
+              .eq('action_type', 'blocker_added')
+              .in('task_step_id', stepIdList);
+            
+            if (stepBlockersError) {
+              console.error('Error fetching step blockers:', stepBlockersError);
+            } else if (stepBlockersData) {
+              // Filter for unresolved blockers in JavaScript (includes null and false)
+              const unresolvedStepBlockers = stepBlockersData.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
+              rawBlockers = [...rawBlockers, ...unresolvedStepBlockers];
+              console.log(`📊 Step blockers: ${stepBlockersData.length} total, ${unresolvedStepBlockers.length} unresolved`);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch step blockers:', err);
+          }
+        }
+        
+        // Query 2: Get blockers for sub-steps
+        if (subStepIdList.length > 0) {
+          try {
+            const { data: subStepBlockersData, error: subStepBlockersError } = await supabase
+              .from('task_step_history')
+              .select('*')
+              .eq('action_type', 'blocker_added')
+              .in('task_steps_to_steps_id', subStepIdList);
+            
+            if (subStepBlockersError) {
+              console.error('Error fetching sub-step blockers:', subStepBlockersError);
+            } else if (subStepBlockersData) {
+              // Filter for unresolved blockers in JavaScript (includes null and false)
+              const unresolvedSubStepBlockers = subStepBlockersData.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
+              rawBlockers = [...rawBlockers, ...unresolvedSubStepBlockers];
+              console.log(`📊 Sub-step blockers: ${subStepBlockersData.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch sub-step blockers:', err);
+          }
+        }
+        
+        // Sort by created_at descending
+        rawBlockers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        
+        // Log blockers without valid step/sub-step IDs
+        const blockersWithoutIds = rawBlockers.filter((b: any) => !b.task_step_id && !b.task_steps_to_steps_id);
+        if (blockersWithoutIds.length > 0) {
+          console.warn(`⚠️ Found ${blockersWithoutIds.length} blockers without task_step_id or task_steps_to_steps_id:`, blockersWithoutIds);
+        }
+        
+        // Log blockers with step IDs that might not be in stepIdList
+        const blockersWithStepIds = rawBlockers.filter((b: any) => b.task_step_id && !stepIdList.includes(b.task_step_id));
+        if (blockersWithStepIds.length > 0) {
+          console.warn(`⚠️ Found ${blockersWithStepIds.length} blockers with step IDs not in stepIdList:`, blockersWithStepIds.map((b: any) => b.task_step_id));
+        }
+        
+        // Log blockers with sub-step IDs that might not be in subStepIdList
+        const blockersWithSubStepIds = rawBlockers.filter((b: any) => b.task_steps_to_steps_id && !subStepIdList.includes(b.task_steps_to_steps_id));
+        if (blockersWithSubStepIds.length > 0) {
+          console.warn(`⚠️ Found ${blockersWithSubStepIds.length} blockers with sub-step IDs not in subStepIdList:`, blockersWithSubStepIds.map((b: any) => b.task_steps_to_steps_id));
+        }
+        
+        console.log(`📊 Total unresolved blockers: ${rawBlockers.length}`);
+
+        // Collect IDs for enrichment
+        // For blockers: get step IDs from all blockers (not limited by history limit)
+        const blockerStepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
+        const blockerSubStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
+        
+        // For recent updates: also include step IDs from history
+        const historyStepIds: string[] = [];
+        const historySubStepIds: string[] = [];
         hist.forEach((h: any) => {
-          if (h.task_step_id) stepIds.push(h.task_step_id);
-          if (h.task_steps_to_steps_id) subStepIds.push(h.task_steps_to_steps_id);
+          if (h.task_step_id) historyStepIds.push(h.task_step_id);
+          if (h.task_steps_to_steps_id) historySubStepIds.push(h.task_steps_to_steps_id);
         });
-        const uniqStepIds = [...new Set(stepIds)];
-        const uniqSubIds = [...new Set(subStepIds)];
+        
+        // Combine all step IDs needed for enrichment (blockers + history for updates)
+        const allStepIds = [...new Set([...blockerStepIds, ...historyStepIds])];
+        const allSubStepIds = [...new Set([...blockerSubStepIds, ...historySubStepIds])];
+        const uniqStepIds = allStepIds;
+        const uniqSubIds = allSubStepIds;
 
         let stepMap: Record<string, any> = {};
         let subStepMap: Record<string, any> = {};
@@ -182,6 +265,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .select('id, title, task:daily_tasks(id, title)')
             .in('id', uniqStepIds);
           (steps || []).forEach((s: any) => { stepMap[s.id] = s; });
+          console.log(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
         }
         if (uniqSubIds.length > 0) {
           const { data: subs } = await supabase
@@ -189,6 +273,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .select('id, title, parent_step_id')
             .in('id', uniqSubIds);
           (subs || []).forEach((s: any) => { subStepMap[s.id] = s; });
+          console.log(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
         }
 
         const enriched = rawBlockers.map((b: any) => {
@@ -196,13 +281,29 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
           const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
           const task = (step || parentStep)?.task || null;
-          return {
+          const enrichedBlocker = {
             ...b,
             taskTitle: task?.title || '-',
             stepTitle: (step || parentStep)?.title || '-',
             subStepTitle: sub?.title || null,
           };
+          
+          // Log warning if blocker doesn't have task or step info
+          if (!step && !parentStep) {
+            console.warn('⚠️ Blocker without step info:', {
+              blockerId: b.id,
+              task_step_id: b.task_step_id,
+              task_steps_to_steps_id: b.task_steps_to_steps_id,
+              stepInMap: !!step,
+              subInMap: !!sub,
+              parentStepInMap: !!parentStep
+            });
+          }
+          
+          return enrichedBlocker;
         });
+        
+        console.log(`✅ Enriched ${enriched.length} blockers with task/step info`);
         setBlockers(enriched);
 
         // Build blocker count and map by step (use parent step for sub-step blockers)
@@ -265,7 +366,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         stepTitle: r.step?.title || '-',
         taskTitle: r.step?.task?.title || '-',
         dueDate: r.due_date,
-        finishedAt: r.step?.updated_at || null,
+        finishedAt: (r.step?.is_completed && r.step?.updated_at) ? r.step.updated_at : null,
         isCompleted: !!r.step?.is_completed,
         isOnTime,
         lateDays,

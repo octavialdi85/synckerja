@@ -272,19 +272,19 @@ export const PerformanceTable = () => {
           )}
         </div>
       </div>
-      <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+      <div className="flex-1 min-h-0 seamless-scroll overflow-x-auto overflow-y-auto">
         {viewMode === 'performance' ? (
           /* Assignments Performance Table */
-          <table className="w-full text-sm">
+          <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
             <thead className="bg-gray-50 text-gray-600 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="text-left px-3 py-2 bg-gray-50">PIC</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Task</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Step</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Blocker</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Due Date</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Finished</th>
-                <th className="text-left px-3 py-2 bg-gray-50">Status</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '120px', minWidth: '120px' }}>PIC</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Task</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Step</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Blocker</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '100px', minWidth: '100px' }}>Due Date</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '160px', minWidth: '160px' }}>Finished</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '112px', minWidth: '112px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -295,15 +295,19 @@ export const PerformanceTable = () => {
               ) : (
                 rows.map((r, idx) => (
                   <tr key={idx} className="border-t">
-                    <td className="px-3 py-2 text-gray-900">{r.employeeName}</td>
-                    <td className="px-3 py-2 text-gray-700">{r.taskTitle}</td>
-                    <td className="px-3 py-2 text-gray-700">{r.stepTitle}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-left text-gray-900" style={{ width: '120px', minWidth: '120px' }}>{r.employeeName}</td>
+                    <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.taskTitle}</td>
+                    <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.stepTitle}</td>
+                    <td className="px-3 py-2 text-left align-middle" style={{ width: '140px', minWidth: '140px' }}>
                       {(() => {
                         const items = getBlockersForStep(r.stepId);
                         const count = items.length;
                         return count > 0 ? (
-                          <button onClick={() => setOpenForStep(r.stepId)} className="text-xs font-medium text-purple-700 hover:underline">
+                          <button 
+                            onClick={() => setOpenForStep(r.stepId)} 
+                            className="text-xs font-medium text-purple-700 hover:underline m-0 p-0 text-left"
+                            style={{ textAlign: 'left' }}
+                          >
                             Found {count} Blocker{count > 1 ? 's' : ''}
                           </button>
                         ) : (
@@ -311,15 +315,15 @@ export const PerformanceTable = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}</td>
-                    <td className="px-3 py-2 text-gray-600">{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '-'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '100px', minWidth: '100px' }}>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}</td>
+                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '160px', minWidth: '160px' }}>{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '-'}</td>
+                    <td className="px-3 py-2 text-left whitespace-nowrap" style={{ width: '112px', minWidth: '112px' }}>
                       {r.isOnTime === null ? (
                         <span className="text-xs text-gray-500">N/A</span>
                       ) : r.isOnTime ? (
-                        <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5">On-Time</span>
+                        <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5 whitespace-nowrap">On-Time</span>
                       ) : (
-                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5">Late {r.lateDays}d</span>
+                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5 whitespace-nowrap">Late {r.lateDays}d</span>
                       )}
                     </td>
                   </tr>

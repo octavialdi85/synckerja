@@ -205,8 +205,13 @@ export const BlockersAndUpdatesPanel = () => {
   };
 
   // Filter out resolved blockers from display
+  // IMPORTANT: Include blockers with is_resolved === null or is_resolved === false
   const unresolvedBlockers = useMemo(() => {
-    return (blockers || []).filter((b: any) => !b.is_resolved && !locResolved[b.id] && !locDeleted[b.id]);
+    return (blockers || []).filter((b: any) => 
+      (b.is_resolved === null || b.is_resolved === false) && 
+      !locResolved[b.id] && 
+      !locDeleted[b.id]
+    );
   }, [blockers, locResolved, locDeleted]);
 
   const grouped = useMemo(() => {
