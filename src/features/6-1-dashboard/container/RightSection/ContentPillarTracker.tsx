@@ -176,7 +176,7 @@ export const ContentPillarTracker: React.FC = () => {
   const middleCount = pillarData.filter(p => p.funnel === 'middle').length;
   const bottomCount = pillarData.filter(p => p.funnel === 'bottom').length;
 
-  return <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col max-h-[calc(100vh-130px)]">
+  return <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between p-2 border-b border-gray-200 flex-shrink-0">
         <div>

@@ -21,6 +21,7 @@ const ContentCalendarContent: React.FC = () => {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [showDayDialog, setShowDayDialog] = useState(false);
   const [showAddContentDialog, setShowAddContentDialog] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState('content-calendar');
@@ -77,30 +78,111 @@ const ContentCalendarContent: React.FC = () => {
     return plans;
   }, [contentPlans]);
 
-  // Calculate day status and color
+  // Calculate day status and color based on approved, production_approved, done, and on_time_status
   const getDayInfo = (date: Date) => {
     const dateKey = format(date, 'yyyy-MM-dd');
     const plansForDay = plansByDate[dateKey] || [];
     
-    if (plansForDay.length === 0) return { color: '', count: 0, status: 'empty', plans: [] };
+    if (plansForDay.length === 0) return { color: '', count: 0, status: 'empty', plans: [], lateText: null };
     
-    const hasOverdue = plansForDay.some(plan => {
-      const postDate = new Date(plan.post_date);
-      return postDate <= new Date() && !plan.approved && !plan.done;
+    // Note: We no longer apply color to the day card itself, only to individual plan cards
+    
+    // Determine color based on plan status
+    // Priority: Check each plan and determine the most critical status
+    let hasRed = false;      // approved = FALSE + production_approved = false + done = false
+    let hasOrange = false;   // approved = TRUE + production_approved = false + done = false
+    let hasYellow = false;   // approved = TRUE + production_approved = TRUE + done = false
+    let hasGreen = false;    // approved = TRUE + production_approved = TRUE + done = True
+    let hasGreenWithLate = false; // approved = TRUE + production_approved = TRUE + done = True + on_time_status != "Ontime" and != NULL/Empty
+    let lateText: string | null = null;
+    
+    plansForDay.forEach(plan => {
+      const approved = plan.approved === true;
+      const productionApproved = plan.production_approved === true;
+      const done = plan.done === true;
+      const onTimeStatus = plan.on_time_status;
+      
+      // Check if on_time_status is not "Ontime" and not NULL/Empty
+      const hasLateStatus = onTimeStatus && 
+                           onTimeStatus.trim() !== '' && 
+                           onTimeStatus !== 'Ontime' &&
+                           onTimeStatus.toLowerCase().includes('late');
+      
+      if (!approved && !productionApproved && !done) {
+        hasRed = true;
+      } else if (approved && !productionApproved && !done) {
+        hasOrange = true;
+      } else if (approved && productionApproved && !done) {
+        hasYellow = true;
+      } else if (approved && productionApproved && done) {
+        hasGreen = true;
+        if (hasLateStatus) {
+          hasGreenWithLate = true;
+          // Store the late text (e.g., "Late 1 Day", "Late 2 Days")
+          lateText = onTimeStatus;
+        }
+      }
     });
     
-    const hasCompleted = plansForDay.some(plan => plan.approved || plan.done);
-    const hasRevision = plansForDay.some(plan => 
-      plan.status === 'Request Revisi' || plan.production_status === 'Request Revisi'
-    );
+    // Return status based on priority (most critical first)
+    // Note: color is no longer used for day card background, only for reference
+    if (hasRed) {
+      return { 
+        color: '', 
+        count: plansForDay.length, 
+        status: 'red', 
+        plans: plansForDay,
+        lateText: null
+      };
+    }
+    if (hasOrange) {
+      return { 
+        color: '', 
+        count: plansForDay.length, 
+        status: 'orange', 
+        plans: plansForDay,
+        lateText: null
+      };
+    }
+    if (hasYellow) {
+      return { 
+        color: '', 
+        count: plansForDay.length, 
+        status: 'yellow', 
+        plans: plansForDay,
+        lateText: null
+      };
+    }
+    if (hasGreenWithLate) {
+      return { 
+        color: '', 
+        count: plansForDay.length, 
+        status: 'green-late', 
+        plans: plansForDay,
+        lateText: lateText
+      };
+    }
+    if (hasGreen) {
+      return { 
+        color: '', 
+        count: plansForDay.length, 
+        status: 'green', 
+        plans: plansForDay,
+        lateText: null
+      };
+    }
     
-    if (hasOverdue) return { color: 'bg-red-100 border-red-300 text-red-800', count: plansForDay.length, status: 'overdue', plans: plansForDay };
-    if (hasRevision) return { color: 'bg-yellow-100 border-yellow-300 text-yellow-800', count: plansForDay.length, status: 'revision', plans: plansForDay };
-    if (hasCompleted) return { color: 'bg-green-100 border-green-300 text-green-800', count: plansForDay.length, status: 'completed', plans: plansForDay };
-    return { color: 'bg-blue-100 border-blue-300 text-blue-800', count: plansForDay.length, status: 'planned', plans: plansForDay };
+    // Default fallback
+    return { 
+      color: '', 
+      count: plansForDay.length, 
+      status: 'planned', 
+      plans: plansForDay,
+      lateText: null
+    };
   };
 
-  // Calculate statistics for current month
+  // Calculate statistics for current month based on approved, production_approved, done, and on_time_status
   const monthlyStats = useMemo(() => {
     const currentMonthPlans = contentPlans.filter(plan => {
       if (!plan.post_date) return false;
@@ -109,28 +191,61 @@ const ContentCalendarContent: React.FC = () => {
              postDate.getFullYear() === currentDate.getFullYear();
     });
 
-    const today = new Date();
-    const overdue = currentMonthPlans.filter(plan => {
-      const postDate = new Date(plan.post_date);
-      return postDate <= today && !plan.approved && !plan.done;
-    }).length;
-    
-    const completed = currentMonthPlans.filter(plan => plan.approved || plan.done).length;
-    const revision = currentMonthPlans.filter(plan => 
-      plan.status === 'Request Revisi' || plan.production_status === 'Request Revisi'
-    ).length;
-    const planned = currentMonthPlans.filter(plan => 
-      !plan.approved && !plan.done && 
-      plan.status !== 'Request Revisi' && 
-      plan.production_status !== 'Request Revisi'
-    ).length;
+    // Count plans by status based on approved, production_approved, done, and on_time_status
+    let redCount = 0;      // approved = FALSE + production_approved = false + done = false
+    let orangeCount = 0;   // approved = TRUE + production_approved = false + done = false
+    let yellowCount = 0;   // approved = TRUE + production_approved = TRUE + done = false
+    let greenCount = 0;    // approved = TRUE + production_approved = TRUE + done = True
+    let greenWithLateCount = 0; // approved = TRUE + production_approved = TRUE + done = True + on_time_status != "Ontime" and != NULL/Empty
 
-    return { overdue, completed, revision, planned, total: currentMonthPlans.length };
+    currentMonthPlans.forEach(plan => {
+      const approved = plan.approved === true;
+      const productionApproved = plan.production_approved === true;
+      const done = plan.done === true;
+      const onTimeStatus = plan.on_time_status;
+      
+      // Check if on_time_status is not "Ontime" and not NULL/Empty
+      const hasLateStatus = onTimeStatus && 
+                           onTimeStatus.trim() !== '' && 
+                           onTimeStatus !== 'Ontime' &&
+                           onTimeStatus.toLowerCase().includes('late');
+      
+      if (!approved && !productionApproved && !done) {
+        redCount++;
+      } else if (approved && !productionApproved && !done) {
+        orangeCount++;
+      } else if (approved && productionApproved && !done) {
+        yellowCount++;
+      } else if (approved && productionApproved && done) {
+        if (hasLateStatus) {
+          greenWithLateCount++;
+        } else {
+          greenCount++;
+        }
+      }
+    });
+
+    return { 
+      red: redCount,
+      orange: orangeCount,
+      yellow: yellowCount,
+      green: greenCount,
+      greenWithLate: greenWithLateCount,
+      total: currentMonthPlans.length 
+    };
   }, [contentPlans, currentDate]);
 
   // Handle day click
   const handleDayClick = (date: Date, dayInfo: any) => {
     setSelectedDate(date);
+    setSelectedPlan(null); // Reset selected plan when clicking on day
+    setShowDayDialog(true);
+  };
+
+  // Handle plan card click (when there are multiple plans in a day)
+  const handlePlanClick = (date: Date, plan: any) => {
+    setSelectedDate(date);
+    setSelectedPlan(plan); // Set the specific plan that was clicked
     setShowDayDialog(true);
   };
 
@@ -222,6 +337,7 @@ const ContentCalendarContent: React.FC = () => {
                             calendarDays={calendarDays}
                             getDayInfo={getDayInfo}
                             onDayClick={handleDayClick}
+                            onPlanClick={handlePlanClick}
                           />
                         </div>
 
@@ -260,10 +376,17 @@ const ContentCalendarContent: React.FC = () => {
       {/* Day Details Dialog */}
       <DayDetailsDialog
         open={showDayDialog}
-        onOpenChange={setShowDayDialog}
+        onOpenChange={(open) => {
+          setShowDayDialog(open);
+          if (!open) {
+            // Reset selected plan when dialog closes
+            setSelectedPlan(null);
+          }
+        }}
         selectedDate={selectedDate}
         plansByDate={plansByDate}
         onAddContent={handleAddContent}
+        selectedPlan={selectedPlan}
       />
 
       {/* Add Content Dialog */}

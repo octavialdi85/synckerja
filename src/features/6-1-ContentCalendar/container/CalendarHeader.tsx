@@ -42,20 +42,24 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       {/* Calendar Legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+          <div className="w-3 h-3 bg-red-500 rounded shadow-sm"></div>
+          <span className="text-gray-700">Not Approved</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-orange-500 rounded shadow-sm"></div>
+          <span className="text-gray-700">Approved (No Production)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-amber-400 rounded shadow-sm"></div>
+          <span className="text-gray-700">Production Approved</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-green-500 rounded shadow-sm"></div>
           <span className="text-gray-700">Completed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
-          <span className="text-gray-700">Planned</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
-          <span className="text-gray-700">Revision</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
-          <span className="text-gray-700">Overdue</span>
+          <div className="w-3 h-3 bg-green-500 rounded shadow-sm border-2 border-red-500"></div>
+          <span className="text-gray-700">Completed (Late)</span>
         </div>
       </div>
     </div>

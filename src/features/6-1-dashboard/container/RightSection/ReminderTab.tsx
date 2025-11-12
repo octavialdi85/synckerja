@@ -169,10 +169,10 @@ const ReminderTab: React.FC = () => {
           </TabsList>
           
           {/* Scrollable Content Area */}
-          <TabsContent value="funnel" className="flex-1 p-2 m-0 min-h-0 overflow-y-auto seamless-scroll">
+          <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
             <div className="w-full h-full flex flex-col">
               {/* Content Pillar Tracker - Full Width */}
-              <div className="w-full flex-1 min-h-0">
+              <div className="w-full h-full flex-1 min-h-0">
                 <ContentPillarTracker />
               </div>
             </div>

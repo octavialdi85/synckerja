@@ -3,11 +3,12 @@ import { Calendar, CheckCircle2, Clock, AlertCircle, FileEdit } from 'lucide-rea
 import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
 
 interface MonthlyStats {
-  overdue: number;
-  completed: number;
-  revision: number;
-  planned: number;
   total: number;
+  red: number;
+  orange: number;
+  yellow: number;
+  green: number;
+  greenWithLate: number;
 }
 
 // Using ContentPlan from dashboard types
@@ -60,36 +61,44 @@ export const ContentCalendarOverview = ({
             <span className="text-sm font-semibold text-gray-900">{monthlyStats.total}</span>
           </div>
 
+          <div className="flex items-center justify-between p-2 bg-red-50 rounded">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <span className="text-xs text-gray-600">Not Approved</span>
+            </div>
+            <span className="text-sm font-semibold text-red-600">{monthlyStats.red}</span>
+          </div>
+
+          <div className="flex items-center justify-between p-2 bg-orange-50 rounded">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-orange-600" />
+              <span className="text-xs text-gray-600">Approved (No Production)</span>
+            </div>
+            <span className="text-sm font-semibold text-orange-600">{monthlyStats.orange}</span>
+          </div>
+
+          <div className="flex items-center justify-between p-2 bg-amber-50 rounded">
+            <div className="flex items-center gap-2">
+              <FileEdit className="h-4 w-4 text-amber-600" />
+              <span className="text-xs text-gray-600">Production Approved</span>
+            </div>
+            <span className="text-sm font-semibold text-amber-600">{monthlyStats.yellow}</span>
+          </div>
+
           <div className="flex items-center justify-between p-2 bg-green-50 rounded">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-xs text-gray-600">Completed</span>
             </div>
-            <span className="text-sm font-semibold text-green-600">{monthlyStats.completed}</span>
+            <span className="text-sm font-semibold text-green-600">{monthlyStats.green}</span>
           </div>
 
-          <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
+          <div className="flex items-center justify-between p-2 bg-green-100 rounded border border-green-300">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600" />
-              <span className="text-xs text-gray-600">Planned</span>
+              <CheckCircle2 className="h-4 w-4 text-green-700" />
+              <span className="text-xs text-gray-700 font-medium">Completed (Late)</span>
             </div>
-            <span className="text-sm font-semibold text-blue-600">{monthlyStats.planned}</span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
-            <div className="flex items-center gap-2">
-              <FileEdit className="h-4 w-4 text-yellow-600" />
-              <span className="text-xs text-gray-600">Revision</span>
-            </div>
-            <span className="text-sm font-semibold text-yellow-600">{monthlyStats.revision}</span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 bg-red-50 rounded">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <span className="text-xs text-gray-600">Overdue</span>
-            </div>
-            <span className="text-sm font-semibold text-red-600">{monthlyStats.overdue}</span>
+            <span className="text-sm font-semibold text-green-700">{monthlyStats.greenWithLate}</span>
           </div>
         </div>
 

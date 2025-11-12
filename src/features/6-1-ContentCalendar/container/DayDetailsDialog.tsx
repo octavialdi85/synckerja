@@ -13,6 +13,7 @@ interface DayDetailsDialogProps {
   selectedDate: Date | null;
   plansByDate: { [key: string]: any[] };
   onAddContent: (date: Date) => void;
+  selectedPlan?: any | null; // Optional: if provided, show only this plan
 }
 
 export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
@@ -20,7 +21,8 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
   onOpenChange,
   selectedDate,
   plansByDate,
-  onAddContent
+  onAddContent,
+  selectedPlan = null
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,7 +36,7 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
           {selectedDate && (
             <div className="flex justify-between items-center pt-2">
               <h4 className="font-medium">
-                {plansByDate[format(selectedDate, 'yyyy-MM-dd')]?.length || 0} Content Plans
+                {selectedPlan ? '1 Content Plan' : `${plansByDate[format(selectedDate, 'yyyy-MM-dd')]?.length || 0} Content Plans`}
               </h4>
               <Button 
                 onClick={() => onAddContent(selectedDate)}
@@ -51,9 +53,15 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
         <div className="flex-1 overflow-y-auto space-y-4 pt-4">
           {selectedDate && (
             <>                
-              {plansByDate[format(selectedDate, 'yyyy-MM-dd')]?.length > 0 ? (
-                <div className="space-y-3">
-                  {plansByDate[format(selectedDate, 'yyyy-MM-dd')].map((plan) => (
+              {(() => {
+                // If selectedPlan is provided, show only that plan, otherwise show all plans for the day
+                const plansToShow = selectedPlan 
+                  ? [selectedPlan]
+                  : plansByDate[format(selectedDate, 'yyyy-MM-dd')] || [];
+                
+                return plansToShow.length > 0 ? (
+                  <div className="space-y-3">
+                    {plansToShow.map((plan) => (
                     <Card key={plan.id} className="p-3">
                       <div className="space-y-2">
                         {/* Service - Sub Service - Pillar */}
@@ -98,15 +106,16 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
                         </div>
                       </div>
                     </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CalendarIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No content plans for this day</p>
-                  <p className="text-sm">Click "Add Content" to create a new plan</p>
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CalendarIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No content plans for this day</p>
+                    <p className="text-sm">Click "Add Content" to create a new plan</p>
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>

@@ -879,7 +879,7 @@ const SocialMediaContent = () => {
                       <DashboardLoadingWrapper isLoading={loading}>
                         <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
                           {/* Left Section - Main Content (75% width / 9 cols) */}
-                          <div className="col-span-9 space-y-2 flex flex-col seamless-scroll h-full">
+                          <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full">
                             {/* Social Media Metrics */}
                             <div className="flex-shrink-0">
                               <SocialMediaErrorBoundary>
@@ -888,7 +888,7 @@ const SocialMediaContent = () => {
                             </div>
 
                             {/* Social Media Plan Table */}
-                            <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative seamless-scroll h-full">
+                            <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative h-full">
                               {/* Filters Section - Sticky at top */}
                               <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
                                 <SocialMediaErrorBoundary>
@@ -905,7 +905,7 @@ const SocialMediaContent = () => {
                               </div>
                               
                               {/* Scrollable Content Area */}
-                              <div className="flex-1 min-h-0 overflow-auto seamless-scroll">
+                              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
                                 <SocialMediaErrorBoundary>
                                   <ContentPlanTable 
                                     contentPlans={Array.isArray(filteredContentPlans) ? filteredContentPlans : []} 
@@ -941,7 +941,7 @@ const SocialMediaContent = () => {
                           </div>
 
                            {/* Right Section - Sidebar (25% width / 3 cols) */}
-                           <div className="col-span-3 space-y-2 seamless-scroll h-full">
+                           <div className="col-span-3 space-y-2 flex flex-col min-h-0 h-full">
                              <div className="h-full flex flex-col">
                                <SidebarContainer />
                              </div>
