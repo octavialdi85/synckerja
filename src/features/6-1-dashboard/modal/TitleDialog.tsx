@@ -343,7 +343,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       }
 
       // Insert into task_steps_assigned table
-      const { error: assignError } = await supabase
+      const { data: assignmentRecord, error: assignError } = await supabase
         .from('task_steps_assigned')
         .insert({
           organization_id: organizationId,
@@ -351,12 +351,54 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
           employee_id: currentEmployee.id,
           assigned_by: currentEmployee.id,
           assigned_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
       if (assignError) {
         console.error('Error assigning task step:', assignError);
         toast.error('Failed to assign task step');
         return;
+      }
+
+      // Insert deadline from post_date into task_steps_assigned_duedate table
+      // IMPORTANT: Deadline is taken from Post Date column (post_date) in social_media_plans
+      if (planData?.post_date && assignmentRecord?.id) {
+        try {
+          const postDate = new Date(planData.post_date);
+          // Validate date
+          if (isNaN(postDate.getTime())) {
+            console.warn('⚠️ Invalid post_date format:', planData.post_date);
+          } else {
+            // Set time to end of day (23:59:59) for deadline
+            postDate.setHours(23, 59, 59, 999);
+            const dueDateISO = postDate.toISOString();
+
+            const { error: dueDateError } = await supabase
+              .from('task_steps_assigned_duedate')
+              .insert({
+                organization_id: organizationId,
+                task_steps_assigned_id: assignmentRecord.id,
+                due_date: dueDateISO,
+                created_at: new Date().toISOString()
+              });
+
+            if (dueDateError) {
+              console.error('Error saving deadline:', dueDateError);
+              // Don't fail the whole operation if due date save fails
+              console.warn('⚠️ Deadline could not be saved, but step assignment was successful');
+            } else {
+              console.log('✅ Deadline saved from post_date:', planData.post_date, '→', dueDateISO);
+            }
+          }
+        } catch (dateError) {
+          console.error('Error processing post_date:', dateError);
+          // Don't fail the whole operation if date processing fails
+          console.warn('⚠️ Could not process post_date, but step assignment was successful');
+        }
+      } else if (assignmentRecord?.id) {
+        // If post_date is not available, log warning but don't fail
+        console.warn('⚠️ Post date not available, deadline not set for this step');
       }
 
       toast.success('Content title added as daily task step successfully');

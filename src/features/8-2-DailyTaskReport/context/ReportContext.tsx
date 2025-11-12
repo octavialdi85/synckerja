@@ -73,12 +73,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
   }>({ search: '', status: 'all', timePeriod: 'all', customStart: null, customEnd: null, pic: 'all', task: 'all', step: 'all', subStep: 'all' });
   const [blockerCountByStep, setBlockerCountByStep] = useState<Record<string, number>>({});
   const [blockersByStep, setBlockersByStep] = useState<Record<string, any[]>>({});
+  const [completionDateMap, setCompletionDateMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const load = async () => {
       if (!organizationId) return;
       setLoading(true);
       try {
+        // STEP 1: Fetch assignments (this is the main data source)
         const { data: assigns } = await supabase
           .from('task_steps_assigned')
           .select(`
@@ -100,213 +102,185 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         }));
         setRows(mapped);
 
-        // recent history (timeline) - CRITICAL: Filter by organization_id to prevent data leakage
-        // Get history only for tasks in the current organization
-        const { data: taskIds } = await supabase
-          .from('daily_tasks')
-          .select('id')
-          .eq('organization_id', organizationId);
+        // Extract step IDs and completed step IDs from assignments (REUSE DATA)
+        const allStepIdsFromAssignments = [...new Set(mapped.map((r: any) => r.step?.id).filter(Boolean))] as string[];
+        const completedStepIds = [...new Set(
+          mapped
+            .filter((r: any) => r.step?.is_completed && r.step?.id)
+            .map((r: any) => r.step.id)
+        )] as string[];
+
+        // STEP 2: PARALLEL - Fetch task IDs, completion dates, and blockers in parallel
+        const [taskIdsResult, completionHistoryResult, stepBlockersResult] = await Promise.all([
+          // Get task IDs (needed for history and sub-steps)
+          supabase
+            .from('daily_tasks')
+            .select('id')
+            .eq('organization_id', organizationId),
+          
+          // Get completion dates (only if there are completed steps)
+          completedStepIds.length > 0
+            ? supabase
+                .from('task_step_history')
+                .select('task_step_id, created_at, new_value')
+                .in('task_step_id', completedStepIds)
+                .eq('action_type', 'status_change')
+                .or('new_value.eq.completed,new_value.eq.COMPLETED')
+                .order('created_at', { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+          
+          // Get step blockers (use step IDs from assignments - REUSE DATA)
+          allStepIdsFromAssignments.length > 0
+            ? supabase
+                .from('task_step_history')
+                .select('*')
+                .eq('action_type', 'blocker_added')
+                .in('task_step_id', allStepIdsFromAssignments)
+            : Promise.resolve({ data: [], error: null })
+        ]);
+
+        const taskIdList = (taskIdsResult.data || []).map(t => t.id);
         
-        const taskIdList = (taskIds || []).map(t => t.id);
-        
-        // Initialize step and sub-step lists outside the if block to avoid scope issues
+        // Process completion dates
+        let completionDateMap: Record<string, string> = {};
+        if (completionHistoryResult.data) {
+          completionHistoryResult.data.forEach((entry: any) => {
+            if (entry.task_step_id && !completionDateMap[entry.task_step_id]) {
+              completionDateMap[entry.task_step_id] = entry.created_at;
+            }
+          });
+          console.log(`📅 Loaded completion dates for ${Object.keys(completionDateMap).length} steps`);
+        }
+        setCompletionDateMap(completionDateMap);
+
+        // Process step blockers
+        const unresolvedStepBlockers = (stepBlockersResult.data || []).filter(
+          (b: any) => b.is_resolved === null || b.is_resolved === false
+        );
+        console.log(`📊 Step blockers: ${(stepBlockersResult.data || []).length} total, ${unresolvedStepBlockers.length} unresolved`);
+
+        // STEP 3: PARALLEL - Fetch step IDs and sub-step IDs in parallel
         let stepIdList: string[] = [];
         let subStepIdList: string[] = [];
         let history: any[] = [];
-        
+        let unresolvedSubStepBlockers: any[] = [];
+
         if (taskIdList.length > 0) {
-          // Get step IDs for these tasks
-          const { data: stepIds } = await supabase
+          const stepIdsResult = await supabase
             .from('task_steps')
             .select('id')
             .in('task_id', taskIdList);
           
-          stepIdList = (stepIds || []).map(s => s.id);
+          stepIdList = (stepIdsResult.data || []).map(s => s.id);
           console.log(`📋 Found ${taskIdList.length} tasks, ${stepIdList.length} steps in organization`);
           
-          // Get sub-step IDs for these steps
+          // Fetch sub-steps for all steps (we need complete data for history and blockers)
           if (stepIdList.length > 0) {
-            const { data: subSteps } = await supabase
+            const subStepsResult = await supabase
               .from('task_steps_to_steps')
-              .select('id')
+              .select('id, parent_step_id')
               .in('parent_step_id', stepIdList);
-            subStepIdList = (subSteps || []).map(s => s.id);
+            subStepIdList = (subStepsResult.data || []).map(s => s.id);
             console.log(`📋 Found ${subStepIdList.length} sub-steps in organization`);
           }
-          
-          // Fetch history for steps and sub-steps in current organization
-          // CRITICAL: Filter by organization to prevent data leakage
-          if (stepIdList.length > 0 || subStepIdList.length > 0) {
-            let historyQuery = supabase
-              .from('task_step_history')
-              .select('*');
-            
-            // Build OR condition properly for Supabase
-            if (stepIdList.length > 0 && subStepIdList.length > 0) {
-              // Both conditions
-              historyQuery = historyQuery.or(
-                `task_step_id.in.(${stepIdList.join(',')}),task_steps_to_steps_id.in.(${subStepIdList.join(',')})`
-              );
-            } else if (stepIdList.length > 0) {
-              // Only step condition
-              historyQuery = historyQuery.in('task_step_id', stepIdList);
-            } else if (subStepIdList.length > 0) {
-              // Only sub-step condition
-              historyQuery = historyQuery.in('task_steps_to_steps_id', subStepIdList);
-            }
-            
-            const { data: historyData } = await historyQuery
-              .order('created_at', { ascending: false })
-              .limit(50);
-            
-            history = historyData || [];
-          }
-        }
-        
-        const hist = history;
 
-        // Fetch ALL unresolved blockers separately (no limit) to ensure all blockers are shown
-        // IMPORTANT: Use separate queries for steps and sub-steps (same as TaskList.tsx)
-        // This is more reliable than using .or() with complex conditions
-        let rawBlockers: any[] = [];
-        
-        // Query 1: Get blockers for steps
-        if (stepIdList.length > 0) {
-          try {
-            const { data: stepBlockersData, error: stepBlockersError } = await supabase
-              .from('task_step_history')
-              .select('*')
-              .eq('action_type', 'blocker_added')
-              .in('task_step_id', stepIdList);
+          // STEP 4: PARALLEL - Fetch sub-step blockers and history in parallel
+          const [subStepBlockersResult, historyResult] = await Promise.all([
+            // Get sub-step blockers
+            subStepIdList.length > 0
+              ? supabase
+                  .from('task_step_history')
+                  .select('*')
+                  .eq('action_type', 'blocker_added')
+                  .in('task_steps_to_steps_id', subStepIdList)
+              : Promise.resolve({ data: [], error: null }),
             
-            if (stepBlockersError) {
-              console.error('Error fetching step blockers:', stepBlockersError);
-            } else if (stepBlockersData) {
-              // Filter for unresolved blockers in JavaScript (includes null and false)
-              const unresolvedStepBlockers = stepBlockersData.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
-              rawBlockers = [...rawBlockers, ...unresolvedStepBlockers];
-              console.log(`📊 Step blockers: ${stepBlockersData.length} total, ${unresolvedStepBlockers.length} unresolved`);
-            }
-          } catch (err) {
-            console.warn('Failed to fetch step blockers:', err);
+            // Fetch history for steps and sub-steps
+            (stepIdList.length > 0 || subStepIdList.length > 0)
+              ? (() => {
+                  let historyQuery = supabase.from('task_step_history').select('*');
+                  if (stepIdList.length > 0 && subStepIdList.length > 0) {
+                    historyQuery = historyQuery.or(
+                      `task_step_id.in.(${stepIdList.join(',')}),task_steps_to_steps_id.in.(${subStepIdList.join(',')})`
+                    );
+                  } else if (stepIdList.length > 0) {
+                    historyQuery = historyQuery.in('task_step_id', stepIdList);
+                  } else if (subStepIdList.length > 0) {
+                    historyQuery = historyQuery.in('task_steps_to_steps_id', subStepIdList);
+                  }
+                  return historyQuery.order('created_at', { ascending: false }).limit(50);
+                })()
+              : Promise.resolve({ data: [], error: null })
+          ]);
+
+          // Process sub-step blockers
+          if (subStepBlockersResult.data) {
+            unresolvedSubStepBlockers = subStepBlockersResult.data.filter(
+              (b: any) => b.is_resolved === null || b.is_resolved === false
+            );
+            console.log(`📊 Sub-step blockers: ${subStepBlockersResult.data.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
           }
+
+          // Process history
+          history = historyResult.data || [];
         }
-        
-        // Query 2: Get blockers for sub-steps
-        if (subStepIdList.length > 0) {
-          try {
-            const { data: subStepBlockersData, error: subStepBlockersError } = await supabase
-              .from('task_step_history')
-              .select('*')
-              .eq('action_type', 'blocker_added')
-              .in('task_steps_to_steps_id', subStepIdList);
-            
-            if (subStepBlockersError) {
-              console.error('Error fetching sub-step blockers:', subStepBlockersError);
-            } else if (subStepBlockersData) {
-              // Filter for unresolved blockers in JavaScript (includes null and false)
-              const unresolvedSubStepBlockers = subStepBlockersData.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
-              rawBlockers = [...rawBlockers, ...unresolvedSubStepBlockers];
-              console.log(`📊 Sub-step blockers: ${subStepBlockersData.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
-            }
-          } catch (err) {
-            console.warn('Failed to fetch sub-step blockers:', err);
-          }
-        }
-        
-        // Sort by created_at descending
+
+        // Combine all blockers
+        const rawBlockers = [...unresolvedStepBlockers, ...unresolvedSubStepBlockers];
         rawBlockers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        
-        // Log blockers without valid step/sub-step IDs
-        const blockersWithoutIds = rawBlockers.filter((b: any) => !b.task_step_id && !b.task_steps_to_steps_id);
-        if (blockersWithoutIds.length > 0) {
-          console.warn(`⚠️ Found ${blockersWithoutIds.length} blockers without task_step_id or task_steps_to_steps_id:`, blockersWithoutIds);
-        }
-        
-        // Log blockers with step IDs that might not be in stepIdList
-        const blockersWithStepIds = rawBlockers.filter((b: any) => b.task_step_id && !stepIdList.includes(b.task_step_id));
-        if (blockersWithStepIds.length > 0) {
-          console.warn(`⚠️ Found ${blockersWithStepIds.length} blockers with step IDs not in stepIdList:`, blockersWithStepIds.map((b: any) => b.task_step_id));
-        }
-        
-        // Log blockers with sub-step IDs that might not be in subStepIdList
-        const blockersWithSubStepIds = rawBlockers.filter((b: any) => b.task_steps_to_steps_id && !subStepIdList.includes(b.task_steps_to_steps_id));
-        if (blockersWithSubStepIds.length > 0) {
-          console.warn(`⚠️ Found ${blockersWithSubStepIds.length} blockers with sub-step IDs not in subStepIdList:`, blockersWithSubStepIds.map((b: any) => b.task_steps_to_steps_id));
-        }
-        
         console.log(`📊 Total unresolved blockers: ${rawBlockers.length}`);
 
-        // Collect IDs for enrichment
-        // For blockers: get step IDs from all blockers (not limited by history limit)
+        // STEP 5: Collect IDs for enrichment
         const blockerStepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
         const blockerSubStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
+        const historyStepIds = [...new Set(history.map((h: any) => h.task_step_id).filter(Boolean))];
+        const historySubStepIds = [...new Set(history.map((h: any) => h.task_steps_to_steps_id).filter(Boolean))];
         
-        // For recent updates: also include step IDs from history
-        const historyStepIds: string[] = [];
-        const historySubStepIds: string[] = [];
-        hist.forEach((h: any) => {
-          if (h.task_step_id) historyStepIds.push(h.task_step_id);
-          if (h.task_steps_to_steps_id) historySubStepIds.push(h.task_steps_to_steps_id);
-        });
-        
-        // Combine all step IDs needed for enrichment (blockers + history for updates)
         const allStepIds = [...new Set([...blockerStepIds, ...historyStepIds])];
         const allSubStepIds = [...new Set([...blockerSubStepIds, ...historySubStepIds])];
-        const uniqStepIds = allStepIds;
-        const uniqSubIds = allSubStepIds;
 
-        let stepMap: Record<string, any> = {};
-        let subStepMap: Record<string, any> = {};
+        // STEP 6: PARALLEL - Fetch enrichment data (steps and sub-steps) in parallel
+        const [enrichmentStepsResult, enrichmentSubStepsResult] = await Promise.all([
+          allStepIds.length > 0
+            ? supabase
+                .from('task_steps')
+                .select('id, title, task:daily_tasks(id, title)')
+                .in('id', allStepIds)
+            : Promise.resolve({ data: [], error: null }),
+          
+          allSubStepIds.length > 0
+            ? supabase
+                .from('task_steps_to_steps')
+                .select('id, title, parent_step_id')
+                .in('id', allSubStepIds)
+            : Promise.resolve({ data: [], error: null })
+        ]);
 
-        if (uniqStepIds.length > 0) {
-          const { data: steps } = await supabase
-            .from('task_steps' as any)
-            .select('id, title, task:daily_tasks(id, title)')
-            .in('id', uniqStepIds);
-          (steps || []).forEach((s: any) => { stepMap[s.id] = s; });
-          console.log(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
-        }
-        if (uniqSubIds.length > 0) {
-          const { data: subs } = await supabase
-            .from('task_steps_to_steps' as any)
-            .select('id, title, parent_step_id')
-            .in('id', uniqSubIds);
-          (subs || []).forEach((s: any) => { subStepMap[s.id] = s; });
-          console.log(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
-        }
+        // Build maps
+        const stepMap: Record<string, any> = {};
+        const subStepMap: Record<string, any> = {};
+        (enrichmentStepsResult.data || []).forEach((s: any) => { stepMap[s.id] = s; });
+        (enrichmentSubStepsResult.data || []).forEach((s: any) => { subStepMap[s.id] = s; });
+        console.log(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
+        console.log(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
 
+        // Enrich blockers
         const enriched = rawBlockers.map((b: any) => {
           const step = b.task_step_id ? stepMap[b.task_step_id] : null;
           const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
           const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
           const task = (step || parentStep)?.task || null;
-          const enrichedBlocker = {
+          return {
             ...b,
             taskTitle: task?.title || '-',
             stepTitle: (step || parentStep)?.title || '-',
             subStepTitle: sub?.title || null,
           };
-          
-          // Log warning if blocker doesn't have task or step info
-          if (!step && !parentStep) {
-            console.warn('⚠️ Blocker without step info:', {
-              blockerId: b.id,
-              task_step_id: b.task_step_id,
-              task_steps_to_steps_id: b.task_steps_to_steps_id,
-              stepInMap: !!step,
-              subInMap: !!sub,
-              parentStepInMap: !!parentStep
-            });
-          }
-          
-          return enrichedBlocker;
         });
-        
         console.log(`✅ Enriched ${enriched.length} blockers with task/step info`);
         setBlockers(enriched);
 
-        // Build blocker count and map by step (use parent step for sub-step blockers)
+        // Build blocker count and map by step
         const countMap: Record<string, number> = {};
         const byStep: Record<string, any[]> = {};
         enriched.forEach((b: any) => {
@@ -319,8 +293,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         setBlockerCountByStep(countMap);
         setBlockersByStep(byStep);
 
-        // Enrich recent updates similarly
-        const recent = hist.map((b: any) => {
+        // Enrich recent updates
+        const recent = history.map((b: any) => {
           const step = b.task_step_id ? stepMap[b.task_step_id] : null;
           const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
           const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
@@ -343,7 +317,21 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
   const performance = useMemo<ComputedPerformanceRow[]>(() => {
     return rows.map((r) => {
       const due = r.due_date ? new Date(r.due_date) : null;
-      const finished = r.step?.is_completed && r.step?.updated_at ? new Date(r.step.updated_at) : null;
+      
+      // IMPORTANT: Use actual completion date from history, not updated_at
+      // updated_at can change on any update, but completion date is when step was first marked completed
+      let finishedAt: string | null = null;
+      if (r.step?.is_completed && r.step?.id) {
+        // First try to get from completion date map (from task_step_history)
+        if (completionDateMap[r.step.id]) {
+          finishedAt = completionDateMap[r.step.id];
+        } else if (r.step?.updated_at) {
+          // Fallback to updated_at if no history found (for backward compatibility)
+          finishedAt = r.step.updated_at;
+        }
+      }
+      
+      const finished = finishedAt ? new Date(finishedAt) : null;
       let isOnTime: boolean | null = null;
       let lateDays: number | null = null;
       if (due && finished) {
@@ -366,14 +354,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         stepTitle: r.step?.title || '-',
         taskTitle: r.step?.task?.title || '-',
         dueDate: r.due_date,
-        finishedAt: (r.step?.is_completed && r.step?.updated_at) ? r.step.updated_at : null,
+        finishedAt: finishedAt,
         isCompleted: !!r.step?.is_completed,
         isOnTime,
         lateDays,
         subStepTitle: null,
       };
     });
-  }, [rows]);
+  }, [rows, completionDateMap]);
 
   const filtered = useMemo(() => {
     let data = [...performance];
