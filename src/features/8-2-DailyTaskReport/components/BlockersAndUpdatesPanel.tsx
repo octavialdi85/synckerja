@@ -5,7 +5,8 @@ import { BlockerResolutionModal } from './BlockerResolutionModal';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { useToast } from '@/features/ui/use-toast';
-import { Trash2, Edit } from 'lucide-react';
+import { Trash2, Edit, Clock } from 'lucide-react';
+import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -357,6 +358,12 @@ export const BlockersAndUpdatesPanel = () => {
                         <div>Step: <span className="font-medium text-gray-800">{u.stepTitle || '-'}</span></div>
                         {u.subStepTitle && (
                           <div>Sub-step: <span className="font-medium text-gray-800">{u.subStepTitle}</span></div>
+                        )}
+                        {u.assignedAt && (
+                          <div className="flex items-center gap-1 mt-1 text-gray-500">
+                            <Clock className="w-3 h-3" />
+                            <span>Assigned at: {formatDateTime(u.assignedAt)}</span>
+                          </div>
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">{new Date(u.created_at).toLocaleString()}</div>

@@ -55,13 +55,23 @@ export interface TaskStep {
   links?: TaskLink[];
   history?: TaskStepHistory[];
   assigned_to?: string | null;
+  assigned_at?: string | null; // Assignment date/time
+  assigned_by?: string | null; // User who assigned the step
   assigned_employee?: {
+    id: string;
+    full_name: string;
+    email?: string;
+  } | null;
+  assigned_by_employee?: {
     id: string;
     full_name: string;
     email?: string;
   } | null;
   has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
   sub_steps?: TaskSubStep[]; // Sub-steps for this step
+  assigned_due_date?: string | null; // Due date from task_steps_assigned_duedate
+  status?: string;
+  priority?: string;
 }
 
 export interface TaskFile {

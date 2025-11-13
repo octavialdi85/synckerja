@@ -337,7 +337,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             employee_id,
             assigned_by,
             assigned_at,
-            employee:employees!employee_id(id, full_name, email)
+            employee:employees!employee_id(id, full_name, email),
+            assigned_by_employee:employees!assigned_by(id, full_name, email)
           `)
           .in('task_step_id', stepIds)
           .order('assigned_at', { ascending: false });
@@ -469,11 +470,37 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         filesByStepId[file.task_steps_id].push(file);
       });
 
+      // Fetch due dates for step assignments
+      let stepDueDatesData: any[] = [];
+      if (stepAssignmentsData.length > 0) {
+        const assignmentIds = stepAssignmentsData.map((a: any) => a.id);
+        const { data: dueDatesData, error: dueDatesError } = await supabase
+          .from('task_steps_assigned_duedate')
+          .select('task_steps_assigned_id, due_date')
+          .in('task_steps_assigned_id', assignmentIds)
+          .order('created_at', { ascending: false });
+        
+        if (!dueDatesError && dueDatesData) {
+          stepDueDatesData = dueDatesData || [];
+        }
+      }
+      
+      // Map due dates by assignment ID
+      const dueDatesByAssignmentId: Record<string, string> = {};
+      stepDueDatesData.forEach((dueDate: any) => {
+        if (!dueDatesByAssignmentId[dueDate.task_steps_assigned_id]) {
+          dueDatesByAssignmentId[dueDate.task_steps_assigned_id] = dueDate.due_date;
+        }
+      });
+
       // Group step assignments by task_step_id (only keep the latest one per step)
       const stepAssignmentsByStepId: Record<string, any> = {};
       stepAssignmentsData.forEach(assignment => {
         if (!stepAssignmentsByStepId[assignment.task_step_id]) {
-          stepAssignmentsByStepId[assignment.task_step_id] = assignment;
+          stepAssignmentsByStepId[assignment.task_step_id] = {
+            ...assignment,
+            assigned_due_date: dueDatesByAssignmentId[assignment.id] || null
+          };
         }
       });
 
@@ -518,7 +545,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         stepsByTaskId[step.task_id].push({
           ...step,
           assigned_to: stepAssignment?.employee_id || null,
+          assigned_at: stepAssignment?.assigned_at || null,
+          assigned_by: stepAssignment?.assigned_by || null,
           assigned_employee: stepAssignment?.employee || null,
+          assigned_by_employee: stepAssignment?.assigned_by_employee || null,
+          assigned_due_date: stepAssignment?.assigned_due_date || null,
           has_assigned_substeps: hasAssignedSubSteps, // Flag to show step if it has assigned sub-steps
           sub_steps: subSteps, // Include sub-steps data
           files: filesByStepId[step.id] || [] // Include files for this step

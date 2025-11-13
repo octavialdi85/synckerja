@@ -10,6 +10,7 @@ import { Button } from '@/features/ui/button';
 import { DueDateDialog } from './DueDateDialog';
 import { AssignInitiativeItemDialog } from './AssignInitiativeItemDialog';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { formatDateTime } from '@/features/share/utils/dateFormatter';
 
 // Export stats for parent component
 export interface InitiativeStats {
@@ -29,6 +30,7 @@ interface UncompletedItem {
   dueDate?: string | null;
   assignedTo?: string | null;
   assignedEmployee?: { full_name: string; email: string } | null;
+  assignedAt?: string | null; // Assignment date/time
   created_at: string;
 }
 
@@ -131,6 +133,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
             daily_tasks_assigned(
               id,
               employee_id,
+              assigned_at,
               employee:employees!employee_id(full_name, email)
             )
           `)
@@ -171,6 +174,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
               dueDate: assignment?.id ? taskDueDatesMap[assignment.id] : task.due_date, // Prioritize assignment due date, fallback to task due_date
               assignedTo: assignment?.employee_id,
               assignedEmployee: assignment?.employee,
+              assignedAt: assignment?.assigned_at || null,
               created_at: task.created_at
             });
           });
@@ -197,6 +201,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
             task_steps_assigned(
               id,
               employee_id,
+              assigned_at,
               employee:employees!employee_id(full_name, email)
             )
           `)
@@ -238,6 +243,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
               priority: step.daily_tasks?.priority,
               assignedTo: assignment?.employee_id,
               assignedEmployee: assignment?.employee,
+              assignedAt: assignment?.assigned_at || null,
               dueDate: assignment?.id ? dueDatesMap[assignment.id] : null,
               created_at: step.created_at
             });
@@ -257,6 +263,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
               task_steps_to_steps_assigned(
                 id,
                 employee_id,
+                assigned_at,
                 employee:employees!employee_id(full_name, email)
               )
             `)
@@ -324,6 +331,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
                     priority: (parentStep as any).daily_tasks?.priority,
                     assignedTo: assignment?.employee_id,
                     assignedEmployee: assignment?.employee,
+                    assignedAt: assignment?.assigned_at || null,
                     dueDate: assignment?.id ? substepDueDatesMap[assignment.id] : null,
                     created_at: (substep as any).created_at
                   });
@@ -649,9 +657,17 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
 
                   {/* Assigned Info */}
                   {item.assignedEmployee ? (
-                    <div className="flex items-center gap-1 text-xs text-gray-600">
-                      <User className="w-3 h-3" />
-                      <span>Assigned to: {item.assignedEmployee.full_name}</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <User className="w-3 h-3" />
+                        <span>Assigned to: {item.assignedEmployee.full_name}</span>
+                      </div>
+                      {item.assignedAt && (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 ml-4">
+                          <Clock className="w-3 h-3" />
+                          <span>Assigned at: {formatDateTime(item.assignedAt)}</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div 

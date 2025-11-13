@@ -18,6 +18,7 @@ export interface ComputedPerformanceRow {
   stepId: string | null;
   stepTitle: string;
   taskTitle: string;
+  assignedAt: string | null; // Assignment date/time
   dueDate: string | null;
   finishedAt: string | null;
   isCompleted: boolean;
@@ -293,17 +294,43 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         setBlockerCountByStep(countMap);
         setBlockersByStep(byStep);
 
+        // Fetch assigned_at for steps in recent updates
+        const stepIdsForAssignedAt = [...new Set(
+          history
+            .map((h: any) => h.task_step_id)
+            .filter(Boolean)
+        )] as string[];
+        
+        let assignedAtMap: Record<string, string> = {};
+        if (stepIdsForAssignedAt.length > 0) {
+          const { data: assignments } = await supabase
+            .from('task_steps_assigned')
+            .select('task_step_id, assigned_at')
+            .in('task_step_id', stepIdsForAssignedAt)
+            .order('assigned_at', { ascending: false });
+          
+          if (assignments) {
+            assignments.forEach((a: any) => {
+              if (!assignedAtMap[a.task_step_id]) {
+                assignedAtMap[a.task_step_id] = a.assigned_at;
+              }
+            });
+          }
+        }
+
         // Enrich recent updates
         const recent = history.map((b: any) => {
           const step = b.task_step_id ? stepMap[b.task_step_id] : null;
           const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
           const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
           const task = (step || parentStep)?.task || null;
+          const assignedAt = b.task_step_id ? assignedAtMap[b.task_step_id] || null : null;
           return {
             ...b,
             taskTitle: task?.title || '-',
             stepTitle: (step || parentStep)?.title || '-',
             subStepTitle: sub?.title || null,
+            assignedAt: assignedAt,
           };
         });
         setRecentUpdates(recent);
@@ -353,6 +380,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         stepId: r.step?.id || null,
         stepTitle: r.step?.title || '-',
         taskTitle: r.step?.task?.title || '-',
+        assignedAt: r.assigned_at || null,
         dueDate: r.due_date,
         finishedAt: finishedAt,
         isCompleted: !!r.step?.is_completed,

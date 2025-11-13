@@ -5,6 +5,7 @@ import { CheckCircle, ClipboardList, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useToast } from '@/features/ui/use-toast';
+import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -282,6 +283,7 @@ export const PerformanceTable = () => {
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Task</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Step</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Blocker</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Assigned At</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '100px', minWidth: '100px' }}>Due Date</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '160px', minWidth: '160px' }}>Finished</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '112px', minWidth: '112px' }}>Status</th>
@@ -289,9 +291,9 @@ export const PerformanceTable = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No data</td></tr>
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">No data</td></tr>
               ) : (
                 rows.map((r, idx) => (
                   <tr key={idx} className="border-t">
@@ -314,6 +316,9 @@ export const PerformanceTable = () => {
                           <span className="text-xs text-gray-400">-</span>
                         );
                       })()}
+                    </td>
+                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap text-xs" style={{ width: '140px', minWidth: '140px' }}>
+                      {r.assignedAt ? formatDateTime(r.assignedAt) : '-'}
                     </td>
                     <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '100px', minWidth: '100px' }}>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}</td>
                     <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '160px', minWidth: '160px' }}>{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '-'}</td>

@@ -218,7 +218,12 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
     onClose();
   };
 
-  const handleAddAsDailyTask = async (dailyTaskId: string, taskTitle: string) => {
+  const handleAddAsDailyTask = async (
+    dailyTaskId: string, 
+    taskTitle: string, 
+    employeeId?: string, 
+    assignedAt?: string
+  ) => {
     if (!titleText.trim()) {
       toast.error('Please enter a content title first');
       return;
@@ -253,7 +258,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         return;
       }
 
-      // Get current employee (active profile)
+      // Get current employee (active profile) - for regular employees or as fallback
       const { data: currentEmployee, error: employeeError } = await supabase
         .from('employees')
         .select('id')
@@ -264,6 +269,44 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       if (employeeError || !currentEmployee) {
         toast.error('Failed to get current employee');
         return;
+      }
+
+      // Determine employee ID and assigned_at
+      // If employeeId is provided (Owner/Admin assignment), use it
+      // Otherwise, use currentEmployee.id (regular employee self-assignment)
+      const targetEmployeeId = employeeId || currentEmployee.id;
+      const targetAssignedAt = assignedAt || new Date().toISOString();
+      
+      // Validate assigned_at <= due_date (from post_date)
+      if (planData?.post_date) {
+        const assignedDate = new Date(targetAssignedAt);
+        const dueDate = new Date(planData.post_date);
+        dueDate.setHours(23, 59, 59, 999); // Set to end of day for due date
+        
+        if (assignedDate > dueDate) {
+          toast.error('Assignment date cannot be after due date');
+          return;
+        }
+      }
+      
+      // Validate employee status if employeeId is provided (Owner/Admin assignment)
+      if (employeeId) {
+        const { data: targetEmployee, error: targetEmployeeError } = await supabase
+          .from('employees')
+          .select('id, status')
+          .eq('id', employeeId)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+        
+        if (targetEmployeeError || !targetEmployee) {
+          toast.error('Selected employee not found');
+          return;
+        }
+        
+        if (targetEmployee.status !== 'active' && targetEmployee.status !== null) {
+          toast.error('Selected employee is not active');
+          return;
+        }
       }
 
       // Get the maximum order for steps in this task
@@ -342,15 +385,20 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         return;
       }
 
+      // Get assigned_by employee ID (Owner/Admin who assigns, or currentEmployee for self-assignment)
+      // If employeeId is provided, the current user (Owner/Admin) is the one who assigns
+      // Otherwise, it's a self-assignment, so assigned_by = employee_id
+      const assignedByEmployeeId = employeeId ? currentEmployee.id : currentEmployee.id;
+      
       // Insert into task_steps_assigned table
       const { data: assignmentRecord, error: assignError } = await supabase
         .from('task_steps_assigned')
         .insert({
           organization_id: organizationId,
           task_step_id: taskStep.id,
-          employee_id: currentEmployee.id,
-          assigned_by: currentEmployee.id,
-          assigned_at: new Date().toISOString()
+          employee_id: targetEmployeeId,
+          assigned_by: assignedByEmployeeId,
+          assigned_at: targetAssignedAt
         })
         .select()
         .single();
@@ -472,6 +520,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         isOpen={isDailyTaskDialogOpen}
         onClose={() => setIsDailyTaskDialogOpen(false)}
         onSelect={handleAddAsDailyTask}
+        dueDate={planData?.post_date || null}
       />
     </Dialog>
   );

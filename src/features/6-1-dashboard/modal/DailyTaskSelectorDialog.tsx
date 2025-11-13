@@ -9,6 +9,8 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { AssignSocialMediaPlanModal } from './AssignSocialMediaPlanModal';
 import { toast } from 'sonner';
 
 interface DailyTask {
@@ -24,13 +26,15 @@ interface DailyTask {
 interface DailyTaskSelectorDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (dailyTaskId: string, title: string) => Promise<void>;
+  onSelect: (dailyTaskId: string, title: string, employeeId?: string, assignedAt?: string) => Promise<void>;
+  dueDate?: string | null; // Due date from post_date in social_media_plans
 }
 
 const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
   isOpen,
   onClose,
-  onSelect
+  onSelect,
+  dueDate
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<Date | undefined>(undefined);
@@ -38,7 +42,13 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [pendingAssignment, setPendingAssignment] = useState<{ employeeId?: string; assignedAt?: string } | null>(null);
   const { organizationId } = useCurrentOrg();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  
+  // Check if user can assign employees (Owner/Admin only)
+  const canAssignEmployees = isOwner || isAdmin || userRole === 'owner' || userRole === 'admin';
 
   const fetchDailyTasks = React.useCallback(async () => {
     if (!organizationId) return;
@@ -127,10 +137,45 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
       return;
     }
 
+    // If Owner/Admin, show assignment modal
+    if (canAssignEmployees) {
+      setPendingAssignment({});
+      setShowAssignModal(true);
+      return;
+    }
+
+    // Regular employee: directly assign to active profile
     setIsSubmitting(true);
     try {
       await onSelect(selectedTaskId, selectedTask.title);
       toast.success('Content title added as daily task step successfully');
+      onClose();
+    } catch (error) {
+      console.error('Error selecting task:', error);
+      toast.error('Failed to add as daily task');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAssign = async (assignment: { employeeId: string; assignedAt: string }) => {
+    if (!selectedTaskId) {
+      toast.error('Please select a daily task');
+      return;
+    }
+
+    const selectedTask = dailyTasks.find((task) => task.id === selectedTaskId);
+    if (!selectedTask) {
+      toast.error('Selected task not found');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onSelect(selectedTaskId, selectedTask.title, assignment.employeeId, assignment.assignedAt);
+      toast.success('Content title added as daily task step successfully');
+      setShowAssignModal(false);
+      setPendingAssignment(null);
       onClose();
     } catch (error) {
       console.error('Error selecting task:', error);
@@ -352,6 +397,17 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
           </div>
         </div>
       </DialogContent>
+      
+      {/* Assignment Modal for Owner/Admin */}
+      {canAssignEmployees && selectedTaskId && (
+        <AssignSocialMediaPlanModal
+          open={showAssignModal}
+          onOpenChange={setShowAssignModal}
+          onAssign={handleAssign}
+          dueDate={dueDate || null}
+          taskTitle={dailyTasks.find((task) => task.id === selectedTaskId)?.title || ''}
+        />
+      )}
     </Dialog>
   );
 };

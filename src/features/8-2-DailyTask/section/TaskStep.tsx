@@ -16,6 +16,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/MobileAssignStepDialog';
+import { formatDateTime } from '@/features/share/utils/dateFormatter';
 
 interface TaskFile {
   id: string;
@@ -45,8 +46,8 @@ interface TaskStepProps {
     updated_at?: string;
     created_by?: string | null;
     assigned_to?: string | null;
-    assigned_at?: string | null;
-    assigned_by?: string | null;
+    assigned_at?: string | null; // Assignment date/time
+    assigned_by?: string | null; // User who assigned the step
     status?: string;
     priority?: string;
     files?: TaskFile[];
@@ -752,15 +753,20 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 )}
               </div>
             </div>
-            {/* Finished timestamp below title - Desktop only */}
-            {isCompleted && updatedAt && (
+            {/* Finished timestamp and Assigned at below title - Desktop only */}
+            {(isCompleted && updatedAt) || step.assigned_at ? (
               <div className="hidden md:flex -mt-0.5 md:mt-1 items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-gray-500">Finished: {new Date(updatedAt).toLocaleString()}</span>
+                {step.assigned_at && (
+                  <span className="text-[10px] text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                )}
+                {isCompleted && updatedAt && (
+                  <span className="text-[10px] text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
+                )}
                 {getFinishStatusLabel() && (
                   <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
                 )}
               </div>
-            )}
+            ) : null}
             {/* Icons below title on mobile, to the right on desktop when no sub-steps */}
             {subStepCount === 0 && (
               <div className="mt-1 flex justify-end md:hidden">
@@ -779,9 +785,13 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Assigned at for mobile */}
+                    {step.assigned_at && (
+                      <span className="md:hidden text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                    )}
                     {/* Finished timestamp for mobile - only show when completed */}
                     {isCompleted && updatedAt && (
-                      <span className="md:hidden text-gray-500">Finished: {new Date(updatedAt).toLocaleString()}</span>
+                      <span className="md:hidden text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
                     )}
                     {step.assigned_due_date && (
                       <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
