@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Calendar, Bell, Clock } from 'lucide-react';
 import { HolidayEvent } from '../../types/social-media';
 import { ContentPillarTracker } from './ContentPillarTracker';
+import { ContentBalanceTab } from './ContentBalanceTab';
 // import { useOptimizedNationalHolidays } from '@/hooks/useOptimizedAttendanceData'; // Commented out - not available
 import { format, differenceInDays, startOfDay } from 'date-fns';
 import { id } from 'date-fns/locale';
@@ -163,8 +164,9 @@ const ReminderTab: React.FC = () => {
       <CardContent className="p-0 h-full flex flex-col seamless-scroll overflow-hidden">
         <Tabs defaultValue="funnel" className="w-full h-full flex flex-col seamless-scroll overflow-hidden">
           {/* Tabs Header - Fixed */}
-          <TabsList className="grid w-full grid-cols-2 flex-shrink-0 h-8">
+          <TabsList className="grid w-full grid-cols-3 flex-shrink-0 h-8">
             <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
+            <TabsTrigger value="content-balance" className="text-xs py-1">Content Balance</TabsTrigger>
             <TabsTrigger value="pengingat" className="text-xs py-1">Pengingat</TabsTrigger>
           </TabsList>
           
@@ -174,6 +176,15 @@ const ReminderTab: React.FC = () => {
               {/* Content Pillar Tracker - Full Width */}
               <div className="w-full h-full flex-1 min-h-0">
                 <ContentPillarTracker />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
+            <div className="w-full h-full flex flex-col">
+              {/* Content Balance Tab - Full Width */}
+              <div className="w-full h-full flex-1 min-h-0">
+                <ContentBalanceTab />
               </div>
             </div>
           </TabsContent>

@@ -1,0 +1,409 @@
+import React, { useState, useMemo } from 'react';
+import { MoreVertical, Download, RefreshCw, Wifi, Calendar, ChevronLeft, ChevronRight, Image, Video } from 'lucide-react';
+import { Button } from '@/features/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
+import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
+import { Calendar as CalendarComponent } from '@/features/ui/calendar';
+
+// Content type mapping - exact match dari content_type.name
+const VIDEO_TYPES = ['Youtube', 'Reel'];
+const IMAGE_TYPES = ['Post', 'Carousel'];
+const EXCLUDED_TYPES = ['Story'];
+
+interface ContentBalanceStats {
+  total: number;
+  image: {
+    count: number;
+    percentage: number;
+  };
+  video: {
+    count: number;
+    percentage: number;
+  };
+}
+
+interface PICProductionStats {
+  picId: string;
+  picName: string;
+  imageCount: number;
+  videoCount: number;
+  totalCount: number;
+}
+
+export const ContentBalanceTab: React.FC = () => {
+  const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+  const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
+  const { contentPlans, contentTypes, isLoading } = useOptimizedSocialMedia();
+
+  const handleManualRefresh = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ['contentPlans', organizationId]
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ['social-media-master', organizationId]
+    });
+    toast.success('Data refreshed');
+  };
+
+  const exportToCSV = () => {
+    const monthStats = calculateContentBalance();
+    const picStats = calculatePICProductionStats();
+    
+    const csvContent = [
+      ['Month', 'Total Content', 'Image Count', 'Image %', 'Video Count', 'Video %'].join(','),
+      [
+        format(selectedMonth, 'MMM yyyy'),
+        monthStats.total,
+        monthStats.image.count,
+        `${monthStats.image.percentage}%`,
+        monthStats.video.count,
+        `${monthStats.video.percentage}%`
+      ].join(','),
+      '',
+      ['PIC Name', 'Image Count', 'Video Count', 'Total Count'].join(','),
+      ...picStats.map(pic => [
+        `"${pic.picName}"`,
+        pic.imageCount,
+        pic.videoCount,
+        pic.totalCount
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `content-balance-${format(selectedMonth, 'yyyy-MM')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Content balance data exported successfully');
+  };
+
+  // Helper function to determine if content type is image or video
+  const getContentTypeCategory = (contentTypeName: string | null | undefined): 'image' | 'video' | 'excluded' => {
+    if (!contentTypeName) return 'excluded';
+    const name = contentTypeName.trim();
+    if (VIDEO_TYPES.includes(name)) return 'video';
+    if (IMAGE_TYPES.includes(name)) return 'image';
+    if (EXCLUDED_TYPES.includes(name)) return 'excluded';
+    return 'excluded';
+  };
+
+  // Calculate content balance for selected month
+  const calculateContentBalance = (): ContentBalanceStats => {
+    const selectedYear = selectedMonth.getFullYear();
+    const selectedMonthIndex = selectedMonth.getMonth();
+
+    // Filter content plans for selected month
+    const monthContent = contentPlans.filter(plan => {
+      if (!plan.post_date) return false;
+      try {
+        const planDate = new Date(plan.post_date);
+        return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+      } catch {
+        return false;
+      }
+    });
+
+    let imageCount = 0;
+    let videoCount = 0;
+
+    monthContent.forEach(plan => {
+      const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name;
+      const category = getContentTypeCategory(contentTypeName);
+      
+      if (category === 'image') {
+        imageCount++;
+      } else if (category === 'video') {
+        videoCount++;
+      }
+      // Excluded types are not counted
+    });
+
+    const total = imageCount + videoCount;
+
+    return {
+      total,
+      image: {
+        count: imageCount,
+        percentage: total > 0 ? Math.round((imageCount / total) * 100) : 0
+      },
+      video: {
+        count: videoCount,
+        percentage: total > 0 ? Math.round((videoCount / total) * 100) : 0
+      }
+    };
+  };
+
+  // Calculate PIC Production stats for selected month
+  const calculatePICProductionStats = (): PICProductionStats[] => {
+    const selectedYear = selectedMonth.getFullYear();
+    const selectedMonthIndex = selectedMonth.getMonth();
+
+    // Filter content plans for selected month with PIC Production
+    const monthContent = contentPlans.filter(plan => {
+      if (!plan.post_date || !plan.pic_production_id) return false;
+      try {
+        const planDate = new Date(plan.post_date);
+        return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+      } catch {
+        return false;
+      }
+    });
+
+    // Group by PIC Production
+    const picStatsMap = new Map<string, { picName: string; imageCount: number; videoCount: number }>();
+
+    monthContent.forEach(plan => {
+      const picId = plan.pic_production_id!;
+      const picName = plan.pic_production?.full_name || `PIC ${picId}`;
+      const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name;
+      const category = getContentTypeCategory(contentTypeName);
+
+      if (!picStatsMap.has(picId)) {
+        picStatsMap.set(picId, {
+          picName,
+          imageCount: 0,
+          videoCount: 0
+        });
+      }
+
+      const stats = picStatsMap.get(picId)!;
+      if (category === 'image') {
+        stats.imageCount++;
+      } else if (category === 'video') {
+        stats.videoCount++;
+      }
+    });
+
+    // Convert to array and sort by total count (descending)
+    const picStatsArray: PICProductionStats[] = Array.from(picStatsMap.entries()).map(([picId, stats]) => ({
+      picId,
+      picName: stats.picName,
+      imageCount: stats.imageCount,
+      videoCount: stats.videoCount,
+      totalCount: stats.imageCount + stats.videoCount
+    }));
+
+    return picStatsArray.sort((a, b) => b.totalCount - a.totalCount);
+  };
+
+  const contentBalance = useMemo(() => calculateContentBalance(), [contentPlans, contentTypes, selectedMonth]);
+  const picProductionStats = useMemo(() => calculatePICProductionStats(), [contentPlans, contentTypes, selectedMonth]);
+
+  const handlePreviousMonth = () => {
+    setSelectedMonth(startOfMonth(subMonths(selectedMonth, 1)));
+  };
+
+  const handleNextMonth = () => {
+    setSelectedMonth(startOfMonth(addMonths(selectedMonth, 1)));
+  };
+
+  const handleMonthSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedMonth(startOfMonth(date));
+      setIsMonthPickerOpen(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col min-h-0">
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Content Balance</h3>
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
+        <div className="p-4">
+          <div className="animate-pulse space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col min-h-0">
+      {/* Header */}
+      <div className="flex items-center justify-between p-2 border-b border-gray-200 flex-shrink-0">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-900">Content Balance</h3>
+            <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+              <Wifi className="h-3 w-3" />
+              Live
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 mb-2">
+            Month Distribution - Total: {contentBalance.total} content
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleManualRefresh} className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh Data
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToCSV} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Export CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Month Selector */}
+      <div className="p-2 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePreviousMonth}
+            className="h-8 w-8 p-0"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <Popover open={isMonthPickerOpen} onOpenChange={setIsMonthPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex-1 h-8 text-sm font-medium justify-start"
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {format(selectedMonth, 'MMM yyyy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <CalendarComponent
+                mode="single"
+                selected={selectedMonth}
+                onSelect={handleMonthSelect}
+                defaultMonth={selectedMonth}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextMonth}
+            className="h-8 w-8 p-0"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Content Balance Stats */}
+      <div className="p-2 border-b border-gray-100 flex-shrink-0">
+        <div className="grid grid-cols-2 gap-2">
+          {/* Image Stats */}
+          <div className="flex flex-col items-center py-2 px-1 rounded bg-blue-50 border border-blue-200">
+            <div className="flex items-center gap-1 mb-1">
+              <Image className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-medium text-blue-800">Image</span>
+            </div>
+            <div className="text-lg font-semibold text-blue-600 mb-1">
+              {contentBalance.image.percentage}% ({contentBalance.image.count})
+            </div>
+            <div className="w-full h-2 bg-blue-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-600 transition-all duration-300 rounded-full"
+                style={{ width: `${contentBalance.image.percentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Video Stats */}
+          <div className="flex flex-col items-center py-2 px-1 rounded bg-orange-50 border border-orange-200">
+            <div className="flex items-center gap-1 mb-1">
+              <Video className="h-4 w-4 text-orange-600" />
+              <span className="text-xs font-medium text-orange-800">Video</span>
+            </div>
+            <div className="text-lg font-semibold text-orange-600 mb-1">
+              {contentBalance.video.percentage}% ({contentBalance.video.count})
+            </div>
+            <div className="w-full h-2 bg-orange-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-orange-600 transition-all duration-300 rounded-full"
+                style={{ width: `${contentBalance.video.percentage}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PIC Production Tracking */}
+      <div className="flex-1 overflow-y-auto seamless-scroll px-2 pb-2 min-h-0 max-h-[calc(100vh-120px)]">
+        <div className="px-3 py-2 rounded-lg text-sm font-medium mb-3 mt-3 sticky top-0 bg-white z-10 border border-gray-200">
+          PIC Production Distribution
+          <span className="ml-2 text-gray-600">{picProductionStats.length} PICs</span>
+        </div>
+
+        <div className="space-y-3">
+          {picProductionStats.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-sm">No PIC Production data for {format(selectedMonth, 'MMM yyyy')}</p>
+            </div>
+          ) : (
+            picProductionStats.map((pic) => (
+              <div key={pic.picId} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {pic.picName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 ml-2 flex-shrink-0">
+                    <div className="flex items-center gap-1">
+                      <Image className="h-3 w-3 text-blue-600" />
+                      <span className="text-sm font-medium text-gray-900">{pic.imageCount}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Video className="h-3 w-3 text-orange-600" />
+                      <span className="text-sm font-medium text-gray-900">{pic.videoCount}</span>
+                    </div>
+                    <span className="text-xs text-gray-500">({pic.totalCount})</span>
+                  </div>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full flex">
+                    {pic.imageCount > 0 && (
+                      <div
+                        className="bg-blue-600 transition-all duration-300"
+                        style={{ width: `${pic.totalCount > 0 ? (pic.imageCount / pic.totalCount) * 100 : 0}%` }}
+                      />
+                    )}
+                    {pic.videoCount > 0 && (
+                      <div
+                        className="bg-orange-600 transition-all duration-300"
+                        style={{ width: `${pic.totalCount > 0 ? (pic.videoCount / pic.totalCount) * 100 : 0}%` }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
