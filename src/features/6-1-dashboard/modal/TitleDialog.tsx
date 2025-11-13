@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useSyncPicProduction } from '../hook/useSyncPicProduction';
 
 interface TitleDialogProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   const [titleText, setTitleText] = useState('');
   const [isDailyTaskDialogOpen, setIsDailyTaskDialogOpen] = useState(false);
   const { organizationId } = useCurrentOrg();
+  const { syncPicProduction } = useSyncPicProduction();
 
   // ===== OPTIMIZATION 1: Cache planData with React Query =====
   const { data: planData, isLoading: isLoadingPlanData } = useQuery({
@@ -447,6 +449,31 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       } else if (assignmentRecord?.id) {
         // If post_date is not available, log warning but don't fail
         console.warn('⚠️ Post date not available, deadline not set for this step');
+      }
+
+      // Sync pic_production_id to social_media_plans after assignment is created
+      if (assignmentRecord?.id && socialMediaPlanId) {
+        try {
+          // Get current plan data
+          const { data: planData } = await supabase
+            .from('social_media_plans')
+            .select('pic_production_id, pic_production_source, google_drive_link')
+            .eq('id', socialMediaPlanId)
+            .maybeSingle();
+          
+          if (planData) {
+            // Sync pic_production_id (priority: assignment > Google Drive Link)
+            await syncPicProduction(
+              socialMediaPlanId,
+              planData.google_drive_link,
+              planData.pic_production_id,
+              planData.pic_production_source
+            );
+          }
+        } catch (error) {
+          console.error('Error syncing pic_production_id:', error);
+          // Don't fail the whole operation if sync fails
+        }
       }
 
       toast.success('Content title added as daily task step successfully');

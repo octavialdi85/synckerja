@@ -34,6 +34,7 @@ import { useDigitalMarketingEmployees } from "./hook/useDigitalMarketingEmployee
 import { useCreativeEmployees } from "./hook/useCreativeEmployees";
 import { useCurrentEmployee } from "@/features/share/hooks/useCurrentEmployee";
 import { useBatchApprovalAccess } from "./hook/useBatchApprovalAccess";
+import { useSyncPicProduction } from "./hook/useSyncPicProduction";
 
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
@@ -69,6 +70,9 @@ const SocialMediaContent = () => {
   const { data: currentEmployee } = useCurrentEmployee(); // Get employee ID for pic_production_id
   const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { data: creativeEmployees = [] } = useCreativeEmployees();
+  
+  // Sync PIC Production hook
+  const { syncPicProduction, syncAllExistingPlans } = useSyncPicProduction();
   
   // Batch check approval access (optimized - single check for all rows)
   const approvalAccess = useBatchApprovalAccess();
@@ -151,6 +155,31 @@ const SocialMediaContent = () => {
       navigate('/digital-marketing/social-media/dashboard', { replace: true });
     }
   }, [tab, navigate]);
+
+  // Sync existing plans on mount (only once when organizationId is available and data is loaded)
+  // Use ref to prevent multiple syncs
+  const hasSyncedRef = useRef(false);
+  useEffect(() => {
+    if (!organizationId || loading || hasSyncedRef.current) return;
+    
+    // Mark as synced to prevent multiple calls
+    hasSyncedRef.current = true;
+    
+    // Sync existing plans in background (don't block UI)
+    // Add small delay to ensure data is loaded
+    const timeoutId = setTimeout(() => {
+      syncAllExistingPlans().catch(error => {
+        console.error('Error syncing existing plans:', error);
+        // Reset flag on error so it can retry
+        hasSyncedRef.current = false;
+        // Don't show error to user, just log it
+      });
+    }, 1000); // 1 second delay to ensure data is loaded
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [organizationId, loading, syncAllExistingPlans]);
 
   const handleTabChange = (newTab: string) => {
     setActiveMainTab(newTab);
@@ -594,7 +623,7 @@ const SocialMediaContent = () => {
   // Batch updates for production_approved related fields to reduce database calls
   const pendingBatchUpdatesRef = useRef<Map<string, { updates: any; timeout: NodeJS.Timeout }>>(new Map());
 
-  const handleFieldChange = useCallback((id: string, field: string, value: any) => {
+  const handleFieldChange = useCallback(async (id: string, field: string, value: any) => {
     try {
       // OPTIMIZED: Batch production_approved related fields to reduce database roundtrips
       // This prevents multiple trigger executions and improves performance
@@ -634,7 +663,24 @@ const SocialMediaContent = () => {
 
       // Auto-assign PIC Production when Google Drive link is added
       if (field === 'google_drive_link' && value && value.length > 0) {
-        // Use employee ID instead of profile ID to avoid foreign key constraint violation
+        // Check if pic_production_id already exists from task_steps_assigned
+        const plan = contentPlans.find(p => p.id === id);
+        
+        if (plan?.pic_production_source === 'task_steps_assigned') {
+          // Prioritas: task_steps_assigned > Google Drive Link
+          // Jika sudah ada assignment, jangan override dengan Google Drive Link
+          devLog.debug('🔗 Google Drive link added, but PIC Production already set from task_steps_assigned:', {
+            planId: id,
+            link: value,
+            currentPicProductionId: plan.pic_production_id
+          });
+          
+          // Update google_drive_link saja, jangan ubah pic_production_id
+          updateContentPlan(id, { [field]: value });
+          return;
+        }
+        
+        // Jika belum ada assignment, baru auto-assign dari Google Drive Link
         const employeeId = currentEmployee?.id;
         
         if (!employeeId) {
@@ -651,26 +697,49 @@ const SocialMediaContent = () => {
           employeeId: employeeId
         });
         
-        // Update both google_drive_link and pic_production_id with valid employee ID
+        // Update google_drive_link, pic_production_id, and pic_production_source
         updateContentPlan(id, { 
           [field]: value,
-          pic_production_id: employeeId
+          pic_production_id: employeeId,
+          pic_production_source: 'google_drive_link'
         });
       } else if (field === 'google_drive_link' && (!value || value.trim().length === 0)) {
-        devLog.debug('🔗 Google Drive link cleared, clearing PIC Production, production completion date, and resetting production status:', {
-          planId: id,
-          link: value
-        });
+        // When Google Drive Link is cleared
+        const plan = contentPlans.find(p => p.id === id);
         
-        // Clear google_drive_link, pic_production_id, production_completion_date, and reset production_status
-        // production_status should not be "Need Review" when google_drive_link is empty
-        // Standardize: Save as null instead of empty string for consistency
-        updateContentPlan(id, { 
-          [field]: null, // Standardize to null instead of empty string
-          pic_production_id: null,
-          production_completion_date: null,
-          production_status: null // Reset to null/empty when link is removed
-        });
+        if (plan?.pic_production_source === 'google_drive_link') {
+          // If pic_production_id was from Google Drive Link, sync based on assignment
+          devLog.debug('🔗 Google Drive link cleared, syncing pic_production_id:', {
+            planId: id
+          });
+          
+          // Sync pic_production_id based on assignment (if any)
+          try {
+            await syncPicProduction(id, null, plan.pic_production_id, plan.pic_production_source);
+          } catch (error) {
+            console.error('Error syncing pic_production_id:', error);
+            // Continue with update even if sync fails
+          }
+          
+          // Update google_drive_link, production_completion_date, and production_status
+          updateContentPlan(id, { 
+            [field]: null,
+            production_completion_date: null,
+            production_status: null
+          });
+        } else {
+          // If pic_production_id was from assignment, keep it
+          devLog.debug('🔗 Google Drive link cleared, but PIC Production from assignment remains:', {
+            planId: id,
+            currentSource: plan?.pic_production_source
+          });
+          
+          updateContentPlan(id, { 
+            [field]: null,
+            production_completion_date: null,
+            production_status: null
+          });
+        }
       } else {
         // Regular field update
         updateContentPlan(id, { [field]: value });
@@ -679,7 +748,7 @@ const SocialMediaContent = () => {
       console.error('Error in handleFieldChange:', error);
       toast.error('Error updating field');
     }
-  }, [updateContentPlan, currentEmployee?.id]);
+  }, [updateContentPlan, currentEmployee?.id, contentPlans, syncPicProduction]);
 
   const handleAddContent = useCallback(async () => {
     if (!organizationId) {

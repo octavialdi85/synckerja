@@ -41,7 +41,7 @@ interface ContentPlanRowProps {
   contentPillars: ContentPillar[];
   selectedItems: string[];
   onSelectItem: (id: string, checked: boolean) => void;
-  onFieldChange: (id: string, field: string, value: any) => void;
+  onFieldChange: (id: string, field: string, value: any) => void | Promise<void>;
   onOpenBriefDialog: (id: string, brief: string | null) => void;
   onOpenTitleDialog: (id: string, title: string | null) => void;
   onStatusChange: (id: string, value: string) => void;

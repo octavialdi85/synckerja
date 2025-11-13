@@ -44,6 +44,7 @@ export const useOptimizedSocialMediaData = () => {
           approved,
           completion_date,
           pic_production_id,
+          pic_production_source,
           google_drive_link,
           production_status,
           production_revision_count,

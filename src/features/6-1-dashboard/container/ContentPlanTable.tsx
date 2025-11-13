@@ -18,7 +18,7 @@ interface ContentPlanTableProps {
   contentPillars: ContentPillar[];
   onSelectItem: (id: string, checked: boolean) => void;
   selectedItems: string[];
-  onFieldChange: (id: string, field: string, value: any) => void;
+  onFieldChange: (id: string, field: string, value: any) => void | Promise<void>;
   onOpenBriefDialog: (id: string, brief: string | null) => void;
   onOpenTitleDialog: (id: string, title: string | null) => void;
   onContentTypeDataChange: () => void;

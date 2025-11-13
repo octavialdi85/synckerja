@@ -15,6 +15,7 @@ export interface ContentPlan {
   approved: boolean;
   completion_date: string | null;
   pic_production_id: string | null;
+  pic_production_source: 'task_steps_assigned' | 'google_drive_link' | null;
   google_drive_link: string | null;
   production_status: string | null;
   production_revision_count: number;

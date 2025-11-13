@@ -1278,10 +1278,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           .eq('task_step_id', stepId);
 
         // insert new assignment
-        // fetch organization id via step -> task
+        // fetch organization id via step -> task, and get social_media_plan_id
         const { data: stepTask } = await supabase
           .from('task_steps')
-          .select('task_id')
+          .select('task_id, social_media_plan_id')
           .eq('id', stepId)
           .single();
         const { data: taskOrg } = await supabase
@@ -1323,15 +1323,181 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             console.log('✅ Due date saved:', dueDateRecord);
           }
         }
+
+        // Sync pic_production_id to social_media_plans if this step is linked to a plan
+        if ((stepTask as any)?.social_media_plan_id) {
+          try {
+            const planId = (stepTask as any).social_media_plan_id;
+            // Get current plan data
+            const { data: planData } = await supabase
+              .from('social_media_plans')
+              .select('pic_production_id, pic_production_source, google_drive_link')
+              .eq('id', planId)
+              .maybeSingle();
+            
+            if (planData) {
+              // Import and use syncPicProduction function
+              // We'll use a direct implementation here to avoid circular dependencies
+              // Get latest assignment for this plan
+              const { data: assignmentData } = await supabase
+                .from('task_steps_assigned')
+                .select(`
+                  id,
+                  employee_id,
+                  assigned_at,
+                  task_steps!inner(
+                    id,
+                    social_media_plan_id
+                  )
+                `)
+                .eq('task_steps.social_media_plan_id', planId)
+                .order('assigned_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              
+              const assignedEmployeeId = assignmentData?.employee_id || null;
+              
+              // Determine new pic_production_id and source
+              let newPicProductionId: string | null = null;
+              let newPicProductionSource: string | null = null;
+              
+              if (assignedEmployeeId) {
+                newPicProductionId = assignedEmployeeId;
+                newPicProductionSource = 'task_steps_assigned';
+              } else if (planData.google_drive_link) {
+                if (planData.pic_production_source === 'google_drive_link' && planData.pic_production_id) {
+                  newPicProductionId = planData.pic_production_id;
+                  newPicProductionSource = 'google_drive_link';
+                } else {
+                  newPicProductionId = null;
+                  newPicProductionSource = null;
+                }
+              } else {
+                newPicProductionId = null;
+                newPicProductionSource = null;
+              }
+              
+              // Update database only if changed
+              if (newPicProductionId !== planData.pic_production_id || newPicProductionSource !== planData.pic_production_source) {
+                const { error: updateError } = await supabase
+                  .from('social_media_plans')
+                  .update({
+                    pic_production_id: newPicProductionId,
+                    pic_production_source: newPicProductionSource
+                  })
+                  .eq('id', planId);
+                
+                if (updateError) {
+                  console.error('❌ Error syncing pic_production_id:', updateError);
+                } else {
+                  console.log('✅ Synced pic_production_id after assignment:', {
+                    planId,
+                    employeeId: newPicProductionId,
+                    source: newPicProductionSource
+                  });
+                }
+              }
+            }
+          } catch (syncError) {
+            console.error('Error syncing pic_production_id in assignTaskStep:', syncError);
+            // Don't fail the whole operation if sync fails
+          }
+        }
       } else {
         // unassign by deleting assignment rows for this step
         console.log('🔓 Unassigning step:', stepId);
+        
+        // Get social_media_plan_id before deleting assignment
+        const { data: stepData } = await supabase
+          .from('task_steps')
+          .select('social_media_plan_id')
+          .eq('id', stepId)
+          .maybeSingle();
+        
         const { error } = await supabase
           .from('task_steps_assigned')
           .delete()
           .eq('task_step_id', stepId);
         if (error) throw error;
         console.log('✅ Step unassigned successfully');
+
+        // Sync pic_production_id after unassignment if this step was linked to a plan
+        if ((stepData as any)?.social_media_plan_id) {
+          try {
+            const planId = (stepData as any).social_media_plan_id;
+            // Get current plan data
+            const { data: planData } = await supabase
+              .from('social_media_plans')
+              .select('pic_production_id, pic_production_source, google_drive_link')
+              .eq('id', planId)
+              .maybeSingle();
+            
+            if (planData) {
+              // Get latest assignment for this plan (after deletion)
+              const { data: assignmentData } = await supabase
+                .from('task_steps_assigned')
+                .select(`
+                  id,
+                  employee_id,
+                  assigned_at,
+                  task_steps!inner(
+                    id,
+                    social_media_plan_id
+                  )
+                `)
+                .eq('task_steps.social_media_plan_id', planId)
+                .order('assigned_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              
+              const assignedEmployeeId = assignmentData?.employee_id || null;
+              
+              // Determine new pic_production_id and source
+              let newPicProductionId: string | null = null;
+              let newPicProductionSource: string | null = null;
+              
+              if (assignedEmployeeId) {
+                newPicProductionId = assignedEmployeeId;
+                newPicProductionSource = 'task_steps_assigned';
+              } else if (planData.google_drive_link) {
+                if (planData.pic_production_source === 'google_drive_link' && planData.pic_production_id) {
+                  newPicProductionId = planData.pic_production_id;
+                  newPicProductionSource = 'google_drive_link';
+                } else {
+                  newPicProductionId = null;
+                  newPicProductionSource = null;
+                }
+              } else {
+                newPicProductionId = null;
+                newPicProductionSource = null;
+              }
+              
+              // Update database only if changed
+              if (newPicProductionId !== planData.pic_production_id || newPicProductionSource !== planData.pic_production_source) {
+                const { error: updateError } = await supabase
+                  .from('social_media_plans')
+                  .update({
+                    pic_production_id: newPicProductionId,
+                    pic_production_source: newPicProductionSource
+                  })
+                  .eq('id', planId);
+                
+                if (updateError) {
+                  console.error('❌ Error syncing pic_production_id after unassignment:', updateError);
+                } else {
+                  console.log('✅ Synced pic_production_id after unassignment:', {
+                    planId,
+                    employeeId: newPicProductionId,
+                    source: newPicProductionSource
+                  });
+                }
+              }
+            }
+          } catch (syncError) {
+            console.error('Error syncing pic_production_id after unassignment:', syncError);
+            // Don't fail the whole operation if sync fails
+          }
+        }
       }
 
       toast({
@@ -1355,12 +1521,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const deleteTaskStep = async (stepId: string) => {
     try {
-      // Get task_id before deleting
+      // Get task_id and social_media_plan_id before deleting
       const { data: stepData } = await supabase
         .from('task_steps')
-        .select('task_id')
+        .select('task_id, social_media_plan_id')
         .eq('id', stepId)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabase
         .from('task_steps')
@@ -1368,6 +1534,84 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .eq('id', stepId);
 
       if (error) throw error;
+
+      // Sync pic_production_id after step deletion if this step was linked to a plan
+      if ((stepData as any)?.social_media_plan_id) {
+        try {
+          const planId = (stepData as any).social_media_plan_id;
+          // Get current plan data
+          const { data: planData } = await supabase
+            .from('social_media_plans')
+            .select('pic_production_id, pic_production_source, google_drive_link')
+            .eq('id', planId)
+            .maybeSingle();
+          
+          if (planData) {
+            // Get latest assignment for this plan (after step deletion)
+            const { data: assignmentData } = await supabase
+              .from('task_steps_assigned')
+              .select(`
+                id,
+                employee_id,
+                assigned_at,
+                task_steps!inner(
+                  id,
+                  social_media_plan_id
+                )
+              `)
+              .eq('task_steps.social_media_plan_id', planId)
+              .order('assigned_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            const assignedEmployeeId = assignmentData?.employee_id || null;
+            
+            // Determine new pic_production_id and source
+            let newPicProductionId: string | null = null;
+            let newPicProductionSource: string | null = null;
+            
+            if (assignedEmployeeId) {
+              newPicProductionId = assignedEmployeeId;
+              newPicProductionSource = 'task_steps_assigned';
+            } else if (planData.google_drive_link) {
+              if (planData.pic_production_source === 'google_drive_link' && planData.pic_production_id) {
+                newPicProductionId = planData.pic_production_id;
+                newPicProductionSource = 'google_drive_link';
+              } else {
+                newPicProductionId = null;
+                newPicProductionSource = null;
+              }
+            } else {
+              newPicProductionId = null;
+              newPicProductionSource = null;
+            }
+            
+            // Update database only if changed
+            if (newPicProductionId !== planData.pic_production_id || newPicProductionSource !== planData.pic_production_source) {
+              const { error: updateError } = await supabase
+                .from('social_media_plans')
+                .update({
+                  pic_production_id: newPicProductionId,
+                  pic_production_source: newPicProductionSource
+                })
+                .eq('id', planId);
+              
+              if (updateError) {
+                console.error('❌ Error syncing pic_production_id after step deletion:', updateError);
+              } else {
+                console.log('✅ Synced pic_production_id after step deletion:', {
+                  planId,
+                  employeeId: newPicProductionId,
+                  source: newPicProductionSource
+                });
+              }
+            }
+          }
+        } catch (syncError) {
+          console.error('Error syncing pic_production_id after step deletion:', syncError);
+          // Don't fail the whole operation if sync fails
+        }
+      }
 
       // Check if task still has steps after deletion
       if (stepData?.task_id) {

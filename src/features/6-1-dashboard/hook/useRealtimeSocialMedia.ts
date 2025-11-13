@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useSyncPicProduction } from './useSyncPicProduction';
 
 export const useRealtimeSocialMedia = () => {
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const channelRef = useRef<any>(null);
+  const { syncPicProduction } = useSyncPicProduction();
 
   useEffect(() => {
     if (!organizationId) return;
@@ -197,6 +199,115 @@ export const useRealtimeSocialMedia = () => {
           });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_steps_assigned'
+        },
+        async (payload) => {
+          console.log('📡 Task step assignment changed:', payload.eventType);
+          
+          // Get social_media_plan_id from the changed assignment
+          if (payload.new || payload.old) {
+            const assignmentData = payload.new || payload.old;
+            try {
+              const { data: stepData } = await supabase
+                .from('task_steps')
+                .select('social_media_plan_id')
+                .eq('id', assignmentData.task_step_id)
+                .maybeSingle();
+              
+              if (stepData?.social_media_plan_id) {
+                // Get plan data to sync pic_production_id
+                const { data: planData } = await supabase
+                  .from('social_media_plans')
+                  .select('pic_production_id, pic_production_source, google_drive_link')
+                  .eq('id', stepData.social_media_plan_id)
+                  .maybeSingle();
+                
+                if (planData) {
+                  // Sync pic_production_id based on assignment priority
+                  try {
+                    await syncPicProduction(
+                      stepData.social_media_plan_id,
+                      planData.google_drive_link,
+                      planData.pic_production_id,
+                      planData.pic_production_source
+                    );
+                  } catch (error) {
+                    console.error('Error syncing pic_production_id in realtime:', error);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error processing task_steps_assigned change:', error);
+            }
+          }
+          
+          // Invalidate queries
+          queryClient.invalidateQueries({ 
+            queryKey: ['task-steps-assignments'],
+            refetchType: 'active'
+          });
+          queryClient.invalidateQueries({ 
+            queryKey: ['social-media-plans', organizationId],
+            refetchType: 'active'
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'task_steps'
+        },
+        async (payload) => {
+          console.log('📡 Task step deleted:', payload.eventType);
+          
+          // When task_step is deleted, check if we need to update pic_production_id
+          if (payload.old?.social_media_plan_id) {
+            const planId = payload.old.social_media_plan_id;
+            
+            try {
+              // Get plan data to sync pic_production_id
+              const { data: planData } = await supabase
+                .from('social_media_plans')
+                .select('pic_production_id, pic_production_source, google_drive_link')
+                .eq('id', planId)
+                .maybeSingle();
+              
+              if (planData) {
+                // Sync pic_production_id (will check if any assignments remain)
+                try {
+                  await syncPicProduction(
+                    planId,
+                    planData.google_drive_link,
+                    planData.pic_production_id,
+                    planData.pic_production_source
+                  );
+                } catch (error) {
+                  console.error('Error syncing pic_production_id after step deletion:', error);
+                }
+              }
+            } catch (error) {
+              console.error('Error processing task_steps deletion:', error);
+            }
+          }
+          
+          // Invalidate queries
+          queryClient.invalidateQueries({ 
+            queryKey: ['task-steps-assignments'],
+            refetchType: 'active'
+          });
+          queryClient.invalidateQueries({ 
+            queryKey: ['social-media-plans', organizationId],
+            refetchType: 'active'
+          });
+        }
+      )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
           console.error('❌ Realtime connection error - attempting to reconnect...');
@@ -219,6 +330,6 @@ export const useRealtimeSocialMedia = () => {
         channelRef.current = null;
       }
     };
-  }, [organizationId, queryClient]);
+  }, [organizationId, queryClient, syncPicProduction]);
 
 };
