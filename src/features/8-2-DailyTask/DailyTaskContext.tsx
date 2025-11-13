@@ -21,6 +21,108 @@ import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } 
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
 
+// Helper function to batch process large ID arrays (Supabase has limits on .in() queries)
+// Optimized batch size to balance between speed and stability
+const BATCH_SIZE = 10; // Balanced batch size - small enough to prevent 500 errors, large enough for speed
+const MAX_RETRIES = 2; // Maximum retry attempts for failed queries
+const QUERY_TIMEOUT = 15000; // 15 seconds timeout per query
+
+const batchQuery = async <T,>(
+  ids: string[],
+  queryFn: (batch: string[]) => Promise<{ data: T[] | null; error: any }>
+): Promise<T[]> => {
+  if (ids.length === 0) return [];
+  
+  // If IDs fit in one batch, query directly with retry
+  if (ids.length <= BATCH_SIZE) {
+    let lastError: any = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const result = await queryFn(ids);
+        if (!result.error) {
+          return result.data || [];
+        }
+        lastError = result.error;
+        // Don't retry on 4xx errors (client errors)
+        if (result.error?.status >= 400 && result.error?.status < 500) {
+          break;
+        }
+        // Wait before retry (exponential backoff)
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        }
+      }
+    }
+    console.error('Batch query failed after retries:', lastError);
+    return [];
+  }
+  
+  // Split into batches and query in parallel with retry
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    batches.push(ids.slice(i, i + BATCH_SIZE));
+  }
+  
+  // Process batches in parallel but limit concurrency to avoid overwhelming database
+  // Use Promise.allSettled for parallel execution with error handling
+  const CONCURRENT_BATCHES = 5; // Process 5 batches at a time for better speed (increased from 3)
+  
+  const batchResults: PromiseSettledResult<T[]>[] = [];
+  
+  // Process batches in chunks to limit concurrency
+  for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+    const batchChunk = batches.slice(i, i + CONCURRENT_BATCHES);
+    
+    const chunkResults = await Promise.allSettled(
+      batchChunk.map(async (batch) => {
+        let lastError: any = null;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const result = await queryFn(batch);
+            if (!result.error) {
+              return result.data || [];
+            }
+            lastError = result.error;
+            // Don't retry on 4xx errors
+            if (result.error?.status >= 400 && result.error?.status < 500) {
+              break;
+            }
+            if (attempt < MAX_RETRIES) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+            }
+          } catch (error) {
+            lastError = error;
+            if (attempt < MAX_RETRIES) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+            }
+          }
+        }
+        if (lastError) {
+          console.error('Batch query failed after retries:', lastError);
+        }
+        return [];
+      })
+    );
+    
+    batchResults.push(...chunkResults);
+    
+    // Very small delay between chunks (only if not last chunk) to prevent overwhelming database
+    if (i + CONCURRENT_BATCHES < batches.length) {
+      await new Promise(resolve => setTimeout(resolve, 10)); // Minimal 10ms delay for speed
+    }
+  }
+  
+  // Combine all successful results
+  return batchResults.flatMap(result => 
+    result.status === 'fulfilled' ? result.value : []
+  );
+};
+
 export interface DailyTaskContextType {
   tasks: Task[];
   summaryData: SummaryData;
@@ -93,12 +195,20 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const fetchRecentStepUpdates = useCallback(async () => {
     if (!organizationId) return;
 
+    // DISABLED: Query causes timeout - not critical for initial load
+    // Can be loaded lazily when user views recent updates section
+    console.log('ℹ️ Recent step updates query disabled to prevent timeout');
+    setRecentStepUpdates([]);
+    return;
+    
+    /* COMMENTED OUT: Recent step updates disabled to prevent timeout
     try {
       const recentUpdates = await fetchRecentStepUpdatesService(organizationId);
       setRecentStepUpdates(recentUpdates);
     } catch (error) {
       console.error('Error fetching recent step updates:', error);
     }
+    */
   }, [organizationId]);
 
   const fetchTasks = async (force = false) => {
@@ -263,62 +373,90 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         return;
       }
 
-      // Fetch task steps separately to avoid timeout
+      // Fetch task steps separately - use batch processing to avoid timeout
       const taskIds = data.map(task => task.id);
       if (isDev) {
         console.log('🔍 Fetching task steps for tasks:', taskIds);
       }
       
-      const { data: stepsData, error: stepsError } = await supabase
-        .from('task_steps')
-        .select(`
-          id,
-          task_id,
-          title,
-          is_completed,
-          order,
-          status,
-          priority,
-          created_at,
-          updated_at,
-          created_by
-        `)
-        .in('task_id', taskIds)
-        .order('order', { ascending: true });
-
-      if (stepsError) {
-        console.error('❌ Error fetching task steps:', stepsError);
-        // Continue without steps data rather than failing completely
+      let stepsData: any[] = [];
+      if (taskIds.length > 0) {
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const stepsBatches = await batchQuery(
+            taskIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_steps')
+                .select(`
+                  id,
+                  task_id,
+                  title,
+                  is_completed,
+                  order,
+                  status,
+                  priority,
+                  created_at,
+                  updated_at,
+                  completed_at,
+                  created_by
+                `)
+                .in('task_id', batch)
+                .order('order', { ascending: true });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          stepsData = stepsBatches;
+          if (isDev) {
+            console.log('✅ Fetched task steps:', stepsData.length);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching task steps:', error);
+          stepsData = [];
+        }
       }
 
-      if (isDev) {
-        console.log('✅ Fetched task steps:', stepsData?.length || 0);
-      }
+      // OPTIMIZED: No longer need to query completion dates from history
+      // We now use completed_at column directly from task_steps table (fetched above)
 
-      // Fetch task assignments separately to get PIC information
+      // Fetch task assignments separately to get PIC information - use batch processing
       if (isDev) {
         console.log('🔍 Fetching task assignments for tasks:', taskIds);
       }
       
-      const { data: assignmentsData, error: assignmentsError } = await supabase
-        .from('daily_tasks_assigned')
-        .select(`
-          id,
-          daily_task_id,
-          employee_id,
-          assigned_by,
-          assigned_at,
-          employee:employees!employee_id(id, full_name)
-        `)
-        .in('daily_task_id', taskIds);
-
-      if (assignmentsError) {
-        console.error('❌ Error fetching task assignments:', assignmentsError);
-        // Continue without assignment data rather than failing completely
-      }
-
-      if (isDev) {
-        console.log('✅ Fetched task assignments:', assignmentsData?.length || 0);
+      let assignmentsData: any[] = [];
+      if (taskIds.length > 0) {
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const assignmentsBatches = await batchQuery(
+            taskIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('daily_tasks_assigned')
+                .select(`
+                  id,
+                  daily_task_id,
+                  employee_id,
+                  assigned_by,
+                  assigned_at,
+                  employee:employees!employee_id(id, full_name)
+                `)
+                .in('daily_task_id', batch);
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          assignmentsData = assignmentsBatches;
+          if (isDev) {
+            console.log('✅ Fetched task assignments:', assignmentsData.length);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching task assignments:', error);
+          assignmentsData = [];
+        }
       }
 
       // Fetch step assignments separately to get PIC information for each step
@@ -329,27 +467,36 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       
       let stepAssignmentsData: any[] = [];
       if (stepIds.length > 0) {
-        const { data: stepAssigns, error: stepAssignsError } = await supabase
-          .from('task_steps_assigned')
-          .select(`
-            id,
-            task_step_id,
-            employee_id,
-            assigned_by,
-            assigned_at,
-            employee:employees!employee_id(id, full_name, email),
-            assigned_by_employee:employees!assigned_by(id, full_name, email)
-          `)
-          .in('task_step_id', stepIds)
-          .order('assigned_at', { ascending: false });
-
-        if (stepAssignsError) {
-          console.error('❌ Error fetching step assignments:', stepAssignsError);
-        } else {
-          stepAssignmentsData = stepAssigns || [];
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const stepAssignsBatches = await batchQuery(
+            stepIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_steps_assigned')
+                .select(`
+                  id,
+                  task_step_id,
+                  employee_id,
+                  assigned_by,
+                  assigned_at,
+                  employee:employees!employee_id(id, full_name, email),
+                  assigned_by_employee:employees!assigned_by(id, full_name, email)
+                `)
+                .in('task_step_id', batch)
+                .order('assigned_at', { ascending: false });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          stepAssignmentsData = stepAssignsBatches;
           if (isDev) {
             console.log('✅ Fetched step assignments:', stepAssignmentsData.length);
           }
+        } catch (error) {
+          console.error('❌ Error fetching step assignments:', error);
+          stepAssignmentsData = [];
         }
       }
 
@@ -359,27 +506,36 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       }
       let subStepsData: any[] = [];
       if (stepIds.length > 0) {
-        const { data: subSteps, error: subStepsError } = await supabase
-          .from('task_steps_to_steps')
-          .select(`
-            id,
-            parent_step_id,
-            title,
-            is_completed,
-            order,
-            created_at,
-            updated_at
-          `)
-          .in('parent_step_id', stepIds)
-          .order('order', { ascending: true });
-
-        if (subStepsError) {
-          console.error('❌ Error fetching sub-steps:', subStepsError);
-        } else {
-          subStepsData = subSteps || [];
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const subStepsBatches = await batchQuery(
+            stepIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_steps_to_steps')
+                .select(`
+                  id,
+                  parent_step_id,
+                  title,
+                  is_completed,
+                  order,
+                  created_at,
+                  updated_at
+                `)
+                .in('parent_step_id', batch)
+                .order('order', { ascending: true });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          subStepsData = subStepsBatches;
           if (isDev) {
             console.log('✅ Fetched sub-steps:', subStepsData.length);
           }
+        } catch (error) {
+          console.error('❌ Error fetching sub-steps:', error);
+          subStepsData = [];
         }
       }
 
@@ -389,54 +545,73 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (stepIds.length > 0 && subStepsData.length > 0) {
         const subStepIds = subStepsData.map(s => s.id);
         
-        // Fetch assignments for all sub-steps (not just current employee)
-        const { data: subStepAssigns, error: subStepAssignsError } = await supabase
-          .from('task_steps_to_steps_assigned')
-          .select(`
-            id,
-            task_steps_to_steps_id,
-            employee_id,
-            assigned_by,
-            assigned_at,
-            employee:employees!employee_id(id, full_name, email)
-          `)
-          .in('task_steps_to_steps_id', subStepIds)
-          .order('assigned_at', { ascending: false });
-
-        if (subStepAssignsError) {
-          console.error('❌ Error fetching sub-step assignments:', subStepAssignsError);
-        } else {
-          subStepAssignmentsData = subStepAssigns || [];
+        // Fetch assignments for all sub-steps (not just current employee) - use batch processing
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const subStepAssignsBatches = await batchQuery(
+            subStepIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_steps_to_steps_assigned')
+                .select(`
+                  id,
+                  task_steps_to_steps_id,
+                  employee_id,
+                  assigned_by,
+                  assigned_at,
+                  employee:employees!employee_id(id, full_name, email)
+                `)
+                .in('task_steps_to_steps_id', batch)
+                .order('assigned_at', { ascending: false });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          subStepAssignmentsData = subStepAssignsBatches;
           if (isDev) {
             console.log('✅ Fetched sub-step assignments:', subStepAssignmentsData.length);
           }
-          
-          // Group sub-step assignments by sub-step ID
-          const subStepAssignmentsBySubStepId: Record<string, any> = {};
-          subStepAssignmentsData.forEach(assignment => {
-            if (!subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id]) {
-              subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id] = assignment;
-            }
-          });
-
-          // Get parent step IDs that have assigned sub-steps (for current employee or any employee)
-          subStepParentIds = [...new Set(
-            subStepsData
-              .filter(subStep => subStepAssignmentsBySubStepId[subStep.id])
-              .map(subStep => subStep.parent_step_id)
-              .filter(Boolean)
-          )];
-          if (isDev) {
-            console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
+        } catch (error) {
+          console.error('❌ Error fetching sub-step assignments:', error);
+          subStepAssignmentsData = [];
+        }
+        
+        // Group sub-step assignments by sub-step ID
+        const subStepAssignmentsBySubStepId: Record<string, any> = {};
+        subStepAssignmentsData.forEach(assignment => {
+          if (!subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id]) {
+            subStepAssignmentsBySubStepId[assignment.task_steps_to_steps_id] = assignment;
           }
+        });
+        
+        // Get parent step IDs that have assigned sub-steps (for current employee or any employee)
+        subStepParentIds = [...new Set(
+          subStepsData
+            .filter(subStep => subStepAssignmentsBySubStepId[subStep.id])
+            .map(subStep => subStep.parent_step_id)
+            .filter(Boolean)
+        )];
+        if (isDev) {
+          console.log('📋 Parent step IDs with assigned sub-steps:', subStepParentIds);
         }
       }
 
+      // DISABLED: Task files query causes timeout with many IDs - not critical for initial load
+      // Files can be loaded lazily when user views a specific step
+      let taskFilesData: any[] = [];
+      if (stepIds.length > 0) {
+        if (isDev) {
+          console.log('ℹ️ Task files query disabled to prevent timeout');
+          console.log(`📋 Skipping task files for ${stepIds.length} steps`);
+        }
+      }
+      
+      /* COMMENTED OUT: Task files query disabled to prevent timeout
       // Fetch task files for all steps
       if (isDev) {
         console.log('🔍 Fetching task files for steps:', stepIds.length);
       }
-      let taskFilesData: any[] = [];
       if (stepIds.length > 0) {
         const { data: filesData, error: filesError } = await supabase
           .from('task_files')
@@ -460,6 +635,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           }
         }
       }
+      */
 
       // Group task files by step_id
       const filesByStepId: Record<string, any[]> = {};
@@ -470,18 +646,29 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         filesByStepId[file.task_steps_id].push(file);
       });
 
-      // Fetch due dates for step assignments
+      // Fetch due dates for step assignments - use batch processing
       let stepDueDatesData: any[] = [];
       if (stepAssignmentsData.length > 0) {
         const assignmentIds = stepAssignmentsData.map((a: any) => a.id);
-        const { data: dueDatesData, error: dueDatesError } = await supabase
-          .from('task_steps_assigned_duedate')
-          .select('task_steps_assigned_id, due_date')
-          .in('task_steps_assigned_id', assignmentIds)
-          .order('created_at', { ascending: false });
-        
-        if (!dueDatesError && dueDatesData) {
-          stepDueDatesData = dueDatesData || [];
+        try {
+          // Use batch processing to prevent timeout with many IDs
+          const dueDatesBatches = await batchQuery(
+            assignmentIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_steps_assigned_duedate')
+                .select('task_steps_assigned_id, due_date')
+                .in('task_steps_assigned_id', batch)
+                .order('created_at', { ascending: false });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          stepDueDatesData = dueDatesBatches;
+        } catch (error) {
+          console.error('❌ Error fetching due dates:', error);
+          stepDueDatesData = [];
         }
       }
       
@@ -544,6 +731,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
         stepsByTaskId[step.task_id].push({
           ...step,
+          // completed_at is already included from ...step spread (fetched from database)
           assigned_to: stepAssignment?.employee_id || null,
           assigned_at: stepAssignment?.assigned_at || null,
           assigned_by: stepAssignment?.assigned_by || null,
@@ -1089,6 +1277,17 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const beforeCompleted = before ? (before as any).is_completed : false;
       const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : beforeCompleted;
       const completionChanged = typeof data.is_completed === 'boolean' && before && beforeCompleted !== data.is_completed;
+
+      // Set completed_at based on completion status
+      if (completionChanged) {
+        if (afterCompleted) {
+          // Step is being completed - set completed_at to now
+          data.completed_at = new Date().toISOString();
+        } else {
+          // Step is being uncompleted - clear completed_at
+          data.completed_at = null;
+        }
+      }
 
       // Track if we should skip refresh (for mobile auto-reorder)
       let skipRefresh = false;

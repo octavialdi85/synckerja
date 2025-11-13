@@ -317,7 +317,7 @@ export const PerformanceTable = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap text-xs" style={{ width: '140px', minWidth: '140px' }}>
+                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '140px', minWidth: '140px' }}>
                       {r.assignedAt ? formatDateTime(r.assignedAt) : '-'}
                     </td>
                     <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '100px', minWidth: '100px' }}>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}</td>

@@ -19,8 +19,18 @@ import {
 } from '@/features/ui/alert-dialog';
 
 export const BlockersAndUpdatesPanel = () => {
-  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport() as any;
+  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading, blockers: rawBlockers } = useDailyTaskReport() as any;
   const [activeTab, setActiveTab] = useState<'blockers' | 'updates'>('blockers');
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔍 BlockersAndUpdatesPanel - Debug:', {
+      rawBlockersCount: rawBlockers?.length || 0,
+      filteredBlockersCount: blockers?.length || 0,
+      loading,
+      sampleBlocker: blockers?.[0]
+    });
+  }, [blockers, rawBlockers, loading]);
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
   const [resolutionFor, setResolutionFor] = useState<any | null>(null);

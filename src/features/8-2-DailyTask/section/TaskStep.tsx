@@ -44,6 +44,7 @@ interface TaskStepProps {
     order: number;
     created_at: string;
     updated_at?: string;
+    completed_at?: string | null;
     created_by?: string | null;
     assigned_to?: string | null;
     assigned_at?: string | null; // Assignment date/time
@@ -144,10 +145,16 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
   // Removed auto-expand effect - files section now defaults to collapsed
 
   // Compute on-time/late label for finished step vs due date
+  // IMPORTANT: Use completed_at if available, fallback to updated_at for backward compatibility
   const getFinishStatusLabel = (): { text: string; className: string } | null => {
-    if (!step.assigned_due_date || !updatedAt || !isCompleted) return null;
+    if (!step.assigned_due_date || !isCompleted) return null;
+    
+    // Use completed_at if available, otherwise fallback to updated_at
+    const finishDate = step.completed_at || step.updated_at;
+    if (!finishDate) return null;
+    
     const assigneeName = step.assigned_employee?.full_name || 'Assignee';
-    const finish = new Date(updatedAt);
+    const finish = new Date(finishDate);
     const dueEnd = new Date(step.assigned_due_date);
     // on time means finish is on/before 23:59:59 of due date
     dueEnd.setHours(23, 59, 59, 999);
@@ -753,20 +760,6 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 )}
               </div>
             </div>
-            {/* Finished timestamp and Assigned at below title - Desktop only */}
-            {(isCompleted && updatedAt) || step.assigned_at ? (
-              <div className="hidden md:flex -mt-0.5 md:mt-1 items-center gap-2 flex-wrap">
-                {step.assigned_at && (
-                  <span className="text-[10px] text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
-                )}
-                {isCompleted && updatedAt && (
-                  <span className="text-[10px] text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
-                )}
-                {getFinishStatusLabel() && (
-                  <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
-                )}
-              </div>
-            ) : null}
             {/* Icons below title on mobile, to the right on desktop when no sub-steps */}
             {subStepCount === 0 && (
               <div className="mt-1 flex justify-end md:hidden">
@@ -785,16 +778,16 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* Assigned at for mobile */}
-                    {step.assigned_at && (
-                      <span className="md:hidden text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
-                    )}
-                    {/* Finished timestamp for mobile - only show when completed */}
-                    {isCompleted && updatedAt && (
-                      <span className="md:hidden text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
-                    )}
                     {step.assigned_due_date && (
                       <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                    )}
+                    {/* Assigned at */}
+                    {step.assigned_at && (
+                      <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                    )}
+                    {/* Finished timestamp - only show when completed */}
+                    {isCompleted && updatedAt && (
+                      <span className="text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
                     )}
                     {getFinishStatusLabel() && (
                       <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
@@ -814,9 +807,14 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 </div>
               </div>
             )}
-            {subStepCount === 0 && step.assigned_due_date && (
-              <div className="mt-1 flex items-center gap-4 text-[10px] text-gray-500">
-                <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+            {subStepCount === 0 && (step.assigned_due_date || step.assigned_at) && (
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                {step.assigned_due_date && (
+                  <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                )}
+                {step.assigned_at && (
+                  <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                )}
                 {getFinishStatusLabel() && (
                   <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
                 )}

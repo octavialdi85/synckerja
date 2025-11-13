@@ -70,6 +70,7 @@ export interface TaskStep {
   has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
   sub_steps?: TaskSubStep[]; // Sub-steps for this step
   assigned_due_date?: string | null; // Due date from task_steps_assigned_duedate
+  completion_date_from_history?: string | null; // Completion date from task_step_history (accurate), or fallback to updated_at
   status?: string;
   priority?: string;
 }

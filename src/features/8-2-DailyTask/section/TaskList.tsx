@@ -321,112 +321,64 @@ export const TaskList = () => {
           return;
         }
 
-        // Collect ALL step IDs from ALL tasks at once
-        const allStepIds: string[] = [];
-        const taskToStepMapping: Record<string, string[]> = {};
-        
-        tasksToProcess.forEach(t => {
-          const stepIds = t.steps.map(s => s.id);
-          taskToStepMapping[t.id] = stepIds;
-          allStepIds.push(...stepIds);
-        });
-
-        if (allStepIds.length === 0) {
+        const allTaskIds = tasksToProcess.map(task => task.id);
+        if (allTaskIds.length === 0) {
           setBlockerCountByTask({});
           return;
         }
 
-        // SINGLE BATCHED QUERY #1: Get all sub-steps for all tasks at once
-        let allSubSteps: any[] = [];
-        try {
-          const { data, error } = await supabase
-            .from('task_steps_to_steps')
-            .select('id, parent_step_id')
-            .in('parent_step_id', allStepIds);
-          
-          if (!error && data) {
-            allSubSteps = data;
+        const chunkArray = <T,>(array: T[], chunkSize: number): T[][] => {
+          if (chunkSize <= 0) return [array];
+          const result: T[][] = [];
+          for (let i = 0; i < array.length; i += chunkSize) {
+            result.push(array.slice(i, i + chunkSize));
           }
-        } catch (err) {
-          console.warn('Failed to fetch sub-steps:', err);
-          // Continue with empty sub-steps
-        }
+          return result;
+        };
 
-        if (cancelled) return;
+        const counts: Record<string, number> = {};
+        const taskIdChunks = chunkArray(allTaskIds, 25);
 
-        const allSubStepIds = allSubSteps.map(s => s.id);
-        
-        // SINGLE BATCHED QUERY #2: Get ALL blocker counts for ALL steps at once (only unresolved)
-        let stepBlockers: any[] = [];
-        try {
-          const { data, error } = await supabase
-            .from('task_step_history')
-            .select('task_step_id, is_resolved')
-            .eq('action_type', 'blocker_added')
-            .in('task_step_id', allStepIds);
-          
-          if (!error && data) {
-            // Filter for unresolved blockers in JavaScript to avoid 500 errors
-            stepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
-          }
-        } catch (err) {
-          console.warn('Failed to count step blockers:', err);
-          // Continue with empty blockers - graceful degradation
-        }
+        for (let i = 0; i < taskIdChunks.length; i++) {
+          const chunk = taskIdChunks[i];
+          if (chunk.length === 0) continue;
 
-        if (cancelled) return;
-
-        // SINGLE BATCHED QUERY #3: Get ALL blocker counts for ALL sub-steps at once (only unresolved)
-        let subStepBlockers: any[] = [];
-        if (allSubStepIds.length > 0) {
           try {
             const { data, error } = await supabase
-              .from('task_step_history')
-              .select('task_steps_to_steps_id, is_resolved')
-              .eq('action_type', 'blocker_added')
-              .in('task_steps_to_steps_id', allSubStepIds);
-            
-            if (!error && data) {
-              // Filter for unresolved blockers in JavaScript to avoid 500 errors
-              subStepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
+              .rpc('get_unresolved_blocker_counts', { task_ids: chunk });
+
+            if (cancelled) return;
+
+            if (error) {
+              console.warn(`Failed to fetch blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, error);
+              continue;
+            }
+
+            if (Array.isArray(data)) {
+              data.forEach((row: any) => {
+                if (row?.task_id) {
+                  counts[row.task_id] = (counts[row.task_id] ?? 0) + (row.blocker_count ?? 0);
+                }
+              });
             }
           } catch (err) {
-            console.warn('Failed to count sub-step blockers:', err);
-            // Continue with empty blockers - graceful degradation
+            console.warn(`Error fetching blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, err);
+            if (cancelled) return;
           }
         }
 
-        if (cancelled) return;
-
-        // Map sub-steps to their parent steps
-        const subStepToParent: Record<string, string> = {};
-        allSubSteps.forEach(sub => {
-          subStepToParent[sub.id] = sub.parent_step_id;
-        });
-
-        // Count blockers per task
-        const counts: Record<string, number> = {};
         tasksToProcess.forEach(task => {
-          const taskStepIds = taskToStepMapping[task.id];
-          let count = 0;
-
-          // Count step blockers
-          stepBlockers.forEach(blocker => {
-            if (taskStepIds.includes(blocker.task_step_id)) {
-              count++;
-            }
-          });
-
-          // Count sub-step blockers
-          subStepBlockers.forEach(blocker => {
-            const parentStepId = subStepToParent[blocker.task_steps_to_steps_id];
-            if (parentStepId && taskStepIds.includes(parentStepId)) {
-              count++;
-            }
-          });
-
-          counts[task.id] = count;
+          if (counts[task.id] === undefined) {
+            counts[task.id] = 0;
+          }
         });
+        
+        if (import.meta.env.DEV) {
+          console.log('🛠️ Blocker debug (RPC)', {
+            totalTasks: tasksToProcess.length,
+            counts,
+          });
+        }
         
         // Only update state if not cancelled
         if (!cancelled) {
