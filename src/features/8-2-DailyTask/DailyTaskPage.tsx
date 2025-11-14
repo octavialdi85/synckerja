@@ -11,6 +11,8 @@ import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
 import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
+import { JobDescTracker } from './section/JobDescTracker';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const DailyTaskPage = () => {
   return (
@@ -23,8 +25,9 @@ const DailyTaskPage = () => {
 };
 
 const DailyTaskContent = () => {
+  const { t } = useAppTranslation();
   const { tasks, filters, isLoading } = useDailyTask();
-  const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative'>('summary');
+  const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
 
   // Show loading state while initial data is being fetched
@@ -134,7 +137,7 @@ const DailyTaskContent = () => {
                                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                               }`}
                             >
-                              Task Summary
+                              {t('dailyTask.sidebar.summaryTab', 'Task Summary')}
                             </button>
                             <button
                               onClick={() => setSidebarTab('initiative')}
@@ -144,40 +147,40 @@ const DailyTaskContent = () => {
                                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                               }`}
                             >
-                              Initiative
+                              {t('dailyTask.sidebar.initiativeTab', 'Initiative')}
+                            </button>
+                            <button
+                              onClick={() => setSidebarTab('jobdesc')}
+                              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                                sidebarTab === 'jobdesc'
+                                  ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                            >
+                              {t('dailyTask.sidebar.jobDescTab', 'Job Desc')}
                             </button>
                           </div>
                           
-                          {/* Tab Description */}
-                          <div className="px-4 py-1.5">
-                            <h3 className="text-sm font-semibold text-gray-900">
-                              {sidebarTab === 'summary' ? 'Task Summary' : 'Initiative'}
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {sidebarTab === 'summary' 
-                                ? 'Overview of daily tasks' 
-                                : 'Track initiative progress'}
-                            </p>
-                          </div>
                         </div>
 
                       {/* Scrollable Sidebar Content */}
                       <div className="flex-1 overflow-y-auto seamless-scroll p-4">
-                        {sidebarTab === 'summary' ? (
-                          <TaskSummaryCards />
-                        ) : (
+                        {sidebarTab === 'summary' && <TaskSummaryCards />}
+                        {sidebarTab === 'initiative' && (
                           <TaskInitiative onStatsChange={setInitiativeStats} />
                         )}
+                        {sidebarTab === 'jobdesc' && <JobDescTracker />}
                       </div>
 
                       {/* Sidebar Footer - Conditional based on active tab */}
-                      {sidebarTab === 'summary' ? (
+                      {sidebarTab === 'summary' && (
                         <TaskSidebarFooter 
                           totalTasks={tasks.length}
                           thisWeek={thisWeekTasks}
                           completionRate={completionRate}
                         />
-                      ) : (
+                      )}
+                      {sidebarTab === 'initiative' && (
                         <TaskInitiativeFooter 
                           totalItems={initiativeStats.totalItems}
                           unassignedItems={initiativeStats.unassignedItems}

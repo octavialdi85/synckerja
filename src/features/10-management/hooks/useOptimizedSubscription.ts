@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
-import { useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useCallback, useEffect, useRef } from 'react';
 
 export interface SubscriptionStatus {
   status: 'trial' | 'active' | 'expired' | 'cancelled' | 'suspended';
@@ -48,32 +48,42 @@ export interface SubscriptionPlan {
 export const useOptimizedSubscription = () => {
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
+  const hasInitializedRef = useRef(false);
+  const lastOrgIdRef = useRef<string | null>(null);
 
 
   // CRITICAL: Invalidate and refetch subscription query when organization changes
   // This ensures we get fresh data from Supabase for the new organization
   useEffect(() => {
-    if (organizationId) {
-      console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
-      
-      // Remove stale queries from previous organizations
-      queryClient.removeQueries({
-        predicate: (query) => {
-          const queryKey = query.queryKey;
-          return Array.isArray(queryKey) && 
-                 queryKey[0] === 'subscriptionStatus' && 
-                 queryKey[1] !== organizationId; // Remove queries for other organizations
-        }
-      });
-      
-      // Invalidate and force refetch subscription data for new organization
-      queryClient.invalidateQueries({ 
-        queryKey: optimizedQueryKeys.subscription.status(organizationId),
-        refetchType: 'active' // Immediately refetch active queries
-      });
-      
-      console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
+    if (!organizationId) return;
+
+    // Avoid duplicate invalidations during React strict-mode double effects
+    if (hasInitializedRef.current && lastOrgIdRef.current === organizationId) {
+      return;
     }
+
+    hasInitializedRef.current = true;
+    lastOrgIdRef.current = organizationId;
+
+    console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
+    
+    // Remove stale queries from previous organizations
+    queryClient.removeQueries({
+      predicate: (query) => {
+        const queryKey = query.queryKey;
+        return Array.isArray(queryKey) && 
+               queryKey[0] === 'subscriptionStatus' && 
+               queryKey[1] !== organizationId; // Remove queries for other organizations
+      }
+    });
+    
+    // Invalidate and force refetch subscription data for new organization
+    queryClient.invalidateQueries({ 
+      queryKey: optimizedQueryKeys.subscription.status(organizationId),
+      refetchType: 'active' // Immediately refetch active queries
+    });
+    
+    console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
   }, [organizationId, queryClient]);
 
   // Optimized subscription status query with proper caching and better error handling

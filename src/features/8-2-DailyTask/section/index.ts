@@ -16,6 +16,7 @@ export { DeadlineExtensionDialog } from './DeadlineExtensionDialog';
 export { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 export { ModalAddTaskStep } from './ModalAddTaskStep';
 export { DueDateDialog } from './DueDateDialog';
+export { JobDescTracker } from './JobDescTracker';
 
 
 

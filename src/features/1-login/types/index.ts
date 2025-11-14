@@ -497,6 +497,15 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
+      get_task_step_history_batch: {
+        Args: {
+          p_task_step_ids?: string[] | null
+          p_sub_step_ids?: string[] | null
+          p_limit?: number | null
+          p_offset?: number | null
+        }
+        Returns: Database['public']['Tables']['task_step_history']['Row'][]
+      }
       [_ in never]: never
     }
     Enums: {

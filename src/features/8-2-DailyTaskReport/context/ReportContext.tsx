@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
@@ -71,14 +71,67 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     timePeriod: 'all' | 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
     customStart?: string | null; customEnd?: string | null;
     pic?: 'all' | string; task?: 'all' | string; step?: 'all' | string; subStep?: 'all' | string;
-  }>({ search: '', status: 'all', timePeriod: 'all', customStart: null, customEnd: null, pic: 'all', task: 'all', step: 'all', subStep: 'all' });
+  }>({
+    search: '',
+    status: 'all',
+    timePeriod: 'this_week',
+    customStart: null,
+    customEnd: null,
+    pic: 'all',
+    task: 'all',
+    step: 'all',
+    subStep: 'all'
+  });
   const [blockerCountByStep, setBlockerCountByStep] = useState<Record<string, number>>({});
   const [blockersByStep, setBlockersByStep] = useState<Record<string, any[]>>({});
   const [completionDateMap, setCompletionDateMap] = useState<Record<string, string>>({});
+  const isLoadingOrgRef = useRef(false);
+  const inFlightOrgRef = useRef<string | null>(null);
+
+  const fetchHistoryBatch = async (
+    stepIds: string[],
+    subStepIds: string[],
+    limit = 50
+  ): Promise<any[]> => {
+    if (stepIds.length === 0 && subStepIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await supabase.rpc('get_task_step_history_batch', {
+      p_task_step_ids: stepIds.length ? stepIds : null,
+      p_sub_step_ids: subStepIds.length ? subStepIds : null,
+      p_limit: limit,
+    });
+
+    if (error) {
+      console.error('❌ Failed to fetch task_step_history batch', error);
+      throw error;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(
+        '📚 History batch fetch',
+        `steps=${stepIds.length} subSteps=${subStepIds.length} returned=${data?.length || 0}`
+      );
+    }
+
+    return data || [];
+  };
 
   useEffect(() => {
+    if (!organizationId) return;
+
+    // Prevent duplicate loads for the same org (e.g., React strict mode)
+    if (isLoadingOrgRef.current && inFlightOrgRef.current === organizationId) {
+      console.debug('⏭️ Skipping duplicate report load for org:', organizationId);
+      return;
+    }
+
+    isLoadingOrgRef.current = true;
+    inFlightOrgRef.current = organizationId;
+    let isActive = true;
+
     const load = async () => {
-      if (!organizationId) return;
       setLoading(true);
       try {
         // STEP 1: Fetch assignments (this is the main data source)
@@ -186,7 +239,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           }
 
           // STEP 4: PARALLEL - Fetch sub-step blockers and history in parallel
-          const [subStepBlockersResult, historyResult] = await Promise.all([
+          const [subStepBlockersResult, historyData] = await Promise.all([
             // Get sub-step blockers
             subStepIdList.length > 0
               ? supabase
@@ -196,22 +249,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                   .in('task_steps_to_steps_id', subStepIdList)
               : Promise.resolve({ data: [], error: null }),
             
-            // Fetch history for steps and sub-steps
-            (stepIdList.length > 0 || subStepIdList.length > 0)
-              ? (() => {
-                  let historyQuery = supabase.from('task_step_history').select('*');
-                  if (stepIdList.length > 0 && subStepIdList.length > 0) {
-                    historyQuery = historyQuery.or(
-                      `task_step_id.in.(${stepIdList.join(',')}),task_steps_to_steps_id.in.(${subStepIdList.join(',')})`
-                    );
-                  } else if (stepIdList.length > 0) {
-                    historyQuery = historyQuery.in('task_step_id', stepIdList);
-                  } else if (subStepIdList.length > 0) {
-                    historyQuery = historyQuery.in('task_steps_to_steps_id', subStepIdList);
-                  }
-                  return historyQuery.order('created_at', { ascending: false }).limit(50);
-                })()
-              : Promise.resolve({ data: [], error: null })
+            // Fetch history for steps and sub-steps via optimized RPC
+            fetchHistoryBatch(stepIdList, subStepIdList, 50)
           ]);
 
           // Process sub-step blockers
@@ -223,7 +262,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           }
 
           // Process history
-          history = historyResult.data || [];
+          history = historyData || [];
         }
 
         // Combine all blockers
@@ -338,7 +377,16 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         setLoading(false);
       }
     };
-    load();
+    load().finally(() => {
+      if (isActive) {
+        isLoadingOrgRef.current = false;
+        inFlightOrgRef.current = null;
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
   }, [organizationId]);
 
   const performance = useMemo<ComputedPerformanceRow[]>(() => {
