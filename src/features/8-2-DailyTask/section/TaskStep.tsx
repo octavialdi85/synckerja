@@ -17,6 +17,7 @@ import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/MobileAssignStepDialog';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 interface TaskFile {
   id: string;
@@ -55,6 +56,7 @@ interface TaskStepProps {
     links?: TaskLink[];
     assigned_due_date?: string | null;
     has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
+    social_media_plan_id?: string | null;
     // Relations
     assigned_employee?: {
       id: string;
@@ -92,6 +94,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
   const [optimisticUpdatedAt, setOptimisticUpdatedAt] = useState<string | null>(null);
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+  const { toast } = useToast();
 
   // States for meeting point integration
   const [isFromMeetingPoint, setIsFromMeetingPoint] = useState(false);
@@ -390,6 +393,14 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
   }, [isUpdateHistoryOpen, solutionId, isFromMeetingPoint]);
 
   const handleToggleComplete = async () => {
+    if (step.social_media_plan_id && subStepCount === 0) {
+      toast({
+        title: 'Completion locked',
+        description: 'This step is controlled by the Social Media Plan. Update the plan status or Google Drive link to complete it.',
+      });
+      return;
+    }
+
     // Jika step memiliki sub-step, tidak bisa di-toggle langsung
     if (subStepCount > 0) {
       // Jika step belum completed, cek apakah semua sub-step sudah selesai

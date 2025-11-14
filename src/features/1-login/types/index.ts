@@ -78,6 +78,8 @@ export interface Database {
           has_dependencies: boolean | null
           id: string
           is_completed: boolean
+          manual_completed_at: string | null
+          manual_is_completed: boolean
           order: number
           priority: string | null
           social_media_plan_id: string | null
@@ -102,6 +104,8 @@ export interface Database {
           has_dependencies?: boolean | null
           id?: string
           is_completed?: boolean
+          manual_completed_at?: string | null
+          manual_is_completed?: boolean
           order?: number
           priority?: string | null
           social_media_plan_id?: string | null
@@ -126,6 +130,8 @@ export interface Database {
           has_dependencies?: boolean | null
           id?: string
           is_completed?: boolean
+          manual_completed_at?: string | null
+          manual_is_completed?: boolean
           order?: number
           priority?: string | null
           social_media_plan_id?: string | null

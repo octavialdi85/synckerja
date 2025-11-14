@@ -30,6 +30,13 @@ interface SubStep {
   } | null;
 }
 
+interface ParentPlanInfo {
+  id: string;
+  google_drive_link?: string | null;
+  production_status?: string | null;
+  production_approved?: boolean | null;
+}
+
 interface ModalViewSubStepsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +60,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const { toast } = useToast();
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
+  const [parentPlan, setParentPlan] = useState<ParentPlanInfo | null>(null);
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -205,6 +213,25 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 
   const toggleCompleted = async (id: string, current: boolean) => {
     try {
+      const willBeCompleted = !current;
+      const isFinishingAllSubSteps =
+        willBeCompleted &&
+        subSteps.length > 0 &&
+        subSteps.every(s => (s.id === id ? true : s.is_completed));
+
+      if (
+        isFinishingAllSubSteps &&
+        parentPlan?.id &&
+        (!parentPlan.google_drive_link || parentPlan.google_drive_link.trim() === '')
+      ) {
+        toast({
+          title: 'Lengkapi Google Drive Link',
+          description: 'Isi Google Drive link pada halaman Social Media sebelum menuntaskan semua sub-step.',
+          variant: 'destructive'
+        });
+        return; // Prevent completion if Google Drive link is missing
+      }
+
       const { error } = await supabase
         .from('task_steps_to_steps')
         .update({ is_completed: !current })
@@ -387,6 +414,45 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       });
     }
   };
+
+  useEffect(() => {
+    if (!open || !parentStepId) {
+      return;
+    }
+
+    const fetchParentPlan = async () => {
+      try {
+        const { data: stepPlan } = await supabase
+          .from('task_steps')
+          .select('social_media_plan_id')
+          .eq('id', parentStepId)
+          .maybeSingle();
+
+        if (!stepPlan?.social_media_plan_id) {
+          setParentPlan(null);
+          return;
+        }
+
+        const { data: planData } = await supabase
+          .from('social_media_plans')
+          .select('google_drive_link, production_status, production_approved')
+          .eq('id', stepPlan.social_media_plan_id)
+          .maybeSingle();
+
+        setParentPlan({
+          id: stepPlan.social_media_plan_id,
+          google_drive_link: planData?.google_drive_link ?? null,
+          production_status: planData?.production_status ?? null,
+          production_approved: planData?.production_approved ?? null
+        });
+      } catch (error) {
+        console.error('Error fetching parent plan info:', error);
+        setParentPlan(null);
+      }
+    };
+
+    fetchParentPlan();
+  }, [open, parentStepId]);
 
   useEffect(() => {
     if (open) fetchSubSteps();
