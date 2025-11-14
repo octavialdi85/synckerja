@@ -419,9 +419,17 @@ export const TaskList = () => {
   // When PIC filter is active, calculate progress for steps assigned to that PIC
   // When All PIC is selected, calculate progress for ALL steps
   // When task is assigned at task level, calculate progress for ALL steps
+  // If task has no steps, progress is based on status (completed = 100%, not completed = 0%)
   const calculateAssignedStepsProgress = (task: Task): number => {
     const visibleSteps = getVisibleSteps(task);
-    if (visibleSteps.length === 0) return 0;
+    
+    // If task has no steps, progress is based on status
+    // This ensures that tasks without steps show 100% when completed
+    if (visibleSteps.length === 0) {
+      return task.status === 'completed' ? 100 : 0;
+    }
+    
+    // If task has steps, calculate from completed steps
     const completedVisibleSteps = visibleSteps.filter(s => s.is_completed).length;
     return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
   };
@@ -894,8 +902,9 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* Finish Date */}
+                        {/* Use finish_date from daily_tasks table (automatically set by database trigger when status = 'completed') */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {task.finish_date && calculateAssignedStepsProgress(task) === 100 ? (
+                          {task.finish_date ? (
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-green-600" />
@@ -992,7 +1001,7 @@ export const TaskList = () => {
                               return (
                                 <>
                                   <div className="text-xs text-gray-500">
-                                    {visibleSteps.length > 0 ? `${progress}%` : 'No steps'}
+                                    {visibleSteps.length > 0 ? `${progress}%` : (task.status === 'completed' ? '100%' : 'No steps')}
                                   </div>
                                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                                     <div 

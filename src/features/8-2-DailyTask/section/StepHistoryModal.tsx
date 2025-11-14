@@ -225,15 +225,21 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
       // Update step status if needed
       if (!subStepId) {
         if (actionType === 'status_change') {
+          // Synchronize is_completed with status
+          // When status = 'completed', set is_completed = true
+          // When status != 'completed', set is_completed = false
+          // Note: completed_at is automatically handled by database trigger based on is_completed
+          const updatePayload: any = {
+            status: newStatus,
+            is_completed: newStatus === 'completed',
+            blocked_reason: newStatus === 'blocked' ? data.description : null,
+            blocked_at: newStatus === 'blocked' ? new Date().toISOString() : null,
+            started_at: newStatus === 'in_progress' ? new Date().toISOString() : null
+          };
+
           const { error: updateError } = await (supabase as any)
             .from('task_steps')
-            .update({
-              status: newStatus,
-              blocked_reason: newStatus === 'blocked' ? data.description : null,
-              blocked_at: newStatus === 'blocked' ? new Date().toISOString() : null,
-              started_at: newStatus === 'in_progress' ? new Date().toISOString() : null,
-              completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-            })
+            .update(updatePayload)
             .eq('id', taskStepId);
 
           if (updateError) throw updateError;

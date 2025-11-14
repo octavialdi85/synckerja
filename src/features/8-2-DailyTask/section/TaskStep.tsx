@@ -105,6 +105,10 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
   // Use optimistic state if available, otherwise use step prop (for immediate UI feedback)
   const isCompleted = optimisticCompleted !== null ? optimisticCompleted : step.is_completed;
   const updatedAt = optimisticUpdatedAt !== null ? optimisticUpdatedAt : step.updated_at;
+  
+  // Use completed_at for finished date (from task_steps table)
+  // completed_at is automatically set by database trigger when is_completed = TRUE
+  const completedAt = step.completed_at;
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -145,12 +149,13 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
   // Removed auto-expand effect - files section now defaults to collapsed
 
   // Compute on-time/late label for finished step vs due date
-  // IMPORTANT: Use completed_at if available, fallback to updated_at for backward compatibility
+  // Use completed_at from task_steps table (automatically set by database trigger)
   const getFinishStatusLabel = (): { text: string; className: string } | null => {
     if (!step.assigned_due_date || !isCompleted) return null;
     
-    // Use completed_at if available, otherwise fallback to updated_at
-    const finishDate = step.completed_at || step.updated_at;
+    // Use completed_at from task_steps table for finished date
+    // completed_at is automatically set by database trigger when is_completed = TRUE
+    const finishDate = step.completed_at;
     if (!finishDate) return null;
     
     const assigneeName = step.assigned_employee?.full_name || 'Assignee';
@@ -786,8 +791,9 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                       <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
                     )}
                     {/* Finished timestamp - only show when completed */}
-                    {isCompleted && updatedAt && (
-                      <span className="text-gray-500">Finished: {formatDateTime(updatedAt)}</span>
+                    {/* Use completed_at from task_steps table for finished date */}
+                    {isCompleted && completedAt && (
+                      <span className="text-gray-500">Finished: {formatDateTime(completedAt)}</span>
                     )}
                     {getFinishStatusLabel() && (
                       <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>

@@ -756,7 +756,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Calculate progress for each task and synchronize status
       const tasksWithProgress = (data || []).map((task: any) => {
         const taskSteps = stepsByTaskId[task.id] || [];
-        const progress = calculateProgress(taskSteps);
+        // Pass task status to calculateProgress for tasks without steps
+        // If no steps exist, progress is based on status (completed = 100%, not completed = 0%)
+        const progress = calculateProgress(taskSteps, task.status);
         
         // For tasks without substeps (has_substeps = false), respect the manual status
         // Don't auto-synchronize status based on progress since they can be checked directly
@@ -846,20 +848,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (updatesNeeded.length > 0) {
         console.log('Syncing task statuses in database:', updatesNeeded.map(t => ({ id: t.id, oldStatus: originalTasks.find(ot => ot.id === t.id)?.status, newStatus: t.status })));
         
-        // Update status and finish_date for each task that needs synchronization
+        // Update status for each task that needs synchronization
+        // Note: finish_date is now automatically handled by database trigger
+        // When status = 'completed', trigger sets finish_date = NOW()
+        // When status != 'completed', trigger sets finish_date = NULL
         for (const task of updatesNeeded) {
           const updateData: any = { status: task.status };
-          
-          // Ensure finish_date logic: if status is not 'completed', finish_date must be NULL
-          // If status is 'completed' and finish_date is not set, set it to current timestamp
-          if (task.status === 'completed') {
-            if (!task.finish_date) {
-              updateData.finish_date = new Date().toISOString();
-            }
-          } else {
-            // If status is not completed, ensure finish_date is NULL
-            updateData.finish_date = null;
-          }
           
           const { error } = await supabase
             .from('daily_tasks')
@@ -1007,18 +1001,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       data.has_reminder = false;
     }
     
-    // Ensure finish_date logic: if status is not 'completed', finish_date must be NULL
-    // If status is 'completed' and finish_date is not set, set it to current timestamp
-    if (data.status !== undefined) {
-      if (data.status === 'completed') {
-        // If status is being set to completed and finish_date is not provided, set it
-        if (!data.finish_date) {
-          data.finish_date = new Date().toISOString();
-        }
-      } else {
-        // If status is not completed, ensure finish_date is NULL
-        data.finish_date = null;
-      }
+    // Note: finish_date is now automatically handled by database trigger
+    // When status = 'completed', trigger sets finish_date = NOW()
+    // When status != 'completed', trigger sets finish_date = NULL
+    // Remove finish_date from data if present, let trigger handle it
+    if (data.finish_date !== undefined) {
+      delete data.finish_date;
     }
     
     // Extract assigned_to from data since it's not a column in daily_tasks table
@@ -1029,11 +1017,27 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     
     // Optimistic update: update local state immediately
     const previousTasks = [...tasks];
+    const previousStatus = currentTask?.status;
+    const isStatusChanged = data.status !== undefined && data.status !== previousStatus;
+    
     setTasks(prevTasks => 
       prevTasks.map(task => {
         if (task.id === id) {
-          // Simply apply the update directly - no complex logic needed for optimistic update
-          return { ...task, ...data };
+          const updatedTask = { ...task, ...data };
+          
+          // Optimistic update for finish_date based on status change
+          // This provides instant UI feedback while database trigger sets the actual value
+          if (isStatusChanged) {
+            if (data.status === 'completed') {
+              // Set finish_date to current timestamp for optimistic update
+              updatedTask.finish_date = new Date().toISOString();
+            } else {
+              // Clear finish_date if status is not completed
+              updatedTask.finish_date = null;
+            }
+          }
+          
+          return updatedTask;
         }
         return task;
       })
@@ -1114,14 +1118,40 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // For status updates (and has_reminder auto-update when completing), mark task as recently updated to skip real-time refresh
+      // For status updates (and has_reminder auto-update when completing), fetch finish_date from database
       // Check if update is primarily a status update (has_reminder might be auto-set to false)
       // Also check if assignment changed (assigned_to is handled separately)
       const isStatusUpdate = data.status !== undefined;
       const hasAssignmentChange = assignedTo !== undefined;
-      const hasOnlyStatusOrReminder = Object.keys(updateData).every(key => key === 'status' || key === 'has_reminder' || key === 'finish_date');
+      // Note: finish_date is handled by database trigger, not included in updateData
+      const hasOnlyStatusOrReminder = Object.keys(updateData).every(key => key === 'status' || key === 'has_reminder');
       
       if (isStatusUpdate && hasOnlyStatusOrReminder && !hasAssignmentChange) {
+        // Fetch updated task to get finish_date from database trigger
+        // This ensures we get the exact finish_date set by the database trigger
+        const { data: updatedTask, error: fetchError } = await supabase
+          .from('daily_tasks')
+          .select('finish_date, status')
+          .eq('id', id)
+          .single();
+
+        if (!fetchError && updatedTask) {
+          // Update local state with finish_date from database
+          // This replaces the optimistic update with the actual value from database
+          setTasks(prevTasks => 
+            prevTasks.map(task => {
+              if (task.id === id) {
+                return { 
+                  ...task, 
+                  finish_date: updatedTask.finish_date,
+                  status: updatedTask.status as 'pending' | 'in_progress' | 'completed' | 'cancelled'
+                };
+              }
+              return task;
+            })
+          );
+        }
+
         // Mark this task as recently updated to skip real-time refresh
         // For tasks without substeps, extend the skip time since they don't have progress-based sync
         const skipDuration = currentTask?.has_substeps === false ? 5000 : 3000;
@@ -1278,16 +1308,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : beforeCompleted;
       const completionChanged = typeof data.is_completed === 'boolean' && before && beforeCompleted !== data.is_completed;
 
-      // Set completed_at based on completion status
-      if (completionChanged) {
-        if (afterCompleted) {
-          // Step is being completed - set completed_at to now
-          data.completed_at = new Date().toISOString();
-        } else {
-          // Step is being uncompleted - clear completed_at
-          data.completed_at = null;
-        }
-      }
+      // Note: completed_at is now automatically handled by database trigger
+      // When is_completed = TRUE, trigger sets completed_at = NOW()
+      // When is_completed = FALSE, trigger sets completed_at = NULL
 
       // Track if we should skip refresh (for mobile auto-reorder)
       let skipRefresh = false;
@@ -1300,27 +1323,27 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           .eq('task_id', taskId);
 
         if (allSteps) {
-          // Calculate progress and determine new status
-          const progress = calculateProgress(allSteps as any);
-          const newStatus = determineStatusFromProgress(progress, 'pending');
-          
-          // Get current task status
+          // Get current task status first (needed for progress calculation if no steps)
           const { data: currentTask } = await supabase
             .from('daily_tasks')
             .select('status')
             .eq('id', taskId)
             .single();
           
-          const finalStatus = determineStatusFromProgress(progress, (currentTask as any)?.status || 'pending');
+          const currentStatus = (currentTask as any)?.status || 'pending';
           
-          // Update task status and finish_date based on progress
+          // Calculate progress and determine new status
+          // Pass task status to calculateProgress for tasks without steps
+          const progress = calculateProgress(allSteps as any, currentStatus);
+          const newStatus = determineStatusFromProgress(progress, 'pending');
+          
+          const finalStatus = determineStatusFromProgress(progress, currentStatus);
+          
+          // Update task status based on progress
+          // Note: finish_date is now automatically handled by database trigger
+          // When status = 'completed', trigger sets finish_date = NOW()
+          // When status != 'completed', trigger sets finish_date = NULL
           const updateData: any = { status: finalStatus };
-          
-          if (finalStatus === 'completed' && progress === 100) {
-            updateData.finish_date = new Date().toISOString();
-          } else if (finalStatus !== 'completed') {
-            updateData.finish_date = null;
-          }
           
           await supabase
             .from('daily_tasks')
@@ -1370,7 +1393,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                     .sort((a, b) => a.order - b.order);
                   
                   // Recalculate progress
-                  const progress = calculateProgress(updatedSteps);
+                  // Pass task status to calculateProgress for tasks without steps
+                  const progress = calculateProgress(updatedSteps, task.status);
                   
                   return {
                     ...task,
@@ -2037,7 +2061,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const calculateTaskProgress = (taskId: string): number => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return 0;
-    return calculateProgress(task.steps);
+    // Pass task status to calculateProgress for tasks without steps
+    return calculateProgress(task.steps, task.status);
   };
 
   // Deadline extension functions

@@ -3,9 +3,16 @@ import { TaskStep } from '../types/taskTypes';
 
 /**
  * Calculate progress percentage based on completed steps
+ * If no steps exist, progress is based on task status:
+ * - status = 'completed' → 100%
+ * - status != 'completed' → 0%
  */
-export const calculateProgress = (steps: TaskStep[]): number => {
-  if (!steps || !Array.isArray(steps) || steps.length === 0) return 0;
+export const calculateProgress = (steps: TaskStep[], taskStatus?: string): number => {
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    // If no steps, progress is based on status
+    // This ensures that tasks without steps show 100% when completed
+    return taskStatus === 'completed' ? 100 : 0;
+  }
   const completedSteps = steps.filter(step => step && step.is_completed).length;
   return Math.round((completedSteps / steps.length) * 100);
 };

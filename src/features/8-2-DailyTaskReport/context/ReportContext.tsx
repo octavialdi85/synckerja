@@ -7,7 +7,7 @@ export interface AssignmentRow {
   task_step_id: string;
   assigned_at: string;
   employee: { id: string; full_name: string; email?: string } | null;
-  step: { id: string; title: string; updated_at: string | null; is_completed: boolean; task?: { id: string; title: string } } | null;
+  step: { id: string; title: string; updated_at: string | null; completed_at: string | null; is_completed: boolean; task?: { id: string; title: string } } | null;
   due_date: string | null;
 }
 
@@ -87,7 +87,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           .select(`
             id, task_step_id, assigned_at,
             employee:employees!employee_id(id, full_name, email),
-            step:task_steps(id, title, updated_at, is_completed, task:daily_tasks(id, title)),
+            step:task_steps(id, title, updated_at, completed_at, is_completed, task:daily_tasks(id, title)),
             task_steps_assigned_duedate(due_date, created_at)
           `)
           .eq('organization_id', organizationId);
@@ -345,17 +345,12 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     return rows.map((r) => {
       const due = r.due_date ? new Date(r.due_date) : null;
       
-      // IMPORTANT: Use actual completion date from history, not updated_at
-      // updated_at can change on any update, but completion date is when step was first marked completed
+      // Use completed_at from task_steps table (automatically set by database trigger)
+      // completed_at is set to NOW() when is_completed = TRUE, and NULL when is_completed = FALSE
       let finishedAt: string | null = null;
-      if (r.step?.is_completed && r.step?.id) {
-        // First try to get from completion date map (from task_step_history)
-        if (completionDateMap[r.step.id]) {
-          finishedAt = completionDateMap[r.step.id];
-        } else if (r.step?.updated_at) {
-          // Fallback to updated_at if no history found (for backward compatibility)
-          finishedAt = r.step.updated_at;
-        }
+      if (r.step?.is_completed && r.step?.completed_at) {
+        // Use completed_at from task_steps table as the primary source
+        finishedAt = r.step.completed_at;
       }
       
       const finished = finishedAt ? new Date(finishedAt) : null;
@@ -389,7 +384,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         subStepTitle: null,
       };
     });
-  }, [rows, completionDateMap]);
+  }, [rows]);
 
   const filtered = useMemo(() => {
     let data = [...performance];
