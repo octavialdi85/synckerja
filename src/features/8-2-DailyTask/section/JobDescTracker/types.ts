@@ -16,6 +16,8 @@ interface JobDescAssignmentBase {
   dueDate?: string | null;
   dueStatus: JobDescDueStatus;
   pendingHours: number;
+  completedAt?: string | null;
+  completedInRange?: boolean;
 }
 
 export interface JobDescTaskAssignment extends JobDescAssignmentBase {

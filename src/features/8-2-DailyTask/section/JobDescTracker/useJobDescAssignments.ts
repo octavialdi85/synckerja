@@ -30,6 +30,7 @@ interface TaskRecord {
   status: string | null;
   priority: string | null;
   due_date: string | null;
+  finish_date: string | null;
 }
 
 interface StepRecord {
@@ -37,6 +38,7 @@ interface StepRecord {
   title: string | null;
   task_id: string | null;
   is_completed: boolean | null;
+  completed_at: string | null;
 }
 
 interface SubStepRecord {
@@ -44,6 +46,7 @@ interface SubStepRecord {
   title: string | null;
   parent_step_id: string | null;
   is_completed: boolean | null;
+  completed_at: string | null;
 }
 
 interface TaskAssignmentRow {
@@ -146,6 +149,14 @@ const isWithinRange = (dueDate: string, range: DateRangeValue) => {
   return date >= range.start && date <= range.end;
 };
 
+const isDateWithinRange = (value: string | null | undefined, range: DateRangeValue) => {
+  if (!value) return false;
+  if (!range.start || !range.end) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date >= range.start && date <= range.end;
+};
+
 const createEmptySummary = (employee?: EmployeeRow): JobDescEmployeeSummary => ({
   employeeId: employee?.id ?? "unknown",
   name: employee?.full_name ?? "Unknown Employee",
@@ -166,11 +177,11 @@ const applyAssignmentToSummary = (
   summary: JobDescEmployeeSummary,
   assignment: JobDescAssignment,
   isActive: boolean,
-  isCompleted: boolean,
+  completedAtInRange: boolean,
   isOverdue: boolean,
 ) => {
   summary.assignments.push(assignment);
-  if (isCompleted) {
+  if (completedAtInRange) {
     summary.completedAssignments += 1;
   }
   if (isOverdue) {
@@ -256,7 +267,12 @@ const buildSummaries = ({
     const dueDate = task.due_date;
     const overdue = isOverdue(dueDate, (task.status ?? "").toLowerCase() === "completed");
     const inRange = dueDate ? isWithinRange(dueDate, range) : false;
-    if (!dueDate || (!inRange && !(includeAllOverdue && overdue))) {
+    const completedAt = task.finish_date;
+    const completedInRange = isDateWithinRange(completedAt, range);
+    if (
+      (!dueDate || (!inRange && !(includeAllOverdue && overdue))) &&
+      !completedInRange
+    ) {
       return;
     }
     const dueStatus = determineDueStatus(
@@ -275,6 +291,8 @@ const buildSummaries = ({
       dueDate,
       dueStatus,
       pendingHours,
+      completedAt,
+      completedInRange,
     };
 
     const isActive = (task.status ?? "").toLowerCase() !== "completed";
@@ -282,7 +300,7 @@ const buildSummaries = ({
       summary,
       taskAssignment,
       isActive,
-      !isActive,
+      completedInRange,
       overdue,
     );
   });
@@ -300,7 +318,12 @@ const buildSummaries = ({
     const dueDate = explicitDueDate ?? task?.due_date ?? null;
     const overdue = isOverdue(dueDate, step.is_completed ?? false);
     const inRange = dueDate ? isWithinRange(dueDate, range) : false;
-    if (!dueDate || (!inRange && !(includeAllOverdue && overdue))) {
+    const completedAt = step.completed_at;
+    const completedInRange = isDateWithinRange(completedAt, range);
+    if (
+      (!dueDate || (!inRange && !(includeAllOverdue && overdue))) &&
+      !completedInRange
+    ) {
       return;
     }
     const dueStatus = determineDueStatus(dueDate, step.is_completed ?? false);
@@ -316,6 +339,8 @@ const buildSummaries = ({
       dueStatus,
       pendingHours,
       isCompleted: step.is_completed ?? false,
+      completedAt,
+      completedInRange,
     };
 
     const isActive = !(step.is_completed ?? false);
@@ -323,7 +348,7 @@ const buildSummaries = ({
       summary,
       stepAssignment,
       isActive,
-      step.is_completed ?? false,
+      completedInRange,
       overdue,
     );
   });
@@ -346,7 +371,12 @@ const buildSummaries = ({
     const dueDate = subStepDueDates[assignment.id] ?? task?.due_date ?? null;
     const overdue = isOverdue(dueDate, subStep.is_completed ?? false);
     const inRange = dueDate ? isWithinRange(dueDate, range) : false;
-    if (!dueDate || (!inRange && !(includeAllOverdue && overdue))) {
+    const completedAt = subStep.completed_at;
+    const completedInRange = isDateWithinRange(completedAt, range);
+    if (
+      (!dueDate || (!inRange && !(includeAllOverdue && overdue))) &&
+      !completedInRange
+    ) {
       return;
     }
     const dueStatus = determineDueStatus(dueDate, subStep.is_completed ?? false);
@@ -363,6 +393,8 @@ const buildSummaries = ({
       dueStatus,
       pendingHours,
       isCompleted: subStep.is_completed ?? false,
+      completedAt,
+      completedInRange,
     };
 
     const isActive = !(subStep.is_completed ?? false);
@@ -370,7 +402,7 @@ const buildSummaries = ({
       summary,
       subAssignment,
       isActive,
-      subStep.is_completed ?? false,
+      completedInRange,
       overdue,
     );
   });
@@ -406,7 +438,8 @@ const fetchAssignments = async (
             title,
             status,
             priority,
-            due_date
+            due_date,
+            finish_date
           )
         `,
         )
@@ -444,7 +477,7 @@ const fetchAssignments = async (
     subStepIds.length
       ? await supabase
           .from("task_steps_to_steps")
-          .select("id, parent_step_id, title, is_completed")
+          .select("id, parent_step_id, title, is_completed, completed_at")
           .in("id", subStepIds)
       : { data: [], error: null };
 
@@ -460,7 +493,7 @@ const fetchAssignments = async (
   const { data: stepDetailsData, error: stepDetailsError } = stepIdsToFetch.size
     ? await supabase
         .from("task_steps")
-        .select("id, title, task_id, is_completed")
+        .select("id, title, task_id, is_completed, completed_at")
         .in("id", Array.from(stepIdsToFetch))
     : { data: [], error: null };
 

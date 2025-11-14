@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { id as indonesianLocale } from "date-fns/locale";
 import { Badge } from "@/features/ui/badge";
@@ -29,10 +29,16 @@ const formatDate = (value: string | null, fallback: string) => {
 export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
   const { t, language } = useAppTranslation();
   const locale = language === "id" ? indonesianLocale : undefined;
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const assignmentsToShow = summary.activeAssignments.length
     ? summary.activeAssignments
     : summary.assignments.slice(0, 3);
+
+  const completedAssignments = useMemo(
+    () => summary.assignments.filter(assignment => assignment.completedInRange),
+    [summary.assignments],
+  );
 
   const statusBadge = summary.idle
     ? {
@@ -113,7 +119,7 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
           </div>
         ))}
         <div>
-          <p className="text-xs font-semibold text-gray-900">{summary.completedAssignments}</p>
+          <p className="text-xs font-semibold text-gray-900">{completedAssignments.length}</p>
           <p className="text-[11px] text-gray-500">
             {t("dailyTask.jobDesc.metrics.completed", "Selesai")}
           </p>
@@ -211,6 +217,70 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {completedAssignments.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowCompleted((prev) => !prev)}
+            className="text-xs text-indigo-600 hover:text-indigo-500 font-medium"
+          >
+            {showCompleted
+              ? t("dailyTask.jobDesc.completed.hide", "Sembunyikan tugas selesai")
+              : t("dailyTask.jobDesc.completed.showAll", "Lihat {{count}} tugas selesai", {
+                  count: completedAssignments.length,
+                })}
+          </button>
+          {showCompleted && (
+            <div className="mt-2 space-y-2">
+              {completedAssignments.map((assignment) => {
+                const typeLabel = t(assignmentTypeKey[assignment.type], assignment.type);
+                const completedTitle =
+                  assignment.type === "task"
+                    ? assignment.title
+                    : assignment.type === "step"
+                      ? assignment.stepTitle
+                      : assignment.subStepTitle;
+                return (
+                  <div
+                    key={`${assignment.assignmentId}-${assignment.type}-completed`}
+                    className="border border-green-100 bg-green-50 rounded-md p-2 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-900 line-clamp-1">
+                          {completedTitle || assignment.taskTitle}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {assignment.completedAt
+                            ? t("dailyTask.jobDesc.assignment.completedOn", "Selesai {{date}}", {
+                                date: formatDate(assignment.completedAt, "-"),
+                              })
+                            : t("dailyTask.jobDesc.assignment.completed", "Selesai")}
+                        </p>
+                      </div>
+                      <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">
+                        {t("dailyTask.jobDesc.assignment.completed", "Selesai")}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                      <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-[10px]">
+                        {typeLabel}
+                      </span>
+                      {assignment.dueDate && (
+                        <span>
+                          {t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
+                            date: formatDate(assignment.dueDate, "-"),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

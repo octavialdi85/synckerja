@@ -79,6 +79,9 @@ const idTranslations: TranslationDictionary = {
   "dailyTask.jobDesc.assignment.dueStatus.dueSoon": "Segera jatuh tempo",
   "dailyTask.jobDesc.assignment.dueStatus.onTrack": "On track",
   "dailyTask.jobDesc.assignment.dueStatus.noDue": "Tanpa due date",
+"dailyTask.jobDesc.completed.showAll": "Lihat {{count}} tugas selesai",
+"dailyTask.jobDesc.completed.hide": "Sembunyikan tugas selesai",
+"dailyTask.jobDesc.assignment.completedOn": "Selesai {{date}}",
 
   "pages.campaignCalculator.title": "Kalkulator Kampanye",
   "pages.campaignCalculator.description":
@@ -246,6 +249,9 @@ const enTranslations: TranslationDictionary = {
   "dailyTask.jobDesc.assignment.dueStatus.dueSoon": "Due soon",
   "dailyTask.jobDesc.assignment.dueStatus.onTrack": "On track",
   "dailyTask.jobDesc.assignment.dueStatus.noDue": "No due date",
+"dailyTask.jobDesc.completed.showAll": "Show {{count}} completed tasks",
+"dailyTask.jobDesc.completed.hide": "Hide completed tasks",
+"dailyTask.jobDesc.assignment.completedOn": "Completed {{date}}",
 
   "pages.campaignCalculator.title": "Campaign Calculator",
   "pages.campaignCalculator.description":
