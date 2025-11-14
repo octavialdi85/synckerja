@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { differenceInCalendarDays, format, formatDistanceToNowStrict, startOfDay } from "date-fns";
 import { id as indonesianLocale } from "date-fns/locale";
 import { Badge } from "@/features/ui/badge";
 import { Separator } from "@/features/ui/separator";
@@ -182,6 +182,20 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                     {extraLabel && (
                       <p className="text-[11px] text-gray-500 line-clamp-1">{extraLabel}</p>
                     )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                      {assignment.dueDate && (
+                        <span>
+                          {t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
+                            date: formatDate(assignment.dueDate, "-"),
+                          })}
+                        </span>
+                      )}
+                      <span>
+                        {t("dailyTask.jobDesc.assignment.pendingFor", "Pending {{duration}}", {
+                          duration: pendingLabel,
+                        })}
+                      </span>
+                    </div>
                   </div>
                   <Badge className={cn("text-[10px]", statusColor)}>
                     {statusLabel === "completed"
@@ -201,18 +215,19 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                   >
                     {dueStatusMeta[assignment.dueStatus].label}
                   </span>
-                  <span>
-                    {assignment.dueDate
-                      ? t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
-                          date: formatDate(assignment.dueDate, "-"),
-                        })
-                      : t("dailyTask.jobDesc.assignment.noDueDate", "Tidak ada due date")}
-                  </span>
-                  <span>
-                    {t("dailyTask.jobDesc.assignment.pendingFor", "Pending {{duration}}", {
-                      duration: pendingLabel,
-                    })}
-                  </span>
+                  {assignment.dueStatus === "overdue" && assignment.dueDate && (
+                    <span className="px-2 py-0.5 rounded-full bg-red-100 border border-red-200 text-[10px] text-red-700">
+                      {t("dailyTask.jobDesc.assignment.completedLateDetail", "Terlambat {{days}} hari", {
+                        days: Math.max(
+                          differenceInCalendarDays(
+                            startOfDay(new Date()),
+                            startOfDay(new Date(assignment.dueDate)),
+                          ),
+                          1,
+                        ),
+                      })}
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -242,6 +257,17 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                     : assignment.type === "step"
                       ? assignment.stepTitle
                       : assignment.subStepTitle;
+                const completedDate = assignment.completedAt
+                  ? startOfDay(new Date(assignment.completedAt))
+                  : null;
+                const dueDateObj = assignment.dueDate
+                  ? startOfDay(new Date(assignment.dueDate))
+                  : null;
+                const lateDays =
+                  completedDate && dueDateObj
+                    ? differenceInCalendarDays(completedDate, dueDateObj)
+                    : 0;
+                const isLateCompletion = Boolean(lateDays && lateDays > 0);
                 return (
                   <div
                     key={`${assignment.assignmentId}-${assignment.type}-completed`}
@@ -252,6 +278,13 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                         <p className="font-semibold text-gray-900 line-clamp-1">
                           {completedTitle || assignment.taskTitle}
                         </p>
+                        {assignment.dueDate && (
+                          <p className="text-[11px] text-gray-500">
+                            {t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
+                              date: formatDate(assignment.dueDate, "-"),
+                            })}
+                          </p>
+                        )}
                         <p className="text-[11px] text-gray-500">
                           {assignment.completedAt
                             ? t("dailyTask.jobDesc.assignment.completedOn", "Selesai {{date}}", {
@@ -268,11 +301,13 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                       <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-[10px]">
                         {typeLabel}
                       </span>
-                      {assignment.dueDate && (
-                        <span>
-                          {t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
-                            date: formatDate(assignment.dueDate, "-"),
-                          })}
+                      {isLateCompletion && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 border border-red-200 text-[10px] text-red-700">
+                          {t(
+                            "dailyTask.jobDesc.assignment.completedLateDetail",
+                            "Terlambat {{days}} hari",
+                            { days: lateDays },
+                          )}
                         </span>
                       )}
                     </div>
