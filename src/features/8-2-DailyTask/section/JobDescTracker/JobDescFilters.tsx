@@ -145,6 +145,7 @@ export const JobDescFilters = ({
         <Switch
           checked={showIdleOnly}
           onCheckedChange={onShowIdleOnlyChange}
+          className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-300"
           aria-label="Toggle idle only"
         />
       </div>
@@ -161,6 +162,7 @@ export const JobDescFilters = ({
         <Switch
           checked={includeOverdue}
           onCheckedChange={onIncludeOverdueChange}
+          className="data-[state=checked]:bg-indigo-600 data-[state=unchecked]:bg-gray-300"
           aria-label="Toggle include overdue"
         />
       </div>
