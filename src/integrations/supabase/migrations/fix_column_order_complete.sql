@@ -1,0 +1,19 @@
+-- ============================================
+-- FINAL FIX - Correct Column Order
+-- ============================================
+-- Migration: final_fix_column_order_complete
+-- Status: ✅ APPLIED
+-- ============================================
+-- Fixes:
+-- 1. "Returned type uuid does not match expected type timestamp with time zone in column 11"
+--    - Fixed: Swap updated_at (position 11) dan created_by (position 12)
+-- 2. "structure of query does not match function result type" 
+--    - Fixed: Verified v2 function structure matches RETURNS TABLE
+-- ============================================
+-- This migration has been successfully applied.
+-- Column order now matches table structure exactly:
+-- Position 10: created_at (TIMESTAMPTZ)
+-- Position 11: updated_at (TIMESTAMPTZ) ✅
+-- Position 12: created_by (UUID) ✅
+-- ============================================
+

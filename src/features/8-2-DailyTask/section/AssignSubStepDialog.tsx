@@ -4,6 +4,9 @@ import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useToast } from '@/features/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Employee {
   id: string;
@@ -16,6 +19,7 @@ interface AssignSubStepDialogProps {
   subStep: {
     id: string;
     title: string;
+    parent_step_id: string; // NEW: untuk fetch step due_date
     assigned_to?: string | null;
     assigned_employee?: {
       id: string;
@@ -23,7 +27,7 @@ interface AssignSubStepDialogProps {
       email?: string;
     } | null;
   };
-  onAssign: (employeeId: string) => void;
+  onAssign: (employeeId: string, dueDateIso: string) => void; // NEW: wajib dueDateIso
   onUnassign: () => void;
   onClose: () => void;
 }
@@ -31,7 +35,81 @@ interface AssignSubStepDialogProps {
 export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: AssignSubStepDialogProps) => {
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dueDate, setDueDate] = useState<string>('');
+  const [stepDueDate, setStepDueDate] = useState<string | null>(null);
+  const [dueDateError, setDueDateError] = useState<string | null>(null);
   const { data: employees = [], isLoading: loading } = useAvailableEmployees();
+  const { organizationId } = useCurrentOrg();
+  const { toast } = useToast();
+
+  // Fetch step due_date on mount
+  useEffect(() => {
+    const loadStepDueDate = async () => {
+      if (!organizationId || !subStep.parent_step_id) return;
+      
+      try {
+        // Get step assignment
+        const { data: assigns } = await supabase
+          .from('task_steps_assigned')
+          .select('id')
+          .eq('task_step_id', subStep.parent_step_id)
+          .order('assigned_at', { ascending: false })
+          .limit(1);
+        
+        if (assigns && assigns.length > 0) {
+          const { data: dueRows } = await supabase
+            .from('task_steps_assigned_duedate')
+            .select('due_date')
+            .eq('task_steps_assigned_id', assigns[0].id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          const stepDue = dueRows?.[0]?.due_date as string | undefined;
+          if (stepDue) {
+            setStepDueDate(stepDue);
+            // Auto-set to step due_date
+            const d = new Date(stepDue);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            setDueDate(`${yyyy}-${mm}-${dd}`);
+          }
+        }
+
+        // Check if sub-step already has due_date
+        if (subStep.assigned_to) {
+          const { data: subAssigns } = await supabase
+            .from('task_steps_to_steps_assigned')
+            .select('id')
+            .eq('task_steps_to_steps_id', subStep.id)
+            .order('assigned_at', { ascending: false })
+            .limit(1);
+          
+          if (subAssigns && subAssigns.length > 0) {
+            const { data: subDueRows } = await supabase
+              .from('task_steps_assigned_duedate')
+              .select('due_date')
+              .eq('task_steps_to_steps_assigned_id', subAssigns[0].id)
+              .order('created_at', { ascending: false })
+              .limit(1);
+            
+            const subDue = subDueRows?.[0]?.due_date as string | undefined;
+            if (subDue) {
+              const d = new Date(subDue);
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              setDueDate(`${yyyy}-${mm}-${dd}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load step due_date', e);
+      }
+    };
+    
+    loadStepDueDate();
+  }, [subStep.parent_step_id, subStep.id, subStep.assigned_to, organizationId]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -45,8 +123,55 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
     }
   }, [searchTerm, employees]);
 
+  // Validate due_date
+  const validateDueDate = (dateValue: string): string | null => {
+    if (!dateValue) {
+      return 'Due date is required';
+    }
+    
+    if (!stepDueDate) {
+      return null; // No step due_date, so no validation needed
+    }
+    
+    const subDue = new Date(dateValue);
+    const stepDue = new Date(stepDueDate);
+    
+    // Set time to end of day for comparison
+    subDue.setHours(23, 59, 59, 999);
+    stepDue.setHours(23, 59, 59, 999);
+    
+    if (subDue.getTime() > stepDue.getTime()) {
+      return 'Due date cannot be greater than parent step due date';
+    }
+    
+    return null;
+  };
+
   const handleAssign = (employeeId: string) => {
-    onAssign(employeeId);
+    // Validate due_date
+    const error = validateDueDate(dueDate);
+    if (error) {
+      setDueDateError(error);
+      toast({ 
+        title: 'Validation Error', 
+        description: error, 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    if (!dueDate) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Due date is required', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    setDueDateError(null);
+    const dueDateIso = new Date(dueDate).toISOString();
+    onAssign(employeeId, dueDateIso);
   };
 
   const handleUnassign = () => {
@@ -103,6 +228,45 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
+          </div>
+
+          {/* Due Date Input */}
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Due Date <span className="text-red-500">*</span>
+              {stepDueDate && (
+                <span className="text-gray-400 ml-1">
+                  (Default: {new Date(stepDueDate).toLocaleDateString()})
+                </span>
+              )}
+            </label>
+            <Input
+              type="date"
+              className={`mt-1 h-9 ${dueDateError ? 'border-red-500' : ''}`}
+              value={dueDate}
+              onChange={(e) => {
+                const val = e.target.value;
+                setDueDate(val);
+                const error = validateDueDate(val);
+                setDueDateError(error);
+                if (error) {
+                  toast({
+                    title: 'Warning',
+                    description: error,
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              required
+            />
+            {dueDateError && (
+              <p className="text-xs text-red-500 mt-1">{dueDateError}</p>
+            )}
+            {stepDueDate && !dueDateError && (
+              <p className="text-xs text-gray-400 mt-1">
+                Parent step due date: {new Date(stepDueDate).toLocaleDateString()}
+              </p>
+            )}
           </div>
 
           {/* Employee List */}

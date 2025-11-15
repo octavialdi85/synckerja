@@ -352,9 +352,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 		}
 	};
 
-  const handleAssignSubStep = async (subStepId: string, employeeId: string | null) => {
+  const handleAssignSubStep = async (subStepId: string, employeeId: string | null, dueDateIso?: string | null) => {
     try {
-      console.log('🎯 Assigning sub-step:', { subStepId, employeeId });
+      console.log('🎯 Assigning sub-step:', { subStepId, employeeId, dueDateIso });
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
@@ -367,6 +367,16 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         .maybeSingle();
 
       if (employeeId) {
+        // Validate due_date is provided (required)
+        if (!dueDateIso) {
+          toast({
+            title: 'Error',
+            description: 'Due date is required when assigning sub-step',
+            variant: 'destructive'
+          });
+          return;
+        }
+
         // Delete existing assignments
         await supabase
           .from('task_steps_to_steps_assigned')
@@ -374,7 +384,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           .eq('task_steps_to_steps_id', subStepId);
 
         // Create new assignment
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('task_steps_to_steps_assigned')
           .insert({
             organization_id: organizationId,
@@ -382,9 +392,32 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             employee_id: employeeId,
             assigned_by: currentEmployee?.id || null,
             assigned_at: new Date().toISOString()
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        // Save due_date to task_steps_assigned_duedate
+        const { error: dueDateError } = await supabase
+          .from('task_steps_assigned_duedate')
+          .insert({
+            organization_id: organizationId,
+            task_steps_to_steps_assigned_id: inserted.id,
+            due_date: dueDateIso,
+          });
+
+        if (dueDateError) {
+          console.error('❌ Error saving sub-step due_date:', dueDateError);
+          toast({
+            title: 'Warning',
+            description: 'Sub-step assigned but due date not saved',
+            variant: 'destructive'
+          });
+        } else {
+          console.log('✅ Sub-step due_date saved successfully');
+        }
+
         console.log('✅ Sub-step assigned successfully');
       } else {
         // Unassign
@@ -467,24 +500,26 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:max-w-xl md:h-[520px] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
         <DialogHeader className="flex-shrink-0 p-4 md:p-0">
-          <DialogTitle className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                className="h-8 w-8 p-0 -ml-2 md:ml-0 hover:bg-gray-100 flex-shrink-0"
-                aria-label="Close"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <span className="flex items-center gap-2">
-                <span>Steps</span>
-                <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
-              </span>
-            </div>
-            <span className="text-xs text-gray-500 truncate max-w-[60%] md:max-w-none" title={parentStepTitle}>{parentStepTitle}</span>
-          </DialogTitle>
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8 p-0 -ml-2 md:ml-0 hover:bg-gray-100 flex-shrink-0"
+              aria-label="Close"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <DialogTitle className="flex items-center gap-2 flex-1 min-w-0">
+              <span>Steps</span>
+              <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
+            </DialogTitle>
+          </div>
+          <div className="px-2 md:px-0">
+            <p className="text-xs text-gray-500 truncate" title={parentStepTitle}>
+              {parentStepTitle}
+            </p>
+          </div>
           <DialogDescription className="sr-only">
             Manage sub-steps for {parentStepTitle}. Add, edit, complete, or delete individual steps.
           </DialogDescription>
@@ -651,9 +686,19 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         {/* Assign Sub-Step Dialog */}
         {assignDialogSubStep && (
           <AssignSubStepDialog
-            subStep={assignDialogSubStep}
-            onAssign={(employeeId) => handleAssignSubStep(assignDialogSubStep.id, employeeId)}
-            onUnassign={() => handleAssignSubStep(assignDialogSubStep.id, null)}
+            subStep={{
+              id: assignDialogSubStep.id,
+              title: assignDialogSubStep.title,
+              parent_step_id: parentStepId, // NEW: pass parent step ID
+              assigned_to: assignDialogSubStep.assigned_to,
+              assigned_employee: assignDialogSubStep.assigned_employee
+            }}
+            onAssign={async (employeeId: string, dueDateIso: string) => {
+              await handleAssignSubStep(assignDialogSubStep.id, employeeId, dueDateIso);
+            }}
+            onUnassign={async () => {
+              await handleAssignSubStep(assignDialogSubStep.id, null);
+            }}
             onClose={() => setAssignDialogSubStep(null)}
           />
         )}

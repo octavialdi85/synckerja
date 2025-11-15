@@ -467,6 +467,11 @@ export interface Database {
           created_at: string | null
           created_by?: string | null
           updated_at?: string | null
+          task_steps_to_steps_id?: string | null
+          is_resolved?: boolean | null
+          organization_id?: string | null
+          task_id?: string | null
+          employee_id?: string | null
         }
         Insert: {
           id?: string
@@ -481,6 +486,11 @@ export interface Database {
           created_at?: string | null
           created_by?: string | null
           updated_at?: string | null
+          task_steps_to_steps_id?: string | null
+          is_resolved?: boolean | null
+          organization_id?: string | null
+          task_id?: string | null
+          employee_id?: string | null
         }
         Update: {
           id?: string
@@ -495,6 +505,11 @@ export interface Database {
           created_at?: string | null
           created_by?: string | null
           updated_at?: string | null
+          task_steps_to_steps_id?: string | null
+          is_resolved?: boolean | null
+          organization_id?: string | null
+          task_id?: string | null
+          employee_id?: string | null
         }
       }
       [key: string]: any
@@ -511,6 +526,21 @@ export interface Database {
           p_offset?: number | null
         }
         Returns: Database['public']['Tables']['task_step_history']['Row'][]
+      }
+      get_task_step_history_batch_v2: {
+        Args: {
+          p_organization_id: string
+          p_task_step_ids?: string[] | null
+          p_sub_step_ids?: string[] | null
+          p_limit?: number | null
+          p_cursor_id?: string | null
+          p_cursor_created_at?: string | null
+        }
+        Returns: Array<Database['public']['Tables']['task_step_history']['Row'] & {
+          next_cursor_id?: string | null
+          next_cursor_created_at?: string | null
+          has_more?: boolean
+        }>
       }
       [_ in never]: never
     }

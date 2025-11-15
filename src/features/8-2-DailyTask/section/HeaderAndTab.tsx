@@ -1,6 +1,7 @@
 import React from 'react';
-import { CheckSquare, FileText } from 'lucide-react';
+import { CheckSquare, FileText, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
 
 interface HeaderAndTabProps {
   activeTab: string;
@@ -9,6 +10,7 @@ interface HeaderAndTabProps {
 
 export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   const navigate = useNavigate();
+  const { canAccessPage } = useDepartmentAccess();
   
   const tabs = [
     { 
@@ -55,20 +57,31 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const isLocked = tab.path ? !canAccessPage(tab.path) : false;
             
             return (
               <div
                 key={tab.id}
-                onClick={() => handleTabClick(tab)}
-                className={`flex items-center space-x-1.5 py-1.5 px-1 border-b-2 font-medium text-sm cursor-pointer transition-colors ${
-                  isActive
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                onClick={() => {
+                  if (!isLocked) {
+                    handleTabClick(tab);
+                  }
+                }}
+                className={`flex items-center space-x-1.5 py-1.5 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  isLocked
+                    ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                    : isActive
+                    ? 'border-blue-500 text-blue-600 cursor-pointer'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 cursor-pointer'
                 }`}
                 style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}
+                title={isLocked ? 'You do not have permission to access this tab' : tab.description}
               >
                 <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
+                {isLocked && (
+                  <Lock className="w-3.5 h-3.5 ml-1" />
+                )}
               </div>
             );
           })}

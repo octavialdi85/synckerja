@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useDailyTaskReport } from '../context/ReportContext';
 import { BlockerDetailsModal } from './BlockerDetailsModal';
+import { ReportMainFooter } from './ReportMainFooter';
 import { CheckCircle, ClipboardList, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -31,7 +32,7 @@ interface ResolvedBlockerRow {
 }
 
 export const PerformanceTable = () => {
-  const { filtered: rows, loading, getBlockersForStep, filteredBlockers, filters } = useDailyTaskReport();
+  const { filtered: rows, loading, getBlockersForStep, filteredBlockers, filters, formatDateRangeDisplay } = useDailyTaskReport();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
   const [openForStep, setOpenForStep] = useState<string | null>(null);
@@ -49,40 +50,103 @@ export const PerformanceTable = () => {
     return (filteredBlockers || []).filter((b: any) => b.is_resolved);
   }, [filteredBlockers]);
 
-  // Fetch resolved blocker details when switching to resolved view
+  // Helper to convert filters to date range for RPC (server-side filtering)
+  // Reuses same logic as ReportContext.getDateRange() for consistency
+  const getDateRangeForRPC = useCallback(() => {
+    const now = new Date();
+    let start: Date | null = null;
+    let end: Date | null = null;
+    
+    if (filters.timePeriod === 'today') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (filters.timePeriod === 'yesterday') {
+      const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      start = new Date(y.getFullYear(), y.getMonth(), y.getDate());
+      end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+    } else if (filters.timePeriod === 'this_week') {
+      // This week: Monday to Sunday (not Sunday to Saturday)
+      const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      // Calculate days to Monday (1 = Monday)
+      const daysToMonday = day === 0 ? 6 : day - 1; // If Sunday, go back 6 days to Monday
+      start = new Date(now);
+      start.setDate(now.getDate() - daysToMonday);
+      start.setHours(0, 0, 0, 0);
+      // End is Sunday (6 days after Monday)
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    } else if (filters.timePeriod === 'this_month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (filters.timePeriod === 'last_month') {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (filters.timePeriod === 'custom' && filters.customStart && filters.customEnd) {
+      start = new Date(filters.customStart);
+      end = new Date(filters.customEnd);
+      end.setHours(23, 59, 59, 999);
+    }
+    
+    return {
+      start: start ? start.toISOString() : null,
+      end: end ? end.toISOString() : null
+    };
+  }, [filters.timePeriod, filters.customStart, filters.customEnd]);
+
+  // Fetch resolved blocker details with server-side date filtering
+  // Includes debouncing and request cancellation for optimal performance
   useEffect(() => {
+    if (viewMode !== 'resolved' || !organizationId) return;
+    
+    const abortController = new AbortController();
+    let isCancelled = false;
+    
     const fetchResolvedDetails = async () => {
-      if (viewMode !== 'resolved' || !organizationId) return;
-      
       setLoadingResolved(true);
       try {
-        console.log('🔍 Fetching resolved blockers for organization:', organizationId);
+        // Get date range from filters for server-side filtering
+        const { start, end } = getDateRangeForRPC();
         
-        // Use RPC function to get all resolved blockers with complete info
-        // This is much simpler and faster than multiple queries
+        console.log('🔍 Fetching resolved blockers with date filter:', {
+          organizationId,
+          start,
+          end,
+          timePeriod: filters.timePeriod
+        });
+        
+        // Call RPC with date parameters (server-side filtering for better performance)
         const { data: resolvedData, error } = await (supabase as any).rpc('get_all_resolved_blockers', {
           p_organization_id: organizationId,
-          p_limit: 100
+          p_limit: 100,
+          p_start_date: start,
+          p_end_date: end
         });
+
+        if (isCancelled) return; // Check if request was cancelled
 
         if (error) {
           console.error('❌ Error loading resolved blockers:', error);
-          console.error('Error details:', error);
-          setResolvedRows([]);
-          setLoadingResolved(false);
+          if (!isCancelled) {
+            setResolvedRows([]);
+            toast({
+              title: 'Error',
+              description: `Failed to load resolved blockers: ${error.message}`,
+              variant: 'destructive',
+            });
+          }
           return;
         }
-
-        console.log('📦 RPC response:', resolvedData);
 
         if (!resolvedData || resolvedData.length === 0) {
-          console.log('📭 No resolved blockers found in database');
-          setResolvedRows([]);
-          setLoadingResolved(false);
+          console.log('📭 No resolved blockers found for selected date range');
+          if (!isCancelled) {
+            setResolvedRows([]);
+          }
           return;
         }
 
-        // Map to table rows
+        // Map to table rows (no client-side filtering needed - already filtered by server)
         const mapped: ResolvedBlockerRow[] = resolvedData.map((row: any) => {
           // Calculate days to resolve
           const createdAt = new Date(row.blocker_created_at);
@@ -90,8 +154,8 @@ export const PerformanceTable = () => {
           const daysToResolve = Math.ceil((resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
 
           return {
-            id: row.blocker_resolved_id || row.id, // Use blocker_resolved_id if available, fallback to id
-            task_step_history_id: row.task_step_history_id || row.id, // Use correct task_step_history_id
+            id: row.blocker_resolved_id || row.id,
+            task_step_history_id: row.task_step_history_id || row.id,
             taskTitle: row.task_title || '-',
             stepTitle: row.step_title || '-',
             subStepTitle: row.sub_step_title,
@@ -103,18 +167,38 @@ export const PerformanceTable = () => {
           };
         });
 
-        setResolvedRows(mapped);
-        console.log('✅ Loaded resolved blockers:', mapped.length);
-      } catch (error) {
-        console.error('Error in fetchResolvedDetails:', error);
-        setResolvedRows([]);
+        if (!isCancelled) {
+          setResolvedRows(mapped);
+          console.log('✅ Loaded resolved blockers:', mapped.length);
+        }
+      } catch (error: any) {
+        if (!isCancelled) {
+          console.error('Error in fetchResolvedDetails:', error);
+          setResolvedRows([]);
+          toast({
+            title: 'Error',
+            description: 'An unexpected error occurred while loading resolved blockers',
+            variant: 'destructive',
+          });
+        }
       } finally {
-        setLoadingResolved(false);
+        if (!isCancelled) {
+          setLoadingResolved(false);
+        }
       }
     };
 
-    fetchResolvedDetails();
-  }, [viewMode, organizationId]);
+    // Debounce fetch to prevent excessive API calls when filter changes rapidly
+    const timeoutId = setTimeout(() => {
+      fetchResolvedDetails();
+    }, 300);
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [viewMode, organizationId, filters.timePeriod, filters.customStart, filters.customEnd, getDateRangeForRPC, toast]);
 
   // Handle edit resolution details
   const handleEditResolution = (row: ResolvedBlockerRow) => {
@@ -242,13 +326,17 @@ export const PerformanceTable = () => {
     }
   };
 
+  // Get date range display string
+  const dateRangeDisplay = formatDateRangeDisplay();
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
-      <div className="px-3 py-2 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
-        <span className="text-sm font-medium">
-          {viewMode === 'performance' ? 'Assignments Performance' : 'Blocker Resolved'}
-        </span>
-        <div className="flex items-center gap-2">
+      <div className="px-3 py-2 border-b bg-gray-50 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">
+            {viewMode === 'performance' ? 'Assignments Performance' : 'Blocker Resolved'}
+          </span>
+          <div className="flex items-center gap-2">
           {viewMode === 'performance' ? (
             <button
               onClick={() => setViewMode('resolved')}
@@ -271,7 +359,14 @@ export const PerformanceTable = () => {
               Assignments Performance
             </button>
           )}
+          </div>
         </div>
+        {/* Date range display */}
+        {dateRangeDisplay && (
+          <div className="text-xs text-gray-500 mt-1">
+            {dateRangeDisplay}
+          </div>
+        )}
       </div>
       <div className="flex-1 min-h-0 seamless-scroll overflow-x-auto overflow-y-auto">
         {viewMode === 'performance' ? (
@@ -282,6 +377,7 @@ export const PerformanceTable = () => {
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '120px', minWidth: '120px' }}>PIC</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Task</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Step</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Sub Step</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Blocker</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Assigned At</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '100px', minWidth: '100px' }}>Due Date</th>
@@ -291,22 +387,28 @@ export const PerformanceTable = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
+                <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">No data</td></tr>
+                <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">No data</td></tr>
               ) : (
                 rows.map((r, idx) => (
                   <tr key={idx} className="border-t">
                     <td className="px-3 py-2 text-left text-gray-900" style={{ width: '120px', minWidth: '120px' }}>{r.employeeName}</td>
                     <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.taskTitle}</td>
                     <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.stepTitle}</td>
+                    <td className="px-3 py-2 text-left text-gray-600" style={{ minWidth: '150px' }}>{r.subStepTitle || '-'}</td>
                     <td className="px-3 py-2 text-left align-middle" style={{ width: '140px', minWidth: '140px' }}>
                       {(() => {
-                        const items = getBlockersForStep(r.stepId);
+                        // Get blockers for step (includes sub-step blockers mapped to parent step)
+                        const stepBlockers = getBlockersForStep(r.stepId || '');
+                        // If this is a sub-step row, also filter blockers for this specific sub-step
+                        const items = r.type === 'substep' && r.subStepId
+                          ? stepBlockers.filter((b: any) => b.task_steps_to_steps_id === r.subStepId)
+                          : stepBlockers.filter((b: any) => !b.task_steps_to_steps_id || b.task_step_id === r.stepId);
                         const count = items.length;
                         return count > 0 ? (
                           <button 
-                            onClick={() => setOpenForStep(r.stepId)} 
+                            onClick={() => setOpenForStep(r.stepId || '')} 
                             className="text-xs font-medium text-purple-700 hover:underline m-0 p-0 text-left"
                             style={{ textAlign: 'left' }}
                           >
@@ -484,6 +586,9 @@ export const PerformanceTable = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Footer */}
+      <ReportMainFooter />
     </div>
   );
 };

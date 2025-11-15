@@ -17,12 +17,12 @@ const DailyTaskReportPage = () => {
               <HeaderAndTab activeTab="daily-task-report" onTabChange={() => {}} />
             </div>
             <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-              <div className="col-span-9 flex flex-col min-h-0">
+              <div className="col-span-9 flex flex-col min-h-0 max-h-[calc(100vh-120px)]">
                 <div className="flex-shrink-0 mb-2">
                   <OverviewCards />
                 </div>
                 <div className="flex-shrink-0 px-0 pb-1"><Filters /></div>
-                <div className="flex-1 min-h-0 max-h-[calc(100vh-120px)] seamless-scroll">
+                <div className="flex-1 min-h-0 seamless-scroll">
                   <PerformanceTable />
                 </div>
               </div>
