@@ -10,12 +10,16 @@ import { ContentPillarTracker } from './ContentPillarTracker';
 import { ContentBalanceTab } from './ContentBalanceTab';
 // import { useOptimizedNationalHolidays } from '@/hooks/useOptimizedAttendanceData'; // Commented out - not available
 import { format, differenceInDays, startOfDay } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 const ReminderTab: React.FC = () => {
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === 'id' ? id : enUS;
   // const { data: nationalHolidays = [], isLoading } = useOptimizedNationalHolidays(); // Commented out - hook not available
   const nationalHolidays: HolidayEvent[] = [];
   const isLoading = false;
@@ -115,7 +119,7 @@ const ReminderTab: React.FC = () => {
   }, [nationalHolidays, currentMonth, currentYear]);
 
   // Get current month name
-  const currentMonthName = format(currentDate, 'MMMM yyyy');
+  const currentMonthName = format(currentDate, 'MMMM yyyy', { locale: dateLocale });
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -133,11 +137,11 @@ const ReminderTab: React.FC = () => {
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'national':
-        return 'Nasional';
+        return t('reminderTab.holidays.type.national', 'National');
       case 'international':
-        return 'International';
+        return t('reminderTab.holidays.type.international', 'International');
       case 'religious':
-        return 'Keagamaan';
+        return t('reminderTab.holidays.type.religious', 'Religious');
       default:
         return type;
     }
@@ -153,10 +157,10 @@ const ReminderTab: React.FC = () => {
 
   const formatDaysRemaining = (days: number | null): string => {
     if (days === null) return '';
-    if (days < 0) return `${Math.abs(days)} hari lalu`;
-    if (days === 0) return 'Hari ini';
-    if (days === 1) return 'Besok';
-    return `${days} hari lagi`;
+    if (days < 0) return applyVariables(t('reminderTab.daysAgo', '{{days}} days ago'), { days: String(Math.abs(days)) });
+    if (days === 0) return t('reminderTab.today', 'Today');
+    if (days === 1) return t('reminderTab.tomorrow', 'Tomorrow');
+    return applyVariables(t('reminderTab.daysRemaining', '{{days}} days remaining'), { days: String(days) });
   };
 
   return (
@@ -167,7 +171,7 @@ const ReminderTab: React.FC = () => {
           <TabsList className="grid w-full grid-cols-3 flex-shrink-0 h-8">
             <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
             <TabsTrigger value="content-balance" className="text-xs py-1">Content Balance</TabsTrigger>
-            <TabsTrigger value="pengingat" className="text-xs py-1">Pengingat</TabsTrigger>
+            <TabsTrigger value="pengingat" className="text-xs py-1">{t('reminderTab.tab.pengingat', 'Reminders')}</TabsTrigger>
           </TabsList>
           
           {/* Scrollable Content Area */}
@@ -194,16 +198,16 @@ const ReminderTab: React.FC = () => {
             <div>
               <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-yellow-600" />
-                Pengingat Tugas
+                {t('reminderTab.title', 'Task Reminders')}
               </h3>
               <div className="space-y-2">
                 {isLoadingReminders ? (
                   <div className="flex items-center justify-center py-4">
-                    <div className="text-sm text-gray-500">Memuat pengingat...</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.loading', 'Loading reminders...')}</div>
                   </div>
                 ) : reminderTasks.length === 0 ? (
                   <div className="flex items-center justify-center py-4">
-                    <div className="text-sm text-gray-500">Tidak ada pengingat tugas</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.noReminders', 'No task reminders')}</div>
                   </div>
                 ) : (
                   reminderTasks.map((task: any) => {
@@ -234,7 +238,7 @@ const ReminderTab: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium text-sm text-gray-900 mb-1">
-                            {task.title || 'Tanpa Judul'}
+                            {task.title || t('reminderTab.noTitle', 'No Title')}
                           </h4>
                           {task.description && (
                             <p className="text-xs text-gray-600 mb-2 line-clamp-2">
@@ -252,7 +256,7 @@ const ReminderTab: React.FC = () => {
                                     ? 'text-green-600' 
                                     : 'text-gray-600'
                                 }>
-                                  Jatuh tempo: {format(dueDate, 'dd MMM yyyy', { locale: id })}
+                                  {applyVariables(t('reminderTab.dueDate', 'Due date: {{date}}'), { date: format(dueDate, 'dd MMM yyyy', { locale: dateLocale }) })}
                                 </span>
                               </div>
                               {daysRemaining !== null && (
@@ -272,12 +276,12 @@ const ReminderTab: React.FC = () => {
                           )}
                           {isOverdue && (
                             <Badge className="mt-1 text-xs bg-red-100 text-red-800">
-                              Terlambat
+                              {t('reminderTab.overdue', 'Overdue')}
                             </Badge>
                           )}
                           {isCompleted && !isOverdue && (
                             <Badge className="mt-1 text-xs bg-green-100 text-green-800">
-                              Selesai
+                              {t('reminderTab.completed', 'Completed')}
                             </Badge>
                           )}
                         </div>
@@ -293,16 +297,16 @@ const ReminderTab: React.FC = () => {
             {/* Current Month Holidays */}
             <div>
               <h3 className="font-semibold text-sm mb-2">
-                Hari Penting Bulan {currentMonthName}
+                {applyVariables(t('reminderTab.holidays.currentMonth', 'Important Days in {{month}}'), { month: currentMonthName })}
               </h3>
               <div className="space-y-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
-                    <div className="text-sm text-gray-500">Memuat hari penting...</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.holidays.loading', 'Loading important days...')}</div>
                   </div>
                 ) : currentMonthHolidays.length === 0 ? (
                   <div className="flex items-center justify-center py-4">
-                    <div className="text-sm text-gray-500">Tidak ada hari penting bulan ini</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.holidays.noCurrentMonth', 'No important days this month')}</div>
                   </div>
                 ) : (
                   currentMonthHolidays.map((holiday, index) => (
@@ -334,15 +338,15 @@ const ReminderTab: React.FC = () => {
 
             {/* Upcoming Holidays */}
             <div>
-              <h3 className="font-semibold text-sm mb-2">Hari Penting yang Akan Datang</h3>
+              <h3 className="font-semibold text-sm mb-2">{t('reminderTab.holidays.upcoming', 'Upcoming Important Days')}</h3>
               <div className="space-y-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-2">
-                    <div className="text-sm text-gray-500">Memuat...</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.holidays.loadingShort', 'Loading...')}</div>
                   </div>
                 ) : upcomingHolidays.length === 0 ? (
                   <div className="flex items-center justify-center py-2">
-                    <div className="text-sm text-gray-500">Tidak ada hari penting yang akan datang</div>
+                    <div className="text-sm text-gray-500">{t('reminderTab.holidays.noUpcoming', 'No upcoming important days')}</div>
                   </div>
                 ) : (
                   upcomingHolidays.map((holiday, index) => (

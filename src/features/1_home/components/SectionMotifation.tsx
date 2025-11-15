@@ -12,8 +12,10 @@ import { ModalMotifationForm } from './ModalMotifationForm/ModalMotifationForm';
 import { MotivationLikeButton } from './MotivationLikeButton';
 import { useMotivations } from './ModalMotifationForm/useMotivations';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const SectionMotifation = () => {
+  const { t } = useAppTranslation();
   const { programs } = useLatestTrainingPrograms();
   const { data: employeeData } = useCurrentUserEmployee();
   const { motivations, isLoading, deleteMotivation, updateMotivation } = useMotivations();
@@ -58,8 +60,8 @@ export const SectionMotifation = () => {
     try {
       await deleteMotivation(motivationId);
       toast({
-        title: "Berhasil!",
-        description: "Motivasi berhasil dihapus",
+        title: t('common.success', 'Success'),
+        description: t('motivation.deletedSuccessfully', 'Motivation deleted successfully'),
       });
       
       // Adjust current index if needed
@@ -69,8 +71,8 @@ export const SectionMotifation = () => {
     } catch (error) {
       console.error('Error deleting motivation:', error);
       toast({
-        title: "Error",
-        description: "Gagal menghapus motivasi",
+        title: t('common.error', 'Error'),
+        description: t('motivation.failedToDelete', 'Failed to delete motivation'),
         variant: "destructive",
       });
     }
@@ -97,7 +99,7 @@ export const SectionMotifation = () => {
         <CardContent className="p-4 flex items-center justify-center h-full">
           <div className="flex items-center space-x-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span className="text-sm">Memuat motivasi...</span>
+            <span className="text-sm">{t('motivation.loading', 'Loading motivation...')}</span>
           </div>
         </CardContent>
       </Card>
@@ -112,8 +114,8 @@ export const SectionMotifation = () => {
           <CardContent className="p-4 flex items-center space-x-3 h-full">
             <Lightbulb className="h-6 w-6 text-yellow-300" />
             <div className="flex-1">
-              <p className="text-xs font-medium">Belum ada motivasi hari ini</p>
-              <p className="text-xs text-blue-100">Tulis motivasi pertama Anda!</p>
+              <p className="text-xs font-medium">{t('motivation.noMotivationToday', 'No motivation today')}</p>
+              <p className="text-xs text-blue-100">{t('motivation.writeFirstMotivation', 'Write your first motivation!')}</p>
             </div>
             <Button
               variant="ghost"
@@ -122,7 +124,7 @@ export const SectionMotifation = () => {
               onClick={() => setIsMotivationDialogOpen(true)}
             >
               <PlusCircle className="h-3 w-3" />
-              <span className="text-xs">Tulis</span>
+              <span className="text-xs">{t('motivation.write', 'Write')}</span>
             </Button>
           </CardContent>
         </Card>
@@ -152,7 +154,7 @@ export const SectionMotifation = () => {
                 <Lightbulb className="h-6 w-6 text-yellow-300 flex-shrink-0" />
                 <div className="flex-1 min-w-0 pr-2">
                   <p className="text-sm font-medium leading-relaxed text-white">{currentItem.content}</p>
-                  <p className="text-xs text-blue-100 mt-1">Motivasi hari ini</p>
+                  <p className="text-xs text-blue-100 mt-1">{t('motivation.todayMotivation', 'Today\'s motivation')}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <MotivationLikeButton motivation={currentItem.motivation} />
@@ -169,7 +171,7 @@ export const SectionMotifation = () => {
                     <DropdownMenuContent align="end" className="w-32">
                     <DropdownMenuItem onClick={() => setIsMotivationDialogOpen(true)}>
                       <PlusCircle className="h-3 w-3 mr-2" />
-                      Tulis
+                      {t('motivation.write', 'Write')}
                     </DropdownMenuItem>
                     {currentItem.motivation && (
                       <>
@@ -181,7 +183,7 @@ export const SectionMotifation = () => {
                           }}
                         >
                           <Edit3 className="h-3 w-3 mr-2" />
-                          Edit
+                          {t('common.edit', 'Edit')}
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={async () => {
@@ -192,7 +194,7 @@ export const SectionMotifation = () => {
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="h-3 w-3 mr-2" />
-                          Hapus
+                          {t('common.delete', 'Delete')}
                         </DropdownMenuItem>
                       </>
                     )}

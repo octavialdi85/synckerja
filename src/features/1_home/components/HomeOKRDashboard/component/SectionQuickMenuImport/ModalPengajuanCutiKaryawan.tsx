@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -19,23 +21,24 @@ import { useLeaveRequest } from '../../../../hooks/useLeaveRequest';
 import { useEmployeeLeaveEligibility } from '../../../../hooks/useEmployeeLeaveEligibility';
 import { LeaveEligibilityAlert } from '../../../../components/LeaveEligibilityAlert';
 
-const leaveRequestSchema = z.object({
-  leaveType: z.string().min(1, 'Jenis cuti harus dipilih'),
+// Schema will be created inside component to access translation
+const createLeaveRequestSchema = (t: (key: string, fallback: string) => string) => z.object({
+  leaveType: z.string().min(1, t('leaveRequest.validation.leaveTypeRequired', 'Leave type must be selected')),
   startDate: z.date({
-    required_error: 'Tanggal mulai harus diisi'
+    required_error: t('leaveRequest.validation.startDateRequired', 'Start date must be filled')
   }),
   endDate: z.date({
-    required_error: 'Tanggal selesai harus diisi'
+    required_error: t('leaveRequest.validation.endDateRequired', 'End date must be filled')
   }),
-  reason: z.string().min(10, 'Alasan cuti minimal 10 karakter'),
-  emergencyContact: z.string().min(5, 'Kontak darurat harus diisi'),
-  workHandover: z.string().min(10, 'Serah terima pekerjaan minimal 10 karakter')
+  reason: z.string().min(10, t('leaveRequest.validation.reasonMinLength', 'Leave reason must be at least 10 characters')),
+  emergencyContact: z.string().min(5, t('leaveRequest.validation.emergencyContactRequired', 'Emergency contact must be filled')),
+  workHandover: z.string().min(10, t('leaveRequest.validation.workHandoverMinLength', 'Work handover must be at least 10 characters'))
 }).refine(data => data.endDate >= data.startDate, {
-  message: 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai',
+  message: t('leaveRequest.validation.endDateBeforeStart', 'End date cannot be earlier than start date'),
   path: ['endDate']
 });
 
-type LeaveRequestFormData = z.infer<typeof leaveRequestSchema>;
+type LeaveRequestFormData = z.infer<ReturnType<typeof createLeaveRequestSchema>>;
 
 interface ModalPengajuanCutiKaryawanProps {
   isOpen: boolean;
@@ -43,34 +46,12 @@ interface ModalPengajuanCutiKaryawanProps {
   onSubmit: (data: LeaveRequestFormData) => void;
 }
 
-const leaveTypes = [{
-  value: 'annual',
-  label: 'Cuti Tahunan'
-}, {
-  value: 'sick',
-  label: 'Cuti Sakit'
-}, {
-  value: 'maternity',
-  label: 'Cuti Melahirkan'
-}, {
-  value: 'paternity',
-  label: 'Cuti Ayah'
-}, {
-  value: 'personal',
-  label: 'Cuti Pribadi'
-}, {
-  value: 'emergency',
-  label: 'Cuti Darurat'
-}, {
-  value: 'unpaid',
-  label: 'Cuti Tanpa Gaji'
-}];
-
 export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProps> = ({
   isOpen,
   onClose,
   onSubmit
 }) => {
+  const { t, dateLocale } = useAppTranslation();
   const {
     data: employeeData,
     isLoading: employeeLoading
@@ -83,6 +64,31 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
     data: eligibility,
     isLoading: eligibilityLoading
   } = useEmployeeLeaveEligibility();
+
+  const leaveTypes = [{
+    value: 'annual',
+    label: t('leaveRequest.leaveType.annual', 'Annual Leave')
+  }, {
+    value: 'sick',
+    label: t('leaveRequest.leaveType.sick', 'Sick Leave')
+  }, {
+    value: 'maternity',
+    label: t('leaveRequest.leaveType.maternity', 'Maternity Leave')
+  }, {
+    value: 'paternity',
+    label: t('leaveRequest.leaveType.paternity', 'Paternity Leave')
+  }, {
+    value: 'personal',
+    label: t('leaveRequest.leaveType.personal', 'Personal Leave')
+  }, {
+    value: 'emergency',
+    label: t('leaveRequest.leaveType.emergency', 'Emergency Leave')
+  }, {
+    value: 'unpaid',
+    label: t('leaveRequest.leaveType.unpaid', 'Unpaid Leave')
+  }];
+  
+  const leaveRequestSchema = createLeaveRequestSchema(t);
   
   const form = useForm<LeaveRequestFormData>({
     resolver: zodResolver(leaveRequestSchema),
@@ -127,10 +133,10 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 z-20">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              Pengajuan Cuti Karyawan
+              {t('leaveRequest.title', 'Employee Leave Request')}
             </DialogTitle>
             <DialogDescription className="text-sm text-gray-600">
-              Ajukan permohonan cuti dengan melengkapi informasi karyawan, jenis cuti, dan periode yang diinginkan.
+              {t('leaveRequest.description', 'Submit a leave request by completing employee information, leave type, and desired period.')}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -142,16 +148,16 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
 
             {/* Employee Info Section */}
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Informasi Karyawan</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-3">{t('leaveRequest.employeeInfo', 'Employee Information')}</h3>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center space-x-3">
                   <User className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Nama Karyawan</p>
+                    <p className="text-xs text-gray-500">{t('leaveRequest.employeeName', 'Employee Name')}</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {employeeLoading ? 'Loading...' : (
-                        employeeData?.full_name || 'Tidak tersedia'
+                      {employeeLoading ? t('common.loading', 'Loading...') : (
+                        employeeData?.full_name || t('common.notAvailable', 'Not Available')
                       )}
                     </p>
                   </div>
@@ -160,14 +166,14 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 <div className="flex items-center space-x-3">
                   <Building className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Departemen</p>
+                    <p className="text-xs text-gray-500">{t('leaveRequest.department', 'Department')}</p>
                     <p className="text-sm font-medium text-gray-900">
                       {employeeLoading ? (
-                        'Loading...'
+                        t('common.loading', 'Loading...')
                       ) : employeeData?.departments?.name ? (
                         employeeData.departments.name
                       ) : (
-                        <span className="text-red-500 italic">Tidak tersedia</span>
+                        <span className="text-red-500 italic">{t('common.notAvailable', 'Not Available')}</span>
                       )}
                     </p>
                   </div>
@@ -178,14 +184,14 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 <div className="flex items-center space-x-3">
                   <CalendarIcon className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Join Date</p>
+                    <p className="text-xs text-gray-500">{t('profile.joinDate', 'Join Date')}</p>
                     <p className="text-sm font-medium text-gray-900">
                       {employeeLoading ? (
-                        'Loading...'
+                        t('common.loading', 'Loading...')
                       ) : employeeData?.join_date || employeeData?.hire_date ? (
-                        format(new Date(employeeData.join_date || employeeData.hire_date), 'dd MMM yyyy', { locale: id })
+                        format(new Date(employeeData.join_date || employeeData.hire_date), 'dd MMM yyyy', { locale: dateLocale })
                       ) : (
-                        <span className="text-orange-500">N/A</span>
+                        <span className="text-orange-500">{t('common.notAvailable', 'N/A')}</span>
                       )}
                     </p>
                   </div>
@@ -194,17 +200,19 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 <div className="flex items-center space-x-3">
                   <Clock className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Sisa Cuti</p>
+                    <p className="text-xs text-gray-500">{t('profile.remainingLeave', 'Remaining Leave')}</p>
                     <p className="text-sm font-medium text-gray-900">
                       {eligibilityLoading ? (
-                        'Loading...'
+                        t('common.loading', 'Loading...')
                       ) : eligibility ? (
                         <span className="text-orange-500">
-                          {eligibility.remainingDays} hari 
-                          <span className="text-gray-500"> dari {eligibility.annualLeaveEntitlement} hari/tahun</span>
+                          {applyVariables(t('profile.leaveBalance', '{{remaining}} days from {{total}} days/year'), {
+                            remaining: String(eligibility.remainingDays),
+                            total: String(eligibility.annualLeaveEntitlement)
+                          })}
                         </span>
                       ) : (
-                        <span className="text-red-500 italic">Tidak tersedia</span>
+                        <span className="text-red-500 italic">{t('common.notAvailable', 'Not Available')}</span>
                       )}
                     </p>
                   </div>
@@ -214,18 +222,18 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
 
             {/* Leave Details Section */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-900">Detail Pengajuan Cuti</h3>
+              <h3 className="text-sm font-medium text-gray-900">{t('leaveRequest.leaveDetails', 'Leave Request Details')}</h3>
               
               {/* Department Display */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-xs text-blue-700">
                   <span className="font-medium">
-                    Departemen: {employeeLoading ? (
-                      'Loading...'
+                    {t('leaveRequest.department', 'Department')}: {employeeLoading ? (
+                      t('common.loading', 'Loading...')
                     ) : employeeData?.departments?.name ? (
                       employeeData.departments.name
                     ) : (
-                      <span className="text-red-600">Tidak ada departemen</span>
+                      <span className="text-red-600">{t('leaveRequest.noDepartment', 'No department')}</span>
                     )}
                   </span>
                 </p>
@@ -236,11 +244,11 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 name="leaveType" 
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-semibold">Jenis Cuti <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel className="text-sm font-semibold">{t('leaveRequest.leaveType', 'Leave Type')} <span className="text-red-500">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Pilih jenis cuti" />
+                          <SelectValue placeholder={t('leaveRequest.selectLeaveType', 'Select leave type')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -262,14 +270,14 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                   name="startDate" 
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-semibold">Tanggal Mulai <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel className="text-sm font-semibold">{t('leaveRequest.startDate', 'Start Date')} <span className="text-red-500">*</span></FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                               {field.value ? format(field.value, "dd MMMM yyyy", {
-                                locale: id
-                              }) : <span>Pilih tanggal</span>}
+                                locale: dateLocale
+                              }) : <span>{t('datePicker.selectDate', 'Select date')}</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>
@@ -292,14 +300,14 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                   name="endDate" 
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-semibold">Tanggal Selesai <span className="text-red-500">*</span></FormLabel>
+                      <FormLabel className="text-sm font-semibold">{t('leaveRequest.endDate', 'End Date')} <span className="text-red-500">*</span></FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                               {field.value ? format(field.value, "dd MMMM yyyy", {
-                                locale: id
-                              }) : <span>Pilih tanggal</span>}
+                                locale: dateLocale
+                              }) : <span>{t('datePicker.selectDate', 'Select date')}</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>
@@ -325,7 +333,7 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 <div className="space-y-3">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <p className="text-xs text-blue-700">
-                      <span className="font-medium">Total hari cuti: {requestedDays} hari</span>
+                      <span className="font-medium">{applyVariables(t('leaveRequest.totalLeaveDays', 'Total leave days: {{days}} days'), { days: String(requestedDays) })}</span>
                     </p>
                   </div>
                   
@@ -334,7 +342,13 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                       <div className="flex items-center gap-2">
                         {remainingAfterRequest < 0 && <AlertTriangle className="h-4 w-4 text-red-600" />}
                         <p className={cn("text-xs font-medium", remainingAfterRequest >= 0 ? "text-green-700" : "text-red-700")}>
-                          {remainingAfterRequest >= 0 ? `Sisa cuti setelah pengajuan: ${remainingAfterRequest} hari` : `Kekurangan cuti: ${Math.abs(remainingAfterRequest)} hari (Sisa cuti Anda hanya ${eligibility.remainingDays} hari)`}
+                          {remainingAfterRequest >= 0 
+                            ? applyVariables(t('leaveRequest.remainingAfterRequest', 'Remaining leave after request: {{remaining}} days'), { remaining: String(remainingAfterRequest) })
+                            : applyVariables(t('leaveRequest.insufficientLeave', 'Insufficient leave: {{shortage}} days (You only have {{available}} days remaining)'), { 
+                                shortage: String(Math.abs(remainingAfterRequest)), 
+                                available: String(eligibility.remainingDays) 
+                              })
+                          }
                         </p>
                       </div>
                     </div>
@@ -347,16 +361,19 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 name="reason" 
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-semibold">Alasan Cuti <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel className="text-sm font-semibold">{t('leaveRequest.reason', 'Leave Reason')} <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Jelaskan alasan mengajukan cuti..." 
+                        placeholder={t('leaveRequest.reasonPlaceholder', 'Explain the reason for requesting leave...')} 
                         className="min-h-[100px] resize-none" 
                         {...field} 
                       />
                     </FormControl>
                     <p className="text-xs text-gray-500">
-                      Minimal 10 karakter ({field.value?.length || 0}/10)
+                      {applyVariables(t('leaveRequest.minCharacters', 'Minimum {{min}} characters ({{current}}/{{min}})'), { 
+                        min: '10', 
+                        current: String(field.value?.length || 0) 
+                      })}
                     </p>
                     <FormMessage />
                   </FormItem>
@@ -368,9 +385,9 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 name="emergencyContact" 
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-semibold">Kontak Darurat <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel className="text-sm font-semibold">{t('leaveRequest.emergencyContact', 'Emergency Contact')} <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="Nama dan nomor telepon yang dapat dihubungi" {...field} />
+                      <Input placeholder={t('leaveRequest.emergencyContactPlaceholder', 'Name and phone number that can be contacted')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -382,16 +399,19 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
                 name="workHandover" 
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-semibold">Serah Terima Pekerjaan <span className="text-red-500">*</span></FormLabel>
+                    <FormLabel className="text-sm font-semibold">{t('leaveRequest.workHandover', 'Work Handover')} <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Jelaskan pekerjaan yang akan diserahkan dan kepada siapa..." 
+                        placeholder={t('leaveRequest.workHandoverPlaceholder', 'Explain the work that will be handed over and to whom...')} 
                         className="min-h-[100px] resize-none" 
                         {...field} 
                       />
                     </FormControl>
                     <p className="text-xs text-gray-500">
-                      Minimal 10 karakter ({field.value?.length || 0}/10)
+                      {applyVariables(t('leaveRequest.minCharacters', 'Minimum {{min}} characters ({{current}}/{{min}})'), { 
+                        min: '10', 
+                        current: String(field.value?.length || 0) 
+                      })}
                     </p>
                     <FormMessage />
                   </FormItem>
@@ -405,7 +425,7 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
           <div className="flex justify-between gap-3">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1 text-sm" disabled={isLoading}>
-              Batal
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button 
               type="submit" 
@@ -416,19 +436,19 @@ export const ModalPengajuanCutiKaryawan: React.FC<ModalPengajuanCutiKaryawanProp
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Mengajukan...
+                  {t('leaveRequest.submitting', 'Submitting...')}
                 </>
               ) : eligibilityLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Memuat...
+                  {t('common.loading', 'Loading...')}
                 </>
               ) : !eligibility?.isEligible ? (
-                'Belum Berhak Cuti'
+                t('leaveRequest.notEligible', 'Not Eligible for Leave')
               ) : remainingAfterRequest < 0 ? (
-                'Sisa Cuti Tidak Mencukupi'
+                t('leaveRequest.insufficientLeaveBalance', 'Insufficient Leave Balance')
               ) : (
-                'Ajukan Cuti'
+                t('leaveRequest.submit', 'Submit Leave Request')
               )}
             </Button>
           </div>

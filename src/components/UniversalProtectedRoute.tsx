@@ -6,6 +6,7 @@ import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedU
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { useAuth } from '@/features/1-login';
 import { LoadingDots } from './LoadingDots';
+import { logger } from '@/config/logger';
 
 interface UniversalProtectedRouteProps {
   children: ReactNode;
@@ -52,16 +53,15 @@ export const UniversalProtectedRoute = ({
       const isDev = import.meta.env.DEV;
       
       if (isDev) {
-        console.group('🌍 UNIVERSAL ROUTE PROTECTION');
-        console.log('Validating Path:', currentPath);
-        console.log('User Context:', { userRole, isOwner, isAdmin });
+        logger.debug('🌍 UNIVERSAL ROUTE PROTECTION');
+        logger.debug('Validating Path:', currentPath);
+        logger.debug('User Context:', { userRole, isOwner, isAdmin });
       }
 
       // Step 1: Authentication check
       if (requiresAuth && !user) {
         if (isDev) {
-          console.log('❌ Authentication required but user not logged in');
-          console.groupEnd();
+          logger.debug('❌ Authentication required but user not logged in');
         }
         navigate(redirectTo, { state: { from: location }, replace: true });
         return;
@@ -70,8 +70,7 @@ export const UniversalProtectedRoute = ({
       // Step 2: Wait for configurations to load
       if (configLoading) {
         if (isDev) {
-          console.log('⏳ Still loading page configurations...');
-          console.groupEnd();
+          logger.debug('⏳ Still loading page configurations...');
         }
         return; // Keep showing loading
       }
@@ -81,15 +80,14 @@ export const UniversalProtectedRoute = ({
       const hasAccess = canAccessPage(currentPath);
       
       if (isDev) {
-        console.log('Database Access Check Result:', hasAccess);
-        console.log('Access Level:', getAccessLevel());
+        logger.debug('Database Access Check Result:', hasAccess);
+        logger.debug('Access Level:', getAccessLevel());
       }
       
       if (!hasAccess) {
         if (isDev) {
-          console.log('🚨 ACCESS DENIED by Page Access Configuration');
-          console.log('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
-          console.groupEnd();
+          logger.debug('🚨 ACCESS DENIED by Page Access Configuration');
+          logger.debug('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
         }
         
         setAccessDenied(true);
@@ -100,8 +98,7 @@ export const UniversalProtectedRoute = ({
 
       // Step 4: Access granted
       if (isDev) {
-        console.log('✅ ACCESS GRANTED by Page Access Configuration');
-        console.groupEnd();
+        logger.debug('✅ ACCESS GRANTED by Page Access Configuration');
       }
       setAccessDenied(false);
       setDeniedReason('');

@@ -6,11 +6,15 @@ import { Button } from '@/features/ui/button';
 import { Avatar, AvatarFallback } from '@/features/ui/avatar';
 import { AlertTriangle, Eye, MoreHorizontal } from 'lucide-react';
 import { useAttendancePenalties } from './hooks/useAttendancePenalties';
-import { formatDistanceToNow } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDistanceToNow, format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export const RecentPenaltiesWidget = () => {
   const { penalties, loading } = useAttendancePenalties();
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === 'id' ? id : enUS;
 
   if (loading) {
     return (
@@ -18,7 +22,7 @@ export const RecentPenaltiesWidget = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
-            Recent Penalties
+            {t('penalties.recent.title', 'Recent Penalties')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -66,18 +70,18 @@ export const RecentPenaltiesWidget = () => {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <AlertTriangle className="h-5 w-5 text-red-600" />
-          Recent Penalties
+          {t('penalties.recent.title', 'Recent Penalties')}
         </CardTitle>
         <Button variant="ghost" size="sm">
           <Eye className="h-4 w-4 mr-1" />
-          View All
+          {t('penalties.recent.viewAll', 'View All')}
         </Button>
       </CardHeader>
       <CardContent className="flex-1">
         {recentPenalties.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-            <p>No recent penalties</p>
+            <p>{t('penalties.recent.noPenalties', 'No recent penalties')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -98,7 +102,22 @@ export const RecentPenaltiesWidget = () => {
                     </Badge>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                    {penalty.penalty_reason}
+                    {(() => {
+                      // Parse penalty_reason which might be in format "Keterlambatan X menit pada YYYY-MM-DD"
+                      const reason = penalty.penalty_reason || '';
+                      const lateMatch = reason.match(/Keterlambatan\s+(\d+)\s+menit\s+pada\s+(\d{4}-\d{2}-\d{2})/i);
+                      
+                      if (lateMatch) {
+                        const minutes = lateMatch[1];
+                        const dateStr = lateMatch[2];
+                        const formattedDate = format(new Date(dateStr), 'yyyy-MM-dd');
+                        return applyVariables(
+                          t('penalties.lateReason', 'Late {{minutes}} minutes on {{date}}'),
+                          { minutes, date: formattedDate }
+                        );
+                      }
+                      return reason;
+                    })()}
                   </p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs font-medium text-red-600">
@@ -107,7 +126,7 @@ export const RecentPenaltiesWidget = () => {
                     <span className="text-xs text-gray-500">
                       {formatDistanceToNow(new Date(penalty.applied_date), { 
                         addSuffix: true,
-                        locale: id 
+                        locale: dateLocale 
                       })}
                     </span>
                   </div>

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 
 interface ObjectiveStats {
   avgProgress: number;
@@ -18,10 +19,10 @@ export const useObjectiveStats = (
   return useQuery({
     queryKey: ['objective-stats', organizationId, type, cycleIds],
     queryFn: async (): Promise<ObjectiveStats> => {
-      console.log(`🔍 [${type}] Fetching objective stats:`, { organizationId, cycleIds, type });
+      logger.query(`🔍 [${type}] Fetching objective stats:`, { organizationId, cycleIds, type });
       
       if (!organizationId) {
-        console.log(`❌ [${type}] No organizationId provided`);
+        logger.query(`❌ [${type}] No organizationId provided`);
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
@@ -31,10 +32,10 @@ export const useObjectiveStats = (
         .eq('organization_id', organizationId);
 
       if (cycleIds && cycleIds.length > 0) {
-        console.log(`🎯 [${type}] Filtering by cycle IDs:`, cycleIds);
+        logger.query(`🎯 [${type}] Filtering by cycle IDs:`, cycleIds);
         query = query.in('cycle_id', cycleIds);
       } else {
-        console.log(`⚠️ [${type}] No cycle IDs provided, returning zero stats`);
+        logger.query(`⚠️ [${type}] No cycle IDs provided, returning zero stats`);
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
@@ -45,7 +46,7 @@ export const useObjectiveStats = (
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
-      console.log(`✅ [${type}] Objectives fetched:`, {
+      logger.query(`✅ [${type}] Objectives fetched:`, {
         count: objectives?.length || 0,
         objectives: objectives?.map(obj => ({ id: obj.id, progress: obj.progress_percentage }))
       });
@@ -53,7 +54,7 @@ export const useObjectiveStats = (
       const totalObjectives = objectives?.length || 0;
       
       if (totalObjectives === 0) {
-        console.log(`⚠️ [${type}] No objectives found for the selected criteria`);
+        logger.query(`⚠️ [${type}] No objectives found for the selected criteria`);
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
       
@@ -64,7 +65,7 @@ export const useObjectiveStats = (
         completed: objectives.filter(obj => obj.status === 'completed').length
       };
       
-      console.log(`📊 [${type}] Status breakdown:`, statusCounts);
+      logger.query(`📊 [${type}] Status breakdown:`, statusCounts);
 
       // For individual objectives, we need to calculate progress from key_results
       if (type === 'individual') {
@@ -147,14 +148,14 @@ export const useObjectiveStats = (
       if (type === 'company') {
         // Fetch department objectives for all company objectives
         const objectiveIds = objectives.map(obj => obj.id);
-        console.log(`📊 [company] Fetching department objectives for company objectives:`, objectiveIds);
+        logger.query(`📊 [company] Fetching department objectives for company objectives:`, objectiveIds);
         
         const { data: deptObjectives, error: deptError } = await supabase
           .from('department_objectives')
           .select('company_objective_id, progress_percentage')
           .in('company_objective_id', objectiveIds);
 
-        console.log(`📊 [company] Department objectives fetched:`, {
+        logger.query(`📊 [company] Department objectives fetched:`, {
           count: deptObjectives?.length || 0,
           deptObjectives: deptObjectives?.map(dept => ({
             company_objective_id: dept.company_objective_id,
@@ -196,30 +197,30 @@ export const useObjectiveStats = (
         const objectiveProgresses = objectiveIds.map(objectiveId => {
           const objDeptObjectives = deptObjectives?.filter(dept => dept.company_objective_id === objectiveId) || [];
           
-          console.log(`📊 [company] Objective ${objectiveId} has ${objDeptObjectives.length} department objectives`);
+          logger.query(`📊 [company] Objective ${objectiveId} has ${objDeptObjectives.length} department objectives`);
           
           if (objDeptObjectives.length === 0) {
             // No department objectives, use progress_percentage from objective
             const obj = objectives.find(o => o.id === objectiveId);
             const fallbackProgress = obj?.progress_percentage || 0;
-            console.log(`📊 [company] No department objectives, using fallback progress: ${fallbackProgress}%`);
+            logger.query(`📊 [company] No department objectives, using fallback progress: ${fallbackProgress}%`);
             return fallbackProgress;
           }
 
           // Calculate average progress from department objectives
           const totalDeptProgress = objDeptObjectives.reduce((sum, dept) => {
-            console.log(`📊 [company] Department objective progress: ${dept.progress_percentage}%`);
+            logger.query(`📊 [company] Department objective progress: ${dept.progress_percentage}%`);
             return sum + (dept.progress_percentage || 0);
           }, 0);
 
           const objectiveProgress = totalDeptProgress / objDeptObjectives.length;
-          console.log(`📊 [company] Objective ${objectiveId} progress: ${objectiveProgress}%`);
+          logger.query(`📊 [company] Objective ${objectiveId} progress: ${objectiveProgress}%`);
           return objectiveProgress;
         });
 
         // Calculate average progress across all objectives
         const avgProgress = objectiveProgresses.reduce((sum, progress) => sum + progress, 0) / totalObjectives;
-        console.log(`📊 [company] Final average progress: ${avgProgress}%`);
+        logger.query(`📊 [company] Final average progress: ${avgProgress}%`);
 
         // Find next deadline
         const now = new Date();

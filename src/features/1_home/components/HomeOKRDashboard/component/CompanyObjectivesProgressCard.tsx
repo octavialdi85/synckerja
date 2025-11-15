@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Calendar, Plus, Target } from 'lucide-react';
 import { AddObjectiveDialog } from '../../AddObjectiveDialog';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
+import { logger } from '@/config/logger';
 
 interface SectionCompanyObjectivesProgressOverviewProps {
   enhancedCompanyObjectives: any[];
@@ -61,12 +62,12 @@ export const CompanyObjectivesProgressCard = ({
   const currentYearQuarterSelection = yearQuarterSelection || defaultYearQuarterSelection;
   
   const handleYearQuarterChange = (selection: YearQuarterSelection) => {
-    console.log('🟡 SectionCompanyObjectivesProgressOverview - Year quarter selection changed:', selection);
+    logger.debug('🟡 SectionCompanyObjectivesProgressOverview - Year quarter selection changed:', selection);
     if (onYearQuarterChange) {
-      console.log('🟡 Calling parent onYearQuarterChange');
+      logger.debug('🟡 Calling parent onYearQuarterChange');
       onYearQuarterChange(selection);
     } else {
-      console.log('🟡 No parent onYearQuarterChange handler provided');
+      logger.debug('🟡 No parent onYearQuarterChange handler provided');
     }
   };
 
@@ -164,7 +165,7 @@ export const CompanyObjectivesProgressCard = ({
                 type="company"
                 buttonClassName="h-8 px-3 py-2 text-sm"
                 onObjectiveAdded={() => {
-                  console.log('Company objective created successfully');
+                  logger.debug('Company objective created successfully');
                   // Trigger any necessary data refresh here
                 }}
               />

@@ -13,8 +13,10 @@ import { toast } from 'sonner';
 import { MyInfoSidebarFooter } from '@/features/2-1-employees/MyInfo/shared/MyInfoSidebarFooter';
 import { MyInfoContentFooter } from '@/features/2-1-employees/MyInfo/shared/MyInfoContentFooter';
 import { ComprehensiveLeaveHistory } from '../components/ComprehensiveLeaveHistory';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const EmployeeLeavePermit = () => {
+  const { t } = useAppTranslation();
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -180,19 +182,19 @@ const EmployeeLeavePermit = () => {
                             size="lg"
                             onPhotoUpdate={async (newPhotoUrl) => {
                               try {
-                                const loadingToast = toast.loading('Memperbarui foto profil...');
+                                const loadingToast = toast.loading(t('profile.updatingPhoto', 'Updating profile photo...'));
                                 const result = await syncAvatarAcrossApp(newPhotoUrl);
                                 toast.dismiss(loadingToast);
                                 
                                 if (result?.success) {
                                   setTimeout(() => refetch(), 500);
-                                  toast.success('Foto profil berhasil diperbarui di seluruh aplikasi! 🎉');
+                                  toast.success(t('profile.photoUpdatedSuccess', 'Profile photo successfully updated across the app! 🎉'));
                                 } else {
-                                  toast.error('Gagal menyinkronkan foto di seluruh aplikasi');
+                                  toast.error(t('profile.failedToSyncPhoto', 'Failed to sync photo across the app'));
                                 }
                               } catch (error) {
                                 console.error('Error during photo update:', error);
-                                toast.error('Gagal memperbarui foto profil');
+                                toast.error(t('profile.failedToUpdatePhoto', 'Failed to update profile photo'));
                               }
                             }}
                           />

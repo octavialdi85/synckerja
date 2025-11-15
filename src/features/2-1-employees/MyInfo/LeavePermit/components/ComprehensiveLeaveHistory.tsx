@@ -21,7 +21,9 @@ import {
 import { Label } from '@/features/ui/label';
 import { InfoTooltip } from './info-tooltip';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 import { useEmployeeLeaveRequests } from '../hooks/useEmployeeLeaveRequests';
 import { useEmployeeLeaveAllocations } from '../hooks/useEmployeeLeaveAllocations';
 import { useLeavePolicy } from '../hooks/useLeavePolicy';
@@ -34,6 +36,7 @@ interface ComprehensiveLeaveHistoryProps {
 }
 
 export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: ComprehensiveLeaveHistoryProps) => {
+  const { t, dateLocale } = useAppTranslation();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -64,10 +67,10 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      pending: { label: 'Menunggu', variant: 'secondary' as const },
-      approved: { label: 'Disetujui', variant: 'default' as const },
-      rejected: { label: 'Ditolak', variant: 'destructive' as const },
-      cancelled: { label: 'Dibatalkan', variant: 'outline' as const },
+      pending: { label: t('leaveHistory.pending', 'Pending'), variant: 'secondary' as const },
+      approved: { label: t('leaveHistory.approved', 'Approved'), variant: 'default' as const },
+      rejected: { label: t('leaveHistory.rejected', 'Rejected'), variant: 'destructive' as const },
+      cancelled: { label: t('leaveHistory.cancelled', 'Cancelled'), variant: 'outline' as const },
     };
     
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
@@ -76,13 +79,13 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
 
   const getLeaveTypeLabel = (type: string) => {
     const typeLabels = {
-      annual: 'Cuti Tahunan',
-      sick: 'Cuti Sakit', 
-      maternity: 'Cuti Melahirkan',
-      paternity: 'Cuti Ayah',
-      personal: 'Cuti Pribadi',
-      emergency: 'Cuti Darurat',
-      unpaid: 'Cuti Tanpa Gaji',
+      annual: t('leaveHistory.leaveType.annual', 'Annual Leave'),
+      sick: t('leaveHistory.leaveType.sick', 'Sick Leave'), 
+      maternity: t('leaveHistory.leaveType.maternity', 'Maternity Leave'),
+      paternity: t('leaveHistory.leaveType.paternity', 'Paternity Leave'),
+      personal: t('leaveHistory.leaveType.personal', 'Personal Leave'),
+      emergency: t('leaveHistory.leaveType.emergency', 'Emergency Leave'),
+      unpaid: t('leaveHistory.leaveType.unpaid', 'Unpaid Leave'),
     };
     
     return typeLabels[type as keyof typeof typeLabels] || type;
@@ -106,13 +109,13 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
   const getAllocationTypeLabel = (type: string) => {
     switch (type) {
       case 'annual_grant':
-        return 'Cuti Tahunan';
+        return t('leaveHistory.allocationType.annualGrant', 'Annual Leave');
       case 'bonus':
-        return 'Cuti Bonus';
+        return t('leaveHistory.allocationType.bonus', 'Bonus Leave');
       case 'carry_over':
-        return 'Cuti Dibawa';
+        return t('leaveHistory.allocationType.carryOver', 'Carry Over');
       case 'manual_adjustment':
-        return 'Penyesuaian Manual';
+        return t('leaveHistory.allocationType.manualAdjustment', 'Manual Adjustment');
       default:
         return type;
     }
@@ -141,7 +144,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        <span className="ml-2">Memuat data riwayat cuti...</span>
+        <span className="ml-2">{t('leaveHistory.loading', 'Loading leave history...')}</span>
       </div>
     );
   }
@@ -154,9 +157,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Sisa Cuti</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('leaveHistory.remainingLeave', 'Remaining Leave')}</p>
                 <p className="text-2xl font-bold">{leaveBalance?.remainingLeave || 0}</p>
-                <p className="text-xs text-muted-foreground">hari</p>
+                <p className="text-xs text-muted-foreground">{t('leaveHistory.days', 'days')}</p>
               </div>
               <Calendar className="h-8 w-8 text-green-500" />
             </div>
@@ -167,9 +170,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Cuti Terpakai</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('leaveHistory.usedLeave', 'Used Leave')}</p>
                 <p className="text-2xl font-bold">{totalDaysUsed}</p>
-                <p className="text-xs text-muted-foreground">hari tahun ini</p>
+                <p className="text-xs text-muted-foreground">{t('leaveHistory.daysThisYear', 'days this year')}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-blue-500" />
             </div>
@@ -180,9 +183,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Menunggu</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('leaveHistory.pending', 'Pending')}</p>
                 <p className="text-2xl font-bold">{pendingDays}</p>
-                <p className="text-xs text-muted-foreground">hari</p>
+                <p className="text-xs text-muted-foreground">{t('leaveHistory.days', 'days')}</p>
               </div>
               <Hourglass className="h-8 w-8 text-yellow-500" />
             </div>
@@ -193,9 +196,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Alokasi</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('leaveHistory.totalAllocation', 'Total Allocation')}</p>
                 <p className="text-2xl font-bold">{totalAllocated}</p>
-                <p className="text-xs text-muted-foreground">hari</p>
+                <p className="text-xs text-muted-foreground">{t('leaveHistory.days', 'days')}</p>
               </div>
               <Gift className="h-8 w-8 text-purple-500" />
             </div>
@@ -205,9 +208,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
 
       <Tabs defaultValue="requests" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="requests">Riwayat Pengajuan</TabsTrigger>
-          <TabsTrigger value="allocations">Alokasi Cuti</TabsTrigger>
-          <TabsTrigger value="policy">Kebijakan Cuti</TabsTrigger>
+          <TabsTrigger value="requests">{t('leaveHistory.requestHistory', 'Request History')}</TabsTrigger>
+          <TabsTrigger value="allocations">{t('leaveHistory.leaveAllocation', 'Leave Allocation')}</TabsTrigger>
+          <TabsTrigger value="policy">{t('leaveHistory.leavePolicy', 'Leave Policy')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="requests" className="space-y-4">
@@ -216,7 +219,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <FileCheck className="h-5 w-5" />
-                  Riwayat Pengajuan Cuti
+                  {t('leaveHistory.leaveRequestHistory', 'Leave Request History')}
                 </CardTitle>
                 <div className="flex gap-2">
                   <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
@@ -234,11 +237,11 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Semua Status</SelectItem>
-                      <SelectItem value="pending">Menunggu</SelectItem>
-                      <SelectItem value="approved">Disetujui</SelectItem>
-                      <SelectItem value="rejected">Ditolak</SelectItem>
-                      <SelectItem value="cancelled">Dibatalkan</SelectItem>
+                      <SelectItem value="all">{t('leaveHistory.allStatus', 'All Status')}</SelectItem>
+                      <SelectItem value="pending">{t('leaveHistory.pending', 'Pending')}</SelectItem>
+                      <SelectItem value="approved">{t('leaveHistory.approved', 'Approved')}</SelectItem>
+                      <SelectItem value="rejected">{t('leaveHistory.rejected', 'Rejected')}</SelectItem>
+                      <SelectItem value="cancelled">{t('leaveHistory.cancelled', 'Cancelled')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -248,7 +251,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
               {leaveRequests.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <FileCheck className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p>Belum ada riwayat pengajuan cuti</p>
+                  <p>{t('leaveHistory.noRequestHistory', 'No leave request history')}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -262,16 +265,16 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                             {getStatusBadge(request.status)}
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {format(parseDateFromDatabase(request.start_date), 'dd MMM yyyy', { locale: id })} - {' '}
-                            {format(parseDateFromDatabase(request.end_date), 'dd MMM yyyy', { locale: id })}
+                            {format(parseDateFromDatabase(request.start_date), 'dd MMM yyyy', { locale: dateLocale })} - {' '}
+                            {format(parseDateFromDatabase(request.end_date), 'dd MMM yyyy', { locale: dateLocale })}
                           </p>
                           <p className="text-sm text-muted-foreground">{request.reason}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold">{request.total_days} hari</p>
+                        <p className="font-semibold">{request.total_days} {t('leaveHistory.days', 'days')}</p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(request.created_at), 'dd MMM yyyy', { locale: id })}
+                          {format(new Date(request.created_at), 'dd MMM yyyy', { locale: dateLocale })}
                         </p>
                       </div>
                     </div>
@@ -287,14 +290,14 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5" />
-                Alokasi Cuti
+                {t('leaveHistory.leaveAllocation', 'Leave Allocation')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {leaveAllocations.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Gift className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p>Belum ada alokasi cuti</p>
+                  <p>{t('leaveHistory.noAllocation', 'No leave allocation')}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -319,7 +322,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                               <h4 className="font-medium">{getAllocationTypeLabel(allocation.allocation_type)}</h4>
                               {isExpired && (
                                 <Badge variant="outline" className="text-destructive border-destructive">
-                                  Expired
+                                  {t('leaveHistory.expired', 'Expired')}
                                 </Badge>
                               )}
                             </div>
@@ -328,16 +331,16 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                               <p className="text-sm text-muted-foreground">{allocation.notes}</p>
                             )}
                             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                              <span>Diberikan: {format(new Date(allocation.allocation_date), 'dd MMM yyyy', { locale: id })}</span>
+                              <span>{t('leaveHistory.granted', 'Granted')}: {format(new Date(allocation.allocation_date), 'dd MMM yyyy', { locale: dateLocale })}</span>
                               {allocation.expires_at && (
                                 <span>
-                                  Berakhir: {format(new Date(allocation.expires_at), 'dd MMM yyyy', { locale: id })}
+                                  {t('leaveHistory.expires', 'Expires')}: {format(new Date(allocation.expires_at), 'dd MMM yyyy', { locale: dateLocale })}
                                 </span>
                               )}
                             </div>
                             {allocation.allocation_type === 'annual_grant' && (
                               <div className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">
-                                ℹ️ Cuti tahunan berlaku untuk tahun kalender (1 Jan - 31 Des). Sisa cuti tidak dibawa ke tahun berikutnya.
+                                {t('leaveHistory.annualLeaveInfo', 'ℹ️ Annual leave is valid for the calendar year (Jan 1 - Dec 31). Remaining leave is not carried over to the next year.')}
                               </div>
                             )}
                           </div>
@@ -346,7 +349,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                           <p className={`text-lg font-semibold ${
                             isExpired ? 'text-destructive' : 'text-foreground'
                           }`}>
-                            +{allocation.days_allocated} hari
+                            +{allocation.days_allocated} {t('leaveHistory.days', 'days')}
                           </p>
                         </div>
                       </div>
@@ -366,7 +369,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Strategi Pemberian Cuti
+                    {t('leaveHistory.strategyTitle', 'Leave Grant Strategy')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -376,9 +379,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                         <>
                           <Users className="h-5 w-5 text-primary mt-0.5" />
                           <div>
-                            <div className="font-medium">Otomatis setelah masa probation selesai</div>
+                            <div className="font-medium">{t('leaveHistory.afterProbation', 'Automatically after probation period ends')}</div>
                             <div className="text-sm text-muted-foreground mt-1">
-                              Karyawan langsung mendapat hak cuti penuh setelah masa probation berakhir
+                              {t('leaveHistory.afterProbationDesc', 'Employees immediately receive full leave entitlement after probation period ends')}
                             </div>
                           </div>
                         </>
@@ -386,9 +389,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                         <>
                           <Clock className="h-5 w-5 text-primary mt-0.5" />
                           <div>
-                            <div className="font-medium">Setelah masa kerja tertentu</div>
+                            <div className="font-medium">{t('leaveHistory.afterWorkPeriod', 'After certain work period')}</div>
                             <div className="text-sm text-muted-foreground mt-1">
-                              Karyawan mendapat hak cuti setelah bekerja dalam jangka waktu yang ditentukan
+                              {t('leaveHistory.afterWorkPeriodDesc', 'Employees receive leave entitlement after working for a specified period')}
                             </div>
                           </div>
                         </>
@@ -403,7 +406,7 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    Konfigurasi Kebijakan
+                    {t('leaveHistory.configTitle', 'Policy Configuration')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -412,28 +415,28 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                       <div className="space-y-3">
                         <Label className="flex items-center gap-2 text-base font-medium">
                           <Users className="h-4 w-4" />
-                          Durasi Masa Probation
+                          {t('leaveHistory.probationDuration', 'Probation Duration')}
                         </Label>
                         <div className="flex items-center gap-2">
                           <div className="text-2xl font-bold text-primary">{leavePolicy.probation_months}</div>
-                          <span className="text-muted-foreground">bulan</span>
+                          <span className="text-muted-foreground">{t('leaveHistory.months', 'months')}</span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Masa probation sebelum karyawan mendapat hak cuti
+                          {t('leaveHistory.probationDesc', 'Probation period before employees receive leave entitlement')}
                         </p>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         <Label className="flex items-center gap-2 text-base font-medium">
                           <Clock className="h-4 w-4" />
-                          Cuti Diberikan Setelah
+                          {t('leaveHistory.leaveGrantAfter', 'Leave Granted After')}
                         </Label>
                         <div className="flex items-center gap-2">
                           <div className="text-2xl font-bold text-primary">{leavePolicy.leave_grant_after_months}</div>
-                          <span className="text-muted-foreground">bulan kerja</span>
+                          <span className="text-muted-foreground">{t('leaveHistory.workMonths', 'work months')}</span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Waktu tunggu sebelum karyawan mendapat hak cuti
+                          {t('leaveHistory.leaveGrantDesc', 'Waiting period before employees receive leave entitlement')}
                         </p>
                       </div>
                     )}
@@ -441,14 +444,14 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                     <div className="space-y-3">
                       <Label className="flex items-center gap-2 text-base font-medium">
                         <CalendarDays className="h-4 w-4" />
-                        Jumlah Cuti Tahunan
+                        {t('leaveHistory.annualLeaveDays', 'Annual Leave Days')}
                       </Label>
                       <div className="flex items-center gap-2">
                         <div className="text-2xl font-bold text-primary">{leavePolicy.annual_leave_days}</div>
-                        <span className="text-muted-foreground">hari per tahun</span>
+                        <span className="text-muted-foreground">{t('leaveHistory.daysPerYear', 'days per year')}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Total hari cuti yang diberikan setiap tahun
+                        {t('leaveHistory.annualLeaveDesc', 'Total leave days granted each year')}
                       </p>
                     </div>
                   </div>
@@ -461,9 +464,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                   <div className="flex items-start gap-3 mb-4">
                     <Info className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div>
-                      <h3 className="font-semibold text-blue-900">Sistem Cuti Tahunan</h3>
+                      <h3 className="font-semibold text-blue-900">{t('leaveHistory.systemTitle', 'Annual Leave System')}</h3>
                       <p className="text-sm text-blue-700 mt-1">
-                        Ringkasan kebijakan cuti yang diterapkan
+                        {t('leaveHistory.systemDesc', 'Summary of applied leave policy')}
                       </p>
                     </div>
                   </div>
@@ -471,43 +474,41 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                   <div className="space-y-3 text-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <span className="font-medium">Periode:</span>
-                      <span>Tahun kalender (1 Jan - 31 Des)</span>
+                      <span className="font-medium">{t('leaveHistory.period', 'Period')}:</span>
+                      <span>{t('leaveHistory.calendarYear', 'Calendar year (Jan 1 - Dec 31)')}</span>
                     </div>
                     
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <span className="font-medium">Pembaruan:</span>
-                      <span>Otomatis setiap 1 Januari</span>
+                      <span className="font-medium">{t('leaveHistory.update', 'Update')}:</span>
+                      <span>{t('leaveHistory.autoUpdate', 'Automatically every January 1st')}</span>
                     </div>
                     
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <span className="font-medium">Sisa cuti:</span>
-                      <span>Hangus per 31 Desember</span>
+                      <span className="font-medium">{t('leaveHistory.remaining', 'Remaining leave')}:</span>
+                      <span>{t('leaveHistory.expiresAtYearEnd', 'Expires on December 31st')}</span>
                     </div>
                     
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <span className="font-medium">Carry Over:</span>
-                      <span>Tidak ada (0 hari)</span>
+                      <span className="font-medium">{t('leaveHistory.carryOver', 'Carry Over')}:</span>
+                      <span>{t('leaveHistory.noCarryOver', 'None (0 days)')}</span>
                     </div>
                     
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <span className="font-medium">Alokasi baru:</span>
-                      <span>{leavePolicy.annual_leave_days} hari setiap tahun</span>
+                      <span className="font-medium">{t('leaveHistory.newAllocation', 'New allocation')}:</span>
+                      <span>{applyVariables(t('leaveHistory.daysPerYearAllocation', '{{days}} days each year'), { days: leavePolicy.annual_leave_days })}</span>
                     </div>
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-blue-200">
-                    <h4 className="font-medium text-blue-900 mb-3">Kebijakan Eligibilitas</h4>
+                    <h4 className="font-medium text-blue-900 mb-3">{t('leaveHistory.eligibilityPolicy', 'Eligibility Policy')}</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-blue-600" />
-                        <span>
-                          Karyawan mendapat <strong>{leavePolicy.annual_leave_days} hari</strong> cuti per tahun
-                        </span>
+                        <span dangerouslySetInnerHTML={{ __html: applyVariables(t('leaveHistory.employeeGetsDays', 'Employees receive <strong>{{days}} days</strong> leave per year'), { days: leavePolicy.annual_leave_days }) }} />
                       </div>
                       <div className="flex items-center gap-2">
                         {leavePolicy.leave_strategy === 'after_probation' ? (
@@ -517,8 +518,8 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
                         )}
                         <span>
                           {leavePolicy.leave_strategy === 'after_probation' 
-                            ? `Hak cuti otomatis setelah probation ${leavePolicy.probation_months} bulan selesai`
-                            : `Hak cuti mulai setelah ${leavePolicy.leave_grant_after_months} bulan kerja`
+                            ? applyVariables(t('leaveHistory.autoAfterProbation', 'Leave entitlement automatically after {{months}} months probation ends'), { months: leavePolicy.probation_months })
+                            : applyVariables(t('leaveHistory.leaveAfterMonths', 'Leave entitlement starts after {{months}} work months'), { months: leavePolicy.leave_grant_after_months })
                           }
                         </span>
                       </div>
@@ -531,9 +532,9 @@ export const ComprehensiveLeaveHistory = ({ employeeId, organizationId }: Compre
             <Card>
               <CardContent className="text-center py-12">
                 <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Kebijakan Cuti Belum Ditetapkan</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('leaveHistory.policyNotSet', 'Leave Policy Not Set')}</h3>
                 <p className="text-muted-foreground">
-                  Hubungi HR atau administrator untuk mengatur kebijakan cuti perusahaan.
+                  {t('leaveHistory.contactHR', 'Contact HR or administrator to set company leave policy.')}
                 </p>
               </CardContent>
             </Card>

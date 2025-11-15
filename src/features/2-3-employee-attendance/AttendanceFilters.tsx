@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { AttendanceToolbar } from '@/features/2-3-attendance/section/AttendanceToolbar';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { format } from 'date-fns';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export interface FilterState {
   searchTerm: string;
@@ -43,6 +44,7 @@ export const AttendanceFilters = ({
   currentView,
   onViewChange
 }: AttendanceFiltersProps) => {
+  const { t } = useAppTranslation();
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleSearchChange = useCallback(
@@ -70,8 +72,8 @@ export const AttendanceFilters = ({
     if (filters.dateRange.from && filters.dateRange.to) {
       return `${format(filters.dateRange.from, 'dd MMM yyyy')} - ${format(filters.dateRange.to, 'dd MMM yyyy')}`;
     }
-    return 'Pilih rentang tanggal';
-  }, [filters.dateRange.from, filters.dateRange.to]);
+    return t('datePicker.selectDateRange', 'Select date range');
+  }, [filters.dateRange.from, filters.dateRange.to, t]);
 
   const handleClearFilters = useCallback(() => {
     setFilters(createDefaultFilterState());

@@ -4,8 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/fea
 import { Clock, Users, Settings } from 'lucide-react';
 import { ShiftManagement } from './ShiftManagement';
 import { EmployeeShiftAssignment } from './EmployeeShiftAssignment';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const ShiftSettings = () => {
+  const { t } = useAppTranslation();
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -13,8 +16,8 @@ export const ShiftSettings = () => {
           <Clock className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Pengaturan Shift Karyawan</h2>
-          <p className="text-sm text-gray-600">Kelola shift kerja dan penugasan karyawan</p>
+          <h2 className="text-lg font-semibold text-gray-900">{t('shiftSettings.title', 'Employee Shift Settings')}</h2>
+          <p className="text-sm text-gray-600">{t('shiftSettings.description', 'Manage work shifts and employee assignments')}</p>
         </div>
       </div>
 
@@ -22,20 +25,20 @@ export const ShiftSettings = () => {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="shifts" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            Master Shift
+            {t('shiftSettings.tab.masterShift', 'Master Shift')}
           </TabsTrigger>
           <TabsTrigger value="assignments" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Penugasan Karyawan
+            {t('shiftSettings.tab.employeeAssignment', 'Employee Assignment')}
           </TabsTrigger>
         </TabsList>
         
         <TabsContent value="shifts" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Manajemen Shift</CardTitle>
+              <CardTitle>{t('shiftSettings.shiftManagement.title', 'Shift Management')}</CardTitle>
               <CardDescription>
-                Buat dan kelola master data shift kerja untuk organisasi Anda
+                {t('shiftSettings.shiftManagement.description', 'Create and manage master work shift data for your organization')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -47,9 +50,9 @@ export const ShiftSettings = () => {
         <TabsContent value="assignments" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Penugasan Shift Karyawan</CardTitle>
+              <CardTitle>{t('shiftSettings.employeeAssignment.title', 'Employee Shift Assignment')}</CardTitle>
               <CardDescription>
-                Tetapkan karyawan ke shift kerja yang sesuai
+                {t('shiftSettings.employeeAssignment.description', 'Assign employees to appropriate work shifts')}
               </CardDescription>
             </CardHeader>
             <CardContent>

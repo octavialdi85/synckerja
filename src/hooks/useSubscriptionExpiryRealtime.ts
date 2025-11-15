@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
+import { logger } from '@/config/logger';
 
 /**
  * Hook to setup realtime subscription for organization_subscriptions table
@@ -30,9 +31,7 @@ export const useSubscriptionExpiryRealtime = () => {
     if (previousOrgIdRef.current && previousOrgIdRef.current !== organizationId) {
       const oldChannelName = `subscription-expiry-realtime-${previousOrgIdRef.current}`;
       if (channelRef.current) {
-        if (import.meta.env.DEV) {
-          console.log('🔌 Cleaning up realtime subscription for previous org:', previousOrgIdRef.current);
-        }
+        logger.realtime('🔌 Cleaning up realtime subscription for previous org:', previousOrgIdRef.current);
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
@@ -72,9 +71,7 @@ export const useSubscriptionExpiryRealtime = () => {
             return;
           }
 
-          if (import.meta.env.DEV) {
-            console.log('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
-          }
+          logger.realtime('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
           
           // OPTIMIZED: Invalidate using standardized query key (shared by useOptimizedSubscription and useSubscriptionExpiry)
           // Use refetchType: 'none' to let components decide when to refetch (lazy refetch)
@@ -83,25 +80,17 @@ export const useSubscriptionExpiryRealtime = () => {
             queryKey: optimizedQueryKeys.subscription.status(organizationId), // Standardized query key
             refetchType: 'none' // Lazy refetch - components will refetch when needed
           }).then(() => {
-            if (import.meta.env.DEV) {
-              console.log('✅ Subscription cache invalidated for org:', organizationId, '(lazy refetch)');
-            }
+            logger.realtime('✅ Subscription cache invalidated for org:', organizationId, '(lazy refetch)');
           }).catch((error) => {
-            if (import.meta.env.DEV) {
-              console.warn('⚠️ Error invalidating subscription cache:', error);
-            }
+            console.warn('⚠️ Error invalidating subscription cache:', error);
           });
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (import.meta.env.DEV) {
-            console.log('✅ Subscribed to subscription expiry realtime for org:', organizationId);
-          }
+          logger.realtime('✅ Subscribed to subscription expiry realtime for org:', organizationId);
         } else if (status === 'CHANNEL_ERROR') {
-          if (import.meta.env.DEV) {
-            console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
-          }
+          console.error('❌ Error subscribing to subscription expiry realtime for org:', organizationId);
         }
       });
 
@@ -111,9 +100,7 @@ export const useSubscriptionExpiryRealtime = () => {
     // Cleanup on unmount or organization change
     return () => {
       if (channelRef.current && previousOrgIdRef.current === organizationId) {
-        if (import.meta.env.DEV) {
-          console.log('🔌 Unsubscribing from subscription expiry realtime for org:', organizationId);
-        }
+        logger.realtime('🔌 Unsubscribing from subscription expiry realtime for org:', organizationId);
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }

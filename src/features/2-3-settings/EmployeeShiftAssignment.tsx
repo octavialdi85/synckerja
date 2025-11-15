@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/features/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
 interface Employee {
   id: string;
@@ -36,6 +39,8 @@ interface EmployeeShift {
 }
 
 export const EmployeeShiftAssignment = () => {
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === 'id' ? id : enUS;
   const [assignments, setAssignments] = useState<EmployeeShift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -104,8 +109,8 @@ export const EmployeeShiftAssignment = () => {
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
-        title: "Error",
-        description: "Gagal memuat data",
+        title: t('common.error', 'Error'),
+        description: t('employeeShiftAssignment.error.loadFailed', 'Failed to load data'),
         variant: "destructive"
       });
     } finally {
@@ -136,8 +141,8 @@ export const EmployeeShiftAssignment = () => {
 
       if (!profile?.active_organization_id) {
         toast({
-          title: "Error",
-          description: "Organisasi tidak ditemukan",
+          title: t('common.error', 'Error'),
+          description: t('employeeShiftAssignment.error.organizationNotFound', 'Organization not found'),
           variant: "destructive"
         });
         return;
@@ -159,8 +164,8 @@ export const EmployeeShiftAssignment = () => {
         if (error) throw error;
         
         toast({
-          title: "Berhasil",
-          description: "Penugasan shift berhasil diperbarui"
+          title: t('common.success', 'Success'),
+          description: t('employeeShiftAssignment.success.updated', 'Shift assignment updated successfully')
         });
       } else {
         // Create new assignment
@@ -171,8 +176,8 @@ export const EmployeeShiftAssignment = () => {
         if (error) throw error;
         
         toast({
-          title: "Berhasil",
-          description: "Penugasan shift berhasil dibuat"
+          title: t('common.success', 'Success'),
+          description: t('employeeShiftAssignment.success.created', 'Shift assignment created successfully')
         });
       }
 
@@ -182,8 +187,8 @@ export const EmployeeShiftAssignment = () => {
     } catch (error) {
       console.error('Error saving assignment:', error);
       toast({
-        title: "Error",
-        description: "Gagal menyimpan penugasan shift",
+        title: t('common.error', 'Error'),
+        description: t('employeeShiftAssignment.error.saveFailed', 'Failed to save shift assignment'),
         variant: "destructive"
       });
     }
@@ -202,7 +207,7 @@ export const EmployeeShiftAssignment = () => {
   };
 
   const handleDelete = async (assignmentId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus penugasan shift ini?')) return;
+    if (!confirm(t('employeeShiftAssignment.confirmDelete', 'Are you sure you want to delete this shift assignment?'))) return;
 
     try {
       const { error } = await supabase
@@ -213,16 +218,16 @@ export const EmployeeShiftAssignment = () => {
       if (error) throw error;
       
       toast({
-        title: "Berhasil",
-        description: "Penugasan shift berhasil dihapus"
+        title: t('common.success', 'Success'),
+        description: t('employeeShiftAssignment.success.deleted', 'Shift assignment deleted successfully')
       });
       
       fetchData();
     } catch (error) {
       console.error('Error deleting assignment:', error);
       toast({
-        title: "Error",
-        description: "Gagal menghapus penugasan shift",
+        title: t('common.error', 'Error'),
+        description: t('employeeShiftAssignment.error.deleteFailed', 'Failed to delete shift assignment'),
         variant: "destructive"
       });
     }
@@ -245,13 +250,13 @@ export const EmployeeShiftAssignment = () => {
           const validDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
           
           if (!isNaN(validDate.getTime())) {
-            return validDate.toLocaleDateString('id-ID');
+            return format(validDate, 'PP', { locale: dateLocale });
           }
         }
         return dateString; // Return original string if all parsing fails
       }
       
-      return date.toLocaleDateString('id-ID');
+      return format(date, 'PP', { locale: dateLocale });
     } catch (error) {
       console.error('Error formatting date:', error, 'for date:', dateString);
       return dateString;
@@ -267,7 +272,7 @@ export const EmployeeShiftAssignment = () => {
   );
 
   if (loading) {
-    return <div className="text-center py-8">Memuat data penugasan shift...</div>;
+    return <div className="text-center py-8">{t('employeeShiftAssignment.loading', 'Loading shift assignment data...')}</div>;
   }
 
   return (
@@ -277,7 +282,7 @@ export const EmployeeShiftAssignment = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Cari karyawan atau shift..."
+              placeholder={t('employeeShiftAssignment.searchPlaceholder', 'Search employee or shift...')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -289,29 +294,29 @@ export const EmployeeShiftAssignment = () => {
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              Tugaskan Shift
+              {t('employeeShiftAssignment.button.assignShift', 'Assign Shift')}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {editingAssignment ? 'Edit Penugasan Shift' : 'Tugaskan Shift Baru'}
+                {editingAssignment ? t('employeeShiftAssignment.form.editTitle', 'Edit Shift Assignment') : t('employeeShiftAssignment.form.addTitle', 'Assign New Shift')}
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-600">
-                Pilih karyawan, tentukan shift, dan setel periode berlakunya penugasan.
+                {t('employeeShiftAssignment.form.description', 'Select employee, determine shift, and set the effective period of the assignment.')}
               </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="employee_id">Karyawan</Label>
+                <Label htmlFor="employee_id">{t('employeeShiftAssignment.form.employee', 'Employee')}</Label>
                 <Select
                   value={formData.employee_id}
                   onValueChange={(value) => setFormData({ ...formData, employee_id: value })}
                   required
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih karyawan" />
+                    <SelectValue placeholder={t('employeeShiftAssignment.form.selectEmployee', 'Select employee')} />
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((employee) => (
@@ -324,14 +329,14 @@ export const EmployeeShiftAssignment = () => {
               </div>
               
               <div>
-                <Label htmlFor="shift_id">Shift</Label>
+                <Label htmlFor="shift_id">{t('employeeShiftAssignment.form.shift', 'Shift')}</Label>
                 <Select
                   value={formData.shift_id}
                   onValueChange={(value) => setFormData({ ...formData, shift_id: value })}
                   required
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih shift" />
+                    <SelectValue placeholder={t('employeeShiftAssignment.form.selectShift', 'Select shift')} />
                   </SelectTrigger>
                   <SelectContent>
                     {shifts.map((shift) => (
@@ -344,7 +349,7 @@ export const EmployeeShiftAssignment = () => {
               </div>
               
               <div>
-                <Label htmlFor="effective_from_date">Tanggal Mulai Berlaku</Label>
+                <Label htmlFor="effective_from_date">{t('employeeShiftAssignment.form.effectiveFromDate', 'Effective Start Date')}</Label>
                 <Input
                   id="effective_from_date"
                   type="date"
@@ -355,7 +360,7 @@ export const EmployeeShiftAssignment = () => {
               </div>
               
               <div>
-                <Label htmlFor="effective_to_date">Tanggal Berakhir (Opsional)</Label>
+                <Label htmlFor="effective_to_date">{t('employeeShiftAssignment.form.effectiveToDate', 'End Date (Optional)')}</Label>
                 <Input
                   id="effective_to_date"
                   type="date"
@@ -370,13 +375,13 @@ export const EmployeeShiftAssignment = () => {
                   checked={formData.is_active}
                   onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
                 />
-                <Label htmlFor="is_active">Aktif</Label>
+                <Label htmlFor="is_active">{t('employeeShiftAssignment.form.active', 'Active')}</Label>
               </div>
               
               <div className="flex gap-2 pt-4">
                 <Button type="submit" className="flex-1">
                   <Save className="h-4 w-4 mr-2" />
-                  {editingAssignment ? 'Update' : 'Simpan'}
+                  {editingAssignment ? t('common.update', 'Update') : t('common.save', 'Save')}
                 </Button>
                 <Button 
                   type="button" 
@@ -384,7 +389,7 @@ export const EmployeeShiftAssignment = () => {
                   onClick={() => setShowCreateDialog(false)}
                 >
                   <X className="h-4 w-4 mr-2" />
-                  Batal
+                  {t('common.cancel', 'Cancel')}
                 </Button>
               </div>
             </form>
@@ -397,15 +402,15 @@ export const EmployeeShiftAssignment = () => {
           <CardContent className="text-center py-8">
             <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'Tidak ada hasil pencarian' : 'Belum ada penugasan shift'}
+              {searchTerm ? t('employeeShiftAssignment.emptyState.noSearchResults', 'No search results') : t('employeeShiftAssignment.emptyState.noAssignments', 'No shift assignments yet')}
             </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm ? 'Coba kata kunci pencarian yang berbeda' : 'Mulai dengan menugaskan karyawan ke shift'}
+              {searchTerm ? t('employeeShiftAssignment.emptyState.tryDifferentKeywords', 'Try different search keywords') : t('employeeShiftAssignment.emptyState.description', 'Start by assigning employees to shifts')}
             </p>
             {!searchTerm && (
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Tugaskan Shift
+                {t('employeeShiftAssignment.button.assignShift', 'Assign Shift')}
               </Button>
             )}
           </CardContent>
@@ -425,13 +430,13 @@ export const EmployeeShiftAssignment = () => {
                         {assignment.employees.full_name}
                       </CardTitle>
                       <p className="text-sm text-gray-600">
-                        ID: {assignment.employees.employee_id}
+                        {t('employeeShiftAssignment.card.employeeId', 'ID')}: {assignment.employees.employee_id}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={assignment.is_active ? "default" : "secondary"}>
-                      {assignment.is_active ? 'Aktif' : 'Nonaktif'}
+                      {assignment.is_active ? t('employeeShiftAssignment.status.active', 'Active') : t('employeeShiftAssignment.status.inactive', 'Inactive')}
                     </Badge>
                     <Button
                       variant="outline"
@@ -453,14 +458,14 @@ export const EmployeeShiftAssignment = () => {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-600">Shift</p>
+                    <p className="text-gray-600">{t('employeeShiftAssignment.card.shift', 'Shift')}</p>
                     <p className="font-medium">{assignment.shifts.name}</p>
                     <p className="text-gray-500">
                       {formatTime(assignment.shifts.start_time)} - {formatTime(assignment.shifts.end_time)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Tanggal Berlaku</p>
+                    <p className="text-gray-600">{t('employeeShiftAssignment.card.effectiveDate', 'Effective Date')}</p>
                     <p className="font-medium">
                       {formatDate(assignment.effective_from_date)}
                       {assignment.effective_to_date && (
@@ -469,9 +474,9 @@ export const EmployeeShiftAssignment = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Status</p>
+                    <p className="text-gray-600">{t('employeeShiftAssignment.card.status', 'Status')}</p>
                     <p className="font-medium">
-                      {assignment.is_active ? 'Aktif' : 'Nonaktif'}
+                      {assignment.is_active ? t('employeeShiftAssignment.status.active', 'Active') : t('employeeShiftAssignment.status.inactive', 'Inactive')}
                     </p>
                   </div>
                 </div>

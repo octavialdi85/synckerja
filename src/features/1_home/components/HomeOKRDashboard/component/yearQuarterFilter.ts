@@ -1,5 +1,6 @@
 import type { YearQuarterSelection } from './FiturTimePeriod';
 import type { OkrCycle } from '@/types/okr';
+import { logger } from '@/config/logger';
 
 /**
  * Filter OKR cycles based on year-quarter selection
@@ -48,7 +49,7 @@ const computeFilter = (cycles: OkrCycle[], selection: YearQuarterSelection): str
                    logCount < MAX_LOGS_PER_SESSION; // Limit total logs
 
   if (shouldLog) {
-    console.log('🔍 YearQuarter Filter:', {
+    logger.debug('🔍 YearQuarter Filter:', {
       cycles: cycles.length,
       hasSelection: Object.values(selection.years).some(y => y.selected || Object.values(y.quarters).some(Boolean))
     });

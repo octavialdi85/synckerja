@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 declare global {
   interface Window {
@@ -35,6 +37,7 @@ interface PaymentParams {
 }
 
 export const useMidtransPayment = () => {
+  const { t } = useAppTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
@@ -186,7 +189,7 @@ export const useMidtransPayment = () => {
   }
 ]
           setIsPopupOpen(false);
-          toast.success('Pembayaran berhasil! Subscription Anda sedang diaktifkan...');
+          toast.success(t('subscription.plans.success.paymentSuccess', 'Payment successful! Your subscription is being activated...'));
           
           localStorage.setItem('lastOrderId', data.order_id);
           
@@ -197,7 +200,7 @@ export const useMidtransPayment = () => {
         onPending: (result: any) => {
           console.log('⏳ Payment pending:', result);
           setIsPopupOpen(false);
-          toast.info('Pembayaran sedang diproses...');
+          toast.info(t('subscription.plans.info.paymentProcessing', 'Payment is being processed...'));
           
           localStorage.setItem('lastOrderId', data.order_id);
           
@@ -208,13 +211,13 @@ export const useMidtransPayment = () => {
         onError: (result: any) => {
           console.error('❌ Payment error:', result);
           setIsPopupOpen(false);
-          toast.error('Pembayaran gagal. Silakan coba lagi.');
+          toast.error(t('subscription.plans.error.paymentFailed', 'Payment failed. Please try again.'));
           window.location.href = fallbackRedirectUrl;
         },
         onClose: () => {
           console.log('🔒 Payment popup closed');
           setIsPopupOpen(false);
-          toast.info('Pembayaran dibatalkan');
+          toast.info(t('subscription.plans.info.paymentCancelled', 'Payment cancelled'));
           window.location.href = fallbackRedirectUrl;
         }
       };
@@ -232,15 +235,15 @@ export const useMidtransPayment = () => {
 
     } catch (error: any) {
       console.error('Payment initiation error:', error);
-      const errorMessage = error.message || 'Gagal memulai pembayaran';
+      const errorMessage = error.message || t('subscription.plans.error.paymentStartFailed', 'Failed to start payment');
       
       // Handle specific error cases
       if (errorMessage.includes('temporary error') || errorMessage.includes('network')) {
-        toast.error('Terjadi gangguan sementara. Silakan coba lagi dalam beberapa menit.');
+        toast.error(t('subscription.plans.error.temporaryError', 'Temporary issue occurred. Please try again in a few minutes.'));
       } else if (errorMessage.includes('payment method')) {
-        toast.error('Metode pembayaran tidak tersedia. Silakan pilih metode pembayaran lain.');
+        toast.error(t('subscription.plans.error.paymentMethodUnavailable', 'Payment method unavailable. Please select another payment method.'));
       } else {
-        toast.error('Pembayaran tidak dapat diproses. Silakan hubungi customer service untuk bantuan.');
+        toast.error(applyVariables(t('subscription.plans.error.paymentStartFailed', 'Failed to start payment: {{message}}'), { message: errorMessage }));
       }
     } finally {
       setIsLoading(false);

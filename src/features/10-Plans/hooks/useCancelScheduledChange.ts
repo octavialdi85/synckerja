@@ -2,8 +2,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export const useCancelScheduledChange = () => {
+  const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
 
@@ -28,7 +31,7 @@ export const useCancelScheduledChange = () => {
         throw error;
       }
 
-      return { message: 'Perubahan terjadwal berhasil dibatalkan' };
+      return { message: t('subscription.plans.success.cancelled', 'Scheduled change cancelled successfully') };
     },
     onSuccess: (data) => {
       toast.success(data.message);
@@ -37,7 +40,7 @@ export const useCancelScheduledChange = () => {
     },
     onError: (error: any) => {
       console.error('❌ Error cancelling scheduled change:', error);
-      toast.error('Gagal membatalkan perubahan: ' + (error.message || 'Unknown error'));
+      toast.error(applyVariables(t('subscription.plans.error.cancelFailed', 'Failed to cancel change: {{message}}'), { message: error.message || 'Unknown error' }));
     },
   });
 };

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentUser } from './useCurrentUser';
 import { useCurrentOrg } from './useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export const useCurrentEmployee = () => {
   const { user } = useCurrentUser();
@@ -12,11 +13,11 @@ export const useCurrentEmployee = () => {
     queryKey: ['current-employee', user?.id, organizationId],
     queryFn: async () => {
       if (!user?.id || !organizationId) {
-        console.log('useCurrentEmployee: Missing user or organization ID - user:', user?.id, 'org:', organizationId);
+        logger.userData('useCurrentEmployee: Missing user or organization ID - user:', user?.id, 'org:', organizationId);
         return null;
       }
 
-      console.log('useCurrentEmployee: Fetching employee for user:', user.id, 'org:', organizationId);
+      logger.userData('useCurrentEmployee: Fetching employee for user:', user.id, 'org:', organizationId);
 
       const { data, error } = await supabase
         .from('employees')
@@ -37,7 +38,7 @@ export const useCurrentEmployee = () => {
         return null;
       }
 
-      console.log('useCurrentEmployee: Employee data fetched successfully:', data?.id);
+      logger.userData('useCurrentEmployee: Employee data fetched successfully:', data?.id);
       return data;
     },
     enabled: !!user?.id && !!organizationId,

@@ -2,6 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface SchedulePlanChangeParams {
   current_plan_id: string;
@@ -15,6 +17,7 @@ interface SchedulePlanChangeParams {
 }
 
 export const useSchedulePlanChange = () => {
+  const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
 
   return useMutation({
@@ -43,14 +46,14 @@ export const useSchedulePlanChange = () => {
         throw error;
       }
 
-      return { message: 'Perubahan plan dijadwalkan pada akhir periode berjalan.' };
+      return { message: t('subscription.plans.success.scheduled', 'Plan change scheduled for end of current period.') };
     },
     onSuccess: (res) => {
       toast.success(res.message);
       // Optionally refresh subscription queries
     },
     onError: (err: any) => {
-      toast.error('Gagal menjadwalkan perubahan plan: ' + (err.message || 'Unknown error'));
+      toast.error(applyVariables(t('subscription.plans.error.scheduleFailed', 'Failed to schedule plan change: {{message}}'), { message: err.message || 'Unknown error' }));
     }
   });
 };

@@ -9,8 +9,10 @@ import { Badge } from '@/features/ui/badge';
 import { Shield, Camera, Clock, AlertTriangle, Save } from 'lucide-react';
 import { useWorkScheduleSettings } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useWorkScheduleSettings';
 import { Alert, AlertDescription } from '@/features/ui/alert';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const AttendanceRulesSettings = () => {
+  const { t } = useAppTranslation();
   const { settings: schedules } = useWorkScheduleSettings();
   const [formData, setFormData] = useState({
     work_schedule_id: '',
@@ -42,8 +44,8 @@ export const AttendanceRulesSettings = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Aturan Absensi</h2>
-          <p className="text-gray-600 mt-1">Konfigurasi aturan dan validasi untuk sistem absensi</p>
+          <h2 className="text-2xl font-semibold text-gray-900">{t('attendanceRules.title', 'Attendance Rules')}</h2>
+          <p className="text-gray-600 mt-1">{t('attendanceRules.description', 'Configure rules and validation for the attendance system')}</p>
         </div>
         <Button 
           onClick={handleSave}
@@ -51,7 +53,7 @@ export const AttendanceRulesSettings = () => {
           className="bg-green-600 hover:bg-green-700"
         >
           <Save className="h-4 w-4 mr-2" />
-          {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
+          {saving ? t('attendanceRules.saving', 'Saving...') : t('attendanceRules.saveSettings', 'Save Settings')}
         </Button>
       </div>
 
@@ -61,21 +63,21 @@ export const AttendanceRulesSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Jadwal Kerja Default
+              {t('attendanceRules.defaultWorkSchedule.title', 'Default Work Schedule')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="work_schedule">Pilih Jadwal Kerja</Label>
+              <Label htmlFor="work_schedule">{t('attendanceRules.defaultWorkSchedule.selectLabel', 'Select Work Schedule')}</Label>
               <Select 
                 value={formData.work_schedule_id} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, work_schedule_id: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pilih jadwal kerja default" />
+                  <SelectValue placeholder={t('attendanceRules.defaultWorkSchedule.placeholder', 'Select default work schedule')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="no-schedule">Tanpa jadwal khusus</SelectItem>
+                  <SelectItem value="no-schedule">{t('attendanceRules.defaultWorkSchedule.noSchedule', 'No special schedule')}</SelectItem>
                   {schedules.map((schedule) => (
                     <SelectItem key={schedule.id} value={schedule.id}>
                       {schedule.name} ({schedule.start_time} - {schedule.end_time})
@@ -84,7 +86,7 @@ export const AttendanceRulesSettings = () => {
                 </SelectContent>
               </Select>
               <p className="text-sm text-gray-500 mt-1">
-                Jadwal ini akan digunakan sebagai default untuk validasi absensi
+                {t('attendanceRules.defaultWorkSchedule.description', 'This schedule will be used as default for attendance validation')}
               </p>
             </div>
           </CardContent>
@@ -95,16 +97,16 @@ export const AttendanceRulesSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />
-              Aturan Hari Libur & Weekend
+              {t('attendanceRules.holidayWeekend.title', 'Holiday & Weekend Rules')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Terapkan Hari Libur Nasional</Label>
+                  <Label>{t('attendanceRules.holidayWeekend.applyNationalHolidays', 'Apply National Holidays')}</Label>
                   <p className="text-sm text-gray-500">
-                    Sistem akan mengecualikan hari libur nasional dari kewajiban absensi
+                    {t('attendanceRules.holidayWeekend.applyNationalHolidaysDescription', 'System will exclude national holidays from attendance requirements')}
                   </p>
                 </div>
                 <Switch
@@ -115,9 +117,9 @@ export const AttendanceRulesSettings = () => {
 
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Izinkan Absensi Weekend</Label>
+                  <Label>{t('attendanceRules.holidayWeekend.allowWeekendAttendance', 'Allow Weekend Attendance')}</Label>
                   <p className="text-sm text-gray-500">
-                    Karyawan dapat melakukan absensi pada hari Sabtu dan Minggu
+                    {t('attendanceRules.holidayWeekend.allowWeekendAttendanceDescription', 'Employees can perform attendance on Saturday and Sunday')}
                   </p>
                 </div>
                 <Switch
@@ -134,16 +136,16 @@ export const AttendanceRulesSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Persyaratan Foto
+              {t('attendanceRules.photoRequirements.title', 'Photo Requirements')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Wajib Foto saat Check-in</Label>
+                  <Label>{t('attendanceRules.photoRequirements.requirePhotoCheckin', 'Require Photo on Check-in')}</Label>
                   <p className="text-sm text-gray-500">
-                    Karyawan harus mengambil foto selfie saat absensi masuk
+                    {t('attendanceRules.photoRequirements.requirePhotoCheckinDescription', 'Employees must take a selfie photo when checking in')}
                   </p>
                 </div>
                 <Switch
@@ -154,9 +156,9 @@ export const AttendanceRulesSettings = () => {
 
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Wajib Foto saat Check-out</Label>
+                  <Label>{t('attendanceRules.photoRequirements.requirePhotoCheckout', 'Require Photo on Check-out')}</Label>
                   <p className="text-sm text-gray-500">
-                    Karyawan harus mengambil foto selfie saat absensi pulang
+                    {t('attendanceRules.photoRequirements.requirePhotoCheckoutDescription', 'Employees must take a selfie photo when checking out')}
                   </p>
                 </div>
                 <Switch
@@ -173,15 +175,15 @@ export const AttendanceRulesSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Auto Check-out
+              {t('attendanceRules.autoCheckout.title', 'Auto Check-out')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <Label>Aktifkan Auto Check-out</Label>
+                <Label>{t('attendanceRules.autoCheckout.enable', 'Enable Auto Check-out')}</Label>
                 <p className="text-sm text-gray-500">
-                  Sistem otomatis akan melakukan check-out pada jam yang ditentukan
+                  {t('attendanceRules.autoCheckout.enableDescription', 'System will automatically perform check-out at the specified time')}
                 </p>
               </div>
               <Switch
@@ -192,7 +194,7 @@ export const AttendanceRulesSettings = () => {
 
             {formData.auto_checkout_enabled && (
               <div>
-                <Label htmlFor="auto_checkout_time">Jam Auto Check-out</Label>
+                <Label htmlFor="auto_checkout_time">{t('attendanceRules.autoCheckout.time', 'Auto Check-out Time')}</Label>
                 <Input
                   id="auto_checkout_time"
                   type="time"
@@ -210,13 +212,13 @@ export const AttendanceRulesSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Aturan Lokasi
+              {t('attendanceRules.locationRules.title', 'Location Rules')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="max_radius">Radius Maksimal (meter)</Label>
+                <Label htmlFor="max_radius">{t('attendanceRules.locationRules.maxRadius', 'Maximum Radius (meters)')}</Label>
                 <Input
                   id="max_radius"
                   type="number"
@@ -228,7 +230,7 @@ export const AttendanceRulesSettings = () => {
               </div>
 
               <div>
-                <Label htmlFor="gps_accuracy">Threshold Akurasi GPS (meter)</Label>
+                <Label htmlFor="gps_accuracy">{t('attendanceRules.locationRules.gpsAccuracyThreshold', 'GPS Accuracy Threshold (meters)')}</Label>
                 <Input
                   id="gps_accuracy"
                   type="number"
@@ -243,9 +245,9 @@ export const AttendanceRulesSettings = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Wajib Akurasi GPS</Label>
+                  <Label>{t('attendanceRules.locationRules.requireGpsAccuracy', 'Require GPS Accuracy')}</Label>
                   <p className="text-sm text-gray-500">
-                    Tolak absensi jika akurasi GPS tidak memenuhi threshold
+                    {t('attendanceRules.locationRules.requireGpsAccuracyDescription', 'Reject attendance if GPS accuracy does not meet threshold')}
                   </p>
                 </div>
                 <Switch
@@ -256,9 +258,9 @@ export const AttendanceRulesSettings = () => {
 
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label>Izinkan Lokasi Manual</Label>
+                  <Label>{t('attendanceRules.locationRules.allowManualLocation', 'Allow Manual Location')}</Label>
                   <p className="text-sm text-gray-500">
-                    Karyawan dapat memasukkan koordinat lokasi secara manual
+                    {t('attendanceRules.locationRules.allowManualLocationDescription', 'Employees can enter location coordinates manually')}
                   </p>
                 </div>
                 <Switch
@@ -275,15 +277,15 @@ export const AttendanceRulesSettings = () => {
           <Shield className="h-4 w-4" />
           <AlertDescription>
             <div className="space-y-2">
-              <p><strong>Status Konfigurasi Saat Ini:</strong></p>
+              <p><strong>{t('attendanceRules.status.currentConfiguration', 'Current Configuration Status:')}</strong></p>
               <div className="flex flex-wrap gap-2">
-                {formData.enforce_national_holidays && <Badge variant="secondary">Hari Libur Nasional</Badge>}
-                {formData.allow_weekend_attendance && <Badge variant="secondary">Weekend Allowed</Badge>}
-                {formData.require_photo_checkin && <Badge variant="secondary">Foto Check-in</Badge>}
-                {formData.require_photo_checkout && <Badge variant="secondary">Foto Check-out</Badge>}
-                {formData.auto_checkout_enabled && <Badge variant="secondary">Auto Check-out</Badge>}
-                {formData.require_gps_accuracy && <Badge variant="secondary">GPS Accuracy</Badge>}
-                {formData.allow_manual_location && <Badge variant="secondary">Manual Location</Badge>}
+                {formData.enforce_national_holidays && <Badge variant="secondary">{t('attendanceRules.status.nationalHolidays', 'National Holidays')}</Badge>}
+                {formData.allow_weekend_attendance && <Badge variant="secondary">{t('attendanceRules.status.weekendAllowed', 'Weekend Allowed')}</Badge>}
+                {formData.require_photo_checkin && <Badge variant="secondary">{t('attendanceRules.status.photoCheckin', 'Photo Check-in')}</Badge>}
+                {formData.require_photo_checkout && <Badge variant="secondary">{t('attendanceRules.status.photoCheckout', 'Photo Check-out')}</Badge>}
+                {formData.auto_checkout_enabled && <Badge variant="secondary">{t('attendanceRules.status.autoCheckout', 'Auto Check-out')}</Badge>}
+                {formData.require_gps_accuracy && <Badge variant="secondary">{t('attendanceRules.status.gpsAccuracy', 'GPS Accuracy')}</Badge>}
+                {formData.allow_manual_location && <Badge variant="secondary">{t('attendanceRules.status.manualLocation', 'Manual Location')}</Badge>}
               </div>
             </div>
           </AlertDescription>

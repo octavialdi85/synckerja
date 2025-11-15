@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export interface AssignmentRow {
   id: string;
@@ -135,7 +136,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
         if (!error && data) {
           if (import.meta.env.DEV) {
-            console.log(
+            logger.query(
               '📚 History batch fetch (optimized)',
               `steps=${stepIds.length} subSteps=${subStepIds.length} returned=${data?.length || 0}`
             );
@@ -161,26 +162,26 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
     // Fallback to old API (backward compatible)
     try {
-      const { data, error } = await supabase.rpc('get_task_step_history_batch', {
-        p_task_step_ids: stepIds.length ? stepIds : null,
-        p_sub_step_ids: subStepIds.length ? subStepIds : null,
-        p_limit: limit,
+    const { data, error } = await supabase.rpc('get_task_step_history_batch', {
+      p_task_step_ids: stepIds.length ? stepIds : null,
+      p_sub_step_ids: subStepIds.length ? subStepIds : null,
+      p_limit: limit,
         p_offset: 0,
-      });
+    });
 
-      if (error) {
-        console.error('❌ Failed to fetch task_step_history batch', error);
-        throw error;
-      }
+    if (error) {
+      console.error('❌ Failed to fetch task_step_history batch', error);
+      throw error;
+    }
 
-      if (import.meta.env.DEV) {
-        console.log(
-          '📚 History batch fetch (legacy)',
-          `steps=${stepIds.length} subSteps=${subStepIds.length} returned=${data?.length || 0}`
-        );
-      }
+    if (import.meta.env.DEV) {
+      logger.query(
+        '📚 History batch fetch (legacy)',
+        `steps=${stepIds.length} subSteps=${subStepIds.length} returned=${data?.length || 0}`
+      );
+    }
 
-      return data || [];
+    return data || [];
     } catch (error) {
       console.error('❌ History fetch failed with both APIs:', error);
       throw error;
@@ -244,7 +245,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     );
 
     if (import.meta.env.DEV) {
-      console.log(
+      logger.query(
         '📚 History batch fetch (large dataset)',
         `steps=${stepIds.length} subSteps=${subStepIds.length} returned=${uniqueResults.length}`
       );
@@ -339,7 +340,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .in('parent_step_id', assignedStepIds);
 
           allSubSteps = allSubStepsData || [];
-          console.log(`📋 Found ${allSubSteps.length} total sub-steps for ${assignedStepIds.length} assigned steps`);
+          logger.query(`📋 Found ${allSubSteps.length} total sub-steps for ${assignedStepIds.length} assigned steps`);
 
           if (allSubSteps.length > 0) {
             // Build sub-step details map
@@ -494,7 +495,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           // Combine: step assignments (filtered) + sub-step rows (all with due_date)
           const allMapped = [...filteredStepMapped, ...subStepMappedWithDueDate];
           setRows(allMapped);
-          console.log(`✅ Loaded ${filteredStepMapped.length} step assignments and ${subStepMappedWithDueDate.length} sub-step rows (including unassigned)`);
+          logger.query(`✅ Loaded ${filteredStepMapped.length} step assignments and ${subStepMappedWithDueDate.length} sub-step rows (including unassigned)`);
           
           // Extract step IDs for next steps...
           var allStepIdsFromAssignments = [...new Set(allMapped.map((r: any) => r.step?.id).filter(Boolean))] as string[];
@@ -512,7 +513,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         } else {
           // No sub-steps, use step assignments only
           setRows(stepMapped);
-          console.log(`✅ Loaded ${stepMapped.length} step assignments (no sub-steps)`);
+          logger.query(`✅ Loaded ${stepMapped.length} step assignments (no sub-steps)`);
           
           // Extract step IDs and completed step IDs from assignments (REUSE DATA)
           var allStepIdsFromAssignments = [...new Set(stepMapped.map((r: any) => r.step?.id).filter(Boolean))] as string[];
@@ -543,12 +544,43 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             : Promise.resolve({ data: [], error: null }),
           
           // Get step blockers (use step IDs from assignments - REUSE DATA)
+          // Use batch processing to avoid 500 error with large arrays
           allStepIdsFromAssignments.length > 0
-            ? supabase
-                .from('task_step_history')
-                .select('*')
-                .eq('action_type', 'blocker_added')
-                .in('task_step_id', allStepIdsFromAssignments)
+            ? (async () => {
+                // Split into smaller batches to avoid query timeout/error
+                const BLOCKER_BATCH_SIZE = 20; // Smaller batch size for blockers
+                const batches: string[][] = [];
+                for (let i = 0; i < allStepIdsFromAssignments.length; i += BLOCKER_BATCH_SIZE) {
+                  batches.push(allStepIdsFromAssignments.slice(i, i + BLOCKER_BATCH_SIZE));
+                }
+                
+                // Process batches sequentially to avoid overwhelming the database
+                const allBlockers: any[] = [];
+                for (const batch of batches) {
+                  try {
+                    const { data, error } = await supabase
+                      .from('task_step_history')
+                      .select('*')
+                      .eq('action_type', 'blocker_added')
+                      .in('task_step_id', batch);
+                    
+                    if (error) {
+                      console.error('❌ Error fetching step blockers batch:', error);
+                      // Continue with other batches even if one fails
+                      continue;
+                    }
+                    
+                    if (data) {
+                      allBlockers.push(...data);
+                    }
+                  } catch (err) {
+                    console.error('❌ Exception fetching step blockers batch:', err);
+                    // Continue with other batches
+                  }
+                }
+                
+                return { data: allBlockers, error: null };
+              })()
             : Promise.resolve({ data: [], error: null })
         ]);
 
@@ -562,7 +594,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
               completionDateMap[entry.task_step_id] = entry.created_at;
             }
           });
-          console.log(`📅 Loaded completion dates for ${Object.keys(completionDateMap).length} steps`);
+          logger.query(`📅 Loaded completion dates for ${Object.keys(completionDateMap).length} steps`);
         }
         setCompletionDateMap(completionDateMap);
 
@@ -570,7 +602,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         const unresolvedStepBlockers = (stepBlockersResult.data || []).filter(
           (b: any) => b.is_resolved === null || b.is_resolved === false
         );
-        console.log(`📊 Step blockers: ${(stepBlockersResult.data || []).length} total, ${unresolvedStepBlockers.length} unresolved`);
+        logger.query(`📊 Step blockers: ${(stepBlockersResult.data || []).length} total, ${unresolvedStepBlockers.length} unresolved`);
 
         // STEP 3: PARALLEL - Fetch step IDs and sub-step IDs in parallel
         let stepIdList: string[] = [];
@@ -585,7 +617,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .in('task_id', taskIdList);
           
           stepIdList = (stepIdsResult.data || []).map(s => s.id);
-          console.log(`📋 Found ${taskIdList.length} tasks, ${stepIdList.length} steps in organization`);
+          logger.query(`📋 Found ${taskIdList.length} tasks, ${stepIdList.length} steps in organization`);
           
           // Fetch sub-steps for all steps (we need complete data for history and blockers)
           if (stepIdList.length > 0) {
@@ -594,18 +626,48 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
               .select('id, parent_step_id')
               .in('parent_step_id', stepIdList);
             subStepIdList = (subStepsResult.data || []).map(s => s.id);
-            console.log(`📋 Found ${subStepIdList.length} sub-steps in organization`);
+            logger.query(`📋 Found ${subStepIdList.length} sub-steps in organization`);
           }
 
           // STEP 4: PARALLEL - Fetch sub-step blockers and history in parallel
           const [subStepBlockersResult, historyData] = await Promise.all([
-            // Get sub-step blockers
+            // Get sub-step blockers (with batch processing to avoid 500 error)
             subStepIdList.length > 0
-              ? supabase
-                  .from('task_step_history')
-                  .select('*')
-                  .eq('action_type', 'blocker_added')
-                  .in('task_steps_to_steps_id', subStepIdList)
+              ? (async () => {
+                  // Split into smaller batches to avoid query timeout/error
+                  const BLOCKER_BATCH_SIZE = 20; // Smaller batch size for blockers
+                  const batches: string[][] = [];
+                  for (let i = 0; i < subStepIdList.length; i += BLOCKER_BATCH_SIZE) {
+                    batches.push(subStepIdList.slice(i, i + BLOCKER_BATCH_SIZE));
+                  }
+                  
+                  // Process batches sequentially to avoid overwhelming the database
+                  const allBlockers: any[] = [];
+                  for (const batch of batches) {
+                    try {
+                      const { data, error } = await supabase
+                        .from('task_step_history')
+                        .select('*')
+                        .eq('action_type', 'blocker_added')
+                        .in('task_steps_to_steps_id', batch);
+                      
+                      if (error) {
+                        console.error('❌ Error fetching blockers batch:', error);
+                        // Continue with other batches even if one fails
+                        continue;
+                      }
+                      
+                      if (data) {
+                        allBlockers.push(...data);
+                      }
+                    } catch (err) {
+                      console.error('❌ Exception fetching blockers batch:', err);
+                      // Continue with other batches
+                    }
+                  }
+                  
+                  return { data: allBlockers, error: null };
+                })()
               : Promise.resolve({ data: [], error: null }),
             
             // Fetch history for steps and sub-steps via optimized RPC
@@ -617,7 +679,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             unresolvedSubStepBlockers = subStepBlockersResult.data.filter(
               (b: any) => b.is_resolved === null || b.is_resolved === false
             );
-            console.log(`📊 Sub-step blockers: ${subStepBlockersResult.data.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
+            logger.query(`📊 Sub-step blockers: ${subStepBlockersResult.data.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
           }
 
           // Process history
@@ -627,7 +689,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         // Combine all blockers
         const rawBlockers = [...unresolvedStepBlockers, ...unresolvedSubStepBlockers];
         rawBlockers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        console.log(`📊 Total unresolved blockers: ${rawBlockers.length}`);
+        logger.query(`📊 Total unresolved blockers: ${rawBlockers.length}`);
 
         // STEP 5: Collect IDs for enrichment
         const blockerStepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
@@ -660,8 +722,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         const subStepMap: Record<string, any> = {};
         (enrichmentStepsResult.data || []).forEach((s: any) => { stepMap[s.id] = s; });
         (enrichmentSubStepsResult.data || []).forEach((s: any) => { subStepMap[s.id] = s; });
-        console.log(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
-        console.log(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
+        logger.query(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
+        logger.query(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
 
         // Enrich blockers
         const enriched = rawBlockers.map((b: any) => {
@@ -676,7 +738,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             subStepTitle: sub?.title || null,
           };
         });
-        console.log(`✅ Enriched ${enriched.length} blockers with task/step info`);
+        logger.query(`✅ Enriched ${enriched.length} blockers with task/step info`);
         setBlockers(enriched);
 
         // Build blocker count and map by step

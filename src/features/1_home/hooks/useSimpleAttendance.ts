@@ -5,6 +5,7 @@ import { findNearestOfficeLocation } from '../utils/officeLocationUtils';
 import { hasOfficeLocations } from '../utils/officeLocationValidation';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
 
 export interface PhotoUploadResult {
   url: string;
@@ -54,7 +55,7 @@ export const useSimpleAttendance = () => {
     if (!employee?.id) return;
     
     const today = new Date().toISOString().split('T')[0];
-    console.log('🔍 Checking today attendance for date:', today);
+    logger.debug('🔍 Checking today attendance for date:', today);
     
     const { data: record, error } = await supabase
       .from('attendance_records')
@@ -63,7 +64,7 @@ export const useSimpleAttendance = () => {
       .eq('attendance_date', today)
       .maybeSingle();
 
-    console.log('📋 Today attendance status:', { record, error });
+    logger.debug('📋 Today attendance status:', { record, error });
 
     if (!error && record) {
       setHasCheckedIn(!!record.check_in_time);
@@ -71,14 +72,14 @@ export const useSimpleAttendance = () => {
       setLastCheckIn(record.check_in_time);
       setLastCheckOut(record.check_out_time);
       
-      console.log('📋 Local state updated:', {
+      logger.debug('📋 Local state updated:', {
         hasCheckedIn: !!record.check_in_time,
         hasCheckedOut: !!record.check_out_time,
         lastCheckIn: record.check_in_time,
         lastCheckOut: record.check_out_time
       });
     } else {
-      console.log('📋 No attendance record found for today');
+      logger.debug('📋 No attendance record found for today');
       setHasCheckedIn(false);
       setHasCheckedOut(false);
       setLastCheckIn(null);
@@ -98,7 +99,7 @@ export const useSimpleAttendance = () => {
       throw new Error('Employee ID not found');
     }
 
-    console.log('📸 Uploading', type.replace('_', '-'), 'photo...');
+    logger.debug('📸 Uploading', type.replace('_', '-'), 'photo...');
     
     // Convert base64 to blob
     const base64Data = imageDataUrl.split(',')[1];
@@ -115,7 +116,7 @@ export const useSimpleAttendance = () => {
     const fileName = `${type}_${timestamp}.jpg`;
     const filePath = `${employee.id}/${fileName}`;
 
-    console.log('Uploading photo to:', filePath);
+    logger.debug('Uploading photo to:', filePath);
 
     // Upload to Supabase storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -135,8 +136,8 @@ export const useSimpleAttendance = () => {
       .from('attendance-photos')
       .getPublicUrl(filePath);
 
-    console.log('Photo uploaded successfully:', publicUrl);
-    console.log('✅ Photo uploaded:', publicUrl);
+    logger.debug('Photo uploaded successfully:', publicUrl);
+    logger.debug('✅ Photo uploaded:', publicUrl);
 
     return {
       url: publicUrl,
@@ -202,7 +203,7 @@ export const useSimpleAttendance = () => {
     const isLate = checkInTime > toleranceTime;
     const lateMinutes = isLate ? Math.floor((checkInTime.getTime() - scheduledStartTime.getTime()) / (1000 * 60)) : 0;
 
-    console.log('⏰ Late calculation:', {
+    logger.debug('⏰ Late calculation:', {
       checkInTime: checkInTime.toLocaleTimeString(),
       scheduledStart: scheduledStartTime.toLocaleTimeString(),
       toleranceEnd: toleranceTime.toLocaleTimeString(),
@@ -223,7 +224,7 @@ export const useSimpleAttendance = () => {
     setLoading(true);
     try {
       // STEP 0: Check if organization has office locations before proceeding
-      console.log('🏢 Checking if organization has office locations...');
+      logger.debug('🏢 Checking if organization has office locations...');
       const hasOffices = await hasOfficeLocations(employee.organization_id);
       
       if (!hasOffices) {
@@ -231,13 +232,13 @@ export const useSimpleAttendance = () => {
       }
       // Get current location
       const location = await getCurrentLocation();
-      console.log('📍 Current location:', { 
+      logger.debug('📍 Current location:', { 
         latitude: location.latitude, 
         longitude: location.longitude 
       });
 
       // STEP 1: Run comprehensive validation BEFORE proceeding
-      console.log('🔍 Running attendance validation...');
+      logger.debug('🔍 Running attendance validation...');
       const { data: validationResult, error: validationError } = await supabase
         .rpc('validate_attendance_comprehensive', {
           employee_id_param: employee.id,
@@ -252,8 +253,8 @@ export const useSimpleAttendance = () => {
         throw new Error('Gagal memvalidasi data absensi');
       }
 
-      console.log('✅ Validation result:', validationResult);
-      console.log('🕐 Current time for debugging:', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }));
+      logger.debug('✅ Validation result:', validationResult);
+      logger.debug('🕐 Current time for debugging:', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }));
 
       // Cast to proper type safely
       const validation = validationResult[0] as AttendanceValidationResult;
@@ -266,7 +267,7 @@ export const useSimpleAttendance = () => {
         if (!validation.face_valid && !validation.face_registered) {
           // If face is not registered, allow auto-registration
           try {
-            console.log('🎭 Face not registered, attempting auto-registration...');
+            logger.debug('🎭 Face not registered, attempting auto-registration...');
             
             // First check if there's already an active registration for this employee
             const { data: existingReg } = await supabase
@@ -277,7 +278,7 @@ export const useSimpleAttendance = () => {
               .limit(1);
 
             if (existingReg && existingReg.length > 0) {
-              console.log('✅ Face registration already exists, updating validation');
+              logger.debug('✅ Face registration already exists, updating validation');
               validation.face_valid = true;
               validation.face_registered = true;
             } else {
@@ -300,14 +301,14 @@ export const useSimpleAttendance = () => {
                 console.error('❌ Face registration error:', faceRegError);
                 if (faceRegError.code === '23505') {
                   // Unique constraint violation - face already registered
-                  console.log('✅ Face already registered (unique constraint), proceeding...');
+                  logger.debug('✅ Face already registered (unique constraint), proceeding...');
                   validation.face_valid = true;
                   validation.face_registered = true;
                 } else {
                   errorMessage += '\n- Wajah tidak terdaftar dan gagal didaftarkan otomatis';
                 }
               } else {
-                console.log('✅ Face registered automatically:', faceRegResult);
+                logger.debug('✅ Face registered automatically:', faceRegResult);
                 // Update validation to reflect successful face registration
                 validation.face_valid = true;
                 validation.face_registered = true;
@@ -331,11 +332,11 @@ export const useSimpleAttendance = () => {
           const distance = validation.distance_meters || 0;
           const maxRadius = validation.allowed_radius || 1000;
           
-          console.log('🌐 Location validation failed, trying IP-based validation...');
+          logger.debug('🌐 Location validation failed, trying IP-based validation...');
           try {
             const ipResponse = await fetch('https://ipapi.co/json/');
             const ipData = await ipResponse.json();
-            console.log('🌐 User IP detected:', ipData.ip);
+            logger.debug('🌐 User IP detected:', ipData.ip);
             
             if (ipData.ip) {
               // Check if the IP is in the allowed list
@@ -345,13 +346,13 @@ export const useSimpleAttendance = () => {
                 .eq('organization_id', employee.organization_id)
                 .eq('is_active', true);
 
-              console.log('🌐 Allowed IPs:', allowedIPs);
+              logger.debug('🌐 Allowed IPs:', allowedIPs);
 
               if (!ipError && allowedIPs && allowedIPs.length > 0) {
                 const matchedIP = allowedIPs.find(allowedIP => {
                   // Check for exact match
                   if (allowedIP.ip_address === ipData.ip) {
-                    console.log('✅ Exact IP match found:', allowedIP.ip_address);
+                    logger.debug('✅ Exact IP match found:', allowedIP.ip_address);
                     return true;
                   }
                   
@@ -368,13 +369,13 @@ export const useSimpleAttendance = () => {
                       const match = userIPParts[0] === networkParts[0] && 
                                    userIPParts[1] === networkParts[1] && 
                                    userIPParts[2] === networkParts[2];
-                      if (match) console.log('✅ CIDR /24 match found:', allowedIP.ip_address);
+                      if (match) logger.debug('✅ CIDR /24 match found:', allowedIP.ip_address);
                       return match;
                     } else if (prefix === 16) {
                       // /16 subnet (xxx.xxx.0.0/16)
                       const match = userIPParts[0] === networkParts[0] && 
                                    userIPParts[1] === networkParts[1];
-                      if (match) console.log('✅ CIDR /16 match found:', allowedIP.ip_address);
+                      if (match) logger.debug('✅ CIDR /16 match found:', allowedIP.ip_address);
                       return match;
                     }
                   }
@@ -385,15 +386,15 @@ export const useSimpleAttendance = () => {
                 if (matchedIP) {
                   validation.location_valid = true;
                   validation.distance_meters = 0; // Set to 0 for IP-based validation
-                  console.log('✅ IP-based location validation successful with:', matchedIP.name);
+                  logger.debug('✅ IP-based location validation successful with:', matchedIP.name);
                   
                   toast({
                     title: "Lokasi Terdeteksi via WiFi",
                     description: `Terhubung ke ${matchedIP.name} - IP diizinkan untuk absensi`,
                   });
                 } else {
-                  console.log('❌ IP not in allowed list. Current IP:', ipData.ip);
-                  console.log('❌ Allowed IPs:', allowedIPs.map(ip => ip.ip_address));
+                  logger.debug('❌ IP not in allowed list. Current IP:', ipData.ip);
+                  logger.debug('❌ Allowed IPs:', allowedIPs.map(ip => ip.ip_address));
                   
                   if (distance > 0 && !isNaN(distance)) {
                     errorMessage += `\n- Lokasi terlalu jauh (${Math.round(distance)}m dari kantor, maksimal ${maxRadius}m)`;
@@ -402,7 +403,7 @@ export const useSimpleAttendance = () => {
                   errorMessage += `\n- Pastikan Anda terhubung ke WiFi kantor atau hubungi admin untuk menambahkan IP Address Anda`;
                 }
               } else {
-                console.log('❌ No allowed IPs configured or error fetching IPs');
+                logger.debug('❌ No allowed IPs configured or error fetching IPs');
                 if (distance > 0 && !isNaN(distance)) {
                   errorMessage += `\n- Lokasi terlalu jauh (${Math.round(distance)}m dari kantor, maksimal ${maxRadius}m)`;
                 } else {
@@ -410,7 +411,7 @@ export const useSimpleAttendance = () => {
                 }
               }
             } else {
-              console.log('❌ Unable to detect IP');
+              logger.debug('❌ Unable to detect IP');
               errorMessage += `\n- Tidak dapat mendeteksi lokasi atau IP Address`;
             }
           } catch (ipError) {
@@ -424,20 +425,20 @@ export const useSimpleAttendance = () => {
         }
         
         if (!validation.schedule_valid) {
-          console.log('⚠️ Schedule validation failed, but allowing with late check');
+          logger.debug('⚠️ Schedule validation failed, but allowing with late check');
           errorMessage += '\n- Di luar jam kerja (akan dicatat sebagai terlambat)';
           // Don't block attendance for schedule issues - allow late attendance
           validation.schedule_valid = true; // Override for late attendance
         }
         
         if (!validation.no_duplicate) {
-          console.log('❌ Duplicate attendance detected');
+          logger.debug('❌ Duplicate attendance detected');
           errorMessage += '\n- Sudah melakukan absensi hari ini';
           // This is a hard block - cannot bypass
         }
         
         if (validation.is_holiday) {
-          console.log('🏖️ Holiday detected, but allowing attendance');
+          logger.debug('🏖️ Holiday detected, but allowing attendance');
           errorMessage += '\n- Hari ini adalah hari libur (absensi masih diizinkan)';
           // Allow attendance on holidays if needed
         }
@@ -445,7 +446,7 @@ export const useSimpleAttendance = () => {
         // Update can_attend with more flexible rules
         validation.can_attend = validation.face_valid && validation.location_valid && validation.no_duplicate;
         
-        console.log('🔍 Updated validation after fixes:', {
+        logger.debug('🔍 Updated validation after fixes:', {
           face_valid: validation.face_valid,
           location_valid: validation.location_valid,
           schedule_valid: validation.schedule_valid,
@@ -460,7 +461,7 @@ export const useSimpleAttendance = () => {
       }
 
       // CRITICAL VALIDATION: Check mandatory validations before recording
-      console.log('🔒 Final validation check before recording:', {
+      logger.debug('🔒 Final validation check before recording:', {
         location_valid: validation.location_valid,
         schedule_valid: validation.schedule_valid,
         face_valid: validation.face_valid,
@@ -509,7 +510,7 @@ export const useSimpleAttendance = () => {
         String(localCheckInTime.getMinutes()).padStart(2, '0') + ':' +
         String(localCheckInTime.getSeconds()).padStart(2, '0');
 
-      console.log('💾 Recording attendance with local time:', localTimeString);
+      logger.debug('💾 Recording attendance with local time:', localTimeString);
 
       // STEP 4: Use the new timezone-aware database function
       // Use Asia/Jakarta timezone for proper calculation
@@ -546,7 +547,7 @@ export const useSimpleAttendance = () => {
         }
       }
 
-      console.log('✅ Attendance recorded successfully:', attendanceResult);
+      logger.debug('✅ Attendance recorded successfully:', attendanceResult);
 
       // Get the attendance record data for validation records
       const attendanceData = { 
@@ -556,7 +557,7 @@ export const useSimpleAttendance = () => {
         status: attendanceResult[0]?.status
       };
 
-      console.log('✅ Attendance record saved:', attendanceData);
+      logger.debug('✅ Attendance record saved:', attendanceData);
 
       // STEP 5: Save validation records to attendance_validations table
       const validationRecords = [
@@ -610,7 +611,7 @@ export const useSimpleAttendance = () => {
         console.error('⚠️ Warning: Failed to save validation records:', validationInsertError);
         // Don't throw error here as attendance was successful
       } else {
-        console.log('✅ Validation records saved successfully');
+        logger.debug('✅ Validation records saved successfully');
       }
 
       // Update local state

@@ -15,30 +15,39 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { useEffect } from 'react';
 import { ManualHolidayForm } from './ManualHolidayForm';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
-const DAYS_OF_WEEK = [
-  { value: 1, label: 'Senin' },
-  { value: 2, label: 'Selasa' },
-  { value: 3, label: 'Rabu' },
-  { value: 4, label: 'Kamis' },
-  { value: 5, label: 'Jumat' },
-  { value: 6, label: 'Sabtu' },
-  { value: 7, label: 'Minggu' },
+const getDaysOfWeek = (t: any) => [
+  { value: 1, label: t('workSchedule.days.monday', 'Monday') },
+  { value: 2, label: t('workSchedule.days.tuesday', 'Tuesday') },
+  { value: 3, label: t('workSchedule.days.wednesday', 'Wednesday') },
+  { value: 4, label: t('workSchedule.days.thursday', 'Thursday') },
+  { value: 5, label: t('workSchedule.days.friday', 'Friday') },
+  { value: 6, label: t('workSchedule.days.saturday', 'Saturday') },
+  { value: 7, label: t('workSchedule.days.sunday', 'Sunday') },
 ];
 
-const SCHEDULE_PRESETS = [
-  { name: 'Senin - Jumat', working_days: [1, 2, 3, 4, 5] },
-  { name: 'Senin - Sabtu', working_days: [1, 2, 3, 4, 5, 6] },
-  { name: 'Setiap Hari', working_days: [1, 2, 3, 4, 5, 6, 7] },
+const getSchedulePresets = (t: any) => [
+  { name: t('workSchedule.presets.mondayFriday', 'Monday - Friday'), working_days: [1, 2, 3, 4, 5] },
+  { name: t('workSchedule.presets.mondaySaturday', 'Monday - Saturday'), working_days: [1, 2, 3, 4, 5, 6] },
+  { name: t('workSchedule.presets.everyDay', 'Every Day'), working_days: [1, 2, 3, 4, 5, 6, 7] },
 ];
 
 export const WorkScheduleSettings = () => {
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === 'id' ? id : enUS;
   const { settings, loading, createSettings, updateSettings, deleteSettings } = useWorkScheduleSettings();
   const { holidays, toggleHolidayStatus, workingDaysSummary, fetchWorkingDaysSummary, deleteHoliday } = useAttendanceHolidays();
   const { organizationId } = useCurrentOrg();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<WorkScheduleSettingsType | null>(null);
   const [showHolidayForm, setShowHolidayForm] = useState(false);
+  
+  const DAYS_OF_WEEK = getDaysOfWeek(t);
+  const SCHEDULE_PRESETS = getSchedulePresets(t);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -135,22 +144,22 @@ export const WorkScheduleSettings = () => {
   };
 
   if (loading) {
-    return <div className="flex justify-center p-8">Loading...</div>;
+    return <div className="flex justify-center p-8">{t('common.loading', 'Loading...')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Pengaturan Jadwal Kerja</h2>
-          <p className="text-gray-600 mt-1">Kelola hari kerja, jam kerja, dan hari libur nasional</p>
+          <h2 className="text-2xl font-semibold text-gray-900">{t('workSchedule.title', 'Work Schedule Settings')}</h2>
+          <p className="text-gray-600 mt-1">{t('workSchedule.description', 'Manage working days, working hours, and national holidays')}</p>
         </div>
         <Button 
           onClick={() => setShowCreateForm(true)}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Tambah Jadwal
+          {t('workSchedule.button.addSchedule', 'Add Schedule')}
         </Button>
       </div>
 
@@ -158,11 +167,11 @@ export const WorkScheduleSettings = () => {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="schedules">
             <Clock className="h-4 w-4 mr-2" />
-            Jadwal Kerja
+            {t('workSchedule.tab.workSchedule', 'Work Schedule')}
           </TabsTrigger>
           <TabsTrigger value="holidays">
             <Calendar className="h-4 w-4 mr-2" />
-            Hari Libur Nasional
+            {t('workSchedule.tab.nationalHolidays', 'National Holidays')}
           </TabsTrigger>
         </TabsList>
 
@@ -172,25 +181,25 @@ export const WorkScheduleSettings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
-                  {editingSchedule ? 'Edit Jadwal Kerja' : 'Tambah Jadwal Kerja Baru'}
+                  {editingSchedule ? t('workSchedule.form.editTitle', 'Edit Work Schedule') : t('workSchedule.form.addTitle', 'Add New Work Schedule')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                      <Label htmlFor="name">Nama Jadwal</Label>
+                      <Label htmlFor="name">{t('workSchedule.form.scheduleName', 'Schedule Name')}</Label>
                       <Input
                         id="name"
                         value={formData.name}
                         onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="contoh: Jadwal Reguler"
+                        placeholder={t('workSchedule.form.scheduleNamePlaceholder', 'e.g., Regular Schedule')}
                         required
                       />
                     </div>
 
                     <div className="col-span-2">
-                      <Label>Hari Kerja</Label>
+                      <Label>{t('workSchedule.form.workingDays', 'Working Days')}</Label>
                       <div className="mt-2 space-y-2">
                         <div className="flex gap-2 mb-3">
                           {SCHEDULE_PRESETS.map((preset) => (
@@ -231,7 +240,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="start_time">Jam Masuk</Label>
+                      <Label htmlFor="start_time">{t('workSchedule.form.startTime', 'Start Time')}</Label>
                       <Input
                         id="start_time"
                         type="time"
@@ -242,7 +251,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="end_time">Jam Pulang</Label>
+                      <Label htmlFor="end_time">{t('workSchedule.form.endTime', 'End Time')}</Label>
                       <Input
                         id="end_time"
                         type="time"
@@ -253,7 +262,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="break_start_time">Jam Istirahat Mulai</Label>
+                      <Label htmlFor="break_start_time">{t('workSchedule.form.breakStartTime', 'Break Start Time')}</Label>
                       <Input
                         id="break_start_time"
                         type="time"
@@ -263,7 +272,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="break_end_time">Jam Istirahat Selesai</Label>
+                      <Label htmlFor="break_end_time">{t('workSchedule.form.breakEndTime', 'Break End Time')}</Label>
                       <Input
                         id="break_end_time"
                         type="time"
@@ -273,7 +282,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="late_tolerance">Toleransi Terlambat (menit)</Label>
+                      <Label htmlFor="late_tolerance">{t('workSchedule.form.lateTolerance', 'Late Tolerance (minutes)')}</Label>
                       <Input
                         id="late_tolerance"
                         type="number"
@@ -285,7 +294,7 @@ export const WorkScheduleSettings = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="timezone">Zona Waktu</Label>
+                      <Label htmlFor="timezone">{t('workSchedule.form.timezone', 'Timezone')}</Label>
                       <Select value={formData.timezone} onValueChange={(value) => setFormData(prev => ({ ...prev, timezone: value }))}>
                         <SelectTrigger>
                           <SelectValue />
@@ -303,7 +312,7 @@ export const WorkScheduleSettings = () => {
                         checked={formData.is_default}
                         onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_default: checked }))}
                       />
-                      <Label>Jadikan sebagai jadwal default</Label>
+                      <Label>{t('workSchedule.form.setAsDefault', 'Set as default schedule')}</Label>
                     </div>
                   </div>
 
@@ -317,10 +326,10 @@ export const WorkScheduleSettings = () => {
                         resetForm();
                       }}
                     >
-                      Batal
+                      {t('common.cancel', 'Cancel')}
                     </Button>
                     <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                      {editingSchedule ? 'Update Jadwal' : 'Simpan Jadwal'}
+                      {editingSchedule ? t('workSchedule.form.updateSchedule', 'Update Schedule') : t('workSchedule.form.saveSchedule', 'Save Schedule')}
                     </Button>
                   </div>
                 </form>
@@ -333,7 +342,7 @@ export const WorkScheduleSettings = () => {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Belum ada jadwal kerja yang dikonfigurasi. Tambahkan jadwal kerja pertama untuk mengatur hari dan jam kerja karyawan.
+                  {t('workSchedule.emptyState', 'No work schedules configured yet. Add the first work schedule to set employee working days and hours.')}
                 </AlertDescription>
               </Alert>
             ) : (
@@ -345,15 +354,15 @@ export const WorkScheduleSettings = () => {
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold">{schedule.name}</h3>
                           {schedule.is_default && (
-                            <Badge variant="secondary">Default</Badge>
+                            <Badge variant="secondary">{t('workSchedule.badge.default', 'Default')}</Badge>
                           )}
                         </div>
                         <div className="text-sm text-gray-600 space-y-1">
-                          <p><strong>Hari Kerja:</strong> {formatWorkingDays(schedule.working_days)}</p>
-                          <p><strong>Jam Kerja:</strong> {schedule.start_time} - {schedule.end_time}</p>
-                          <p><strong>Jam Istirahat:</strong> {schedule.break_start_time} - {schedule.break_end_time}</p>
-                          <p><strong>Toleransi Terlambat:</strong> {schedule.late_tolerance_minutes} menit</p>
-                          <p><strong>Zona Waktu:</strong> {schedule.timezone}</p>
+                          <p><strong>{t('workSchedule.card.workingDays', 'Working Days')}:</strong> {formatWorkingDays(schedule.working_days)}</p>
+                          <p><strong>{t('workSchedule.card.workingHours', 'Working Hours')}:</strong> {schedule.start_time} - {schedule.end_time}</p>
+                          <p><strong>{t('workSchedule.card.breakTime', 'Break Time')}:</strong> {schedule.break_start_time} - {schedule.break_end_time}</p>
+                          <p><strong>{t('workSchedule.card.lateTolerance', 'Late Tolerance')}:</strong> {applyVariables(t('workSchedule.card.lateToleranceMinutes', '{{minutes}} minutes'), { minutes: String(schedule.late_tolerance_minutes) })}</p>
+                          <p><strong>{t('workSchedule.card.timezone', 'Timezone')}:</strong> {schedule.timezone}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -362,7 +371,7 @@ export const WorkScheduleSettings = () => {
                           size="sm"
                           onClick={() => handleEdit(schedule)}
                         >
-                          Edit
+                          {t('common.edit', 'Edit')}
                         </Button>
                         <Button
                           variant="outline"
@@ -386,7 +395,7 @@ export const WorkScheduleSettings = () => {
             <Alert className="flex-1 mr-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Hari libur nasional yang diaktifkan akan mempengaruhi sistem absensi. Karyawan tidak akan diwajibkan absen pada hari-hari ini.
+                {t('workSchedule.holidays.alert', 'Activated national holidays will affect the attendance system. Employees will not be required to attend on these days.')}
               </AlertDescription>
             </Alert>
             <Button 
@@ -394,7 +403,7 @@ export const WorkScheduleSettings = () => {
               className="bg-green-600 hover:bg-green-700"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Tambah Hari Libur
+              {t('workSchedule.holidays.addHoliday', 'Add Holiday')}
             </Button>
           </div>
 
@@ -405,14 +414,16 @@ export const WorkScheduleSettings = () => {
                 <div className="flex items-center gap-3">
                   <Calendar className="h-5 w-5 text-blue-600" />
                   <div>
-                    <h3 className="font-semibold text-blue-900">Hari Kerja Bulan Ini</h3>
+                    <h3 className="font-semibold text-blue-900">{t('workSchedule.holidays.workingDaysThisMonth', 'Working Days This Month')}</h3>
                     <p className="text-sm text-blue-700">
-                      Total: {workingDaysSummary.summary.working_days} hari kerja • 
-                      {workingDaysSummary.summary.holiday_days} hari libur • 
-                      {workingDaysSummary.summary.weekend_days} hari weekend
+                      {applyVariables(t('workSchedule.holidays.summary', 'Total: {{workingDays}} working days • {{holidayDays}} holidays • {{weekendDays}} weekends'), {
+                        workingDays: String(workingDaysSummary.summary.working_days),
+                        holidayDays: String(workingDaysSummary.summary.holiday_days),
+                        weekendDays: String(workingDaysSummary.summary.weekend_days)
+                      })}
                     </p>
                     <p className="text-xs text-blue-600 mt-1">
-                      Dihitung otomatis: {new Date(workingDaysSummary.calculated_at).toLocaleString('id-ID')}
+                      {t('workSchedule.holidays.calculatedAt', 'Calculated automatically')}: {format(new Date(workingDaysSummary.calculated_at), 'PPpp', { locale: dateLocale })}
                     </p>
                   </div>
                 </div>
@@ -438,7 +449,7 @@ export const WorkScheduleSettings = () => {
             <div className="space-y-2">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Hari Libur Organisasi
+                {t('workSchedule.holidays.organizationHolidays', 'Organization Holidays')}
               </h3>
               <div className="grid gap-4">
                 {holidays.filter(h => h.organization_id).map((holiday) => (
@@ -452,40 +463,35 @@ export const WorkScheduleSettings = () => {
                             </h3>
                             {!holiday.is_active && (
                               <Badge variant="secondary" className="text-xs bg-gray-200 text-gray-600">
-                                Tidak Aktif
+                                {t('workSchedule.holidays.inactive', 'Inactive')}
                               </Badge>
                             )}
                             <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700">
-                              Organisasi
+                              {t('workSchedule.holidays.organization', 'Organization')}
                             </Badge>
                           </div>
                           <p className={`text-sm ${!holiday.is_active ? 'text-gray-400' : 'text-blue-700'}`}>
                             {(() => {
                               try {
                                 const date = new Date(holiday.date);
-                                return isNaN(date.getTime()) ? holiday.date : date.toLocaleDateString('id-ID', {
-                                  weekday: 'long',
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric'
-                                });
+                                return isNaN(date.getTime()) ? holiday.date : format(date, 'EEEE, d MMMM yyyy', { locale: dateLocale });
                               } catch {
                                 return holiday.date;
                               }
                             })()}
                           </p>
                           <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <span>Negara: {holiday.country_code}</span>
-                            <span>• ID Org: {holiday.organization_id}</span>
+                            <span>{t('workSchedule.holidays.country', 'Country')}: {holiday.country_code}</span>
+                            <span>• {t('workSchedule.holidays.orgId', 'Org ID')}: {holiday.organization_id}</span>
                           </div>
                           {holiday.is_recurring && (
                             <Badge variant="outline" className="text-xs">
-                              Berulang Tahunan ({holiday.recurring_type || 'annual'})
+                              {applyVariables(t('workSchedule.holidays.recurringAnnual', 'Recurring Annual ({{type}})'), { type: holiday.recurring_type || 'annual' })}
                             </Badge>
                           )}
                           {holiday.is_active && holiday.applies_to_attendance && (
                             <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                              Berlaku untuk Absensi
+                              {t('workSchedule.holidays.appliesToAttendance', 'Applies to Attendance')}
                             </Badge>
                           )}
                         </div>
@@ -494,7 +500,7 @@ export const WorkScheduleSettings = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              if (window.confirm('Apakah Anda yakin ingin menghapus hari libur ini?')) {
+                              if (window.confirm(t('workSchedule.holidays.confirmDelete', 'Are you sure you want to delete this holiday?'))) {
                                 deleteHoliday(holiday.id);
                               }
                             }}
@@ -502,7 +508,7 @@ export const WorkScheduleSettings = () => {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                          <Label className="text-sm">Aktifkan hari libur</Label>
+                          <Label className="text-sm">{t('workSchedule.holidays.enableHoliday', 'Enable holiday')}</Label>
                           <Switch
                             checked={holiday.is_active}
                             onCheckedChange={() => toggleHolidayStatus(holiday.id, holiday.is_active)}
@@ -520,7 +526,7 @@ export const WorkScheduleSettings = () => {
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Hari Libur Nasional
+              {t('workSchedule.holidays.nationalHolidays', 'National Holidays')}
             </h3>
             <div className="grid gap-4">
               {holidays.filter(h => !h.organization_id).map((holiday) => (
@@ -534,7 +540,7 @@ export const WorkScheduleSettings = () => {
                           </h3>
                           {!holiday.is_active && (
                             <Badge variant="secondary" className="text-xs bg-gray-200 text-gray-600">
-                              Tidak Aktif
+                              {t('workSchedule.holidays.inactive', 'Inactive')}
                             </Badge>
                           )}
                         </div>
@@ -542,33 +548,28 @@ export const WorkScheduleSettings = () => {
                           {(() => {
                             try {
                               const date = new Date(holiday.date);
-                              return isNaN(date.getTime()) ? holiday.date : date.toLocaleDateString('id-ID', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              });
+                              return isNaN(date.getTime()) ? holiday.date : format(date, 'EEEE, d MMMM yyyy', { locale: dateLocale });
                             } catch {
                               return holiday.date;
                             }
                           })()}
                         </p>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <span>Negara: {holiday.country_code}</span>
+                          <span>{t('workSchedule.holidays.country', 'Country')}: {holiday.country_code}</span>
                         </div>
                         {holiday.is_recurring && (
                           <Badge variant="outline" className="text-xs">
-                            Berulang Tahunan ({holiday.recurring_type || 'annual'})
+                            {applyVariables(t('workSchedule.holidays.recurringAnnual', 'Recurring Annual ({{type}})'), { type: holiday.recurring_type || 'annual' })}
                           </Badge>
                         )}
                         {holiday.is_active && holiday.applies_to_attendance && (
                           <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                            Berlaku untuk Absensi
+                            {t('workSchedule.holidays.appliesToAttendance', 'Applies to Attendance')}
                           </Badge>
                         )}
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Label className="text-sm">Aktifkan hari libur</Label>
+                        <Label className="text-sm">{t('workSchedule.holidays.enableHoliday', 'Enable holiday')}</Label>
                         <Switch
                           checked={holiday.is_active}
                           onCheckedChange={() => toggleHolidayStatus(holiday.id, holiday.is_active)}

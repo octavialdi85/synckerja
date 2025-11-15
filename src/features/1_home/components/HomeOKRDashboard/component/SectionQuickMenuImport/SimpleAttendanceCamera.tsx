@@ -6,8 +6,12 @@ import { Camera, MapPin, CheckCircle } from 'lucide-react';
 import { useSimpleAttendance } from '../../../../hooks/useSimpleAttendance';
 import { FaceRegistrationDialog } from '../../../../components/FaceRegistrationDialog';
 import { LateReasonModal } from '../../../../components/LateReasonModal';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
 export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange }: { onAttendanceUpdate?: () => void; onCameraStateChange?: (isActive: boolean) => void }) => {
+  const { t, dateLocale } = useAppTranslation();
   const webcamRef = useRef<Webcam>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -94,7 +98,7 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
         <div className="flex items-center gap-2 text-blue-600 mb-4">
           <Camera className="h-5 w-5" />
           <span className="text-sm font-semibold">
-            {actionType === 'checkin' ? 'Clock In' : 'Clock Out'} - Ambil Foto
+            {actionType === 'checkin' ? t('quickMenu.clockIn', 'Clock In') : t('quickMenu.clockOut', 'Clock Out')} - {t('quickMenu.takePhoto', 'Take Photo')}
           </span>
         </div>
         
@@ -113,14 +117,14 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
             disabled={isCapturing}
             className="flex-1"
           >
-            {isCapturing ? 'Processing...' : `Confirm ${actionType === 'checkin' ? 'Clock In' : 'Clock Out'}`}
+            {isCapturing ? t('quickMenu.processing', 'Processing...') : t('quickMenu.confirm', 'Confirm')} {actionType === 'checkin' ? t('quickMenu.clockIn', 'Clock In') : t('quickMenu.clockOut', 'Clock Out')}
           </Button>
           <Button 
             variant="outline" 
             onClick={cancelCapture}
             disabled={isCapturing}
           >
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </Button>
         </div>
       </div>
@@ -131,7 +135,7 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-gray-600 mb-3">
         <MapPin className="h-5 w-5" />
-        <span className="text-xs font-medium">Attendance System</span>
+        <span className="text-xs font-medium">{t('quickMenu.attendanceSystem', 'Attendance System')}</span>
       </div>
 
       {/* Success banners */}
@@ -139,10 +143,10 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
         <div className="bg-muted border border-border rounded-lg p-3 mb-3">
           <div className="flex items-center gap-2 text-foreground">
             <CheckCircle className="h-5 w-5" />
-            <span className="text-sm font-semibold">Clock In Berhasil!</span>
+            <span className="text-sm font-semibold">{t('quickMenu.clockInSuccess', 'Clock In Successful!')}</span>
           </div>
           <p className="text-green-700 text-xs mt-1">
-            Waktu: {new Date(lastCheckIn).toLocaleTimeString('id-ID')}
+            {t('quickMenu.time', 'Time')}: {format(new Date(lastCheckIn), 'HH:mm:ss', { locale: dateLocale })}
           </p>
         </div>
       )}
@@ -151,10 +155,10 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
         <div className="bg-muted border border-border rounded-lg p-3 mb-3">
           <div className="flex items-center gap-2 text-foreground">
             <CheckCircle className="h-5 w-5" />
-            <span className="text-sm font-semibold">Clock Out Berhasil!</span>
+            <span className="text-sm font-semibold">{t('quickMenu.clockOutSuccess', 'Clock Out Successful!')}</span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
-            Waktu: {new Date(lastCheckOut).toLocaleTimeString('id-ID')}
+            {t('quickMenu.time', 'Time')}: {format(new Date(lastCheckOut), 'HH:mm:ss', { locale: dateLocale })}
           </p>
         </div>
       )}
@@ -166,7 +170,7 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
           className={`flex items-center gap-2 text-sm font-semibold ${hasCheckedIn ? 'bg-gray-400 cursor-not-allowed' : ''}`}
         >
           <Camera className="h-4 w-4" />
-          Clock In
+          {t('quickMenu.clockIn', 'Clock In')}
         </Button>
         
         <Button 
@@ -176,13 +180,13 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
           className="flex items-center gap-2 text-sm font-semibold"
         >
           <Camera className="h-4 w-4" />
-          Clock Out
+          {t('quickMenu.clockOut', 'Clock Out')}
         </Button>
       </div>
 
       {loading && (
         <div className="text-center text-gray-600 text-sm">
-          Processing attendance...
+          {t('quickMenu.processingAttendance', 'Processing attendance...')}
         </div>
       )}
 

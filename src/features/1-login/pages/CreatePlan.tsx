@@ -16,8 +16,10 @@ import { formatIDR, getMonthlyPriceForMembers, getYearlyPriceForMembers } from '
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const CreatePlan = () => {
+  const { t } = useAppTranslation();
   const [memberCounts, setMemberCounts] = useState<{ [key: string]: number }>({});
   const [billingCycles, setBillingCycles] = useState<{ [key: string]: 'monthly' | 'yearly' }>({});
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
@@ -183,7 +185,7 @@ const CreatePlan = () => {
       });
     } catch (error) {
       console.error('❌ Payment failed:', error);
-      toast.error('Gagal memproses pembayaran');
+      // Error already handled in useMidtransPayment hook with translation
     }
   };
 
@@ -205,8 +207,8 @@ const CreatePlan = () => {
         <Card className="w-full max-w-md shadow border rounded-2xl bg-white">
           <CardContent className="p-6 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Memuat Data...</h2>
-            <p className="text-gray-600 text-sm">Mohon tunggu sebentar...</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{t('common.loading.data', 'Loading Data...')}</h2>
+            <p className="text-gray-600 text-sm">{t('common.loading.pleaseWait', 'Please wait a moment...')}</p>
           </CardContent>
         </Card>
       </div>

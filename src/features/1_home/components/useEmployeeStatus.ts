@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export interface EmployeeStatus {
   id: string;
@@ -30,13 +31,13 @@ export const useEmployeeStatus = () => {
   const fetchStatuses = async () => {
     try {
       if (!organizationId) {
-        console.log('⚠️ No organization ID found for employee status');
+        logger.query('⚠️ No organization ID found for employee status');
         setStatuses([]);
         setLoading(false);
         return;
       }
 
-      console.log('🔍 Fetching employee statuses for organization:', organizationId);
+      logger.query('🔍 Fetching employee statuses for organization:', organizationId);
 
       const { data, error } = await supabase
         .from('employee_status')
@@ -95,7 +96,7 @@ export const useEmployeeStatus = () => {
         .maybeSingle();
 
       if (empError || !employee) {
-        console.log('Employee not found for current user, this is normal for some users');
+        logger.debug('Employee not found for current user, this is normal for some users');
         toast({
           title: "Info",
           description: "Status karyawan tidak tersedia untuk akun ini",

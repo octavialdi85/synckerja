@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 const isDev = import.meta.env.DEV;
 
@@ -137,7 +138,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
     try {
       if (isDev) {
-        console.log('Fetching meeting points for organization:', organizationId); // Debug log
+        logger.query('Fetching meeting points for organization:', organizationId);
       }
       
       const { data, error } = await supabase
@@ -149,7 +150,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
       
       if (isDev) {
-        console.log('Fetched meeting points:', data); // Debug log
+        logger.query('Fetched meeting points:', data);
       }
       setMeetingPoints(data || []);
     } catch (error) {
@@ -211,7 +212,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
     try {
       if (isDev) {
-        console.log('Adding meeting point to database:', { ...data, organization_id: organizationId }); // Debug log
+        logger.debug('Adding meeting point to database:', { ...data, organization_id: organizationId });
       }
       
       const { error } = await supabase
@@ -227,7 +228,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
 
       if (isDev) {
-        console.log('Meeting point added successfully'); // Debug log
+        logger.debug('Meeting point added successfully');
       }
       
       toast({
@@ -761,7 +762,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         },
         (payload) => {
           if (isDev) {
-            console.log('Real-time meeting points update:', payload); // Debug log
+            logger.realtime('Real-time meeting points update:', payload);
           }
           fetchMeetingPoints();
         }

@@ -16,6 +16,7 @@ import { useCurrentOrg } from './hooks/useCurrentOrg';
 import { useObjectiveStats } from './hooks/useObjectiveStats';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { filterCyclesByYearQuarter, hasYearQuarterSelection } from './component/yearQuarterFilter';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 const HomeOKRDashboardContent = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'employee'>('employee');
@@ -76,12 +77,13 @@ const HomeOKRDashboardContent = () => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+  const { t } = useAppTranslation();
   const getGreeting = () => {
     const hour = currentTime.getHours();
-    if (hour < 12) return "Selamat Pagi";
-    if (hour < 15) return "Selamat Siang";
-    if (hour < 18) return "Selamat Sore";
-    return "Selamat Malam";
+    if (hour < 12) return t('greeting.goodMorning', 'Good Morning');
+    if (hour < 15) return t('greeting.goodAfternoon', 'Good Afternoon');
+    if (hour < 18) return t('greeting.goodEvening', 'Good Evening');
+    return t('greeting.goodNight', 'Good Night');
   };
   const toggleKeyResults = (index: number) => {
     setOpenKeyResults(prev => ({

@@ -8,6 +8,8 @@ import { Label } from '@/features/ui/label';
 import { Check, type LucideIcon } from 'lucide-react';
 import { formatIDR } from '@/features/1-login/utils/subscriptionUtils';
 import type { SubscriptionPlan } from '@/features/10-management/hooks/useOptimizedSubscription';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface PlanCardProps {
   plan: SubscriptionPlan;
@@ -56,6 +58,7 @@ export const PlanCard = memo(({
   onBillingCycleChange,
   onUpgrade,
 }: PlanCardProps) => {
+  const { t } = useAppTranslation();
   const isYearly = billingCycle === 'yearly';
   const isComingSoon = plan.description?.toLowerCase().includes('coming soon') || 
                        plan.description?.toLowerCase().includes('comming soon');
@@ -74,8 +77,8 @@ export const PlanCard = memo(({
         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
           <Badge className="bg-green-500 text-white px-4 py-1">
             {subscriptionStatus?.is_trial 
-              ? `Trial - ${subscriptionStatus.days_until_expiry} hari lagi`
-              : 'Current Plan'
+              ? applyVariables(t('subscription.plans.badge.trial', 'Trial - {{days}} days left'), { days: String(subscriptionStatus.days_until_expiry || 0) })
+              : t('subscription.plans.badge.current', 'Current Plan')
             }
           </Badge>
         </div>
@@ -83,7 +86,7 @@ export const PlanCard = memo(({
       {!isCurrent && isPopular && (
         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
           <Badge className="bg-blue-500 text-white px-4 py-1">
-            Paling Populer
+            {t('subscription.plans.badge.popular', 'Most Popular')}
           </Badge>
         </div>
       )}
@@ -116,7 +119,10 @@ export const PlanCard = memo(({
             {formatIDR(totalPrice)}
           </div>
           <div className="text-sm text-gray-600">
-            {isYearly ? 'per tahun' : 'per bulan'} untuk {memberCount} member
+            {isYearly 
+              ? applyVariables(t('subscription.plans.pricing.perYear', 'per year for {{count}} members'), { count: String(memberCount) })
+              : applyVariables(t('subscription.plans.pricing.perMonth', 'per month for {{count}} members'), { count: String(memberCount) })
+            }
           </div>
         </div>
       </CardHeader>
@@ -125,8 +131,8 @@ export const PlanCard = memo(({
         {/* Employee Count Slider */}
         <div className="space-y-3">
           <Label className="text-sm font-medium text-gray-700">
-            Jumlah Member: {memberCount}
-            {isTrialPlan && ` (maksimal ${maxEmployees})`}
+            {applyVariables(t('subscription.plans.memberCount.label', 'Member Count: {{count}}'), { count: String(memberCount) })}
+            {isTrialPlan && applyVariables(t('subscription.plans.memberCount.max', '(max {{max}})'), { max: String(maxEmployees) })}
           </Label>
           <Slider
             value={[memberCount]}
@@ -138,15 +144,15 @@ export const PlanCard = memo(({
             disabled={isTrialPlan}
           />
           <div className="flex justify-between text-xs text-gray-500">
-            <span>1 member</span>
-            <span>{maxEmployees} member</span>
+            <span>{t('subscription.plans.memberCount.min', '1 member')}</span>
+            <span>{applyVariables(t('subscription.plans.memberCount.maxDisplay', '{{max}} member'), { max: String(maxEmployees) })}</span>
           </div>
         </div>
 
         {/* Billing Cycle Toggle */}
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-gray-700">
-            Pembayaran Tahunan
+            {t('subscription.plans.billingCycle.yearly', 'Yearly Billing')}
           </Label>
           <Switch
             checked={billingCycle === 'yearly'}
@@ -158,7 +164,7 @@ export const PlanCard = memo(({
 
         {/* Features */}
         <div className="space-y-3 flex-grow">
-          <h4 className="font-medium text-gray-900">Fitur yang termasuk:</h4>
+          <h4 className="font-medium text-gray-900">{t('subscription.plans.features.title', 'Included Features:')}</h4>
           <ul className="space-y-2 min-h-[120px]">
             {plan.features?.map((feature, index) => (
               <li key={index} className="flex items-start space-x-2">
@@ -190,16 +196,21 @@ export const PlanCard = memo(({
               (isCurrent && memberCount === currentMemberCount && !hasBillingCycleChange)
             }
           >
-            {isComingSoon ? 'Coming Soon' : buttonText}
+            {isComingSoon ? t('subscription.plans.button.comingSoon', 'Coming Soon') : buttonText}
           </Button>
           {isCurrent && (
             <div className="text-xs text-green-600 font-medium text-center mt-2">
-              Plan saat ini: {currentMemberCount} member limit | {currentEmployeeCount} karyawan aktif
+              {applyVariables(t('subscription.plans.currentPlan.label', 'Current plan: {{memberCount}} member limit | {{employeeCount}} active employees'), { 
+                memberCount: String(currentMemberCount), 
+                employeeCount: String(currentEmployeeCount) 
+              })}
             </div>
           )}
           {!canChange && isCurrent && memberCount < currentMemberCount && (
             <p className="text-xs text-red-500 text-center mt-2">
-              Tidak bisa downgrade. Anda memiliki {currentEmployeeCount} karyawan aktif.
+              {applyVariables(t('subscription.plans.downgrade.error', 'Cannot downgrade. You have {{count}} active employees.'), { 
+                count: String(currentEmployeeCount) 
+              })}
             </p>
           )}
         </div>
@@ -208,7 +219,9 @@ export const PlanCard = memo(({
         {isYearly && plan.annual_discount_percentage && (
           <div className="text-center">
             <div className="text-sm text-green-600 font-medium">
-              Hemat {plan.annual_discount_percentage}% dengan paket tahunan!
+              {applyVariables(t('subscription.plans.savings', 'Save {{percentage}}% with yearly plan!'), { 
+                percentage: String(plan.annual_discount_percentage) 
+              })}
             </div>
           </div>
         )}
@@ -216,31 +229,36 @@ export const PlanCard = memo(({
         {/* Price Breakdown */}
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex justify-between">
-            <span>Harga per member:</span>
+            <span>{t('subscription.plans.priceBreakdown.perMember', 'Price per member:')}</span>
             <span>{formatIDR(plan.base_price_per_member)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Subtotal bulanan:</span>
+            <span>{t('subscription.plans.priceBreakdown.monthlySubtotal', 'Monthly subtotal:')}</span>
             <span>{formatIDR(monthlyPrice)}</span>
           </div>
           {isYearly && plan.annual_discount_percentage && (
             <>
               <div className="flex justify-between text-red-600">
-                <span>Diskon tahunan ({plan.annual_discount_percentage}%):</span>
+                <span>{applyVariables(t('subscription.plans.priceBreakdown.yearlyDiscount', 'Yearly discount ({{percentage}}%):'), { 
+                  percentage: String(plan.annual_discount_percentage) 
+                })}</span>
                 <span>-{formatIDR(monthlyPrice * 12 * (plan.annual_discount_percentage / 100))}</span>
               </div>
             </>
           )}
           <hr />
           <div className="flex justify-between font-medium text-gray-900">
-            <span>Total {isYearly ? 'tahunan' : 'bulanan'}:</span>
+            <span>{isYearly 
+              ? t('subscription.plans.priceBreakdown.totalYearly', 'Total yearly:')
+              : t('subscription.plans.priceBreakdown.totalMonthly', 'Total monthly:')
+            }</span>
             <span>{formatIDR(totalPrice)}</span>
           </div>
         </div>
 
         {plan.demo_required && (
           <p className="text-xs text-center text-gray-500">
-            Paket ini memerlukan demo terlebih dahulu
+            {t('subscription.plans.demoRequired', 'This plan requires a demo first')}
           </p>
         )}
       </CardContent>

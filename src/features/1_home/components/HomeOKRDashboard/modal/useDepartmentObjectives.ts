@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
 
 export interface DepartmentObjective {
   id: string;
@@ -76,9 +77,7 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
       return;
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
-    }
+    logger.realtime('🔄 Setting up real-time subscription for department objectives with org:', organizationId);
 
     subscriptionRef.current = supabase
       .channel(`department_objectives_realtime_${organizationId}`)
@@ -91,14 +90,12 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📡 REAL-TIME UPDATE for department objectives:', {
-              event: payload.eventType,
-              table: payload.table,
-              new: payload.new,
-              old: payload.old
-            });
-          }
+          logger.realtime('📡 REAL-TIME UPDATE for department objectives:', {
+            event: payload.eventType,
+            table: payload.table,
+            new: payload.new,
+            old: payload.old
+          });
           
           // Force immediate invalidation
           queryClient.invalidateQueries({ 
@@ -114,16 +111,12 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         }
       )
       .subscribe((status) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('📊 Department objectives subscription status:', status);
-        }
+        logger.realtime('📊 Department objectives subscription status:', status);
       });
 
     return () => {
       if (subscriptionRef.current) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 Cleaning up department objectives subscription');
-        }
+        logger.realtime('🔄 Cleaning up department objectives subscription');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
       }
@@ -134,15 +127,11 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
     queryKey: ['department-objectives', organizationId, cycleIds, includeIndividualObjectives],
     queryFn: async () => {
       if (!organizationId) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('❌ No organizationId provided');
-        }
+        logger.debug('❌ No organizationId provided');
         return [];
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 Fetching department objectives:', { organizationId, cycleIds, includeIndividualObjectives });
-      }
+      logger.query('🔍 Fetching department objectives:', { organizationId, cycleIds, includeIndividualObjectives });
       
       // Build base query
       let selectQuery = `

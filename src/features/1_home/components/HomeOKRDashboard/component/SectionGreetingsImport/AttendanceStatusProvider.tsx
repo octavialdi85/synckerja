@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 interface AttendanceStatusContextType {
   hasCheckedIn: boolean;
@@ -36,17 +37,17 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
 
   const refreshStatus = async () => {
     if (!organizationId) {
-      console.log('⚠️ No organization ID, skipping status refresh');
+      logger.debug('⚠️ No organization ID, skipping status refresh');
       setIsLoading(false);
       return;
     }
 
     try {
-      console.log('🔄 Refreshing attendance status...');
+      logger.debug('🔄 Refreshing attendance status...');
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.log('⚠️ No authenticated user');
+        logger.debug('⚠️ No authenticated user');
         setIsLoading(false);
         return;
       }
@@ -65,7 +66,7 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
         return;
       }
 
-      console.log('👤 Employee found:', employee);
+      logger.debug('👤 Employee found:', employee);
 
       // Get today's attendance record with penalties - simplified query to avoid 406 errors
       const today = new Date().toISOString().split('T')[0];
@@ -81,13 +82,13 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
         console.error('❌ Error fetching attendance record:', recordError);
       }
 
-      console.log('📋 Today\'s record with penalties:', record);
+      logger.debug('📋 Today\'s record with penalties:', record);
 
       if (record) {
         setTodayRecord(record);
         setHasCheckedIn(!!record.check_in_time);
         setHasCheckedOut(!!record.check_out_time);
-        console.log('✅ Status updated:', {
+        logger.debug('✅ Status updated:', {
           checkIn: !!record.check_in_time,
           checkOut: !!record.check_out_time,
           isLate: record.is_late,
@@ -99,7 +100,7 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
         setTodayRecord(null);
         setHasCheckedIn(false);
         setHasCheckedOut(false);
-        console.log('📝 No attendance record for today');
+        logger.debug('📝 No attendance record for today');
       }
     } catch (error) {
       console.error('❌ Error refreshing attendance status:', error);

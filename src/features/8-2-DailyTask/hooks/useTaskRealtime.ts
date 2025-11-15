@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { throttle, clearCache } from '../utils/optimizationUtils';
+import { logger } from '@/config/logger';
 
 interface UseTaskRealtimeOptions {
   organizationId: string | null;
@@ -21,7 +22,7 @@ export const useTaskRealtime = ({
 
     // Create throttled refresh function (max once every 5 seconds)
     const throttledRefresh = throttle(() => {
-      console.log('🔄 Throttled refresh triggered');
+      logger.realtime('🔄 Throttled refresh triggered');
       clearCache(`tasks_${organizationId}_*`); // Clear cache for all users to get fresh data
       onRefresh(); // Force refresh to bypass cache
     }, 5000); // 5 seconds
@@ -39,12 +40,12 @@ export const useTaskRealtime = ({
           filter: `organization_id=eq.${organizationId}`,
         },
         (payload) => {
-          console.log('📡 Real-time tasks update:', payload.eventType);
+          logger.realtime('📡 Real-time tasks update:', payload.eventType);
 
           // Skip refresh if this task was recently updated by us (optimization for status updates)
           const taskId = payload.new?.id || payload.old?.id;
           if (taskId && recentlyUpdatedTasksRef.current.has(taskId)) {
-            console.log('⏭️ Skipping refresh for recently updated task:', taskId);
+            logger.realtime('⏭️ Skipping refresh for recently updated task:', taskId);
             return;
           }
 
@@ -53,11 +54,11 @@ export const useTaskRealtime = ({
       )
       .subscribe();
 
-    console.log('✅ Real-time subscriptions setup (OPTIMIZED)');
+    logger.realtime('✅ Real-time subscriptions setup (OPTIMIZED)');
 
     // Cleanup subscriptions
     return () => {
-      console.log('🧹 Cleaning up real-time subscriptions');
+      logger.realtime('🧹 Cleaning up real-time subscriptions');
       supabase.removeChannel(tasksChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

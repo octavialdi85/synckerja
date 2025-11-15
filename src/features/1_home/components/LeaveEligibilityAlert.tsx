@@ -3,9 +3,12 @@ import { Badge } from '@/features/ui/badge';
 import { Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useEmployeeLeaveEligibility } from '../hooks/useEmployeeLeaveEligibility';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export const LeaveEligibilityAlert = () => {
+  const { t, dateLocale } = useAppTranslation();
   const { data: eligibility, isLoading } = useEmployeeLeaveEligibility();
 
   if (isLoading) {
@@ -13,7 +16,7 @@ export const LeaveEligibilityAlert = () => {
       <Alert>
         <Clock className="h-4 w-4" />
         <AlertDescription>
-          Memuat informasi kelayakan cuti...
+          {t('leaveEligibility.loading', 'Loading leave eligibility information...')}
         </AlertDescription>
       </Alert>
     );
@@ -24,7 +27,7 @@ export const LeaveEligibilityAlert = () => {
       <Alert variant="destructive">
         <XCircle className="h-4 w-4" />
         <AlertDescription>
-          Tidak dapat memuat informasi kelayakan cuti
+          {t('leaveEligibility.loadError', 'Unable to load leave eligibility information')}
         </AlertDescription>
       </Alert>
     );
@@ -42,7 +45,7 @@ export const LeaveEligibilityAlert = () => {
         <AlertDescription className="flex items-center justify-between">
           <span>{eligibility.message}</span>
           <Badge variant={eligibility.isEligible ? "default" : "secondary"}>
-            {eligibility.isEligible ? "Berhak Cuti" : "Belum Berhak"}
+            {eligibility.isEligible ? t('leaveEligibility.eligible', 'Eligible for Leave') : t('leaveEligibility.notEligible', 'Not Eligible')}
           </Badge>
         </AlertDescription>
       </Alert>
@@ -52,25 +55,28 @@ export const LeaveEligibilityAlert = () => {
         <div className="bg-muted/50 rounded-lg p-4">
           <div className="flex items-center gap-2 text-sm font-medium mb-1">
             <Calendar className="h-4 w-4" />
-            Sisa Cuti
+            {t('profile.remainingLeave', 'Remaining Leave')}
           </div>
           <p className="text-2xl font-bold">
-            {eligibility.remainingDays} hari
+            {applyVariables(t('leaveEligibility.days', '{{days}} days'), { days: String(eligibility.remainingDays) })}
           </p>
           <p className="text-sm text-muted-foreground">
-            dari {eligibility.annualLeaveEntitlement} hari/tahun
+            {applyVariables(t('profile.leaveBalance', '{{remaining}} days from {{total}} days/year'), {
+              remaining: String(eligibility.remainingDays),
+              total: String(eligibility.annualLeaveEntitlement)
+            })}
           </p>
         </div>
 
         <div className="bg-muted/50 rounded-lg p-4">
           <div className="flex items-center gap-2 text-sm font-medium mb-1">
             <Clock className="h-4 w-4" />
-            Strategi Cuti
+            {t('leaveEligibility.strategy', 'Leave Strategy')}
           </div>
           <p className="text-sm">
             {eligibility.strategy === 'after_probation' 
-              ? 'Setelah Probation' 
-              : 'Setelah Masa Kerja'
+              ? t('leaveEligibility.afterProbation', 'After Probation') 
+              : t('leaveEligibility.afterWorkPeriod', 'After Work Period')
             }
           </p>
         </div>
@@ -79,10 +85,10 @@ export const LeaveEligibilityAlert = () => {
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="flex items-center gap-2 text-sm font-medium mb-1">
               <Calendar className="h-4 w-4" />
-              Tanggal Hak Cuti
+              {t('leaveEligibility.eligibilityDate', 'Leave Eligibility Date')}
             </div>
             <p className="text-sm">
-              {format(eligibility.eligibilityDate, 'dd MMM yyyy', { locale: id })}
+              {format(eligibility.eligibilityDate, 'dd MMM yyyy', { locale: dateLocale })}
             </p>
           </div>
         )}

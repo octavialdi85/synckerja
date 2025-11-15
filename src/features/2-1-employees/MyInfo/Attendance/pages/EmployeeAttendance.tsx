@@ -12,8 +12,10 @@ import { toast } from 'sonner';
 import { MyInfoSidebarFooter } from '@/features/2-1-employees/MyInfo/shared/MyInfoSidebarFooter';
 import { MyInfoContentFooter } from '@/features/2-1-employees/MyInfo/shared/MyInfoContentFooter';
 import PersonalAttendanceCalendar from '../hooks/PersonalAttendanceCalendar';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const EmployeeAttendance = () => {
+  const { t } = useAppTranslation();
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -178,19 +180,19 @@ const EmployeeAttendance = () => {
                             size="lg"
                             onPhotoUpdate={async (newPhotoUrl) => {
                               try {
-                                const loadingToast = toast.loading('Memperbarui foto profil...');
+                                const loadingToast = toast.loading(t('profile.updatingPhoto', 'Updating profile photo...'));
                                 const result = await syncAvatarAcrossApp(newPhotoUrl);
                                 toast.dismiss(loadingToast);
                                 
                                 if (result?.success) {
                                   setTimeout(() => refetch(), 500);
-                                  toast.success('Foto profil berhasil diperbarui di seluruh aplikasi! 🎉');
+                                  toast.success(t('profile.photoUpdatedSuccess', 'Profile photo successfully updated across the app! 🎉'));
                                 } else {
-                                  toast.error('Gagal menyinkronkan foto di seluruh aplikasi');
+                                  toast.error(t('profile.failedToSyncPhoto', 'Failed to sync photo across the app'));
                                 }
                               } catch (error) {
                                 console.error('Error during photo update:', error);
-                                toast.error('Gagal memperbarui foto profil');
+                                toast.error(t('profile.failedToUpdatePhoto', 'Failed to update profile photo'));
                               }
                             }}
                           />
@@ -245,7 +247,7 @@ const EmployeeAttendance = () => {
                     <div className="flex-1 min-h-0">
                       <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col h-full">
                         <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                          <div className="p-6">
+                          <div className="p-6 h-full">
                             {/* Header */}
                             <div className="flex items-center justify-between mb-6">
                               <h2 className="text-xl font-semibold text-gray-900">Attendance Records</h2>

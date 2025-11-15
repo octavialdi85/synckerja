@@ -4,6 +4,7 @@ import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Button } from '@/features/ui/button';
 import { AttendanceViewToggle } from '@/features/2-3-employee-attendance';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface AttendanceToolbarProps {
   searchTerm: string;
@@ -32,6 +33,7 @@ export const AttendanceToolbar = ({
   currentView,
   onViewChange,
 }: AttendanceToolbarProps) => {
+  const { t } = useAppTranslation();
   const handleSearch = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       onSearchChange(event.target.value);
@@ -44,7 +46,7 @@ export const AttendanceToolbar = ({
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative flex-1 min-w-[200px]">
           <Input
-            placeholder="Cari nama karyawan..."
+            placeholder={t('search.employeeName', 'Search employee name...')}
             value={searchTerm}
             onChange={handleSearch}
             className="h-9 w-full pl-4 pr-10 text-sm border border-gray-300 focus-visible:ring-blue-500 focus-visible:border-blue-500"
@@ -75,7 +77,7 @@ export const AttendanceToolbar = ({
             <CalendarIcon className="h-4 w-4" />
             {dateRange?.from && dateRange?.to
               ? dateRangeLabel ?? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
-              : dateRangeLabel ?? 'Pilih rentang tanggal'}
+              : dateRangeLabel ?? t('datePicker.selectDateRange', 'Select date range')}
           </Button>
         )}
 

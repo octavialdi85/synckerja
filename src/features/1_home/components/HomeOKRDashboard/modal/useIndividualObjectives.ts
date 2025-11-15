@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
 
 export interface IndividualObjective {
   id: string;
@@ -54,9 +55,7 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
       return;
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 Setting up real-time subscription for individual objectives with org:', organizationId);
-    }
+    logger.realtime('🔄 Setting up real-time subscription for individual objectives with org:', organizationId);
 
     subscriptionRef.current = supabase
       .channel(`individual_objectives_realtime_${organizationId}`)
@@ -69,14 +68,12 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📡 REAL-TIME UPDATE for individual objectives:', {
-              event: payload.eventType,
-              table: payload.table,
-              new: payload.new,
-              old: payload.old
-            });
-          }
+          logger.realtime('📡 REAL-TIME UPDATE for individual objectives:', {
+            event: payload.eventType,
+            table: payload.table,
+            new: payload.new,
+            old: payload.old
+          });
           
           // Force immediate invalidation
           queryClient.invalidateQueries({ 
@@ -92,16 +89,12 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         }
       )
       .subscribe((status) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('📊 Individual objectives subscription status:', status);
-        }
+        logger.realtime('📊 Individual objectives subscription status:', status);
       });
 
     return () => {
       if (subscriptionRef.current) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 Cleaning up individual objectives subscription');
-        }
+        logger.realtime('🔄 Cleaning up individual objectives subscription');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
       }
@@ -112,15 +105,11 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
     queryKey: ['individual-objectives', organizationId, cycleIds],
     queryFn: async () => {
       if (!organizationId) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('❌ No organizationId provided');
-        }
+        logger.debug('❌ No organizationId provided');
         return [];
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 Fetching individual objectives:', { organizationId, cycleIds });
-      }
+      logger.query('🔍 Fetching individual objectives:', { organizationId, cycleIds });
       
       // OPTIMIZATION: Simplified query to prevent timeout
       // Only select essential fields, reduced joins depth
@@ -177,7 +166,7 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Individual objectives fetched:', data);
+        logger.query('✅ Individual objectives fetched:', data);
       }
       return data || [];
     },
@@ -191,7 +180,7 @@ export const useCreateIndividualObjective = () => {
 
   return useMutation({
     mutationFn: async (objectiveData: CreateIndividualObjectiveData) => {
-      console.log('🚀 Creating individual objective:', objectiveData);
+      logger.debug('🚀 Creating individual objective:', objectiveData);
 
       const { data, error } = await supabase
         .from('individual_objectives')
@@ -204,7 +193,7 @@ export const useCreateIndividualObjective = () => {
         throw error;
       }
 
-      console.log('✅ Individual objective created successfully:', data);
+      logger.debug('✅ Individual objective created successfully:', data);
       return data;
     },
     onSuccess: () => {
@@ -238,7 +227,7 @@ export const useUpdateIndividualObjective = () => {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<IndividualObjective> }) => {
-      console.log('🔄 Updating individual objective:', { id, updates });
+      logger.debug('🔄 Updating individual objective:', { id, updates });
 
       const { data, error } = await supabase
         .from('individual_objectives')
@@ -252,7 +241,7 @@ export const useUpdateIndividualObjective = () => {
         throw error;
       }
 
-      console.log('✅ Individual objective updated successfully:', data);
+      logger.debug('✅ Individual objective updated successfully:', data);
       return data;
     },
     onSuccess: () => {
@@ -286,7 +275,7 @@ export const useDeleteIndividualObjective = () => {
 
   return useMutation({
     mutationFn: async (objectiveId: string) => {
-      console.log('🗑️ Deleting individual objective:', objectiveId);
+      logger.debug('🗑️ Deleting individual objective:', objectiveId);
 
       try {
         // First, delete related weekly check-ins via key results
@@ -307,7 +296,7 @@ export const useDeleteIndividualObjective = () => {
           if (checkinError) {
             console.warn('⚠️ Warning deleting weekly check-ins:', checkinError);
           } else {
-            console.log('✅ Deleted weekly check-ins for key results');
+            logger.debug('✅ Deleted weekly check-ins for key results');
           }
 
           // Delete activities for these key results (check if column exists)
@@ -317,7 +306,7 @@ export const useDeleteIndividualObjective = () => {
             .in('key_result_id', keyResultIds);
 
           if (activityError) {
-            console.warn('⚠️ Warning deleting activities by key_result_id:', activityError);
+            logger.warn('⚠️ Warning deleting activities by key_result_id:', activityError);
             // Try alternative column names
             const { error: altActivityError } = await supabase
               .from('activities')
@@ -325,12 +314,12 @@ export const useDeleteIndividualObjective = () => {
               .in('objective_id', keyResultIds);
 
             if (altActivityError) {
-              console.warn('⚠️ Alternative activity deletion also failed:', altActivityError);
+              logger.warn('⚠️ Alternative activity deletion also failed:', altActivityError);
             } else {
-              console.log('✅ Deleted activities using alternative column');
+              logger.debug('✅ Deleted activities using alternative column');
             }
           } else {
-            console.log('✅ Deleted activities for key results');
+            logger.debug('✅ Deleted activities for key results');
           }
 
           // Delete the key results themselves
@@ -343,7 +332,7 @@ export const useDeleteIndividualObjective = () => {
             console.error('❌ Error deleting key results:', keyResultError);
             throw keyResultError;
           } else {
-            console.log('✅ Deleted key results for individual objective');
+            logger.debug('✅ Deleted key results for individual objective');
           }
         }
 
@@ -354,7 +343,7 @@ export const useDeleteIndividualObjective = () => {
           .eq('individual_objective_id', objectiveId);
 
         if (directActivityError) {
-          console.warn('⚠️ Warning deleting direct activities:', directActivityError);
+          logger.warn('⚠️ Warning deleting direct activities:', directActivityError);
           // Try alternative column names
           const { error: altDirectActivityError } = await supabase
             .from('activities')
@@ -362,12 +351,12 @@ export const useDeleteIndividualObjective = () => {
             .eq('objective_id', objectiveId);
 
           if (altDirectActivityError) {
-            console.warn('⚠️ Alternative direct activity deletion also failed:', altDirectActivityError);
+            logger.warn('⚠️ Alternative direct activity deletion also failed:', altDirectActivityError);
           } else {
-            console.log('✅ Deleted direct activities using alternative column');
+            logger.debug('✅ Deleted direct activities using alternative column');
           }
         } else {
-          console.log('✅ Deleted direct activities for individual objective');
+          logger.debug('✅ Deleted direct activities for individual objective');
         }
 
         // Finally, delete the individual objective itself
@@ -381,7 +370,7 @@ export const useDeleteIndividualObjective = () => {
           throw error;
         }
 
-        console.log('✅ Individual objective deleted successfully');
+        logger.debug('✅ Individual objective deleted successfully');
       } catch (error) {
         console.error('❌ Error in delete process:', error);
         throw error;

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 const isDev = import.meta.env.DEV;
 
@@ -20,7 +21,7 @@ export const useAvailableEmployees = () => {
       if (!organizationId) return [];
 
       if (isDev) {
-        console.log('Fetching available employees for organization:', organizationId);
+        logger.query('Fetching available employees for organization:', organizationId);
       }
 
       const { data, error } = await supabase
@@ -36,7 +37,7 @@ export const useAvailableEmployees = () => {
       }
 
       if (isDev) {
-        console.log('Available employees fetched:', data?.length || 0, data);
+        logger.query('Available employees fetched:', data?.length || 0, data);
       }
       return (data as AvailableEmployee[]) || [];
     },

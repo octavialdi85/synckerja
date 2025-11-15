@@ -1,6 +1,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 
 export type Profile = {
   user_id: string;
@@ -50,9 +51,9 @@ export const useProfile = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      // console.log('🔍 useProfile - Basic profile data:', profileData);
-      // console.log('🔍 useProfile - Extended profile data:', detailsData);
-      // console.log('🔍 useProfile - Employee photo data:', employeeData);
+      logger.userData('🔍 useProfile - Basic profile data:', profileData);
+      logger.userData('🔍 useProfile - Extended profile data:', detailsData);
+      logger.userData('🔍 useProfile - Employee photo data:', employeeData);
 
       // Use employee photo if user_profile_details doesn't have one
       const photoUrl = detailsData?.profile_photo_url || employeeData?.profile_photo_url || null;
@@ -68,7 +69,7 @@ export const useProfile = () => {
         profile_photo_url: photoUrl,
       };
 
-      // console.log('🔍 useProfile - Final combined data:', combinedData);
+      logger.userData('🔍 useProfile - Final combined data:', combinedData);
       return combinedData as Profile;
     },
     enabled: true,

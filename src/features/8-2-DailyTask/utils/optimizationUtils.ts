@@ -2,6 +2,8 @@
  * Optimization utilities for reducing database queries and improving performance
  */
 
+import { logger } from '@/config/logger';
+
 // Define isDev once at module level for performance
 const isDev = import.meta.env.DEV;
 
@@ -94,7 +96,7 @@ export function setCache<T>(key: string, data: T): void {
     timestamp: Date.now()
   });
   if (isDev) {
-    console.log(`💾 Cached: ${key}`);
+    logger.debug(`💾 Cached: ${key}`);
   }
 }
 
@@ -167,7 +169,7 @@ let queryCounter = 0;
 export function trackQuery(name: string) {
   queryCounter++;
   if (isDev) {
-    console.log(`📊 Query #${queryCounter}: ${name}`);
+    logger.query(`📊 Query #${queryCounter}: ${name}`);
   }
 }
 

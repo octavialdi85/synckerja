@@ -12,11 +12,14 @@ import { UpgradeConfirmationModal } from './modal/UpgradeConfirmationModal';
 import { useSchedulePlanChange } from './hooks/useSchedulePlanChange';
 import { PendingChangesCard } from './section/PendingChangesCard';
 import { UpgradeOptionsModal } from './modal/UpgradeOptionsModal';
-import { PlansHeader, PlanCard, TrustIndicators } from './section';
+import { PlanCard, TrustIndicators } from './section';
 import { Card, CardContent, CardHeader } from '@/features/ui/card';
 import { LoadingDots } from '@/components/LoadingDots';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 const HRISSubscriptionPlansTab = () => {
+  const { t } = useAppTranslation();
   const [memberCounts, setMemberCounts] = useState<{ [key: string]: number }>({});
   const [billingCycles, setBillingCycles] = useState<{ [key: string]: 'monthly' | 'yearly' }>({});
   const [isYearly, setIsYearly] = useState(false);
@@ -309,17 +312,21 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     
     if (isCurrent) {
       if (memberCount > currentMemberLimit) {
-        return 'Upgrade Plan';
+        return t('subscription.plans.button.upgrade', 'Upgrade Plan');
       } else if (memberCount < currentMemberLimit) {
-        return canChangePlan(plan, memberCount) ? 'Downgrade Plan' : 'Tidak Bisa Downgrade';
+        return canChangePlan(plan, memberCount) 
+          ? t('subscription.plans.button.downgrade', 'Downgrade Plan') 
+          : t('subscription.plans.button.cannotDowngrade', 'Cannot Downgrade');
       } else if (billingCycle !== currentBillingCycle) {
-        return billingCycle === 'yearly' ? 'Upgrade ke Tahunan' : 'Ganti ke Bulanan';
+        return billingCycle === 'yearly' 
+          ? t('subscription.plans.button.upgradeToYearly', 'Upgrade to Yearly') 
+          : t('subscription.plans.button.switchToMonthly', 'Switch to Monthly');
       } else {
-        return 'Current Plan';
+        return t('subscription.plans.button.current', 'Current Plan');
       }
     }
     
-    return 'Pilih Plan';
+    return t('subscription.plans.button.select', 'Select Plan');
   };
   if (isLoading) {
     return (
@@ -348,8 +355,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
             <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <h2 className="text-sm font-semibold text-gray-900">Subscription Plans</h2>
-                  <p className="text-xs text-gray-500 mt-1">Choose the perfect plan for your organization</p>
+                  <h2 className="text-sm font-semibold text-gray-900">{t('subscription.plans.title', 'Subscription Plans')}</h2>
+                  <p className="text-xs text-gray-500 mt-1">{t('subscription.plans.description', 'Choose the perfect plan for your organization')}</p>
                 </div>
               </div>
             </div>
@@ -357,9 +364,6 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
               <div className="p-4 space-y-4">
-                {/* Header */}
-                <PlansHeader />
-
                 {/* Pending Changes Card */}
                 <PendingChangesCard />
 
@@ -427,10 +431,10 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
             <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-600">
-                  Showing <span className="font-medium">{plans?.length || 0}</span> plans
+                  {applyVariables(t('subscription.plans.footer.showing', 'Showing {{count}} plans'), { count: String(plans?.length || 0) })}
                 </div>
                 <div className="text-xs text-gray-500">
-                  Last updated: {new Date().toLocaleTimeString()}
+                  {applyVariables(t('subscription.plans.footer.lastUpdated', 'Last updated: {{time}}'), { time: new Date().toLocaleTimeString() })}
                 </div>
               </div>
             </div>
@@ -443,8 +447,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
         <div className="bg-white border rounded-lg h-full flex flex-col">
           {/* Sidebar Header */}
           <div className="px-4 py-1.5 border-b flex-shrink-0">
-            <h3 className="text-sm font-semibold text-gray-900">Plan Comparison</h3>
-            <p className="text-xs text-gray-500 mt-1">Compare features and pricing</p>
+            <h3 className="text-sm font-semibold text-gray-900">{t('subscription.plans.comparison.title', 'Plan Comparison')}</h3>
+            <p className="text-xs text-gray-500 mt-1">{t('subscription.plans.comparison.description', 'Compare features and pricing')}</p>
           </div>
 
           {/* Scrollable Sidebar Content */}
@@ -453,18 +457,18 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
               {/* Current Plan Summary */}
               {subscriptionStatus && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">Current Plan</h4>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">{t('subscription.plans.comparison.currentPlan', 'Current Plan')}</h4>
                   <div className="space-y-1 text-xs text-blue-800">
                     <div className="flex justify-between">
-                      <span>Plan:</span>
+                      <span>{t('subscription.plans.comparison.plan', 'Plan:')}</span>
                       <span className="font-medium">{subscriptionStatus.plan_name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Members:</span>
+                      <span>{t('subscription.plans.comparison.members', 'Members:')}</span>
                       <span className="font-medium">{subscriptionStatus.member_count}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Billing:</span>
+                      <span>{t('subscription.plans.comparison.billing', 'Billing:')}</span>
                       <span className="font-medium capitalize">{subscriptionStatus.billing_cycle}</span>
                     </div>
                   </div>
@@ -473,18 +477,18 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
 
               {/* Quick Stats */}
               <div className="space-y-3">
-                <div className="text-xs font-medium text-gray-900">Quick Stats</div>
+                <div className="text-xs font-medium text-gray-900">{t('subscription.plans.comparison.quickStats', 'Quick Stats')}</div>
                 <div className="space-y-2 text-xs text-gray-600">
                   <div className="flex justify-between">
-                    <span>Total Plans:</span>
+                    <span>{t('subscription.plans.comparison.totalPlans', 'Total Plans:')}</span>
                     <span className="font-medium">{plans?.length || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Current Employees:</span>
+                    <span>{t('subscription.plans.comparison.currentEmployees', 'Current Employees:')}</span>
                     <span className="font-medium">{currentEmployeeCount}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Active Features:</span>
+                    <span>{t('subscription.plans.comparison.activeFeatures', 'Active Features:')}</span>
                     <span className="font-medium">{plans?.length || 0}</span>
                   </div>
                 </div>
@@ -495,8 +499,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           {/* Sidebar Footer */}
           <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>Live pricing</span>
-              <span className="text-xs text-gray-400">Real-time</span>
+              <span>{t('subscription.plans.comparison.footer.livePricing', 'Live pricing')}</span>
+              <span className="text-xs text-gray-400">{t('subscription.plans.comparison.footer.realTime', 'Real-time')}</span>
             </div>
           </div>
         </div>

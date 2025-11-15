@@ -1,6 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { applyVariables, defaultTranslations } from "./translations";
 import { useLanguage } from "./LanguageProvider";
+import { id, enUS } from "date-fns/locale";
 
 export const useAppTranslation = () => {
   const { language } = useLanguage();
@@ -22,7 +23,11 @@ export const useAppTranslation = () => {
     [language],
   );
 
-  return { t: translate, language };
+  const dateLocale = useMemo(() => {
+    return language === 'id' ? id : enUS;
+  }, [language]);
+
+  return { t: translate, language, dateLocale };
 };
 
 

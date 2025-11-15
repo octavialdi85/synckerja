@@ -15,6 +15,8 @@ import { LocationTypesCRUD } from './LocationTypesCRUD';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 interface EnhancedAddOfficeLocationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,6 +27,7 @@ export const EnhancedAddOfficeLocationModal = ({
   onOpenChange,
   onLocationAdded
 }: EnhancedAddOfficeLocationModalProps) => {
+  const { t } = useAppTranslation();
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -87,8 +90,8 @@ export const EnhancedAddOfficeLocationModal = ({
     if (locationSelected && formData.latitude !== 0 && formData.longitude !== 0) {
       setActiveTab('form');
       toast({
-        title: "Lokasi Dikonfirmasi",
-        description: "Silakan lengkapi detail lokasi pada tab berikutnya."
+        title: t('officeLocation.locationConfirmed', 'Location Confirmed'),
+        description: t('officeLocation.completeDetailsNextTab', 'Please complete location details in the next tab.')
       });
     }
   };
@@ -96,8 +99,8 @@ export const EnhancedAddOfficeLocationModal = ({
     if (formData.address && formData.latitude && formData.longitude) {
       setLocationSelected(true);
       toast({
-        title: "Lokasi Manual Dikonfirmasi",
-        description: "Lokasi berhasil diatur secara manual."
+        title: t('officeLocation.manualLocationConfirmed', 'Manual Location Confirmed'),
+        description: t('officeLocation.manualLocationSet', 'Location successfully set manually.')
       });
     }
   };
@@ -105,16 +108,16 @@ export const EnhancedAddOfficeLocationModal = ({
     e.preventDefault();
     if (!locationSelected || formData.latitude === 0 || formData.longitude === 0) {
       toast({
-        title: "Error",
-        description: "Silakan pilih lokasi terlebih dahulu",
+        title: t('common.error', 'Error'),
+        description: t('officeLocation.pleaseSelectLocation', 'Please select a location first'),
         variant: "destructive"
       });
       return;
     }
     if (!organizationId) {
       toast({
-        title: "Error",
-        description: "Organization tidak ditemukan",
+        title: t('common.error', 'Error'),
+        description: t('officeLocation.organizationNotFound', 'Organization not found'),
         variant: "destructive"
       });
       return;
@@ -123,11 +126,11 @@ export const EnhancedAddOfficeLocationModal = ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        toast({
-          title: "Error",
-          description: "User tidak terautentikasi",
-          variant: "destructive"
-        });
+      toast({
+        title: t('common.error', 'Error'),
+        description: t('officeLocation.userNotAuthenticated', 'User not authenticated'),
+        variant: "destructive"
+      });
         setLoading(false);
         return;
       }
@@ -152,8 +155,8 @@ export const EnhancedAddOfficeLocationModal = ({
       } = await supabase.from('office_locations').insert(cleanedData).select().single();
       if (error) throw error;
       toast({
-        title: "Berhasil",
-        description: "Lokasi kantor berhasil ditambahkan"
+        title: t('common.success', 'Success'),
+        description: t('officeLocation.locationAdded', 'Office location added successfully')
       });
 
       // Reset form
@@ -185,8 +188,8 @@ export const EnhancedAddOfficeLocationModal = ({
     } catch (error) {
       console.error('Error adding office location:', error);
       toast({
-        title: "Error",
-        description: "Gagal menambahkan lokasi kantor",
+        title: t('common.error', 'Error'),
+        description: t('officeLocation.failedToAdd', 'Failed to add office location'),
         variant: "destructive"
       });
     } finally {
@@ -225,10 +228,10 @@ export const EnhancedAddOfficeLocationModal = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Tambah Lokasi Kantor Baru
+            {t('officeLocation.addNewLocation', 'Add New Office Location')}
           </DialogTitle>
           <DialogDescription>
-            Pilih lokasi menggunakan peta interaktif atau masukkan koordinat secara manual.
+            {t('officeLocation.selectLocationDescription', 'Select location using interactive map or enter coordinates manually.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -236,14 +239,14 @@ export const EnhancedAddOfficeLocationModal = ({
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="map">
               <MapPin className="h-4 w-4 mr-2" />
-              Peta Interaktif
+              {t('officeLocation.interactiveMap', 'Interactive Map')}
             </TabsTrigger>
             <TabsTrigger value="manual">
               <Search className="h-4 w-4 mr-2" />
-              Input Manual
+              {t('officeLocation.manualInput', 'Manual Input')}
             </TabsTrigger>
             <TabsTrigger value="form" disabled={!locationSelected}>
-              Detail Lokasi
+              {t('officeLocation.locationDetails', 'Location Details')}
               {locationSelected && <CheckCircle className="h-4 w-4 ml-2 text-green-600" />}
             </TabsTrigger>
           </TabsList>
@@ -257,14 +260,14 @@ export const EnhancedAddOfficeLocationModal = ({
                 
                 <div className="flex justify-end">
                   <Button onClick={handleConfirmLocation} className="bg-blue-600 hover:bg-blue-700">
-                    Konfirmasi Lokasi & Lanjutkan
+                    {t('officeLocation.confirmLocationContinue', 'Confirm Location & Continue')}
                   </Button>
                 </div>
               </div>}
             
             {!locationSelected && <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-blue-700 text-sm">
-                  💡 Silakan gunakan kotak pencarian atau klik langsung pada peta untuk memilih lokasi
+                  💡 {t('officeLocation.useSearchOrClickMap', 'Please use the search box or click directly on the map to select a location')}
                 </p>
               </div>}
           </TabsContent>
@@ -272,21 +275,21 @@ export const EnhancedAddOfficeLocationModal = ({
           <TabsContent value="manual" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label htmlFor="manual-address">Alamat Lengkap</Label>
+                <Label htmlFor="manual-address">{t('officeLocation.fullAddress', 'Full Address')}</Label>
                 <Input id="manual-address" value={formData.address} onChange={e => setFormData(prev => ({
                 ...prev,
                 address: e.target.value
-              }))} placeholder="Masukkan alamat lengkap..." />
+              }))} placeholder={t('officeLocation.enterFullAddress', 'Enter full address...')} />
               </div>
               <div>
-                <Label htmlFor="manual-lat">Latitude</Label>
+                <Label htmlFor="manual-lat">{t('officeLocation.latitude', 'Latitude')}</Label>
                 <Input id="manual-lat" type="number" step="any" value={formData.latitude || ''} onChange={e => setFormData(prev => ({
                 ...prev,
                 latitude: parseFloat(e.target.value) || 0
               }))} placeholder="-6.2088" />
               </div>
               <div>
-                <Label htmlFor="manual-lng">Longitude</Label>
+                <Label htmlFor="manual-lng">{t('officeLocation.longitude', 'Longitude')}</Label>
                 <Input id="manual-lng" type="number" step="any" value={formData.longitude || ''} onChange={e => setFormData(prev => ({
                 ...prev,
                 longitude: parseFloat(e.target.value) || 0
@@ -296,12 +299,12 @@ export const EnhancedAddOfficeLocationModal = ({
             
             <div className="flex justify-end gap-2">
               <Button onClick={handleManualLocationInput} disabled={!formData.address || !formData.latitude || !formData.longitude}>
-                Konfirmasi Lokasi Manual
+                {t('officeLocation.confirmManualLocation', 'Confirm Manual Location')}
               </Button>
             </div>
             
             {locationSelected && <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-800 text-sm">✓ Lokasi manual berhasil dikonfirmasi</p>
+                <p className="text-green-800 text-sm">✓ {t('officeLocation.manualLocationConfirmedSuccess', 'Manual location confirmed successfully')}</p>
               </div>}
           </TabsContent>
 
@@ -309,26 +312,26 @@ export const EnhancedAddOfficeLocationModal = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Display Selected Location Summary */}
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-1">Lokasi yang Dipilih:</h4>
+                <h4 className="font-medium text-blue-900 mb-1">{t('officeLocation.selectedLocation', 'Selected Location')}:</h4>
                 <p className="text-sm text-blue-800">{formData.formatted_address || formData.address}</p>
                 <p className="text-xs text-blue-600">
-                  Koordinat: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                  {t('officeLocation.coordinates', 'Coordinates')}: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                 </p>
               </div>
 
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <Label htmlFor="name">Nama Lokasi *</Label>
+                  <Label htmlFor="name">{t('officeLocation.locationName', 'Location Name')} *</Label>
                   <Input id="name" value={formData.name} onChange={e => setFormData(prev => ({
                   ...prev,
                   name: e.target.value
-                }))} placeholder="contoh: Kantor Pusat Jakarta" required />
+                }))} placeholder={t('officeLocation.locationNamePlaceholder', 'e.g., Jakarta Head Office')} required />
                 </div>
 
                 <div>
                   <Label htmlFor="location_type" className="flex items-center justify-between">
-                    Tipe Lokasi
+                    {t('officeLocation.locationType', 'Location Type')}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -373,26 +376,26 @@ export const EnhancedAddOfficeLocationModal = ({
                   location_type_id: value === "none" ? null : value
                 }))}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Pilih tipe lokasi" />
+                      <SelectValue placeholder={t('officeLocation.selectLocationType', 'Select location type')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Tidak ada tipe</SelectItem>
+                      <SelectItem value="none">{t('officeLocation.noType', 'No type')}</SelectItem>
                       {locationTypesLoading ? <SelectItem value="loading" disabled>
                           <div className="flex items-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Loading...
+                            {t('common.loading', 'Loading...')}
                           </div>
                         </SelectItem> : locationTypes.length > 0 ? locationTypes.map(type => <SelectItem key={type.id} value={type.id}>
                             {type.name}
                           </SelectItem>) : <SelectItem value="no-data" disabled>
-                          Tidak ada tipe lokasi
+                          {t('officeLocation.noLocationTypes', 'No location types')}
                         </SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label htmlFor="radius">Radius Absensi (meter)</Label>
+                  <Label htmlFor="radius">{t('officeLocation.attendanceRadius', 'Attendance Radius (meters)')}</Label>
                   <Input id="radius" type="number" value={formData.radius_meters} onChange={e => setFormData(prev => ({
                   ...prev,
                   radius_meters: parseInt(e.target.value) || 100
@@ -400,26 +403,26 @@ export const EnhancedAddOfficeLocationModal = ({
                 </div>
 
                 <div>
-                  <Label htmlFor="client">Klien (Opsional)</Label>
+                  <Label htmlFor="client">{t('officeLocation.clientOptional', 'Client (Optional)')}</Label>
                   <Select value={formData.client_id || "none"} onValueChange={value => setFormData(prev => ({
                   ...prev,
                   client_id: value === "none" ? null : value,
                   is_client_location: value !== "none" && value !== null
                 }))}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Pilih klien" />
+                      <SelectValue placeholder={t('officeLocation.selectClient', 'Select client')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Tidak ada klien</SelectItem>
+                      <SelectItem value="none">{t('officeLocation.noClient', 'No client')}</SelectItem>
                       {clientsLoading ? <SelectItem value="loading" disabled>
                           <div className="flex items-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Loading...
+                            {t('common.loading', 'Loading...')}
                           </div>
                         </SelectItem> : clients.length > 0 ? clients.map(client => <SelectItem key={client.id} value={client.id}>
                             {client.company_name}
                           </SelectItem>) : <SelectItem value="no-clients" disabled>
-                          Tidak ada klien tersedia
+                          {t('officeLocation.noClientsAvailable', 'No clients available')}
                         </SelectItem>}
                     </SelectContent>
                   </Select>
@@ -430,15 +433,15 @@ export const EnhancedAddOfficeLocationModal = ({
               {/* Contact Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="contact_person">Penanggung Jawab</Label>
+                  <Label htmlFor="contact_person">{t('officeLocation.contactPerson', 'Contact Person')}</Label>
                   <Input id="contact_person" value={formData.contact_person || ''} onChange={e => setFormData(prev => ({
                   ...prev,
                   contact_person: e.target.value
-                }))} placeholder="Nama penanggung jawab" />
+                }))} placeholder={t('officeLocation.contactPersonPlaceholder', 'Contact person name')} />
                 </div>
 
                 <div>
-                  <Label htmlFor="contact_phone">Nomor Telepon</Label>
+                  <Label htmlFor="contact_phone">{t('officeLocation.phoneNumber', 'Phone Number')}</Label>
                   <Input id="contact_phone" value={formData.contact_phone || ''} onChange={e => setFormData(prev => ({
                   ...prev,
                   contact_phone: e.target.value
@@ -448,22 +451,22 @@ export const EnhancedAddOfficeLocationModal = ({
 
               {/* Notes */}
               <div>
-                <Label htmlFor="notes">Catatan</Label>
+                <Label htmlFor="notes">{t('officeLocation.notes', 'Notes')}</Label>
                 <Textarea id="notes" value={formData.notes || ''} onChange={e => setFormData(prev => ({
                 ...prev,
                 notes: e.target.value
-              }))} placeholder="Catatan tambahan tentang lokasi ini..." rows={3} />
+              }))} placeholder={t('officeLocation.notesPlaceholder', 'Additional notes about this location...')} rows={3} />
               </div>
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
-                  Batal
+                  {t('common.cancel', 'Cancel')}
                 </Button>
                 <Button type="submit" disabled={loading || !locationSelected}>
                   {loading ? <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Menambahkan...
-                    </> : 'Tambah Lokasi'}
+                      {t('officeLocation.adding', 'Adding...')}
+                    </> : t('officeLocation.addLocation', 'Add Location')}
                 </Button>
               </DialogFooter>
             </form>
@@ -475,7 +478,7 @@ export const EnhancedAddOfficeLocationModal = ({
       <Dialog open={showLocationTypesCRUD} onOpenChange={setShowLocationTypesCRUD}>
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Manage Location Types</DialogTitle>
+            <DialogTitle>{t('officeLocation.manageLocationTypes', 'Manage Location Types')}</DialogTitle>
           </DialogHeader>
           <LocationTypesCRUD />
         </DialogContent>

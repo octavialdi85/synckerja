@@ -1,8 +1,11 @@
 import React from 'react';
 import { useDailyTaskReport } from '../context/ReportContext';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export const OverviewCards = () => {
+  const { t } = useAppTranslation();
   const { filtered } = useDailyTaskReport();
   const total = filtered.length;
   const completed = filtered.filter(p => p.isCompleted).length;
@@ -14,9 +17,41 @@ export const OverviewCards = () => {
   // Calculate Efficiency Rate: (On Time / Completed) × 100%
   const efficiencyRate = completed > 0 ? Math.round((ontime / completed) * 100 * 10) / 10 : 0;
 
-  // Calculate Weighted Productivity Score: ((On Time × 1.0) + (Late × 0.5) + (Pending × 0)) / Total × 100%
-  const weightedScore = total > 0 
-    ? Math.round(((ontime * 1.0) + (late * 0.5) + (pending * 0)) / total * 100 * 10) / 10 
+  // Calculate Productivity Score with Due Date Awareness
+  // Only count tasks that are:
+  // 1. Completed (on-time or late) - ALWAYS counted, even if premature
+  // 2. Overdue (pending but past due date) - counted as 0
+  // Pending tasks that haven't reached due date are NOT counted (fair assessment)
+  const now = new Date();
+  const eligibleTasks = filtered.filter(p => {
+    // Completed tasks are always eligible (even if premature completion)
+    if (p.isCompleted) return true;
+    
+    // Pending tasks: only eligible if past due date (overdue)
+    if (!p.isCompleted && p.dueDate) {
+      const dueDate = new Date(p.dueDate);
+      dueDate.setHours(23, 59, 59, 999);
+      return now.getTime() > dueDate.getTime(); // Already overdue
+    }
+    
+    // Pending tasks without due date are not eligible
+    return false;
+  });
+
+  const eligibleTotal = eligibleTasks.length;
+  const eligibleOnTime = eligibleTasks.filter(p => p.isOnTime === true).length;
+  const eligibleLate = eligibleTasks.filter(p => p.isOnTime === false).length;
+  const eligibleOverdue = eligibleTasks.filter(p => {
+    if (p.isCompleted) return false; // Only count pending overdue
+    if (!p.dueDate) return false;
+    const dueDate = new Date(p.dueDate);
+    dueDate.setHours(23, 59, 59, 999);
+    return now.getTime() > dueDate.getTime();
+  }).length;
+
+  // Productivity Score: (On Time × 1.0 + Late × 0.5 + Overdue × 0) ÷ Eligible Total × 100%
+  const weightedScore = eligibleTotal > 0
+    ? Math.round(((eligibleOnTime * 1.0) + (eligibleLate * 0.5) + (eligibleOverdue * 0)) / eligibleTotal * 100 * 10) / 10
     : 0;
 
   // Get color gradient based on percentage value
@@ -84,38 +119,38 @@ export const OverviewCards = () => {
   return (
     <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 mb-2">
       <Card 
-        title="Total Assignments" 
+        title={t('dailyTaskReport.overview.totalAssignments', 'Total Assignments')} 
         value={total} 
         color="border-gray-200" 
       />
       <Card 
-        title="Completed" 
+        title={t('dailyTaskReport.overview.completed', 'Completed')} 
         value={completed} 
         color="border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50" 
       />
       <Card 
-        title="On Time" 
+        title={t('dailyTaskReport.overview.onTime', 'On Time')} 
         value={ontime} 
         color="border-green-100 bg-gradient-to-br from-green-50 to-emerald-50" 
       />
       <Card 
-        title="Late" 
+        title={t('dailyTaskReport.overview.late', 'Late')} 
         value={late} 
         color="border-red-100 bg-gradient-to-br from-red-50 to-orange-50" 
       />
       <Card 
-        title="Efficiency Rate" 
+        title={t('dailyTaskReport.overview.efficiencyRate', 'Efficiency Rate')} 
         value={`${efficiencyRate}%`}
         color={getColorForPercentage(efficiencyRate)}
-        description={`${ontime}/${completed} on time`}
-        formula="On Time ÷ Completed"
+        description={applyVariables(t('dailyTaskReport.overview.efficiencyRate.description', '{{ontime}}/{{completed}} on time'), { ontime: String(ontime), completed: String(completed) })}
+        formula={t('dailyTaskReport.overview.efficiencyRate.formula', 'On Time ÷ Completed')}
       />
       <Card 
-        title="Productivity Score" 
+        title={t('dailyTaskReport.overview.productivityScore', 'Productivity Score')} 
         value={`${weightedScore}%`}
         color={getColorForPercentage(weightedScore)}
-        description={`Weighted: On Time 100%, Late 50%`}
-        formula="(On Time + Late×0.5) ÷ Total"
+        description={applyVariables(t('dailyTaskReport.overview.productivityScore.description', 'Only count: Completed + Overdue ({{count}} tasks)'), { count: String(eligibleTotal) })}
+        formula={applyVariables(t('dailyTaskReport.overview.productivityScore.formula', '(On Time × 1.0 + Late × 0.5) ÷ {{count}}'), { count: String(eligibleTotal) })}
       />
     </div>
   );

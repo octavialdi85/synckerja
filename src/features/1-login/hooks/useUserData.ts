@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/features/1-login/contexts/AuthContext";
+import { logger } from "@/config/logger";
 
 interface Profile {
   id: string;
@@ -50,13 +51,13 @@ export const useUserData = (): UserData => {
   const fetchUserData = useCallback(async (userId: string) => {
     // Prevent duplicate fetches for the same user
     if (fetchingRef.current) {
-      console.log('🚫 Preventing duplicate fetch for user:', userId);
+      logger.userData('🚫 Preventing duplicate fetch for user:', userId);
       return;
     }
 
     // Check if we already have this user in progress and have data
     if (lastFetchRef.current === userId && profile !== null) {
-      console.log('📋 Using existing fetch for user:', userId);
+      logger.userData('📋 Using existing fetch for user:', userId);
       return;
     }
 
@@ -64,7 +65,7 @@ export const useUserData = (): UserData => {
     const cacheKey = `user-${userId}`;
     const cached = userDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log('📋 Using cached user data for:', userId);
+      logger.userData('📋 Using cached user data for:', userId);
       setProfile(cached.data.profile);
       setOrganization(cached.data.organization);
       setUserRole(cached.data.userRole);
@@ -77,7 +78,7 @@ export const useUserData = (): UserData => {
       lastFetchRef.current = userId;
       setLoading(true);
       
-      console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
+      logger.userData("🔍 useUserData: Starting optimized fetch for user:", userId);
       
       // OPTIMIZED: Use Promise.allSettled for better error handling
       // This ensures all queries run in parallel, even if some fail
@@ -104,7 +105,7 @@ export const useUserData = (): UserData => {
       let profileData: Profile | null = null;
       if (profileResult.status === 'fulfilled' && profileResult.value.data) {
         profileData = profileResult.value.data;
-        console.log("✅ useUserData: Profile fetched:", profileData);
+        logger.userData("✅ useUserData: Profile fetched:", profileData);
       } else {
         const error = profileResult.status === 'rejected' ? profileResult.reason : profileResult.value.error;
         console.error("❌ useUserData: Profile error:", error);
@@ -146,7 +147,7 @@ export const useUserData = (): UserData => {
       let roleData: UserRole = null;
       if (roleResult.status === 'fulfilled' && !roleResult.value.error) {
         roleData = roleResult.value.data as UserRole;
-        console.log("✅ useUserData: Role in active org:", roleData);
+        logger.userData("✅ useUserData: Role in active org:", roleData);
       } else {
         const error = roleResult.status === 'rejected' ? roleResult.reason : roleResult.value.error;
         console.error("❌ useUserData: Role fetch error:", error);
@@ -165,7 +166,7 @@ export const useUserData = (): UserData => {
         if (orgError) {
           console.error("❌ useUserData: Organization error:", orgError);
         } else {
-          console.log("✅ useUserData: Organization fetched:", organizationData);
+          logger.userData("✅ useUserData: Organization fetched:", organizationData);
           orgData = organizationData;
         }
       }
@@ -220,7 +221,7 @@ export const useUserData = (): UserData => {
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
-      console.log('🔄 Manual refresh of user data triggered');
+      logger.userData('🔄 Manual refresh of user data triggered');
       lastFetchRef.current = ''; // Reset to allow refetch
       userDataCache.delete(`user-${user.id}`); // Clear cache
       fetchingRef.current = false; // Reset fetching flag

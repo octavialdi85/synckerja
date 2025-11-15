@@ -6,6 +6,7 @@ import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedU
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { LoadingDots } from './LoadingDots';
+import { logger } from '@/config/logger';
 
 interface HomeAccessGuardProps {
   children: ReactNode;
@@ -73,7 +74,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // Clear emailJustVerified flag once we've verified email and passed all checks
   useEffect(() => {
     if (user && emailJustVerified && isEmailVerified) {
-      console.log('HomeAccessGuard: Clearing emailJustVerified flag after successful verification');
+      logger.debug('HomeAccessGuard: Clearing emailJustVerified flag after successful verification');
       sessionStorage.removeItem('emailJustVerified');
     }
   }, [user, emailJustVerified, isEmailVerified]);
@@ -105,7 +106,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
           // Set has_active_subscription from organizations table
           const active = orgData.has_active_subscription === true;
           setHasActiveSubscription(active);
-          console.log('HomeAccessGuard: has_active_subscription from organizations table:', active);
+          logger.debug('HomeAccessGuard: has_active_subscription from organizations table:', active);
         }
 
         // Also check organization_subscriptions table for status (SECONDARY CHECK)
@@ -117,7 +118,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
 
         if (!subError && subData && 'status' in subData) {
           setSubscriptionStatus(subData.status as string);
-          console.log('HomeAccessGuard: subscription status from organization_subscriptions:', subData.status);
+          logger.debug('HomeAccessGuard: subscription status from organization_subscriptions:', subData.status);
         }
       } catch (error) {
         console.error('Error checking subscription:', error);
@@ -172,27 +173,27 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
 
   // Check email verification status (skip check if user just verified email)
   if (!isEmailVerified && !emailJustVerified) {
-    console.log('Email not verified, redirecting to verify-email');
+    logger.debug('Email not verified, redirecting to verify-email');
     return <Navigate to="/verify-email" replace />;
   }
 
   // Check if user has created an organization
   // Skip redirect if organization was just created (will redirect to create-plan instead)
   if ((!hasOrganization || !organization) && !organizationJustCreated) {
-    console.log('No organization found, redirecting to create-organization');
+    logger.debug('No organization found, redirecting to create-organization');
     return <Navigate to="/create-organization" replace />;
   }
 
   // Check if user has active organization
   // Skip redirect if organization was just created
   if (!organization?.id && !organizationJustCreated) {
-    console.log('No active organization ID, redirecting to create-organization');
+    logger.debug('No active organization ID, redirecting to create-organization');
     return <Navigate to="/create-organization" replace />;
   }
 
   // If organization was just created but context hasn't updated yet, show loading
   if (organizationJustCreated && (!hasOrganization || !organization)) {
-    console.log('HomeAccessGuard: Organization just created, waiting for context update...');
+    logger.debug('HomeAccessGuard: Organization just created, waiting for context update...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
@@ -222,13 +223,13 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // This is the main gate - if has_active_subscription = FALSE, block access immediately
   // Applies to both mobile and desktop versions
   if (hasActiveSubscription === false) {
-    console.log('HomeAccessGuard: has_active_subscription = FALSE, redirecting to create-plan');
+    logger.debug('HomeAccessGuard: has_active_subscription = FALSE, redirecting to create-plan');
     return <Navigate to="/create-plan" replace />;
   }
 
   // If has_active_subscription is explicitly TRUE, allow access
   if (hasActiveSubscription === true) {
-    console.log('HomeAccessGuard: has_active_subscription = TRUE, allowing access to home');
+    logger.debug('HomeAccessGuard: has_active_subscription = TRUE, allowing access to home');
     return <>{children}</>;
   }
 
@@ -238,19 +239,19 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     // Only allow access if subscription status is 'active'
     // If status is not 'active' or null/undefined, redirect to create-plan
     if (subscriptionStatus === 'active') {
-      console.log('HomeAccessGuard: has_active_subscription is null but subscription status is active, allowing access');
+      logger.debug('HomeAccessGuard: has_active_subscription is null but subscription status is active, allowing access');
       return <>{children}</>;
     } else if (subscriptionStatus !== null && subscriptionStatus !== undefined && subscriptionStatus !== 'active') {
-      console.log('HomeAccessGuard: has_active_subscription is null and subscription status is not active:', subscriptionStatus, 'redirecting to create-plan');
+      logger.debug('HomeAccessGuard: has_active_subscription is null and subscription status is not active:', subscriptionStatus, 'redirecting to create-plan');
       return <Navigate to="/create-plan" replace />;
     }
     // If both are null/undefined, redirect to create-plan for safety
-    console.log('HomeAccessGuard: has_active_subscription is null and no subscription status found, redirecting to create-plan');
+    logger.debug('HomeAccessGuard: has_active_subscription is null and no subscription status found, redirecting to create-plan');
     return <Navigate to="/create-plan" replace />;
   }
 
   // Default fallback: redirect to create-plan if we can't determine status
-  console.log('HomeAccessGuard: Unable to determine subscription status, redirecting to create-plan');
+  logger.debug('HomeAccessGuard: Unable to determine subscription status, redirecting to create-plan');
   return <Navigate to="/create-plan" replace />;
 };
 

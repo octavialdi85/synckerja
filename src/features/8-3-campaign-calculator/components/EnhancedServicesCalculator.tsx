@@ -6,6 +6,8 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { ServiceKPISettings } from '../types/kpi-templates';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 const normalizeCurrencyValue = (value: string) => value.replace(/[^\d]/g, '');
 
@@ -85,6 +87,7 @@ const EnhancedServicesCalculator = ({
   initialSettings,
   onSettingsChange
 }: EnhancedServicesCalculatorProps) => {
+  const { t } = useAppTranslation();
   // Branding objective
   const [brandingBudget, setBrandingBudget] = useState<string>(normalizeCurrencyValue(initialSettings.brandingBudget || ''));
   const [brandingCpm, setBrandingCpm] = useState<string>(normalizeCurrencyValue(initialSettings.brandingCpm || ''));
@@ -265,13 +268,13 @@ const EnhancedServicesCalculator = ({
 
   useEffect(() => {
     if (remarketingAudienceSource === 'branding' && results.brandingWarmAudience === 0) {
-      setConversionFrequencyError('Belum ada audiens hasil Branding. Jalankan kampanye Branding terlebih dahulu.');
+      setConversionFrequencyError(t('pages.campaignCalculator.services.error.noBrandingAudience', 'No audience from Branding campaign. Run Branding campaign first.'));
     } else if (conversionFrequency && floatStringToNumber(conversionFrequency) <= 0) {
-      setConversionFrequencyError('Frekuensi remarketing harus lebih dari 0.');
+      setConversionFrequencyError(t('pages.campaignCalculator.services.error.frequencyRequired', 'Remarketing frequency must be greater than 0.'));
     } else {
       setConversionFrequencyError(null);
     }
-  }, [conversionFrequency, remarketingAudienceSource, results.brandingWarmAudience]);
+  }, [conversionFrequency, remarketingAudienceSource, results.brandingWarmAudience, t]);
 
   const calculateResults = () => {
     const brandingBudgetNum = currencyStringToNumber(brandingBudget);
@@ -379,94 +382,94 @@ const EnhancedServicesCalculator = ({
     if (brandingEngagementRateNum < 3) {
       recommendations.push({
         icon: '✨',
-        title: 'Perkuat Konten Branding',
-        description: `Engagement rate ${brandingEngagementRateNum}% masih rendah. Coba variasikan format konten, gunakan storytelling, atau optimalkan CTA soft.`
+        title: t('pages.campaignCalculator.services.recommendation.brandingContent.title', 'Strengthen Branding Content'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.brandingContent.description', 'Engagement rate {{rate}}% is still low. Try varying content formats, use storytelling, or optimize soft CTA.'), { rate: String(brandingEngagementRateNum) })
       });
     }
 
     if (brandingQualificationRateNum < 25) {
       recommendations.push({
         icon: '🧲',
-        title: 'Tingkatkan Kualitas Consideration',
-        description: `Hanya ${brandingQualificationRateNum}% audiens ter-engage yang masuk ke tahap warm. Rancang penawaran middle funnel (webinar, lead magnet, studi kasus) agar audiens lebih siap di-retarget.`
+        title: t('pages.campaignCalculator.services.recommendation.consideration.title', 'Improve Consideration Quality'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.consideration.description', 'Only {{rate}}% of engaged audience reach warm stage. Design middle funnel offers (webinar, lead magnet, case studies) to better prepare audience for retargeting.'), { rate: String(brandingQualificationRateNum) })
       });
     }
 
     if (conversionFrequencyNum > 0 && conversionFrequencyNum < 6) {
       recommendations.push({
         icon: '🔁',
-        title: 'Naikkan Frekuensi Remarketing',
-        description: `Frekuensi remarketing saat ini ${conversionFrequencyNum.toFixed(1)}x. Biasanya dibutuhkan 7-8x paparan agar audiens memutuskan membeli.`
+        title: t('pages.campaignCalculator.services.recommendation.frequencyLow.title', 'Increase Remarketing Frequency'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.frequencyLow.description', 'Current remarketing frequency is {{frequency}}x. Usually 7-8x exposure is needed for audience to decide to purchase.'), { frequency: conversionFrequencyNum.toFixed(1) })
       });
     } else if (conversionFrequencyNum > 12) {
       recommendations.push({
         icon: '⚡',
-        title: 'Optimalkan Batas Frekuensi',
-        description: `Frekuensi ${conversionFrequencyNum.toFixed(1)}x mungkin terlalu tinggi dan dapat menimbulkan ad fatigue. Pertimbangkan batas frekuensi 8-10x.`
+        title: t('pages.campaignCalculator.services.recommendation.frequencyHigh.title', 'Optimize Frequency Limit'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.frequencyHigh.description', 'Frequency {{frequency}}x may be too high and can cause ad fatigue. Consider frequency limit of 8-10x.'), { frequency: conversionFrequencyNum.toFixed(1) })
       });
     }
 
     if (ctrLinkNum < 1.5) {
       recommendations.push({
         icon: '🎯',
-        title: 'Optimalkan CTR',
-        description: `CTR ${ctrLinkNum}% masih di bawah standar. Sesuaikan pesan iklan dengan segmen remarketing dan uji variasi copy kreatif.`
+        title: t('pages.campaignCalculator.services.recommendation.ctr.title', 'Optimize CTR'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.ctr.description', 'CTR {{ctr}}% is still below standard. Adjust ad messaging with remarketing segments and test creative copy variations.'), { ctr: String(ctrLinkNum) })
       });
     }
 
     if (adsClickToVisitNum < 50) {
       recommendations.push({
         icon: '🌐',
-        title: 'Perbaiki Landing Experience',
-        description: `Hanya ${adsClickToVisitNum}% pengunjung yang lanjut ke halaman. Cek kecepatan loading, relevansi konten, dan kejelasan CTA.`
+        title: t('pages.campaignCalculator.services.recommendation.landing.title', 'Improve Landing Experience'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.landing.description', 'Only {{rate}}% of visitors continue to the page. Check loading speed, content relevance, and CTA clarity.'), { rate: String(adsClickToVisitNum) })
       });
     }
 
     if (whatsappClickNum < 15) {
       recommendations.push({
         icon: '📞',
-        title: 'Perkuat Call-to-Action',
-        description: `Konversi pengunjung ke form submit baru ${whatsappClickNum}%. Tambahkan urgensi atau insentif sehingga audiens mau mengisi formulir.`
+        title: t('pages.campaignCalculator.services.recommendation.cta.title', 'Strengthen Call-to-Action'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.cta.description', 'Visitor to form submit conversion is only {{rate}}%. Add urgency or incentives so audience will fill out the form.'), { rate: String(whatsappClickNum) })
       });
     }
 
     if (clientRetentionRateNum < 60) {
       recommendations.push({
         icon: '🔄',
-        title: 'Program Retensi',
-        description: `Retention rate ${clientRetentionRateNum}% bisa ditingkatkan dengan SOP follow-up, loyalty program, atau edukasi pasca layanan.`
+        title: t('pages.campaignCalculator.services.recommendation.retention.title', 'Retention Program'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.retention.description', 'Retention rate {{rate}}% can be improved with follow-up SOP, loyalty program, or post-service education.'), { rate: String(clientRetentionRateNum) })
       });
     }
 
     if (cpmNum > 500000) {
       recommendations.push({
         icon: '💰',
-        title: 'Audit Targeting',
-        description: `CPM (${formatCurrency(cpmNum)}) cukup tinggi. Uji segmentasi baru atau optimasi placement agar biaya awareness lebih efisien.`
+        title: t('pages.campaignCalculator.services.recommendation.targeting.title', 'Targeting Audit'),
+        description: applyVariables(t('pages.campaignCalculator.services.recommendation.targeting.description', 'CPM ({{cpm}}) is quite high. Test new segmentation or optimize placement to make awareness costs more efficient.'), { cpm: formatCurrency(cpmNum) })
       });
     }
 
     if (results.returnOnInvestment < 100) {
       warnings.push({
         icon: '⚠️',
-        title: 'ROI Belum Optimal',
-        description: `ROI ${results.returnOnInvestment.toFixed(1)}% masih di bawah titik impas. Pertimbangkan menaikkan nilai paket layanan atau efisiensi biaya di funnel.`
+        title: t('pages.campaignCalculator.services.warning.roi.title', 'ROI Not Optimal'),
+        description: applyVariables(t('pages.campaignCalculator.services.warning.roi.description', 'ROI {{roi}}% is still below break-even point. Consider increasing service package value or cost efficiency in funnel.'), { roi: results.returnOnInvestment.toFixed(1) })
       });
     }
 
     if (results.costPerClient > results.servicePackageValue * 0.5 && results.servicePackageValue > 0) {
       warnings.push({
         icon: '⚠️',
-        title: 'Biaya Akuisisi Tinggi',
-        description: `Cost per client lebih dari 50% nilai paket. Cek kembali rasio konversi setiap tahap atau negosiasikan ulang biaya iklan.`
+        title: t('pages.campaignCalculator.services.warning.acquisition.title', 'High Acquisition Cost'),
+        description: t('pages.campaignCalculator.services.warning.acquisition.description', 'Cost per client is more than 50% of package value. Recheck conversion ratio at each stage or renegotiate ad costs.')
       });
     }
 
     if (remarketingAudienceSource === 'branding' && results.brandingWarmAudience === 0) {
       warnings.push({
         icon: '♻️',
-        title: 'Audiens Remarketing Kosong',
-        description: 'Belum ada engagement dari objective Branding. Jalankan kampanye awareness/consideration terlebih dahulu sebelum conversion.'
+        title: t('pages.campaignCalculator.services.warning.noAudience.title', 'Empty Remarketing Audience'),
+        description: t('pages.campaignCalculator.services.warning.noAudience.description', 'No engagement from Branding objective. Run awareness/consideration campaign first before conversion.')
       });
     }
 
@@ -514,7 +517,7 @@ const EnhancedServicesCalculator = ({
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold">{formatNumber(results.brandingEngagements)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Gabungan likes, komen, share, view, dan aksi interaksi lain.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.engagementCombined', 'Combined likes, comments, shares, views, and other interaction actions.')}</p>
                   </CardContent>
                 </Card>
                  <Card>
@@ -523,16 +526,16 @@ const EnhancedServicesCalculator = ({
                    </CardHeader>
                    <CardContent>
                      <div className="text-2xl font-semibold text-emerald-600">{formatCurrency(results.brandingCostPerEngagement)}</div>
-                     <p className="text-xs text-gray-500 mt-1">Biaya rata-rata untuk satu engagement.</p>
+                     <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.costPerEngagement', 'Average cost for one engagement.')}</p>
                    </CardContent>
                  </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-500">Audiens Siap Remarketing</CardTitle>
+                    <CardTitle className="text-sm font-medium text-gray-500">{t('pages.campaignCalculator.services.label.warmAudience', 'Ready for Remarketing Audience')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold text-purple-600">{formatNumber(results.brandingWarmAudience)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Pengunjung engaged yang lolos middle funnel.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.warmAudience', 'Engaged visitors who pass middle funnel.')}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -566,7 +569,7 @@ const EnhancedServicesCalculator = ({
                       />
                     </div>
                     <div>
-                      <Label htmlFor="branding-frequency">Frekuensi Rata-rata</Label>
+                      <Label htmlFor="branding-frequency">{t('pages.campaignCalculator.services.label.brandingFrequency', 'Average Frequency')}</Label>
                       <Input
                         id="branding-frequency"
                         type="text"
@@ -603,7 +606,7 @@ const EnhancedServicesCalculator = ({
                         className="mt-1 pr-10 bg-gray-100 text-gray-600"
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Semua engagement diasumsikan sebagai audiens remarketing (100%).
+                        {t('pages.campaignCalculator.services.description.warmAudienceAssumed', 'All engagements are assumed as remarketing audience (100%).')}
                       </p>
                     </div>
                   </CardContent>
@@ -611,14 +614,14 @@ const EnhancedServicesCalculator = ({
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Ringkasan Funnel Branding</CardTitle>
+                    <CardTitle>{t('pages.campaignCalculator.services.label.brandingSummary', 'Branding Funnel Summary')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    <p>• Investasi branding: {formatCurrency(brandingBudgetValue)}</p>
-                    <p>• {formatNumber(results.brandingImpressions)} impresi untuk menjangkau {formatNumber(results.brandingReach)} orang.</p>
-                    <p>• {formatNumber(results.brandingEngagements)} engagement gabungan tercapai.</p>
-                    <p>• {formatNumber(results.brandingWarmAudience)} audiens siap di-retarget.</p>
-                    <p>• Cost per engagement: {formatCurrency(results.brandingCostPerEngagement)}</p>
+                    <p>• {applyVariables(t('pages.campaignCalculator.services.description.brandingInvestment', 'Branding investment: {{amount}}'), { amount: formatCurrency(brandingBudgetValue) })}</p>
+                    <p>• {applyVariables(t('pages.campaignCalculator.services.description.brandingImpressions', '{{impressions}} impressions to reach {{reach}} people.'), { impressions: formatNumber(results.brandingImpressions), reach: formatNumber(results.brandingReach) })}</p>
+                    <p>• {applyVariables(t('pages.campaignCalculator.services.description.brandingEngagements', '{{engagements}} combined engagements achieved.'), { engagements: formatNumber(results.brandingEngagements) })}</p>
+                    <p>• {applyVariables(t('pages.campaignCalculator.services.description.brandingWarmAudience', '{{audience}} audience ready for retargeting.'), { audience: formatNumber(results.brandingWarmAudience) })}</p>
+                    <p>• {applyVariables(t('pages.campaignCalculator.services.description.brandingCostPerEngagement', 'Cost per engagement: {{cost}}'), { cost: formatCurrency(results.brandingCostPerEngagement) })}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -637,7 +640,7 @@ const EnhancedServicesCalculator = ({
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold text-blue-600">{formatNumber(results.impressions)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Hasil dari audiens remarketing × frekuensi.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.remarketingReach', 'Result from remarketing audience × frequency.')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border border-blue-300 bg-blue-100/60">
@@ -646,7 +649,7 @@ const EnhancedServicesCalculator = ({
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold text-blue-700">{formatCurrency(results.calculatedBudget)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Otomatis dari frekuensi, CPM, dan audiens remarketing.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.remarketingBudget', 'Automatically calculated from frequency, CPM, and remarketing audience.')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border border-pink-200 bg-pink-50/60">
@@ -660,20 +663,20 @@ const EnhancedServicesCalculator = ({
                 </Card>
                 <Card className="border border-purple-200 bg-purple-50/60">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-purple-700">Total Clients</CardTitle>
+                    <CardTitle className="text-sm font-medium text-purple-700">{t('pages.campaignCalculator.services.label.totalClients', 'Total Clients')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold text-purple-600">{formatNumber(results.totalClients)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Estimasi klien baru dari kampanye conversion.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.totalClients', 'Estimated new clients from conversion campaign.')}</p>
                   </CardContent>
                 </Card>
                 <Card className="border border-emerald-200 bg-emerald-50/60">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-emerald-700">Cost per Client</CardTitle>
+                    <CardTitle className="text-sm font-medium text-emerald-700">{t('pages.campaignCalculator.services.label.costPerClient', 'Cost per Client')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-semibold text-emerald-600">{formatCurrency(results.costPerClient)}</div>
-                    <p className="text-xs text-gray-500 mt-1">Biaya rata-rata untuk memperoleh satu klien.</p>
+                    <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.costPerClient', 'Average cost to acquire one client.')}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -715,21 +718,21 @@ const EnhancedServicesCalculator = ({
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <Label htmlFor="remarketing-source">Sumber Audiens Remarketing</Label>
+                        <Label htmlFor="remarketing-source">{t('pages.campaignCalculator.services.label.remarketingSource', 'Remarketing Audience Source')}</Label>
                         <Select value={remarketingAudienceSource} onValueChange={setRemarketingAudienceSource}>
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Pilih sumber" />
+                            <SelectValue placeholder={t('pages.campaignCalculator.services.placeholder.selectSource', 'Select source')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="manual">Input manual</SelectItem>
+                            <SelectItem value="manual">{t('pages.campaignCalculator.services.option.manualInput', 'Manual Input')}</SelectItem>
                             <SelectItem value="branding" disabled={results.brandingWarmAudience === 0}>
-                              Audiens Branding ({formatNumber(results.brandingWarmAudience)} engagement)
+                              {applyVariables(t('pages.campaignCalculator.services.option.brandingAudience', 'Branding Audience ({{count}} engagement)'), { count: formatNumber(results.brandingWarmAudience) })}
                             </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="remarketingAudience">Jumlah Audiens Remarketing (orang)</Label>
+                        <Label htmlFor="remarketingAudience">{t('pages.campaignCalculator.services.label.remarketingAudienceCount', 'Remarketing Audience Count (people)')}</Label>
                         <Input
                           id="remarketingAudience"
                           type="text"
@@ -745,12 +748,12 @@ const EnhancedServicesCalculator = ({
                         />
                         <p className="text-xs text-gray-500 mt-1">
                           {remarketingAudienceSource === 'branding'
-                            ? 'Menggunakan total engagement Branding sebagai audiens remarketing.'
-                            : 'Masukkan estimasi audiens remarketing jika memakai database lain.'}
+                            ? t('pages.campaignCalculator.services.description.usingBrandingAudience', 'Using total Branding engagement as remarketing audience.')
+                            : t('pages.campaignCalculator.services.description.manualAudience', 'Enter estimated remarketing audience if using other database.')}
                         </p>
                       </div>
                       <div>
-                        <Label htmlFor="conversion-frequency">Frekuensi Remarketing</Label>
+                        <Label htmlFor="conversion-frequency">{t('pages.campaignCalculator.services.label.conversionFrequency', 'Remarketing Frequency')}</Label>
                         <Input
                           id="conversion-frequency"
                           type="text"
@@ -760,7 +763,7 @@ const EnhancedServicesCalculator = ({
                           placeholder="7"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Rata-rata jumlah tayangan iklan per audiens warm. Rekomendasi 7-8 kali untuk mendorong keputusan.
+                          {t('pages.campaignCalculator.services.description.frequencyRecommendation', 'Average number of ad impressions per warm audience. Recommendation 7-8 times to drive decisions.')}
                         </p>
                         {conversionFrequencyError && (
                           <p className="text-xs text-red-500 mt-1">{conversionFrequencyError}</p>
@@ -787,7 +790,7 @@ const EnhancedServicesCalculator = ({
                           className="mt-1 bg-gray-100 text-gray-600"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Otomatis dihitung dari frekuensi × audiens remarketing × CPM.
+                          {t('pages.campaignCalculator.services.description.autoCalculated', 'Automatically calculated from frequency × remarketing audience × CPM.')}
                         </p>
                       </div>
                     </CardContent>
@@ -865,34 +868,34 @@ const EnhancedServicesCalculator = ({
 
                   <Card className="lg:col-span-3">
                     <CardHeader>
-                      <CardTitle>Conversion Funnel Analysis</CardTitle>
+                      <CardTitle>{t('pages.campaignCalculator.services.label.conversionFunnelAnalysis', 'Conversion Funnel Analysis')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <div className="flex items-center">
                             <span className="text-blue-500 mr-2">📊</span>
-                            <span>Impressions: {formatNumber(results.impressions)} kali tayang</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.impressions', 'Impressions: {{count}} impressions'), { count: formatNumber(results.impressions) })}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-blue-500 mr-2">👆</span>
-                            <span>Ad clicks: {formatNumber(results.adClicks)} orang</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.adClicks', 'Ad clicks: {{count}} people'), { count: formatNumber(results.adClicks) })}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-blue-500 mr-2">🌐</span>
-                            <span>Website visitors: {formatNumber(results.websiteVisitors)} orang</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.websiteVisitors', 'Website visitors: {{count}} people'), { count: formatNumber(results.websiteVisitors) })}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-green-500 mr-2">📞</span>
-                            <span>Form submit: {formatNumber(results.leads)} orang</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.formSubmit', 'Form submit: {{count}} people'), { count: formatNumber(results.leads) })}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-purple-500 mr-2">🎯</span>
-                            <span>Total clients: {formatNumber(results.totalClients)} klien</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.totalClients', 'Total clients: {{count}} clients'), { count: formatNumber(results.totalClients) })}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-purple-500 mr-2">♻️</span>
-                            <span>Remarketing audience aktif: {formatNumber(results.activeRemarketingAudience)} orang</span>
+                            <span>{applyVariables(t('pages.campaignCalculator.services.funnel.activeRemarketingAudience', 'Active remarketing audience: {{count}} people'), { count: formatNumber(results.activeRemarketingAudience) })}</span>
                           </div>
                         </div>
 
@@ -987,18 +990,18 @@ const EnhancedServicesCalculator = ({
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <Label>Total Clients</Label>
+                        <Label>{t('pages.campaignCalculator.services.label.totalClients', 'Total Clients')}</Label>
                         <div className="mt-1 text-2xl font-semibold text-purple-600">
                           {formatNumber(results.totalClients)}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Estimasi klien baru dari kampanye conversion.</p>
+                        <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.totalClients', 'Estimated new clients from conversion campaign.')}</p>
                       </div>
                       <div>
-                        <Label>Cost per Client</Label>
+                        <Label>{t('pages.campaignCalculator.services.label.costPerClient', 'Cost per Client')}</Label>
                         <div className="mt-1 text-2xl font-semibold text-emerald-600">
                           {formatCurrency(results.costPerClient)}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Biaya rata-rata untuk memperoleh satu klien.</p>
+                        <p className="text-xs text-gray-500 mt-1">{t('pages.campaignCalculator.services.description.costPerClient', 'Average cost to acquire one client.')}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -1008,7 +1011,7 @@ const EnhancedServicesCalculator = ({
               {activeSettingsTab === 'analysis' && (
                 <Card className="bg-blue-50">
                   <CardHeader>
-                    <CardTitle>Rekomendasi Optimasi</CardTitle>
+                    <CardTitle>{t('pages.campaignCalculator.services.label.optimizationRecommendations', 'Optimization Recommendations')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {recommendations.map((rec, index) => (

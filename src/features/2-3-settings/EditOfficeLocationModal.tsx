@@ -10,6 +10,7 @@ import { Switch } from '@/features/ui/switch';
 import { useToast } from '@/features/ui/use-toast';
 import { useClients, useLocationTypes } from '@/features/2-3-settings/hooks/useLocationManagement';
 import { supabase } from '@/integrations/supabase/client';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface OfficeLocation {
   id: string;
@@ -43,6 +44,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
   location,
   onLocationUpdated
 }) => {
+  const { t } = useAppTranslation();
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -112,8 +114,8 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
       if (error) throw error;
 
       toast({
-        title: "Success",
-        description: "Office location updated successfully"
+        title: t('common.success', 'Success'),
+        description: t('officeLocation.locationUpdated', 'Office location updated successfully')
       });
 
       onLocationUpdated();
@@ -121,8 +123,8 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
     } catch (error) {
       console.error('Error updating office location:', error);
       toast({
-        title: "Error",
-        description: "Failed to update office location",
+        title: t('common.error', 'Error'),
+        description: t('officeLocation.failedToUpdate', 'Failed to update office location'),
         variant: "destructive"
       });
     } finally {
@@ -141,16 +143,16 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Office Location</DialogTitle>
+          <DialogTitle>{t('officeLocation.editLocation', 'Edit Office Location')}</DialogTitle>
           <DialogDescription className="text-sm text-gray-600">
-            Perbarui detail lokasi kantor termasuk alamat, koordinat, serta pengaturan radius dan kontak yang relevan.
+            {t('officeLocation.updateLocationDescription', 'Update office location details including address, coordinates, and relevant radius and contact settings.')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Location Name *</Label>
+              <Label htmlFor="name">{t('officeLocation.locationName', 'Location Name')} *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -160,13 +162,13 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location_type">Location Type</Label>
+              <Label htmlFor="location_type">{t('officeLocation.locationType', 'Location Type')}</Label>
               <Select
                 value={formData.location_type_id}
                 onValueChange={(value) => handleInputChange('location_type_id', value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select location type" />
+                  <SelectValue placeholder={t('officeLocation.selectLocationType', 'Select location type')} />
                 </SelectTrigger>
                 <SelectContent>
                   {locationTypes.map((type) => (
@@ -180,7 +182,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Address *</Label>
+            <Label htmlFor="address">{t('officeLocation.address', 'Address')} *</Label>
             <Textarea
               id="address"
               value={formData.address}
@@ -192,7 +194,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="latitude">Latitude *</Label>
+              <Label htmlFor="latitude">{t('officeLocation.latitude', 'Latitude')} *</Label>
               <Input
                 id="latitude"
                 type="number"
@@ -204,7 +206,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="longitude">Longitude *</Label>
+              <Label htmlFor="longitude">{t('officeLocation.longitude', 'Longitude')} *</Label>
               <Input
                 id="longitude"
                 type="number"
@@ -218,7 +220,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="radius">Radius (meters) *</Label>
+              <Label htmlFor="radius">{t('officeLocation.radius', 'Radius (meters)')} *</Label>
               <Input
                 id="radius"
                 type="number"
@@ -233,7 +235,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="contact_person">Contact Person</Label>
+              <Label htmlFor="contact_person">{t('officeLocation.contactPerson', 'Contact Person')}</Label>
               <Input
                 id="contact_person"
                 value={formData.contact_person}
@@ -242,7 +244,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact_phone">Contact Phone</Label>
+              <Label htmlFor="contact_phone">{t('officeLocation.contactPhone', 'Contact Phone')}</Label>
               <Input
                 id="contact_phone"
                 value={formData.contact_phone}
@@ -257,19 +259,19 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
               checked={formData.is_client_location}
               onCheckedChange={(checked) => handleInputChange('is_client_location', checked)}
             />
-            <Label htmlFor="is_client_location">This is a client location</Label>
+            <Label htmlFor="is_client_location">{t('officeLocation.isClientLocation', 'This is a client location')}</Label>
           </div>
 
           {formData.is_client_location && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="client">Client</Label>
+                <Label htmlFor="client">{t('officeLocation.client', 'Client')}</Label>
                 <Select
                   value={formData.client_id}
                   onValueChange={(value) => handleInputChange('client_id', value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select client" />
+                    <SelectValue placeholder={t('officeLocation.selectClient', 'Select client')} />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((client) => (
@@ -283,7 +285,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="planned_start_time">Plan Start Time</Label>
+                  <Label htmlFor="planned_start_time">{t('officeLocation.planStartTime', 'Plan Start Time')}</Label>
                   <Input
                     id="planned_start_time"
                     type="time"
@@ -293,7 +295,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="planned_end_time">Plan End Time</Label>
+                  <Label htmlFor="planned_end_time">{t('officeLocation.planEndTime', 'Plan End Time')}</Label>
                   <Input
                     id="planned_end_time"
                     type="time"
@@ -306,7 +308,7 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">{t('officeLocation.notes', 'Notes')}</Label>
             <Textarea
               id="notes"
               value={formData.notes}
@@ -317,10 +319,10 @@ export const EditOfficeLocationModal: React.FC<EditOfficeLocationModalProps> = (
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Location'}
+              {loading ? t('officeLocation.updating', 'Updating...') : t('officeLocation.updateLocation', 'Update Location')}
             </Button>
           </DialogFooter>
         </form>

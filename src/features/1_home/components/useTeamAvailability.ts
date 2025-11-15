@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export interface TeamAvailabilityData {
   name: string;
@@ -19,7 +20,7 @@ export const useTeamAvailability = () => {
         throw new Error('No organization found');
       }
 
-      console.log('👥 Fetching team availability for org:', currentOrg.id);
+      logger.query('👥 Fetching team availability for org:', currentOrg.id);
 
       // Get today's date
       const today = new Date().toISOString().split('T')[0];
@@ -52,7 +53,7 @@ export const useTeamAvailability = () => {
         throw error;
       }
 
-      console.log('📊 Raw employees with attendance:', employeesWithAttendance);
+      logger.query('📊 Raw employees with attendance:', employeesWithAttendance);
 
       // Group by department and count WFO/WFH
       const departmentStats: { [key: string]: { wfo: number; wfh: number; total: number } } = {};
@@ -91,7 +92,7 @@ export const useTeamAvailability = () => {
         .filter(team => team.total > 0) // Only include departments with employees
         .sort((a, b) => b.total - a.total); // Sort by total employees descending
 
-      console.log('✅ Team availability calculated:', teamAvailability);
+      logger.query('✅ Team availability calculated:', teamAvailability);
       return teamAvailability;
     },
     enabled: !!currentOrg?.id,

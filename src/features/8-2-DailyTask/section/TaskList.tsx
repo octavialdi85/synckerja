@@ -52,6 +52,7 @@ import { type Task } from '../types';
 import { useTaskFilters } from '../hooks/useTaskFilters';
 import { supabase } from '@/integrations/supabase/client';
 import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';
+import { logger } from '@/config/logger';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -374,7 +375,7 @@ export const TaskList = () => {
         });
         
         if (import.meta.env.DEV) {
-          console.log('🛠️ Blocker debug (RPC)', {
+          logger.debug('🛠️ Blocker debug (RPC)', {
             totalTasks: tasksToProcess.length,
             counts,
           });

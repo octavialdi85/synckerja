@@ -6,6 +6,10 @@ import { Clock, Settings, CheckCircle } from 'lucide-react';
 import { useCurrentUserEmployee } from './SectionGreetingsImport/useCurrentUserEmployee';
 import { useAttendanceStatus } from './AttendanceStatusProvider';
 import { useUserData } from './SectionGreetingsImport/useUserData';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
 interface SectionGreetingsProps {
   currentTime: Date;
@@ -13,22 +17,25 @@ interface SectionGreetingsProps {
 }
 
 export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProps) => {
+  const { t, dateLocale } = useAppTranslation();
   const { data: employeeData, isLoading } = useCurrentUserEmployee();
   const { hasCheckedIn, hasCheckedOut, todayRecord } = useAttendanceStatus();
   const { profile } = useUserData();
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    // Format: HH.mm.ss (e.g., 16.29.09)
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${hours}.${minutes}.${seconds}`;
   };
 
   // Calculate working time if checked in
   const calculateWorkingTime = () => {
-    if (!todayRecord?.check_in_time) return "0 jam 0 menit";
+    if (!todayRecord?.check_in_time) {
+      return t('greeting.workingTimeZero', '0 hours 0 minutes');
+    }
     
     const checkIn = new Date(todayRecord.check_in_time);
     const now = new Date();
@@ -37,7 +44,10 @@ export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProp
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     
-    return `${hours} jam ${minutes} menit`;
+    return applyVariables(t('greeting.workingTime', '{{hours}} hours {{minutes}} minutes'), { 
+      hours: String(hours), 
+      minutes: String(minutes) 
+    });
   };
 
   // Use profile name from header data source, same as header components
@@ -68,7 +78,7 @@ export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProp
                 <h2 className="text-xl font-bold text-white mb-3 leading-tight">
                   {greeting}, {displayName}! 👋
                 </h2>
-                <p className="text-blue-100 text-xs leading-relaxed">Jangan lupa untuk absen hari ini!</p>
+                <p className="text-blue-100 text-xs leading-relaxed">{t('greeting.dontForgetToAttend', 'Don\'t forget to attend today!')}</p>
               </div>
 
               {/* Working status slide */}
@@ -77,11 +87,11 @@ export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProp
                   <div className="flex items-center gap-3 mb-2">
                     <CheckCircle className="h-6 w-6 text-green-300" />
                     <h2 className="text-xl font-bold text-white leading-tight">
-                      Anda Sedang Bekerja
+                      {t('greeting.youAreWorking', 'You Are Working')}
                     </h2>
                   </div>
                   <p className="text-blue-100 text-xs leading-relaxed">
-                    Waktu kerja hari ini: {calculateWorkingTime()}
+                    {t('greeting.todayWorkingTime', 'Today\'s working time')}: {calculateWorkingTime()}
                   </p>
                 </div>
               )}
@@ -99,12 +109,7 @@ export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProp
             <span className="leading-normal">{formatTime(currentTime)}</span>
           </div>
           <div>
-            {currentTime.toLocaleDateString('id-ID', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
+            {format(currentTime, 'EEEE, d MMMM yyyy', { locale: dateLocale })}
           </div>
         </div>
       </CardContent>

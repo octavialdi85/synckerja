@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import removeConsole from "vite-plugin-remove-console";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -11,7 +12,15 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     historyApiFallback: true,
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(), 
+    mode === "development" && componentTagger(),
+    // Remove console.log/info/debug in production, but keep console.error/warn
+    mode === "production" && removeConsole({
+      includes: ['log', 'info', 'debug'], // Only remove these
+      excludes: ['error', 'warn'], // Keep error and warn for production debugging
+    }),
+  ].filter(Boolean),
   build: {
     rollupOptions: {
       output: {

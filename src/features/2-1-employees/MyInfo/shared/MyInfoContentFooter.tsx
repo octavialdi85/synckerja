@@ -1,4 +1,6 @@
 import { Calendar, Info } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { format } from 'date-fns';
 
 interface MyInfoContentFooterProps {
   section: string;
@@ -9,11 +11,8 @@ export const MyInfoContentFooter = ({
   section, 
   lastUpdated 
 }: MyInfoContentFooterProps) => {
-  const currentDate = new Date().toLocaleDateString('id-ID', { 
-    day: 'numeric',
-    month: 'short', 
-    year: 'numeric' 
-  });
+  const { dateLocale } = useAppTranslation();
+  const currentDate = format(new Date(), 'dd MMM yyyy', { locale: dateLocale });
 
   return (
     <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">

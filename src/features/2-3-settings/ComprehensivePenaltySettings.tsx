@@ -30,8 +30,13 @@ import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { PenaltyRuleFormDialog } from './PenaltyRuleFormDialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
+import { id, enUS } from 'date-fns/locale';
 
 export const ComprehensivePenaltySettings = () => {
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === 'id' ? id : enUS;
   const { settings, loading, updateSettings, exemptions, createExemption, updateExemption, deleteExemption } = usePenaltySettings();
   const { rules = [], deleteRule } = usePenaltyRules();
   const { data: employees = [] } = useEmployees();
@@ -193,7 +198,7 @@ export const ComprehensivePenaltySettings = () => {
   };
 
   const handleDeleteRule = async (ruleId: string) => {
-    if (confirm('Yakin ingin menghapus aturan denda ini?')) {
+    if (confirm(t('penaltySettings.confirmDeleteRule', 'Are you sure you want to delete this penalty rule?'))) {
       await deleteRule(ruleId);
     }
   };
@@ -216,7 +221,7 @@ export const ComprehensivePenaltySettings = () => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-sm text-muted-foreground">Loading penalty settings...</p>
+          <p className="text-sm text-muted-foreground">{t('penaltySettings.loading', 'Loading penalty settings...')}</p>
         </div>
       </div>
     );
@@ -226,11 +231,11 @@ export const ComprehensivePenaltySettings = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Pengaturan Denda Keterlambatan</h2>
-          <p className="text-gray-600 mt-1">Kelola aturan dan pengaturan denda untuk pelanggaran absensi</p>
+          <h2 className="text-2xl font-semibold text-gray-900">{t('penaltySettings.title', 'Late Penalty Settings')}</h2>
+          <p className="text-gray-600 mt-1">{t('penaltySettings.description', 'Manage rules and penalty settings for attendance violations')}</p>
         </div>
         <Badge variant={generalSettings.enable_automatic_penalties ? "default" : "secondary"}>
-          {generalSettings.enable_automatic_penalties ? 'Aktif' : 'Nonaktif'}
+          {generalSettings.enable_automatic_penalties ? t('penaltySettings.status.active', 'Active') : t('penaltySettings.status.inactive', 'Inactive')}
         </Badge>
       </div>
 
@@ -238,19 +243,19 @@ export const ComprehensivePenaltySettings = () => {
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            Umum
+            {t('penaltySettings.tab.general', 'General')}
           </TabsTrigger>
           <TabsTrigger value="rules" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
-            Aturan
+            {t('penaltySettings.tab.rules', 'Rules')}
           </TabsTrigger>
           <TabsTrigger value="exemptions" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
-            Pengecualian
+            {t('penaltySettings.tab.exemptions', 'Exemptions')}
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
-            Notifikasi
+            {t('penaltySettings.tab.notifications', 'Notifications')}
           </TabsTrigger>
         </TabsList>
 
@@ -260,36 +265,36 @@ export const ComprehensivePenaltySettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-blue-900">
                 <Target className="h-5 w-5" />
-                Jenis Perhitungan Denda
+                {t('penaltySettings.calculationTypes.title', 'Penalty Calculation Types')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div className="p-3 bg-white rounded-lg border">
-                  <h4 className="font-semibold text-blue-900 mb-2">1. Denda Tetap</h4>
+                  <h4 className="font-semibold text-blue-900 mb-2">{t('penaltySettings.calculationTypes.fixed.title', '1. Fixed Penalty')}</h4>
                   <p className="text-gray-600 mb-2">
-                    Denda fix yang tidak berubah berdasarkan durasi keterlambatan.
+                    {t('penaltySettings.calculationTypes.fixed.description', 'Fixed penalty that does not change based on late duration.')}
                   </p>
                   <div className="text-xs text-gray-500">
-                    Contoh: Telat 5 menit atau 60 menit, denda tetap Rp 500.000
+                    {t('penaltySettings.calculationTypes.fixed.example', 'Example: Late 5 minutes or 60 minutes, fixed penalty Rp 500,000')}
                   </div>
                 </div>
                 <div className="p-3 bg-white rounded-lg border">
-                  <h4 className="font-semibold text-green-900 mb-2">2. Per Jam</h4>
+                  <h4 className="font-semibold text-green-900 mb-2">{t('penaltySettings.calculationTypes.hourly.title', '2. Per Hour')}</h4>
                   <p className="text-gray-600 mb-2">
-                    Denda dihitung berdasarkan durasi keterlambatan × tarif per jam.
+                    {t('penaltySettings.calculationTypes.hourly.description', 'Penalty calculated based on late duration × hourly rate.')}
                   </p>
                   <div className="text-xs text-gray-500">
-                    Contoh: Telat 2 jam × Rp 50.000/jam = Rp 100.000
+                    {t('penaltySettings.calculationTypes.hourly.example', 'Example: Late 2 hours × Rp 50,000/hour = Rp 100,000')}
                   </div>
                 </div>
                 <div className="p-3 bg-white rounded-lg border">
-                  <h4 className="font-semibold text-purple-900 mb-2">3. Prorata Gaji</h4>
+                  <h4 className="font-semibold text-purple-900 mb-2">{t('penaltySettings.calculationTypes.salaryPercentage.title', '3. Salary Percentage')}</h4>
                   <p className="text-gray-600 mb-2">
-                    Denda berdasarkan persentase dari gaji bulanan karyawan.
+                    {t('penaltySettings.calculationTypes.salaryPercentage.description', 'Penalty based on percentage of employee monthly salary.')}
                   </p>
                   <div className="text-xs text-gray-500">
-                    Contoh: 5% dari gaji Rp 10.000.000 = Rp 500.000
+                    {t('penaltySettings.calculationTypes.salaryPercentage.example', 'Example: 5% of salary Rp 10,000,000 = Rp 500,000')}
                   </div>
                 </div>
               </div>
@@ -301,7 +306,7 @@ export const ComprehensivePenaltySettings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
-                  Pengaturan Dasar
+                  {t('penaltySettings.basicSettings.title', 'Basic Settings')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -312,11 +317,11 @@ export const ComprehensivePenaltySettings = () => {
                       setGeneralSettings(prev => ({ ...prev, enable_automatic_penalties: checked }))
                     }
                   />
-                  <Label>Aktifkan denda otomatis</Label>
+                  <Label>{t('penaltySettings.basicSettings.enableAutomaticPenalties', 'Enable automatic penalties')}</Label>
                 </div>
 
                 <div>
-                  <Label>Zona Waktu Perhitungan</Label>
+                  <Label>{t('penaltySettings.basicSettings.calculationTimezone', 'Calculation Timezone')}</Label>
                   <Select 
                     value={generalSettings.penalty_calculation_timezone}
                     onValueChange={(value) => 
@@ -327,15 +332,15 @@ export const ComprehensivePenaltySettings = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Asia/Jakarta">WIB (Asia/Jakarta)</SelectItem>
-                      <SelectItem value="Asia/Makassar">WITA (Asia/Makassar)</SelectItem>
-                      <SelectItem value="Asia/Jayapura">WIT (Asia/Jayapura)</SelectItem>
+                      <SelectItem value="Asia/Jakarta">{t('penaltySettings.timezone.wib', 'WIB (Asia/Jakarta)')}</SelectItem>
+                      <SelectItem value="Asia/Makassar">{t('penaltySettings.timezone.wita', 'WITA (Asia/Makassar)')}</SelectItem>
+                      <SelectItem value="Asia/Jayapura">{t('penaltySettings.timezone.wit', 'WIT (Asia/Jayapura)')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label>Tanggal Pemotongan Gaji</Label>
+                  <Label>{t('penaltySettings.basicSettings.salaryDeductionDate', 'Salary Deduction Date')}</Label>
                   <Input
                     type="number"
                     min="1"
@@ -346,12 +351,12 @@ export const ComprehensivePenaltySettings = () => {
                     }
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Tanggal dalam bulan ketika denda dipotong dari gaji
+                    {t('penaltySettings.basicSettings.salaryDeductionDateDescription', 'Date in the month when penalty is deducted from salary')}
                   </p>
                 </div>
 
                 <div>
-                  <Label>Jenis Perhitungan Denda Default</Label>
+                  <Label>{t('penaltySettings.basicSettings.defaultCalculationType', 'Default Penalty Calculation Type')}</Label>
                   <Select 
                     value={generalSettings.default_calculation_type}
                     onValueChange={(value) => 
@@ -362,13 +367,13 @@ export const ComprehensivePenaltySettings = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fixed">Denda Tetap</SelectItem>
-                      <SelectItem value="hourly">Per Jam</SelectItem>
-                      <SelectItem value="salary_percentage">Persentase Gaji</SelectItem>
+                      <SelectItem value="fixed">{t('penaltySettings.calculationTypes.fixed.title', 'Fixed Penalty')}</SelectItem>
+                      <SelectItem value="hourly">{t('penaltySettings.calculationTypes.hourly.title', 'Per Hour')}</SelectItem>
+                      <SelectItem value="salary_percentage">{t('penaltySettings.calculationTypes.salaryPercentage.title', 'Salary Percentage')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Jenis perhitungan denda yang digunakan secara default
+                    {t('penaltySettings.basicSettings.defaultCalculationTypeDescription', 'Penalty calculation type used by default')}
                   </p>
                 </div>
               </CardContent>
@@ -378,12 +383,12 @@ export const ComprehensivePenaltySettings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Batas Denda
+                  {t('penaltySettings.penaltyLimits.title', 'Penalty Limits')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label>Denda Minimum (Rp)</Label>
+                  <Label>{t('penaltySettings.penaltyLimits.minimumPenalty', 'Minimum Penalty (Rp)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -396,7 +401,7 @@ export const ComprehensivePenaltySettings = () => {
                 </div>
 
                 <div>
-                  <Label>Batas Denda Harian (Rp)</Label>
+                  <Label>{t('penaltySettings.penaltyLimits.maximumDailyPenalty', 'Maximum Daily Penalty (Rp)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -405,12 +410,12 @@ export const ComprehensivePenaltySettings = () => {
                     onChange={(e) => 
                       setGeneralSettings(prev => ({ ...prev, maximum_daily_penalty: parseFloat(e.target.value) || 0 }))
                     }
-                    placeholder="Tidak terbatas"
+                    placeholder={t('penaltySettings.penaltyLimits.unlimited', 'Unlimited')}
                   />
                 </div>
 
                 <div>
-                  <Label>Batas Denda Bulanan (Rp)</Label>
+                  <Label>{t('penaltySettings.penaltyLimits.maximumMonthlyPenalty', 'Maximum Monthly Penalty (Rp)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -419,12 +424,12 @@ export const ComprehensivePenaltySettings = () => {
                     onChange={(e) => 
                       setGeneralSettings(prev => ({ ...prev, maximum_monthly_penalty: parseFloat(e.target.value) || 0 }))
                     }
-                    placeholder="Tidak terbatas"
+                    placeholder={t('penaltySettings.penaltyLimits.unlimited', 'Unlimited')}
                   />
                 </div>
 
                 <div>
-                  <Label>Tarif Denda Per Jam Default (Rp)</Label>
+                  <Label>{t('penaltySettings.penaltyLimits.defaultHourlyRate', 'Default Penalty Hourly Rate (Rp)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -435,12 +440,12 @@ export const ComprehensivePenaltySettings = () => {
                     }
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Digunakan untuk perhitungan denda per jam
+                    {t('penaltySettings.penaltyLimits.defaultHourlyRateDescription', 'Used for hourly penalty calculation')}
                   </p>
                 </div>
 
                 <div>
-                  <Label>Persentase Gaji Default (%)</Label>
+                  <Label>{t('penaltySettings.penaltyLimits.defaultSalaryPercentage', 'Default Salary Percentage (%)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -452,7 +457,7 @@ export const ComprehensivePenaltySettings = () => {
                     }
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Digunakan untuk perhitungan denda berdasarkan persentase gaji
+                    {t('penaltySettings.penaltyLimits.defaultSalaryPercentageDescription', 'Used for penalty calculation based on salary percentage')}
                   </p>
                 </div>
               </CardContent>
@@ -462,7 +467,7 @@ export const ComprehensivePenaltySettings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-5 w-5" />
-                  Aturan Hari Libur
+                  {t('penaltySettings.holidayRules.title', 'Holiday Rules')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -473,7 +478,7 @@ export const ComprehensivePenaltySettings = () => {
                       setHolidaySettings(prev => ({ ...prev, apply_on_holidays: checked }))
                     }
                   />
-                  <Label>Terapkan denda pada hari libur nasional</Label>
+                  <Label>{t('penaltySettings.holidayRules.applyOnNationalHolidays', 'Apply penalty on national holidays')}</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -483,7 +488,7 @@ export const ComprehensivePenaltySettings = () => {
                       setHolidaySettings(prev => ({ ...prev, apply_on_weekends: checked }))
                     }
                   />
-                  <Label>Terapkan denda pada akhir pekan</Label>
+                  <Label>{t('penaltySettings.holidayRules.applyOnWeekends', 'Apply penalty on weekends')}</Label>
                 </div>
               </CardContent>
             </Card>
@@ -492,7 +497,7 @@ export const ComprehensivePenaltySettings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  Pengaturan Toleransi
+                  {t('penaltySettings.graceSettings.title', 'Grace Settings')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -503,11 +508,11 @@ export const ComprehensivePenaltySettings = () => {
                       setGraceSettings(prev => ({ ...prev, first_offense_grace: checked }))
                     }
                   />
-                  <Label>Berikan toleransi untuk pelanggaran pertama</Label>
+                  <Label>{t('penaltySettings.graceSettings.firstOffenseGrace', 'Give grace for first offense')}</Label>
                 </div>
 
                 <div>
-                  <Label>Batas Toleransi Bulanan</Label>
+                  <Label>{t('penaltySettings.graceSettings.monthlyGraceLimit', 'Monthly Grace Limit')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -517,7 +522,7 @@ export const ComprehensivePenaltySettings = () => {
                     }
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Jumlah maksimal pelanggaran yang ditoleranse per bulan
+                    {t('penaltySettings.graceSettings.monthlyGraceLimitDescription', 'Maximum number of violations tolerated per month')}
                   </p>
                 </div>
               </CardContent>
@@ -526,14 +531,14 @@ export const ComprehensivePenaltySettings = () => {
 
           <div className="flex justify-end">
             <Button onClick={handleSaveGeneralSettings} className="min-w-[120px]">
-              Simpan Pengaturan
+              {t('penaltySettings.saveSettings', 'Save Settings')}
             </Button>
           </div>
         </TabsContent>
 
         <TabsContent value="rules" className="space-y-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Aturan Denda</h3>
+            <h3 className="text-lg font-medium">{t('penaltySettings.rules.title', 'Penalty Rules')}</h3>
             <PenaltyRuleFormDialog />
           </div>
           
@@ -541,7 +546,7 @@ export const ComprehensivePenaltySettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5" />
-                Aturan Denda Aktif
+                {t('penaltySettings.rules.activeRules', 'Active Penalty Rules')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -549,9 +554,9 @@ export const ComprehensivePenaltySettings = () => {
                 {rules.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <AlertTriangle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-medium mb-2">Belum ada aturan denda yang dikonfigurasi</h3>
+                    <h3 className="text-lg font-medium mb-2">{t('penaltySettings.rules.noRules', 'No penalty rules configured yet')}</h3>
                     <p className="text-sm mb-4">
-                      Buat aturan denda untuk mengotomatiskan perhitungan denda keterlambatan
+                      {t('penaltySettings.rules.noRulesDescription', 'Create penalty rules to automate late penalty calculation')}
                     </p>
                     <PenaltyRuleFormDialog isCompact={false} />
                   </div>
@@ -563,12 +568,12 @@ export const ComprehensivePenaltySettings = () => {
                           <div className="flex items-center gap-2">
                             <h4 className="font-medium">{rule.name}</h4>
                             <Badge variant={rule.is_active ? "default" : "secondary"}>
-                              {rule.is_active ? 'Aktif' : 'Nonaktif'}
+                              {rule.is_active ? t('penaltySettings.status.active', 'Active') : t('penaltySettings.status.inactive', 'Inactive')}
                             </Badge>
                             <Badge variant="outline" className="text-xs">
-                              {rule.calculation_type === 'fixed' && 'Denda Tetap'}
-                              {rule.calculation_type === 'hourly' && 'Per Jam'}
-                              {rule.calculation_type === 'salary_percentage' && 'Persentase Gaji'}
+                              {rule.calculation_type === 'fixed' && t('penaltySettings.calculationTypes.fixed.title', 'Fixed Penalty')}
+                              {rule.calculation_type === 'hourly' && t('penaltySettings.calculationTypes.hourly.title', 'Per Hour')}
+                              {rule.calculation_type === 'salary_percentage' && t('penaltySettings.calculationTypes.salaryPercentage.title', 'Salary Percentage')}
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -583,34 +588,34 @@ export const ComprehensivePenaltySettings = () => {
                         
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
                           <div>
-                            <span className="font-medium text-gray-900">Jenis Pelanggaran:</span>
+                            <span className="font-medium text-gray-900">{t('penaltySettings.rules.violationType', 'Violation Type')}:</span>
                             <br />
                             <span className="capitalize">
                               {rule.rule_type.replace('_', ' ')}
                             </span>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-900">Batas Waktu:</span>
+                            <span className="font-medium text-gray-900">{t('penaltySettings.rules.timeThreshold', 'Time Threshold')}:</span>
                             <br />
-                            {rule.threshold_minutes} menit
+                            {applyVariables(t('penaltySettings.rules.minutes', '{{minutes}} minutes'), { minutes: String(rule.threshold_minutes) })}
                           </div>
                           <div>
-                            <span className="font-medium text-gray-900">Perhitungan:</span>
+                            <span className="font-medium text-gray-900">{t('penaltySettings.rules.calculation', 'Calculation')}:</span>
                             <br />
                             {rule.calculation_type === 'fixed' && `${formatCurrency(rule.penalty_amount)}`}
-                            {rule.calculation_type === 'hourly' && `${formatCurrency(rule.hourly_rate || 0)}/jam`}
-                            {rule.calculation_type === 'salary_percentage' && `${rule.salary_percentage}% gaji`}
+                            {rule.calculation_type === 'hourly' && `${formatCurrency(rule.hourly_rate || 0)}${t('penaltySettings.rules.perHour', '/hour')}`}
+                            {rule.calculation_type === 'salary_percentage' && `${rule.salary_percentage}% ${t('penaltySettings.rules.salary', 'salary')}`}
                           </div>
                           <div>
-                            <span className="font-medium text-gray-900">Batas Maksimal:</span>
+                            <span className="font-medium text-gray-900">{t('penaltySettings.rules.maximumLimit', 'Maximum Limit')}:</span>
                             <br />
-                            {rule.max_penalty_per_month ? formatCurrency(rule.max_penalty_per_month) : 'Tidak terbatas'}
+                            {rule.max_penalty_per_month ? formatCurrency(rule.max_penalty_per_month) : t('penaltySettings.penaltyLimits.unlimited', 'Unlimited')}
                           </div>
                         </div>
                         
                         {rule.description && (
                           <div className="mt-3 p-2 bg-gray-50 rounded text-sm text-gray-600">
-                            <span className="font-medium">Deskripsi: </span>
+                            <span className="font-medium">{t('penaltySettings.rules.description', 'Description')}: </span>
                             {rule.description}
                           </div>
                         )}
@@ -625,32 +630,32 @@ export const ComprehensivePenaltySettings = () => {
 
         <TabsContent value="exemptions" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Pengecualian Denda</h3>
+            <h3 className="text-lg font-medium">{t('penaltySettings.exemptions.title', 'Penalty Exemptions')}</h3>
             <Dialog open={isExemptionDialogOpen} onOpenChange={setIsExemptionDialogOpen}>
               <DialogTrigger asChild>
                 <Button onClick={resetExemptionForm}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Tambah Pengecualian
+                  {t('penaltySettings.exemptions.addExemption', 'Add Exemption')}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingExemption ? 'Edit Pengecualian' : 'Tambah Pengecualian'}
+                    {editingExemption ? t('penaltySettings.exemptions.editTitle', 'Edit Exemption') : t('penaltySettings.exemptions.addTitle', 'Add Exemption')}
                   </DialogTitle>
                   <DialogDescription className="text-sm text-gray-600">
-                    Berikan pengecualian denda untuk karyawan tertentu, atur periode berlaku, dan tentukan aturan yang dikecualikan.
+                    {t('penaltySettings.exemptions.description', 'Give penalty exemption for specific employees, set effective period, and determine which rules are exempted.')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label>Karyawan</Label>
+                    <Label>{t('penaltySettings.exemptions.employee', 'Employee')}</Label>
                     <Select 
                       value={exemptionForm.employee_id}
                       onValueChange={(value) => setExemptionForm(prev => ({ ...prev, employee_id: value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih karyawan" />
+                        <SelectValue placeholder={t('penaltySettings.exemptions.selectEmployee', 'Select employee')} />
                       </SelectTrigger>
                       <SelectContent>
                         {employees.map((employee) => (
@@ -663,16 +668,16 @@ export const ComprehensivePenaltySettings = () => {
                   </div>
 
                   <div>
-                    <Label>Aturan Denda (Opsional)</Label>
+                    <Label>{t('penaltySettings.exemptions.penaltyRule', 'Penalty Rule (Optional)')}</Label>
                     <Select 
                       value={exemptionForm.penalty_rule_id}
                       onValueChange={(value) => setExemptionForm(prev => ({ ...prev, penalty_rule_id: value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Semua aturan" />
+                        <SelectValue placeholder={t('penaltySettings.exemptions.allRules', 'All rules')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Semua aturan</SelectItem>
+                        <SelectItem value="all">{t('penaltySettings.exemptions.allRules', 'All rules')}</SelectItem>
                         {rules.map((rule) => (
                           <SelectItem key={rule.id} value={rule.id}>
                             {rule.name}
@@ -683,7 +688,7 @@ export const ComprehensivePenaltySettings = () => {
                   </div>
 
                   <div>
-                    <Label>Jenis Pengecualian</Label>
+                    <Label>{t('penaltySettings.exemptions.exemptionType', 'Exemption Type')}</Label>
                     <Select 
                       value={exemptionForm.exemption_type}
                       onValueChange={(value) => setExemptionForm(prev => ({ ...prev, exemption_type: value }))}
@@ -692,20 +697,20 @@ export const ComprehensivePenaltySettings = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="temporary">Sementara</SelectItem>
-                        <SelectItem value="permanent">Permanen</SelectItem>
-                        <SelectItem value="conditional">Bersyarat</SelectItem>
+                        <SelectItem value="temporary">{t('penaltySettings.exemptions.temporary', 'Temporary')}</SelectItem>
+                        <SelectItem value="permanent">{t('penaltySettings.exemptions.permanent', 'Permanent')}</SelectItem>
+                        <SelectItem value="conditional">{t('penaltySettings.exemptions.conditional', 'Conditional')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label>Tanggal Mulai</Label>
+                    <Label>{t('penaltySettings.exemptions.startDate', 'Start Date')}</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-start text-left font-normal">
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {exemptionForm.start_date ? format(exemptionForm.start_date, "PPP") : "Pilih tanggal"}
+                          {exemptionForm.start_date ? format(exemptionForm.start_date, "PPP", { locale: dateLocale }) : t('datePicker.selectDate', 'Select date')}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -722,12 +727,12 @@ export const ComprehensivePenaltySettings = () => {
 
                   {exemptionForm.exemption_type === 'temporary' && (
                     <div>
-                      <Label>Tanggal Berakhir</Label>
+                      <Label>{t('penaltySettings.exemptions.endDate', 'End Date')}</Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button variant="outline" className="w-full justify-start text-left font-normal">
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {exemptionForm.end_date ? format(exemptionForm.end_date, "PPP") : "Pilih tanggal"}
+                            {exemptionForm.end_date ? format(exemptionForm.end_date, "PPP", { locale: dateLocale }) : t('datePicker.selectDate', 'Select date')}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -744,20 +749,20 @@ export const ComprehensivePenaltySettings = () => {
                   )}
 
                   <div>
-                    <Label>Alasan</Label>
+                    <Label>{t('penaltySettings.exemptions.reason', 'Reason')}</Label>
                     <Textarea
                       value={exemptionForm.reason}
                       onChange={(e) => setExemptionForm(prev => ({ ...prev, reason: e.target.value }))}
-                      placeholder="Masukkan alasan pengecualian..."
+                      placeholder={t('penaltySettings.exemptions.reasonPlaceholder', 'Enter exemption reason...')}
                     />
                   </div>
 
                   <div className="flex justify-end space-x-2">
                     <Button variant="outline" onClick={() => setIsExemptionDialogOpen(false)}>
-                      Batal
+                      {t('common.cancel', 'Cancel')}
                     </Button>
                     <Button onClick={handleCreateExemption}>
-                      {editingExemption ? 'Update' : 'Tambah'}
+                      {editingExemption ? t('common.update', 'Update') : t('penaltySettings.exemptions.add', 'Add')}
                     </Button>
                   </div>
                 </div>
@@ -770,13 +775,13 @@ export const ComprehensivePenaltySettings = () => {
               <Card>
                 <CardContent className="text-center py-8">
                   <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">Belum ada pengecualian</h3>
+                  <h3 className="text-lg font-medium mb-2">{t('penaltySettings.exemptions.noExemptions', 'No exemptions yet')}</h3>
                   <p className="text-muted-foreground mb-4">
-                    Buat pengecualian untuk karyawan yang tidak dikenakan denda tertentu.
+                    {t('penaltySettings.exemptions.noExemptionsDescription', 'Create exemptions for employees who are not subject to certain penalties.')}
                   </p>
                   <Button onClick={() => setIsExemptionDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Tambah Pengecualian Pertama
+                    {t('penaltySettings.exemptions.addFirstExemption', 'Add First Exemption')}
                   </Button>
                 </CardContent>
               </Card>
@@ -788,10 +793,10 @@ export const ComprehensivePenaltySettings = () => {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className="font-medium">
-                            {employees.find(e => e.id === exemption.employee_id)?.full_name || 'Unknown Employee'}
+                            {employees.find(e => e.id === exemption.employee_id)?.full_name || t('penaltySettings.exemptions.unknownEmployee', 'Unknown Employee')}
                           </h4>
                           <Badge variant={exemption.is_active ? "default" : "secondary"}>
-                            {exemption.is_active ? 'Aktif' : 'Nonaktif'}
+                            {exemption.is_active ? t('penaltySettings.status.active', 'Active') : t('penaltySettings.status.inactive', 'Inactive')}
                           </Badge>
                           <Badge variant="outline">
                             {exemption.exemption_type}
@@ -799,15 +804,15 @@ export const ComprehensivePenaltySettings = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-muted-foreground">
                           <div>
-                            <span className="font-medium">Mulai:</span> {format(new Date(exemption.start_date), "dd/MM/yyyy")}
+                            <span className="font-medium">{t('penaltySettings.exemptions.start', 'Start')}:</span> {format(new Date(exemption.start_date), "dd/MM/yyyy")}
                           </div>
                           {exemption.end_date && (
                             <div>
-                              <span className="font-medium">Berakhir:</span> {format(new Date(exemption.end_date), "dd/MM/yyyy")}
+                              <span className="font-medium">{t('penaltySettings.exemptions.end', 'End')}:</span> {format(new Date(exemption.end_date), "dd/MM/yyyy")}
                             </div>
                           )}
                           <div>
-                            <span className="font-medium">Alasan:</span> {exemption.reason}
+                            <span className="font-medium">{t('penaltySettings.exemptions.reason', 'Reason')}:</span> {exemption.reason}
                           </div>
                         </div>
                       </div>
@@ -819,7 +824,7 @@ export const ComprehensivePenaltySettings = () => {
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => {
-                          if (confirm('Yakin ingin menghapus pengecualian ini?')) {
+                          if (confirm(t('penaltySettings.exemptions.confirmDelete', 'Are you sure you want to delete this exemption?'))) {
                             deleteExemption(exemption.id);
                           }
                         }}>
@@ -839,7 +844,7 @@ export const ComprehensivePenaltySettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
-                Pengaturan Notifikasi
+                {t('penaltySettings.notifications.title', 'Notification Settings')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -850,7 +855,7 @@ export const ComprehensivePenaltySettings = () => {
                     setNotificationSettings(prev => ({ ...prev, notify_employee: checked }))
                   }
                 />
-                <Label>Notifikasi ke karyawan saat denda diterapkan</Label>
+                <Label>{t('penaltySettings.notifications.notifyEmployee', 'Notify employee when penalty is applied')}</Label>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -860,7 +865,7 @@ export const ComprehensivePenaltySettings = () => {
                     setNotificationSettings(prev => ({ ...prev, notify_manager: checked }))
                   }
                 />
-                <Label>Notifikasi ke manajer langsung</Label>
+                <Label>{t('penaltySettings.notifications.notifyManager', 'Notify direct manager')}</Label>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -870,12 +875,12 @@ export const ComprehensivePenaltySettings = () => {
                     setNotificationSettings(prev => ({ ...prev, notify_hr: checked }))
                   }
                 />
-                <Label>Notifikasi ke tim HR</Label>
+                <Label>{t('penaltySettings.notifications.notifyHr', 'Notify HR team')}</Label>
               </div>
 
               <div className="pt-4">
                 <Button onClick={handleSaveGeneralSettings}>
-                  Simpan Pengaturan Notifikasi
+                  {t('penaltySettings.notifications.saveSettings', 'Save Notification Settings')}
                 </Button>
               </div>
             </CardContent>

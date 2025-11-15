@@ -3,6 +3,8 @@ import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { formatIDR } from '@/features/1-login/utils/subscriptionUtils';
 import { SubscriptionPlan } from '@/features/10-management/hooks/useOptimizedSubscription';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 import './UpgradeConfirmationModal.css';
 
 interface ProRatedData {
@@ -61,6 +63,7 @@ export const UpgradeConfirmationModal = ({
   proRatedData,
   isLoading
 }: UpgradeConfirmationModalProps) => {
+  const { t, language } = useAppTranslation();
   const isYearly = billingCycle === 'yearly';
   const memberCount = newMemberCount;
   const selectedPlan = newPlan;
@@ -77,27 +80,27 @@ export const UpgradeConfirmationModal = ({
 
   const getModalTitle = () => {
     if (isScheduledChange) {
-      if (isPlanChange) return 'Jadwalkan Perubahan Plan';
-      return 'Jadwalkan Perubahan Member';
+      if (isPlanChange) return t('subscription.plans.modal.title.schedulePlan', 'Schedule Plan Change');
+      return t('subscription.plans.modal.title.scheduleMember', 'Schedule Member Change');
     }
-    if (isPlanChange) return 'Konfirmasi Perubahan Plan';
-    return 'Konfirmasi Upgrade Member';
+    if (isPlanChange) return t('subscription.plans.modal.title.confirmPlan', 'Confirm Plan Change');
+    return t('subscription.plans.modal.title.confirmMember', 'Confirm Member Upgrade');
   };
 
   const getButtonText = () => {
-    if (isScheduledChange) return 'Jadwalkan Perubahan';
-    return 'Konfirmasi & Bayar';
+    if (isScheduledChange) return t('subscription.plans.modal.button.schedule', 'Schedule Change');
+    return t('subscription.plans.modal.button.confirmPay', 'Confirm & Pay');
   };
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Tanggal tidak tersedia';
+    if (!dateStr) return t('subscription.plans.modal.date.unavailable', 'Date unavailable');
     
     const date = new Date(dateStr);
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
       console.warn('Invalid date string:', dateStr);
-      return 'Tanggal tidak valid';
+      return t('subscription.plans.modal.date.invalid', 'Invalid date');
     }
     
     // Check if date is in the past (shouldn't happen for scheduled changes)
@@ -107,14 +110,16 @@ export const UpgradeConfirmationModal = ({
       // For past dates, show current date + 1 day as fallback
       const tomorrow = new Date(now);
       tomorrow.setDate(now.getDate() + 1);
-      return tomorrow.toLocaleDateString('id-ID', {
+      const locale = language === 'id' ? 'id-ID' : 'en-US';
+      return tomorrow.toLocaleDateString(locale, {
         day: 'numeric',
         month: 'long',
         year: 'numeric'
       });
     }
     
-    return date.toLocaleDateString('id-ID', {
+    const locale = language === 'id' ? 'id-ID' : 'en-US';
+    return date.toLocaleDateString(locale, {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
@@ -134,26 +139,26 @@ export const UpgradeConfirmationModal = ({
           <div className="space-y-4">
           {/* Current vs New Plan Info */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">Detail Perubahan:</h4>
+            <h4 className="font-semibold mb-2">{t('subscription.plans.modal.details.title', 'Change Details:')}</h4>
             
             {proRatedData ? (
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Plan saat ini:</span>
+                  <span>{t('subscription.plans.modal.details.currentPlan', 'Current Plan:')}</span>
                   <span>{proRatedData.current_plan?.name || currentPlan?.name || 'Unknown'}</span>
                 </div>
                 {isPlanChange && (
                   <div className="flex justify-between">
-                    <span>Plan baru:</span>
+                    <span>{t('subscription.plans.modal.details.newPlan', 'New Plan:')}</span>
                     <span>{proRatedData.target_plan?.name || newPlan?.name || 'Unknown'}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>Member saat ini:</span>
+                  <span>{t('subscription.plans.modal.details.currentMember', 'Current Members:')}</span>
                   <span>{proRatedData.current_plan.member_count} member</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Member baru:</span>
+                  <span>{t('subscription.plans.modal.details.newMember', 'New Members:')}</span>
                   <span>{proRatedData.calculation.new_member_count} member</span>
                 </div>
                 {proRatedData.calculation.member_difference !== 0 && (
@@ -161,7 +166,9 @@ export const UpgradeConfirmationModal = ({
                     proRatedData.calculation.member_difference > 0 ? 'text-green-600' : 'text-orange-600'
                   }`}>
                     <span>
-                      {proRatedData.calculation.member_difference > 0 ? 'Tambahan member:' : 'Pengurangan member:'}
+                      {proRatedData.calculation.member_difference > 0 
+                        ? t('subscription.plans.modal.details.additionalMember', 'Additional Members:')
+                        : t('subscription.plans.modal.details.reductionMember', 'Member Reduction:')}
                     </span>
                     <span>
                       {proRatedData.calculation.member_difference > 0 ? '+' : ''}
@@ -173,16 +180,19 @@ export const UpgradeConfirmationModal = ({
             ) : (
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Plan:</span>
+                  <span>{t('subscription.plans.modal.details.plan', 'Plan:')}</span>
                   <span>{selectedPlan.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Member:</span>
+                  <span>{t('subscription.plans.modal.details.member', 'Member:')}</span>
                   <span>{memberCount} member</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Billing:</span>
-                  <span>{isYearly ? 'Tahunan' : 'Bulanan'}</span>
+                  <span>{t('subscription.plans.modal.details.billing', 'Billing:')}</span>
+                  <span>{isYearly 
+                    ? t('subscription.plans.modal.details.billingYearly', 'Yearly')
+                    : t('subscription.plans.modal.details.billingMonthly', 'Monthly')}
+                  </span>
                 </div>
               </div>
             )}
@@ -191,19 +201,19 @@ export const UpgradeConfirmationModal = ({
           {/* Scheduled Change Info */}
           {isScheduledChange && (
             <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-              <h4 className="font-semibold mb-2 text-orange-800">📅 Perubahan Dijadwalkan:</h4>
+              <h4 className="font-semibold mb-2 text-orange-800">📅 {t('subscription.plans.modal.scheduled.title', 'Scheduled Change:')}</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Tanggal efektif:</span>
+                  <span>{t('subscription.plans.modal.scheduled.effectiveDate', 'Effective Date:')}</span>
                   <span className="font-medium">{formatDate(proRatedData.calculation.scheduled_date)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Sisa hari periode saat ini:</span>
-                  <span>{proRatedData.calculation.remaining_days} hari</span>
+                  <span>{t('subscription.plans.modal.scheduled.remainingDays', 'Remaining Days in Current Period:')}</span>
+                  <span>{proRatedData.calculation.remaining_days} {t('subscription.plans.modal.scheduled.days', 'days')}</span>
                 </div>
               </div>
               <div className="mt-2 p-2 bg-orange-100 rounded text-xs text-orange-700">
-                💡 Sesuai kebijakan "no refund", perubahan akan berlaku di akhir periode berjalan
+                💡 {t('subscription.plans.modal.scheduled.policy', 'Per our "no refund" policy, changes will take effect at the end of the current period')}
               </div>
             </div>
           )}
@@ -211,35 +221,35 @@ export const UpgradeConfirmationModal = ({
           {/* Immediate Prorate Calculation */}
           {isImmediateCharge && (
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <h4 className="font-semibold mb-2 text-blue-800">💰 Kalkulasi Prorate:</h4>
+              <h4 className="font-semibold mb-2 text-blue-800">💰 {t('subscription.plans.modal.prorate.title', 'Prorate Calculation:')}</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Sisa hari subscription:</span>
-                  <span>{proRatedData.calculation.remaining_days} hari</span>
+                  <span>{t('subscription.plans.modal.prorate.remainingDays', 'Remaining Subscription Days:')}</span>
+                  <span>{proRatedData.calculation.remaining_days} {t('subscription.plans.modal.scheduled.days', 'days')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Persentase prorate:</span>
+                  <span>{t('subscription.plans.modal.prorate.percentage', 'Prorate Percentage:')}</span>
                   <span>{proRatedData.calculation.prorate_percentage.toFixed(1)}%</span>
                 </div>
                 {proRatedData.calculation.plan_change_charge > 0 && (
                   <div className="flex justify-between">
-                    <span>Biaya perubahan plan:</span>
+                    <span>{t('subscription.plans.modal.prorate.planChangeCost', 'Plan Change Cost:')}</span>
                     <span>{formatIDR(proRatedData.calculation.plan_change_charge)}</span>
                   </div>
                 )}
                 {proRatedData.calculation.member_change_charge > 0 && (
                   <div className="flex justify-between">
-                    <span>Biaya tambahan member:</span>
+                    <span>{t('subscription.plans.modal.prorate.memberCost', 'Additional Member Cost:')}</span>
                     <span>{formatIDR(proRatedData.calculation.member_change_charge)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-medium text-blue-700 border-t pt-1">
-                  <span>Total prorate:</span>
+                  <span>{t('subscription.plans.modal.prorate.total', 'Total Prorate:')}</span>
                   <span>{formatIDR(proRatedData.calculation.prorate_amount)}</span>
                 </div>
               </div>
               <div className="mt-2 p-2 bg-blue-100 rounded text-xs text-blue-600">
-                💡 Anda hanya membayar untuk peningkatan sesuai sisa periode subscription
+                💡 {t('subscription.plans.modal.prorate.note', 'You only pay for the upgrade based on the remaining subscription period')}
               </div>
             </div>
           )}
@@ -248,31 +258,31 @@ export const UpgradeConfirmationModal = ({
           {isImmediateCharge ? (
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-green-800">Total Pembayaran:</span>
+                <span className="font-semibold text-green-800">{t('subscription.plans.modal.payment.total', 'Total Payment:')}</span>
                 <span className="text-xl font-bold text-green-600">
                   {formatIDR(totalAmount)}
                 </span>
               </div>
               <p className="text-xs text-green-600 mt-1">
-                Pembayaran akan diproses segera dan perubahan berlaku langsung
+                {t('subscription.plans.modal.payment.immediate', 'Payment will be processed immediately and changes will take effect right away')}
               </p>
             </div>
           ) : isScheduledChange ? (
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-gray-800">Biaya Tambahan:</span>
+                <span className="font-semibold text-gray-800">{t('subscription.plans.modal.payment.additionalCost', 'Additional Cost:')}</span>
                 <span className="text-xl font-bold text-gray-600">
                   {formatIDR(0)}
                 </span>
               </div>
               <p className="text-xs text-gray-600 mt-1">
-                Tidak ada biaya tambahan. Perubahan akan berlaku di akhir periode berjalan.
+                {t('subscription.plans.modal.payment.noAdditionalCost', 'No additional cost. Changes will take effect at the end of the current period.')}
               </p>
             </div>
           ) : (
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-green-800">Total Pembayaran:</span>
+                <span className="font-semibold text-green-800">{t('subscription.plans.modal.payment.total', 'Total Payment:')}</span>
                 <span className="text-xl font-bold text-green-600">
                   {formatIDR(totalAmount)}
                 </span>
@@ -291,7 +301,7 @@ export const UpgradeConfirmationModal = ({
             className="flex-1"
             disabled={isLoading}
           >
-            Batal
+            {t('subscription.plans.modal.button.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={onConfirm}
@@ -302,7 +312,7 @@ export const UpgradeConfirmationModal = ({
             }`}
             disabled={isLoading}
           >
-            {isLoading ? 'Processing...' : getButtonText()}
+            {isLoading ? t('subscription.plans.modal.button.processing', 'Processing...') : getButtonText()}
           </Button>
         </div>
       </DialogContent>

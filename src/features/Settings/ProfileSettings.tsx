@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useLanguage } from '@/features/share/i18n/LanguageProvider';
 import type { AppLanguage } from '@/features/share/i18n/translations';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 export type ProfileUpdateData = {
   full_name: string;
@@ -80,6 +81,7 @@ const ProfileSettings = () => {
   const { t } = useAppTranslation();
   const updateProfile = useUpdateProfile(t);
   const { language, setLanguage } = useLanguage();
+  const { organizationId } = useCurrentOrg();
   
   const [formData, setFormData] = useState<ProfileUpdateData>({
     full_name: '',
@@ -92,6 +94,7 @@ const ProfileSettings = () => {
   });
 
   const [hasChanges, setHasChanges] = useState(false);
+  const loadedOrgIdRef = useRef<string | null>(null); // Track which orgId we've loaded language for
 
   // Initialize form data when profile loads
   useEffect(() => {
@@ -109,6 +112,54 @@ const ProfileSettings = () => {
       setHasChanges(false);
     }
   }, [profile]);
+
+  // Load language from database when organizationId is available
+  useEffect(() => {
+    // Reset ref when organizationId changes
+    if (loadedOrgIdRef.current !== organizationId) {
+      loadedOrgIdRef.current = null;
+    }
+
+    const loadLanguageFromDatabase = async () => {
+      if (!organizationId || loadedOrgIdRef.current === organizationId) {
+        // Already loaded for this organizationId
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('application_language')
+          .select('is_indonesian')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Failed to load language from database:', error);
+          return;
+        }
+
+        // Mark as loaded (even if no data found)
+        loadedOrgIdRef.current = organizationId;
+
+        if (data) {
+          // Convert boolean to AppLanguage: true = "id", false = "en"
+          const dbLanguage: AppLanguage = data.is_indonesian ? 'id' : 'en';
+          
+          // Only update if different from current language
+          if (language !== dbLanguage) {
+            setLanguage(dbLanguage);
+            if (import.meta.env.DEV) {
+              console.log('✅ Loaded language from database:', { organizationId, isIndonesian: data.is_indonesian, language: dbLanguage });
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('Error loading language from database:', error);
+      }
+    };
+
+    loadLanguageFromDatabase();
+  }, [organizationId, language, setLanguage]);
 
   const handleInputChange = (field: keyof ProfileUpdateData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -144,6 +195,56 @@ const ProfileSettings = () => {
         profile_photo_url: (profile as any).profile_photo_url || null,
       });
       setHasChanges(false);
+    }
+  };
+
+  // Handle language change and save to database
+  const handleLanguageChange = async (value: AppLanguage) => {
+    try {
+      // Update local state immediately
+      setLanguage(value);
+
+      // Save to database if organizationId is available
+      if (organizationId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('No authenticated user, language saved to localStorage only');
+          return;
+        }
+
+        // Convert language to boolean: "id" = true (Indonesian), "en" = false (English)
+        const isIndonesian = value === 'id';
+
+        // Upsert language setting to application_language table
+        const { error: langError } = await supabase
+          .from('application_language')
+          .upsert({
+            organization_id: organizationId,
+            is_indonesian: isIndonesian,
+            created_by: user.id,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'organization_id'
+          });
+
+        if (langError) {
+          console.error('Failed to save language to database:', langError);
+          toast.error(t('settings.profile.language.saveError', 'Failed to save language preference'));
+        } else {
+          // Update ref to indicate we've loaded language for this organization
+          loadedOrgIdRef.current = organizationId;
+          if (import.meta.env.DEV) {
+            console.log('✅ Language saved to database:', { organizationId, isIndonesian, language: value });
+          }
+        }
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('No organizationId available, language saved to localStorage only');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving language:', error);
+      toast.error(t('settings.profile.language.saveError', 'Failed to save language preference'));
     }
   };
 
@@ -190,7 +291,7 @@ const ProfileSettings = () => {
             </Label>
             <Select
               value={language}
-              onValueChange={(value) => setLanguage(value as AppLanguage)}
+              onValueChange={(value) => handleLanguageChange(value as AppLanguage)}
             >
               <SelectTrigger id="language-select" className="w-full">
                 <SelectValue />

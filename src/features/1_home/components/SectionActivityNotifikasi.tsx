@@ -6,7 +6,9 @@ import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { useLeaveRequests } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useLeaveRequests';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 import { 
   Bell, 
   Calendar, 
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 
 export const SectionActivityNotifikasi = () => {
+  const { t, dateLocale } = useAppTranslation();
   const [selectedFilter, setSelectedFilter] = useState('all');
   
   // Fetch real leave request data
@@ -30,15 +33,28 @@ export const SectionActivityNotifikasi = () => {
   const leaveActivities = React.useMemo(() => {
     if (!leaveRequests) return [];
     
+    const getLeaveTypeLabel = (type: string) => {
+      switch (type) {
+        case 'annual': return t('activity.leaveType.annual', 'Annual');
+        case 'sick': return t('activity.leaveType.sick', 'Sick');
+        case 'emergency': return t('activity.leaveType.emergency', 'Emergency');
+        default: return type;
+      }
+    };
+    
     return leaveRequests.slice(0, 10).map((request) => ({
       id: request.id,
       type: 'leave_request',
-      title: `Pengajuan Cuti ${request.leave_type === 'annual' ? 'Tahunan' : 
-                              request.leave_type === 'sick' ? 'Sakit' :
-                              request.leave_type === 'emergency' ? 'Darurat' : 
-                              request.leave_type}`,
-      description: `${request.employees?.full_name || 'Karyawan'} mengajukan cuti ${format(new Date(request.start_date), 'dd MMM', { locale: id })} - ${format(new Date(request.end_date), 'dd MMM yyyy', { locale: id })} (${request.total_days} hari)`,
-      time: format(new Date(request.created_at), 'dd MMM yyyy HH:mm', { locale: id }),
+      title: applyVariables(t('activity.leaveRequestTitle', 'Leave Request {{type}}'), { 
+        type: getLeaveTypeLabel(request.leave_type) 
+      }),
+      description: applyVariables(t('activity.leaveRequestDescription', '{{employee}} requested leave {{startDate}} - {{endDate}} ({{days}} days)'), {
+        employee: request.employees?.full_name || t('activity.employee', 'Employee'),
+        startDate: format(new Date(request.start_date), 'dd MMM', { locale: dateLocale }),
+        endDate: format(new Date(request.end_date), 'dd MMM yyyy', { locale: dateLocale }),
+        days: String(request.total_days)
+      }),
+      time: format(new Date(request.created_at), 'dd MMM yyyy HH:mm', { locale: dateLocale }),
       priority: request.status === 'pending' ? 'high' : 
                 request.status === 'rejected' ? 'medium' : 'low',
       status: request.status,
@@ -47,17 +63,17 @@ export const SectionActivityNotifikasi = () => {
       employee: request.employees?.full_name,
       department: request.employees?.departments?.name
     }));
-  }, [leaveRequests]);
+  }, [leaveRequests, t, dateLocale]);
 
   // Mix leave requests with some mock system activities
   const activities = [...leaveActivities];
 
   const filters = [
-    { id: 'all', label: 'Semua', count: activities.length },
-    { id: 'pending', label: 'Menunggu', count: activities.filter(a => a.status === 'pending').length },
-    { id: 'approved', label: 'Disetujui', count: activities.filter(a => a.status === 'approved').length },
-    { id: 'rejected', label: 'Ditolak', count: activities.filter(a => a.status === 'rejected').length },
-    { id: 'high', label: 'Prioritas Tinggi', count: activities.filter(a => a.priority === 'high').length }
+    { id: 'all', label: t('activity.filter.all', 'All'), count: activities.length },
+    { id: 'pending', label: t('activity.filter.pending', 'Pending'), count: activities.filter(a => a.status === 'pending').length },
+    { id: 'approved', label: t('activity.filter.approved', 'Approved'), count: activities.filter(a => a.status === 'approved').length },
+    { id: 'rejected', label: t('activity.filter.rejected', 'Rejected'), count: activities.filter(a => a.status === 'rejected').length },
+    { id: 'high', label: t('activity.filter.highPriority', 'High Priority'), count: activities.filter(a => a.priority === 'high').length }
   ];
 
   const filteredActivities = activities.filter(activity => {
@@ -93,11 +109,11 @@ export const SectionActivityNotifikasi = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pending': return 'Menunggu';
-      case 'approved': return 'Disetujui';
-      case 'rejected': return 'Ditolak';
-      case 'cancelled': return 'Dibatalkan';
-      case 'info': return 'Info';
+      case 'pending': return t('activity.status.pending', 'Pending');
+      case 'approved': return t('activity.status.approved', 'Approved');
+      case 'rejected': return t('activity.status.rejected', 'Rejected');
+      case 'cancelled': return t('activity.status.cancelled', 'Cancelled');
+      case 'info': return t('activity.status.info', 'Info');
       default: return status;
     }
   };
@@ -108,7 +124,7 @@ export const SectionActivityNotifikasi = () => {
         <div className="flex items-center justify-between">
         <CardTitle className="text-base font-semibold text-gray-900 leading-snug flex items-center">
           <Bell className="h-4 w-4 mr-2 text-blue-600" />
-          Aktivitas & Notifikasi
+          {t('activity.title', 'Activities & Notifications')}
         </CardTitle>
         <Badge variant="secondary" className="text-xs font-medium leading-tight">
           {filteredActivities.length}
@@ -149,7 +165,7 @@ export const SectionActivityNotifikasi = () => {
         <ScrollArea className="flex-1 px-4 seamless-scroll">
           {isLoading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="text-sm text-gray-500 leading-relaxed">Memuat data...</div>
+              <div className="text-sm text-gray-500 leading-relaxed">{t('activity.loading', 'Loading data...')}</div>
             </div>
           ) : (
           <div className="space-y-3">
@@ -207,7 +223,7 @@ export const SectionActivityNotifikasi = () => {
         {/* Action Footer */}
         <div className="p-4 border-t">
           <Button variant="outline" className="w-full text-xs h-8">
-            Lihat Semua Aktivitas
+            {t('activity.viewAll', 'View All Activities')}
           </Button>
         </div>
       </CardContent>

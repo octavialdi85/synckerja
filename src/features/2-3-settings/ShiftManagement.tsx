@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Switch } from '@/features/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface Shift {
   id: string;
@@ -24,6 +26,7 @@ interface Shift {
 }
 
 export const ShiftManagement = () => {
+  const { t } = useAppTranslation();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
@@ -65,8 +68,8 @@ export const ShiftManagement = () => {
     } catch (error) {
       console.error('Error fetching shifts:', error);
       toast({
-        title: "Error",
-        description: "Gagal memuat data shift",
+        title: t('common.error', 'Error'),
+        description: t('shiftManagement.error.loadFailed', 'Failed to load shift data'),
         variant: "destructive"
       });
     } finally {
@@ -99,8 +102,8 @@ export const ShiftManagement = () => {
 
       if (!profile?.active_organization_id) {
         toast({
-          title: "Error",
-          description: "Organisasi tidak ditemukan",
+          title: t('common.error', 'Error'),
+          description: t('shiftManagement.error.organizationNotFound', 'Organization not found'),
           variant: "destructive"
         });
         return;
@@ -116,8 +119,8 @@ export const ShiftManagement = () => {
         if (error) throw error;
         
         toast({
-          title: "Berhasil",
-          description: "Shift berhasil diperbarui"
+          title: t('common.success', 'Success'),
+          description: t('shiftManagement.success.updated', 'Shift updated successfully')
         });
       } else {
         // Create new shift
@@ -131,8 +134,8 @@ export const ShiftManagement = () => {
         if (error) throw error;
         
         toast({
-          title: "Berhasil",
-          description: "Shift berhasil dibuat"
+          title: t('common.success', 'Success'),
+          description: t('shiftManagement.success.created', 'Shift created successfully')
         });
       }
 
@@ -142,8 +145,8 @@ export const ShiftManagement = () => {
     } catch (error) {
       console.error('Error saving shift:', error);
       toast({
-        title: "Error",
-        description: "Gagal menyimpan shift",
+        title: t('common.error', 'Error'),
+        description: t('shiftManagement.error.saveFailed', 'Failed to save shift'),
         variant: "destructive"
       });
     }
@@ -164,7 +167,7 @@ export const ShiftManagement = () => {
   };
 
   const handleDelete = async (shiftId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus shift ini?')) return;
+    if (!confirm(t('shiftManagement.confirmDelete', 'Are you sure you want to delete this shift?'))) return;
 
     try {
       const { error } = await supabase
@@ -175,16 +178,16 @@ export const ShiftManagement = () => {
       if (error) throw error;
       
       toast({
-        title: "Berhasil",
-        description: "Shift berhasil dihapus"
+        title: t('common.success', 'Success'),
+        description: t('shiftManagement.success.deleted', 'Shift deleted successfully')
       });
       
       fetchShifts();
     } catch (error) {
       console.error('Error deleting shift:', error);
       toast({
-        title: "Error",
-        description: "Gagal menghapus shift",
+        title: t('common.error', 'Error'),
+        description: t('shiftManagement.error.deleteFailed', 'Failed to delete shift'),
         variant: "destructive"
       });
     }
@@ -195,60 +198,60 @@ export const ShiftManagement = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8">Memuat data shift...</div>;
+    return <div className="text-center py-8">{t('shiftManagement.loading', 'Loading shift data...')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-medium">Daftar Shift</h3>
-          <p className="text-sm text-gray-600">Kelola jadwal shift kerja organisasi</p>
+          <h3 className="text-lg font-medium">{t('shiftManagement.shiftList.title', 'Shift List')}</h3>
+          <p className="text-sm text-gray-600">{t('shiftManagement.shiftList.description', 'Manage organization work shift schedule')}</p>
         </div>
         
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              Tambah Shift
+              {t('shiftManagement.button.addShift', 'Add Shift')}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {editingShift ? 'Edit Shift' : 'Tambah Shift Baru'}
+                {editingShift ? t('shiftManagement.form.editTitle', 'Edit Shift') : t('shiftManagement.form.addTitle', 'Add New Shift')}
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-600">
-                Tentukan nama shift, jam kerja, serta toleransi untuk jadwal kerja karyawan.
+                {t('shiftManagement.form.description', 'Set shift name, working hours, and tolerance for employee work schedule.')}
               </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="name">Nama Shift</Label>
+                <Label htmlFor="name">{t('shiftManagement.form.shiftName', 'Shift Name')}</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="contoh: Shift Pagi"
+                  placeholder={t('shiftManagement.form.shiftNamePlaceholder', 'e.g., Morning Shift')}
                   required
                 />
               </div>
               
               <div>
-                <Label htmlFor="description">Deskripsi</Label>
+                <Label htmlFor="description">{t('shiftManagement.form.descriptionLabel', 'Description')}</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Deskripsi shift..."
+                  placeholder={t('shiftManagement.form.descriptionPlaceholder', 'Shift description...')}
                   rows={2}
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="start_time">Jam Mulai</Label>
+                  <Label htmlFor="start_time">{t('shiftManagement.form.startTime', 'Start Time')}</Label>
                   <Input
                     id="start_time"
                     type="time"
@@ -259,7 +262,7 @@ export const ShiftManagement = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="end_time">Jam Selesai</Label>
+                  <Label htmlFor="end_time">{t('shiftManagement.form.endTime', 'End Time')}</Label>
                   <Input
                     id="end_time"
                     type="time"
@@ -272,7 +275,7 @@ export const ShiftManagement = () => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="break_duration">Durasi Istirahat (menit)</Label>
+                  <Label htmlFor="break_duration">{t('shiftManagement.form.breakDuration', 'Break Duration (minutes)')}</Label>
                   <Input
                     id="break_duration"
                     type="number"
@@ -283,7 +286,7 @@ export const ShiftManagement = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="late_tolerance">Toleransi Terlambat (menit)</Label>
+                  <Label htmlFor="late_tolerance">{t('shiftManagement.form.lateTolerance', 'Late Tolerance (minutes)')}</Label>
                   <Input
                     id="late_tolerance"
                     type="number"
@@ -300,13 +303,13 @@ export const ShiftManagement = () => {
                   checked={formData.is_active}
                   onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
                 />
-                <Label htmlFor="is_active">Shift Aktif</Label>
+                <Label htmlFor="is_active">{t('shiftManagement.form.shiftActive', 'Shift Active')}</Label>
               </div>
               
               <div className="flex gap-2 pt-4">
                 <Button type="submit" className="flex-1">
                   <Save className="h-4 w-4 mr-2" />
-                  {editingShift ? 'Update' : 'Simpan'}
+                  {editingShift ? t('common.update', 'Update') : t('common.save', 'Save')}
                 </Button>
                 <Button 
                   type="button" 
@@ -314,7 +317,7 @@ export const ShiftManagement = () => {
                   onClick={() => setShowCreateDialog(false)}
                 >
                   <X className="h-4 w-4 mr-2" />
-                  Batal
+                  {t('common.cancel', 'Cancel')}
                 </Button>
               </div>
             </form>
@@ -326,11 +329,11 @@ export const ShiftManagement = () => {
         <Card>
           <CardContent className="text-center py-8">
             <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada shift</h3>
-            <p className="text-gray-600 mb-4">Mulai dengan membuat shift kerja pertama Anda</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('shiftManagement.emptyState.title', 'No shifts yet')}</h3>
+            <p className="text-gray-600 mb-4">{t('shiftManagement.emptyState.description', 'Start by creating your first work shift')}</p>
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Tambah Shift
+              {t('shiftManagement.button.addShift', 'Add Shift')}
             </Button>
           </CardContent>
         </Card>
@@ -351,7 +354,7 @@ export const ShiftManagement = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={shift.is_active ? "default" : "secondary"}>
-                      {shift.is_active ? 'Aktif' : 'Nonaktif'}
+                      {shift.is_active ? t('shiftManagement.status.active', 'Active') : t('shiftManagement.status.inactive', 'Inactive')}
                     </Badge>
                     <Button
                       variant="outline"
@@ -373,22 +376,22 @@ export const ShiftManagement = () => {
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-600">Jam Kerja</p>
+                    <p className="text-gray-600">{t('shiftManagement.card.workingHours', 'Working Hours')}</p>
                     <p className="font-medium">
                       {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Istirahat</p>
-                    <p className="font-medium">{shift.break_duration_minutes} menit</p>
+                    <p className="text-gray-600">{t('shiftManagement.card.break', 'Break')}</p>
+                    <p className="font-medium">{applyVariables(t('shiftManagement.card.breakMinutes', '{{minutes}} minutes'), { minutes: String(shift.break_duration_minutes) })}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Toleransi Terlambat</p>
-                    <p className="font-medium">{shift.late_tolerance_minutes} menit</p>
+                    <p className="text-gray-600">{t('shiftManagement.card.lateTolerance', 'Late Tolerance')}</p>
+                    <p className="font-medium">{applyVariables(t('shiftManagement.card.lateToleranceMinutes', '{{minutes}} minutes'), { minutes: String(shift.late_tolerance_minutes) })}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Status</p>
-                    <p className="font-medium">{shift.is_active ? 'Aktif' : 'Nonaktif'}</p>
+                    <p className="text-gray-600">{t('shiftManagement.card.status', 'Status')}</p>
+                    <p className="font-medium">{shift.is_active ? t('shiftManagement.status.active', 'Active') : t('shiftManagement.status.inactive', 'Inactive')}</p>
                   </div>
                 </div>
               </CardContent>

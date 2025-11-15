@@ -5,6 +5,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
 import { useMemo, useCallback, useEffect, useRef } from 'react';
+import { logger } from '@/config/logger';
 
 export interface SubscriptionStatus {
   status: 'trial' | 'active' | 'expired' | 'cancelled' | 'suspended';
@@ -89,7 +90,7 @@ export const useOptimizedSubscription = () => {
         lastOrgIdRef.current = organizationId;
         hasInitializedRef.current = true;
 
-        console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
+        logger.debug('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
         
         // Remove stale queries from previous organizations
         if (previousOrgId) {
@@ -109,7 +110,7 @@ export const useOptimizedSubscription = () => {
           refetchType: 'active' // Immediately refetch active queries
         });
         
-        console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
+        logger.debug('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
       }
     }, 150); // 150ms debounce to prevent rapid-fire invalidations
 
@@ -130,21 +131,21 @@ export const useOptimizedSubscription = () => {
   } = useQuery({
     queryKey: optimizedQueryKeys.subscription.status(organizationId || ''),
     queryFn: async () => {
-      console.group('🔍 MAIN SUBSCRIPTION QUERY');
-      console.log('Organization ID:', organizationId);
+      logger.query('🔍 MAIN SUBSCRIPTION QUERY');
+      logger.query('Organization ID:', organizationId);
       
       if (!organizationId) {
         console.error('❌ No organization ID available in main query');
         throw new Error('No organization ID');
       }
       
-      console.log('📞 MAIN QUERY: Calling get_subscription_status RPC');
+      logger.query('📞 MAIN QUERY: Calling get_subscription_status RPC');
       
       const { data, error } = await (supabase as any).rpc('get_subscription_status', {
         org_id: organizationId
       });
       
-      console.log('📊 MAIN QUERY Raw Response:', { data, error });
+      logger.query('📊 MAIN QUERY Raw Response:', { data, error });
       
       if (error) {
         console.error('❌ Main query subscription error:', error);
@@ -153,10 +154,10 @@ export const useOptimizedSubscription = () => {
       
       // Handle array response from RPC function
       const subscriptionData = Array.isArray(data) && data && data.length > 0 ? data[0] : data;
-      console.log('🔄 MAIN QUERY Processing:', subscriptionData);
+      logger.query('🔄 MAIN QUERY Processing:', subscriptionData);
       
       if (!subscriptionData) {
-        console.warn('⚠️ No subscription data returned from RPC');
+        logger.warn('⚠️ No subscription data returned from RPC');
         return null;
       }
       
@@ -188,8 +189,7 @@ export const useOptimizedSubscription = () => {
         days_remaining: rawData.days_remaining,
       };
       
-      console.log('✅ MAIN QUERY Mapped data:', mappedData);
-      console.groupEnd();
+      logger.query('✅ MAIN QUERY Mapped data:', mappedData);
       return mappedData;
     },
     enabled: !!organizationId,
@@ -271,7 +271,7 @@ export const useOptimizedSubscription = () => {
   // Memoized refresh function - force refetch from Supabase
   const refreshSubscriptionStatus = useCallback(() => {
     if (organizationId) {
-      console.log('🔄 [refreshSubscriptionStatus] Manually refreshing subscription for org:', organizationId);
+      logger.debug('🔄 [refreshSubscriptionStatus] Manually refreshing subscription for org:', organizationId);
       queryClient.invalidateQueries({ 
         queryKey: optimizedQueryKeys.subscription.status(organizationId),
         refetchType: 'active' // Immediately refetch active queries
@@ -296,7 +296,7 @@ export const useOptimizedSubscription = () => {
       // Only log once when data is first loaded
       const hasLogged = sessionStorage.getItem('subscription_loaded');
       if (!hasLogged) {
-        console.log('✅ Subscription loaded:', subscriptionStatus.plan_name);
+        logger.debug('✅ Subscription loaded:', subscriptionStatus.plan_name);
         sessionStorage.setItem('subscription_loaded', 'true');
       }
     }

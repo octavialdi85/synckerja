@@ -8,6 +8,8 @@ import { ModalPengajuanCutiKaryawan } from './SectionQuickMenuImport/ModalPengaj
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { Clock, Camera, BarChart3, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface TeamData {
   name: string;
@@ -25,6 +27,7 @@ export const SectionQuickMenu = ({
   isTeamLoading = false, 
   displayTeamData = [] 
 }: SectionQuickMenuProps = {}) => {
+  const { t } = useAppTranslation();
   const { hasCheckedIn, hasCheckedOut, todayRecord, refreshStatus } = useAttendanceStatus();
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,7 +36,9 @@ export const SectionQuickMenu = ({
   const { data: employeeData, isLoading: employeeLoading } = useCurrentEmployee();
 
   const calculateWorkingHours = (record: any) => {
-    if (!record?.check_in_time) return "0 jam 0 menit";
+    if (!record?.check_in_time) {
+      return t('quickMenu.workingTimeZero', '0 hours 0 minutes');
+    }
     
     const checkIn = new Date(record.check_in_time);
     const checkOut = record.check_out_time ? new Date(record.check_out_time) : new Date();
@@ -42,16 +47,19 @@ export const SectionQuickMenu = ({
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     
-    return `${hours} jam ${minutes} menit`;
+    return applyVariables(t('quickMenu.workingTime', '{{hours}} hours {{minutes}} minutes'), {
+      hours: String(hours),
+      minutes: String(minutes)
+    });
   };
 
-  const workingHoursToday = todayRecord ? calculateWorkingHours(todayRecord) : "0 jam 0 menit";
+  const workingHoursToday = todayRecord ? calculateWorkingHours(todayRecord) : t('quickMenu.workingTimeZero', '0 hours 0 minutes');
 
   const handleRiwayatAbsensi = async () => {
     console.log('🔍 Riwayat Absensi clicked, employeeData:', employeeData);
     
     if (employeeLoading) {
-      toast.info('Memuat data karyawan...');
+      toast.info(t('quickMenu.loadingEmployee', 'Loading employee data...'));
       return;
     }
     
@@ -62,14 +70,14 @@ export const SectionQuickMenu = ({
         navigate(`/my-info/attendance?id=${employeeData.id}`);
       } catch (error) {
         console.error('Navigation error:', error);
-        toast.error('Gagal membuka halaman riwayat absensi');
+        toast.error(t('quickMenu.failedToOpenHistory', 'Failed to open attendance history page'));
       } finally {
         setIsNavigating(false);
       }
     } else {
       console.warn('⚠️ No employee data available for navigation');
       // Show a toast notification to inform the user
-      toast.error('Data karyawan tidak tersedia. Silakan refresh halaman atau hubungi administrator.');
+      toast.error(t('quickMenu.employeeDataNotAvailable', 'Employee data is not available. Please refresh the page or contact administrator.'));
     }
   };
 
@@ -91,7 +99,7 @@ export const SectionQuickMenu = ({
       <CardHeader className="pb-2 flex-shrink-0">
         <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900 leading-snug">
           <Clock className="h-5 w-5 text-gray-500" />
-          Quick Menu - Absensi Online
+          {t('quickMenu.title', 'Quick Menu - Online Attendance')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 flex-1 overflow-y-auto seamless-scroll scrollbar-hide">
@@ -105,23 +113,23 @@ export const SectionQuickMenu = ({
         <div className="bg-white border border-border rounded-lg p-3">
           <h4 className="text-base font-semibold text-gray-900 mb-3 flex items-center leading-snug">
             <Users className="h-4 w-4 mr-2 text-gray-500" />
-            Tim Hari Ini
+            {t('quickMenu.todayTeam', 'Today\'s Team')}
           </h4>
           <div className="space-y-3">
             {isTeamLoading ? (
               <div className="text-center py-4">
-                <div className="text-xs text-gray-500 leading-relaxed">Memuat data tim...</div>
+                <div className="text-xs text-gray-500 leading-relaxed">{t('quickMenu.loadingTeam', 'Loading team data...')}</div>
               </div>
             ) : displayTeamData.length === 0 ? (
               <div className="text-center py-4">
-                <div className="text-xs text-gray-500 leading-relaxed">Belum ada data tim hari ini</div>
+                <div className="text-xs text-gray-500 leading-relaxed">{t('quickMenu.noTeamData', 'No team data today')}</div>
               </div>
             ) : (
               displayTeamData.map((team, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-900 leading-normal">{team.name}</span>
-                    <span className="text-xs text-gray-500 leading-normal">{team.total} orang</span>
+                    <span className="text-xs text-gray-500 leading-normal">{applyVariables(t('quickMenu.people', '{{count}} people'), { count: String(team.total) })}</span>
                   </div>
                   {team.total > 0 ? (
                     <>
@@ -138,13 +146,13 @@ export const SectionQuickMenu = ({
                         </div>
                       </div>
                       <div className="flex justify-between text-xs text-gray-500 leading-normal">
-                        <span>WFO: {team.wfo}</span>
-                        <span>WFH: {team.wfh}</span>
+                        <span>{t('quickMenu.wfo', 'WFO')}: {team.wfo}</span>
+                        <span>{t('quickMenu.wfh', 'WFH')}: {team.wfh}</span>
                       </div>
                     </>
                   ) : (
                     <div className="text-xs text-gray-500 text-center py-2 leading-normal">
-                      Belum ada data hari ini
+                      {t('quickMenu.noDataToday', 'No data today')}
                     </div>
                   )}
                 </div>
@@ -155,7 +163,7 @@ export const SectionQuickMenu = ({
         
         {/* Additional Content */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <h4 className="text-sm font-semibold text-blue-900 mb-2 leading-snug">Quick Actions</h4>
+          <h4 className="text-sm font-semibold text-blue-900 mb-2 leading-snug">{t('quickMenu.quickActions', 'Quick Actions')}</h4>
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={handleRiwayatAbsensi}
@@ -168,7 +176,7 @@ export const SectionQuickMenu = ({
             >
               <Clock className="h-4 w-4 text-blue-600" />
               <span className="text-xs font-semibold leading-relaxed">
-                {isNavigating ? 'Membuka...' : 'Riwayat Absensi'}
+                {isNavigating ? t('quickMenu.opening', 'Opening...') : t('quickMenu.attendanceHistory', 'Attendance History')}
               </span>
             </button>
             <button 
@@ -176,7 +184,7 @@ export const SectionQuickMenu = ({
               className="flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-md hover:bg-blue-50 transition-colors cursor-pointer"
             >
               <Camera className="h-4 w-4 text-blue-600" />
-              <span className="text-xs font-semibold leading-relaxed">Pengajuan Cuti</span>
+              <span className="text-xs font-semibold leading-relaxed">{t('quickMenu.leaveRequest', 'Leave Request')}</span>
             </button>
           </div>
         </div>

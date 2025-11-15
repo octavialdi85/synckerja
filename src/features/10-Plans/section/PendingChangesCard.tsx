@@ -5,8 +5,11 @@ import { Calendar, Users, ArrowRight, X } from 'lucide-react';
 import { usePendingSubscriptionChanges } from '@/features/10-Plans/hooks/usePendingSubscriptionChanges';
 import { useCancelScheduledChange } from '@/features/10-Plans/hooks/useCancelScheduledChange';
 import { formatIDR } from '@/features/1-login/utils/subscriptionUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export const PendingChangesCard = () => {
+  const { t, language } = useAppTranslation();
   const { data: pendingChanges, isLoading } = usePendingSubscriptionChanges();
   const cancelScheduledChange = useCancelScheduledChange();
 
@@ -29,7 +32,8 @@ export const PendingChangesCard = () => {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+    const locale = language === 'id' ? 'id-ID' : 'en-US';
+    return new Date(dateString).toLocaleDateString(locale, {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
@@ -38,11 +42,11 @@ export const PendingChangesCard = () => {
 
   const getChangeTypeLabel = (type: string) => {
     const labels = {
-      upgrade: 'Upgrade Plan',
-      downgrade: 'Downgrade Plan',
-      member_increase: 'Tambah Member',
-      member_decrease: 'Kurangi Member',
-      mixed: 'Perubahan Plan & Member'
+      upgrade: t('subscription.plans.pendingChanges.changeType.upgrade', 'Upgrade Plan'),
+      downgrade: t('subscription.plans.pendingChanges.changeType.downgrade', 'Downgrade Plan'),
+      member_increase: t('subscription.plans.pendingChanges.changeType.memberIncrease', 'Add Members'),
+      member_decrease: t('subscription.plans.pendingChanges.changeType.memberDecrease', 'Reduce Members'),
+      mixed: t('subscription.plans.pendingChanges.changeType.mixed', 'Plan & Member Change')
     };
     return labels[type as keyof typeof labels] || type;
   };
@@ -59,7 +63,7 @@ export const PendingChangesCard = () => {
   };
 
   const handleCancelChange = async (changeId: string) => {
-    if (confirm('Apakah Anda yakin ingin membatalkan perubahan terjadwal ini?')) {
+    if (confirm(t('subscription.plans.pendingChanges.cancelConfirm', 'Are you sure you want to cancel this scheduled change?'))) {
       await cancelScheduledChange.mutateAsync(changeId);
     }
   };
@@ -70,10 +74,10 @@ export const PendingChangesCard = () => {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg text-blue-900">
-              Perubahan Terjadwal
+              {t('subscription.plans.pendingChanges.title', 'Scheduled Changes')}
             </CardTitle>
             <CardDescription className="text-blue-700">
-              {pendingChanges.length} perubahan akan diterapkan
+              {applyVariables(t('subscription.plans.pendingChanges.description', '{{count}} changes will be applied'), { count: String(pendingChanges.length) })}
             </CardDescription>
           </div>
           <Calendar className="h-5 w-5 text-blue-600" />
@@ -110,7 +114,7 @@ export const PendingChangesCard = () => {
             <div className="space-y-2">
               {/* Plan Change */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Plan:</span>
+                <span className="text-gray-600">{t('subscription.plans.pendingChanges.plan', 'Plan:')}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">
                     {change.current_plan?.name || 'Unknown'}
@@ -125,7 +129,7 @@ export const PendingChangesCard = () => {
               {/* Member Count Change */}
               {change.current_member_count !== change.target_member_count && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Member:</span>
+                  <span className="text-gray-600">{t('subscription.plans.pendingChanges.member', 'Member:')}</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
                       {change.current_member_count}
@@ -141,7 +145,7 @@ export const PendingChangesCard = () => {
               {/* Prorate Amount */}
               {change.prorate_amount > 0 && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Biaya Tambahan:</span>
+                  <span className="text-gray-600">{t('subscription.plans.pendingChanges.additionalCost', 'Additional Cost:')}</span>
                   <span className="font-medium text-green-600">
                     {formatIDR(change.prorate_amount)}
                   </span>
@@ -151,7 +155,7 @@ export const PendingChangesCard = () => {
 
             {change.notes && (
               <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
-                <strong>Catatan:</strong> {change.notes}
+                <strong>{t('subscription.plans.pendingChanges.notes', 'Notes:')}</strong> {change.notes}
               </div>
             )}
           </div>
@@ -159,7 +163,7 @@ export const PendingChangesCard = () => {
         
         <div className="text-center">
           <p className="text-xs text-blue-600">
-            Perubahan akan diterapkan otomatis pada tanggal yang dijadwalkan
+            {t('subscription.plans.pendingChanges.footer', 'Changes will be applied automatically on the scheduled date')}
           </p>
         </div>
       </CardContent>

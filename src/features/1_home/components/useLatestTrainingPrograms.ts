@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export interface LatestTrainingProgram {
   id: string;
@@ -23,7 +24,7 @@ export const useLatestTrainingPrograms = () => {
     queryFn: async () => {
       if (!organizationId) return [];
 
-      console.log('Fetching latest training programs for organization:', organizationId);
+      logger.query('Fetching latest training programs for organization:', organizationId);
 
       const { data, error } = await supabase
         .from('training_programs')
@@ -55,7 +56,7 @@ export const useLatestTrainingPrograms = () => {
         participants_count: program.training_participants?.filter(p => p.status === 'registered').length || 0
       }));
 
-      console.log('Latest training programs with correct count:', programsWithCount);
+      logger.query('Latest training programs with correct count:', programsWithCount);
       return programsWithCount as LatestTrainingProgram[];
     },
     enabled: !!organizationId,

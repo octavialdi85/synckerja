@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 // Type definition for the RPC function result
 interface LeaveBalanceResult {
@@ -23,13 +24,13 @@ export const useEmployeeLeaveBalance = () => {
         throw new Error('No employee found');
       }
 
-      console.log('📊 Fetching leave balance for employee:', employeeData.id);
-      console.log('📊 Employee organization:', employeeData.organization_id);
-      console.log('📊 Employee current leave_balance:', employeeData.leave_balance);
+      logger.query('📊 Fetching leave balance for employee:', employeeData.id);
+      logger.query('📊 Employee organization:', employeeData.organization_id);
+      logger.query('📊 Employee current leave_balance:', employeeData.leave_balance);
 
       try {
         // Always calculate using the updated RPC function for accurate data
-        console.log('📊 Calculating leave balance for employee:', employeeData.id);
+        logger.query('📊 Calculating leave balance for employee:', employeeData.id);
         
         const { data: balanceResult, error: balanceError } = await supabase
           .rpc('calculate_employee_leave_balance', {
@@ -37,7 +38,7 @@ export const useEmployeeLeaveBalance = () => {
           });
 
         if (!balanceError && balanceResult) {
-          console.log('✅ Leave balance calculated successfully:', balanceResult);
+          logger.query('✅ Leave balance calculated successfully:', balanceResult);
           const result = balanceResult as unknown as LeaveBalanceResult;
           return {
             totalAnnualLeave: result.total_allocated,
@@ -78,7 +79,7 @@ export const useEmployeeLeaveBalance = () => {
         const totalAnnualLeave = leavePolicy?.annual_leave_days || 12;
         const remainingLeave = Math.max(0, totalAnnualLeave - usedLeaveDays);
 
-        console.log('✅ Legacy leave balance calculated:', { usedLeaveDays, remainingLeave, totalAnnualLeave });
+        logger.query('✅ Legacy leave balance calculated:', { usedLeaveDays, remainingLeave, totalAnnualLeave });
         
         return {
           totalAnnualLeave,

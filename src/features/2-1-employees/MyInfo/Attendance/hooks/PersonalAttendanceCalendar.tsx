@@ -13,24 +13,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { useLeaveRequests } from './useLeaveRequests';
 import { parseDateFromDatabase } from '../utils/dateUtils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
+import { format } from 'date-fns';
 
 const getDaysInMonth = (month: number, year: number) => {
   return new Date(year, month + 1, 0).getDate();
 };
 
-const getMonthName = (month: number) => {
-  const months = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-  return months[month];
-};
-
-const getDayName = (date: number, month: number, year: number) => {
-  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-  const dayIndex = new Date(year, month, date).getDay();
-  return dayNames[dayIndex];
-};
+// getMonthName and getDayName will be replaced with date-fns format using dynamic locale
 
 const isNonWorkingDay = (date: number, month: number, year: number, workingDays: number[] = [1, 2, 3, 4, 5], nationalHolidays: any[] = []) => {
   const dayIndex = new Date(year, month, date).getDay();
@@ -86,6 +77,7 @@ interface PersonalAttendanceCalendarProps {
 }
 
 const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarProps) => {
+  const { t, dateLocale } = useAppTranslation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -121,6 +113,27 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
   
   const defaultSchedule = workScheduleSettings.find(schedule => schedule.is_default) || workScheduleSettings[0];
   const workingDays = defaultSchedule?.working_days || [1, 2, 3, 4, 5];
+
+  // Get month name using date-fns with dynamic locale
+  const getMonthName = (month: number) => {
+    const date = new Date(currentYear, month, 1);
+    return format(date, 'MMMM yyyy', { locale: dateLocale });
+  };
+
+  // Get day names for calendar header (Monday to Sunday)
+  const getDayNames = () => {
+    const dayNames: string[] = [];
+    // Start from Monday (1) to Sunday (7)
+    for (let i = 1; i <= 7; i++) {
+      // Create a date for Monday (2024-01-01 is a Monday)
+      const mondayDate = new Date(2024, 0, 1);
+      const targetDate = new Date(mondayDate);
+      targetDate.setDate(mondayDate.getDate() + (i - 1));
+      const dayName = format(targetDate, 'EEE', { locale: dateLocale });
+      dayNames.push(dayName);
+    }
+    return dayNames;
+  };
   
   useEffect(() => {
     getCurrentOrganizationId().then(({ organizationId }) => {
@@ -229,7 +242,7 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-gray-600">Loading attendance data...</p>
+          <p className="text-gray-600">{t('attendanceCalendar.loading', 'Loading attendance data...')}</p>
         </div>
       </div>
     );
@@ -242,7 +255,7 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <Calendar className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold text-gray-900">Kalendar Kehadiran</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('attendanceCalendar.title', 'Attendance Calendar')}</h3>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -254,7 +267,7 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-lg font-semibold text-gray-800 min-w-[150px] text-center">
-              {getMonthName(currentMonth)} {currentYear}
+              {getMonthName(currentMonth)}
             </span>
             <Button
               variant="ghost"
@@ -270,17 +283,17 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
         {/* Employee name and summary stats */}
         <div className="bg-slate-50 px-4 py-3 rounded-lg mb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <span className="font-medium text-gray-900">{userData?.full_name || 'Loading...'}</span>
+            <span className="font-medium text-gray-900">{userData?.full_name || t('common.loading', 'Loading...')}</span>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
-              <span>Hari Kerja: <strong className="text-gray-800">{totalWorkingDays}</strong></span>
+              <span>{applyVariables(t('attendanceCalendar.workingDays', 'Working Days: {{days}}'), { days: String(totalWorkingDays) })}</span>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <span>Tingkat Kehadiran: <strong className="text-emerald-600">{attendanceRate}%</strong></span>
+                  <span>{applyVariables(t('attendanceCalendar.attendanceRate', 'Attendance Rate: {{rate}}%'), { rate: String(attendanceRate) })}</span>
                 </div>
                 <Progress value={attendanceRate} className="h-2 w-full sm:w-32" />
               </div>
-              <span className="hidden sm:inline">Denda Bulan Ini: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
-              <span className="sm:hidden">Denda: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
+              <span className="hidden sm:inline">{t('attendanceCalendar.penaltyThisMonth', 'Penalty This Month')}: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
+              <span className="sm:hidden">{t('attendanceCalendar.penalty', 'Penalty')}: <strong className="text-red-600">{formatToRupiah(personalPenalties)}</strong></span>
             </div>
           </div>
         </div>
@@ -289,37 +302,37 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-emerald-200 text-emerald-800 rounded text-xs flex items-center justify-center font-medium border border-emerald-300">H</span>
-            <span className="text-gray-600">Hadir</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.present', 'Present')}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-blue-200 text-blue-800 rounded text-xs flex items-center justify-center font-medium border border-blue-300">I</span>
-            <span className="text-gray-600">Izin</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.permission', 'Permission')}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-yellow-200 text-yellow-800 rounded text-xs flex items-center justify-center font-medium border border-yellow-300">S</span>
-            <span className="text-gray-600">Sakit</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.sick', 'Sick')}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-orange-200 text-orange-800 rounded text-xs flex items-center justify-center font-medium border border-orange-300">C</span>
-            <span className="text-gray-600">Cuti</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.leave', 'Leave')}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-red-200 text-red-800 rounded text-xs flex items-center justify-center font-medium border border-red-300">A</span>
-            <span className="text-gray-600">Alfa</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.absent', 'Absent')}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-4 h-4 bg-purple-200 text-purple-800 rounded text-xs flex items-center justify-center font-medium border border-purple-300">T</span>
-            <span className="text-gray-600">Terlambat</span>
+            <span className="text-gray-600">{t('attendanceCalendar.status.late', 'Late')}</span>
           </div>
         </div>
       </div>
 
       {/* Calendar */}
-      <div className="flex-1 overflow-auto max-h-[750px]">
+      <div className="flex-1 overflow-auto max-h-[900px]">
         <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-b-lg overflow-hidden min-w-[280px]">
           {/* Days of week header */}
-          {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map(day => (
-            <div key={day} className="bg-slate-700 text-white p-2 sm:p-3 text-center font-medium text-xs sm:text-sm">
+          {getDayNames().map((day, index) => (
+            <div key={index} className="bg-slate-700 text-white p-2 sm:p-3 text-center font-medium text-xs sm:text-sm">
               {day}
             </div>
           ))}
@@ -367,75 +380,80 @@ const PersonalAttendanceCalendar = ({ employeeId }: PersonalAttendanceCalendarPr
         </div>
         
         {/* Summary section */}
-        <div className="bg-gray-50 p-4 border-t space-y-4 overflow-y-auto max-h-[300px]">
+        <div className="bg-gray-50 p-4 border-t space-y-4 overflow-y-auto max-h-[500px]">
           {/* Attendance Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-4 text-center">
             <div className="bg-emerald-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-emerald-700">{stats.H}</div>
-              <div className="text-xs text-emerald-600">Hadir</div>
+              <div className="text-xs text-emerald-600">{t('attendanceCalendar.status.present', 'Present')}</div>
             </div>
             <div className="bg-red-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-red-700">{stats.A}</div>
-              <div className="text-xs text-red-600">Alfa</div>
+              <div className="text-xs text-red-600">{t('attendanceCalendar.status.absent', 'Absent')}</div>
             </div>
             <div className="bg-orange-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-orange-700">{stats.C}</div>
-              <div className="text-xs text-orange-600">Cuti</div>
+              <div className="text-xs text-orange-600">{t('attendanceCalendar.status.leave', 'Leave')}</div>
             </div>
             <div className="bg-blue-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-blue-700">{stats.I}</div>
-              <div className="text-xs text-blue-600">Izin</div>
+              <div className="text-xs text-blue-600">{t('attendanceCalendar.status.permission', 'Permission')}</div>
             </div>
             <div className="bg-yellow-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-yellow-700">{stats.S}</div>
-              <div className="text-xs text-yellow-600">Sakit</div>
+              <div className="text-xs text-yellow-600">{t('attendanceCalendar.status.sick', 'Sick')}</div>
             </div>
             <div className="bg-purple-50 p-2 sm:p-3 rounded border">
               <div className="text-sm sm:text-lg font-bold text-purple-700">{stats.T}</div>
-              <div className="text-xs text-purple-600">Terlambat</div>
+              <div className="text-xs text-purple-600">{t('attendanceCalendar.status.late', 'Late')}</div>
             </div>
           </div>
           
           {/* Detailed Breakdown */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-semibold text-gray-800 mb-3">Rincian Keterlambatan & Denda</h4>
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">{t('attendanceCalendar.latePenaltyDetails', 'Late & Penalty Details')}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                 <div className="text-lg sm:text-2xl font-bold text-purple-600">{processedEmployeeData.totalLateMinutes}</div>
-                <div className="text-xs sm:text-sm text-gray-600">Total Menit Terlambat</div>
+                <div className="text-xs sm:text-sm text-gray-600">{t('attendanceCalendar.totalLateMinutes', 'Total Late Minutes')}</div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {Math.floor(processedEmployeeData.totalLateMinutes / 60)}j {processedEmployeeData.totalLateMinutes % 60}m
+                  {applyVariables(t('attendanceCalendar.timeFormat', '{{hours}}h {{minutes}}m'), {
+                    hours: String(Math.floor(processedEmployeeData.totalLateMinutes / 60)),
+                    minutes: String(processedEmployeeData.totalLateMinutes % 60)
+                  })}
                 </div>
               </div>
               
               <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                 <div className="text-lg sm:text-2xl font-bold text-red-600">{formatToRupiah(personalPenalties)}</div>
-                <div className="text-xs sm:text-sm text-gray-600">Total Denda Bulan Ini</div>
+                <div className="text-xs sm:text-sm text-gray-600">{t('attendanceCalendar.totalPenaltyThisMonth', 'Total Penalty This Month')}</div>
                 <div className="text-xs text-gray-500 mt-1">
-                  Berdasarkan aturan perusahaan
+                  {t('attendanceCalendar.basedOnCompanyRules', 'Based on company rules')}
                 </div>
               </div>
               
               <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 sm:col-span-2 lg:col-span-1">
                 <div className="text-lg sm:text-2xl font-bold text-amber-600">{stats.T}</div>
-                <div className="text-xs sm:text-sm text-gray-600">Total Hari Terlambat</div>
+                <div className="text-xs sm:text-sm text-gray-600">{t('attendanceCalendar.totalLateDays', 'Total Late Days')}</div>
                 <div className="text-xs text-gray-500 mt-1">
-                  Rata-rata: {stats.T > 0 ? Math.round(processedEmployeeData.totalLateMinutes / stats.T) : 0} menit/hari
+                  {applyVariables(t('attendanceCalendar.averagePerDay', 'Average: {{minutes}} minutes/day'), {
+                    minutes: String(stats.T > 0 ? Math.round(processedEmployeeData.totalLateMinutes / stats.T) : 0)
+                  })}
                 </div>
               </div>
             </div>
             
             {/* Monthly Performance */}
             <div className="mt-4 bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
-              <h5 className="text-sm font-medium text-gray-800 mb-2">Performa Kehadiran Bulan Ini</h5>
+              <h5 className="text-sm font-medium text-gray-800 mb-2">{t('attendanceCalendar.monthlyPerformance', 'Monthly Attendance Performance')}</h5>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <span>Kehadiran: <strong className="text-emerald-600">{attendanceRate}%</strong></span>
-                  <span>Keterlambatan: <strong className="text-purple-600">{totalWorkingDays > 0 ? Math.round((stats.T / totalWorkingDays) * 100) : 0}%</strong></span>
-                  <span>Absensi: <strong className="text-red-600">{totalWorkingDays > 0 ? Math.round((stats.A / totalWorkingDays) * 100) : 0}%</strong></span>
+                  <span>{applyVariables(t('attendanceCalendar.attendance', 'Attendance: {{rate}}%'), { rate: String(attendanceRate) })}</span>
+                  <span>{applyVariables(t('attendanceCalendar.lateness', 'Lateness: {{rate}}%'), { rate: String(totalWorkingDays > 0 ? Math.round((stats.T / totalWorkingDays) * 100) : 0) })}</span>
+                  <span>{applyVariables(t('attendanceCalendar.absence', 'Absence: {{rate}}%'), { rate: String(totalWorkingDays > 0 ? Math.round((stats.A / totalWorkingDays) * 100) : 0) })}</span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {getMonthName(currentMonth)} {currentYear}
+                  {getMonthName(currentMonth)}
                 </div>
               </div>
             </div>

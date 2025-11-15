@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useEmployeeLeaveBalance } from '@/features/2-1-employees/MyInfo/LeavePermit/hooks/useEmployeeLeaveBalance';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 export interface LeaveEligibility {
   isEligible: boolean;
@@ -13,6 +15,7 @@ export interface LeaveEligibility {
 }
 
 export const useEmployeeLeaveEligibility = (employeeId?: string | null) => {
+  const { t } = useAppTranslation();
   const { data: currentEmployee } = useCurrentEmployee();
   const effectiveEmployeeId = employeeId || currentEmployee?.id;
   
@@ -39,8 +42,8 @@ export const useEmployeeLeaveEligibility = (employeeId?: string | null) => {
           remainingDays,
           annualLeaveEntitlement: annualEntitlement,
           message: isEligible 
-            ? `Anda memiliki ${remainingDays} hari cuti tersisa` 
-            : 'Anda tidak memiliki sisa cuti yang tersedia',
+            ? applyVariables(t('leaveEligibility.hasRemainingLeave', 'You have {{days}} days of leave remaining'), { days: String(remainingDays) })
+            : t('leaveEligibility.noRemainingLeave', 'You do not have any remaining leave available'),
           strategy: 'after_probation',
           eligibilityDate: currentEmployee?.join_date ? new Date(currentEmployee.join_date) : undefined
         };
@@ -55,8 +58,8 @@ export const useEmployeeLeaveEligibility = (employeeId?: string | null) => {
         remainingDays: 12,
         annualLeaveEntitlement: 12,
         message: isEligible 
-          ? 'Anda berhak mengajukan cuti' 
-          : 'Anda belum berhak mengajukan cuti',
+          ? t('leaveEligibility.eligibleToRequest', 'You are eligible to request leave') 
+          : t('leaveEligibility.notEligibleToRequest', 'You are not yet eligible to request leave'),
         strategy: 'after_probation',
         eligibilityDate: joinDate ? new Date(joinDate) : undefined
       };

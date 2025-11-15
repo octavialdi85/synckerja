@@ -10,6 +10,7 @@ import {
 import { Button } from "@/mobile/components/ui/button";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface CustomDatePickerProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const CustomDatePicker = ({
   initialStartDate,
   initialEndDate 
 }: CustomDatePickerProps) => {
+  const { t } = useAppTranslation();
   const [startDate, setStartDate] = useState<Date | undefined>(initialStartDate);
   const [endDate, setEndDate] = useState<Date | undefined>(initialEndDate);
   const [selectingStart, setSelectingStart] = useState(true);
@@ -79,7 +81,7 @@ export const CustomDatePicker = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] max-w-md mx-auto">
         <DialogHeader>
-          <DialogTitle className="text-center">Pilih Rentang Tanggal</DialogTitle>
+          <DialogTitle className="text-center">{t('datePicker.title', 'Choose Date Range')}</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
@@ -89,18 +91,18 @@ export const CustomDatePicker = ({
                 "px-3 py-2 rounded-lg border",
                 selectingStart ? "bg-primary text-primary-foreground" : "bg-muted"
               )}>
-                Dari: {startDate ? format(startDate, "dd MMM yyyy") : "Pilih tanggal"}
+                {t('datePicker.from', 'From:')} {startDate ? format(startDate, "dd MMM yyyy") : t('datePicker.selectDate', 'Select date')}
               </div>
               <div className={cn(
                 "px-3 py-2 rounded-lg border",
                 !selectingStart ? "bg-primary text-primary-foreground" : "bg-muted"
               )}>
-                Sampai: {endDate ? format(endDate, "dd MMM yyyy") : "Pilih tanggal"}
+                {t('datePicker.to', 'To:')} {endDate ? format(endDate, "dd MMM yyyy") : t('datePicker.selectDate', 'Select date')}
               </div>
             </div>
             
             <p className="text-xs text-muted-foreground">
-              {selectingStart ? "Pilih tanggal mulai" : "Pilih tanggal akhir"}
+              {selectingStart ? t('datePicker.selectStartDate', 'Select start date') : t('datePicker.selectEndDate', 'Select end date')}
             </p>
           </div>
 
@@ -166,14 +168,14 @@ export const CustomDatePicker = ({
             onClick={handleReset}
             className="w-full sm:w-auto"
           >
-            Reset
+            {t('datePicker.reset', 'Reset')}
           </Button>
           <Button 
             onClick={handleApply}
             disabled={!startDate || !endDate}
             className="w-full sm:w-auto"
           >
-            Terapkan
+            {t('datePicker.apply', 'Apply')}
           </Button>
         </DialogFooter>
       </DialogContent>

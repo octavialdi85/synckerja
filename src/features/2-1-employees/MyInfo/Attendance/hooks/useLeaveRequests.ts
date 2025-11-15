@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export interface LeaveRequestData {
   id: string;
@@ -42,11 +43,11 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
     queryKey: ['leave-requests', organizationId, month, year, status],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('⚠️ No organization ID found, returning empty array');
+        logger.query('⚠️ No organization ID found, returning empty array');
         return [];
       }
 
-      console.log('🔍 Fetching leave requests with filters:', { organizationId, month, year, status });
+      logger.query('🔍 Fetching leave requests with filters:', { organizationId, month, year, status });
       
       // OPTIMIZED: Simplified query to prevent 502 Bad Gateway
       // Strategy: Remove nested joins, fetch employee data separately
@@ -61,7 +62,7 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
       if (month && year) {
         const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
         const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-        console.log('📅 Filtering by date range:', { startDate, endDate });
+        logger.query('📅 Filtering by date range:', { startDate, endDate });
         query = query
           .gte('start_date', startDate)
           .lte('start_date', endDate);
@@ -69,7 +70,7 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
 
       // Filter by status if provided
       if (status && status !== 'all') {
-        console.log('🏷️ Filtering by status:', status);
+        logger.query('🏷️ Filtering by status:', status);
         query = query.eq('status', status);
       }
 
@@ -102,9 +103,9 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
         return [];
       }
 
-      console.log('✅ Leave requests fetched successfully!');
-      console.log('📋 Data received:', data);
-      console.log('📊 Total records:', data?.length || 0);
+      logger.query('✅ Leave requests fetched successfully!');
+      logger.query('📋 Data received:', data);
+      logger.query('📊 Total records:', data?.length || 0);
       
       if (!data || data.length === 0) {
         return [];
@@ -139,7 +140,7 @@ export const useLeaveRequests = ({ month, year, status }: UseLeaveRequestsProps 
         employees: employeeMap[lr.employee_id] || null
       }));
 
-      console.log('✅ Leave requests enriched with employee data');
+      logger.query('✅ Leave requests enriched with employee data');
       
       return enrichedData as LeaveRequestData[];
     },

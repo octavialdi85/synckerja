@@ -12,6 +12,7 @@ import { ComprehensivePenaltySettings } from './ComprehensivePenaltySettings';
 
 import { ShiftSettings } from './ShiftSettings';
 import { IPAddressSettings } from './IPAddressSettings';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface SettingsSection {
   id: string;
@@ -27,69 +28,70 @@ interface AttendanceSettingsLayoutProps {
 }
 
 export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutProps) => {
+  const { t } = useAppTranslation();
   const [activeSection, setActiveSection] = useState('work-schedule');
 
   const settingsSections: SettingsSection[] = [
     {
       id: 'work-schedule',
-      title: 'Jadwal Kerja',
-      description: 'Pengaturan hari kerja, jam kerja, dan hari libur',
+      title: t('attendanceSettings.workSchedule.title', 'Work Schedule'),
+      description: t('attendanceSettings.workSchedule.description', 'Configure working days, working hours, and holidays'),
       icon: Calendar,
       status: 'active',
       component: <WorkScheduleSettings />
     },
     {
       id: 'shift-settings',
-      title: 'Pengaturan Shift',
-      description: 'Kelola shift kerja dan penugasan karyawan',
+      title: t('attendanceSettings.shiftSettings.title', 'Shift Settings'),
+      description: t('attendanceSettings.shiftSettings.description', 'Manage work shifts and employee assignments'),
       icon: UserCog,
       status: 'active',
       component: <ShiftSettings />
     },
     {
       id: 'attendance-rules',
-      title: 'Aturan Absensi',
-      description: 'Konfigurasi validasi dan persyaratan absensi',
+      title: t('attendanceSettings.attendanceRules.title', 'Attendance Rules'),
+      description: t('attendanceSettings.attendanceRules.description', 'Configure validation and attendance requirements'),
       icon: ClipboardList,
       status: 'active',
       component: <AttendanceRulesSettings />
     },
     {
       id: 'penalty-settings',
-      title: 'Pengaturan Denda',
-      description: 'Konfigurasi lengkap sistem denda keterlambatan',
+      title: t('attendanceSettings.penaltySettings.title', 'Penalty Settings'),
+      description: t('attendanceSettings.penaltySettings.description', 'Complete configuration of late penalty system'),
       icon: DollarSign,
       status: 'active',
       component: <ComprehensivePenaltySettings />
     },
     {
       id: 'office-locations',
-      title: 'Lokasi Kantor',
-      description: 'Kelola lokasi kantor dengan peta interaktif',
+      title: t('attendanceSettings.officeLocations.title', 'Office Locations'),
+      description: t('attendanceSettings.officeLocations.description', 'Manage office locations with interactive map'),
       icon: MapPin,
       status: 'active',
       component: <OptimizedOfficeLocationsList />
     },
     {
       id: 'client-management',
-      title: 'Manajemen Klien',
-      description: 'Kelola klien dan lokasi mereka',
+      title: t('attendanceSettings.clientManagement.title', 'Client Management'),
+      description: t('attendanceSettings.clientManagement.description', 'Manage clients and their locations'),
       icon: Building,
       status: 'active',
       component: <ClientManagement />
     },
     {
       id: 'visit-scheduling',
-      title: 'Penjadwalan Kunjungan',
-      description: 'Jadwalkan dan lacak kunjungan karyawan',
+      title: t('attendanceSettings.visitScheduling.title', 'Visit Scheduling'),
+      description: t('attendanceSettings.visitScheduling.description', 'Schedule and track employee visits'),
       icon: Calendar,
       status: 'active',
       component: <VisitScheduling />
     },
     {
       id: 'ip-address-settings',
-      title: 'Pengaturan IP Address',
-      description: 'Kelola daftar IP address yang diizinkan untuk absensi',
+      title: t('attendanceSettings.ipAddressSettings.title', 'IP Address Settings'),
+      description: t('attendanceSettings.ipAddressSettings.description', 'Manage list of allowed IP addresses for attendance'),
       icon: Wifi,
       status: 'active',
       component: <IPAddressSettings />
@@ -102,6 +104,15 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
       case 'warning': return 'bg-yellow-100 text-yellow-800';
       case 'inactive': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'active': return t('attendanceSettings.status.active', 'active');
+      case 'warning': return t('attendanceSettings.status.warning', 'warning');
+      case 'inactive': return t('attendanceSettings.status.inactive', 'inactive');
+      default: return status || '';
     }
   };
 
@@ -118,7 +129,7 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
     }
 
     // Default content for sections without custom components
-    return children || <div className="text-center py-8 text-gray-500">Konten pengaturan akan diimplementasikan segera</div>;
+    return children || <div className="text-center py-8 text-gray-500">{t('attendanceSettings.comingSoon', 'Settings content will be implemented soon')}</div>;
   };
 
   return (
@@ -127,10 +138,10 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
       <div className="w-72 lg:w-80 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 lg:p-6 border-b border-gray-200 flex-shrink-0">
           <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-2">
-            Pengaturan Absensi
+            {t('attendanceSettings.title', 'Attendance Settings')}
           </h2>
           <p className="text-xs lg:text-sm text-gray-600">
-            Konfigurasi sistem absensi berbasis lokasi dengan real-time updates
+            {t('attendanceSettings.description', 'Configure location-based attendance system with real-time updates')}
           </p>
         </div>
 
@@ -174,7 +185,7 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
                               variant="secondary"
                               className={`text-xs flex-shrink-0 ml-1 ${getStatusColor(section.status)}`}
                             >
-                              {section.status}
+                              {getStatusLabel(section.status)}
                             </Badge>
                           )}
                         </div>
@@ -198,10 +209,10 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 lg:p-3">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-              <span className="text-xs font-medium text-blue-800">Real-time Active</span>
+              <span className="text-xs font-medium text-blue-800">{t('attendanceSettings.realtime.active', 'Real-time Active')}</span>
             </div>
             <p className="text-xs text-blue-700 mt-1">
-              Data otomatis terupdate saat ada perubahan
+              {t('attendanceSettings.realtime.description', 'Data automatically updates when changes occur')}
             </p>
           </div>
         </div>
@@ -221,10 +232,10 @@ export const AttendanceSettingsLayout = ({ children }: AttendanceSettingsLayoutP
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-4">
               <Badge variant="outline" className="text-xs">
-                Auto-sync enabled
+                {t('attendanceSettings.badge.autoSync', 'Auto-sync enabled')}
               </Badge>
               <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                Real-time
+                {t('attendanceSettings.badge.realtime', 'Real-time')}
               </Badge>
             </div>
           </div>

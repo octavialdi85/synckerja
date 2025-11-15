@@ -11,6 +11,8 @@ import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Badge } from '@/features/ui/badge';
 import { Plus, Calculator, Clock, Percent, Info, Target, DollarSign } from 'lucide-react';
 import { usePenaltyRules, PenaltyRule } from '@/features/2-3-settings/hooks/useLocationManagement';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 type RuleType = 'late_arrival' | 'early_departure' | 'no_checkout' | 'invalid_location';
 type PenaltyType = 'deduction' | 'warning' | 'points';
@@ -42,6 +44,7 @@ export const PenaltyRuleFormDialog = ({
   editingRule = null,
   onClose 
 }: PenaltyRuleFormDialogProps) => {
+  const { t } = useAppTranslation();
   const { createRule, updateRule, isPenaltyMigrationComplete } = usePenaltyRules();
   const [isOpen, setIsOpen] = useState(!!editingRule);
   const [formData, setFormData] = useState<FormData>({
@@ -132,10 +135,10 @@ export const PenaltyRuleFormDialog = ({
 
   const getRuleTypeLabel = (type: RuleType) => {
     switch (type) {
-      case 'late_arrival': return 'Terlambat Masuk';
-      case 'early_departure': return 'Pulang Lebih Awal';
-      case 'no_checkout': return 'Tidak Check-out';
-      case 'invalid_location': return 'Lokasi Tidak Valid';
+      case 'late_arrival': return t('penaltyRuleForm.ruleType.lateArrival', 'Late Arrival');
+      case 'early_departure': return t('penaltyRuleForm.ruleType.earlyDeparture', 'Early Departure');
+      case 'no_checkout': return t('penaltyRuleForm.ruleType.noCheckout', 'No Check-out');
+      case 'invalid_location': return t('penaltyRuleForm.ruleType.invalidLocation', 'Invalid Location');
       default: return type;
     }
   };
@@ -152,15 +155,15 @@ export const PenaltyRuleFormDialog = ({
     const baseAmount = formData.penalty_amount;
     switch (formData.calculation_type) {
       case 'fixed':
-        return `Contoh: Telat berapapun = ${formatCurrency(baseAmount)}`;
+        return applyVariables(t('penaltyRuleForm.calculationExample.fixed', 'Example: Late any duration = {{amount}}'), { amount: formatCurrency(baseAmount) });
       case 'hourly':
         const hours = 2.5;
         const hourlyAmount = (formData.hourly_rate || 0) * hours;
-        return `Contoh: Telat ${hours} jam = ${formatCurrency(hourlyAmount)}`;
+        return applyVariables(t('penaltyRuleForm.calculationExample.hourly', 'Example: Late {{hours}} hours = {{amount}}'), { hours: String(hours), amount: formatCurrency(hourlyAmount) });
       case 'salary_percentage':
         const salary = 10000000;
         const percentageAmount = (salary * (formData.salary_percentage || 0)) / 100;
-        return `Contoh: ${formData.salary_percentage}% dari gaji Rp 10jt = ${formatCurrency(percentageAmount)}`;
+        return applyVariables(t('penaltyRuleForm.calculationExample.salaryPercentage', 'Example: {{percentage}}% of salary Rp 10M = {{amount}}'), { percentage: String(formData.salary_percentage || 0), amount: formatCurrency(percentageAmount) });
       default:
         return '';
     }
@@ -171,7 +174,7 @@ export const PenaltyRuleFormDialog = ({
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Sistem denda belum tersedia. Silakan jalankan migrasi database terlebih dahulu.
+          {t('penaltyRuleForm.migrationNotComplete', 'Penalty system is not available. Please run database migration first.')}
         </AlertDescription>
       </Alert>
     );
@@ -193,7 +196,7 @@ export const PenaltyRuleFormDialog = ({
             className={isCompact ? "" : "px-8 py-3"}
           >
             <Plus className="h-4 w-4 mr-2" />
-            {isCompact ? "Add Rule" : "Buat Aturan Denda Pertama"}
+            {isCompact ? t('penaltyRuleForm.button.addRule', 'Add Rule') : t('penaltyRuleForm.button.createFirstRule', 'Create First Penalty Rule')}
           </Button>
         </DialogTrigger>
       )}
@@ -201,10 +204,10 @@ export const PenaltyRuleFormDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            {editingRule ? 'Edit Aturan Denda' : 'Buat Aturan Denda Baru'}
+            {editingRule ? t('penaltyRuleForm.title.edit', 'Edit Penalty Rule') : t('penaltyRuleForm.title.create', 'Create New Penalty Rule')}
           </DialogTitle>
           <DialogDescription className="text-sm text-gray-600">
-            Tentukan jenis pelanggaran, perhitungan denda, dan aturan tambahan untuk kebijakan keterlambatan organisasi.
+            {t('penaltyRuleForm.description', 'Determine violation type, penalty calculation, and additional rules for organization late policy.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -217,16 +220,16 @@ export const PenaltyRuleFormDialog = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Calculator className="h-4 w-4" />
-                  Denda Tetap
-                  {formData.calculation_type === 'fixed' && <Badge variant="default" className="text-xs">Dipilih</Badge>}
+                  {t('penaltyRuleForm.calculationType.fixed.title', 'Fixed Penalty')}
+                  {formData.calculation_type === 'fixed' && <Badge variant="default" className="text-xs">{t('penaltyRuleForm.selected', 'Selected')}</Badge>}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <p className="text-xs text-gray-600 mb-2">
-                  Denda tetap tidak berubah berdasarkan durasi
+                  {t('penaltyRuleForm.calculationType.fixed.description', 'Fixed penalty does not change based on duration')}
                 </p>
                 <div className="text-xs text-blue-600 font-medium">
-                  Telat 5 menit = Telat 2 jam = Rp 500.000
+                  {t('penaltyRuleForm.calculationType.fixed.example', 'Late 5 minutes = Late 2 hours = Rp 500,000')}
                 </div>
               </CardContent>
             </Card>
@@ -237,16 +240,16 @@ export const PenaltyRuleFormDialog = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Per Jam
-                  {formData.calculation_type === 'hourly' && <Badge variant="default" className="text-xs">Dipilih</Badge>}
+                  {t('penaltyRuleForm.calculationType.hourly.title', 'Per Hour')}
+                  {formData.calculation_type === 'hourly' && <Badge variant="default" className="text-xs">{t('penaltyRuleForm.selected', 'Selected')}</Badge>}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <p className="text-xs text-gray-600 mb-2">
-                  Denda berdasarkan durasi × tarif per jam
+                  {t('penaltyRuleForm.calculationType.hourly.description', 'Penalty based on duration × hourly rate')}
                 </p>
                 <div className="text-xs text-green-600 font-medium">
-                  2 jam × Rp 50.000 = Rp 100.000
+                  {t('penaltyRuleForm.calculationType.hourly.example', '2 hours × Rp 50,000 = Rp 100,000')}
                 </div>
               </CardContent>
             </Card>
@@ -257,16 +260,16 @@ export const PenaltyRuleFormDialog = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Percent className="h-4 w-4" />
-                  Persentase Gaji
-                  {formData.calculation_type === 'salary_percentage' && <Badge variant="default" className="text-xs">Dipilih</Badge>}
+                  {t('penaltyRuleForm.calculationType.salaryPercentage.title', 'Salary Percentage')}
+                  {formData.calculation_type === 'salary_percentage' && <Badge variant="default" className="text-xs">{t('penaltyRuleForm.selected', 'Selected')}</Badge>}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <p className="text-xs text-gray-600 mb-2">
-                  Denda berdasarkan % dari gaji karyawan
+                  {t('penaltyRuleForm.calculationType.salaryPercentage.description', 'Penalty based on % of employee salary')}
                 </p>
                 <div className="text-xs text-purple-600 font-medium">
-                  5% × Rp 10.000.000 = Rp 500.000
+                  {t('penaltyRuleForm.calculationType.salaryPercentage.example', '5% × Rp 10,000,000 = Rp 500,000')}
                 </div>
               </CardContent>
             </Card>
@@ -275,17 +278,17 @@ export const PenaltyRuleFormDialog = ({
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">Nama Aturan *</Label>
+              <Label htmlFor="name">{t('penaltyRuleForm.ruleName', 'Rule Name')} *</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Denda Keterlambatan Standar"
+                placeholder={t('penaltyRuleForm.ruleNamePlaceholder', 'e.g., Standard Late Penalty')}
                 required
               />
             </div>
             <div>
-              <Label htmlFor="rule_type">Jenis Pelanggaran *</Label>
+              <Label htmlFor="rule_type">{t('penaltyRuleForm.violationType', 'Violation Type')} *</Label>
               <Select 
                 value={formData.rule_type} 
                 onValueChange={(value: RuleType) => setFormData(prev => ({ ...prev, rule_type: value }))}
@@ -294,10 +297,10 @@ export const PenaltyRuleFormDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="late_arrival">Terlambat Masuk</SelectItem>
-                  <SelectItem value="early_departure">Pulang Lebih Awal</SelectItem>
-                  <SelectItem value="no_checkout">Tidak Check-out</SelectItem>
-                  <SelectItem value="invalid_location">Lokasi Tidak Valid</SelectItem>
+                  <SelectItem value="late_arrival">{t('penaltyRuleForm.ruleType.lateArrival', 'Late Arrival')}</SelectItem>
+                  <SelectItem value="early_departure">{t('penaltyRuleForm.ruleType.earlyDeparture', 'Early Departure')}</SelectItem>
+                  <SelectItem value="no_checkout">{t('penaltyRuleForm.ruleType.noCheckout', 'No Check-out')}</SelectItem>
+                  <SelectItem value="invalid_location">{t('penaltyRuleForm.ruleType.invalidLocation', 'Invalid Location')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -305,7 +308,7 @@ export const PenaltyRuleFormDialog = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="threshold_minutes">Batas Waktu (menit) *</Label>
+              <Label htmlFor="threshold_minutes">{t('penaltyRuleForm.timeThreshold', 'Time Threshold (minutes)')} *</Label>
               <Input
                 id="threshold_minutes"
                 type="number"
@@ -314,11 +317,11 @@ export const PenaltyRuleFormDialog = ({
                 onChange={(e) => setFormData(prev => ({ ...prev, threshold_minutes: parseInt(e.target.value) || 0 }))}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Denda akan berlaku setelah melewati batas ini
+                {t('penaltyRuleForm.timeThresholdDescription', 'Penalty will apply after exceeding this threshold')}
               </p>
             </div>
             <div>
-              <Label htmlFor="penalty_type">Jenis Penalti</Label>
+              <Label htmlFor="penalty_type">{t('penaltyRuleForm.penaltyType', 'Penalty Type')}</Label>
               <Select 
                 value={formData.penalty_type} 
                 onValueChange={(value: PenaltyType) => setFormData(prev => ({ ...prev, penalty_type: value }))}
@@ -327,9 +330,9 @@ export const PenaltyRuleFormDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="deduction">Potongan Gaji</SelectItem>
-                  <SelectItem value="warning">Peringatan</SelectItem>
-                  <SelectItem value="points">Sistem Poin</SelectItem>
+                  <SelectItem value="deduction">{t('penaltyRuleForm.penaltyType.deduction', 'Salary Deduction')}</SelectItem>
+                  <SelectItem value="warning">{t('penaltyRuleForm.penaltyType.warning', 'Warning')}</SelectItem>
+                  <SelectItem value="points">{t('penaltyRuleForm.penaltyType.points', 'Point System')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -338,7 +341,7 @@ export const PenaltyRuleFormDialog = ({
           {/* Calculation Specific Fields */}
           {formData.calculation_type === 'fixed' && (
             <div>
-              <Label htmlFor="penalty_amount">Jumlah Denda Tetap (Rp) *</Label>
+              <Label htmlFor="penalty_amount">{t('penaltyRuleForm.fixedPenaltyAmount', 'Fixed Penalty Amount (Rp)')} *</Label>
               <Input
                 id="penalty_amount"
                 type="number"
@@ -352,7 +355,7 @@ export const PenaltyRuleFormDialog = ({
 
           {formData.calculation_type === 'hourly' && (
             <div>
-              <Label htmlFor="hourly_rate">Tarif Per Jam (Rp) *</Label>
+              <Label htmlFor="hourly_rate">{t('penaltyRuleForm.hourlyRate', 'Hourly Rate (Rp)')} *</Label>
               <Input
                 id="hourly_rate"
                 type="number"
@@ -363,14 +366,14 @@ export const PenaltyRuleFormDialog = ({
                 placeholder="50000"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Denda akan dihitung: durasi keterlambatan (jam) × tarif per jam
+                {t('penaltyRuleForm.hourlyRateDescription', 'Penalty will be calculated: late duration (hours) × hourly rate')}
               </p>
             </div>
           )}
 
           {formData.calculation_type === 'salary_percentage' && (
             <div>
-              <Label htmlFor="salary_percentage">Persentase Gaji (%) *</Label>
+              <Label htmlFor="salary_percentage">{t('penaltyRuleForm.salaryPercentage', 'Salary Percentage (%)')} *</Label>
               <Input
                 id="salary_percentage"
                 type="number"
@@ -382,7 +385,7 @@ export const PenaltyRuleFormDialog = ({
                 placeholder="5.0"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Denda akan dihitung: (persentase ÷ 100) × gaji bulanan karyawan
+                {t('penaltyRuleForm.salaryPercentageDescription', 'Penalty will be calculated: (percentage ÷ 100) × employee monthly salary')}
               </p>
             </div>
           )}
@@ -391,13 +394,13 @@ export const PenaltyRuleFormDialog = ({
           <Alert>
             <DollarSign className="h-4 w-4" />
             <AlertDescription>
-              <strong>Simulasi Perhitungan:</strong> {calculateExample()}
+              <strong>{t('penaltyRuleForm.calculationSimulation', 'Calculation Simulation')}:</strong> {calculateExample()}
             </AlertDescription>
           </Alert>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="max_penalty_per_month">Batas Denda Maksimal Per Bulan (Rp)</Label>
+              <Label htmlFor="max_penalty_per_month">{t('penaltyRuleForm.maxPenaltyPerMonth', 'Maximum Penalty Per Month (Rp)')}</Label>
               <Input
                 id="max_penalty_per_month"
                 type="number"
@@ -405,19 +408,19 @@ export const PenaltyRuleFormDialog = ({
                 step="1000"
                 value={formData.max_penalty_per_month || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, max_penalty_per_month: parseFloat(e.target.value) || undefined }))}
-                placeholder="Tidak terbatas"
+                placeholder={t('penaltySettings.penaltyLimits.unlimited', 'Unlimited')}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Kosongkan untuk tidak ada batas maksimal
+                {t('penaltyRuleForm.maxPenaltyPerMonthDescription', 'Leave empty for no maximum limit')}
               </p>
             </div>
             <div>
-              <Label htmlFor="description">Deskripsi</Label>
+              <Label htmlFor="description">{t('penaltyRuleForm.descriptionLabel', 'Description')}</Label>
               <Textarea
                 id="description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Deskripsi aturan denda ini..."
+                placeholder={t('penaltyRuleForm.descriptionPlaceholder', 'Description of this penalty rule...')}
                 rows={3}
               />
             </div>
@@ -430,7 +433,7 @@ export const PenaltyRuleFormDialog = ({
                 checked={formData.applies_to_all}
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, applies_to_all: checked }))}
               />
-              <Label htmlFor="applies_to_all">Berlaku untuk semua karyawan</Label>
+              <Label htmlFor="applies_to_all">{t('penaltyRuleForm.appliesToAll', 'Applies to all employees')}</Label>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -439,16 +442,16 @@ export const PenaltyRuleFormDialog = ({
                 checked={formData.is_active}
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
               />
-              <Label htmlFor="is_active">Aktifkan aturan ini</Label>
+              <Label htmlFor="is_active">{t('penaltyRuleForm.enableRule', 'Enable this rule')}</Label>
             </div>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={handleClose}>
-              Batal
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit">
-              {editingRule ? 'Update Aturan' : 'Buat Aturan'}
+              {editingRule ? t('penaltyRuleForm.button.updateRule', 'Update Rule') : t('penaltyRuleForm.button.createRule', 'Create Rule')}
             </Button>
           </div>
         </form>

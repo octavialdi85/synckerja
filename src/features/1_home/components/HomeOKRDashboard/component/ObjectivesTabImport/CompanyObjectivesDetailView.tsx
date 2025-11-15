@@ -5,6 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, BarChart3, Trash2, Edit } from 'lucide-react';
+import { logger } from '@/config/logger';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDeleteCompanyObjective } from '../../hooks/useDeleteCompanyObjective';
@@ -109,7 +110,7 @@ export const CompanyObjectivesDetailView = ({
     if (process.env.NODE_ENV === 'development' && 
         debugInfo.filteredCycleIds && 
         debugInfo.filteredCycleIds.length > 0) {
-      console.log('🔍 CompanyObjectivesDetailView Debug:', debugInfo);
+      logger.debug('🔍 CompanyObjectivesDetailView Debug:', debugInfo);
     }
   }, [debugInfo]);
   
@@ -157,12 +158,12 @@ export const CompanyObjectivesDetailView = ({
     { id: 'q4-2025', label: 'Q4 2025' }
   ];
   const onQuarterToggle = (quarterId: string) => {
-    console.log('onQuarterToggle called with:', quarterId);
+    logger.debug('onQuarterToggle called with:', quarterId);
     setSelectedQuarters(prev => {
       const newSelection = prev.includes(quarterId) 
         ? prev.filter(id => id !== quarterId)
         : [...prev, quarterId];
-      console.log('New selection:', newSelection);
+      logger.debug('New selection:', newSelection);
       return newSelection;
     });
   };
@@ -230,7 +231,7 @@ export const CompanyObjectivesDetailView = ({
 
   // Helper function to calculate progress for individual objective from key_results
   const getIndividualObjectiveProgress = (indObj: any) => {
-    console.log('🔍 Calculating progress for individual objective:', {
+    logger.debug('🔍 Calculating progress for individual objective:', {
       id: indObj.id,
       title: indObj.title,
       hasKeyResults: indObj.key_results && indObj.key_results.length > 0,
@@ -242,7 +243,7 @@ export const CompanyObjectivesDetailView = ({
     if (indObj.key_results && indObj.key_results.length > 0) {
       const keyResult = indObj.key_results[0]; // Get first key result
       
-      console.log('📊 Key result data:', keyResult);
+      logger.debug('📊 Key result data:', keyResult);
       
       if (keyResult.metric_type === 'number') {
         // For numerical metrics, calculate percentage: (current_value / target_value) * 100
@@ -250,7 +251,7 @@ export const CompanyObjectivesDetailView = ({
         const targetValue = keyResult.target_value || 1;
         const calculatedProgress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
         
-        console.log('🔢 Numerical metric progress:', {
+        logger.debug('🔢 Numerical metric progress:', {
           currentValue,
           targetValue,
           calculatedProgress
@@ -261,7 +262,7 @@ export const CompanyObjectivesDetailView = ({
         // For percentage metrics, use progress_percentage from key_results
         const progressPercentage = keyResult.progress_percentage || 0;
         
-        console.log('📊 Percentage metric progress:', {
+        logger.debug('📊 Percentage metric progress:', {
           progressPercentage
         });
         
@@ -272,7 +273,7 @@ export const CompanyObjectivesDetailView = ({
     // Fallback to objective's own progress_percentage for objectives without key results
     const fallbackProgress = indObj.progress_percentage || 0;
     
-    console.log('📊 Fallback progress:', {
+    logger.debug('📊 Fallback progress:', {
       fallbackProgress
     });
     
@@ -356,7 +357,7 @@ export const CompanyObjectivesDetailView = ({
     const confirmMessage = `Are you sure you want to delete "${objectiveTitle}"?\n\nThis action cannot be undone and will also remove all associated department objectives, key results, and progress data.`;
     
     if (confirm(confirmMessage)) {
-      console.log('🗑️ User confirmed deletion of company objective:', { objectiveId, objectiveTitle });
+      logger.debug('🗑️ User confirmed deletion of company objective:', { objectiveId, objectiveTitle });
       deleteCompanyObjective.mutate(objectiveId);
     }
   };
@@ -695,7 +696,7 @@ export const CompanyObjectivesDetailView = ({
           onOpenChange={(open) => setEditModal({ open })}
           editObjective={editModal.objective}
           onObjectiveAdded={() => {
-            console.log('✅ Company objective updated successfully');
+            logger.debug('✅ Company objective updated successfully');
             setEditModal({ open: false });
           }}
         />
@@ -709,7 +710,7 @@ export const CompanyObjectivesDetailView = ({
           cycleId={cycleId || ''}
           editObjective={editModal.objective}
           onSuccess={() => {
-            console.log('✅ Individual objective updated successfully');
+            logger.debug('✅ Individual objective updated successfully');
             setEditModal({ open: false });
           }}
         />
@@ -723,7 +724,7 @@ export const CompanyObjectivesDetailView = ({
           cycleId={cycleId || ''}
           editObjective={editModal.objective}
           onSuccess={() => {
-            console.log('✅ Department objective updated successfully');
+            logger.debug('✅ Department objective updated successfully');
             setEditModal({ open: false });
           }}
         />

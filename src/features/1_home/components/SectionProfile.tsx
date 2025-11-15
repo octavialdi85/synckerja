@@ -10,8 +10,13 @@ import { useAvatarSync } from '@/features/2-1-employees/MyInfo/LeavePermit/hooks
 import { useUserData } from '@/features/1-login/hooks/useUserData';
 import { useTeamAvailability } from './useTeamAvailability';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
 export const SectionProfile = () => {
+  const { t, dateLocale } = useAppTranslation();
   const {
     data: employeeData,
     isLoading,
@@ -38,11 +43,11 @@ export const SectionProfile = () => {
   const getRoleDisplayText = (role: string | null) => {
     switch (role) {
       case 'owner':
-        return 'Owner';
+        return t('profile.role.owner', 'Owner');
       case 'admin':
-        return 'Admin';
+        return t('profile.role.admin', 'Admin');
       case 'employee':
-        return 'Employee';
+        return t('profile.role.employee', 'Employee');
       default:
         return defaultData.position;
     }
@@ -68,7 +73,7 @@ export const SectionProfile = () => {
       console.log('📸 New photo URL:', photoUrl);
       
       // Show loading toast
-      const loadingToast = toast.loading('Memperbarui foto profil...');
+      const loadingToast = toast.loading(t('profile.updatingPhoto', 'Updating profile photo...'));
       
       // Sync avatar across all app components
       const result = await syncAvatarAcrossApp(photoUrl);
@@ -83,15 +88,15 @@ export const SectionProfile = () => {
           await refetchEmployee();
         }, 500);
         
-        toast.success('Foto profil berhasil diperbarui di seluruh aplikasi! 🎉');
+        toast.success(t('profile.photoUpdatedSuccess', 'Profile photo updated successfully across the app! 🎉'));
         console.log('✅ SectionProfile: Photo sync completed successfully');
       } else {
-        toast.error('Gagal menyinkronkan foto di seluruh aplikasi');
+        toast.error(t('profile.failedToSyncPhoto', 'Failed to sync photo across the app'));
         console.error('❌ SectionProfile: Photo sync failed:', result?.error);
       }
     } catch (error) {
       console.error('❌ SectionProfile: Error during photo update:', error);
-      toast.error('Gagal memperbarui foto profil');
+      toast.error(t('profile.failedToUpdatePhoto', 'Failed to update profile photo'));
     }
   };
 
@@ -146,20 +151,20 @@ export const SectionProfile = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <User className="h-4 w-4" />
-                  <span className="text-xs text-gray-700 leading-relaxed">Employee ID:</span>
+                  <span className="text-xs text-gray-700 leading-relaxed">{t('profile.employeeId', 'Employee ID')}:</span>
                 </div>
-                <span className="text-xs font-semibold text-blue-600 leading-normal">{employeeData?.employee_id || 'N/A'}</span>
+                <span className="text-xs font-semibold text-blue-600 leading-normal">{employeeData?.employee_id || t('common.notAvailable', 'N/A')}</span>
               </div>
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Calendar className="h-4 w-4" />
-                  <span className="text-xs text-gray-700 leading-relaxed">Join Date:</span>
+                  <span className="text-xs text-gray-700 leading-relaxed">{t('profile.joinDate', 'Join Date')}:</span>
                 </div>
                 <span className="text-xs font-semibold text-green-600 leading-normal">
                   {employeeData?.join_date || employeeData?.hire_date 
-                    ? new Date(employeeData.join_date || employeeData.hire_date).toLocaleDateString('id-ID')
-                    : 'N/A'
+                    ? format(new Date(employeeData.join_date || employeeData.hire_date), 'dd/MM/yyyy', { locale: dateLocale })
+                    : t('common.notAvailable', 'N/A')
                   }
                 </span>
               </div>
@@ -167,13 +172,13 @@ export const SectionProfile = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Coffee className="h-4 w-4" />
-                  <span className="text-xs text-gray-700 leading-relaxed">Sisa Cuti:</span>
+                  <span className="text-xs text-gray-700 leading-relaxed">{t('profile.remainingLeave', 'Remaining Leave')}:</span>
                 </div>
                 <span className="text-xs font-semibold text-orange-600 leading-normal">
-                  {currentUser.remainingLeave} hari
-                  <span className="text-xs text-gray-500 ml-1 leading-normal">
-                    dari {currentUser.totalLeave} hari/tahun
-                  </span>
+                  {applyVariables(t('profile.leaveBalance', '{{remaining}} days from {{total}} days/year'), {
+                    remaining: String(currentUser.remainingLeave),
+                    total: String(currentUser.totalLeave)
+                  })}
                 </span>
               </div>
 
@@ -181,9 +186,9 @@ export const SectionProfile = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Home className="h-4 w-4" />
-                    <span className="text-sm">Branch:</span>
+                    <span className="text-sm">{t('profile.branch', 'Branch')}:</span>
                   </div>
-                  <span className="font-semibold text-purple-600">Head Office</span>
+                  <span className="font-semibold text-purple-600">{t('profile.headOffice', 'Head Office')}</span>
                 </div>
               )}
             </div>

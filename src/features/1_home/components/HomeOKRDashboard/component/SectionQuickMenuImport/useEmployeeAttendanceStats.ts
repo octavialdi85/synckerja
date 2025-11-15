@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 
 export const useEmployeeAttendanceStats = () => {
   const { currentOrg } = useCurrentOrg();
@@ -12,7 +13,7 @@ export const useEmployeeAttendanceStats = () => {
         throw new Error('No organization found');
       }
 
-      console.log('📊 Fetching employee attendance stats for org:', currentOrg.id);
+      logger.query('📊 Fetching employee attendance stats for org:', currentOrg.id);
 
       // Get current month start and end dates
       const now = new Date();
@@ -118,7 +119,7 @@ export const useEmployeeAttendanceStats = () => {
         workingDays
       };
 
-      console.log('✅ Employee attendance stats calculated:', stats);
+      logger.query('✅ Employee attendance stats calculated:', stats);
       return stats;
     },
     enabled: !!currentOrg?.id,

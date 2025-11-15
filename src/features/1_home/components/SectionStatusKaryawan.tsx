@@ -9,13 +9,16 @@ import { ModalStatusKaryawan } from './ModalStatusKaryawan';
 import { useEmployeeStatus, EmployeeStatus } from './useEmployeeStatus';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { formatDistanceToNow } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { id, enUS } from 'date-fns/locale';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface SectionStatusKaryawanProps {
   statusCreatedTrigger?: number;
 }
 
 export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKaryawanProps) => {
+  const { t, dateLocale } = useAppTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusCreatedCount, setStatusCreatedCount] = useState(0);
   const [editingStatus, setEditingStatus] = useState<EmployeeStatus | null>(null);
@@ -83,10 +86,10 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
     try {
       return formatDistanceToNow(new Date(dateString), { 
         addSuffix: true, 
-        locale: id 
+        locale: dateLocale 
       });
     } catch (error) {
-      return 'Baru saja';
+      return t('status.justNow', 'Just now');
     }
   };
 
@@ -125,17 +128,17 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
           <div className="w-6 h-6 bg-pink-100 rounded flex items-center justify-center">
             <span className="text-pink-600 text-sm">👤</span>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 leading-snug">Status Karyawan</h3>
+          <h3 className="text-lg font-semibold text-gray-900 leading-snug">{t('status.title', 'Employee Status')}</h3>
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-xs text-gray-500 leading-relaxed">
-            {loading ? 'Loading...' : `${statuses.length} Update Terbaru`}
+            {loading ? t('common.loading', 'Loading...') : applyVariables(t('status.latestUpdates', '{{count}} Latest Updates'), { count: String(statuses.length) })}
           </span>
           <Button
             onClick={handleCreateStatus}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium leading-normal"
           >
-            + Buat Status
+            + {t('status.createStatus', 'Create Status')}
           </Button>
         </div>
       </div>
@@ -144,11 +147,11 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
       <div className="p-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-gray-500">Loading status updates...</div>
+            <div className="text-gray-500">{t('status.loadingUpdates', 'Loading status updates...')}</div>
           </div>
         ) : statuses.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <div className="text-gray-500">Belum ada status update</div>
+            <div className="text-gray-500">{t('status.noUpdates', 'No status updates yet')}</div>
           </div>
         ) : (
           /* Horizontal scroll container */
@@ -175,14 +178,14 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
                             className="cursor-pointer"
                           >
                             <Edit3 className="h-3 w-3 mr-2" />
-                            Edit
+                            {t('common.edit', 'Edit')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeleteStatusId(status.id)}
                             className="cursor-pointer text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-3 w-3 mr-2" />
-                            Delete
+                            {t('status.delete', 'Delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -192,15 +195,15 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
                   <div className="flex items-center space-x-3 mb-4">
                     <UnifiedAvatar 
                       photoUrl={status.employees?.profile_photo_url} 
-                      name={status.employees?.full_name || 'Unknown'} 
+                      name={status.employees?.full_name || t('common.unknown', 'Unknown')} 
                       size="md" 
                     />
                     <div>
                       <h4 className="text-sm font-medium text-gray-900 leading-normal">
-                        {status.employees?.full_name || 'Unknown'}
+                        {status.employees?.full_name || t('common.unknown', 'Unknown')}
                       </h4>
                       <p className="text-xs text-gray-500 leading-normal">
-                        {status.employees?.departments?.name || 'Unknown Department'}
+                        {status.employees?.departments?.name || t('status.unknownDepartment', 'Unknown Department')}
                       </p>
                     </div>
                   </div>
@@ -247,19 +250,19 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
       <AlertDialog open={!!deleteStatusId} onOpenChange={() => setDeleteStatusId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Hapus Status</AlertDialogTitle>
+            <AlertDialogTitle>{t('status.deleteTitle', 'Delete Status')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Apakah Anda yakin ingin menghapus status ini? Tindakan ini tidak dapat dibatalkan.
+              {t('status.deleteDescription', 'Are you sure you want to delete this status? This action cannot be undone.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteStatusId && handleDeleteStatus(deleteStatusId)}
               disabled={isDeleting}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? 'Menghapus...' : 'Hapus'}
+              {isDeleting ? t('status.deleting', 'Deleting...') : t('status.delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

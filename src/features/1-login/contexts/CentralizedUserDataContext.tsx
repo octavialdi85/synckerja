@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import type { User } from '@supabase/supabase-js';
+import { logger } from '@/config/logger';
 
 // Types - focus only on 5 core tables
 interface UserData {
@@ -101,7 +102,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     // If force refresh, clear the flag and continue with data fetching
     if (forceRefresh) {
       if (import.meta.env.DEV) {
-        console.log('CentralizedUserDataContext: Force refresh detected, fetching fresh data...');
+        logger.userData('CentralizedUserDataContext: Force refresh detected, fetching fresh data...');
       }
       sessionStorage.removeItem('forceRefreshUserData');
       // Reset the fetching refs to allow fresh fetch
@@ -112,7 +113,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     // If email verified flag exists, clear it and continue with data fetching
     if (emailVerifiedFlag) {
       if (import.meta.env.DEV) {
-        console.log('CentralizedUserDataContext: Email verified flag detected, fetching fresh data...');
+        logger.userData('CentralizedUserDataContext: Email verified flag detected, fetching fresh data...');
       }
       sessionStorage.removeItem('emailVerified');
       // Reset the fetching refs to allow fresh fetch
@@ -123,7 +124,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     // Skip if already fetched for this user, unless force refresh or email verified flag
     if (lastUserIdRef.current === user.id && !forceRefresh && !emailVerifiedFlag) {
       if (import.meta.env.DEV) {
-        console.log('CentralizedUserDataContext: Skipping fetch - already fetched for user:', user.id);
+        logger.userData('CentralizedUserDataContext: Skipping fetch - already fetched for user:', user.id);
       }
       setLoading(false);
       return;
@@ -132,7 +133,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     // If force refresh or email verified flag, reset cache
     if (forceRefresh || emailVerifiedFlag) {
       if (import.meta.env.DEV) {
-        console.log('CentralizedUserDataContext: Force refresh or email verified - resetting cache for user:', user.id);
+        logger.userData('CentralizedUserDataContext: Force refresh or email verified - resetting cache for user:', user.id);
       }
       lastUserIdRef.current = '';
       fetchingRef.current = false;
@@ -175,7 +176,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       ]) as any;
       
       if (import.meta.env.DEV) {
-        console.log('CentralizedUserDataContext: Email verification check:', {
+        logger.userData('CentralizedUserDataContext: Email verification check:', {
           userId: user.id,
           verificationToken,
           verificationError,
@@ -289,13 +290,13 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             // Set a default role based on email or user metadata
             if (user.email?.includes('owner') || user.email?.includes('admin')) {
               setUserRole('owner');
-              console.log('CentralizedUserDataContext: Set fallback owner role based on email');
+              logger.userData('CentralizedUserDataContext: Set fallback owner role based on email');
             } else if (user.user_metadata?.role) {
               setUserRole(user.user_metadata.role as UserRole);
-              console.log('CentralizedUserDataContext: Set fallback role from user metadata:', user.user_metadata.role);
+              logger.userData('CentralizedUserDataContext: Set fallback role from user metadata:', user.user_metadata.role);
             } else {
               setUserRole('employee'); // Default fallback
-              console.log('CentralizedUserDataContext: Set default employee role as fallback');
+              logger.userData('CentralizedUserDataContext: Set default employee role as fallback');
             }
           } else {
             throw orgError;
@@ -336,7 +337,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           setUserRole('employee'); // Default fallback
         }
         
-        console.log('CentralizedUserDataContext: Fallback data created:', {
+        logger.userData('CentralizedUserDataContext: Fallback data created:', {
           userData: fallbackUserData,
           userRole: user.email?.includes('owner') ? 'owner' : 'employee'
         });
@@ -354,13 +355,13 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
   // Force refresh function that bypasses caching
   const forceRefreshUserData = useCallback(async () => {
-    console.log('CentralizedUserDataContext: Force refresh requested');
+    logger.userData('CentralizedUserDataContext: Force refresh requested');
     if (!user) {
-      console.log('CentralizedUserDataContext: No user for force refresh');
+      logger.userData('CentralizedUserDataContext: No user for force refresh');
       return;
     }
     
-    console.log('CentralizedUserDataContext: Resetting cache and forcing refresh...');
+    logger.userData('CentralizedUserDataContext: Resetting cache and forcing refresh...');
     lastUserIdRef.current = '';
     fetchingRef.current = false;
     

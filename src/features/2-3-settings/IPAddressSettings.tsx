@@ -11,6 +11,9 @@ import { Alert, AlertDescription } from '@/features/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { format } from 'date-fns';
+import { id, enUS } from 'date-fns/locale';
 
 interface AllowedIP {
   id: string;
@@ -22,6 +25,7 @@ interface AllowedIP {
 }
 
 export const IPAddressSettings = () => {
+  const { t, dateLocale } = useAppTranslation();
   const [allowedIPs, setAllowedIPs] = useState<AllowedIP[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,7 +59,7 @@ export const IPAddressSettings = () => {
       setAllowedIPs(data || []);
     } catch (error) {
       console.error('Error fetching allowed IPs:', error);
-      toast.error('Gagal memuat daftar IP address');
+      toast.error(t('ipAddress.failedToLoad', 'Failed to load IP address list'));
     } finally {
       setLoading(false);
     }
@@ -72,7 +76,7 @@ export const IPAddressSettings = () => {
     if (!employee?.organization_id) return;
 
     if (!validateIPAddress(formData.ip_address)) {
-      toast.error('Format IP address tidak valid. Gunakan format seperti 192.168.1.1 atau 192.168.1.0/24');
+      toast.error(t('ipAddress.invalidFormat', 'Invalid IP address format. Use format like 192.168.1.1 or 192.168.1.0/24'));
       return;
     }
 
@@ -91,16 +95,16 @@ export const IPAddressSettings = () => {
 
       if (error) throw error;
 
-      toast.success('IP address berhasil ditambahkan');
+      toast.success(t('ipAddress.addedSuccessfully', 'IP address added successfully'));
       setFormData({ ip_address: '', name: '', description: '', is_active: true });
       setShowAddForm(false);
       fetchAllowedIPs();
     } catch (error: any) {
       console.error('Error adding IP:', error);
       if (error.code === '23505') {
-        toast.error('IP address sudah ada dalam daftar');
+        toast.error(t('ipAddress.alreadyExists', 'IP address already exists in the list'));
       } else {
-        toast.error('Gagal menambahkan IP address');
+        toast.error(t('ipAddress.failedToAdd', 'Failed to add IP address'));
       }
     } finally {
       setLoading(false);
@@ -117,18 +121,18 @@ export const IPAddressSettings = () => {
 
       if (error) throw error;
 
-      toast.success(`IP address ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}`);
+      toast.success(!currentStatus ? t('ipAddress.activated', 'IP address activated') : t('ipAddress.deactivated', 'IP address deactivated'));
       fetchAllowedIPs();
     } catch (error) {
       console.error('Error updating IP status:', error);
-      toast.error('Gagal mengubah status IP address');
+      toast.error(t('ipAddress.failedToUpdateStatus', 'Failed to update IP address status'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus IP address ini?')) return;
+    if (!confirm(t('ipAddress.confirmDelete', 'Are you sure you want to delete this IP address?'))) return;
 
     setLoading(true);
     try {
@@ -139,11 +143,11 @@ export const IPAddressSettings = () => {
 
       if (error) throw error;
 
-      toast.success('IP address berhasil dihapus');
+      toast.success(t('ipAddress.deletedSuccessfully', 'IP address deleted successfully'));
       fetchAllowedIPs();
     } catch (error) {
       console.error('Error deleting IP:', error);
-      toast.error('Gagal menghapus IP address');
+      toast.error(t('ipAddress.failedToDelete', 'Failed to delete IP address'));
     } finally {
       setLoading(false);
     }
@@ -153,9 +157,9 @@ export const IPAddressSettings = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">IP Address Management</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{t('ipAddress.management', 'IP Address Management')}</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Kelola daftar IP address yang diizinkan untuk absensi dari laptop/komputer
+            {t('ipAddress.managementDescription', 'Manage the list of allowed IP addresses for attendance from laptop/computer')}
           </p>
         </div>
         <Button 
@@ -163,58 +167,57 @@ export const IPAddressSettings = () => {
           disabled={loading}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Tambah IP
+          {t('ipAddress.addIP', 'Add IP')}
         </Button>
       </div>
 
       <Alert>
         <Wifi className="h-4 w-4" />
         <AlertDescription>
-          IP address digunakan sebagai fallback ketika GPS tidak tersedia (laptop/komputer). 
-          Gunakan format seperti 192.168.1.1 untuk IP tunggal atau 192.168.1.0/24 untuk range.
+          {t('ipAddress.alertDescription', 'IP address is used as a fallback when GPS is not available (laptop/computer). Use format like 192.168.1.1 for single IP or 192.168.1.0/24 for range.')}
         </AlertDescription>
       </Alert>
 
       {showAddForm && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Tambah IP Address Baru</CardTitle>
+            <CardTitle className="text-base">{t('ipAddress.addNewIP', 'Add New IP Address')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="ip_address">IP Address *</Label>
+                  <Label htmlFor="ip_address">{t('ipAddress.ipAddress', 'IP Address')} *</Label>
                   <Input
                     id="ip_address"
                     value={formData.ip_address}
                     onChange={(e) => setFormData(prev => ({ ...prev, ip_address: e.target.value }))}
-                    placeholder="192.168.1.1 atau 192.168.1.0/24"
+                    placeholder={t('ipAddress.ipAddressPlaceholder', '192.168.1.1 or 192.168.1.0/24')}
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Gunakan /24 untuk network range (contoh: 192.168.1.0/24)
+                    {t('ipAddress.useSlash24', 'Use /24 for network range (example: 192.168.1.0/24)')}
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="name">Nama/Label *</Label>
+                  <Label htmlFor="name">{t('ipAddress.nameLabel', 'Name/Label')} *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="WiFi Kantor Utama"
+                    placeholder={t('ipAddress.namePlaceholder', 'Main Office WiFi')}
                     required
                   />
                 </div>
               </div>
               
               <div>
-                <Label htmlFor="description">Deskripsi</Label>
+                <Label htmlFor="description">{t('ipAddress.description', 'Description')}</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Deskripsi opsional untuk IP address ini"
+                  placeholder={t('ipAddress.descriptionPlaceholder', 'Optional description for this IP address')}
                   rows={2}
                 />
               </div>
@@ -225,13 +228,13 @@ export const IPAddressSettings = () => {
                   checked={formData.is_active}
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
                 />
-                <Label htmlFor="is_active">Aktif</Label>
+                <Label htmlFor="is_active">{t('ipAddress.active', 'Active')}</Label>
               </div>
 
               <div className="flex gap-2">
                 <Button type="submit" disabled={loading}>
                   <Save className="h-4 w-4 mr-2" />
-                  Simpan
+                  {t('common.save', 'Save')}
                 </Button>
                 <Button 
                   type="button" 
@@ -240,7 +243,7 @@ export const IPAddressSettings = () => {
                   disabled={loading}
                 >
                   <X className="h-4 w-4 mr-2" />
-                  Batal
+                  {t('common.cancel', 'Cancel')}
                 </Button>
               </div>
             </form>
@@ -253,8 +256,8 @@ export const IPAddressSettings = () => {
           <Card>
             <CardContent className="text-center py-8">
               <Globe className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">Belum ada IP address yang dikonfigurasi</p>
-              <p className="text-sm text-gray-500">Tambah IP address pertama untuk mulai menggunakan fitur ini</p>
+              <p className="text-gray-600">{t('ipAddress.noIPConfigured', 'No IP addresses configured yet')}</p>
+              <p className="text-sm text-gray-500">{t('ipAddress.addFirstIP', 'Add the first IP address to start using this feature')}</p>
             </CardContent>
           </Card>
         ) : (
@@ -271,7 +274,7 @@ export const IPAddressSettings = () => {
                         </code>
                       </div>
                       <Badge variant={ip.is_active ? "default" : "secondary"}>
-                        {ip.is_active ? 'Aktif' : 'Nonaktif'}
+                        {ip.is_active ? t('ipAddress.active', 'Active') : t('ipAddress.inactive', 'Inactive')}
                       </Badge>
                     </div>
                     
@@ -283,7 +286,7 @@ export const IPAddressSettings = () => {
                     </div>
                     
                     <p className="text-xs text-gray-500 mt-2">
-                      Ditambahkan: {new Date(ip.created_at).toLocaleDateString('id-ID')}
+                      {t('ipAddress.added', 'Added')}: {format(new Date(ip.created_at), 'PP', { locale: dateLocale })}
                     </p>
                   </div>
 

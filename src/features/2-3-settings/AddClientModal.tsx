@@ -8,6 +8,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Loader2, Building } from 'lucide-react';
 import { useClients } from '@/features/2-3-settings/hooks/useLocationManagement';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface AddClientModalProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface AddClientModalProps {
 }
 
 export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientModalProps) => {
+  const { t } = useAppTranslation();
   const [formData, setFormData] = useState({
     company_name: '',
     contact_person: '',
@@ -74,44 +76,44 @@ export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientM
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building className="h-5 w-5" />
-            Add New Client
+            {t('client.addNewClient', 'Add New Client')}
           </DialogTitle>
           <DialogDescription className="text-sm text-gray-600">
-            Lengkapi informasi utama klien untuk menambahkan perusahaan baru ke organisasi Anda.
+            {t('client.completeClientInfo', 'Complete main client information to add a new company to your organization.')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-2">
-              <Label htmlFor="company_name">Company Name *</Label>
+              <Label htmlFor="company_name">{t('client.companyName', 'Company Name')} *</Label>
               <Input
                 id="company_name"
                 value={formData.company_name}
                 onChange={(e) => setFormData(prev => ({ ...prev, company_name: e.target.value }))}
-                placeholder="e.g., ABC Corporation"
+                placeholder={t('client.companyNamePlaceholder', 'e.g., ABC Corporation')}
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact_person">Contact Person</Label>
+              <Label htmlFor="contact_person">{t('client.contactPerson', 'Contact Person')}</Label>
               <Input
                 id="contact_person"
                 value={formData.contact_person}
                 onChange={(e) => setFormData(prev => ({ ...prev, contact_person: e.target.value }))}
-                placeholder="John Doe"
+                placeholder={t('client.contactPersonPlaceholder', 'John Doe')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="industry">Industry</Label>
+              <Label htmlFor="industry">{t('client.industry', 'Industry')}</Label>
               <Select
                 value={formData.industry}
                 onValueChange={(value) => setFormData(prev => ({ ...prev, industry: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select industry" />
+                  <SelectValue placeholder={t('client.selectIndustry', 'Select industry')} />
                 </SelectTrigger>
                 <SelectContent>
                   {industries.map((industry) => (
@@ -124,18 +126,18 @@ export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientM
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact_email">Email</Label>
+              <Label htmlFor="contact_email">{t('client.email', 'Email')}</Label>
               <Input
                 id="contact_email"
                 type="email"
                 value={formData.contact_email}
                 onChange={(e) => setFormData(prev => ({ ...prev, contact_email: e.target.value }))}
-                placeholder="contact@company.com"
+                placeholder={t('client.emailPlaceholder', 'contact@company.com')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact_phone">Phone</Label>
+              <Label htmlFor="contact_phone">{t('client.phone', 'Phone')}</Label>
               <Input
                 id="contact_phone"
                 value={formData.contact_phone}
@@ -146,23 +148,23 @@ export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientM
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address">{t('client.address', 'Address')}</Label>
             <Textarea
               id="address"
               value={formData.address}
               onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-              placeholder="Full company address..."
+              placeholder={t('client.addressPlaceholder', 'Full company address...')}
               rows={2}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">{t('client.notes', 'Notes')}</Label>
             <Textarea
               id="notes"
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Additional notes about this client..."
+              placeholder={t('client.notesPlaceholder', 'Additional notes about this client...')}
               rows={3}
             />
           </div>
@@ -174,16 +176,16 @@ export const AddClientModal = ({ open, onOpenChange, onClientAdded }: AddClientM
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Adding...
+                  {t('client.adding', 'Adding...')}
                 </>
               ) : (
-                'Add Client'
+                t('client.addClient', 'Add Client')
               )}
             </Button>
           </DialogFooter>

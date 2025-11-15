@@ -1,6 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { applyVariables } from '@/features/share/i18n/translations';
 
 interface ProRateRequest {
   new_member_count: number;
@@ -42,6 +44,8 @@ interface ProRateCalculation {
 }
 
 export const useProRateCalculation = () => {
+  const { t } = useAppTranslation();
+  
   return useMutation({
     mutationFn: async (request: ProRateRequest): Promise<ProRateCalculation> => {
       console.log('🧮 Calculating prorate for:', request);
@@ -64,7 +68,7 @@ export const useProRateCalculation = () => {
     },
     onError: (error: any) => {
       console.error('❌ ProRate calculation failed:', error);
-      toast.error('Gagal menghitung prorate: ' + (error.message || 'Unknown error'));
+      toast.error(applyVariables(t('subscription.plans.error.proRateFailed', 'Failed to calculate prorate: {{message}}'), { message: error.message || 'Unknown error' }));
     },
   });
 };

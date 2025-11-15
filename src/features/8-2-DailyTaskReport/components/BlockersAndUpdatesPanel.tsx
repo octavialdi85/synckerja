@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { useToast } from '@/features/ui/use-toast';
 import { Trash2, Edit, Clock } from 'lucide-react';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
+import { logger } from '@/config/logger';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,7 @@ export const BlockersAndUpdatesPanel = () => {
   
   // Debug logging
   React.useEffect(() => {
-    console.log('🔍 BlockersAndUpdatesPanel - Debug:', {
+    logger.debug('🔍 BlockersAndUpdatesPanel - Debug:', {
       rawBlockersCount: rawBlockers?.length || 0,
       filteredBlockersCount: blockers?.length || 0,
       loading,
@@ -87,7 +88,7 @@ export const BlockersAndUpdatesPanel = () => {
           variant: 'destructive',
         });
       } else {
-        console.log('✅ Resolution verified:', resolutionCheck[0]);
+        logger.debug('✅ Resolution verified:', resolutionCheck[0]);
       }
       
       // Update local state
