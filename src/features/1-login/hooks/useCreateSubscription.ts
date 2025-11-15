@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrg } from './useCurrentOrg';
+import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
 
 interface CreateSubscriptionRequest {
   plan_id?: string;
@@ -105,10 +106,14 @@ export const useCreateSubscription = () => {
     onSuccess: (data) => {
       toast.success(data.message);
       
-      // Refresh relevant queries including subscription expiry check
-      queryClient.invalidateQueries({ queryKey: ['organization-subscription'] });
-      queryClient.invalidateQueries({ queryKey: ['subscription-status'] });
-      queryClient.invalidateQueries({ queryKey: ['subscription-expiry', organizationId] });
+      // OPTIMIZED: Use standardized query key for cache invalidation
+      // This ensures both useOptimizedSubscription and useSubscriptionExpiry get updated
+      if (organizationId) {
+        queryClient.invalidateQueries({ 
+          queryKey: optimizedQueryKeys.subscription.status(organizationId),
+          refetchType: 'active' // Immediately refetch active queries
+        });
+      }
       
       // Store subscription creation flag and redirect to employee welcome
       sessionStorage.setItem('subscriptionJustCreated', 'true');

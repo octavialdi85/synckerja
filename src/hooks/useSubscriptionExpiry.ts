@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { queryManager } from '@/utils/queryManager';
+import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
+import { useMemo } from 'react';
+import type { SubscriptionStatus } from '@/features/10-management/hooks/useOptimizedSubscription';
 
 export interface SubscriptionExpiryStatus {
   isExpired: boolean;
@@ -16,148 +18,128 @@ export interface SubscriptionExpiryStatus {
 
 /**
  * Hook to check if subscription or trial has expired
- * Checks both trial_end_date and subscription_end_date from organization_subscriptions table
- * Now with aggressive caching and query deduplication
+ * OPTIMIZED: Now uses shared query from useOptimizedSubscription to eliminate duplicate RPC calls
+ * This ensures React Query automatically deduplicates queries and shares cache
  */
 export const useSubscriptionExpiry = () => {
   const { organizationId, loading: orgLoading } = useCurrentOrg();
 
-  const {
-    data: expiryStatus,
-    isLoading,
-    error
-  } = useQuery({
-    queryKey: ['subscription-expiry', organizationId],
-    queryFn: async (): Promise<SubscriptionExpiryStatus> => {
+  // Use shared query key to leverage React Query's automatic deduplication
+  // This ensures we use the same cache as useOptimizedSubscription
+  const queryKey = optimizedQueryKeys.subscription.status(organizationId || '');
+
+  // Get subscription status from shared cache (same query as useOptimizedSubscription)
+  // React Query will automatically deduplicate if useOptimizedSubscription is also used
+  const { data: subscriptionStatus, isLoading, error } = useQuery<SubscriptionStatus | null>({
+    queryKey,
+    queryFn: async () => {
       if (!organizationId) {
-        return {
-          isExpired: false,
-          isTrialExpired: false,
-          isSubscriptionExpired: false,
-          trialEndDate: null,
-          subscriptionEndDate: null,
-          expiredDate: null,
-          daysExpired: 0,
-          status: 'checking'
-        };
+        return null;
       }
 
-      // Use query manager to deduplicate and cache this query
-      return queryManager.execute(
-        `subscription-expiry-${organizationId}`,
-        async () => {
-          // OPTIMIZATION: Use RPC function instead of direct table query
-          // The RPC function is already optimized and cached
-          let subscription: any = null;
-          
-          try {
-            const { data: rpcData, error: rpcError } = await supabase.rpc('get_subscription_status', {
-              org_id: organizationId  // Fixed: parameter name must match RPC function definition
-            });
+      // Use the same RPC call as useOptimizedSubscription for cache sharing
+      const { data, error: rpcError } = await (supabase as any).rpc('get_subscription_status', {
+        org_id: organizationId
+      });
 
-            if (!rpcError && rpcData && rpcData.length > 0) {
-              // Use RPC data (already includes all needed fields)
-              subscription = rpcData[0];
-            }
-          } catch (rpcErr) {
-            console.warn('RPC get_subscription_status failed, using fallback', rpcErr);
-          }
+      if (rpcError) {
+        console.warn('⚠️ RPC get_subscription_status failed in useSubscriptionExpiry:', rpcError);
+        return null;
+      }
 
-          // FALLBACK: If RPC failed, try direct query with timeout protection
-          if (!subscription) {
-            try {
-              const { data: directData, error: subError } = await Promise.race([
-                supabase
-                  .from('organization_subscriptions')
-                  .select('trial_end_date, subscription_end_date, is_trial, status, organization_id')
-                  .eq('organization_id', organizationId)
-                  .maybeSingle(),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Query timeout')), 5000)
-                )
-              ]) as any;
+      // Handle array response from RPC function
+      const subscriptionData = Array.isArray(data) && data && data.length > 0 ? data[0] : data;
+      
+      if (!subscriptionData) {
+        return null;
+      }
 
-              if (!subError && directData) {
-                subscription = directData;
-              }
-            } catch (fallbackErr) {
-              console.warn('Direct subscription query also failed', fallbackErr);
-            }
-          }
-
-          // If both methods failed, return safe default
-          if (!subscription) {
-            if (import.meta.env.DEV) {
-              console.warn('⚠️ Could not fetch subscription for org:', organizationId, '- Using safe default');
-            }
-            // If error, don't block access - return safe default
-            return {
-              isExpired: false,
-              isTrialExpired: false,
-              isSubscriptionExpired: false,
-              trialEndDate: null,
-              subscriptionEndDate: null,
-              expiredDate: null,
-              daysExpired: 0,
-              status: 'active' // Allow access if we can't determine status
-            };
-          }
-
-          // Continue with normal expiry check logic...
-          const now = new Date();
-          const trialEndDate = subscription.trial_end_date ? new Date(subscription.trial_end_date) : null;
-          const subscriptionEndDate = subscription.subscription_end_date ? new Date(subscription.subscription_end_date) : null;
-
-          // Check if trial expired
-          const isTrialExpired = subscription.is_trial && trialEndDate ? trialEndDate < now : false;
-
-          // Check if subscription expired
-          const isSubscriptionExpired = !subscription.is_trial && subscriptionEndDate ? subscriptionEndDate < now : false;
-
-          const isExpired = isTrialExpired || isSubscriptionExpired;
-          const expiredDate = isTrialExpired ? subscription.trial_end_date : 
-                            isSubscriptionExpired ? subscription.subscription_end_date : null;
-
-          // Calculate days expired
-          let daysExpired = 0;
-          if (expiredDate) {
-            const expDate = new Date(expiredDate);
-            daysExpired = Math.floor((now.getTime() - expDate.getTime()) / (1000 * 60 * 60 * 24));
-          }
-
-          return {
-            isExpired,
-            isTrialExpired,
-            isSubscriptionExpired,
-            trialEndDate: subscription.trial_end_date,
-            subscriptionEndDate: subscription.subscription_end_date,
-            expiredDate,
-            daysExpired,
-            status: isExpired ? 'expired' : 'active'
-          };
-        },
-        {
-          cacheTTL: 60000 // Cache for 60 seconds - subscription status doesn't change frequently
-        }
-      );
+      // Map to SubscriptionStatus format (same as useOptimizedSubscription)
+      const rawData = subscriptionData as any;
+      return {
+        status: rawData.status || 'trial',
+        plan_name: rawData.plan_name || 'Free Trial',
+        is_trial: rawData.is_trial || (rawData.status === 'trial'),
+        is_active: rawData.is_active || false,
+        is_expired: rawData.is_expired || false,
+        current_employees: rawData.employee_count || 0,
+        member_count: rawData.member_limit || (rawData.is_trial ? 2 : 1000),
+        over_limit: rawData.is_over_limit || false,
+        days_until_expiry: rawData.days_remaining || 0,
+        needs_renewal: (rawData.days_remaining || 0) <= 7,
+        end_date: rawData.end_date,
+        subscription_start_date: rawData.subscription_start_date,
+        subscription_end_date: rawData.subscription_end_date,
+        trial_end_date: rawData.trial_end_date,
+        billing_cycle: rawData.billing_cycle || 'monthly',
+        base_price_per_member: rawData.base_price_per_member || 0,
+        next_payment_date: rawData.next_payment_date,
+        employee_count: rawData.employee_count,
+        member_limit: rawData.member_limit,
+        is_over_limit: rawData.is_over_limit,
+        days_remaining: rawData.days_remaining,
+      } as SubscriptionStatus;
     },
     enabled: !orgLoading && !!organizationId,
-    staleTime: 60000, // Consider data fresh for 60 seconds
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-    retry: false // Don't retry on failure - use cached/default value
+    staleTime: 2 * 60 * 1000, // 2 minutes - same as useOptimizedSubscription for cache consistency
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    retry: false, // Don't retry on failure - use cached/default value
   });
 
+  // Map SubscriptionStatus to SubscriptionExpiryStatus format
+  const expiryStatus: SubscriptionExpiryStatus = useMemo(() => {
+    // Default values when no subscription data
+    if (!subscriptionStatus) {
+      return {
+        isExpired: false,
+        isTrialExpired: false,
+        isSubscriptionExpired: false,
+        trialEndDate: null,
+        subscriptionEndDate: null,
+        expiredDate: null,
+        daysExpired: 0,
+        status: orgLoading ? 'checking' : 'active'
+      };
+    }
+
+    // Calculate expiry status from subscription data
+    const now = new Date();
+    const trialEndDate = subscriptionStatus.trial_end_date ? new Date(subscriptionStatus.trial_end_date) : null;
+    const subscriptionEndDate = subscriptionStatus.subscription_end_date ? new Date(subscriptionStatus.subscription_end_date) : null;
+
+    // Check if trial expired
+    const isTrialExpired = subscriptionStatus.is_trial && trialEndDate ? trialEndDate < now : false;
+
+    // Check if subscription expired
+    const isSubscriptionExpired = !subscriptionStatus.is_trial && subscriptionEndDate ? subscriptionEndDate < now : false;
+
+    // Also check is_expired flag from RPC (more reliable)
+    const isExpired = subscriptionStatus.is_expired || isTrialExpired || isSubscriptionExpired;
+    
+    const expiredDate = isTrialExpired ? subscriptionStatus.trial_end_date : 
+                        isSubscriptionExpired ? subscriptionStatus.subscription_end_date : null;
+
+    // Calculate days expired
+    let daysExpired = 0;
+    if (expiredDate) {
+      const expDate = new Date(expiredDate);
+      daysExpired = Math.floor((now.getTime() - expDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    return {
+      isExpired,
+      isTrialExpired,
+      isSubscriptionExpired,
+      trialEndDate: subscriptionStatus.trial_end_date || null,
+      subscriptionEndDate: subscriptionStatus.subscription_end_date || null,
+      expiredDate,
+      daysExpired,
+      status: isExpired ? 'expired' : 'active'
+    };
+  }, [subscriptionStatus, orgLoading]);
+
   return {
-    expiryStatus: expiryStatus || {
-      isExpired: false,
-      isTrialExpired: false,
-      isSubscriptionExpired: false,
-      trialEndDate: null,
-      subscriptionEndDate: null,
-      expiredDate: null,
-      daysExpired: 0,
-      status: orgLoading ? 'checking' as const : 'active' as const
-    },
+    expiryStatus,
     isLoading: isLoading || orgLoading,
     error
   };

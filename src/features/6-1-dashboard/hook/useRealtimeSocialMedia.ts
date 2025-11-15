@@ -60,6 +60,11 @@ export const useRealtimeSocialMedia = () => {
             queryKey: ['all-social-media-links'],
             refetchType: 'active' // Force refetch for active queries
           });
+          // Invalidate batch-social-media-links for calendar view
+          queryClient.invalidateQueries({ 
+            queryKey: ['batch-social-media-links'],
+            refetchType: 'active' // Force refetch for active calendar queries
+          });
           
           console.log('✅ Links cache invalidated');
         }

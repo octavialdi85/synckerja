@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MoreVertical, Download, RefreshCw, Wifi, Calendar, ChevronLeft, ChevronRight, Image, Video } from 'lucide-react';
+import { MoreVertical, Download, RefreshCw, Wifi, Calendar, ChevronLeft, ChevronRight, Image, Video, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
@@ -25,6 +25,11 @@ interface ContentBalanceStats {
     count: number;
     percentage: number;
   };
+  completed: {
+    total: number;
+    image: number;
+    video: number;
+  };
 }
 
 interface PICProductionStats {
@@ -33,6 +38,9 @@ interface PICProductionStats {
   imageCount: number;
   videoCount: number;
   totalCount: number;
+  completedImageCount: number;
+  completedVideoCount: number;
+  completedTotalCount: number;
 }
 
 export const ContentBalanceTab: React.FC = () => {
@@ -103,7 +111,7 @@ export const ContentBalanceTab: React.FC = () => {
 
     // Filter content plans for selected month
     const monthContent = contentPlans.filter(plan => {
-      if (!plan.post_date) return false;
+      if (!plan?.post_date) return false;
       try {
         const planDate = new Date(plan.post_date);
         return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
@@ -114,20 +122,32 @@ export const ContentBalanceTab: React.FC = () => {
 
     let imageCount = 0;
     let videoCount = 0;
+    let completedImageCount = 0;
+    let completedVideoCount = 0;
 
     monthContent.forEach(plan => {
-      const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name;
+      const contentTypeName = contentTypes.find(type => type.id === plan?.content_type_id)?.name;
       const category = getContentTypeCategory(contentTypeName);
+      
+      // Check if production_approved = true for completed tracking
+      const isCompleted = plan?.production_approved === true;
       
       if (category === 'image') {
         imageCount++;
+        if (isCompleted) {
+          completedImageCount++;
+        }
       } else if (category === 'video') {
         videoCount++;
+        if (isCompleted) {
+          completedVideoCount++;
+        }
       }
       // Excluded types are not counted
     });
 
     const total = imageCount + videoCount;
+    const completedTotal = completedImageCount + completedVideoCount;
 
     return {
       total,
@@ -138,6 +158,11 @@ export const ContentBalanceTab: React.FC = () => {
       video: {
         count: videoCount,
         percentage: total > 0 ? Math.round((videoCount / total) * 100) : 0
+      },
+      completed: {
+        total: completedTotal,
+        image: completedImageCount,
+        video: completedVideoCount
       }
     };
   };
@@ -149,7 +174,7 @@ export const ContentBalanceTab: React.FC = () => {
 
     // Filter content plans for selected month with PIC Production
     const monthContent = contentPlans.filter(plan => {
-      if (!plan.post_date || !plan.pic_production_id) return false;
+      if (!plan?.post_date || !plan?.pic_production_id) return false;
       try {
         const planDate = new Date(plan.post_date);
         return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
@@ -158,28 +183,45 @@ export const ContentBalanceTab: React.FC = () => {
       }
     });
 
-    // Group by PIC Production
-    const picStatsMap = new Map<string, { picName: string; imageCount: number; videoCount: number }>();
+    // Group by PIC Production with completed tracking
+    const picStatsMap = new Map<string, { 
+      picName: string; 
+      imageCount: number; 
+      videoCount: number;
+      completedImageCount: number;
+      completedVideoCount: number;
+    }>();
 
     monthContent.forEach(plan => {
       const picId = plan.pic_production_id!;
       const picName = plan.pic_production?.full_name || `PIC ${picId}`;
-      const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name;
+      const contentTypeName = contentTypes.find(type => type.id === plan?.content_type_id)?.name;
       const category = getContentTypeCategory(contentTypeName);
+      
+      // Check if production_approved = true for completed tracking
+      const isCompleted = plan?.production_approved === true;
 
       if (!picStatsMap.has(picId)) {
         picStatsMap.set(picId, {
           picName,
           imageCount: 0,
-          videoCount: 0
+          videoCount: 0,
+          completedImageCount: 0,
+          completedVideoCount: 0
         });
       }
 
       const stats = picStatsMap.get(picId)!;
       if (category === 'image') {
         stats.imageCount++;
+        if (isCompleted) {
+          stats.completedImageCount++;
+        }
       } else if (category === 'video') {
         stats.videoCount++;
+        if (isCompleted) {
+          stats.completedVideoCount++;
+        }
       }
     });
 
@@ -189,7 +231,10 @@ export const ContentBalanceTab: React.FC = () => {
       picName: stats.picName,
       imageCount: stats.imageCount,
       videoCount: stats.videoCount,
-      totalCount: stats.imageCount + stats.videoCount
+      totalCount: stats.imageCount + stats.videoCount,
+      completedImageCount: stats.completedImageCount,
+      completedVideoCount: stats.completedVideoCount,
+      completedTotalCount: stats.completedImageCount + stats.completedVideoCount
     }));
 
     return picStatsArray.sort((a, b) => b.totalCount - a.totalCount);
@@ -245,6 +290,11 @@ export const ContentBalanceTab: React.FC = () => {
           </div>
           <div className="text-sm text-gray-600 mb-2">
             Month Distribution - Total: {contentBalance.total} content
+            {contentBalance.completed.total > 0 && (
+              <span className="ml-2 text-green-600 font-medium">
+                | {contentBalance.completed.total} completed ({contentBalance.completed.image} image, {contentBalance.completed.video} video)
+              </span>
+            )}
           </div>
         </div>
         <DropdownMenu>
@@ -380,6 +430,15 @@ export const ContentBalanceTab: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">{pic.videoCount}</span>
                     </div>
                     <span className="text-xs text-gray-500">({pic.totalCount})</span>
+                    {pic.completedTotalCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-600" />
+                        <span className="text-sm font-medium text-gray-900">{pic.completedTotalCount}</span>
+                        <span className="text-xs text-gray-900">
+                          completed ({pic.completedImageCount} image, {pic.completedVideoCount} video)
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

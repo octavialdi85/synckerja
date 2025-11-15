@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
 
 /**
  * Hook to setup realtime subscription for organization_subscriptions table
@@ -75,24 +76,19 @@ export const useSubscriptionExpiryRealtime = () => {
             console.log('📡 Subscription expiry data changed for org:', organizationId, payload.eventType);
           }
           
-          // CRITICAL: Invalidate ALL subscription-related queries for THIS specific organization
-          // This includes both subscription-expiry and subscriptionStatus queries
-          Promise.all([
-            queryClient.invalidateQueries({ 
-              queryKey: ['subscription-expiry', organizationId], // Query key includes orgId for isolation
-              refetchType: 'active' // Immediately refetch active queries
-            }),
-            queryClient.invalidateQueries({ 
-              queryKey: ['subscriptionStatus', organizationId], // Also invalidate subscriptionStatus query
-              refetchType: 'active' // Immediately refetch active queries
-            })
-          ]).then(() => {
+          // OPTIMIZED: Invalidate using standardized query key (shared by useOptimizedSubscription and useSubscriptionExpiry)
+          // Use refetchType: 'none' to let components decide when to refetch (lazy refetch)
+          // This prevents cascade invalidations and reduces unnecessary network calls
+          queryClient.invalidateQueries({ 
+            queryKey: optimizedQueryKeys.subscription.status(organizationId), // Standardized query key
+            refetchType: 'none' // Lazy refetch - components will refetch when needed
+          }).then(() => {
             if (import.meta.env.DEV) {
-              console.log('✅ All subscription caches invalidated for org:', organizationId);
+              console.log('✅ Subscription cache invalidated for org:', organizationId, '(lazy refetch)');
             }
           }).catch((error) => {
             if (import.meta.env.DEV) {
-              console.warn('⚠️ Error invalidating subscription caches:', error);
+              console.warn('⚠️ Error invalidating subscription cache:', error);
             }
           });
         }

@@ -79,33 +79,35 @@ export const useUserData = (): UserData => {
       
       console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
       
-      // Parallel fetch of profile, role data, and photo data
-      const [profileResult, roleResult, photoResult] = await Promise.all([
+      // OPTIMIZED: Use Promise.allSettled for better error handling
+      // This ensures all queries run in parallel, even if some fail
+      const [profileResult, roleResult, photoDetailsResult, photoEmployeeResult] = await Promise.allSettled([
         supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
           .maybeSingle(),
         supabase.rpc('get_user_role_in_active_org'),
-        // Get photo from user_profile_details and employees tables
-        Promise.all([
-          supabase
-            .from('user_profile_details')
-            .select('profile_photo_url')
-            .eq('profile_id', userId)
-            .maybeSingle(),
-          supabase
-            .from('employees')
-            .select('profile_photo_url')
-            .eq('user_id', userId)
-            .maybeSingle()
-        ])
+        supabase
+          .from('user_profile_details')
+          .select('profile_photo_url')
+          .eq('profile_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('employees')
+          .select('profile_photo_url')
+          .eq('user_id', userId)
+          .maybeSingle()
       ]);
 
-      let profileData: Profile | null = profileResult.data;
-      
-      if (profileResult.error) {
-        console.error("❌ useUserData: Profile error:", profileResult.error);
+      // Process profile result
+      let profileData: Profile | null = null;
+      if (profileResult.status === 'fulfilled' && profileResult.value.data) {
+        profileData = profileResult.value.data;
+        console.log("✅ useUserData: Profile fetched:", profileData);
+      } else {
+        const error = profileResult.status === 'rejected' ? profileResult.reason : profileResult.value.error;
+        console.error("❌ useUserData: Profile error:", error);
         // Create fallback profile from auth data with all required fields
         profileData = {
           id: userId,
@@ -119,22 +121,15 @@ export const useUserData = (): UserData => {
           organization_created: false,
           profile_photo_url: null
         };
-      } else {
-        console.log("✅ useUserData: Profile fetched:", profileData);
       }
 
-      // Get photo URL from user_profile_details or employees table
-      const [detailsPhoto, employeePhoto] = photoResult;
+      // OPTIMIZED: Get photo URL from first successful result
+      // Try user_profile_details first, then fallback to employees
       let photoUrl: string | null = null;
-      
-      // @ts-ignore - Supabase response type issues
-      if (detailsPhoto?.data?.profile_photo_url) {
-        // @ts-ignore
-        photoUrl = detailsPhoto.data.profile_photo_url;
-      // @ts-ignore
-      } else if (employeePhoto?.data?.profile_photo_url) {
-        // @ts-ignore
-        photoUrl = employeePhoto.data.profile_photo_url;
+      if (photoDetailsResult.status === 'fulfilled' && photoDetailsResult.value.data?.profile_photo_url) {
+        photoUrl = photoDetailsResult.value.data.profile_photo_url;
+      } else if (photoEmployeeResult.status === 'fulfilled' && photoEmployeeResult.value.data?.profile_photo_url) {
+        photoUrl = photoEmployeeResult.value.data.profile_photo_url;
       }
       
       // Add photo URL to profile data
@@ -147,12 +142,14 @@ export const useUserData = (): UserData => {
 
       setProfile(profileData);
 
-      // Get role data
-      const roleData = roleResult.error ? null : roleResult.data as UserRole;
-      if (roleResult.error) {
-        console.error("❌ useUserData: Role fetch error:", roleResult.error);
-      } else {
+      // Process role result
+      let roleData: UserRole = null;
+      if (roleResult.status === 'fulfilled' && !roleResult.value.error) {
+        roleData = roleResult.value.data as UserRole;
         console.log("✅ useUserData: Role in active org:", roleData);
+      } else {
+        const error = roleResult.status === 'rejected' ? roleResult.reason : roleResult.value.error;
+        console.error("❌ useUserData: Role fetch error:", error);
       }
       setUserRole(roleData);
 

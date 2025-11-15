@@ -50,40 +50,76 @@ export const useOptimizedSubscription = () => {
   const queryClient = useQueryClient();
   const hasInitializedRef = useRef(false);
   const lastOrgIdRef = useRef<string | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // OPTIMIZED: Clear cache when organization becomes null to prevent data leak
+  useEffect(() => {
+    if (!organizationId) {
+      // Clear subscription cache when org is null
+      queryClient.removeQueries({
+        queryKey: optimizedQueryKeys.subscription.status('')
+      });
+      lastOrgIdRef.current = null;
+      hasInitializedRef.current = false;
+      return;
+    }
+  }, [organizationId, queryClient]);
 
-  // CRITICAL: Invalidate and refetch subscription query when organization changes
-  // This ensures we get fresh data from Supabase for the new organization
+  // OPTIMIZED: Debounced organization change detection to prevent race conditions
+  // This ensures we only invalidate once per organization change, even with rapid changes
   useEffect(() => {
     if (!organizationId) return;
 
-    // Avoid duplicate invalidations during React strict-mode double effects
+    // Clear any pending timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    // Skip if already initialized for this org (prevents React strict mode double effect)
     if (hasInitializedRef.current && lastOrgIdRef.current === organizationId) {
       return;
     }
 
-    hasInitializedRef.current = true;
-    lastOrgIdRef.current = organizationId;
+    // Debounce invalidation to prevent rapid-fire invalidations
+    timeoutRef.current = setTimeout(() => {
+      // Double-check org hasn't changed during debounce
+      if (lastOrgIdRef.current !== organizationId) {
+        const previousOrgId = lastOrgIdRef.current;
+        lastOrgIdRef.current = organizationId;
+        hasInitializedRef.current = true;
 
-    console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
-    
-    // Remove stale queries from previous organizations
-    queryClient.removeQueries({
-      predicate: (query) => {
-        const queryKey = query.queryKey;
-        return Array.isArray(queryKey) && 
-               queryKey[0] === 'subscriptionStatus' && 
-               queryKey[1] !== organizationId; // Remove queries for other organizations
+        console.log('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
+        
+        // Remove stale queries from previous organizations
+        if (previousOrgId) {
+          queryClient.removeQueries({
+            predicate: (query) => {
+              const queryKey = query.queryKey;
+              return Array.isArray(queryKey) && 
+                     queryKey[0] === 'subscriptionStatus' && 
+                     queryKey[1] === previousOrgId; // Remove queries for previous organization
+            }
+          });
+        }
+        
+        // Invalidate and force refetch subscription data for new organization
+        queryClient.invalidateQueries({ 
+          queryKey: optimizedQueryKeys.subscription.status(organizationId),
+          refetchType: 'active' // Immediately refetch active queries
+        });
+        
+        console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
       }
-    });
-    
-    // Invalidate and force refetch subscription data for new organization
-    queryClient.invalidateQueries({ 
-      queryKey: optimizedQueryKeys.subscription.status(organizationId),
-      refetchType: 'active' // Immediately refetch active queries
-    });
-    
-    console.log('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
+    }, 150); // 150ms debounce to prevent rapid-fire invalidations
+
+    // Cleanup timeout on unmount or org change
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, [organizationId, queryClient]);
 
   // Optimized subscription status query with proper caching and better error handling
@@ -157,11 +193,11 @@ export const useOptimizedSubscription = () => {
       return mappedData;
     },
     enabled: !!organizationId,
-    staleTime: 30 * 1000, // 30 seconds - shorter stale time for more accurate data when switching organizations
-    gcTime: 5 * 60 * 1000, // 5 minutes cache
-    refetchOnWindowFocus: true, // Refetch on window focus for fresh data
-    refetchOnMount: true, // Enable mount refetch for fresh data
-    refetchOnReconnect: true, // Refetch when network reconnects
+    staleTime: 2 * 60 * 1000, // 2 minutes - subscription doesn't change frequently, reduces unnecessary refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes cache - keep longer for better performance
+    refetchOnWindowFocus: false, // Disabled - use staleTime instead to reduce unnecessary refetches
+    refetchOnMount: false, // Disabled - use staleTime instead, real-time updates will handle critical changes
+    refetchOnReconnect: true, // Keep enabled for network recovery
     retry: (failureCount, error: any) => {
       console.error('🔄 Query retry:', failureCount, error);
       // Don't retry on 4xx errors

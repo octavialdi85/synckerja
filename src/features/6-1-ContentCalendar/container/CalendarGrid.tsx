@@ -1,6 +1,7 @@
-import React from 'react';
-import { Plus } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Plus, ExternalLink } from 'lucide-react';
 import { isSameDay } from 'date-fns';
+import { useBatchSocialMediaLinks } from '../hooks/useBatchSocialMediaLinks';
 
 const indonesianDays = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
@@ -17,6 +18,36 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   onDayClick,
   onPlanClick
 }) => {
+  // Extract plan IDs for green cards (done = true) to fetch links
+  // Extract directly from calendarDays to avoid dependency on getDayInfo function
+  const planIdsForLinks = useMemo(() => {
+    const ids: string[] = [];
+    calendarDays.forEach(({ date }) => {
+      const dayInfo = getDayInfo(date);
+      dayInfo.plans?.forEach((plan: any) => {
+        // Only green cards (done = true) need social_media_links
+        if (plan?.approved && plan?.production_approved && plan?.done && plan?.id) {
+          ids.push(plan.id);
+        }
+      });
+    });
+    return [...new Set(ids)]; // Remove duplicates
+  }, [calendarDays, getDayInfo]);
+
+  // Batch fetch links for green cards
+  const { data: linksByPlanId = {} } = useBatchSocialMediaLinks(planIdsForLinks);
+
+  // Helper function to validate URL
+  const isValidUrl = (url: string | null | undefined): boolean => {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <div className="relative">
       {/* Days of week header - Fixed positioning */}
@@ -53,13 +84,14 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 <div className="flex-1 space-y-1 overflow-y-auto seamless-scroll">
                   {dayInfo.plans.map((plan: any, planIndex: number) => {
                     // Determine individual plan color based on status
-                    const approved = plan.approved === true;
-                    const productionApproved = plan.production_approved === true;
-                    const done = plan.done === true;
-                    const onTimeStatus = plan.on_time_status;
+                    const approved = plan?.approved === true;
+                    const productionApproved = plan?.production_approved === true;
+                    const done = plan?.done === true;
+                    const onTimeStatus = plan?.on_time_status;
                     
                     // Check if on_time_status is not "Ontime" and not NULL/Empty
                     const hasLateStatus = onTimeStatus && 
+                                         typeof onTimeStatus === 'string' &&
                                          onTimeStatus.trim() !== '' && 
                                          onTimeStatus !== 'Ontime' &&
                                          onTimeStatus.toLowerCase().includes('late');
@@ -74,6 +106,15 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     } else if (approved && productionApproved && done) {
                       planStatus = 'green';
                     }
+                    
+                    // Get links for green cards (with null safety)
+                    const planLinks = (plan?.id && linksByPlanId[plan.id]) || [];
+                    
+                    // Check yellow card for google_drive_link (with validation)
+                    const hasGoogleDriveLink = planStatus === 'yellow' && 
+                                             productionApproved && 
+                                             plan?.google_drive_link &&
+                                             isValidUrl(plan.google_drive_link);
                     
                     return (
                       <div 
@@ -110,9 +151,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           'text-blue-700'
                         }`}>
                           {[
-                            plan.service?.name,
-                            plan.sub_service?.name,
-                            plan.content_pillar?.name
+                            plan?.service?.name,
+                            plan?.sub_service?.name,
+                            plan?.content_pillar?.name
                           ].filter(Boolean).join(' - ') || 'No Service'}
                         </div>
                         
@@ -124,7 +165,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           planStatus === 'red' ? 'text-white' :
                           'text-blue-900'
                         }`}>
-                          {plan.title || 'Untitled'}
+                          {plan?.title || 'Untitled'}
                         </div>
                         
                         {/* PIC */}
@@ -135,8 +176,69 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           planStatus === 'red' ? 'text-red-100' :
                           'text-blue-600'
                         }`}>
-                          PIC: {plan.pic?.full_name || 'Unassigned'}
+                          PIC: {plan?.pic?.full_name || 'Unassigned'}
                         </div>
+                        
+                        {/* NEW: Green cards - Display all social media links */}
+                        {planStatus === 'green' && planLinks.length > 0 && (
+                          <div className="mt-1.5 pt-1.5 border-t border-white/20">
+                            <div className="text-[9px] font-semibold text-emerald-50 mb-0.5">
+                              Links:
+                            </div>
+                            <div className="space-y-0.5 max-h-16 overflow-y-auto">
+                              {planLinks
+                                .filter(link => link?.url && isValidUrl(link.url)) // Filter invalid URLs
+                                .slice(0, 3) // Limit to 3 links to prevent overflow
+                                .map((link) => (
+                                <a
+                                  key={link.id}
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Only stop on link click, not card click
+                                  }}
+                                  className="flex items-center gap-1 text-[9px] text-emerald-100 hover:text-white hover:underline truncate"
+                                  title={`${link.platform || 'Link'}: ${link.url}`}
+                                >
+                                  <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
+                                  <span className="truncate">
+                                    {link.platform || 'Link'}: {link.url.length > 25 ? link.url.substring(0, 25) + '...' : link.url}
+                                  </span>
+                                </a>
+                              ))}
+                              {planLinks.filter(link => link?.url && isValidUrl(link.url)).length > 3 && (
+                                <div className="text-[8px] text-emerald-200">
+                                  +{planLinks.filter(link => link?.url && isValidUrl(link.url)).length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* NEW: Yellow cards - Display google_drive_link */}
+                        {hasGoogleDriveLink && (
+                          <div className="mt-1.5 pt-1.5 border-t border-amber-300/20">
+                            <div className="text-[9px] font-semibold text-gray-800 mb-0.5">
+                              Preview:
+                            </div>
+                            <a
+                              href={plan.google_drive_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Only stop on link click, not card click
+                              }}
+                              className="flex items-center gap-1 text-[9px] text-gray-700 hover:text-gray-900 hover:underline truncate"
+                              title={plan.google_drive_link}
+                            >
+                              <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
+                              <span className="truncate">
+                                {plan.google_drive_link.length > 30 ? plan.google_drive_link.substring(0, 30) + '...' : plan.google_drive_link}
+                              </span>
+                            </a>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
