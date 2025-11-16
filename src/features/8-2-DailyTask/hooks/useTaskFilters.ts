@@ -102,58 +102,96 @@ export const useTaskFilters = ({
       if (!filters.dateRange || filters.dateRange === 'all') {
         return true;
       }
-      
-      // If task has no due_date and date filter is active, exclude it
-      if (!task.due_date) {
-        return false;
-      }
 
-      const taskDueDate = new Date(task.due_date);
       const now = new Date();
 
-      switch (filters.dateRange) {
-        case 'today':
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          return taskDueDate >= today && taskDueDate < tomorrow;
+      // Helper: determine if a given ISO date string falls within the active filter
+      const isInActiveRange = (isoDate?: string | null): boolean => {
+        if (!isoDate) return false;
+        const date = new Date(isoDate);
 
-        case 'yesterday':
-          const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          const today2 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          return taskDueDate >= yesterday && taskDueDate < today2;
-
-        case 'this_week':
-          const weekStart = new Date(now);
-          weekStart.setDate(now.getDate() - now.getDay());
-          weekStart.setHours(0, 0, 0, 0);
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekStart.getDate() + 7);
-          return taskDueDate >= weekStart && taskDueDate < weekEnd;
-
-        case 'this_month':
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-          return taskDueDate >= monthStart && taskDueDate < monthEnd;
-
-        case 'last_month':
-          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-          return taskDueDate >= lastMonthStart && taskDueDate < lastMonthEnd;
-
-        case 'custom':
-          if (filters.customStartDate && filters.customEndDate) {
-            const startDate = new Date(filters.customStartDate);
-            startDate.setHours(0, 0, 0, 0);
-            const endDate = new Date(filters.customEndDate);
-            endDate.setHours(23, 59, 59, 999);
-            return taskDueDate >= startDate && taskDueDate <= endDate;
+        switch (filters.dateRange) {
+          case 'today': {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const end = new Date(start);
+            end.setDate(end.getDate() + 1);
+            return date >= start && date < end;
           }
-          return true;
+          case 'yesterday': {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return date >= start && date < end;
+          }
+          case 'this_week': {
+            const start = new Date(now);
+            start.setDate(now.getDate() - now.getDay());
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 7);
+            return date >= start && date < end;
+          }
+          case 'this_month': {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            return date >= start && date < end;
+          }
+          case 'last_month': {
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 1);
+            return date >= start && date < end;
+          }
+          case 'custom': {
+            if (filters.customStartDate && filters.customEndDate) {
+              const start = new Date(filters.customStartDate);
+              start.setHours(0, 0, 0, 0);
+              const end = new Date(filters.customEndDate);
+              end.setHours(23, 59, 59, 999);
+              return date >= start && date <= end;
+            }
+            return true;
+          }
+          default:
+            return true;
+        }
+      };
 
-        default:
-          return true;
+      // Helper: determine overdue (date in past) for task or step
+      const isOverdueDate = (isoDate?: string | null): boolean => {
+        if (!isoDate) return false;
+        const date = new Date(isoDate);
+        return date.getTime() < now.getTime();
+      };
+
+      // Match if task-level due date is in range
+      if (isInActiveRange(task.due_date)) {
+        return true;
       }
+
+      // Also match if ANY step-level assigned due date is in range
+      const stepHasDueInRange =
+        Array.isArray(task.steps) &&
+        task.steps.some((step) => isInActiveRange(step.assigned_due_date || null));
+
+      if (stepHasDueInRange) {
+        return true;
+      }
+
+      // Include overdue across ranges:
+      // - Task overdue (task.due_date past) and task not completed
+      if (isOverdueDate(task.due_date) && (task.status !== 'completed')) {
+        return true;
+      }
+      // - Any step overdue (step.assigned_due_date past) and step not completed
+      const hasOverdueStep =
+        Array.isArray(task.steps) &&
+        task.steps.some(
+          (step) => isOverdueDate(step.assigned_due_date || null) && step.is_completed !== true
+        );
+      if (hasOverdueStep) {
+        return true;
+      }
+
+      return false;
     },
     [filters.dateRange, filters.customStartDate, filters.customEndDate]
   );
@@ -226,31 +264,99 @@ export const useTaskFilters = ({
         return [];
       }
 
+      // Helper: check if a given ISO date is within the active filter range
+      const isInActiveRange = (isoDate?: string | null): boolean => {
+        if (!filters.dateRange || filters.dateRange === 'all') return true;
+        if (!isoDate) return false;
+        const now = new Date();
+        const date = new Date(isoDate);
+        switch (filters.dateRange) {
+          case 'today': {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const end = new Date(start);
+            end.setDate(end.getDate() + 1);
+            return date >= start && date < end;
+          }
+          case 'yesterday': {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return date >= start && date < end;
+          }
+          case 'this_week': {
+            const start = new Date(now);
+            start.setDate(now.getDate() - now.getDay());
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 7);
+            return date >= start && date < end;
+          }
+          case 'this_month': {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            return date >= start && date < end;
+          }
+          case 'last_month': {
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 1);
+            return date >= start && date < end;
+          }
+          case 'custom': {
+            if (filters.customStartDate && filters.customEndDate) {
+              const start = new Date(filters.customStartDate);
+              start.setHours(0, 0, 0, 0);
+              const end = new Date(filters.customEndDate);
+              end.setHours(23, 59, 59, 999);
+              return date >= start && date <= end;
+            }
+            return true;
+          }
+          default:
+            return true;
+        }
+      };
+
       // Priority 1: Individual PIC filter
+      let steps = task.steps;
       if (filters.pic) {
-        return task.steps.filter(
+        steps = steps.filter(
           (step) => step.assigned_employee?.id === filters.pic
         );
       }
 
-      // Priority 2: All PIC mode - show ALL steps
-      if (filters.myTask === 'all') {
-        return task.steps;
-      }
+      // Priority 2: All PIC mode - keep current filtered list
 
       // Priority 3: My Task mode
       // If task is assigned at task level to current employee, show ALL steps
       if (task.assigned_to === currentEmployeeId) {
-        return task.steps;
+        // keep steps as-is
+      } else {
+        // Otherwise, show only steps assigned to current employee or created by user or has assigned substeps
+        steps = steps.filter(
+          (step) =>
+            step.assigned_to === currentEmployeeId ||
+            step.created_by === currentUserId ||
+            step.has_assigned_substeps
+        );
       }
 
-      // Otherwise, show only steps assigned to current employee or created by user or has assigned substeps
-      return task.steps.filter(
-        (step) =>
-          step.assigned_to === currentEmployeeId ||
-          step.created_by === currentUserId ||
-          step.has_assigned_substeps
-      );
+      // Apply date range filter at step level:
+      // When a date filter is active, show steps whose assigned_due_date falls in range
+      // OR steps that are overdue (assigned_due_date in past) and not completed
+      if (filters.dateRange && filters.dateRange !== 'all') {
+        const now = new Date();
+        const isOverdue = (step: TaskStep): boolean => {
+          if (!step.assigned_due_date) return false;
+          const due = new Date(step.assigned_due_date);
+          // consider overdue if due date has passed and step not completed
+          return due.getTime() < now.getTime() && step.is_completed !== true;
+        };
+        steps = steps.filter((step) => {
+          const inRange = isInActiveRange(step.assigned_due_date || null);
+          return inRange || isOverdue(step);
+        });
+      }
+
+      return steps;
     },
     [filters, currentEmployeeId, currentUserId]
   );

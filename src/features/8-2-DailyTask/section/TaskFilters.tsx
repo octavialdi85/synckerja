@@ -213,10 +213,10 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         value={filters.dateRange || "all"} 
         onValueChange={handleDateRangeChange}
       >
-        <SelectTrigger className="w-40 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-2">
+        <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] border border-gray-200 rounded-lg whitespace-nowrap overflow-hidden">
+          <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
             <CalendarIcon className="h-4 w-4 text-gray-500" />
-            <SelectValue placeholder="All Dates">
+            <SelectValue placeholder="All Dates" className="truncate">
               {getDateRangeDisplayText()}
             </SelectValue>
           </div>

@@ -175,6 +175,24 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
     return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'inline-flex items-center whitespace-normal break-words bg-red-100 text-red-700 border border-red-200 rounded px-1.5 py-0.5' };
   };
 
+  // Compute overdue days label for active (not completed) steps
+  const getOverdueLabel = (): { text: string; className: string } | null => {
+    if (!step.assigned_due_date || isCompleted) return null;
+    const now = new Date();
+    const dueEnd = new Date(step.assigned_due_date);
+    // consider overdue if now is after 23:59:59 on due date
+    dueEnd.setHours(23, 59, 59, 999);
+    if (now.getTime() <= dueEnd.getTime()) return null;
+    const diffMs = now.getTime() - dueEnd.getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const overdueDays = Math.ceil(diffMs / dayMs);
+    return {
+      text: `Overdue ${overdueDays} day${overdueDays > 1 ? 's' : ''}`,
+      className:
+        'inline-flex items-center whitespace-normal break-words bg-red-50 text-red-700 border border-red-200 rounded px-1.5 py-0.5',
+    };
+  };
+
   // Load history count and link count for badges
   useEffect(() => {
     const fetchCounts = async () => {
@@ -801,6 +819,10 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                     {step.assigned_at && (
                       <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
                     )}
+                    {/* Overdue badge for active steps - placed to the right of Assigned */}
+                    {getOverdueLabel() && (
+                      <span className={`ml-0 ${getOverdueLabel()!.className}`}>{getOverdueLabel()!.text}</span>
+                    )}
                     {/* Finished timestamp - only show when completed */}
                     {/* Use completed_at from task_steps table for finished date */}
                     {isCompleted && completedAt && (
@@ -831,6 +853,10 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 )}
                 {step.assigned_at && (
                   <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                )}
+                {/* Overdue badge for active steps - placed to the right of Assigned */}
+                {getOverdueLabel() && (
+                  <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
                 )}
                 {getFinishStatusLabel() && (
                   <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
