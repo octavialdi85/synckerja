@@ -35,9 +35,19 @@ export const ContentPillarManager: React.FC<ContentPillarManagerProps> = React.m
   const loadContentPillars = useCallback(async () => {
     if (hasLoadedRef.current) return; // Prevent duplicate loads
     hasLoadedRef.current = true;
-    console.log('Loading content pillars...');
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('pillar-load', 3000, () => logger.debug('Loading content pillars...'));
+    } catch {
+      console.log('Loading content pillars...');
+    }
     const data = await fetchData();
-    console.log('Content pillars loaded:', data);
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('pillar-loaded', 3000, () => logger.debug('Content pillars loaded:', data));
+    } catch {
+      console.log('Content pillars loaded:', data);
+    }
     setContentPillars(data as ContentPillar[]);
   }, [fetchData]);
 

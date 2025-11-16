@@ -31,9 +31,19 @@ export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDat
   const loadServices = useCallback(async () => {
     if (hasLoadedRef.current) return; // Prevent duplicate loads
     hasLoadedRef.current = true;
-    console.log('Loading services...');
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('svc-load', 3000, () => logger.debug('Loading services...'));
+    } catch {
+      console.log('Loading services...');
+    }
     const data = await fetchData();
-    console.log('Services loaded:', data);
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('svc-loaded', 3000, () => logger.debug('Services loaded:', data));
+    } catch {
+      console.log('Services loaded:', data);
+    }
     setServices(data as Service[]);
   }, [fetchData]);
 

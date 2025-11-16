@@ -155,7 +155,12 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         data = result.data;
         error = result.error;
       } catch (timeoutError: any) {
-        console.warn('⚠️ Individual objectives query timed out, using empty array');
+        try {
+          const { logger } = await import('@/config/logger');
+          logger.rateLimited('indiv-obj-timeout', 60000, () => logger.warn('⚠️ Individual objectives query timed out, using empty array'));
+        } catch {
+          console.warn('⚠️ Individual objectives query timed out, using empty array');
+        }
         return []; // Graceful degradation - return empty array
       }
 

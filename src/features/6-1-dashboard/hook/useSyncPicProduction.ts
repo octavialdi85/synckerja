@@ -177,39 +177,23 @@ export const useSyncPicProduction = () => {
       
       allPlans.forEach(plan => {
         const latestAssignment = latestAssignments.get(plan.id);
-        let newPicProductionId: string | null = null;
-        let newPicProductionSource: string | null = null;
-        
-        if (latestAssignment) {
-          // Priority: task_steps_assigned > google_drive_link
-          // Always use assignment if it exists, even if plan already has pic_production_id from Google Drive Link
-          newPicProductionId = latestAssignment.employee_id;
-          newPicProductionSource = 'task_steps_assigned';
-        } else if (plan.google_drive_link && plan.pic_production_id) {
-          // If has Google Drive Link and pic_production_id, set source to 'google_drive_link'
-          // This handles existing data that was set from Google Drive Link but source is null
-          newPicProductionId = plan.pic_production_id;
-          newPicProductionSource = 'google_drive_link';
-        } else if (!plan.google_drive_link && !plan.pic_production_id) {
-          // No assignment, no Google Drive Link, and no pic_production_id
-          // Ensure both are null
-          newPicProductionId = null;
-          newPicProductionSource = null;
-        } else {
-          // Edge case: has pic_production_id but no assignment and no Google Drive Link
-          // This shouldn't happen, but clear it if it does
-          newPicProductionId = null;
-          newPicProductionSource = null;
-        }
-        
-        // Only update if changed
-        if (newPicProductionId !== plan.pic_production_id || newPicProductionSource !== plan.pic_production_source) {
+
+        // RULE: Jangan auto-populate dari assignment via batch sync.
+        // Auto-populate PIC Production hanya boleh terjadi dari flow TITLE (memanggil syncPicProduction eksplisit).
+        // Jadi: Abaikan latestAssignment di sini, kecuali kita sedang menyamakan source 'google_drive_link'.
+
+        // Jika ada Google Drive Link dan sudah ada pic_production_id, pastikan sumbernya 'google_drive_link'.
+        if (plan.google_drive_link && plan.pic_production_id && plan.pic_production_source !== 'google_drive_link') {
           updates.push({
             id: plan.id,
-            pic_production_id: newPicProductionId,
-            pic_production_source: newPicProductionSource
+            pic_production_id: plan.pic_production_id,
+            pic_production_source: 'google_drive_link'
           });
+          return;
         }
+
+        // Jika tidak ada GDrive dan tidak ada assignment yang ingin kita proses di batch,
+        // jangan sentuh nilai yang ada agar tidak menimpa hasil flow TITLE.
       });
       
       if (updates.length === 0) {

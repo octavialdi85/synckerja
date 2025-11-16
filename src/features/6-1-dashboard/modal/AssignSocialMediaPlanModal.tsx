@@ -25,6 +25,7 @@ interface AssignSocialMediaPlanModalProps {
   onAssign: (assignment: { employeeId: string; assignedAt: string }) => void;
   dueDate: string | null; // Due date from post_date in social_media_plans
   taskTitle: string;
+  disabledReason?: string; // when present, disable assign and show message
 }
 
 export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProps> = ({
@@ -32,7 +33,8 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
   onOpenChange,
   onAssign,
   dueDate,
-  taskTitle
+  taskTitle,
+  disabledReason
 }) => {
   const { data: employees = [], isLoading: loadingEmployees } = useAvailableEmployees();
   const { data: currentEmployee } = useCurrentEmployee();
@@ -98,6 +100,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
   
   // Handle assign button click
   const handleAssignClick = () => {
+    if (disabledReason) return;
     if (!selectedEmployeeId) {
       toast.error('Please select an employee');
       return;
@@ -128,6 +131,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
   
   // Handle confirmation
   const handleConfirm = () => {
+    if (disabledReason) return;
     if (!selectedEmployeeId) return;
     
     setIsAssigning(true);
@@ -154,6 +158,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
   
   // Handle auto-assign (when no employee is selected)
   const handleAutoAssign = () => {
+    if (disabledReason) return;
     if (!currentEmployee) {
       toast.error('Current employee not found');
       return;
@@ -199,6 +204,12 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
                 Assign this task step to an employee
               </DialogDescription>
             </DialogHeader>
+          
+          {disabledReason && (
+            <div className="px-6 py-3 text-xs text-amber-700 bg-amber-50 border-y border-amber-200">
+              {disabledReason}
+            </div>
+          )}
             
             <div className="flex-1 overflow-y-auto seamless-scroll space-y-4 mt-4 px-6 min-h-0 w-full">
             {/* Task Title Info */}
@@ -304,7 +315,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
                   size="sm"
                   onClick={handleAutoAssign}
                   className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  disabled={isAssigning}
+                  disabled={isAssigning || !!disabledReason}
                 >
                   <User className="w-4 h-4 mr-2" />
                   Auto-assign to me
@@ -332,7 +343,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
             </Button>
             <Button
               onClick={handleAssignClick}
-              disabled={!selectedEmployeeId || !isDateValid || isAssigning}
+              disabled={!!disabledReason || !selectedEmployeeId || !isDateValid || isAssigning}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isAssigning ? (

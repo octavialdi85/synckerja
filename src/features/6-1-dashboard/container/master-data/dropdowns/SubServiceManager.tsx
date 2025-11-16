@@ -35,9 +35,19 @@ export const SubServiceManager: React.FC<SubServiceManagerProps> = React.memo(({
   const loadSubServices = useCallback(async () => {
     if (hasLoadedRef.current) return; // Prevent duplicate loads
     hasLoadedRef.current = true;
-    console.log('Loading sub services...');
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('subsvc-load', 3000, () => logger.debug('Loading sub services...'));
+    } catch {
+      console.log('Loading sub services...');
+    }
     const data = await fetchData();
-    console.log('Sub services loaded:', data);
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.rateLimited('subsvc-loaded', 3000, () => logger.debug('Sub services loaded:', data));
+    } catch {
+      console.log('Sub services loaded:', data);
+    }
     setSubServices(data as SubService[]);
   }, [fetchData]);
 

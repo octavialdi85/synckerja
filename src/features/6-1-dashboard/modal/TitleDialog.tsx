@@ -10,6 +10,8 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSyncPicProduction } from '../hook/useSyncPicProduction';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface TitleDialogProps {
   isOpen: boolean;
@@ -30,6 +32,8 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   const [isDailyTaskDialogOpen, setIsDailyTaskDialogOpen] = useState(false);
   const { organizationId } = useCurrentOrg();
   const { syncPicProduction } = useSyncPicProduction();
+  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  const { language } = useAppTranslation();
 
   // ===== OPTIMIZATION 1: Cache planData with React Query =====
   const { data: planData, isLoading: isLoadingPlanData } = useQuery({
@@ -41,6 +45,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         .from('social_media_plans')
         .select(`
           post_date,
+          approved,
           service:services(name),
           content_type:content_types(name)
         `)
@@ -54,6 +59,34 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 10 * 60 * 1000, // 10 minutes
   });
+
+  // Check if plan already has any task_step (for exception rule)
+  const { data: hasExistingStep } = useQuery({
+    queryKey: ['plan-has-step', socialMediaPlanId],
+    queryFn: async () => {
+      if (!socialMediaPlanId) return false;
+      const { data } = await supabase
+        .from('task_steps')
+        .select('id')
+        .eq('social_media_plan_id', socialMediaPlanId)
+        .limit(1);
+      return !!(data && data.length > 0);
+    },
+    enabled: !!socialMediaPlanId && isOpen
+  });
+
+  // Bilingual message helper via LanguageProvider translations
+  // Fallback to English if translation key not found
+  const approvedGuardMessage = React.useMemo(() => {
+    const isApproved = !!planData?.approved;
+    const isEmployee = !(isOwner || isAdmin);
+    if (isEmployee && !isApproved && !hasExistingStep) {
+      return language === 'id'
+        ? 'Konten belum di-approve. Silakan minta approval terlebih dahulu.'
+        : 'Content is not approved yet. Please request approval first.';
+    }
+    return undefined;
+  }, [planData?.approved, hasExistingStep, isOwner, isAdmin, language]);
 
   // ===== OPTIMIZATION 2: Memoize formattedTitle calculation =====
   const formattedTitle = useMemo(() => {
@@ -548,6 +581,8 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         onClose={() => setIsDailyTaskDialogOpen(false)}
         onSelect={handleAddAsDailyTask}
         dueDate={planData?.post_date || null}
+        assignDisabledReason={approvedGuardMessage}
+        serviceName={planData?.service?.name || ''}
       />
     </Dialog>
   );

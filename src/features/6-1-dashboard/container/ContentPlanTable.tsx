@@ -26,6 +26,8 @@ interface ContentPlanTableProps {
   onContentPillarDataChange: () => void;
   loading?: boolean;
   approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
+  requestApproval?: (plan: ContentPlan, oldStatus: string | null, oldApproved?: boolean, oldCompletionDate?: string | null) => boolean; // Hook untuk approval dengan task step
+  handleUnapproval?: (planId: string) => Promise<void>; // Hook untuk un-approval dengan task step deletion
 }
 
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
@@ -40,7 +42,9 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onOpenBriefDialog,
   onOpenTitleDialog,
   loading = false,
-  approvalAccess
+  approvalAccess,
+  requestApproval,
+  handleUnapproval
 }) => {
   // Helper function to filter sub-services based on service
   const getFilteredSubServices = useCallback(
@@ -81,22 +85,50 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
       // Find the current plan to get current status and revision count
       const currentPlan = contentPlans.find(plan => plan.id === id);
       
-      if (currentPlan) {
-        // If changing to "Request Revision", increment revision count
-        if (value === 'Request Revision' && currentPlan.status !== 'Request Revision') {
-          const newRevisionCount = (currentPlan.revision_count || 0) + 1;
-          onFieldChange(id, 'status', value);
-          onFieldChange(id, 'revision_count', newRevisionCount);
-        } else {
-          // Regular status change
-          onFieldChange(id, 'status', value);
-        }
-      } else {
+      if (!currentPlan) {
         // Fallback if plan not found
+        onFieldChange(id, 'status', value);
+        return;
+      }
+
+      const oldStatus = currentPlan.status || null;
+      const isChangingToApproved = value === 'Approved';
+      const isChangingToNeedReview = value === 'Need Review';
+
+      // Special handling untuk status change ke "Approved" dengan requestApproval hook
+      if (isChangingToApproved && requestApproval) {
+        // Check apakah perlu show modal untuk memilih daily task
+        // Pass oldApproved dan oldCompletionDate untuk rollback jika modal dibatalkan
+        const oldApproved = currentPlan.approved || false;
+        const oldCompletionDate = currentPlan.completion_date || null;
+        const shouldPreventUpdate = requestApproval(currentPlan, oldStatus, oldApproved, oldCompletionDate);
+        if (shouldPreventUpdate) {
+          // Prevent normal update, modal akan handle update setelah task dipilih
+          return;
+        }
+      }
+
+      // Special handling untuk status change dari "Approved" ke "Need Review" (un-approval)
+      // Delete task_steps ketika status berubah dari "Approved" ke "Need Review"
+      // NON-BLOCKING: jangan di-await supaya dropdown status tetap responsif
+      if (isChangingToNeedReview && oldStatus === 'Approved' && handleUnapproval) {
+        // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
+        handleUnapproval(id).catch((error) => {
+          console.error('Error during unapproval task step deletion (table):', error);
+        });
+      }
+
+      // If changing to "Request Revision", increment revision count
+      if (value === 'Request Revision' && currentPlan.status !== 'Request Revision') {
+        const newRevisionCount = (currentPlan.revision_count || 0) + 1;
+        onFieldChange(id, 'status', value);
+        onFieldChange(id, 'revision_count', newRevisionCount);
+      } else {
+        // Regular status change
         onFieldChange(id, 'status', value);
       }
     },
-    [onFieldChange, contentPlans]
+    [onFieldChange, contentPlans, requestApproval, handleUnapproval]
   );
 
   const handleProductionStatusChange = useCallback(

@@ -268,14 +268,31 @@ export const debugPermissions = {
 };
 
 // Make available globally in development
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+if (typeof window !== 'undefined' && (import.meta.env?.DEV || process.env.NODE_ENV === 'development')) {
   window.debugPermissions = debugPermissions;
-  console.log('🐛 Debug utilities available at window.debugPermissions');
-  console.log('Available functions:');
-  console.log('- checkUserRole(userEmail?)');
-  console.log('- listPermissionConfigs(organizationId?)'); 
-  console.log('- testPageAccess(pagePath, userRole, organizationId)');
-  console.log('- clearPermissionCache()');
-  console.log('- inspectCache()');
-  console.log('- verifyPermissionSetup()');
+
+  (async () => {
+    try {
+      const { logger } = await import('@/config/logger');
+      logger.once('dev-utils:debugPermissions', () => {
+        console.log('🐛 Debug utilities available at window.debugPermissions');
+        console.log('Available functions:');
+        console.log('- checkUserRole(userEmail?)');
+        console.log('- listPermissionConfigs(organizationId?)'); 
+        console.log('- testPageAccess(pagePath, userRole, organizationId)');
+        console.log('- clearPermissionCache()');
+        console.log('- inspectCache()');
+        console.log('- verifyPermissionSetup()');
+      });
+    } catch {
+      console.log('🐛 Debug utilities available at window.debugPermissions');
+      console.log('Available functions:');
+      console.log('- checkUserRole(userEmail?)');
+      console.log('- listPermissionConfigs(organizationId?)'); 
+      console.log('- testPageAccess(pagePath, userRole, organizationId)');
+      console.log('- clearPermissionCache()');
+      console.log('- inspectCache()');
+      console.log('- verifyPermissionSetup()');
+    }
+  })();
 }

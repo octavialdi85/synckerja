@@ -35,6 +35,8 @@ import { useCreativeEmployees } from "./hook/useCreativeEmployees";
 import { useCurrentEmployee } from "@/features/share/hooks/useCurrentEmployee";
 import { useBatchApprovalAccess } from "./hook/useBatchApprovalAccess";
 import { useSyncPicProduction } from "./hook/useSyncPicProduction";
+import { useApprovalTaskStepCreation } from "./hook/useApprovalTaskStepCreation";
+import DailyTaskSelectorDialog from "./modal/DailyTaskSelectorDialog";
 
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
@@ -76,6 +78,28 @@ const SocialMediaContent = () => {
   
   // Batch check approval access (optimized - single check for all rows)
   const approvalAccess = useBatchApprovalAccess();
+  
+  // Approval with task step creation hook
+  const { 
+    requestApproval, 
+    isTaskSelectorOpen, 
+    pendingApproval, 
+    handleTaskSelected, 
+    handleModalClose,
+    handleUnapproval
+  } = useApprovalTaskStepCreation({
+    onStatusUpdate: async (planId: string, status: string) => {
+      await updateContentPlan(planId, { status });
+    },
+    onUpdate: async (planId: string, fields: { status?: string | null; approved?: boolean; completion_date?: string | null }) => {
+      // Update semua field setelah task step berhasil dibuat
+      await updateContentPlan(planId, fields);
+    },
+    onRollback: async (planId: string, fields: { status?: string | null; approved?: boolean; completion_date?: string | null }) => {
+      // Rollback semua field yang sudah diupdate
+      await updateContentPlan(planId, fields);
+    }
+  });
 
   // Fetch all social media links for Content Post metrics (same logic as ContentPostTab)
   const { data: allSocialMediaLinks = [] } = useQuery({
@@ -622,9 +646,96 @@ const SocialMediaContent = () => {
 
   // Batch updates for production_approved related fields to reduce database calls
   const pendingBatchUpdatesRef = useRef<Map<string, { updates: any; timeout: NodeJS.Timeout }>>(new Map());
+  
+  // Track plans yang sedang pending approval (untuk prevent multiple updates)
+  const pendingApprovalPlansRef = useRef<Set<string>>(new Set());
 
   const handleFieldChange = useCallback(async (id: string, field: string, value: any) => {
+    // Skip update jika plan sedang pending approval (dari previous approved/completion_date call)
+    if (pendingApprovalPlansRef.current.has(id)) {
+      // Clear flag setelah delay kecil untuk allow update setelah modal dibuka
+      setTimeout(() => {
+        pendingApprovalPlansRef.current.delete(id);
+      }, 100);
+      return;
+    }
+
     try {
+      // Special handling untuk approved toggle yang akan trigger status change ke "Approved"
+      // Check jika perlu show modal untuk memilih daily task
+      if (field === 'approved' && value === true) {
+        const plan = contentPlans.find(p => p.id === id);
+        if (plan) {
+          const oldStatus = plan.status || null;
+          const oldApproved = plan.approved || false;
+          const oldCompletionDate = plan.completion_date || null;
+          
+          // Check apakah status akan berubah ke "Approved" (dari "Need Review" atau NULL)
+          const willChangeToApproved = oldStatus === 'Need Review' || oldStatus === null || oldStatus === '' || oldStatus === 'none';
+          
+          if (willChangeToApproved) {
+            // Request approval dengan old approved dan completion_date untuk rollback
+            const shouldPreventUpdate = requestApproval(plan, oldStatus, oldApproved, oldCompletionDate);
+            if (shouldPreventUpdate) {
+              // Mark plan sebagai pending approval untuk prevent completion_date dan status updates
+              pendingApprovalPlansRef.current.add(id);
+              
+              // Prevent update approved, completion_date, dan status
+              // Toggle akan tetap di posisi off sampai task dipilih
+              return;
+            }
+          }
+        }
+      }
+
+      // Special handling untuk status change ke "Approved"
+      // Check jika perlu show modal untuk memilih daily task
+      if (field === 'status' && value === 'Approved') {
+        const plan = contentPlans.find(p => p.id === id);
+        if (plan) {
+          const oldStatus = plan.status || null;
+          const oldApproved = plan.approved || false;
+          const oldCompletionDate = plan.completion_date || null;
+          // Request approval (akan return true jika modal dibuka)
+          const shouldPreventUpdate = requestApproval(plan, oldStatus, oldApproved, oldCompletionDate);
+          if (shouldPreventUpdate) {
+            // Mark plan sebagai pending approval untuk prevent other updates
+            pendingApprovalPlansRef.current.add(id);
+            
+            // Prevent normal update, tunggu task dipilih
+            return;
+          }
+        }
+      }
+
+      // Special handling untuk status change dari "Approved" ke "Need Review" (un-approval)
+      // Delete task_steps ketika status berubah dari "Approved" ke "Need Review"
+      // NON-BLOCKING: jangan di-await supaya perubahan status di UI tetap cepat
+      if (field === 'status' && value === 'Need Review') {
+        const plan = contentPlans.find(p => p.id === id);
+        if (plan && plan.status === 'Approved') {
+          // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
+          handleUnapproval(id).catch((error) => {
+            console.error('Error during unapproval task step deletion (status):', error);
+          });
+        }
+      }
+
+      // Special handling untuk approved toggle yang diubah ke false (un-approval)
+      // Delete task_steps ketika approved diubah dari true ke false
+      // NON-BLOCKING: jangan di-await supaya toggle langsung pindah ke posisi off tanpa delay
+      if (field === 'approved' && value === false) {
+        const plan = contentPlans.find(p => p.id === id);
+        if (plan && plan.approved === true && plan.status === 'Approved') {
+          // Approved diubah dari true ke false dan status adalah "Approved" - hapus task_steps di background
+          handleUnapproval(id).catch((error) => {
+            console.error('Error during unapproval task step deletion:', error);
+          });
+          // Clear PIC Production immediately so UI reflects the change
+          updateContentPlan(id, { pic_production_id: null, pic_production_source: null });
+        }
+      }
+
       // OPTIMIZED: Batch production_approved related fields to reduce database roundtrips
       // This prevents multiple trigger executions and improves performance
       if (field === 'production_approved' || field === 'production_approved_date' || field === 'production_status' || field === 'production_completion_date') {
@@ -748,7 +859,7 @@ const SocialMediaContent = () => {
       console.error('Error in handleFieldChange:', error);
       toast.error('Error updating field');
     }
-  }, [updateContentPlan, currentEmployee?.id, contentPlans, syncPicProduction]);
+  }, [updateContentPlan, currentEmployee?.id, contentPlans, syncPicProduction, requestApproval]);
 
   const handleAddContent = useCallback(async () => {
     if (!organizationId) {
@@ -992,6 +1103,8 @@ const SocialMediaContent = () => {
                                     onContentPillarDataChange={handleMasterDataChange} 
                                     loading={false}
                                     approvalAccess={approvalAccess}
+                                    requestApproval={requestApproval}
+                                    handleUnapproval={handleUnapproval}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
@@ -1044,6 +1157,19 @@ const SocialMediaContent = () => {
             employeeName={editingManager?.name}
             targetType={targetType}
           />
+
+          {/* Daily Task Selector Dialog for Approval */}
+          {pendingApproval && (
+            <DailyTaskSelectorDialog
+              isOpen={isTaskSelectorOpen}
+              onClose={handleModalClose}
+              onSelect={handleTaskSelected}
+              dueDate={pendingApproval.plan.post_date || null}
+              serviceName={pendingApproval.plan.service?.name || (services?.find?.((s: any) => s.id === pendingApproval.plan.service_id)?.name) || ''}
+              organizationIdOverride={pendingApproval.plan.organization_id}
+              skipAssignment={true} // Skip assignment modal karena task step auto-completed
+            />
+          )}
               </div>
             </div>
           </div>

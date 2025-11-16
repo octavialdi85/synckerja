@@ -12,6 +12,9 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { AssignSocialMediaPlanModal } from './AssignSocialMediaPlanModal';
 import { toast } from 'sonner';
+import { CreateTaskDialog } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
+import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { id as idLocale } from 'date-fns/locale';
 
 interface DailyTask {
   id: string;
@@ -28,13 +31,21 @@ interface DailyTaskSelectorDialogProps {
   onClose: () => void;
   onSelect: (dailyTaskId: string, title: string, employeeId?: string, assignedAt?: string) => Promise<void>;
   dueDate?: string | null; // Due date from post_date in social_media_plans
+  skipAssignment?: boolean; // Skip assignment modal if task step is auto-completed
+  assignDisabledReason?: string; // If provided, disable assign in the nested modal
+  serviceName?: string; // Service name from social_media_plans->services(name)
+  organizationIdOverride?: string; // Optional override for organization id (e.g., from plan)
 }
 
 const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
   isOpen,
   onClose,
   onSelect,
-  dueDate
+  dueDate,
+  skipAssignment = false, // Default false untuk backward compatibility
+  assignDisabledReason,
+  serviceName,
+  organizationIdOverride
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<Date | undefined>(undefined);
@@ -45,20 +56,53 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [pendingAssignment, setPendingAssignment] = useState<{ employeeId?: string; assignedAt?: string } | null>(null);
   const { organizationId } = useCurrentOrg();
+  const orgIdToUse = organizationIdOverride || organizationId;
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
   
   // Check if user can assign employees (Owner/Admin only)
   const canAssignEmployees = isOwner || isAdmin || userRole === 'owner' || userRole === 'admin';
 
+  // Create Task fallback controls
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [prefillTitle, setPrefillTitle] = useState('');
+  const [createOpenedOnce, setCreateOpenedOnce] = useState(false);
+
+  // Normalize helper and server-side existence check for Branding Plan task
+  const normalize = React.useCallback((s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim(), []);
+  const checkBrandingTaskExists = React.useCallback(async (): Promise<boolean> => {
+    try {
+      if (!orgIdToUse || !dueDate || !serviceName) return false;
+      const d = new Date(dueDate);
+      if (isNaN(d.getTime())) return false;
+      const { data: tasks } = await supabase
+        .from('daily_tasks')
+        .select('id, title')
+        .eq('organization_id', orgIdToUse)
+        .ilike('title', '%branding plan%')
+        .order('created_at', { ascending: false });
+      const monthLongID = format(d, 'MMMM yyyy', { locale: idLocale }).toLowerCase();
+      const monthShortID = format(d, 'MMM yyyy', { locale: idLocale }).toLowerCase();
+      const monthLongEN = format(d, 'MMMM yyyy').toLowerCase();
+      const svc = normalize(serviceName);
+      return (tasks || []).some(t => {
+        const tnorm = normalize(t.title || '');
+        return tnorm.includes('branding plan') &&
+          tnorm.includes(svc) &&
+          (tnorm.includes(monthLongID) || tnorm.includes(monthShortID) || tnorm.includes(monthLongEN));
+      });
+    } catch {
+      return false;
+    }
+  }, [orgIdToUse, dueDate, serviceName, normalize]);
   const fetchDailyTasks = React.useCallback(async () => {
-    if (!organizationId) return;
+    if (!orgIdToUse) return;
 
     setIsLoading(true);
     try {
       let query = supabase
         .from('daily_tasks')
         .select('id, title, description, status, priority, due_date, created_at')
-        .eq('organization_id', organizationId)
+        .eq('organization_id', orgIdToUse)
         .order('created_at', { ascending: false });
 
       // Filter by month if selected
@@ -89,6 +133,30 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
         );
       }
 
+      // Simplify list for specific month+service: show only "Branding Plan {service} {MMMM yyyy}"
+      const isValidDue = !!dueDate && !isNaN(new Date(dueDate as string).getTime());
+      const hasService = !!(serviceName && serviceName.trim().length > 0);
+      if (isValidDue && hasService) {
+        const due = new Date(dueDate as string);
+        const monthLongID = format(due, 'MMMM yyyy', { locale: idLocale }).toLowerCase();
+        const monthShortID = format(due, 'MMM yyyy', { locale: idLocale }).toLowerCase();
+        const monthLongEN = format(due, 'MMMM yyyy').toLowerCase(); // fallback
+        const serviceLower = normalize(serviceName as string);
+
+        filteredTasks = filteredTasks.filter((task) => {
+          const t = normalize(task.title);
+          const hasBrandingPlan = t.includes('branding plan');
+          const hasSvc = t.includes(serviceLower);
+          const hasMonth = t.includes(monthLongID) || t.includes(monthShortID) || t.includes(monthLongEN);
+          return hasBrandingPlan && hasSvc && hasMonth;
+        });
+
+        // Keep newest if multiple
+        if (filteredTasks.length > 1) {
+          filteredTasks = [filteredTasks[0]];
+        }
+      }
+
       setDailyTasks(filteredTasks);
     } catch (error) {
       console.error('Error fetching daily tasks:', error);
@@ -96,19 +164,23 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [organizationId, selectedMonth, searchQuery]);
+  }, [orgIdToUse, selectedMonth, searchQuery, dueDate, serviceName]);
 
   useEffect(() => {
-    if (isOpen && organizationId) {
+    if (isOpen && orgIdToUse) {
       fetchDailyTasks();
+      setCreateOpenedOnce(false);
     } else {
       // Reset state when dialog closes
       setSearchQuery('');
       setSelectedMonth(undefined);
       setDailyTasks([]);
       setSelectedTaskId(null);
+      setIsCreateTaskOpen(false);
+      setPrefillTitle('');
+      setCreateOpenedOnce(false);
     }
-  }, [isOpen, organizationId, fetchDailyTasks]);
+  }, [isOpen, orgIdToUse, fetchDailyTasks]);
 
   // Handle month selection - when user clicks any date, filter by that month
   const handleMonthClick = (date: Date | undefined) => {
@@ -120,6 +192,25 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
       setSelectedMonth(undefined);
     }
   };
+
+  // Fallback: open Create Task only after confirming it doesn't exist on server
+  useEffect(() => {
+    const run = async () => {
+      const isValidDue = !!dueDate && !isNaN(new Date(dueDate as string).getTime());
+      const hasService = !!(serviceName && serviceName.trim().length > 0);
+      if (isOpen && isValidDue && hasService && !isLoading && dailyTasks.length === 0 && !createOpenedOnce) {
+        const exists = await checkBrandingTaskExists();
+        if (!exists) {
+          const d = new Date(dueDate as string);
+          const monthText = format(d, 'MMMM yyyy', { locale: idLocale });
+          setPrefillTitle(`Branding Plan ${serviceName} ${monthText}`);
+          setIsCreateTaskOpen(true);
+          setCreateOpenedOnce(true);
+        }
+      }
+    };
+    run();
+  }, [isOpen, dueDate, serviceName, isLoading, dailyTasks, createOpenedOnce, checkBrandingTaskExists]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -137,22 +228,37 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
       return;
     }
 
-    // If Owner/Admin, show assignment modal
-    if (canAssignEmployees) {
+    // Employee flow: jika assignDisabledReason ada (approved=false & belum ada step), blok add langsung
+    if (!canAssignEmployees && assignDisabledReason) {
+      toast.info(assignDisabledReason);
+      return;
+    }
+
+    // If Owner/Admin and NOT skip assignment, show assignment modal
+    // If skipAssignment = true (task step auto-completed), skip assign modal
+    if (canAssignEmployees && !skipAssignment) {
       setPendingAssignment({});
       setShowAssignModal(true);
       return;
     }
 
+    // Skip assignment modal: directly create task step (auto-completed)
     // Regular employee: directly assign to active profile
     setIsSubmitting(true);
     try {
+      // Skip assignment - task step akan dibuat sebagai completed
       await onSelect(selectedTaskId, selectedTask.title);
-      toast.success('Content title added as daily task step successfully');
-      onClose();
+      // Don't show success toast here if skipAssignment = true (hook will show it)
+      // Don't call onClose() here if skipAssignment = true (hook will close modal after success)
+      if (!skipAssignment) {
+        toast.success('Content title added as daily task step successfully');
+        onClose();
+      }
+      // If skipAssignment = true, hook will handle closing and showing success toast
     } catch (error) {
       console.error('Error selecting task:', error);
       toast.error('Failed to add as daily task');
+      // On error, don't close modal - let user retry or cancel
     } finally {
       setIsSubmitting(false);
     }
@@ -214,6 +320,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto seamless-scroll">
         <DialogHeader>
@@ -383,7 +490,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
             </Button>
             <Button
               onClick={handleSelectTask}
-              disabled={!selectedTaskId || isSubmitting}
+              disabled={!selectedTaskId || isSubmitting || isCreateTaskOpen}
             >
               {isSubmitting ? (
                 <>
@@ -406,9 +513,26 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
           onAssign={handleAssign}
           dueDate={dueDate || null}
           taskTitle={dailyTasks.find((task) => task.id === selectedTaskId)?.title || ''}
+          disabledReason={assignDisabledReason}
         />
       )}
     </Dialog>
+    
+    {/* Create Task dialog with prefilled title (fallback) */}
+    <DailyTaskProvider>
+      <CreateTaskDialog
+        open={isCreateTaskOpen}
+        onOpenChange={(open) => {
+          setIsCreateTaskOpen(open);
+          if (!open) {
+            // refresh list after closing create dialog
+            fetchDailyTasks();
+          }
+        }}
+        defaultTitle={prefillTitle}
+      />
+    </DailyTaskProvider>
+    </>
   );
 };
 

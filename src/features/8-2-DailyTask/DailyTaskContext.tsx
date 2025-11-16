@@ -309,7 +309,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             const prevIds = prevTaskIdsRef.current.stepLevel;
             const idsChanged = JSON.stringify(stepAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
             if (idsChanged) {
-              logger.debug('📋 Step-level assigned task IDs:', stepAssignedTaskIds);
+              const label = `📋 Step-level assigned task IDs: ${stepAssignedTaskIds.length} items`;
+              logger.rateLimited('step-assigned-ids', 3000, () => {
+                logger.groupCollapsed(label, () => {
+                  logger.debug(stepAssignedTaskIds);
+                });
+              });
               prevTaskIdsRef.current.stepLevel = stepAssignedTaskIds;
             }
           }
@@ -340,10 +345,15 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           if (isDev) {
             const prevIds = prevTaskIdsRef.current.subStepLevel;
             const idsChanged = JSON.stringify(subStepAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
-            if (idsChanged) {
-              logger.debug('📋 Sub-step-level assigned task IDs:', subStepAssignedTaskIds);
-              prevTaskIdsRef.current.subStepLevel = subStepAssignedTaskIds;
-            }
+          if (idsChanged) {
+            const label = `📋 Sub-step-level assigned task IDs: ${subStepAssignedTaskIds.length} items`;
+            logger.rateLimited('substep-assigned-ids', 3000, () => {
+              logger.groupCollapsed(label, () => {
+                logger.debug(subStepAssignedTaskIds);
+              });
+            });
+            prevTaskIdsRef.current.subStepLevel = subStepAssignedTaskIds;
+          }
           }
         }
       }
@@ -355,7 +365,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const prevIds = prevTaskIdsRef.current.combined;
         const idsChanged = JSON.stringify(allAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
         if (idsChanged) {
-          logger.debug('📋 Combined assigned task IDs (task + step + sub-step):', allAssignedTaskIds);
+          const label = `📋 Combined assigned task IDs (task + step + sub-step): ${allAssignedTaskIds.length} items`;
+          logger.rateLimited('combined-assigned-ids', 3000, () => {
+            logger.groupCollapsed(label, () => {
+              logger.debug(allAssignedTaskIds);
+            });
+          });
           prevTaskIdsRef.current.combined = allAssignedTaskIds;
         }
       }

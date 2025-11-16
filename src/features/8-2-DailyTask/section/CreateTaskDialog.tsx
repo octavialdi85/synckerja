@@ -32,11 +32,13 @@ import { useIsMobile } from '@/mobile/hooks/use-mobile';
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTitle?: string;
 }
 
 export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   open,
   onOpenChange,
+  defaultTitle,
 }) => {
   const isMobile = useIsMobile();
   const { addTask } = useDailyTask();
@@ -73,6 +75,13 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     deadline: null
   });
   const [showAssignModal, setShowAssignModal] = useState(false);
+
+  // Prefill title when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      setTitle(defaultTitle || '');
+    }
+  }, [open, defaultTitle]);
 
   const handleAssign = (newAssignment: { employeeId: string | null; deadline: string | null }) => {
     setAssignment(newAssignment);
@@ -130,7 +139,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:max-w-2xl md:max-h-[90vh] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
+        <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:w-[min(56vw,56vh)] md:h-[min(56vw,56vh)] border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
           <DialogHeader className="flex-shrink-0 p-4 md:p-0">
             <DialogTitle className="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <Button

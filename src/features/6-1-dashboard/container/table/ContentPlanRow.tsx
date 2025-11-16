@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -21,7 +21,11 @@ import { useCurrentUserRole } from '../../hook/useCurrentUserRole';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useSocialMediaLinks } from '@/features/6-1-dashboard/hook/useSocialMediaLinks';
 import { supabase } from '@/integrations/supabase/client';
-import { devLog } from '@/config/logger';
+import { devLog, logger } from '@/config/logger';
+import { CreateTaskDialog } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
+import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 
 // Simple in-memory cache for approval/revision checks to avoid repeated DB queries
 const approvalCheckCache = new Map<string, { result: boolean; timestamp: number }>();
@@ -88,6 +92,10 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     status: true,
     production_status: true
   });
+  // Fallback Create Task for Branding Plan task existence
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [createPrefillTitle, setCreatePrefillTitle] = useState('');
+  const [createTriggeredOnce, setCreateTriggeredOnce] = useState(false);
   // Initialize to false to prevent refresh icons showing before config check completes
   const [revisionConfigActive, setRevisionConfigActive] = useState(false);
   const [productionRevisionConfigActive, setProductionRevisionConfigActive] = useState(false);
@@ -100,6 +108,92 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     links
   } = useSocialMediaLinks(plan.id);
 
+  // Helpers for Branding Plan auto-create when approved toggled ON
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const getServiceName = () => {
+    const name = (plan as any)?.service?.name || services.find(s => s.id === plan.service_id)?.name || '';
+    return name;
+  };
+  const maybeOpenBrandingPlanCreate = async () => {
+    if (createTriggeredOnce) return;
+    try {
+      const serviceName = getServiceName();
+      if (!serviceName || !plan.post_date || !(plan as any).organization_id) return;
+      const d = new Date(plan.post_date);
+      if (isNaN(d.getTime())) return;
+
+      // IMPORTANT: Jangan bergantung pada due_date karena bisa NULL.
+      // Ambil task berdasarkan organization saja, dan batasi via judul 'branding plan' untuk efisiensi,
+      // lalu filter di klien berdasarkan service dan bulan Indonesia.
+      const { data: tasks, error } = await supabase
+        .from('daily_tasks')
+        .select('id, title')
+        .eq('organization_id', (plan as any).organization_id)
+        .ilike('title', '%branding plan%')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching monthly daily_tasks:', error);
+        return;
+      }
+
+      const monthTextID = format(d, 'MMMM yyyy', { locale: idLocale }).toLowerCase();
+      const hasBrandingTask = (tasks || []).some(t => {
+        const title = normalize(t.title || '');
+        return title.includes('branding plan') && title.includes(normalize(serviceName)) && title.includes(monthTextID);
+      });
+
+      if (!hasBrandingTask) {
+        setCreatePrefillTitle(`Branding Plan ${serviceName} ${format(d, 'MMMM yyyy', { locale: idLocale })}`);
+        setIsCreateTaskOpen(true);
+        setCreateTriggeredOnce(true);
+      }
+    } catch (e) {
+      console.error('maybeOpenBrandingPlanCreate error:', e);
+    }
+  };
+
+  // Recheck existence when CreateTaskDialog closed; if masih belum ada, rollback approved
+  const recheckOrRollbackAfterCreateClose = async () => {
+    try {
+      const serviceName = getServiceName();
+      if (!serviceName || !plan.post_date || !(plan as any).organization_id) return;
+      const d = new Date(plan.post_date);
+      if (isNaN(d.getTime())) return;
+
+      const { data: tasks, error } = await supabase
+        .from('daily_tasks')
+        .select('id, title')
+        .eq('organization_id', (plan as any).organization_id)
+        .ilike('title', '%branding plan%')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error rechecking daily_tasks:', error);
+        return;
+      }
+
+      const monthTextID = format(d, 'MMMM yyyy', { locale: idLocale }).toLowerCase();
+      const exists = (tasks || []).some(t => {
+        const title = normalize(t.title || '');
+        return title.includes('branding plan') && title.includes(normalize(serviceName)) && title.includes(monthTextID);
+      });
+
+      if (!exists) {
+        // Rollback approved, completion_date, and status to Need Review
+        setApprovedInstant(false); // visual rollback instantly
+        onFieldChange(plan.id, 'approved', false);
+        onFieldChange(plan.id, 'completion_date', null);
+        if (plan.status === 'Approved') {
+          onStatusChange(plan.id, 'Need Review');
+        }
+        // Allow triggering again next time
+        setCreateTriggeredOnce(false);
+      }
+    } catch (e) {
+      console.error('recheckOrRollbackAfterCreateClose error:', e);
+    }
+  };
   // Use batch-checked approval access from parent if available, otherwise fallback to individual checks
   React.useEffect(() => {
     const checkApprovalVisibility = async () => {
@@ -147,90 +241,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   const { data: currentUserRole } = useCurrentUserRole();
   const isAdmin = currentUserRole === 'admin' || currentUserRole === 'owner';
 
-  // Function to check approval access based on configuration (with caching)
-  const checkApprovalAccess = async (columnType: string) => {
-    try {
-      // Get current user
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user) return false;
-
-      // Get user's active organization
-      const {
-        data: profile,
-        error: profileError
-      } = await supabase.from('profiles').select('active_organization_id').eq('user_id', user.id).single();
-      if (profileError || !profile?.active_organization_id) {
-        console.error('Error fetching user profile:', profileError);
-        return false;
-      }
-
-      // Check cache first
-      const cacheKey = `approval_${columnType}_${user.id}_${profile.active_organization_id}`;
-      const cached = approvalCheckCache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-        // Cache hit - return without logging
-        return cached.result;
-      }
-
-      // Get user's role in the organization
-      const {
-        data: userRole,
-        error: roleError
-      } = await supabase.from('user_roles').select('role').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
-      if (roleError || !userRole) {
-        console.error('Error fetching user role:', roleError);
-        return false;
-      }
-
-      // Get user's employee record to check exceptions
-      const {
-        data: employee,
-        error: employeeError
-      } = await supabase.from('employees').select('id').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
-      if (employeeError || !employee) {
-        console.error('Error fetching employee:', employeeError);
-        return false;
-      }
-
-      // Get approval configuration for this column type
-      const {
-        data: config,
-        error: configError
-      } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', columnType).eq('is_active', true).single();
-      if (configError || !config) {
-        // If no configuration found, fall back to admin-only access
-        const result = userRole.role === 'owner' || userRole.role === 'admin';
-        // Cache the result
-        approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
-        return result;
-      }
-
-      // Check if user's role is in the allowed roles
-      const hasRoleAccess = config.allowed_roles?.includes(userRole.role);
-
-      // Check if user is in the exceptions list
-      const isException = config.exceptions?.includes(employee.id);
-      const result = hasRoleAccess || isException;
-      
-      // Cache the result (only log on cache miss)
-      approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
-      devLog.debug('🔐 Approval access check (cached):', {
-        columnType,
-        userRole: userRole.role,
-        employeeId: employee.id,
-        result,
-        cached: false
-      });
-      
-      return result;
-    } catch (error) {
-      console.error('Error checking approval access:', error);
-      return false;
-    }
+  // Fast approval access using batched result from parent (no awaits for instant UX)
+  const checkApprovalAccess = (columnType: string): boolean => {
+    if (columnType === 'approved') return !!approvalAccess?.approved;
+    if (columnType === 'prod_approved') return !!approvalAccess?.prodApproved;
+    return false;
   };
 
   // Function to check if CURRENT user has approval access for a column type
@@ -433,10 +448,12 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   
   // Only log if there's a mismatch (pic_production_id exists but employee not found)
   if (plan.pic_production_id && !selectedProductionPIC) {
-    devLog.debug('⚠️ PIC Production employee not found:', {
-      plan_id: plan.id,
-      pic_production_id: plan.pic_production_id,
-      digitalEmployeesCount: digitalEmployees?.length || 0
+    logger.rateLimited(`pic-production-missing:${plan.id}`, 5000, () => {
+      devLog.debug('⚠️ PIC Production employee not found:', {
+        plan_id: plan.id,
+        pic_production_id: plan.pic_production_id,
+        digitalEmployeesCount: digitalEmployees?.length || 0
+      });
     });
   }
 
@@ -533,9 +550,17 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   };
 
   // POINT 2: Handle Approved change - check approval access configuration
+  // Local visual state to make unapprove instant without waiting server
+  const [approvedInstant, setApprovedInstant] = useState<boolean | null>(null);
+  // Sinkronkan kembali ke nilai dari server setelah update datang
+  useEffect(() => {
+    // Setelah plan.approved berubah (hasil server/realtime), serahkan kontrol ke data server
+    setApprovedInstant(null);
+  }, [plan.approved]);
+
   const handleApprovedChange = async (checked: boolean) => {
-    // Check if user has approval access based on configuration
-    const hasApprovalAccess = await checkApprovalAccess('approved');
+    // Check if user has approval access based on pre-fetched configuration
+    const hasApprovalAccess = checkApprovalAccess('approved');
     if (!hasApprovalAccess) {
       toast({
         variant: "destructive",
@@ -545,7 +570,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       return;
     }
     if (checked) {
-      // Validate required fields before allowing approval
+      // Selalu biarkan toggle tetap OFF; parent akan membuka modal Select Daily Task via requestApproval
+      // Validasi field wajib
       const missingFields = validateRequiredFields(plan);
       if (missingFields.length > 0) {
         toast({
@@ -553,26 +579,24 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           title: "Cannot approve content",
           description: `Please fill in the following required fields: ${missingFields.join(', ')}`
         });
-        return; // Don't proceed with approval
+        return;
       }
-    }
-
-    // Update approved flag
-    onFieldChange(plan.id, 'approved', checked);
-
-    // Sync completion_date with approved toggle
-    if (checked) {
-      // When approved is checked, automatically set status to "Approved" and stamp completion_date
-      const nowIso = new Date().toISOString();
-      onFieldChange(plan.id, 'completion_date', nowIso);
-      onStatusChange(plan.id, 'Approved');
+      // Jangan ubah visual ON, cukup minta parent update field 'approved' → parent akan intercept dan buka modal
+      onFieldChange(plan.id, 'approved', true);
+      return;
     } else {
+      // Make unapprove visual instant
+      setApprovedInstant(false);
       // When unapproved, clear completion_date and change status to "Need Review"
       onFieldChange(plan.id, 'completion_date', null);
       // If current status is "Approved", change it to "Need Review"
       if (plan.status === 'Approved') {
         onStatusChange(plan.id, 'Need Review');
       }
+      // Update approved flag to false
+      onFieldChange(plan.id, 'approved', false);
+      // Reset one-shot flag so future approvals can trigger check again
+      setCreateTriggeredOnce(false);
     }
   };
 
@@ -710,9 +734,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   
   // Only log PIC checks if there's a mismatch (pic_id exists but employee not found)
   if (plan.pic_id && !selectedPIC) {
-    devLog.debug('⚠️ PIC employee not found:', {
-      plan_id: plan.id,
-      pic_id: plan.pic_id
+    logger.rateLimited(`pic-missing:${plan.id}`, 5000, () => {
+      devLog.debug('⚠️ PIC employee not found:', {
+        plan_id: plan.id,
+        pic_id: plan.pic_id
+      });
     });
   }
   return <>
@@ -897,7 +923,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '120px',
         maxWidth: '120px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <Switch checked={plan.approved || false} onCheckedChange={handleApprovedChange} />
+          <Switch checked={approvedInstant ?? (plan.approved || false)} onCheckedChange={handleApprovedChange} />
         </td>
 
         {/* Completion Date - Center aligned */}
@@ -1124,6 +1150,23 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       {/* Brief Dialog - NOW WITH REAL-TIME STATUS UPDATE */}
       <BriefDialog isOpen={isBriefDialogOpen} onClose={() => setIsBriefDialogOpen(false)} brief={plan.brief} onSave={handleBriefSave} socialMediaPlanId={plan.id} onStatusUpdate={handleBriefStatusUpdate} />
+
+      {/* Auto-create Branding Plan task when approved toggled ON and not exists */}
+      <DailyTaskProvider>
+        <CreateTaskDialog
+          open={isCreateTaskOpen}
+          onOpenChange={(open) => {
+            setIsCreateTaskOpen(open);
+            if (!open) {
+              // Immediate visual rollback to reflect cancellation
+              setApprovedInstant(false);
+              // After dialog closed, recheck existence; rollback toggle if task still not found
+              void recheckOrRollbackAfterCreateClose();
+            }
+          }}
+          defaultTitle={createPrefillTitle}
+        />
+      </DailyTaskProvider>
     </>;
 });
 ContentPlanRow.displayName = 'ContentPlanRow';

@@ -214,6 +214,21 @@ export const useRealtimeSocialMedia = () => {
         async (payload) => {
           console.log('📡 Task step assignment changed:', payload.eventType);
           
+          // IMPORTANT: Jangan auto-sync PIC saat INSERT (flow APPROVED)
+          // Flow TITLE akan memanggil syncPicProduction secara eksplisit.
+          if (payload.eventType === 'INSERT') {
+            // Tetap invalidate queries agar UI aware, tapi skip sync PIC
+            queryClient.invalidateQueries({ 
+              queryKey: ['task-steps-assignments'],
+              refetchType: 'active'
+            });
+            queryClient.invalidateQueries({ 
+              queryKey: ['social-media-plans', organizationId],
+              refetchType: 'active'
+            });
+            return;
+          }
+          
           // Get social_media_plan_id from the changed assignment
           if (payload.new || payload.old) {
             const assignmentData = payload.new || payload.old;
