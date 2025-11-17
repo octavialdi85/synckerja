@@ -356,6 +356,19 @@ export const useTaskFilters = ({
         });
       }
 
+      // Apply search filter at step level:
+      // When a search term is provided, only show steps whose title matches the search term
+      // Task is still shown if task title matches or if any step matches (handled by matchesSearch)
+      // but we only show steps that match the search term
+      if (filters.search) {
+        const lowerSearchTerm = filters.search.toLowerCase();
+        // Filter steps to only show those whose title matches the search term
+        steps = steps.filter((step) => {
+          const stepTitleMatch = step.title?.toLowerCase().includes(lowerSearchTerm) || false;
+          return stepTitleMatch;
+        });
+      }
+
       return steps;
     },
     [filters, currentEmployeeId, currentUserId]
