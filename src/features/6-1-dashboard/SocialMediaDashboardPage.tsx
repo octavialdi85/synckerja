@@ -155,10 +155,12 @@ const SocialMediaContent = () => {
     isOpen: boolean;
     id: string;
     title: string | null;
+    approved?: boolean;
   }>({
     isOpen: false,
     id: "",
-    title: null
+    title: null,
+    approved: undefined
   });
 
   // Define tab configurations
@@ -991,11 +993,12 @@ const SocialMediaContent = () => {
   }, [briefDialog.id, handleFieldChange]);
 
   // Title Dialog Handlers
-  const openTitleDialog = useCallback((id: string, title: string | null) => {
+  const openTitleDialog = useCallback((id: string, title: string | null, approved?: boolean) => {
     setTitleDialog({
       isOpen: true,
       id,
-      title
+      title,
+      approved
     });
   }, []);
 
@@ -1003,7 +1006,8 @@ const SocialMediaContent = () => {
     setTitleDialog({
       isOpen: false,
       id: "",
-      title: null
+      title: null,
+      approved: undefined
     });
   }, []);
 
@@ -1147,6 +1151,7 @@ const SocialMediaContent = () => {
             title={titleDialog.title || ""} 
             onSave={saveTitle}
             socialMediaPlanId={titleDialog.id}
+            approved={titleDialog.id ? contentPlans.find(p => p.id === titleDialog.id)?.approved : undefined}
           />
 
           <EditTargetDialog 

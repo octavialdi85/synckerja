@@ -47,7 +47,7 @@ interface ContentPlanRowProps {
   onSelectItem: (id: string, checked: boolean) => void;
   onFieldChange: (id: string, field: string, value: any) => void | Promise<void>;
   onOpenBriefDialog: (id: string, brief: string | null) => void;
-  onOpenTitleDialog: (id: string, title: string | null) => void;
+  onOpenTitleDialog: (id: string, title: string | null, approved?: boolean) => void;
   onStatusChange: (id: string, value: string) => void;
   onProductionStatusChange: (id: string, value: string | null) => void;
   onStatusContentChange: (id: string, value: string) => void;
@@ -843,7 +843,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '280px',
         maxWidth: '280px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <Button variant="ghost" className="h-8 w-full justify-start text-xs px-2 border border-gray-200 hover:bg-gray-50" onClick={() => onOpenTitleDialog(plan.id, plan.title)}>
+          <Button variant="ghost" className="h-8 w-full justify-start text-xs px-2 border border-gray-200 hover:bg-gray-50" onClick={() => onOpenTitleDialog(plan.id, plan.title, plan.approved)}>
               <span className="truncate block w-full text-left">
                 {plan.title || 'Click to add title...'}
               </span>

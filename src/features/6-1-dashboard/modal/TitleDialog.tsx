@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import DailyTaskSelectorDialog from './DailyTaskSelectorDialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,8 +10,13 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSyncPicProduction } from '../hook/useSyncPicProduction';
-import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/features/ui/tooltip";
 
 interface TitleDialogProps {
   isOpen: boolean;
@@ -19,6 +24,7 @@ interface TitleDialogProps {
   title: string | null;
   onSave: (title: string) => void;
   socialMediaPlanId?: string;
+  approved?: boolean; // Pass approved status directly to avoid delay
 }
 
 const TitleDialog: React.FC<TitleDialogProps> = ({
@@ -26,16 +32,18 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
   onClose,
   title,
   onSave,
-  socialMediaPlanId
+  socialMediaPlanId,
+  approved: approvedProp
 }) => {
   const [titleText, setTitleText] = useState('');
   const [isDailyTaskDialogOpen, setIsDailyTaskDialogOpen] = useState(false);
   const { organizationId } = useCurrentOrg();
   const { syncPicProduction } = useSyncPicProduction();
-  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
   const { language } = useAppTranslation();
 
   // ===== OPTIMIZATION 1: Cache planData with React Query =====
+  // Always fetch planData for service/content_type/post_date (needed for formattedTitle)
+  // approved status can come from prop (no delay) or from planData (backward compatibility)
   const { data: planData, isLoading: isLoadingPlanData } = useQuery({
     queryKey: ['social-media-plan', socialMediaPlanId],
     queryFn: async () => {
@@ -58,35 +66,26 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
     enabled: !!socialMediaPlanId && isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 10 * 60 * 1000, // 10 minutes
+    // Only refetch if approved prop not provided (backward compatibility)
+    // If approved prop is provided, parent will handle real-time updates for approved status
+    refetchInterval: isOpen && approvedProp === undefined ? 2000 : false,
   });
 
-  // Check if plan already has any task_step (for exception rule)
-  const { data: hasExistingStep } = useQuery({
-    queryKey: ['plan-has-step', socialMediaPlanId],
-    queryFn: async () => {
-      if (!socialMediaPlanId) return false;
-      const { data } = await supabase
-        .from('task_steps')
-        .select('id')
-        .eq('social_media_plan_id', socialMediaPlanId)
-        .limit(1);
-      return !!(data && data.length > 0);
-    },
-    enabled: !!socialMediaPlanId && isOpen
-  });
+  // Use prop if available (no delay), otherwise use fetched data
+  const isPlanApproved = approvedProp !== undefined ? approvedProp === true : (planData?.approved === true);
+  const showApprovalRestriction = approvedProp !== undefined 
+    ? !approvedProp 
+    : (!!planData && !isPlanApproved);
 
-  // Bilingual message helper via LanguageProvider translations
-  // Fallback to English if translation key not found
-  const approvedGuardMessage = React.useMemo(() => {
-    const isApproved = !!planData?.approved;
-    const isEmployee = !(isOwner || isAdmin);
-    if (isEmployee && !isApproved && !hasExistingStep) {
+  // Bilingual tooltip message - short and concise
+  const approvedTooltipMessage = React.useMemo(() => {
+    if (showApprovalRestriction) {
       return language === 'id'
-        ? 'Konten belum di-approve. Silakan minta approval terlebih dahulu.'
-        : 'Content is not approved yet. Please request approval first.';
+        ? 'Konten belum di-approve'
+        : 'Content not approved';
     }
     return undefined;
-  }, [planData?.approved, hasExistingStep, isOwner, isAdmin, language]);
+  }, [showApprovalRestriction, language]);
 
   // ===== OPTIMIZATION 2: Memoize formattedTitle calculation =====
   const formattedTitle = useMemo(() => {
@@ -282,6 +281,15 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
 
     if (!formattedTitle) {
       toast.error('Failed to format title');
+      return;
+    }
+
+    if (!isPlanApproved) {
+      toast.error(
+        language === 'id'
+          ? 'Konten belum di-approve'
+          : 'Content not approved'
+      );
       return;
     }
 
@@ -536,35 +544,54 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
             />
           </div>
 
-          <div className="flex justify-between items-center">
-            <Button
-              variant="outline"
-              onClick={() => setIsDailyTaskDialogOpen(true)}
-              className="flex items-center gap-2"
-              disabled={
-                isLoadingPlanData ||
-                isCheckingDuplicate || 
-                isFetchingDuplicate || 
-                !!duplicateCheck?.exists || 
-                !titleText.trim() ||
-                !formattedTitle ||
-                !planData
-              }
-            >
-              {isCheckingDuplicate || isFetchingDuplicate ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking...
-                </>
-              ) : duplicateCheck?.exists ? (
-                `Already taken by ${duplicateCheck.employeeName}`
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  Add as Daily Task
-                </>
-              )}
-            </Button>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDailyTaskDialogOpen(true)}
+                      className="flex items-center gap-2"
+                      disabled={
+                        showApprovalRestriction ||
+                        isLoadingPlanData ||
+                        isCheckingDuplicate || 
+                        isFetchingDuplicate || 
+                        !!duplicateCheck?.exists || 
+                        !titleText.trim() ||
+                        !formattedTitle ||
+                        !planData
+                      }
+                    >
+                      {isCheckingDuplicate || isFetchingDuplicate ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Checking...
+                        </>
+                      ) : duplicateCheck?.exists ? (
+                        `Already taken by ${duplicateCheck.employeeName}`
+                      ) : showApprovalRestriction ? (
+                        <>
+                          <Lock className="h-4 w-4" />
+                          Add as Daily Task
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          Add as Daily Task
+                        </>
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {showApprovalRestriction && approvedTooltipMessage && (
+                  <TooltipContent>
+                    <p>{approvedTooltipMessage}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>
                 Cancel
@@ -582,7 +609,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         onClose={() => setIsDailyTaskDialogOpen(false)}
         onSelect={handleAddAsDailyTask}
         dueDate={planData?.post_date || null}
-        assignDisabledReason={approvedGuardMessage}
+        assignDisabledReason={approvedTooltipMessage}
         serviceName={planData?.service?.name || ''}
       />
     </Dialog>
