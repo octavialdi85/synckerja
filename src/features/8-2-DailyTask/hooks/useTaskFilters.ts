@@ -357,16 +357,29 @@ export const useTaskFilters = ({
       }
 
       // Apply search filter at step level:
-      // When a search term is provided, only show steps whose title matches the search term
-      // Task is still shown if task title matches or if any step matches (handled by matchesSearch)
-      // but we only show steps that match the search term
+      // - Exact match with task title => show all steps
+      // - Exact match with step title => show only matching steps
+      // - Partial match => keep previous behavior (step titles containing keyword)
       if (filters.search) {
-        const lowerSearchTerm = filters.search.toLowerCase();
-        // Filter steps to only show those whose title matches the search term
-        steps = steps.filter((step) => {
-          const stepTitleMatch = step.title?.toLowerCase().includes(lowerSearchTerm) || false;
-          return stepTitleMatch;
-        });
+        const normalizedSearch = filters.search.toLowerCase().trim();
+        const normalizedTaskTitle = task.title?.toLowerCase().trim() || '';
+        const isExactTaskMatch = normalizedSearch.length > 0 && normalizedTaskTitle === normalizedSearch;
+
+        if (!isExactTaskMatch) {
+          const exactStepMatches = steps.filter((step) => {
+            const normalizedStepTitle = step.title?.toLowerCase().trim() || '';
+            return normalizedStepTitle === normalizedSearch;
+          });
+
+          if (exactStepMatches.length > 0) {
+            steps = exactStepMatches;
+          } else {
+            steps = steps.filter((step) => {
+              const stepTitleMatch = step.title?.toLowerCase().includes(normalizedSearch) || false;
+              return stepTitleMatch;
+            });
+          }
+        }
       }
 
       return steps;
