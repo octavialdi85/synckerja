@@ -25,6 +25,8 @@ export const useSyncPicProduction = () => {
     
     try {
       // Get latest assignment for this plan
+      // IMPORTANT: Only sync from Content steps (is_concept_step = false), not Concept steps
+      // PIC Production should only come from Content step assignments, not Concept step assignments
       const { data: assignmentData } = await supabase
         .from('task_steps_assigned')
         .select(`
@@ -33,10 +35,12 @@ export const useSyncPicProduction = () => {
           assigned_at,
           task_steps!inner(
             id,
-            social_media_plan_id
+            social_media_plan_id,
+            is_concept_step
           )
         `)
         .eq('task_steps.social_media_plan_id', socialMediaPlanId)
+        .eq('task_steps.is_concept_step', false) // Only Content steps, not Concept steps
         .order('assigned_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -136,6 +140,7 @@ export const useSyncPicProduction = () => {
       
       // Get latest assignment for each plan in batch
       // Use a more efficient query: get all assignments for plans that have task_steps
+      // IMPORTANT: Only sync from Content steps (is_concept_step = false), not Concept steps
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from('task_steps_assigned')
         .select(`
@@ -144,10 +149,12 @@ export const useSyncPicProduction = () => {
           assigned_at,
           task_steps!inner(
             id,
-            social_media_plan_id
+            social_media_plan_id,
+            is_concept_step
           )
         `)
         .in('task_steps.social_media_plan_id', planIds)
+        .eq('task_steps.is_concept_step', false) // Only Content steps, not Concept steps
         .order('assigned_at', { ascending: false });
       
       if (assignmentsError) {

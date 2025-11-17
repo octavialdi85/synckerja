@@ -536,18 +536,6 @@ export const useApprovalTaskStepCreation = ({
   const handleUnapproval = useCallback(async (planId: string): Promise<void> => {
     // Delete task_steps when un-approving
     await deleteTaskStepForPlan(planId);
-    // Also clear PIC Production fields so UI reflects unapproval state
-    try {
-      await supabase
-        .from('social_media_plans')
-        .update({
-          pic_production_id: null,
-          pic_production_source: null
-        })
-        .eq('id', planId);
-    } catch (e) {
-      console.warn('Non-blocking: failed to clear PIC production on unapproval', e);
-    }
   }, [deleteTaskStepForPlan]);
 
   return {

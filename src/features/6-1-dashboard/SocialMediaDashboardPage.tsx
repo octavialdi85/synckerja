@@ -732,8 +732,6 @@ const SocialMediaContent = () => {
           handleUnapproval(id).catch((error) => {
             console.error('Error during unapproval Concept task step deletion:', error);
           });
-          // Clear PIC Production immediately so UI reflects the change
-          updateContentPlan(id, { pic_production_id: null, pic_production_source: null });
         }
       }
 

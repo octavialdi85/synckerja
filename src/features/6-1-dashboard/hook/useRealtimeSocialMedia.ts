@@ -233,13 +233,15 @@ export const useRealtimeSocialMedia = () => {
           if (payload.new || payload.old) {
             const assignmentData = payload.new || payload.old;
             try {
+              // IMPORTANT: Only sync PIC Production from Content steps (is_concept_step = false), not Concept steps
               const { data: stepData } = await supabase
                 .from('task_steps')
-                .select('social_media_plan_id')
+                .select('social_media_plan_id, is_concept_step')
                 .eq('id', assignmentData.task_step_id)
                 .maybeSingle();
               
-              if (stepData?.social_media_plan_id) {
+              // Skip sync if this is a Concept step (PIC Production should only come from Content steps)
+              if (stepData?.social_media_plan_id && stepData.is_concept_step === false) {
                 // Get plan data to sync pic_production_id
                 const { data: planData } = await supabase
                   .from('social_media_plans')
