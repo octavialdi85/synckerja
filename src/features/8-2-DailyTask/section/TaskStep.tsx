@@ -57,6 +57,7 @@ interface TaskStepProps {
     assigned_due_date?: string | null;
     has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
     social_media_plan_id?: string | null;
+    is_concept_step?: boolean; // true for Concept step, false for Content step
     // Relations
     assigned_employee?: {
       id: string;
@@ -410,13 +411,122 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
     }
   }, [isUpdateHistoryOpen, solutionId, isFromMeetingPoint]);
 
+  // Auto-complete Concept step when approved = true
+  useEffect(() => {
+    const autoCompleteConceptStep = async () => {
+      // Only check for Concept step with social_media_plan_id and no sub-steps
+      if (!step.social_media_plan_id || subStepCount > 0) return;
+      
+      // Use is_concept_step column instead of parsing title
+      const isConceptStep = step.is_concept_step === true;
+      if (!isConceptStep) return;
+
+      // Skip if already completed
+      if (step.is_completed) return;
+
+      try {
+        const { data: planData, error: planError } = await supabase
+          .from('social_media_plans')
+          .select('approved')
+          .eq('id', step.social_media_plan_id)
+          .single();
+
+        if (planError) {
+          console.error('Error fetching plan data for auto-complete:', planError);
+          return;
+        }
+
+        // If approved = true and step is not completed, auto-complete it
+        if (planData?.approved === true && !step.is_completed) {
+          const now = new Date().toISOString();
+          const payload: any = { 
+            is_completed: true,
+            updated_at: now
+          };
+          
+          setOptimisticCompleted(true);
+          setOptimisticUpdatedAt(now);
+          
+          updateTaskStep(step.id, payload, { autoReorder }).catch((error) => {
+            console.error('Error auto-completing Concept step:', error);
+            setOptimisticCompleted(null);
+            setOptimisticUpdatedAt(null);
+          });
+        }
+      } catch (error) {
+        console.error('Error in auto-complete Concept step:', error);
+      }
+    };
+
+    autoCompleteConceptStep();
+  }, [step.social_media_plan_id, step.is_concept_step, step.is_completed, subStepCount, step.id]);
+
   const handleToggleComplete = async () => {
+    // Handle step with social_media_plan_id
     if (step.social_media_plan_id && subStepCount === 0) {
-      toast({
-        title: 'Completion locked',
-        description: 'This step is controlled by the Social Media Plan. Update the plan status or Google Drive link to complete it.',
-      });
-      return;
+      try {
+        // Fetch social media plan data
+        const { data: planData, error: planError } = await supabase
+          .from('social_media_plans')
+          .select('approved, google_drive_link, production_approved')
+          .eq('id', step.social_media_plan_id)
+          .single();
+
+        if (planError) {
+          console.error('Error fetching social media plan:', planError);
+          toast({
+            title: 'Error',
+            description: 'Failed to fetch plan data',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        // Identify step type: "Concept" or "Content" based on is_concept_step column
+        const isConceptStep = step.is_concept_step === true;
+        const isContentStep = step.is_concept_step === false;
+
+        // Logic for Concept Step (controlled by approved only)
+        if (isConceptStep) {
+          if (planData?.approved === true) {
+            // If approved = true, allow completion (auto-complete handled by useEffect)
+            // Allow manual toggle (check/uncheck)
+            // Continue with normal toggle logic below
+          } else {
+            // If approved = false, block manual toggle
+            toast({
+              title: 'Completion locked',
+              description: 'This step can only be checked from the Social Media Dashboard by approving the plan.',
+            });
+            return;
+          }
+        }
+
+        // Logic for Content Step (controlled by production_approved and google_drive_link only, ignore approved)
+        if (isContentStep) {
+          const hasGoogleDriveLink = planData?.google_drive_link && planData.google_drive_link.trim() !== '';
+          const isProductionApproved = planData?.production_approved === true;
+
+          // Block if: google_drive_link IS NULL AND production_approved = false
+          if (!hasGoogleDriveLink && !isProductionApproved) {
+            toast({
+              title: 'Completion locked',
+              description: 'Content step requires either a Google Drive link or production approval. Please add the Google Drive link or approve production in the Social Media Plan first.',
+            });
+            return;
+          }
+          // Allow if: google_drive_link IS NOT NULL OR production_approved = true
+          // Continue with normal toggle logic below
+        }
+      } catch (error) {
+        console.error('Error in handleToggleComplete:', error);
+        toast({
+          title: 'Error',
+          description: 'An error occurred while checking plan data',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     // Jika step memiliki sub-step, tidak bisa di-toggle langsung

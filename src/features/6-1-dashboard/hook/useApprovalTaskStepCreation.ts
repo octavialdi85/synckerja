@@ -90,14 +90,17 @@ export const useApprovalTaskStepCreation = ({
     
     try {
       // 1. Check duplicate FIRST (early exit untuk performance)
-      const { data: existingStep } = await supabase
+      // Only check for existing "Concept" steps, not "Content" steps
+      // Because a plan can have both "Concept" and "Content" steps
+      const { data: existingConceptStep } = await supabase
         .from('task_steps')
         .select('id')
         .eq('social_media_plan_id', plan.id)
+        .eq('is_concept_step', true)
         .maybeSingle();
 
-      if (existingStep) {
-        toast.error('Task step already exists for this social media plan');
+      if (existingConceptStep) {
+        toast.error('Concept step already exists for this social media plan');
         return false;
       }
 
@@ -168,7 +171,8 @@ export const useApprovalTaskStepCreation = ({
           order: nextOrder,
           completed_at: completedAt, // Ambil dari completion_date di social_media_plans
           created_by: userId, // Harus merujuk ke users.id (bukan employees.id)
-          social_media_plan_id: plan.id // Tidak boleh NULL
+          social_media_plan_id: plan.id, // Tidak boleh NULL
+          is_concept_step: true // This is a Concept step
         })
         .select('id')
         .single();
@@ -474,49 +478,56 @@ export const useApprovalTaskStepCreation = ({
   }, [shouldShowModal]);
 
   // Delete task_steps when status changes from "Approved" to "Need Review"
+  // Only delete "Concept" steps, not "Content" steps
   const deleteTaskStepForPlan = useCallback(async (planId: string): Promise<boolean> => {
     try {
-      // Check if task_steps exists for this social_media_plan_id
-      const { data: existingStep } = await supabase
+      // Check if Concept task_steps exists for this social_media_plan_id
+      // Only delete steps with is_concept_step = true
+      const { data: existingSteps } = await supabase
         .from('task_steps')
         .select('id, task_id')
         .eq('social_media_plan_id', planId)
-        .maybeSingle();
+        .eq('is_concept_step', true);
 
-      if (!existingStep) {
-        // No task step exists - nothing to delete
+      if (!existingSteps || existingSteps.length === 0) {
+        // No Concept step exists - nothing to delete
         return true;
       }
 
-      // Delete task step
-      const { error: deleteError } = await supabase
-        .from('task_steps')
-        .delete()
-        .eq('social_media_plan_id', planId);
+      // Delete only Concept steps (is_concept_step = true)
+      const conceptStepIds = existingSteps.map(step => step.id);
+      
+      if (conceptStepIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('task_steps')
+          .delete()
+          .in('id', conceptStepIds);
 
-      if (deleteError) {
-        console.error('Error deleting task step:', {
-          error: deleteError,
-          code: deleteError.code,
-          message: deleteError.message,
-          details: deleteError.details,
-          hint: deleteError.hint,
-          planId
-        });
-        toast.error('Failed to delete task step: ' + (deleteError.message || 'Unknown error'));
-        return false;
+        if (deleteError) {
+          console.error('Error deleting Concept task steps:', {
+            error: deleteError,
+            code: deleteError.code,
+            message: deleteError.message,
+            details: deleteError.details,
+            hint: deleteError.hint,
+            planId,
+            deletedStepIds: conceptStepIds
+          });
+          toast.error('Failed to delete Concept task step: ' + (deleteError.message || 'Unknown error'));
+          return false;
+        }
       }
 
-      // Successfully deleted
+      // Successfully deleted Concept steps
       return true;
     } catch (error: any) {
-      console.error('Error deleting task step:', {
+      console.error('Error deleting Concept task steps:', {
         error,
         message: error?.message,
         code: error?.code,
         planId
       });
-      toast.error('Failed to delete task step: ' + (error?.message || 'Unknown error'));
+      toast.error('Failed to delete Concept task step: ' + (error?.message || 'Unknown error'));
       return false;
     }
   }, []);

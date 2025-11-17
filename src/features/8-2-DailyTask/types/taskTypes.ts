@@ -51,6 +51,7 @@ export interface TaskStep {
   updated_at: string;
   created_by?: string | null;
   social_media_plan_id?: string | null;
+  is_concept_step?: boolean; // true for Concept step, false for Content step
   files?: TaskFile[];
   links?: TaskLink[];
   history?: TaskStepHistory[];

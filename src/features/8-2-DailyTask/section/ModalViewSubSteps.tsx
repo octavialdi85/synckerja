@@ -35,6 +35,7 @@ interface ParentPlanInfo {
   google_drive_link?: string | null;
   production_status?: string | null;
   production_approved?: boolean | null;
+  is_concept_step?: boolean; // true for Concept step, false for Content step
 }
 
 interface ModalViewSubStepsProps {
@@ -214,13 +215,47 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const toggleCompleted = async (id: string, current: boolean) => {
     try {
       const willBeCompleted = !current;
+      
+      // Check if this is the last sub-step being completed
+      // Find the last sub-step by order
+      const sortedSubSteps = [...subSteps].sort((a, b) => b.order - a.order);
+      const lastSubStep = sortedSubSteps[0];
+      const isLastSubStep = lastSubStep?.id === id;
+      
+      // Check if parent step is Content step using is_concept_step column
+      const isContentStep = parentPlan?.is_concept_step === false;
+      
+      // For Content step, check if completing the last sub-step requires Google Drive link or production approval
+      if (
+        willBeCompleted &&
+        isLastSubStep &&
+        isContentStep &&
+        parentPlan?.id
+      ) {
+        const hasGoogleDriveLink = parentPlan.google_drive_link && parentPlan.google_drive_link.trim() !== '';
+        const isProductionApproved = parentPlan.production_approved === true;
+        
+        // Block if: google_drive_link IS NULL AND production_approved = false
+        if (!hasGoogleDriveLink && !isProductionApproved) {
+          toast({
+            title: 'Completion locked',
+            description: 'Content step requires either a Google Drive link or production approval. Please add the Google Drive link or approve production in the Social Media Plan first.',
+            variant: 'destructive'
+          });
+          return;
+        }
+      }
+      
+      // Original logic: Check if finishing all sub-steps (for non-Content steps or non-last sub-steps)
       const isFinishingAllSubSteps =
         willBeCompleted &&
         subSteps.length > 0 &&
         subSteps.every(s => (s.id === id ? true : s.is_completed));
 
+      // Only apply Google Drive link check for non-Content steps or when not the last sub-step
       if (
         isFinishingAllSubSteps &&
+        !isContentStep &&
         parentPlan?.id &&
         (!parentPlan.google_drive_link || parentPlan.google_drive_link.trim() === '')
       ) {
@@ -457,7 +492,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       try {
         const { data: stepPlan } = await supabase
           .from('task_steps')
-          .select('social_media_plan_id')
+          .select('social_media_plan_id, is_concept_step')
           .eq('id', parentStepId)
           .maybeSingle();
 
@@ -472,11 +507,15 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           .eq('id', stepPlan.social_media_plan_id)
           .maybeSingle();
 
+        // Store parent step's is_concept_step for Content step check
+        const parentIsConceptStep = stepPlan.is_concept_step === true;
+
         setParentPlan({
           id: stepPlan.social_media_plan_id,
           google_drive_link: planData?.google_drive_link ?? null,
           production_status: planData?.production_status ?? null,
-          production_approved: planData?.production_approved ?? null
+          production_approved: planData?.production_approved ?? null,
+          is_concept_step: parentIsConceptStep
         });
       } catch (error) {
         console.error('Error fetching parent plan info:', error);

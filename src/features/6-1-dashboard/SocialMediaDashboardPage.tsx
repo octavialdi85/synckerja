@@ -722,14 +722,15 @@ const SocialMediaContent = () => {
       }
 
       // Special handling untuk approved toggle yang diubah ke false (un-approval)
-      // Delete task_steps ketika approved diubah dari true ke false
+      // Delete Concept task_steps ketika approved diubah dari true ke false
       // NON-BLOCKING: jangan di-await supaya toggle langsung pindah ke posisi off tanpa delay
       if (field === 'approved' && value === false) {
         const plan = contentPlans.find(p => p.id === id);
-        if (plan && plan.approved === true && plan.status === 'Approved') {
-          // Approved diubah dari true ke false dan status adalah "Approved" - hapus task_steps di background
+        if (plan && plan.approved === true) {
+          // Approved diubah dari true ke false - hapus Concept task_steps di background
+          // Only Concept steps will be deleted (Content steps remain)
           handleUnapproval(id).catch((error) => {
-            console.error('Error during unapproval task step deletion:', error);
+            console.error('Error during unapproval Concept task step deletion:', error);
           });
           // Clear PIC Production immediately so UI reflects the change
           updateContentPlan(id, { pic_production_id: null, pic_production_source: null });

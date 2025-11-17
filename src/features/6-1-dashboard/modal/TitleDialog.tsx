@@ -409,7 +409,8 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
           status: 'pending',
           priority: 'medium',
           created_by: user.id,
-          social_media_plan_id: socialMediaPlanId || null
+          social_media_plan_id: socialMediaPlanId || null,
+          is_concept_step: false // This is a Content step
         })
         .select()
         .single();

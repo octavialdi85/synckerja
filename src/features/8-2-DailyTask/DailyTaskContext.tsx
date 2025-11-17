@@ -453,7 +453,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   updated_at,
                   completed_at,
                   created_by,
-                  social_media_plan_id
+                  social_media_plan_id,
+                  is_concept_step
                 `)
                 .in('task_id', batch)
                 .order('order', { ascending: true });
