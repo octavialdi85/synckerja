@@ -278,6 +278,20 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                         <p className="font-semibold text-gray-900 line-clamp-1">
                           {completedTitle || assignment.taskTitle}
                         </p>
+                        {assignment.type === "subStep" && assignment.stepTitle && (
+                          <p className="text-[11px] text-gray-500">
+                            {t("dailyTask.jobDesc.assignment.parentStep", "Step: {{title}}", {
+                              title: assignment.stepTitle,
+                            })}
+                          </p>
+                        )}
+                        {assignment.type !== "task" && assignment.taskTitle && (
+                          <p className="text-[11px] text-gray-500">
+                            {t("dailyTask.jobDesc.assignment.parentTask", "Task: {{title}}", {
+                              title: assignment.taskTitle,
+                            })}
+                          </p>
+                        )}
                         {assignment.dueDate && (
                           <p className="text-[11px] text-gray-500">
                             {t("dailyTask.jobDesc.assignment.due", "Due {{date}}", {
