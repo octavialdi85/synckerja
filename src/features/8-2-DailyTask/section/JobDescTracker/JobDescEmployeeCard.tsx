@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { differenceInCalendarDays, format, formatDistanceToNowStrict, startOfDay } from "date-fns";
 import { id as indonesianLocale } from "date-fns/locale";
 import { Badge } from "@/features/ui/badge";
@@ -6,6 +6,9 @@ import { Separator } from "@/features/ui/separator";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { cn } from "@/lib/utils";
 import { JobDescAssignment, JobDescEmployeeSummary } from "./types";
+import { useDailyTask } from '../../DailyTaskContext';
+import { ModalViewSubSteps } from '../ModalViewSubSteps';
+import { supabase } from '@/integrations/supabase/client';
 
 interface JobDescEmployeeCardProps {
   summary: JobDescEmployeeSummary;
@@ -30,6 +33,146 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
   const { t, language } = useAppTranslation();
   const locale = language === "id" ? indonesianLocale : undefined;
   const [showCompleted, setShowCompleted] = useState(false);
+  const { setFilters, navigateToTask, setExpandedTasks, scrollToStep } = useDailyTask();
+  
+  // State untuk modal sub-step
+  const [subStepModal, setSubStepModal] = useState<{
+    open: boolean;
+    parentStepId: string;
+    parentStepTitle: string;
+  }>({
+    open: false,
+    parentStepId: '',
+    parentStepTitle: '',
+  });
+
+  // Cache untuk performance optimization
+  const [stepIdCache, setStepIdCache] = useState<Map<string, string>>(new Map());
+  const [parentStepIdCache, setParentStepIdCache] = useState<Map<string, string>>(new Map());
+
+  // Helper function untuk mendapatkan stepId dari assignmentId (dengan cache)
+  const getStepId = useCallback(async (assignmentId: string): Promise<string | null> => {
+    // Check cache first
+    if (stepIdCache.has(assignmentId)) {
+      return stepIdCache.get(assignmentId) || null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('task_steps_assigned')
+        .select('task_step_id')
+        .eq('id', assignmentId)
+        .single();
+
+      if (error || !data) return null;
+
+      const stepId = data.task_step_id;
+      // Update cache
+      setStepIdCache(prev => new Map(prev).set(assignmentId, stepId));
+      return stepId;
+    } catch (error) {
+      console.error('Error fetching stepId:', error);
+      return null;
+    }
+  }, [stepIdCache]);
+
+  // Helper function untuk mendapatkan parentStepId dari assignmentId (dengan cache)
+  const getParentStepId = useCallback(async (assignmentId: string): Promise<string | null> => {
+    // Check cache first
+    if (parentStepIdCache.has(assignmentId)) {
+      return parentStepIdCache.get(assignmentId) || null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('task_steps_to_steps_assigned')
+        .select(`
+          task_steps_to_steps_id,
+          task_steps_to_steps!inner(parent_step_id)
+        `)
+        .eq('id', assignmentId)
+        .single();
+
+      if (error || !data) return null;
+
+      const parentStepId = (data as any).task_steps_to_steps?.parent_step_id;
+      if (parentStepId) {
+        // Update cache
+        setParentStepIdCache(prev => new Map(prev).set(assignmentId, parentStepId));
+        return parentStepId;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching parentStepId:', error);
+      return null;
+    }
+  }, [parentStepIdCache]);
+
+  // Handle click pada task title
+  const handleTaskTitleClick = useCallback(async (assignment: JobDescAssignment) => {
+    if (assignment.type === 'task') {
+      // Task Title Click: search dengan taskTitle, tampilkan semua step
+      const searchTitle = assignment.title || assignment.taskTitle;
+      setFilters(prev => ({
+        ...prev,
+        search: searchTitle
+      }));
+      navigateToTask(assignment.taskId);
+      
+    } else if (assignment.type === 'step') {
+      // Step Title Click: search dengan stepTitle, tampilkan hanya step spesifik
+      setFilters(prev => ({
+        ...prev,
+        search: assignment.stepTitle
+      }));
+      
+      // Query stepId untuk scroll ke step spesifik
+      const stepId = await getStepId(assignment.assignmentId);
+      
+      // Expand task
+      setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+      
+      // Scroll ke step jika stepId ditemukan
+      if (stepId) {
+        setTimeout(() => {
+          scrollToStep(stepId);
+        }, 300); // Delay untuk memastikan task sudah expanded
+      } else {
+        // Fallback: navigate biasa jika stepId tidak ditemukan
+        navigateToTask(assignment.taskId);
+      }
+      
+    } else if (assignment.type === 'subStep') {
+      // Sub-step Title Click: search dengan stepTitle (parent), buka modal, scroll ke parent step
+      setFilters(prev => ({
+        ...prev,
+        search: assignment.stepTitle
+      }));
+      
+      // Query parentStepId untuk buka modal dan scroll
+      const parentStepId = await getParentStepId(assignment.assignmentId);
+      
+      if (parentStepId) {
+        setSubStepModal({
+          open: true,
+          parentStepId: parentStepId,
+          parentStepTitle: assignment.stepTitle,
+        });
+        
+        // Expand task
+        setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+        
+        // Scroll ke parent step
+        setTimeout(() => {
+          scrollToStep(parentStepId);
+        }, 300);
+      } else {
+        // Fallback: expand task saja jika parentStepId tidak ditemukan
+        setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+        navigateToTask(assignment.taskId);
+      }
+    }
+  }, [setFilters, navigateToTask, setExpandedTasks, scrollToStep, getStepId, getParentStepId]);
 
   const assignmentsToShow = summary.activeAssignments.length
     ? summary.activeAssignments
@@ -176,11 +319,21 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-gray-900 line-clamp-1">
+                    <p 
+                      className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                      onClick={() => handleTaskTitleClick(assignment)}
+                      title="Click to search and view this task"
+                    >
                       {taskTitle}
                     </p>
                     {extraLabel && (
-                      <p className="text-[11px] text-gray-500 line-clamp-1">{extraLabel}</p>
+                      <p 
+                        className="text-[11px] text-gray-500 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => handleTaskTitleClick(assignment)}
+                        title="Click to search and view this task"
+                      >
+                        {extraLabel}
+                      </p>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
                       {assignment.dueDate && (
@@ -275,7 +428,11 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-gray-900 line-clamp-1">
+                        <p 
+                          className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={() => handleTaskTitleClick(assignment)}
+                          title="Click to search and view this task"
+                        >
                           {completedTitle || assignment.taskTitle}
                         </p>
                         {assignment.type === "subStep" && assignment.stepTitle && (
@@ -332,6 +489,14 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
           )}
         </div>
       )}
+
+      {/* Sub-step Modal */}
+      <ModalViewSubSteps
+        open={subStepModal.open}
+        onOpenChange={(open) => setSubStepModal(prev => ({ ...prev, open }))}
+        parentStepId={subStepModal.parentStepId}
+        parentStepTitle={subStepModal.parentStepTitle}
+      />
     </div>
   );
 };
