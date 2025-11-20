@@ -59,7 +59,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
     isDeleting 
   } = useSocialMediaLinks(socialMediaPlanId);
 
-  const { socialMediaNames, getNamesByPlatform } = useSocialMediaNames(organizationId);
+  const { socialMediaNames, getNamesByPlatform, isLoading: isLoadingNames } = useSocialMediaNames(organizationId);
 
   // Initialize form data when dialog opens or links change
   useEffect(() => {
@@ -290,15 +290,23 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
                               <SelectValue placeholder="Select account name" />
                             </SelectTrigger>
                             <SelectContent>
-                              {getNamesByPlatform(link.platform).map((name) => (
-                                <SelectItem key={name.id} value={name.name}>
-                                  {name.name}
+                              {isLoadingNames ? (
+                                <SelectItem value="loading" disabled>
+                                  Loading...
                                 </SelectItem>
-                              ))}
-                              {getNamesByPlatform(link.platform).length === 0 && (
-                                <SelectItem value="no-names-available" disabled>
-                                  No names available for {link.platform}
-                                </SelectItem>
+                              ) : (
+                                <>
+                                  {getNamesByPlatform(link.platform).map((name) => (
+                                    <SelectItem key={name.id} value={name.name}>
+                                      {name.name}
+                                    </SelectItem>
+                                  ))}
+                                  {getNamesByPlatform(link.platform).length === 0 && (
+                                    <SelectItem value="no-names-available" disabled>
+                                      No names available for {link.platform}
+                                    </SelectItem>
+                                  )}
+                                </>
                               )}
                             </SelectContent>
                           </Select>

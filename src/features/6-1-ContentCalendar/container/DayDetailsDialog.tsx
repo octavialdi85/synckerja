@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Plus, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, ExternalLink, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Card } from '@/features/ui/card';
@@ -14,6 +14,7 @@ interface DayDetailsDialogProps {
   selectedDate: Date | null;
   plansByDate: { [key: string]: any[] };
   onAddContent: (date: Date) => void;
+  onEditContent?: (plan: any) => void; // Handler for edit action
   selectedPlan?: any | null; // Optional: if provided, show only this plan
 }
 
@@ -23,6 +24,7 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
   selectedDate,
   plansByDate,
   onAddContent,
+  onEditContent,
   selectedPlan = null
 }) => {
   // Extract plan IDs for green cards (done = true) to fetch links
@@ -126,17 +128,34 @@ export const DayDetailsDialog: React.FC<DayDetailsDialogProps> = ({
                       return (
                         <Card key={plan.id} className="p-3">
                           <div className="space-y-2">
-                            {/* Service - Sub Service - Pillar */}
-                            <div className="text-sm text-muted-foreground">
-                              {[
-                                plan?.service?.name,
-                                plan?.sub_service?.name,
-                                plan?.content_pillar?.name
-                              ].filter(Boolean).join(' - ') || 'No Service'}
+                            {/* Header with Edit button */}
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                {/* Service - Sub Service - Pillar */}
+                                <div className="text-sm text-muted-foreground">
+                                  {[
+                                    plan?.service?.name,
+                                    plan?.sub_service?.name,
+                                    plan?.content_pillar?.name
+                                  ].filter(Boolean).join(' - ') || 'No Service'}
+                                </div>
+                                
+                                {/* Title */}
+                                <h5 className="font-medium text-lg">{plan?.title || 'Untitled Content'}</h5>
+                              </div>
+                              {/* Edit Button */}
+                              {onEditContent && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => onEditContent(plan)}
+                                  className="h-8 w-8 p-0"
+                                  title="Edit content plan"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
-                            
-                            {/* Title */}
-                            <h5 className="font-medium text-lg">{plan?.title || 'Untitled Content'}</h5>
                             
                             {/* PIC */}
                             <div className="text-sm text-muted-foreground">

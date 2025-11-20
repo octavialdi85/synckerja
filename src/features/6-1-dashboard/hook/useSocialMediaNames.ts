@@ -29,9 +29,25 @@ export const useSocialMediaNames = (organizationId?: string) => {
     enabled: !!organizationId,
   });
 
-  // Get names by platform
+  // Get names by platform (case-insensitive comparison)
   const getNamesByPlatform = (platform: string) => {
-    return socialMediaNames.filter(name => name.platform === platform);
+    if (!platform || platform.trim() === '') return [];
+    const filtered = socialMediaNames.filter(name => 
+      name.platform && 
+      name.platform.trim().toLowerCase() === platform.trim().toLowerCase()
+    );
+    
+    // Debug logging (can be removed in production)
+    if (process.env.NODE_ENV === 'development' && filtered.length === 0 && socialMediaNames.length > 0) {
+      console.log('🔍 getNamesByPlatform debug:', {
+        platform,
+        totalNames: socialMediaNames.length,
+        availablePlatforms: [...new Set(socialMediaNames.map(n => n.platform))],
+        allNames: socialMediaNames
+      });
+    }
+    
+    return filtered;
   };
 
   // Create new social media name

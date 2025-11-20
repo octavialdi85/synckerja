@@ -10,12 +10,14 @@ import { useSocialMediaMutations } from '@/features/6-1-dashboard/hook/useOptimi
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
 import './AddContentDialog.css';
 
 interface AddContentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedDate: Date | null;
+  editingPlan?: ContentPlan | null; // Plan to edit, null means create mode
 }
 
 interface Employee {
@@ -27,17 +29,20 @@ interface Employee {
 export const AddContentDialog: React.FC<AddContentDialogProps> = ({
   open,
   onOpenChange,
-  selectedDate
+  selectedDate,
+  editingPlan = null
 }) => {
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
-  const { addContentPlan } = useSocialMediaMutations();
+  const { addContentPlan, updateContentPlan } = useSocialMediaMutations();
+  const isEditMode = !!editingPlan;
   
   // State for master data - simplified approach
   const [contentTypes, setContentTypes] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [subServices, setSubServices] = useState<any[]>([]);
   const [contentPillars, setContentPillars] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
@@ -48,7 +53,8 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
     sub_service_id: '',
     content_pillar_id: '',
     content_type_id: '',
-    pic_id: ''
+    pic_id: '',
+    post_date: ''
   });
   const [filteredSubServices, setFilteredSubServices] = useState<any[]>([]);
 
@@ -59,7 +65,7 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
     setLoading(true);
     try {
       // Fetch all master data in parallel
-      const [contentTypesResult, servicesResult, subServicesResult, contentPillarsResult] = await Promise.all([
+      const [contentTypesResult, servicesResult, subServicesResult, contentPillarsResult, employeesResult] = await Promise.all([
         supabase
           .from('content_types')
           .select('*')
@@ -83,7 +89,13 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
           .select('*')
           .or(`organization_id.eq.${organizationId},organization_id.is.null`)
           .eq('is_active', true)
-          .order('name')
+          .order('name'),
+        supabase
+          .from('employees')
+          .select('id, full_name, user_id')
+          .eq('organization_id', organizationId)
+          .eq('status', 'active')
+          .order('full_name')
       ]);
 
       // Check for errors
@@ -91,11 +103,13 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
       if (servicesResult.error) throw servicesResult.error;
       if (subServicesResult.error) throw subServicesResult.error;
       if (contentPillarsResult.error) throw contentPillarsResult.error;
+      if (employeesResult.error) throw employeesResult.error;
 
       setContentTypes(contentTypesResult.data || []);
       setServices(servicesResult.data || []);
       setSubServices(subServicesResult.data || []);
       setContentPillars(contentPillarsResult.data || []);
+      setEmployees(employeesResult.data || []);
     } catch (error) {
       console.error('Error loading master data:', error);
       toast({
@@ -150,7 +164,9 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
         }
 
         setCurrentEmployee(employee);
-        if (employee) {
+        
+        // Create mode: set default PIC to current employee
+        if (!isEditMode && employee) {
           setFormData(prev => ({
             ...prev,
             pic_id: employee.id
@@ -161,10 +177,27 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
       }
     };
 
-    if (open && organizationId) {
+    if (open && organizationId && !isEditMode) {
       fetchCurrentEmployee();
     }
-  }, [open, organizationId]);
+  }, [open, organizationId, isEditMode]);
+
+  // Populate form for edit mode
+  useEffect(() => {
+    if (open && isEditMode && editingPlan) {
+      const postDate = editingPlan.post_date ? new Date(editingPlan.post_date) : selectedDate;
+      setFormData({
+        title: editingPlan.title || '',
+        brief: editingPlan.brief || '',
+        service_id: editingPlan.service_id || '',
+        sub_service_id: editingPlan.sub_service_id || '',
+        content_pillar_id: editingPlan.content_pillar_id || '',
+        content_type_id: editingPlan.content_type_id || '',
+        pic_id: editingPlan.pic_id || '',
+        post_date: postDate ? format(postDate, 'yyyy-MM-dd') : ''
+      });
+    }
+  }, [open, isEditMode, editingPlan, selectedDate]);
 
   // Filter sub services based on selected service
   useEffect(() => {
@@ -177,9 +210,9 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
     }
   }, [formData.service_id, subServices]);
 
-  // Reset form when modal closes
+  // Reset form when modal closes (only in create mode)
   useEffect(() => {
-    if (!open) {
+    if (!open && !isEditMode) {
       setFormData({
         title: '',
         brief: '',
@@ -187,19 +220,20 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
         sub_service_id: '',
         content_pillar_id: '',
         content_type_id: '',
-        pic_id: currentEmployee?.id || ''
+        pic_id: currentEmployee?.id || '',
+        post_date: ''
       });
       setLoading(false);
     }
-  }, [open, currentEmployee?.id]);
+  }, [open, isEditMode, currentEmployee?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedDate || !organizationId) {
+    if (!organizationId) {
       toast({
         title: "Error",
-        description: "Missing required data",
+        description: "Missing organization data",
         variant: "destructive"
       });
       return;
@@ -214,10 +248,43 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
       return;
     }
 
-    if (!currentEmployee) {
+    // Determine the date to use
+    let dateToUse: Date | null = null;
+    
+    if (isEditMode && editingPlan) {
+      // Edit mode: use formData.post_date if available, otherwise use original post_date
+      if (formData.post_date) {
+        dateToUse = new Date(formData.post_date);
+      } else if (editingPlan.post_date) {
+        dateToUse = new Date(editingPlan.post_date);
+      } else if (selectedDate) {
+        dateToUse = selectedDate;
+      }
+      
+      // Validation: Check if post_date can be changed (if approved, cannot change)
+      const isApproved = editingPlan.approved === true;
+      if (isApproved && formData.post_date) {
+        const originalPostDate = editingPlan.post_date ? format(new Date(editingPlan.post_date), 'yyyy-MM-dd') : '';
+        const newPostDate = format(new Date(formData.post_date), 'yyyy-MM-dd');
+        
+        if (originalPostDate !== newPostDate) {
+          toast({
+            title: "Error",
+            description: "Cannot change post date for approved content plan",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+    } else {
+      // Create mode: use selectedDate
+      dateToUse = selectedDate;
+    }
+    
+    if (!dateToUse) {
       toast({
-        title: "Error", 
-        description: "Employee information not found",
+        title: "Error",
+        description: "Missing post date",
         variant: "destructive"
       });
       return;
@@ -226,58 +293,95 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
     setLoading(true);
     
     try {
-      const newContentData = {
-        organization_id: organizationId,
-        post_date: format(selectedDate, 'yyyy-MM-dd'),
-        title: formData.title.trim(),
-        brief: formData.brief.trim() || null,
-        service_id: formData.service_id || null,
-        sub_service_id: formData.sub_service_id || null,
-        content_pillar_id: formData.content_pillar_id || null,
-        content_type_id: formData.content_type_id || null,
-        pic_id: formData.pic_id || null,
-        status: "",
-        revision_count: 0,
-        approved: false,
-        completion_date: null,
-        pic_production_id: null,
-        google_drive_link: null,
-        production_status: "",
-        production_revision_count: 0,
-        production_completion_date: null,
-        production_approved: false,
-        production_approved_date: null,
-        post_link: null,
-        done: false,
-        actual_post_date: null,
-        on_time_status: "",
-        status_content: ""
-      };
+      if (isEditMode && editingPlan) {
+        // Update existing content plan
+        const updateData: Partial<ContentPlan> = {
+          title: formData.title.trim(),
+          brief: formData.brief.trim() || null,
+          service_id: formData.service_id || null,
+          sub_service_id: formData.sub_service_id || null,
+          content_pillar_id: formData.content_pillar_id || null,
+          content_type_id: formData.content_type_id || null,
+          pic_id: formData.pic_id || null,
+        };
 
-      await addContentPlan(newContentData);
-      
-      toast({
-        title: "Success",
-        description: "Content plan created successfully"
-      });
-      
-      // Reset form
-      setFormData({
-        title: '',
-        brief: '',
-        service_id: '',
-        sub_service_id: '',
-        content_pillar_id: '',
-        content_type_id: '',
-        pic_id: currentEmployee.id
-      });
+        // Only update post_date if not approved
+        if (!editingPlan.approved) {
+          updateData.post_date = format(dateToUse, 'yyyy-MM-dd');
+        }
+
+        await updateContentPlan(editingPlan.id, updateData);
+        
+        toast({
+          title: "Success",
+          description: "Content plan updated successfully"
+        });
+      } else {
+        // Create new content plan
+        if (!currentEmployee) {
+          toast({
+            title: "Error", 
+            description: "Employee information not found",
+            variant: "destructive"
+          });
+          setLoading(false);
+          return;
+        }
+
+        const newContentData = {
+          organization_id: organizationId,
+          post_date: format(dateToUse, 'yyyy-MM-dd'),
+          title: formData.title.trim(),
+          brief: formData.brief.trim() || null,
+          service_id: formData.service_id || null,
+          sub_service_id: formData.sub_service_id || null,
+          content_pillar_id: formData.content_pillar_id || null,
+          content_type_id: formData.content_type_id || null,
+          pic_id: formData.pic_id || null,
+          status: "",
+          revision_count: 0,
+          approved: false,
+          completion_date: null,
+          pic_production_id: null,
+          google_drive_link: null,
+          production_status: "",
+          production_revision_count: 0,
+          production_completion_date: null,
+          production_approved: false,
+          production_approved_date: null,
+          post_link: null,
+          done: false,
+          actual_post_date: null,
+          on_time_status: "",
+          status_content: ""
+        };
+
+        await addContentPlan(newContentData);
+        
+        toast({
+          title: "Success",
+          description: "Content plan created successfully"
+        });
+        
+        // Reset form
+        setFormData({
+          title: '',
+          brief: '',
+          service_id: '',
+          sub_service_id: '',
+          content_pillar_id: '',
+          content_type_id: '',
+          pic_id: currentEmployee.id,
+          post_date: ''
+        });
+      }
       
       onOpenChange(false);
     } catch (error) {
-      console.error('Error creating content plan:', error);
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} content plan:`, error);
       toast({
         title: "Error",
-        description: "Failed to create content plan",
+        description: `Failed to ${isEditMode ? 'update' : 'create'} content plan`,
         variant: "destructive"
       });
     } finally {
@@ -288,25 +392,50 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto seamless-scroll" style={{ zIndex: 999999 }}>
-        <DialogHeader>
+      <DialogContent className="max-w-2xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden" style={{ zIndex: 999999 }}>
+        {/* Sticky Header */}
+        <DialogHeader className="flex-shrink-0 bg-background z-10 pb-4 pt-6 px-6 border-b">
           <DialogTitle>
-            Add New Content Plan - {selectedDate && format(selectedDate, 'dd MMMM yyyy')}
+            {isEditMode ? 'Edit Content Plan' : 'Add New Content Plan'} - {selectedDate && format(selectedDate, 'dd MMMM yyyy')}
           </DialogTitle>
           <DialogDescription>
-            Create a new content plan for the selected date. Fill in all required fields to save your content plan.
+            {isEditMode 
+              ? 'Edit the content plan details. Fill in all required fields to save your changes.'
+              : 'Create a new content plan for the selected date. Fill in all required fields to save your content plan.'}
           </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
-              <p className="text-sm text-gray-600">Loading master data...</p>
+        {/* Scrollable Content */}
+        <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll px-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Loading master data...</p>
+              </div>
             </div>
-          </div>
-        ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          ) : (
+          <form onSubmit={handleSubmit} id="content-plan-form" className="space-y-4 py-4">
+          {/* Post Date - Only show in edit mode, and disable if approved */}
+          {isEditMode && editingPlan && (
+            <div className="space-y-2">
+              <Label htmlFor="post_date">Post Date {editingPlan.approved && '(Cannot change - Already approved)'}</Label>
+              <Input
+                id="post_date"
+                type="date"
+                value={formData.post_date}
+                onChange={(e) => setFormData(prev => ({ ...prev, post_date: e.target.value }))}
+                disabled={editingPlan.approved === true}
+                className={editingPlan.approved ? 'bg-muted' : ''}
+              />
+              {editingPlan.approved && (
+                <p className="text-xs text-muted-foreground">
+                  Post date cannot be changed for approved content plans
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>
@@ -476,19 +605,46 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
             </Select>
           </div>
 
-          {/* PIC (Auto-filled, read-only) */}
+          {/* PIC (Editable dropdown) */}
           <div className="space-y-2">
             <Label htmlFor="pic">PIC</Label>
-            <Input
-              id="pic"
-              value={currentEmployee?.full_name || 'Loading...'}
-              readOnly
-              className="bg-muted"
-            />
+            <Select
+              value={formData.pic_id}
+              onValueChange={(value) => {
+                setFormData(prev => ({ ...prev, pic_id: value }));
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select PIC" />
+              </SelectTrigger>
+              <SelectContent 
+                className="max-h-[200px] overflow-y-auto" 
+                position="popper" 
+                sideOffset={4}
+                style={{ zIndex: 999999 }}
+              >
+                {employees.length > 0 ? (
+                  employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id}>
+                      {employee.full_name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-employees" disabled>
+                    No employees available
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-4">
+          </form>
+          )}
+        </div>
+
+        {/* Sticky Footer */}
+        <div className="flex-shrink-0 bg-background z-10 pt-4 pb-6 px-6 border-t">
+          <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -501,12 +657,17 @@ export const AddContentDialog: React.FC<AddContentDialogProps> = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !currentEmployee}>
-              {loading ? 'Creating...' : 'Create Content Plan'}
+            <Button 
+              type="submit" 
+              form="content-plan-form"
+              disabled={loading || !formData.pic_id}
+            >
+              {loading 
+                ? (isEditMode ? 'Updating...' : 'Creating...') 
+                : (isEditMode ? 'Update Content Plan' : 'Create Content Plan')}
             </Button>
           </div>
-        </form>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );

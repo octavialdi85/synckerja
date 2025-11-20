@@ -22,6 +22,7 @@ const ContentCalendarContent: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [showDayDialog, setShowDayDialog] = useState(false);
   const [showAddContentDialog, setShowAddContentDialog] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState('content-calendar');
@@ -252,6 +253,18 @@ const ContentCalendarContent: React.FC = () => {
   // Handle adding new content
   const handleAddContent = async (date: Date) => {
     setSelectedDate(date);
+    setEditingPlan(null); // Reset editing plan for create mode
+    setShowDayDialog(false);
+    setShowAddContentDialog(true);
+  };
+
+  // Handle editing content
+  const handleEditContent = (plan: any) => {
+    setEditingPlan(plan);
+    // Set selected date from plan's post_date
+    if (plan.post_date) {
+      setSelectedDate(new Date(plan.post_date));
+    }
     setShowDayDialog(false);
     setShowAddContentDialog(true);
   };
@@ -386,14 +399,22 @@ const ContentCalendarContent: React.FC = () => {
         selectedDate={selectedDate}
         plansByDate={plansByDate}
         onAddContent={handleAddContent}
+        onEditContent={handleEditContent}
         selectedPlan={selectedPlan}
       />
 
-      {/* Add Content Dialog */}
+      {/* Add/Edit Content Dialog */}
       <AddContentDialog
         open={showAddContentDialog}
-        onOpenChange={setShowAddContentDialog}
+        onOpenChange={(open) => {
+          setShowAddContentDialog(open);
+          if (!open) {
+            // Reset editing plan when dialog closes
+            setEditingPlan(null);
+          }
+        }}
         selectedDate={selectedDate}
+        editingPlan={editingPlan}
       />
     </StandardLayout>
   );
