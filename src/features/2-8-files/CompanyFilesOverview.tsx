@@ -1,0 +1,68 @@
+
+import { Card } from '@/features/ui/card';
+import { FileText, Clock, TrendingUp } from 'lucide-react';
+import { useCompanyFiles } from './useCompanyFiles';
+import { format } from 'date-fns';
+
+export const CompanyFilesOverview = () => {
+  const { files } = useCompanyFiles();
+
+  const recentFiles = files.slice(0, 5);
+  const totalSize = files.reduce((acc, file) => acc + file.file_size, 0);
+
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Storage Usage */}
+      <Card className="p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <TrendingUp className="h-5 w-5 text-blue-600" />
+          <h4 className="font-medium text-slate-800">Storage Usage</h4>
+        </div>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-600">Used</span>
+            <span className="font-medium">{formatSize(totalSize)}</span>
+          </div>
+          <div className="w-full bg-slate-200 rounded-full h-2">
+            <div className="bg-blue-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+          </div>
+          <p className="text-xs text-slate-500">45% of storage used</p>
+        </div>
+      </Card>
+
+      {/* Recent Files */}
+      <Card className="p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <Clock className="h-5 w-5 text-green-600" />
+          <h4 className="font-medium text-slate-800">Recent Files</h4>
+        </div>
+        <div className="space-y-3">
+          {recentFiles.map((file) => (
+            <div key={file.id} className="flex items-center gap-3">
+              <div className="p-1.5 rounded bg-slate-100">
+                <FileText className="h-3.5 w-3.5 text-slate-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-900 truncate">{file.file_name}</p>
+                <p className="text-xs text-slate-500">
+                  {format(new Date(file.created_at), 'MMM dd, HH:mm')}
+                </p>
+              </div>
+            </div>
+          ))}
+          {recentFiles.length === 0 && (
+            <p className="text-xs text-slate-500 text-center py-4">No files uploaded yet</p>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+};

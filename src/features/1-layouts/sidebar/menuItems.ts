@@ -39,6 +39,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.humanResources.attendance.description",
       },
       {
+        title: "Company",
+        titleKey: "sidebar.humanResources.company.title",
+        url: "/company/dashboard",
+        description: "Manage company profile, departments, and assets",
+        descriptionKey: "sidebar.humanResources.company.description",
+      },
+      {
         title: "Page Access",
         titleKey: "sidebar.humanResources.pageAccess.title",
         url: "/access-permissions/page-access",

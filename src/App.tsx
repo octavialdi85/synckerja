@@ -60,6 +60,11 @@ import { ReprimandManagementPage } from "./features/2-1-reprimand";
 import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
 import AttendancePage from "./features/2-3-attendance/AttendancePage";
+import { CompanyDashboardPage } from "./features/2-8-dashboard";
+import { CompanyAssetsPage } from "@/features/2-8-assets";
+import { CompanyFilesPage } from "@/features/2-8-files";
+import { CompanyOrganizationPage } from "@/features/2-8-organization";
+import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 // Removed legacy imports - using ProtectedRoute instead
 // import { AccessPermissionsGuard } from "./features/2-9-PageAccess/guards/AccessPermissionsGuard";
 // import { AccessPermissionsRedirector } from "./features/2-9-PageAccess/redirectors/AccessPermissionsRedirector";
@@ -350,6 +355,35 @@ const App = () => (
               <Route path="/attendance/settings" element={
                 <ProtectedRoute>
                   <AttendancePage />
+                </ProtectedRoute>
+              } />
+
+              {/* Company Management Routes - PROTECTED */}
+              {/* Each route has its own main file */}
+              <Route path="/company/dashboard" element={
+                <ProtectedRoute>
+                  <CompanyDashboardPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/company/assets" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <CompanyAssetsPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/company/files" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <CompanyFilesPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/company/organization" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <CompanyOrganizationPage />
+                  </StandardLayout>
                 </ProtectedRoute>
               } />
               
