@@ -5,6 +5,7 @@ import { SectionProfile } from '../components/SectionProfile';
 import { HomeOKRDashboard } from '../components/HomeOKRDashboard/HomeOKRDashboard';
 import { SectionActivityNotifikasi } from '../components/SectionActivityNotifikasi';
 import { SectionStatusKaryawan } from '../components/SectionStatusKaryawan';
+import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
 // TODO: Update to use specific contribution modals
 // import { ModalCreateObjective } from '../components/ModalCreateObjective';
 import { ModalMotifationForm } from '../components/ModalMotifationForm/ModalMotifationForm';
@@ -88,7 +89,9 @@ function ModernHomePage() {
                   {/* Right Section - Activities & Notifications (25%) */}
                   <div className="col-span-3 h-full">
                     <div className="h-full flex flex-col max-h-[calc(100vh-200px)]">
-                      <SectionActivityNotifikasi />
+                      <DailyTaskProvider>
+                        <SectionActivityNotifikasi />
+                      </DailyTaskProvider>
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { Task, TaskStep } from '../types';
+import { calculateProgress } from '../utils/taskUtils';
 
 export interface TaskFilters {
   search: string;
@@ -197,8 +198,62 @@ export const useTaskFilters = ({
   );
 
   /**
+   * Helper function untuk mendapatkan status priority
+   * Urutan: Pending (1) > In Progress (2) > Completed (3) > Cancelled (4)
+   */
+  const getStatusPriority = useCallback((status: string | null | undefined): number => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 1; // Paling atas
+      case 'in_progress':
+        return 2; // Di tengah
+      case 'completed':
+        return 3; // Di bawah
+      case 'cancelled':
+        return 4; // Paling bawah
+      default:
+        return 5; // Status lain di paling bawah
+    }
+  }, []);
+
+  /**
+   * Helper function untuk mendapatkan progress task
+   * Menggunakan calculateProgress dari utils
+   */
+  const getTaskProgress = useCallback((task: Task): number => {
+    if (task.steps && task.steps.length > 0) {
+      return calculateProgress(task.steps, task.status);
+    }
+    // Jika task tanpa steps, cek status
+    if (task.status === 'completed') return 100;
+    if (task.status === 'in_progress') return 0; // Default untuk in_progress tanpa steps
+    return 0;
+  }, []);
+
+  /**
+   * Helper function untuk mendapatkan completed date
+   * Prioritaskan finish_date, fallback ke updated_at, lalu created_at
+   */
+  const getCompletedDate = useCallback((task: Task): Date | null => {
+    // Prioritaskan finish_date
+    if (task.finish_date) {
+      return new Date(task.finish_date);
+    }
+    // Fallback ke updated_at jika finish_date null
+    if (task.updated_at) {
+      return new Date(task.updated_at);
+    }
+    // Fallback terakhir ke created_at
+    if (task.created_at) {
+      return new Date(task.created_at);
+    }
+    return null;
+  }, []);
+
+  /**
    * Filter tasks dengan early exit pattern untuk optimasi
    * Perbaikan: Memastikan "All PIC" menampilkan semua tasks
+   * Ditambahkan: Auto-sorting berdasarkan status dan sub-criteria
    */
   const filteredTasks = useMemo(() => {
     // Defensive check: if tasks array is empty, return empty array
@@ -206,7 +261,7 @@ export const useTaskFilters = ({
       return [];
     }
 
-    return tasks.filter((task) => {
+    const filtered = tasks.filter((task) => {
       // Early exit 1: My Task filter
       // Hanya apply jika myTask === 'my_task', jika 'all' maka skip filter ini
       if (filters.myTask === 'my_task') {
@@ -245,6 +300,58 @@ export const useTaskFilters = ({
 
       return true;
     });
+
+    // Tambahkan sorting setelah filtering
+    return filtered.sort((a, b) => {
+      // 1. Sort berdasarkan status priority
+      const statusPriorityA = getStatusPriority(a.status);
+      const statusPriorityB = getStatusPriority(b.status);
+      
+      if (statusPriorityA !== statusPriorityB) {
+        return statusPriorityA - statusPriorityB;
+      }
+
+      // 2. Jika status sama, sort berdasarkan sub-criteria
+      const statusA = a.status?.toLowerCase();
+      const statusB = b.status?.toLowerCase();
+
+      // Pending: sort berdasarkan due_date (null di akhir)
+      if (statusA === 'pending' && statusB === 'pending') {
+        const dueDateA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const dueDateB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        return dueDateA - dueDateB; // Due date terdekat di atas
+      }
+
+      // In Progress: sort berdasarkan progress (rendah → tinggi)
+      if (statusA === 'in_progress' && statusB === 'in_progress') {
+        const progressA = getTaskProgress(a);
+        const progressB = getTaskProgress(b);
+        return progressA - progressB; // Progress rendah di atas
+      }
+
+      // Completed: sort berdasarkan finish_date (baru → lama)
+      if (statusA === 'completed' && statusB === 'completed') {
+        const completedDateA = getCompletedDate(a);
+        const completedDateB = getCompletedDate(b);
+        
+        if (!completedDateA && !completedDateB) return 0;
+        if (!completedDateA) return 1; // Null di bawah
+        if (!completedDateB) return -1; // Null di bawah
+        
+        // Terbaru di atas (descending)
+        return completedDateB.getTime() - completedDateA.getTime();
+      }
+
+      // Cancelled: sort berdasarkan updated_at (baru → lama)
+      if (statusA === 'cancelled' && statusB === 'cancelled') {
+        const updatedA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const updatedB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return updatedB - updatedA; // Terbaru di atas
+      }
+
+      // Default: maintain current order
+      return 0;
+    });
   }, [
     tasks,
     filters,
@@ -252,6 +359,9 @@ export const useTaskFilters = ({
     matchesSearch,
     matchesDateRange,
     hasStepAssignedToPic,
+    getStatusPriority,
+    getTaskProgress,
+    getCompletedDate,
   ]);
 
   /**

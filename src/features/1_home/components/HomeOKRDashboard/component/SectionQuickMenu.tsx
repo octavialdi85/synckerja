@@ -6,7 +6,7 @@ import { AttendanceStats } from './SectionQuickMenuImport/AttendanceStats';
 import { useAttendanceStatus } from './AttendanceStatusProvider';
 import { ModalPengajuanCutiKaryawan } from './SectionQuickMenuImport/ModalPengajuanCutiKaryawan';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
-import { Clock, Camera, BarChart3, Users } from 'lucide-react';
+import { Clock, Camera, BarChart3, Users, Folder } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
@@ -83,6 +83,10 @@ export const SectionQuickMenu = ({
 
   const handlePengajuanCuti = () => {
     setIsModalOpen(true);
+  };
+
+  const handleFiles = () => {
+    navigate('/company/files');
   };
 
   const handleModalClose = () => {
@@ -185,6 +189,13 @@ export const SectionQuickMenu = ({
             >
               <Camera className="h-4 w-4 text-blue-600" />
               <span className="text-xs font-semibold leading-relaxed">{t('quickMenu.leaveRequest', 'Leave Request')}</span>
+            </button>
+            <button 
+              onClick={handleFiles}
+              className="flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-md hover:bg-blue-50 transition-colors cursor-pointer"
+            >
+              <Folder className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-semibold leading-relaxed">{t('quickMenu.files', 'Files')}</span>
             </button>
           </div>
         </div>
