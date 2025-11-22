@@ -5,6 +5,7 @@ import { AssetsFilters } from './AssetsFilters';
 import { CompanyAssetsMetricsCards } from './CompanyAssetsMetricsCards';
 import { AssetsTable } from './AssetsTable';
 import { AddAssetModal } from './AddAssetModal';
+import { CompanyAssetsOverviewFooter } from './CompanyAssetsOverviewFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
@@ -68,13 +69,18 @@ export const CompanyCompanyAssetsPage = () => {
     fetchAssets();
   }, [fetchAssets]);
 
+  // Get the latest asset's created_at date for last updated
+  const lastUpdated = assets.length > 0 
+    ? assets[0].created_at 
+    : undefined;
+
   return (
     <StandardLayout>
-      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-full bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col overflow-hidden">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <HeaderAndTab 
@@ -131,7 +137,7 @@ export const CompanyCompanyAssetsPage = () => {
                 {/* Right Column - Overview Sidebar (25% like employee page) */}
                 <div className="col-span-3 h-full">
                   <div className="h-full flex flex-col">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                    <div className="bg-white border rounded-lg h-full flex flex-col">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
                         <div className="flex flex-col">
@@ -141,51 +147,54 @@ export const CompanyCompanyAssetsPage = () => {
                       </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full p-4">
-                          {/* Quick Stats */}
-                          <div className="grid grid-cols-1 gap-3 mb-4">
-                            <div className="p-3 bg-blue-50 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-medium text-blue-800">Total Assets</p>
-                                  <p className="text-lg font-bold text-blue-900">{assets.length}</p>
-                                </div>
+                      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-4">
+                        {/* Quick Stats */}
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="p-3 bg-blue-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-blue-800">Total Assets</p>
+                                <p className="text-lg font-bold text-blue-900">{assets.length}</p>
                               </div>
                             </div>
-                            <div className="p-3 bg-green-50 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-medium text-green-800">Available</p>
-                                  <p className="text-lg font-bold text-green-900">
-                                    {assets.filter(a => a.status === 'available').length}
-                                  </p>
-                                </div>
+                          </div>
+                          <div className="p-3 bg-green-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-green-800">Available</p>
+                                <p className="text-lg font-bold text-green-900">
+                                  {assets.filter(a => a.status === 'available').length}
+                                </p>
                               </div>
                             </div>
-                            <div className="p-3 bg-amber-50 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-medium text-amber-800">In Use</p>
-                                  <p className="text-lg font-bold text-amber-900">
-                                    {assets.filter(a => a.status === 'in-use').length}
-                                  </p>
-                                </div>
+                          </div>
+                          <div className="p-3 bg-amber-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-amber-800">In Use</p>
+                                <p className="text-lg font-bold text-amber-900">
+                                  {assets.filter(a => a.status === 'in-use').length}
+                                </p>
                               </div>
                             </div>
-                            <div className="p-3 bg-red-50 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-medium text-red-800">Maintenance</p>
-                                  <p className="text-lg font-bold text-red-900">
-                                    {assets.filter(a => a.status === 'maintenance').length}
-                                  </p>
-                                </div>
+                          </div>
+                          <div className="p-3 bg-red-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-red-800">Maintenance</p>
+                                <p className="text-lg font-bold text-red-900">
+                                  {assets.filter(a => a.status === 'maintenance').length}
+                                </p>
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
+
+                      {/* Sidebar Footer */}
+                      <CompanyAssetsOverviewFooter
+                        lastUpdated={lastUpdated}
+                      />
                     </div>
                   </div>
                 </div>

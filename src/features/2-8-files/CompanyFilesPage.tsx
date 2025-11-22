@@ -21,11 +21,11 @@ export const CompanyFilesPage = () => {
 
   return (
     <StandardLayout>
-      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-full bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col overflow-hidden">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <HeaderAndTab 
@@ -63,7 +63,7 @@ export const CompanyFilesPage = () => {
                 {/* Right Column - Overview Sidebar (25% like employee page) */}
                 <div className="col-span-3 h-full">
                   <div className="h-full flex flex-col">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                    <div className="bg-white border rounded-lg h-full flex flex-col">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
                         <div className="flex flex-col">
@@ -72,12 +72,8 @@ export const CompanyFilesPage = () => {
                         </div>
                       </div>
 
-                      {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full p-4">
-                          <CompanyFilesOverview />
-                        </div>
-                      </div>
+                      {/* Sidebar Content with Footer */}
+                      <CompanyFilesOverview />
                     </div>
                   </div>
                 </div>

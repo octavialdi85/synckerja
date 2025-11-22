@@ -11,6 +11,7 @@ import { CompanyFile } from '@/features/2-8-dashboard/utils/fileTypes';
 import { CompanyFilesTableHeader } from './files-table/CompanyFilesTableHeader';
 import { FileRow } from './files-table/FileRow';
 import { CompanyFilesEmptyState } from './files-table/CompanyFilesEmptyState';
+import { CompanyFilesTableFooter } from './files-table/CompanyFilesTableFooter';
 
 interface CompanyFilesTableProps {
   onUploadFile?: () => void;
@@ -56,23 +57,37 @@ export const CompanyFilesTable = ({ onUploadFile }: CompanyFilesTableProps) => {
     return <CompanyFilesEmptyState isLoading={isLoading} hasFiles={hasFiles} onUploadFile={onUploadFile} />;
   }
 
+  // Calculate total file size
+  const totalSize = files.reduce((acc, file) => acc + (file.file_size || 0), 0);
+
   return (
     <>
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <CompanyFilesTableHeader />
-          <TableBody>
-            {files.map((file) => (
-              <FileRow
-                key={file.id}
-                file={file}
-                onViewDetails={handleViewDetails}
-                onEditFile={handleEditFile}
-                onDeleteFile={handleDeleteFile}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex flex-col h-full">
+        {/* Scrollable Table Content */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400" style={{ maxHeight: 'calc(100vh - 280px)', scrollBehavior: 'smooth' }}>
+          <div className="border rounded-t-lg overflow-hidden">
+            <Table>
+              <CompanyFilesTableHeader />
+              <TableBody>
+                {files.map((file) => (
+                  <FileRow
+                    key={file.id}
+                    file={file}
+                    onViewDetails={handleViewDetails}
+                    onEditFile={handleEditFile}
+                    onDeleteFile={handleDeleteFile}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+        
+        {/* Fixed Footer */}
+        <CompanyFilesTableFooter
+          totalFiles={files.length}
+          totalSize={totalSize}
+        />
       </div>
 
       {/* Modals */}

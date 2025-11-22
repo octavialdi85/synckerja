@@ -12,6 +12,7 @@ import { AssetsTableHeader } from './assets-table/AssetsTableHeader';
 import { AssetsEmptyState } from './assets-table/AssetsEmptyState';
 import { DeleteAssetDialog } from './assets-table/DeleteAssetDialog';
 import { useAssetFilters } from './assets-table/useAssetFilters';
+import { CompanyAssetsTableFooter } from './assets-table/CompanyAssetsTableFooter';
 
 interface Asset {
   id: string;
@@ -135,23 +136,38 @@ export const AssetsTable = ({
     return <AssetsEmptyState isLoading={isLoading} hasAssets={hasAssets} />;
   }
 
+  // Calculate total asset value
+  const totalValue = filteredAssets.reduce((acc, asset) => acc + (asset.purchase_price || 0), 0);
+
   return (
     <>
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <AssetsTableHeader />
-          <TableBody>
-            {filteredAssets.map((asset) => (
-              <AssetRow
-                key={asset.id}
-                asset={asset}
-                onViewDetails={handleViewDetails}
-                onEditAsset={handleEditAsset}
-                onDeleteAsset={handleDeleteAsset}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex flex-col h-full">
+        {/* Scrollable Table Content */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400" style={{ maxHeight: 'calc(100vh - 280px)', scrollBehavior: 'smooth' }}>
+          <div className="border rounded-t-lg overflow-hidden">
+            <Table>
+              <AssetsTableHeader />
+              <TableBody>
+                {filteredAssets.map((asset) => (
+                  <AssetRow
+                    key={asset.id}
+                    asset={asset}
+                    onViewDetails={handleViewDetails}
+                    onEditAsset={handleEditAsset}
+                    onDeleteAsset={handleDeleteAsset}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+        
+        {/* Fixed Footer */}
+        <CompanyAssetsTableFooter
+          totalAssets={assets.length}
+          filteredAssets={filteredAssets.length}
+          totalValue={totalValue}
+        />
       </div>
 
       <ViewAssetModal
