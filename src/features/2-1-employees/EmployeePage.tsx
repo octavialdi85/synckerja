@@ -55,40 +55,38 @@ export const EmployeePage = () => {
               {/* Grid Layout: 12 columns (9-3) */}
               <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                 {/* Main Content - 9 columns */}
-                <div className="col-span-9 flex flex-col min-h-0">
-                  <div className="flex-1 min-h-0">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                      {/* Filters Section */}
-                      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200 flex items-center">
-                        <div className="w-full">
-                          <EmployeeFilters />
-                        </div>
+                <div className="col-span-9 h-full">
+                  <div className="h-full flex flex-col">
+                    {/* Filter Section */}
+                    <div className="flex-shrink-0 mb-2">
+                      <div className="bg-white border rounded-md p-2">
+                        <EmployeeFilters />
                       </div>
-
-                      {/* Metrics Cards Section */}
-                      <div className="flex-shrink-0 p-3 border-b border-gray-200">
-                        <EmployeeMetricsCards employees={employees} />
-                      </div>
-
-                      {/* Scrollable Table Content */}
-                      <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full p-4">
-                          <EmployeeTable 
-                            employees={employees}
-                            currentUserEmail={user?.email}
-                            onRefresh={handleRefresh}
-                            onViewEmployee={handleViewEmployee}
-                            isLoading={isLoading}
-                          />
-                        </div>
+                    </div>
+                    
+                    {/* Metrics Cards Section */}
+                    <div className="flex-shrink-0 mb-2">
+                      <EmployeeMetricsCards employees={employees} />
+                    </div>
+                    
+                    {/* Table Section - Main Content */}
+                    <div className="flex-1 min-h-0">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+                        <EmployeeTable 
+                          employees={employees}
+                          currentUserEmail={user?.email}
+                          onRefresh={handleRefresh}
+                          onViewEmployee={handleViewEmployee}
+                          isLoading={isLoading}
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
                 
-                {/* Sidebar - 3 columns */}
-                <div className="col-span-3 flex flex-col min-h-0">
-                  <div className="flex-1 min-h-0">
+                {/* Right Column - Overview Sidebar (25% like employee page) */}
+                <div className="col-span-3 h-full">
+                  <div className="h-full flex flex-col">
                     <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">

@@ -6,7 +6,6 @@ export const FILE_CATEGORIES = {
 } as const;
 
 export const FILE_VISIBILITY = {
-  publik: 'Public',
   internal: 'Internal',
   privat: 'Private'
 } as const;
@@ -40,6 +39,7 @@ export interface CompanyFile {
   visibility: FileVisibility;
   owner_id: string;
   owner_name: string;
+  employee_id?: string | null;
   expires_at?: string;
   created_at: string;
   updated_at: string;

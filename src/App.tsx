@@ -61,7 +61,7 @@ import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
 import AttendancePage from "./features/2-3-attendance/AttendancePage";
 import { CompanyDashboardPage } from "./features/2-8-dashboard";
-import { CompanyAssetsPage } from "@/features/2-8-assets";
+import { CompanyCompanyAssetsPage } from "@/features/2-8-company-assets";
 import { CompanyFilesPage } from "@/features/2-8-files";
 import { CompanyOrganizationPage } from "@/features/2-8-organization";
 import { StandardLayout } from "@/features/1-layouts/StandardLayout";
@@ -365,18 +365,14 @@ const App = () => (
                   <CompanyDashboardPage />
                 </ProtectedRoute>
               } />
-              <Route path="/company/assets" element={
+              <Route path="/company/company-assets" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <CompanyAssetsPage />
-                  </StandardLayout>
+                  <CompanyCompanyAssetsPage />
                 </ProtectedRoute>
               } />
               <Route path="/company/files" element={
                 <ProtectedRoute>
-                  <StandardLayout>
-                    <CompanyFilesPage />
-                  </StandardLayout>
+                  <CompanyFilesPage />
                 </ProtectedRoute>
               } />
               <Route path="/company/organization" element={

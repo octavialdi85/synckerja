@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/features/ui/button';
-import { Edit } from 'lucide-react';
+import { Edit, Save, X } from 'lucide-react';
 import { CompanyProfilePhoto } from './CompanyProfilePhoto';
 
 interface CompanyProfileHeaderProps {
@@ -9,6 +9,9 @@ interface CompanyProfileHeaderProps {
   logoUrl?: string | null;
   isEditMode: boolean;
   onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  isSaving?: boolean;
   onLogoUpdate: (logoUrl: string | null) => void;
 }
 
@@ -16,7 +19,10 @@ export const CompanyProfileHeader = ({
   companyName, 
   logoUrl, 
   isEditMode,
-  onEdit, 
+  onEdit,
+  onCancel,
+  onSave,
+  isSaving = false,
   onLogoUpdate 
 }: CompanyProfileHeaderProps) => {
   return (
@@ -34,8 +40,30 @@ export const CompanyProfileHeader = ({
           <p className="text-gray-600 mt-1 text-sm sm:text-base">Company Profile</p>
         </div>
       </div>
-      {!isEditMode && (
-        <div className="flex-shrink-0">
+      <div className="flex-shrink-0">
+        {isEditMode ? (
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={onCancel} 
+              variant="outline" 
+              className="flex items-center space-x-2"
+              size="sm"
+              disabled={isSaving}
+            >
+              <X className="h-4 w-4" />
+              <span className="whitespace-nowrap">Cancel</span>
+            </Button>
+            <Button 
+              onClick={onSave} 
+              className="flex items-center space-x-2"
+              size="sm"
+              disabled={isSaving}
+            >
+              <Save className="h-4 w-4" />
+              <span className="whitespace-nowrap">{isSaving ? 'Saving...' : 'Save'}</span>
+            </Button>
+          </div>
+        ) : (
           <Button 
             onClick={onEdit} 
             variant="outline" 
@@ -45,8 +73,8 @@ export const CompanyProfileHeader = ({
             <Edit className="h-4 w-4" />
             <span className="whitespace-nowrap">Edit Company Details</span>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

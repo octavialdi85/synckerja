@@ -5,10 +5,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { CompanyFile } from '@/features/2-8-dashboard/utils/fileTypes';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 export const useCompanyFiles = () => {
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
+  const { data: employee } = useCurrentEmployee();
   const queryClient = useQueryClient();
 
   // Fetch company files
@@ -17,24 +21,66 @@ export const useCompanyFiles = () => {
     isLoading,
     error
   } = useQuery({
-    queryKey: ['company-files', organizationId],
+    queryKey: ['company-files', organizationId, user?.id, employee?.id],
     queryFn: async () => {
-      if (!organizationId) return [];
+      if (!organizationId || !user) return [];
 
-      const { data, error } = await supabase
+      // Get employee_id if exists
+      let employeeId: string | null = null;
+      if (employee) {
+        employeeId = employee.id;
+      }
+
+      // Fetch all internal files (visible to all in organization) and private files
+      // We use efficient query with OR filter and then filter in memory for security
+      const internalFilesQuery = supabase
         .from('company_files')
         .select('*')
         .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false });
+        .eq('visibility', 'internal');
 
-      if (error) {
-        console.error('Error fetching company files:', error);
-        throw error;
+      const privateFilesQuery = supabase
+        .from('company_files')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('visibility', 'privat');
+
+      // Execute queries in parallel for better performance
+      const [internalResult, privateResult] = await Promise.all([
+        internalFilesQuery.order('created_at', { ascending: false }),
+        privateFilesQuery.order('created_at', { ascending: false })
+      ]);
+
+      if (internalResult.error) {
+        console.error('Error fetching internal files:', internalResult.error);
+        throw internalResult.error;
       }
 
-      return data as CompanyFile[];
+      if (privateResult.error) {
+        console.error('Error fetching private files:', privateResult.error);
+        throw privateResult.error;
+      }
+
+      // Filter private files based on ownership
+      const allowedPrivateFiles = (privateResult.data || []).filter((file: any) => {
+        // Private files: only show if owner_id matches OR employee_id matches
+        return file.owner_id === user.id || (employeeId && file.employee_id === employeeId);
+      });
+
+      // Combine internal files (all visible) with filtered private files
+      const allFiles = [
+        ...(internalResult.data || []),
+        ...allowedPrivateFiles
+      ];
+
+      // Sort by created_at descending
+      allFiles.sort((a: any, b: any) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      return allFiles as CompanyFile[];
     },
-    enabled: !!organizationId
+    enabled: !!organizationId && !!user
   });
 
   // Delete file mutation

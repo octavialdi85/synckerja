@@ -10,7 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
 import { CompanyAssetsMetricsCards } from './CompanyAssetsMetricsCards';
-import { HeaderAndTab } from '@/features/2-8-dashboard/section';
+// This file is deprecated - using CompanyCompanyAssetsPage from 2-8-company-assets instead
+// import { HeaderAndTab } from '@/features/2-8-dashboard/section';
 
 export const CompanyAssetsPage = () => {
   const [activeTab, setActiveTab] = useState('assets');

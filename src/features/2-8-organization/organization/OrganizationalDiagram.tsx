@@ -15,6 +15,7 @@ import {
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { getPhotoUrl, getInitials } from '@/features/2-1-employees/hooks/photoUtils';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 interface OrganizationalDiagramProps {
   onEmployeeClick?: (employeeId: string) => void;
@@ -35,6 +36,7 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
 
   const { data: employees = [], isLoading } = useEmployees();
   const { data: currentUserEmployee } = useCurrentUserEmployee();
+  const { organization, organizationName: contextOrganizationName } = useCentralizedUserData();
 
   // Build hierarchy based on job levels
   const buildHierarchy = React.useMemo(() => {
@@ -42,7 +44,8 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
 
     // Find organization owner
     const owner = employees.find(emp => emp.is_organization_owner);
-    const organizationName = "Klinik Utama Pandawa"; // You can get this from organization data
+    // Get organization name from context (current active organization)
+    const organizationName = contextOrganizationName || organization?.company_name || 'Organization';
 
     // Get job level order for sorting
     const getJobLevelOrder = (levelName: string): number => {
@@ -136,7 +139,7 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
     }
 
     return { nodes: rootNodes, organizationName };
-  }, [employees]);
+  }, [employees, contextOrganizationName, organization]);
 
   // Filter nodes based on search
   const filteredNodes = React.useMemo(() => {

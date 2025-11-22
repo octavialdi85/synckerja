@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -10,7 +10,7 @@ import {
   CompanyValues,
   CompanyLoadingState,
 } from './components';
-import { useCompanyProfile, useCompanyLogo } from './hooks';
+import { useCompanyProfile, useCompanyLogo, useUpdateCompany } from './hooks';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -71,9 +71,83 @@ export const CompanyProfileDashboard = () => {
 
   const isDepartmentsLoading = departmentsLoading || employeesLoading;
   const [isEditMode, setIsEditMode] = useState(false);
+  const updateCompanyMutation = useUpdateCompany();
+
+  // Form data state - managed at dashboard level
+  const [formData, setFormData] = useState({
+    company_name: '',
+    address: '',
+    phone_number: '',
+    website: '',
+    email: '',
+    industry: '',
+    description: '',
+    tax_id: '',
+    established: '',
+    about_us: '',
+    mission: '',
+    vision: '',
+  });
+
+  // Initialize form data from company data
+  useEffect(() => {
+    if (companyData) {
+      setFormData({
+        company_name: companyData.company_name || '',
+        address: companyData.address || '',
+        phone_number: companyData.phone_number || '',
+        website: companyData.website || '',
+        email: companyData.email || '',
+        industry: companyData.industry || '',
+        description: companyData.description || '',
+        tax_id: companyData.tax_id || '',
+        established: companyData.established || '',
+        about_us: companyData.about_us || '',
+        mission: companyData.mission || '',
+        vision: companyData.vision || '',
+      });
+    }
+  }, [companyData]);
 
   const handleEdit = () => {
     setIsEditMode(true);
+  };
+
+  const handleCancel = () => {
+    // Reset form data to original company data
+    if (companyData) {
+      setFormData({
+        company_name: companyData.company_name || '',
+        address: companyData.address || '',
+        phone_number: companyData.phone_number || '',
+        website: companyData.website || '',
+        email: companyData.email || '',
+        industry: companyData.industry || '',
+        description: companyData.description || '',
+        tax_id: companyData.tax_id || '',
+        established: companyData.established || '',
+        about_us: companyData.about_us || '',
+        mission: companyData.mission || '',
+        vision: companyData.vision || '',
+      });
+    }
+    setIsEditMode(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      await updateCompanyMutation.mutateAsync(formData);
+      setIsEditMode(false);
+    } catch (error) {
+      console.error('Failed to save company data:', error);
+    }
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   if (isLoading) {
@@ -87,15 +161,15 @@ export const CompanyProfileDashboard = () => {
     phone_number: companyData?.phone_number || '+62 21 1234 5678',
     website: companyData?.website || 'www.democompany.com',
     email: companyData?.email || 'contact@democompany.com',
-    established: '2020',
+    established: companyData?.established || '',
     // Use real employee count from useEmployeeDepartments hook
     employee_count: totalEmployees > 0 ? `${totalEmployees}` : '0',
     tax_id: companyData?.tax_id || '123456789',
     industry: companyData?.industry || 'Technology',
     description: companyData?.description || 'A leading technology company',
-    mission: 'To provide innovative solutions that transform businesses and improve lives through technology and exceptional service.',
-    vision: 'To be the leading provider of cutting-edge solutions that empower organizations to achieve their full potential in the digital age.',
-    about_us: 'We are a forward-thinking company dedicated to delivering exceptional value through innovative solutions, outstanding customer service, and a commitment to excellence. Our team of experienced professionals works tirelessly to understand our clients\' unique needs and provide tailored solutions that drive success.'
+    mission: companyData?.mission || '',
+    vision: companyData?.vision || '',
+    about_us: companyData?.about_us || ''
   };
 
   return (
@@ -105,6 +179,9 @@ export const CompanyProfileDashboard = () => {
         logoUrl={logoUrl}
         isEditMode={isEditMode}
         onEdit={handleEdit}
+        onCancel={handleCancel}
+        onSave={handleSave}
+        isSaving={updateCompanyMutation.isPending}
         onLogoUpdate={updateLogo}
       />
       
@@ -113,13 +190,14 @@ export const CompanyProfileDashboard = () => {
         <div className="xl:col-span-2 space-y-2 sm:space-y-3 min-w-0">
           <CompanyBasicInfo 
             companyData={displayCompanyData} 
+            formData={formData}
             isEditMode={isEditMode}
-            onEditModeChange={setIsEditMode}
+            onFieldChange={handleFieldChange}
           />
           <CompanyMissionVision 
-            mission={displayCompanyData.mission}
-            vision={displayCompanyData.vision}
-            aboutUs={displayCompanyData.about_us}
+            formData={formData}
+            isEditMode={isEditMode}
+            onFieldChange={handleFieldChange}
           />
         </div>
         

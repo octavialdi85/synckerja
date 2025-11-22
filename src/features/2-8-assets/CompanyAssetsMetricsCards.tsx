@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Package, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 
@@ -7,42 +6,69 @@ interface CompanyAssetsMetricsCardsProps {
 }
 
 export const CompanyAssetsMetricsCards = ({ assets }: CompanyAssetsMetricsCardsProps) => {
-  const metrics = [
+  const totalAssets = assets.length;
+  const availableAssets = assets.filter(asset => asset.status === 'available').length;
+  const inUseAssets = assets.filter(asset => asset.status === 'in-use').length;
+  const maintenanceAssets = assets.filter(asset => asset.status === 'maintenance').length;
+
+  const statsCards = [
     {
       title: 'Total Assets',
-      count: assets.length,
+      value: totalAssets.toString(),
+      subtitle: 'All assets',
       icon: Package,
-      accentColor: 'bg-blue-500',
+      iconColor: 'text-blue-500',
       bgColor: 'bg-blue-50',
-      textColor: 'text-blue-600'
+      borderColor: 'border-blue-200'
     },
     {
       title: 'Available',
-      count: assets.filter(asset => asset.status === 'available').length,
+      value: availableAssets.toString(),
+      subtitle: 'Currently available',
       icon: CheckCircle,
-      accentColor: 'bg-green-500',
+      iconColor: 'text-green-500',
       bgColor: 'bg-green-50',
-      textColor: 'text-green-600'
+      borderColor: 'border-green-200'
     },
     {
       title: 'In Use',
-      count: assets.filter(asset => asset.status === 'in-use').length,
+      value: inUseAssets.toString(),
+      subtitle: 'Currently in use',
       icon: Clock,
-      accentColor: 'bg-amber-500',
+      iconColor: 'text-amber-500',
       bgColor: 'bg-amber-50',
-      textColor: 'text-amber-600'
+      borderColor: 'border-amber-200'
     },
     {
       title: 'Maintenance',
-      count: assets.filter(asset => asset.status === 'maintenance').length,
+      value: maintenanceAssets.toString(),
+      subtitle: 'Under maintenance',
       icon: AlertTriangle,
-      accentColor: 'bg-red-500',
+      iconColor: 'text-red-500',
       bgColor: 'bg-red-50',
-      textColor: 'text-red-600'
+      borderColor: 'border-red-200'
     }
   ];
 
   return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
+      {statsCards.map((stat, index) => (
+        <div key={index} className={`${stat.bgColor} ${stat.borderColor} border rounded-md p-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-900">{stat.title}</h3>
+            <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+          </div>
+          
+          <div className="space-y-1">
+            <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+            <div className="text-xs text-gray-600">{stat.subtitle}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
     <>
       {metrics.map((metric, index) => {
         const Icon = metric.icon;

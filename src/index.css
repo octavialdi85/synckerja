@@ -254,4 +254,28 @@ All colors MUST be HSL.
     width: 0 !important;
     height: 0 !important;
   }
+
+  /* Ensure date picker calendar popup has consistent borders */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
+
+  /* Ensure date input field has consistent border radius */
+  input[type="date"] {
+    border-radius: 0.375rem; /* rounded-md */
+  }
+}
+
+/* Global styles for native date picker calendar popup to ensure consistent borders */
+/* Note: Native calendar popup styling is limited, but we can try to influence it */
+@supports (-webkit-appearance: none) {
+  /* Webkit browsers (Chrome, Safari) */
+  input[type="date"]::-webkit-datetime-edit {
+    border-radius: 0.375rem;
+  }
+
+  input[type="date"]::-webkit-inner-spin-button,
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    border-radius: 0.375rem;
+  }
 }

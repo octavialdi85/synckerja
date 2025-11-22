@@ -119,3 +119,6 @@ COMMENT ON COLUMN campaign_kpi_templates.is_public IS 'When true, template is vi
 
 
 
+
+
+

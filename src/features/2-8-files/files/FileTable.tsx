@@ -39,8 +39,6 @@ export const FileTable = ({
 }: FileTableProps) => {
   const getVisibilityBadgeColor = (visibility: string) => {
     switch (visibility) {
-      case 'publik':
-        return 'bg-green-100 text-green-800';
       case 'internal':
         return 'bg-blue-100 text-blue-800';
       case 'privat':

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Package, FileText, Network } from 'lucide-react';
+import { LayoutDashboard, FileText, Network, Package } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
 
 interface HeaderAndTabProps {
@@ -8,6 +8,7 @@ interface HeaderAndTabProps {
   onTabChange: (tab: string) => void;
 }
 
+// HeaderAndTab for Dashboard page only - independent from other tabs
 export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,11 +23,11 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       route: '/company/dashboard'
     },
     {
-      id: 'assets',
-      label: 'Assets',
+      id: 'company-assets',
+      label: 'Company Assets',
       icon: Package,
       description: 'Manage company assets and inventory',
-      route: '/company/assets'
+      route: '/company/company-assets'
     },
     {
       id: 'files',
@@ -55,7 +56,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   const getActiveTab = () => {
     const path = location.pathname;
     if (path === '/company/dashboard') return 'dashboard';
-    if (path === '/company/assets') return 'assets';
+    if (path === '/company/company-assets') return 'company-assets';
     if (path === '/company/files') return 'files';
     if (path === '/company/organization') return 'organization';
     return 'dashboard';
@@ -64,7 +65,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   const activeTabId = getActiveTab();
 
   return (
-    <div className="px-1 py-3">
+    <div className="py-3 pl-2 ml-0 dashboard-header-tab-wrapper">
       {/* Header Section */}
       <div className="mb-3">
         <h1 className="text-xl font-bold text-gray-900 mb-0.5">Company Management</h1>
@@ -103,5 +104,6 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
   );
 };
 
-HeaderAndTab.displayName = 'HeaderAndTab';
+HeaderAndTab.displayName = 'DashboardHeaderAndTab';
+
 

@@ -1,68 +1,83 @@
 import React, { useState, useCallback } from 'react';
+import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { CompanyFilesFilters } from './CompanyFilesFilters';
 import { CompanyFilesMetricsCards } from './CompanyFilesMetricsCards';
 import { CompanyFilesTable } from './CompanyFilesTable';
 import { CompanyFilesOverview } from './CompanyFilesOverview';
-import { HeaderAndTab } from '@/features/2-8-dashboard/section';
+import { HeaderAndTab } from './HeaderAndTab';
+import { FileUploadModal } from './files/FileUploadModal';
 
 export const CompanyFilesPage = () => {
   const [activeTab, setActiveTab] = useState('files');
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
   }, []);
 
-  return (
-    <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
-      <div className="flex flex-1 min-h-0">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-          <div className="h-full flex flex-col">
-            {/* Header and Tabs */}
-            <div className="flex-shrink-0 mb-1">
-              <HeaderAndTab 
-                activeTab={activeTab} 
-                onTabChange={handleTabChange} 
-              />
-            </div>
+  const handleUploadFile = useCallback(() => {
+    setUploadModalOpen(true);
+  }, []);
 
-            {/* Content Area */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-                <div className="p-2 flex gap-2 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 min-h-full">
-                  {/* Main Content */}
-                  <div className="flex-1" style={{ flex: '1.8' }}>
+  return (
+    <StandardLayout>
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="flex flex-1 min-h-0">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col">
+              {/* Header and Tabs */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeTab={activeTab} 
+                  onTabChange={handleTabChange} 
+                />
+              </div>
+
+              {/* Grid Layout: 12 columns (9-3) */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Main Content - 9 columns */}
+                <div className="col-span-9 h-full">
+                  <div className="h-full flex flex-col">
                     {/* Filter Section */}
-                    <CompanyFilesFilters />
-                    
-                    {/* Metrics Cards Section */}
-                    <div className="mb-2">
-                      <div className="grid grid-cols-4 gap-1">
-                        <CompanyFilesMetricsCards />
+                    <div className="flex-shrink-0 mb-2">
+                      <div className="bg-white border rounded-md p-2">
+                        <CompanyFilesFilters onUploadFile={handleUploadFile} />
                       </div>
                     </div>
                     
-                    {/* Main Table */}
-                    <div className="bg-white/95 backdrop-blur-sm rounded-md border border-slate-200/60 shadow-sm overflow-hidden relative">
-                      {/* Modern accent line */}
-                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/60 via-indigo-500/40 to-purple-500/30"></div>
-                      
-                      <CompanyFilesTable />
+                    {/* Metrics Cards Section */}
+                    <div className="flex-shrink-0 mb-2">
+                      <CompanyFilesMetricsCards />
+                    </div>
+                    
+                    {/* Table Section - Main Content */}
+                    <div className="flex-1 min-h-0">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+                        <CompanyFilesTable onUploadFile={handleUploadFile} />
+                      </div>
                     </div>
                   </div>
-                  
-                  {/* Sidebar */}
-                  <div className="w-96 bg-white/90 backdrop-blur-sm rounded-md border border-slate-200/60 shadow-sm overflow-hidden relative" style={{ flex: 'none', width: '480px' }}>
-                    {/* Subtle accent border */}
-                    <div className="absolute top-0 left-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500/40 via-indigo-400/30 to-purple-400/20"></div>
-                    
-                    <div className="p-3 border-b border-slate-100/80 bg-gradient-to-r from-blue-50/30 to-white">
-                      <h3 className="text-base font-semibold text-slate-800 tracking-tight mb-1">Files Storage Overview</h3>
-                      <p className="text-xs text-slate-500">Recent uploads and file statistics</p>
-                    </div>
-                    
-                    <div className="p-2">
-                      <CompanyFilesOverview />
+                </div>
+                
+                {/* Right Column - Overview Sidebar (25% like employee page) */}
+                <div className="col-span-3 h-full">
+                  <div className="h-full flex flex-col">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                      {/* Sidebar Header */}
+                      <div className="px-4 py-1.5 border-b flex-shrink-0">
+                        <div className="flex flex-col">
+                          <h3 className="text-sm font-semibold text-gray-900">Files Overview</h3>
+                          <p className="text-xs text-gray-500 mt-1">Recent uploads and file statistics</p>
+                        </div>
+                      </div>
+
+                      {/* Scrollable Sidebar Content */}
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="h-full p-4">
+                          <CompanyFilesOverview />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -71,6 +86,12 @@ export const CompanyFilesPage = () => {
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Upload File Modal */}
+      <FileUploadModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+      />
+    </StandardLayout>
   );
 };

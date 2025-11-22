@@ -171,6 +171,48 @@ export const useDepartmentAccess = () => {
         return true;
       }
 
+      // COMPANY FILES HARDCODE OVERRIDE - Always accessible by owner, admin, employees, HR
+      // This override ignores any database configuration restrictions for /company/files
+      // Only applies to exact path /company/files (not sub-routes)
+      // This check happens BEFORE configLoading check to ensure access even during loading
+      const normalizePath = (p?: string) => {
+        if (!p) return '/';
+        let s = p.trim();
+        if (!s.startsWith('/')) s = '/' + s;
+        if (s.length > 1 && s.endsWith('/')) s = s.slice(0, -1);
+        return s.toLowerCase();
+      };
+      
+      const normalizedPath = normalizePath(pagePath);
+      if (normalizedPath === '/company/files') {
+        // Check if user role is in allowed roles (owner, admin, employee, hr)
+        const allowedRoles = ['owner', 'admin', 'employee', 'hr'];
+        const normalizedRole = userRole?.toLowerCase().trim();
+        
+        if (normalizedRole && allowedRoles.includes(normalizedRole)) {
+          // Only log once per path to reduce noise
+          if (isDev && !loggedOverridePaths.has(pagePath)) {
+            logger.debug('📁 COMPANY FILES OVERRIDE: Granting access to', pagePath, 'for role', normalizedRole);
+            logger.debug('🎯 This override ignores any database configuration restrictions');
+            loggedOverridePaths.add(pagePath);
+            // Clear logged paths after 5 minutes to allow re-logging if path changes
+            setTimeout(() => {
+              loggedOverridePaths.delete(pagePath);
+            }, 5 * 60 * 1000);
+          }
+          // Grant access regardless of database configuration or loading state
+          // Cache the result for performance
+          const cacheKey = `${normalizedPath}-${userRole}-${employee?.id || 'no-emp'}`;
+          const result = true;
+          accessCache.set(cacheKey, { 
+            result, 
+            timestamp: Date.now(), 
+            configHash 
+          });
+          return result;
+        }
+      }
+
       
       // Don't make access decisions if we're still loading critical data
       if (configLoading) {
@@ -184,6 +226,20 @@ export const useDepartmentAccess = () => {
         };
         
         const normalizedPath = normalize(pagePath);
+        
+        // COMPANY FILES OVERRIDE - Also check during loading
+        if (normalizedPath === '/company/files') {
+          const allowedRoles = ['owner', 'admin', 'employee', 'hr'];
+          const normalizedRole = userRole?.toLowerCase().trim();
+          
+          if (normalizedRole && allowedRoles.includes(normalizedRole)) {
+            if (isDev) {
+              logger.debug('📁 COMPANY FILES OVERRIDE (LOADING): Granting access during loading for role', normalizedRole);
+            }
+            return true;
+          }
+        }
+        
         const isUnrestrictedDuringLoading = UNRESTRICTED_DURING_LOADING.some(unrestrictedPath => {
           const normalizedUnrestricted = normalize(unrestrictedPath);
           return normalizedPath === normalizedUnrestricted || normalizedPath.startsWith(normalizedUnrestricted + '/');
@@ -215,6 +271,16 @@ export const useDepartmentAccess = () => {
         };
         
         const normalizedPath = normalize(pagePath);
+        
+        // COMPANY FILES OVERRIDE - Also check during user role loading
+        // If employee exists, assume they are employee or hr role
+        if (normalizedPath === '/company/files' && employee) {
+          if (isDev) {
+            logger.debug('📁 COMPANY FILES OVERRIDE (USER LOADING): Granting access during user role loading for employee');
+          }
+          return true;
+        }
+        
         const isUnrestrictedDuringLoading = UNRESTRICTED_DURING_LOADING.some(unrestrictedPath => {
           const normalizedUnrestricted = normalize(unrestrictedPath);
           return normalizedPath === normalizedUnrestricted || normalizedPath.startsWith(normalizedUnrestricted + '/');
@@ -416,6 +482,23 @@ export const useDepartmentAccess = () => {
         const result = true;
         accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
         return result;
+      }
+      
+      // COMPANY FILES HARDCODE OVERRIDE - Check even after config is found
+      // This ensures override works even if database configuration restricts access
+      if (current === '/company/files') {
+        const allowedRoles = ['owner', 'admin', 'employee', 'hr'];
+        const normalizedRole = userRole?.toLowerCase().trim();
+        
+        if (normalizedRole && allowedRoles.includes(normalizedRole)) {
+          if (isDev) {
+            logger.debug('📁 COMPANY FILES OVERRIDE (AFTER CONFIG): Granting access despite database restrictions for role', normalizedRole);
+            logger.debug('🎯 This override ignores database configuration:', config.roles_allowed);
+          }
+          const result = true;
+          accessCache.set(cacheKey, { result, timestamp: Date.now(), configHash });
+          return result;
+        }
       }
       
       if (!userRole) {

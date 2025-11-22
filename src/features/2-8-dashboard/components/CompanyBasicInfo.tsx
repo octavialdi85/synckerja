@@ -1,13 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
-import { Button } from '@/features/ui/button';
-import { MapPin, Phone, Globe, Mail, Calendar, Users, Hash, Briefcase, Save, X } from 'lucide-react';
-import { useUpdateCompany, useCompanyProfile } from '../hooks';
+import { MapPin, Phone, Globe, Mail, Calendar, Users, Hash, Briefcase } from 'lucide-react';
+import { useCompanyProfile } from '../hooks';
 
 interface CompanyData {
   company_name: string;
@@ -15,7 +14,7 @@ interface CompanyData {
   phone_number: string;
   website: string;
   email: string;
-  established: string;
+  established?: string;
   employee_count: string;
   tax_id: string;
   industry: string;
@@ -24,81 +23,50 @@ interface CompanyData {
 
 interface CompanyBasicInfoProps {
   companyData: CompanyData;
+  formData?: any;
   isEditMode: boolean;
-  onEditModeChange: (mode: boolean) => void;
+  onFieldChange?: (field: string, value: string) => void;
 }
 
-export const CompanyBasicInfo = ({ companyData, isEditMode, onEditModeChange }: CompanyBasicInfoProps) => {
+export const CompanyBasicInfo = ({ 
+  companyData, 
+  formData: propFormData,
+  isEditMode, 
+  onFieldChange 
+}: CompanyBasicInfoProps) => {
   const { data: realCompanyData } = useCompanyProfile();
-  const updateCompanyMutation = useUpdateCompany();
   
-  const [formData, setFormData] = useState({
-    company_name: companyData.company_name,
-    address: companyData.address,
-    phone_number: companyData.phone_number,
-    website: companyData.website,
-    email: companyData.email,
-    industry: companyData.industry,
-    description: companyData.description,
-    tax_id: companyData.tax_id,
-  });
-
-  useEffect(() => {
-    if (realCompanyData) {
-      setFormData({
-        company_name: realCompanyData.company_name || companyData.company_name,
-        address: realCompanyData.address || companyData.address,
-        phone_number: realCompanyData.phone_number || companyData.phone_number,
-        website: realCompanyData.website || companyData.website,
-        email: realCompanyData.email || companyData.email,
-        industry: realCompanyData.industry || companyData.industry,
-        description: realCompanyData.description || companyData.description,
-        tax_id: realCompanyData.tax_id || companyData.tax_id,
-      });
-    }
-  }, [realCompanyData, companyData]);
+  // Use prop formData if provided, otherwise use companyData
+  const formData = propFormData || {
+    company_name: companyData.company_name || '',
+    address: companyData.address || '',
+    phone_number: companyData.phone_number || '',
+    website: companyData.website || '',
+    email: companyData.email || '',
+    industry: companyData.industry || '',
+    description: companyData.description || '',
+    tax_id: companyData.tax_id || '',
+    established: companyData.established || '',
+  };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleSave = async () => {
-    try {
-      await updateCompanyMutation.mutateAsync(formData);
-      onEditModeChange(false);
-    } catch (error) {
-      console.error('Failed to update company:', error);
+    if (onFieldChange) {
+      onFieldChange(field, value);
     }
   };
 
-  const handleCancel = () => {
-    if (realCompanyData) {
-      setFormData({
-        company_name: realCompanyData.company_name || companyData.company_name,
-        address: realCompanyData.address || companyData.address,
-        phone_number: realCompanyData.phone_number || companyData.phone_number,
-        website: realCompanyData.website || companyData.website,
-        email: realCompanyData.email || companyData.email,
-        industry: realCompanyData.industry || companyData.industry,
-        description: realCompanyData.description || companyData.description,
-        tax_id: realCompanyData.tax_id || companyData.tax_id,
-      });
-    }
-    onEditModeChange(false);
-  };
-
+  // Use realCompanyData for display if available, fallback to formData or companyData
+  const displayData = realCompanyData || formData || companyData;
+  
   const infoItems = [
-    { icon: MapPin, label: 'Address', field: 'address', value: companyData.address },
-    { icon: Phone, label: 'Phone', field: 'phone_number', value: companyData.phone_number },
-    { icon: Globe, label: 'Website', field: 'website', value: companyData.website },
-    { icon: Mail, label: 'Email', field: 'email', value: companyData.email },
-    { icon: Calendar, label: 'Established', field: 'established', value: companyData.established, readOnly: true },
+    { icon: MapPin, label: 'Address', field: 'address', value: isEditMode ? formData.address : (displayData.address || companyData.address) },
+    { icon: Phone, label: 'Phone', field: 'phone_number', value: isEditMode ? formData.phone_number : (displayData.phone_number || companyData.phone_number) },
+    { icon: Globe, label: 'Website', field: 'website', value: isEditMode ? formData.website : (displayData.website || companyData.website) },
+    { icon: Mail, label: 'Email', field: 'email', value: isEditMode ? formData.email : (displayData.email || companyData.email) },
+    { icon: Calendar, label: 'Established', field: 'established', value: isEditMode ? formData.established : (displayData.established || companyData.established) },
     { icon: Users, label: 'Employees', field: 'employee_count', value: `${companyData.employee_count} employees`, readOnly: true },
-    { icon: Hash, label: 'Tax ID', field: 'tax_id', value: companyData.tax_id },
-    { icon: Briefcase, label: 'Industry', field: 'industry', value: companyData.industry },
+    { icon: Hash, label: 'Tax ID', field: 'tax_id', value: isEditMode ? formData.tax_id : (displayData.tax_id || companyData.tax_id) },
+    { icon: Briefcase, label: 'Industry', field: 'industry', value: isEditMode ? formData.industry : (displayData.industry || companyData.industry) },
   ];
 
   return (
@@ -106,29 +74,6 @@ export const CompanyBasicInfo = ({ companyData, isEditMode, onEditModeChange }: 
       <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 pb-3">
         <CardTitle className="text-lg sm:text-xl font-semibold truncate">Company Information</CardTitle>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {isEditMode && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCancel}
-                disabled={updateCompanyMutation.isPending}
-                className="flex items-center space-x-1"
-              >
-                <X className="h-4 w-4" />
-                <span className="hidden sm:inline">Cancel</span>
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={updateCompanyMutation.isPending}
-                className="flex items-center space-x-1"
-              >
-                <Save className="h-4 w-4" />
-                <span>{updateCompanyMutation.isPending ? 'Saving...' : 'Save'}</span>
-              </Button>
-            </div>
-          )}
           <Badge variant="secondary" className="text-xs whitespace-nowrap">
             Basic Info
           </Badge>
@@ -156,7 +101,7 @@ export const CompanyBasicInfo = ({ companyData, isEditMode, onEditModeChange }: 
           ))}
         </div>
         
-        <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
+            <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
           <h4 className="text-sm sm:text-base font-medium text-blue-900 mb-2">Company Description</h4>
           {isEditMode ? (
             <Textarea
@@ -167,7 +112,9 @@ export const CompanyBasicInfo = ({ companyData, isEditMode, onEditModeChange }: 
               placeholder="Enter company description"
             />
           ) : (
-            <p className="text-xs sm:text-sm text-blue-800 break-words leading-relaxed">{companyData.description || 'No description provided'}</p>
+            <p className="text-xs sm:text-sm text-blue-800 break-words leading-relaxed">
+              {displayData.description || companyData.description || 'No description provided'}
+            </p>
           )}
         </div>
       </CardContent>

@@ -5,7 +5,7 @@ import { OrganizationStatistics } from './organization/OrganizationStatistics';
 import { useOrganizationalStructure } from './hooks/useOrganizationalStructure';
 import { Skeleton } from '@/features/ui/skeleton';
 import { Card, CardContent } from '@/features/ui/card';
-import { HeaderAndTab } from '@/features/2-8-dashboard/section';
+import { HeaderAndTab } from './HeaderAndTab';
 
 export const CompanyOrganizationPage = () => {
   const [activeTab, setActiveTab] = useState('organization');

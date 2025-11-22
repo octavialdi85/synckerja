@@ -209,7 +209,7 @@ export const ReprimandManagementPage = () => {
   if (employeesLoading || reprimandsLoading) {
     return (
       <StandardLayout>
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="h-full bg-gray-100 flex flex-col font-sans relative">
           <div className="flex flex-1 min-h-0">
             <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
               <div className="h-full flex flex-col overflow-hidden">
@@ -244,7 +244,7 @@ export const ReprimandManagementPage = () => {
 
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-full bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
