@@ -58,7 +58,7 @@ export const SectionActivityNotifikasi = () => {
     customRange,
     includeOverdue: true,
   });
-
+    
   const { setFilters, navigateToTask, setExpandedTasks, scrollToStep } = useDailyTask();
 
   // State untuk modal sub-step
@@ -154,7 +154,7 @@ export const SectionActivityNotifikasi = () => {
       
       // Expand task (disimpan di localStorage melalui context)
       setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
-      
+
       // Navigate dengan query parameter
       if (stepId) {
         navigate(`/tools/daily-task?taskId=${assignment.taskId}&stepId=${stepId}&action=scroll`);
@@ -262,8 +262,8 @@ export const SectionActivityNotifikasi = () => {
         >
           {t('activity.tab.notifications', 'Notifications')}
         </button>
-      </div>
-      
+        </div>
+        
       <CardHeader className="pb-2 flex-shrink-0">
         {/* Timeframe Filter - Only show for Activities tab */}
         {activeTab === 'activities' && (
@@ -287,9 +287,9 @@ export const SectionActivityNotifikasi = () => {
                   >
                     {t(option.translationKey, option.value)}
                   </button>
-                ))}
-              </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
             {timeframe === "custom" && (
               <div className="grid grid-cols-2 gap-2">
@@ -335,10 +335,10 @@ export const SectionActivityNotifikasi = () => {
         <ScrollArea className="flex-1 px-4 seamless-scroll">
           {activeTab === 'activities' ? (
             <>
-              {isLoading ? (
-                <div className="flex items-center justify-center h-32">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
                   <LoadingDots />
-                </div>
+            </div>
               ) : error ? (
                 <div className="flex items-center justify-center h-32">
                   <div className="text-sm text-red-500 leading-relaxed">
@@ -424,8 +424,8 @@ export const SectionActivityNotifikasi = () => {
                                 {statusLabel === "completed"
                                   ? t("dailyTask.jobDesc.assignment.completed", "Selesai")
                                   : t("dailyTask.jobDesc.assignment.pending", "Aktif")}
-                              </Badge>
-                            </div>
+                          </Badge>
+                        </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
                               <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-[10px]">
                                 {typeLabel}
@@ -451,8 +451,8 @@ export const SectionActivityNotifikasi = () => {
                                   })}
                                 </span>
                               )}
-                            </div>
-                          </div>
+                      </div>
+                      </div>
                         );
                       })}
                     </div>
@@ -549,10 +549,10 @@ export const SectionActivityNotifikasi = () => {
                                       )}
                                     </span>
                                   )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                  </div>
+                </div>
+              );
+            })}
                         </div>
                       )}
                     </div>
@@ -565,7 +565,7 @@ export const SectionActivityNotifikasi = () => {
               <div className="flex items-center justify-center h-32">
                 <div className="text-sm text-gray-500 leading-relaxed">{t('activity.noNotifications', 'No notifications')}</div>
               </div>
-            </div>
+          </div>
           )}
         </ScrollArea>
         
@@ -601,11 +601,11 @@ export const SectionActivityNotifikasi = () => {
                         {filter.count}
                       </Badge>
                     )}
-                  </Button>
+          </Button>
                 ))}
               </div>
             </div>
-          </div>
+        </div>
         )}
       </CardContent>
 

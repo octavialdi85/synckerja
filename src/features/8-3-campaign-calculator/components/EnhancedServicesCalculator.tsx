@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
@@ -87,7 +88,20 @@ const EnhancedServicesCalculator = ({
   initialSettings,
   onSettingsChange
 }: EnhancedServicesCalculatorProps) => {
+  const location = useLocation();
   const { t } = useAppTranslation();
+  
+  // Don't render if we're not on the campaign calculator route
+  const isCampaignCalculatorRoute = 
+    location.pathname === "/tools/campaign-calculator/services" ||
+    location.pathname === "/tools/campaign-calculator/sales";
+  
+  if (!isCampaignCalculatorRoute) {
+    if (import.meta.env.DEV) {
+      console.log('⚠️ EnhancedServicesCalculator: Not on correct route, returning null. Current path:', location.pathname);
+    }
+    return null;
+  }
   // Branding objective
   const [brandingBudget, setBrandingBudget] = useState<string>(normalizeCurrencyValue(initialSettings.brandingBudget || ''));
   const [brandingCpm, setBrandingCpm] = useState<string>(normalizeCurrencyValue(initialSettings.brandingCpm || ''));
@@ -720,7 +734,7 @@ const EnhancedServicesCalculator = ({
                       <div>
                         <Label htmlFor="remarketing-source">{t('pages.campaignCalculator.services.label.remarketingSource', 'Remarketing Audience Source')}</Label>
                         <Select value={remarketingAudienceSource} onValueChange={setRemarketingAudienceSource}>
-                          <SelectTrigger className="mt-1">
+                          <SelectTrigger id="remarketing-source" className="mt-1">
                             <SelectValue placeholder={t('pages.campaignCalculator.services.placeholder.selectSource', 'Select source')} />
                           </SelectTrigger>
                           <SelectContent>

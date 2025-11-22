@@ -94,7 +94,7 @@ export const menuItems: MenuItem[] = [
       {
         title: "Campaign Calculator",
         titleKey: "sidebar.tools.campaignCalculator.title",
-        url: "/tools/campaign-calculator",
+        url: "/tools/campaign-calculator/services",
         description: "Plan and analyze marketing campaign performance",
         descriptionKey: "sidebar.tools.campaignCalculator.description",
       },

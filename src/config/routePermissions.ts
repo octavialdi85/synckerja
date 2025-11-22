@@ -114,7 +114,19 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     path: '/tools/campaign-calculator',
     requiresAuth: true,
     requiresPermissions: false,
-    description: 'Campaign calculator - accessible to all authenticated users'
+    description: 'Campaign calculator base route - redirects to /services'
+  },
+  {
+    path: '/tools/campaign-calculator/services',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Campaign calculator - Services tab - accessible to all authenticated users'
+  },
+  {
+    path: '/tools/campaign-calculator/sales',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Campaign calculator - Sales tab - accessible to all authenticated users'
   },
 
   // Employee Self-Service (accessible to all authenticated users)

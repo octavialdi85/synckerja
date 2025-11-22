@@ -1,5 +1,6 @@
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { Tabs, TabsContent } from "@/features/ui/tabs";
 import EnhancedServicesCalculator from "../components/EnhancedServicesCalculator";
@@ -14,7 +15,24 @@ import {
 import KPITemplateManager from "../components/KPITemplateManager";
 
 const CampaignCalculator = () => {
-  const [activeTab, setActiveTab] = useState<"services" | "sales">("services");
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Memoize route check to avoid recalculation
+  const isCampaignCalculatorRoute = useMemo(() => 
+    location.pathname === "/tools/campaign-calculator/services" ||
+    location.pathname === "/tools/campaign-calculator/sales",
+    [location.pathname]
+  );
+  
+  // Memoize active tab from URL to avoid recalculation
+  const activeTabFromUrl = useMemo<"services" | "sales">(() => {
+    return location.pathname === "/tools/campaign-calculator/sales" ? "sales" : "services";
+  }, [location.pathname]);
+  
+  // Use activeTabFromUrl as source of truth - no local state needed
+  const activeTab = activeTabFromUrl;
+
   const [servicesSettings, setServicesSettings] = useState<ServiceKPISettings>({
     brandingBudget: "",
     brandingCpm: "",
@@ -52,17 +70,39 @@ const CampaignCalculator = () => {
     seasonalMultiplier: "",
   });
 
-  const handleLoadServicesTemplate = (settings: ServiceKPISettings) => {
+  const handleLoadServicesTemplate = useCallback((settings: ServiceKPISettings) => {
     setServicesSettings(settings);
-  };
+  }, []);
 
-  const handleLoadSalesTemplate = (settings: SalesKPISettings) => {
+  const handleLoadSalesTemplate = useCallback((settings: SalesKPISettings) => {
     setSalesSettings(settings);
-  };
+  }, []);
 
-  const handleTabChange = (value: string) => {
-    setActiveTab(value as "services" | "sales");
-  };
+  // Unified handler for tab changes - navigates to update URL (which updates activeTab)
+  // Note: activeTab is derived from URL, so navigation automatically updates the UI
+  const handleTabChange = useCallback((value: string) => {
+    const tab = value as "services" | "sales";
+    const targetPath = `/tools/campaign-calculator/${tab}`;
+    
+    // Always navigate to ensure URL and UI are in sync
+    // This ensures tab clicks always work, even if already on the route
+    navigate(targetPath, { replace: true });
+  }, [navigate]);
+
+  // Handler for HeaderAndTab - ensures tab clicks always navigate
+  const handleHeaderTabChange = useCallback((tab: "services" | "sales") => {
+    // Directly navigate to ensure immediate response
+    const targetPath = `/tools/campaign-calculator/${tab}`;
+    navigate(targetPath, { replace: true });
+  }, [navigate]);
+
+  // Handler for Tabs component - uses unified handleTabChange
+  const handleTabsValueChange = handleTabChange;
+
+  // Early return after all hooks - don't render if not on correct route
+  if (!isCampaignCalculatorRoute) {
+    return null;
+  }
 
   return (
     <StandardLayout>
@@ -71,7 +111,7 @@ const CampaignCalculator = () => {
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
             <div className="h-full flex flex-col overflow-hidden">
               <div className="flex-shrink-0 mb-1">
-                <HeaderAndTab activeTab={activeTab} onTabChange={handleTabChange} />
+                <HeaderAndTab activeTab={activeTab} onTabChange={handleHeaderTabChange} />
               </div>
 
               <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
@@ -96,15 +136,16 @@ const CampaignCalculator = () => {
                         <div className="flex-1 min-h-0 overflow-hidden">
                           <div className="h-full overflow-y-auto seamless-scroll max-h-[calc(100vh-220px)]">
                             <div className="p-6">
-                              <Tabs value={activeTab} onValueChange={handleTabChange}>
+                              <Tabs value={activeTab} onValueChange={handleTabsValueChange}>
                                 <TabsContent value="services" className="mt-0">
                                   <EnhancedServicesCalculator
+                                    key="services"
                                     initialSettings={servicesSettings}
                                     onSettingsChange={setServicesSettings}
                                   />
                                 </TabsContent>
                                 <TabsContent value="sales" className="mt-0">
-                                  <SalesCalculator />
+                                  <SalesCalculator key="sales" />
                                 </TabsContent>
                               </Tabs>
                             </div>

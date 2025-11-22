@@ -257,7 +257,7 @@ const KPITemplateManager: React.FC<KPITemplateManagerProps> = ({
                 value={saveForm.category}
                 onValueChange={(value: TemplateCategory) => setSaveForm(prev => ({ ...prev, category: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="template-category">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>

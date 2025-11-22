@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { XCircle, Shield } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
@@ -215,5 +215,7 @@ export const UniversalProtectedRoute = ({
   }
 
   // Access granted - render children
+  // Note: React Router should handle unmounting automatically
+  // The key in CampaignCalculatorRouteElement should be sufficient
   return <>{children}</>;
 };

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
@@ -101,10 +102,11 @@ const LoginRouteElement = () => {
 
 // Route element selector for Home: uses viewport hook + UA heuristics
 const HomeRouteElement = () => {
+  const location = useLocation();
   const isViewportMobile = useIsMobile();
   const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
   const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileHome /> : <ModernHomePage />;
+  return isMobile ? <MobileHome key={location.pathname} /> : <ModernHomePage key={location.pathname} />;
 };
 
 // Route element selector for EmployeeWelcome
@@ -171,6 +173,25 @@ const SubscriptionManagementRouteElement = () => {
   return isMobile ? <ManagementTabPageMobile /> : <ManagementTabPageDesktop />;
 };
 
+// Route element selector for Campaign Calculator
+// Wrapper dengan key berdasarkan location untuk memastikan re-render saat route berubah
+const CampaignCalculatorRouteElement = () => {
+  const location = useLocation();
+  
+  // Only render if we're on the campaign calculator route (services or sales)
+  // This ensures the component is not rendered when navigating to other routes
+  const isCampaignCalculatorRoute = 
+    location.pathname === "/tools/campaign-calculator/services" ||
+    location.pathname === "/tools/campaign-calculator/sales";
+  
+  if (!isCampaignCalculatorRoute) {
+    return null;
+  }
+  
+  // Use location.pathname as key to force remount when route changes
+  return <CampaignCalculator key={location.pathname} />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -189,13 +210,16 @@ const App = () => (
                 <Routes>
                 {/* ======= PROTECTED ROUTES ======= */}
                 {/* PROTECTION SYSTEM */}
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <HomeAccessGuard>
-                      <HomeRouteElement />
-                    </HomeAccessGuard>
-                  </ProtectedRoute>
-                } />
+                <Route 
+                  path="/" 
+                  element={
+                    <ProtectedRoute>
+                      <HomeAccessGuard>
+                        <HomeRouteElement />
+                      </HomeAccessGuard>
+                    </ProtectedRoute>
+                  }
+                />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <HomeAccessGuard>
@@ -269,11 +293,31 @@ const App = () => (
                   <MeetingNotesRouteElement />
                 </UniversalProtectedRoute>
               } />
-              <Route path="/tools/campaign-calculator" element={
-                <UniversalProtectedRoute>
-                  <CampaignCalculator />
-                </UniversalProtectedRoute>
-              } />
+              {/* Campaign Calculator Routes - Nested with /services and /sales */}
+              <Route 
+                path="/tools/campaign-calculator" 
+                element={
+                  <UniversalProtectedRoute>
+                    <Navigate to="/tools/campaign-calculator/services" replace />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/campaign-calculator/services" 
+                element={
+                  <UniversalProtectedRoute>
+                    <CampaignCalculatorRouteElement />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/campaign-calculator/sales" 
+                element={
+                  <UniversalProtectedRoute>
+                    <CampaignCalculatorRouteElement />
+                  </UniversalProtectedRoute>
+                }
+              />
               <Route path="/tools/daily-task-report" element={
                 <UniversalProtectedRoute>
                   <DailyTaskReportRouteElement />
