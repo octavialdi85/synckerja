@@ -179,19 +179,32 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Assign Sub-Step: {subStep.title}
-          </DialogTitle>
-          <DialogDescription>
-            Select an employee to assign this sub-step to.
-          </DialogDescription>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold truncate">
+                Assign Sub-Step
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                {subStep.title}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div
+          className="flex-1 overflow-y-auto px-6 py-6 space-y-4"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollBehavior: 'smooth',
+            scrollbarColor: '#d1d5db transparent',
+          }}
+        >
           {/* Current Assignment */}
           {subStep.assigned_to && subStep.assigned_employee ? (
             <div className="p-3 bg-green-50 border border-green-200 rounded-md">
@@ -220,29 +233,32 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
           )}
 
           {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Search</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search employees..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Due Date Input */}
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
               Due Date <span className="text-red-500">*</span>
               {stepDueDate && (
-                <span className="text-gray-400 ml-1">
-                  (Default: {new Date(stepDueDate).toLocaleDateString()})
+                <span className="text-xs text-gray-400 ml-1">
+                  (Parent due: {new Date(stepDueDate).toLocaleDateString()})
                 </span>
               )}
             </label>
             <Input
               type="date"
-              className={`mt-1 h-9 ${dueDateError ? 'border-red-500' : ''}`}
+              className={`h-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${dueDateError ? 'border-red-500' : ''}`}
               value={dueDate}
               onChange={(e) => {
                 const val = e.target.value;
@@ -262,15 +278,10 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
             {dueDateError && (
               <p className="text-xs text-red-500 mt-1">{dueDateError}</p>
             )}
-            {stepDueDate && !dueDateError && (
-              <p className="text-xs text-gray-400 mt-1">
-                Parent step due date: {new Date(stepDueDate).toLocaleDateString()}
-              </p>
-            )}
           </div>
 
           {/* Employee List */}
-          <div className="max-h-60 overflow-y-auto space-y-2">
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
             {loading ? (
               <div className="text-center py-4">
                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -308,12 +319,12 @@ export const AssignSubStepDialog = ({ subStep, onAssign, onUnassign, onClose }: 
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          </div>
+        </div>
+
+        <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex items-center justify-end gap-3">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

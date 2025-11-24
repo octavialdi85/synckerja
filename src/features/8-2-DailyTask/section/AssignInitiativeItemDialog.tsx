@@ -221,19 +221,24 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600" />
-            Assign {getItemTypeLabel()}
-          </DialogTitle>
-          <DialogDescription>
-            Assign this {getItemTypeLabel().toLowerCase()} to an employee and set a deadline
-          </DialogDescription>
+      <DialogContent className="w-[520px] h-[520px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold truncate">
+                Assign {getItemTypeLabel()}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                Assign this {getItemTypeLabel().toLowerCase()} and optionally add a deadline.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Item Info */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
           <div className="rounded-lg bg-gray-50 p-3 border border-gray-200">
             <div className="text-xs font-medium text-gray-500 mb-1">
               {getItemTypeLabel()}
@@ -335,18 +340,19 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isAssigning}
+            className="w-full md:w-auto"
           >
             Cancel
           </Button>
           <Button
             onClick={handleAssign}
             disabled={!selectedEmployee || isAssigning || (dueDate && !isValidDate)}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto"
           >
             {isAssigning ? (
               <>

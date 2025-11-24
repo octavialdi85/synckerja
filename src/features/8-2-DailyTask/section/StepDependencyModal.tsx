@@ -267,19 +267,25 @@ export const StepDependencyModal: React.FC<StepDependencyModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="w-5 h-5 text-blue-600" />
-            Step Dependencies
-          </DialogTitle>
-          <DialogDescription>
-            Manage dependencies for "{stepTitle}"
-          </DialogDescription>
+      <DialogContent className="w-[720px] h-[720px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <GitBranch className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold truncate">
+                Step Dependencies
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                Manage dependencies for "{stepTitle}"
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
-          <div className="space-y-6">
+        <div className="flex-1 overflow-hidden px-6 pb-6">
+          <div className="space-y-6 h-full overflow-y-auto pr-1">
             {/* Add Dependency Form */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
@@ -421,8 +427,8 @@ export const StepDependencyModal: React.FC<StepDependencyModalProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
+          <Button variant="outline" onClick={onClose} className="w-full md:w-auto">
             Close
           </Button>
         </DialogFooter>

@@ -537,34 +537,38 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:max-w-xl md:h-[520px] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
-        <DialogHeader className="flex-shrink-0 p-4 md:p-0">
-          <div className="flex items-center gap-2 mb-2">
+      <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="h-8 w-8 p-0 -ml-2 md:ml-0 hover:bg-gray-100 flex-shrink-0"
+              className="h-8 w-8 p-0 hover:bg-blue-100/80 flex-shrink-0"
               aria-label="Close"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 text-blue-600" />
             </Button>
-            <DialogTitle className="flex items-center gap-2 flex-1 min-w-0">
-              <span>Steps</span>
-              <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
-            </DialogTitle>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-xl font-semibold flex items-center gap-2 truncate">
+                Steps
+                <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                {parentStepTitle}
+              </DialogDescription>
+            </div>
           </div>
-          <div className="px-2 md:px-0">
-            <p className="text-xs text-gray-500 truncate" title={parentStepTitle}>
-              {parentStepTitle}
-            </p>
-          </div>
-          <DialogDescription className="sr-only">
-            Manage sub-steps for {parentStepTitle}. Add, edit, complete, or delete individual steps.
-          </DialogDescription>
         </DialogHeader>
 
-		<div className="flex flex-col gap-3 flex-1 min-h-0 px-4 md:px-0">
+        <div
+          className="flex-1 overflow-y-auto px-6 py-6 space-y-4"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollBehavior: 'smooth',
+            scrollbarColor: '#d1d5db transparent',
+          }}
+        >
           {/* Inline Add Form */}
           <div className="flex items-center gap-2">
             <Input
@@ -697,8 +701,10 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 				</div>
         </div>
 
-        <div className="flex justify-end pt-2 mt-auto p-4 md:p-0 border-t md:border-t-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">Close</Button>
+        <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex items-center justify-end gap-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
+            Close
+          </Button>
         </div>
         {showHistoryForSubStep && (
           <StepHistoryModal

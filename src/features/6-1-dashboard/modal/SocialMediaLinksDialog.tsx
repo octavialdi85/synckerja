@@ -208,26 +208,35 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
   const isSaving = isCreating || isUpdating || isDeleting;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      // Only close when user explicitly closes, not when interacting with select
-      if (!open) {
-        handleClose();
-      }
-    }}>
-      <DialogContent className="w-[800px] h-[600px] max-w-none">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>Social Media Links</span>
-          </DialogTitle>
-          <DialogDescription className="sr-only">Manage social media links for this content</DialogDescription>
-          {planTitle && (
-            <p className="text-sm text-gray-600 mt-1">
-              Content: {planTitle}
-            </p>
-          )}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+    >
+      <DialogContent className="w-[720px] h-[640px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <Save className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold truncate">
+                Social Media Links
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                Manage social media links for this content.
+              </DialogDescription>
+              {planTitle && (
+                <p className="text-xs text-muted-foreground mt-1 truncate">
+                  Content: {planTitle}
+                </p>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 px-6 pb-6">
           <div className="flex items-center justify-between mb-4">
             <Label className="text-sm font-medium">Add social media links</Label>
             <Button
@@ -380,7 +389,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
           </ScrollArea>
         </div>
 
-        <DialogFooter className="flex gap-2">
+        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex gap-2">
           <Button
             variant="outline"
             onClick={handleClose}

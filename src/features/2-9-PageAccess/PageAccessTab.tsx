@@ -316,14 +316,28 @@ export const PageAccessTab = () => {
                                   Add New Page
                                 </Button>
                               </DialogTrigger>
-              <DialogContent className="max-w-lg aspect-square">
-                <DialogHeader>
-                  <DialogTitle>Create New Page Access</DialogTitle>
-                  <DialogDescription>
-                    Add a custom page with specific access permissions
-                  </DialogDescription>
+              <DialogContent className="w-[520px] h-[520px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
+                <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                        <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <DialogTitle className="text-xl font-semibold truncate">
+                          Create New Page Access
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                          Add a custom page with specific access permissions.
+                        </DialogDescription>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formData.page_path || '/path'}
+                    </div>
+                  </div>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
                   <div>
                     <Label htmlFor="page_path">Page Path *</Label>
                     <Input 
@@ -412,11 +426,11 @@ export const PageAccessTab = () => {
                     </p>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
+                  <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="w-full md:w-auto">
                     Cancel
                   </Button>
-                  <Button onClick={handleCreatePage} disabled={saving}>
+                  <Button onClick={handleCreatePage} disabled={saving} className="w-full md:w-auto bg-blue-600 hover:bg-blue-700">
                     {saving ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />

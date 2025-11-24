@@ -145,7 +145,7 @@ export const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({ onUsePassw
       </div>
 
       {onUsePassword && (
-        <Button onClick={() => onUsePassword(password)} className="w-full">
+        <Button onClick={() => onUsePassword(password)} className="w-full bg-blue-600 hover:bg-blue-700">
           Use This Password
         </Button>
       )}

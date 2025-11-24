@@ -419,44 +419,75 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-none w-screen h-screen md:max-w-4xl md:h-[90vh] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
-        <DialogHeader className="flex-shrink-0 p-4 md:p-0">
-          <DialogTitle className="flex items-center gap-2">
-            <History className="w-5 h-5 text-blue-600" />
-            Step History & Updates
-          </DialogTitle>
-          <DialogDescription>
-            Manage blockers, briefs, and track progress for "{stepTitle}"
-          </DialogDescription>
+      <DialogContent className="w-[720px] h-[720px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold truncate">
+                Step History & Updates
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+                Manage blockers, briefs, and track progress for "{stepTitle}"
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col min-h-0 px-4 md:px-0">
-            <div className="overflow-x-auto seamless-scroll mb-2 md:mb-8 w-full flex-shrink-0">
-              <TabsList className="inline-flex w-auto min-w-full md:min-w-0 md:w-full md:grid md:grid-cols-5 gap-3 md:gap-1.5 h-10 md:h-12 p-2 md:p-1">
-                <TabsTrigger value="brief" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[160px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
-                  <FileText className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
-                  <span className="truncate flex items-center">Brief Updates</span>
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-6 pb-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col min-h-0">
+            <div className="mb-4 w-full flex-shrink-0 overflow-x-auto">
+              <TabsList className="flex gap-4 bg-transparent py-2 px-2 min-w-max !h-auto !items-start rounded-none">
+                <TabsTrigger
+                  value="brief"
+                  className="group flex items-center gap-3 rounded-full border border-gray-200 px-5 py-2 text-sm text-gray-500 transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-blue-600"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-data-[state=active]:bg-white group-data-[state=active]:text-blue-600 transition">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  Brief Updates
                 </TabsTrigger>
-                <TabsTrigger value="blocker" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[140px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
-                  <AlertTriangle className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
-                  <span className="truncate flex items-center">Blockers</span>
+                <TabsTrigger
+                  value="blocker"
+                  className="group flex items-center gap-3 rounded-full border border-gray-200 px-5 py-2 text-sm text-gray-500 transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-blue-600"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-data-[state=active]:bg-white group-data-[state=active]:text-blue-600 transition">
+                    <AlertTriangle className="w-4 h-4" />
+                  </span>
+                  Blockers
                 </TabsTrigger>
                 {!subStepId && (
-                <TabsTrigger value="status" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[120px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
-                  <Clock className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
-                  <span className="truncate flex items-center">Status</span>
+                <TabsTrigger
+                  value="status"
+                  className="group flex items-center gap-3 rounded-full border border-gray-200 px-5 py-2 text-sm text-gray-500 transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-blue-600"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-data-[state=active]:bg-white group-data-[state=active]:text-blue-600 transition">
+                    <Clock className="w-4 h-4" />
+                  </span>
+                  Status
                 </TabsTrigger>
                 )}
                 {!subStepId && (
-                <TabsTrigger value="dependencies" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[160px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
-                  <GitBranch className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
-                  <span className="truncate flex items-center">Dependencies</span>
+                <TabsTrigger
+                  value="dependencies"
+                  className="group flex items-center gap-3 rounded-full border border-gray-200 px-5 py-2 text-sm text-gray-500 transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-blue-600"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-data-[state=active]:bg-white group-data-[state=active]:text-blue-600 transition">
+                    <GitBranch className="w-4 h-4" />
+                  </span>
+                  Dependencies
                 </TabsTrigger>
                 )}
-                <TabsTrigger value="history" className="flex items-center justify-center gap-2 md:gap-2.5 min-w-[130px] md:min-w-0 whitespace-nowrap px-5 md:px-5 py-2 md:py-3 flex-shrink-0 text-xs sm:text-sm mx-1 md:mx-0 leading-tight">
-                  <History className="w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0" />
-                  <span className="truncate flex items-center">Timeline</span>
+                <TabsTrigger
+                  value="history"
+                  className="group flex items-center gap-3 rounded-full border border-gray-200 px-5 py-2 text-sm text-gray-500 transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-blue-600"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-data-[state=active]:bg-white group-data-[state=active]:text-blue-600 transition">
+                    <History className="w-4 h-4" />
+                  </span>
+                  Timeline
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -712,7 +743,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
           </Tabs>
         </div>
 
-        <DialogFooter className="flex-shrink-0 p-4 md:p-0 border-t md:border-t-0 mt-auto">
+        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 mt-auto">
           <Button variant="outline" onClick={onClose} className="w-full md:w-auto">
             Close
           </Button>
