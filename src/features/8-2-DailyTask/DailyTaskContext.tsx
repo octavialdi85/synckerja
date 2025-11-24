@@ -141,7 +141,7 @@ export interface DailyTaskContextType {
   addTask: (data: Partial<Task>) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
-  addTaskStep: (taskId: string, title: string) => Promise<void>;
+  addTaskStep: (taskId: string, title: string, description?: string) => Promise<void>;
   updateTaskStep: (stepId: string, data: Partial<TaskStep>, options?: { autoReorder?: boolean }) => Promise<void>;
   deleteTaskStep: (stepId: string) => Promise<void>;
   assignTaskStep: (stepId: string, employeeId: string | null) => Promise<void>;
@@ -445,6 +445,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   id,
                   task_id,
                   title,
+                  description,
                   is_completed,
                   order,
                   status,
@@ -1267,7 +1268,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
-  const addTaskStep = async (taskId: string, title: string) => {
+  const addTaskStep = async (taskId: string, title: string, description?: string) => {
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -1289,6 +1290,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         .insert({
           task_id: taskId,
           title,
+          description: description?.trim() || null,
           is_completed: false,
           order: nextOrder,
           created_by: user?.id || null

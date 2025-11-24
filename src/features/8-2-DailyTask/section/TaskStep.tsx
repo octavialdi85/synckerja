@@ -10,7 +10,9 @@ import { AssignStepDialog } from './AssignStepDialog';
 import { StepLinks } from './StepLinks';
 import { StepHistoryModal } from './StepHistoryModal';
 import { ModalViewSubSteps } from './ModalViewSubSteps';
+import { ModalAddTaskStep } from './ModalAddTaskStep';
 import UpdateHistoryDialog from '@/features/8-1-meeting-notes/modal/UpdateHistoryDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
@@ -41,6 +43,7 @@ interface TaskStepProps {
     id: string;
     task_id: string;
     title: string;
+    description?: string | null;
     is_completed: boolean;
     order: number;
     created_at: string;
@@ -72,15 +75,16 @@ interface TaskStepProps {
   };
   index: number;
   taskCreatedBy?: string; // Task creator user ID for permission check
+  taskTitle?: string; // Task title for modal display
   autoReorder?: boolean; // Enable auto-reorder when step completion changes (for mobile)
 }
 
-export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: TaskStepProps) => {
+export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReorder = false }: TaskStepProps) => {
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep } = useDailyTask();
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(step.title);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showFiles, setShowFiles] = useState(false); // Default collapsed
   const [showLinks, setShowLinks] = useState(false);
+  const [isDescriptionPopoverOpen, setIsDescriptionPopoverOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -584,16 +588,8 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
     }
   }, [step.is_completed, step.updated_at, optimisticCompleted]);
 
-  const handleSaveEdit = async () => {
-    if (editTitle.trim() && editTitle !== step.title) {
-      await updateTaskStep(step.id, { title: editTitle.trim() });
-    }
-    setIsEditing(false);
-  };
-
-  const handleCancelEdit = () => {
-    setEditTitle(step.title);
-    setIsEditing(false);
+  const handleEditStep = () => {
+    setIsEditModalOpen(true);
   };
 
   const handleDelete = async () => {
@@ -767,7 +763,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => canEdit && setIsEditing(true)}
+        onClick={() => canEdit && handleEditStep()}
         disabled={!canEdit}
         className={`h-6 w-6 p-0 ${
           canEdit 
@@ -844,41 +840,8 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
         </div>
       </div>
 
-      {isEditing ? (
-        <div className="flex items-center gap-2 flex-1">
-          <Input
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className="flex-1 h-8 text-sm"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleSaveEdit();
-              } else if (e.key === 'Escape') {
-                handleCancelEdit();
-              }
-            }}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleSaveEdit}
-            className="h-8 px-2 text-green-600 hover:text-green-700"
-          >
-            Save
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCancelEdit}
-            className="h-8 px-2 text-gray-500 hover:text-gray-700"
-          >
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <>
-          <div className="flex-1 min-w-0 flex flex-col">
+      <>
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className={`text-sm line-clamp-2 md:truncate min-w-0 ${
                 isCompleted ? 'line-through text-gray-500' : 'text-gray-900'
@@ -904,6 +867,45 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
                 )}
               </div>
             </div>
+            {/* Description with see more functionality */}
+            {step.description && step.description.trim() && (
+              <div className="mt-1 min-w-0 max-w-full">
+                <div className="flex items-start gap-1">
+                  <p className="text-xs text-gray-600 break-words line-clamp-1 overflow-hidden flex-1">
+                    {step.description}
+                  </p>
+                  {step.description.length > 50 && (
+                    <Popover open={isDescriptionPopoverOpen} onOpenChange={setIsDescriptionPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsDescriptionPopoverOpen(true);
+                          }}
+                        >
+                          See more
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent 
+                        className="w-80 p-4"
+                        align="start"
+                        side="bottom"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-semibold text-gray-900">Description</h4>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                            {step.description}
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Icons below title on mobile, to the right on desktop when no sub-steps */}
             {subStepCount === 0 && (
               <div className="mt-1 flex justify-end md:hidden">
@@ -984,7 +986,6 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
             </div>
           )}
         </>
-      )}
       </div>
 
       {/* File Upload and Display Section - Moved outside main container */}
@@ -1153,6 +1154,22 @@ export const TaskStep = ({ step, index, taskCreatedBy, autoReorder = false }: Ta
         discussionPoint={discussionPoint}
       />
     )}
+
+    {/* Edit Step Modal */}
+    <ModalAddTaskStep
+      open={isEditModalOpen}
+      onOpenChange={setIsEditModalOpen}
+      taskId={step.task_id}
+      taskTitle={taskTitle || 'Task'}
+      editingStep={{
+        id: step.id,
+        title: step.title,
+        description: step.description ?? null,
+      }}
+      onSuccess={() => {
+        setIsEditModalOpen(false);
+      }}
+    />
     </div>
   );
 };

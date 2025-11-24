@@ -1178,7 +1178,7 @@ export const TaskList = () => {
                           return visibleSteps
                             .sort((a, b) => a.order - b.order)
                             .map((step, index) => (
-                              <TaskStep key={step.id} step={step} index={index} taskCreatedBy={task.created_by} autoReorder={true} />
+                              <TaskStep key={step.id} step={step} index={index} taskCreatedBy={task.created_by} taskTitle={task.title} autoReorder={true} />
                             ));
                         })()}
                       </div>

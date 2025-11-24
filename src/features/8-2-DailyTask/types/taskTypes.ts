@@ -45,6 +45,7 @@ export interface TaskStep {
   id: string;
   task_id: string;
   title: string;
+  description?: string | null;
   is_completed: boolean;
   order: number;
   created_at: string;
