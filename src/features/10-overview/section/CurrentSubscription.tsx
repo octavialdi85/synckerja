@@ -60,7 +60,14 @@ export const CurrentSubscription = memo(({
                   {Math.round(employeeUsagePercentage)}%
                 </span>
               </div>
-              <Progress value={employeeUsagePercentage} className={`h-2 ${isNearLimit ? 'bg-orange-200' : ''}`} />
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div 
+                  className={`h-full rounded-full transition-all ${
+                    isNearLimit ? 'bg-orange-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${employeeUsagePercentage}%` }}
+                />
+              </div>
               {subscriptionStatus.over_limit && (
                 <p className="text-xs text-red-600">
                   Over limit! Please upgrade your plan.
