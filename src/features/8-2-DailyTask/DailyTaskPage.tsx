@@ -98,14 +98,12 @@ const DailyTaskContent = () => {
                 {/* Grid Layout: 12 columns (9-3) */}
                 <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
                   {/* Main Content - 9 columns */}
-                  <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="col-span-9 flex flex-col min-h-0 gap-2">
+                    <div className="flex-shrink-0">
+                      <TaskFilters />
+                    </div>
                     <div className="flex-1 min-h-0">
                       <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                        {/* Filters Section */}
-                        <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200 flex items-center">
-                          <TaskFilters />
-                        </div>
-
                         {/* Scrollable Task Content */}
                         <div className="flex-1 min-h-0 overflow-hidden">
                           <div className="h-full p-4">

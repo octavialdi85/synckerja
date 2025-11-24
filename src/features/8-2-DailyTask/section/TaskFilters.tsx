@@ -148,21 +148,23 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
   };
 
   return (
-    <div className="flex items-center gap-4 w-full">
+    <div className="w-full">
+      <div className="p-2 bg-white border border-gray-200 rounded-md">
+        <div className="flex flex-wrap gap-1 items-center">
       {/* Search Input */}
-      <div className="relative flex-1 max-w-md">
+      <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <Input
           placeholder="Search tasks and steps..."
           value={filters.search}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="pl-8 pr-3 h-9 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         />
       </div>
 
       {/* Combined My Task / All PIC Filter */}
       <Select value={getCurrentTaskViewValue()} onValueChange={handleTaskViewChange}>
-        <SelectTrigger className="w-40 border border-gray-200 rounded-lg">
+        <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 text-left">
           <SelectValue placeholder="My Task" />
         </SelectTrigger>
         <SelectContent>
@@ -182,7 +184,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Status Filter */}
       <Select value={filters.status || "all"} onValueChange={(value) => handleStatusChange(value === "all" ? "" : value)}>
-        <SelectTrigger className="w-40 border border-gray-200 rounded-lg">
+        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
           <SelectValue placeholder="All Status" />
         </SelectTrigger>
         <SelectContent>
@@ -196,7 +198,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Priority Filter */}
       <Select value={filters.priority || "all"} onValueChange={(value) => handlePriorityChange(value === "all" ? "" : value)}>
-        <SelectTrigger className="w-40 border border-gray-200 rounded-lg">
+        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
           <SelectValue placeholder="All Priority" />
         </SelectTrigger>
         <SelectContent>
@@ -213,7 +215,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         value={filters.dateRange || "all"} 
         onValueChange={handleDateRangeChange}
       >
-        <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] border border-gray-200 rounded-lg whitespace-nowrap overflow-hidden">
+        <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
           <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
             <CalendarIcon className="h-4 w-4 text-gray-500" />
             <SelectValue placeholder="All Dates" className="truncate">
@@ -234,15 +236,13 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Clear Filters Button */}
       {(filters.search || filters.status || filters.priority || filters.pic || filters.dateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={clearFilters}
-          className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
-          title="Clear Filters"
+          className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center ml-auto"
+          title="Clear filters"
         >
-          <FilterX className="w-4 h-4" />
-        </Button>
+          <FilterX className="w-4 h-4 text-gray-500" />
+        </button>
       )}
 
       {/* Add Task Button */}
@@ -277,6 +277,8 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           }}
         />
       )}
+    </div>
+      </div>
     </div>
   );
 };

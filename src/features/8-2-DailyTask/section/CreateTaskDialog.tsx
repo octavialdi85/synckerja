@@ -138,32 +138,41 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:w-[min(56vw,56vh)] md:h-[min(56vw,56vh)] border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
-          <DialogHeader className="flex-shrink-0 p-4 md:p-0">
-            <DialogTitle className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClose}
-                className="h-8 w-8 p-0 -ml-2 md:ml-0 hover:bg-gray-100 flex-shrink-0"
-                aria-label="Close"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <Plus className="w-5 h-5 text-blue-600" />
-              Create New Task
-            </DialogTitle>
-            <DialogDescription>
-              Create a new task and link it to an individual objective. Fill in all required fields to save.
-            </DialogDescription>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) {
+            handleClose();
+          }
+        }}
+      >
+        <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-semibold">Create New Task</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground mt-1">
+                  Create a new task and link it to an individual objective. Fill in all required fields to save.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 flex flex-col">
-            <form id="create-task-form" onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
-              <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-0 seamless-scroll">
-                <div className="space-y-4 mt-4 pb-4">
-                  {/* Task Title */}
+          <form id="create-task-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+            <div
+              className="flex-1 overflow-y-auto px-6 py-6"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollBehavior: 'smooth',
+                scrollbarColor: '#d1d5db transparent',
+              }}
+            >
+              <div className="space-y-6">
+                {/* Task Title & Description */}
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="title" className="text-sm font-medium">
                       Task Title <span className="text-red-500">*</span>
@@ -180,7 +189,6 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                     />
                   </div>
 
-                  {/* Description */}
                   <div className="space-y-2">
                     <Label htmlFor="description" className="text-sm font-medium">
                       Description
@@ -195,151 +203,149 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       rows={4}
                     />
                   </div>
+                </div>
 
-                  {/* Priority and Objective Row */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Priority Selector */}
-                    <div className="space-y-2">
-                      <Label htmlFor="priority" className="text-sm font-medium">
-                        Priority <span className="text-red-500">*</span>
-                      </Label>
-                      <Select value={priority} onValueChange={setPriority} disabled={isSubmitting}>
-                        <SelectTrigger className="border border-gray-200 rounded-lg">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">
-                            <div className="flex items-center gap-2">
-                              <Flag className="w-4 h-4 text-green-600" />
-                              Low
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="medium">
-                            <div className="flex items-center gap-2">
-                              <Flag className="w-4 h-4 text-blue-600" />
-                              Medium
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="high">
-                            <div className="flex items-center gap-2">
-                              <Flag className="w-4 h-4 text-orange-600" />
-                              High
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="urgent">
-                            <div className="flex items-center gap-2">
-                              <Flag className="w-4 h-4 text-red-600" />
-                              Urgent
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Individual Objective */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Individual Objective <span className="text-red-500">*</span>
-                      </Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsObjectiveDialogOpen(true)}
-                        disabled={isSubmitting}
-                        className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
-                      >
-                        {objectiveId && objectiveContext ? (
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                            <div className="flex flex-col min-w-0 flex-1 text-left">
-                              <span className="text-sm truncate font-medium text-gray-900">
-                                {objectiveContext.individualTitle}
-                              </span>
-                              {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
-                                <span className="text-xs text-gray-500 truncate">
-                                  {objectiveContext.companyTitle && objectiveContext.departmentTitle
-                                    ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
-                                    : objectiveContext.companyTitle || objectiveContext.departmentTitle}
-                                </span>
-                              )}
-                            </div>
+                {/* Priority & Objective */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="priority" className="text-sm font-medium">
+                      Priority <span className="text-red-500">*</span>
+                    </Label>
+                    <Select value={priority} onValueChange={setPriority} disabled={isSubmitting}>
+                      <SelectTrigger className="border border-gray-200 rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">
+                          <div className="flex items-center gap-2">
+                            <Flag className="w-4 h-4 text-green-600" />
+                            Low
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2 min-w-0 w-full">
-                            <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                            <span className="text-gray-500 text-sm truncate text-left">
-                              Select Individual Objective
-                            </span>
+                        </SelectItem>
+                        <SelectItem value="medium">
+                          <div className="flex items-center gap-2">
+                            <Flag className="w-4 h-4 text-blue-600" />
+                            Medium
                           </div>
-                        )}
-                      </Button>
-                    </div>
+                        </SelectItem>
+                        <SelectItem value="high">
+                          <div className="flex items-center gap-2">
+                            <Flag className="w-4 h-4 text-orange-600" />
+                            High
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="urgent">
+                          <div className="flex items-center gap-2">
+                            <Flag className="w-4 h-4 text-red-600" />
+                            Urgent
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Assign Button */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Assignment</Label>
+                    <Label className="text-sm font-medium">
+                      Individual Objective <span className="text-red-500">*</span>
+                    </Label>
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setShowAssignModal(true)}
+                      onClick={() => setIsObjectiveDialogOpen(true)}
                       disabled={isSubmitting}
                       className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
                     >
-                      {assignment.employeeId ? (
-                        <div className="flex items-center gap-2 w-full">
-                          <User className="w-4 h-4 text-blue-600" />
-                          <span className="text-sm truncate flex-1 text-left">
-                            {employees.find(e => e.id === assignment.employeeId)?.full_name || 'Assigned'}
-                          </span>
-                          {assignment.deadline && (
-                            <span className="text-xs text-gray-500">
-                              {new Date(assignment.deadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                      {objectiveId && objectiveContext ? (
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <div className="flex flex-col min-w-0 flex-1 text-left">
+                            <span className="text-sm truncate font-medium text-gray-900">
+                              {objectiveContext.individualTitle}
                             </span>
-                          )}
+                            {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
+                              <span className="text-xs text-gray-500 truncate">
+                                {objectiveContext.companyTitle && objectiveContext.departmentTitle
+                                  ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
+                                  : objectiveContext.companyTitle || objectiveContext.departmentTitle}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <UserPlus className="w-4 h-4 text-gray-500" />
-                          <span className="text-gray-500 text-sm">Assign Task (Optional)</span>
+                        <div className="flex items-center gap-2 min-w-0 w-full">
+                          <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <span className="text-gray-500 text-sm truncate text-left">
+                            Select Individual Objective
+                          </span>
                         </div>
                       )}
                     </Button>
                   </div>
                 </div>
-              </div>
 
-              {/* Submit Button - Fixed at bottom */}
-              <div className="flex justify-end gap-3 pt-4 border-t mt-auto flex-shrink-0 p-4 md:p-0 md:border-t-0 md:pt-4">
+                {/* Assignment */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Assignment</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowAssignModal(true)}
+                    disabled={isSubmitting}
+                    className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+                  >
+                    {assignment.employeeId ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <User className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm truncate flex-1 text-left">
+                          {employees.find(e => e.id === assignment.employeeId)?.full_name || 'Assigned'}
+                        </span>
+                        {assignment.deadline && (
+                          <span className="text-xs text-gray-500">
+                            {new Date(assignment.deadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-500 text-sm">Assign Task (Optional)</span>
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
+              <div className="flex items-center justify-end gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className="w-full md:w-auto"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={!title.trim() || !objectiveId || isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 w-full md:w-auto"
+                  className="min-w-[140px] flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (
-                    <div className="flex items-center gap-2">
+                    <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Adding...
-                    </div>
+                      <span>Adding...</span>
+                    </>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <>
                       <Plus className="w-4 h-4" />
-                      Create Task
-                    </div>
+                      <span>Create Task</span>
+                    </>
                   )}
                 </Button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 

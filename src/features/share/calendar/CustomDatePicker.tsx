@@ -69,7 +69,10 @@ function CustomDatePicker({
   }
 
   return (
-    <div className={cn("custom-date-picker p-4 bg-white rounded-lg shadow-sm border border-gray-200", className)}>
+    <div
+      className={cn("custom-date-picker p-4 bg-white rounded-lg shadow-sm border border-gray-200 mx-auto", className)}
+      style={{ width: 'fit-content', minWidth: '340px' }}
+    >
       {/* Header with navigation */}
       <div className="flex justify-center items-center mb-3">
         <button
@@ -98,11 +101,11 @@ function CustomDatePicker({
       </div>
 
       {/* Week days header */}
-      <div className="flex justify-between mb-1">
+      <div className="grid grid-cols-7 mb-1 text-center">
         {weekDays.map((day) => (
           <div
             key={day}
-            className="text-gray-600 w-8 h-6 font-medium text-xs flex items-center justify-center"
+            className="text-gray-600 h-6 font-medium text-xs flex items-center justify-center"
           >
             {day}
           </div>
@@ -110,7 +113,7 @@ function CustomDatePicker({
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-0">
+      <div className="grid grid-cols-7 gap-0 text-center">
         {allDays.map((day, index) => {
           const isCurrentMonth = isSameMonth(day, currentMonth)
           const isSelected = selected && isSameDay(day, selected)
@@ -125,10 +128,10 @@ function CustomDatePicker({
               onClick={() => handleDayClick(day)}
               disabled={isDisabled}
               className={cn(
-                "h-8 w-8 p-0 font-medium text-sm rounded-md transition-all duration-200 border-0",
+                "h-8 w-full p-0 font-medium text-sm rounded-md transition-all duration-200 border-0 flex items-center justify-center",
                 "hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1",
                 // Outside month styling
-                !isCurrentMonth && "text-gray-400 opacity-50",
+                !isCurrentMonth && "text-gray-400",
                 // Current month styling - default untuk tanggal masa depan
                 isCurrentMonth && !isPastDate && !isTodayDate && "text-gray-800",
                 // Past date styling - lebih kontras dan terlihat jelas
