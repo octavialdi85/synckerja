@@ -172,12 +172,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     // on time means finish is on/before 23:59:59 of due date
     dueEnd.setHours(23, 59, 59, 999);
     if (finish.getTime() <= dueEnd.getTime()) {
-      return { text: `${assigneeName} · ontime`, className: 'inline-flex items-center whitespace-normal break-words bg-green-100 text-green-700 border border-green-200 rounded px-1.5 py-0.5' };
+      return { text: `${assigneeName} · ontime`, className: 'text-[10px] text-green-600' };
     }
     const diffMs = finish.getTime() - dueEnd.getTime();
     const dayMs = 24 * 60 * 60 * 1000;
     const lateDays = Math.ceil(diffMs / dayMs);
-    return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'inline-flex items-center whitespace-normal break-words bg-red-100 text-red-700 border border-red-200 rounded px-1.5 py-0.5' };
+    return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'text-[10px] text-red-600' };
   };
 
   // Compute overdue days label for active (not completed) steps
@@ -193,8 +193,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     const overdueDays = Math.ceil(diffMs / dayMs);
     return {
       text: `Overdue ${overdueDays} day${overdueDays > 1 ? 's' : ''}`,
-      className:
-        'inline-flex items-center whitespace-normal break-words bg-red-50 text-red-700 border border-red-200 rounded px-1.5 py-0.5',
+      className: 'text-[10px] text-red-600',
     };
   };
 
@@ -842,30 +841,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
 
       <>
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <span className={`text-sm line-clamp-2 md:truncate min-w-0 ${
+            <div className="min-w-0">
+              <span className={`text-sm line-clamp-2 md:truncate min-w-0 block ${
                 isCompleted ? 'line-through text-gray-500' : 'text-gray-900'
               }`}>
                 {step.title}
               </span>
-              {/* Badge to indicate assignment status */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {isAssignedToMe && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">
-                    Assigned to you
-                  </Badge>
-                )}
-                {!isAssignedToMe && step.assigned_to && isStepCreator && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300">
-                    Assigned to {step.assigned_employee?.full_name || 'other'}
-                  </Badge>
-                )}
-                {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border-purple-300">
-                    Sub-step assigned to you
-                  </Badge>
-                )}
-              </div>
             </div>
             {/* Description with see more functionality */}
             {step.description && step.description.trim() && (
@@ -906,85 +887,111 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
                 </div>
               </div>
             )}
-            {/* Icons below title on mobile, to the right on desktop when no sub-steps */}
+            {/* Icons below title when no sub-steps */}
             {subStepCount === 0 && (
-              <div className="mt-1 flex justify-end md:hidden">
-                <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
-                  {renderActionButtons()}
-                </div>
-              </div>
-            )}
-            {subStepCount > 0 && (
-              <div className="mt-1">
-                <div className="w-full h-1.5 bg-blue-100 rounded">
-                  <div
-                    className="h-1.5 bg-blue-500 rounded"
-                    style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
-                  />
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-1 flex items-end justify-between gap-2 flex-wrap">
+                {(step.assigned_due_date || step.assigned_at || isAssignedToMe || (step.assigned_to && isStepCreator) || step.has_assigned_substeps || getOverdueLabel() || getFinishStatusLabel()) && (
+                  <div className="flex flex-wrap items-end gap-2 text-[10px] text-gray-500 min-w-0">
+                    {isAssignedToMe && (
+                      <span className="text-[10px] text-green-600">
+                        Assigned to you
+                      </span>
+                    )}
+                    {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                      <span className="text-[10px] text-blue-600">
+                        Assigned to {step.assigned_employee?.full_name || 'other'}
+                      </span>
+                    )}
+                    {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                      <span className="text-[10px] text-purple-600">
+                        Sub-step assigned to you
+                      </span>
+                    )}
                     {step.assigned_due_date && (
                       <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
                     )}
-                    {/* Assigned at */}
                     {step.assigned_at && (
                       <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
                     )}
                     {/* Overdue badge for active steps - placed to the right of Assigned */}
                     {getOverdueLabel() && (
-                      <span className={`ml-0 ${getOverdueLabel()!.className}`}>{getOverdueLabel()!.text}</span>
-                    )}
-                    {/* Finished timestamp - only show when completed */}
-                    {/* Use completed_at from task_steps table for finished date */}
-                    {isCompleted && completedAt && (
-                      <span className="text-gray-500">Finished: {formatDateTime(completedAt)}</span>
+                      <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
                     )}
                     {getFinishStatusLabel() && (
-                      <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
+                      <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span>{subStepCompletedCount}/{subStepCount}</span>
-                    <span className="font-medium">
-                      {Math.round((subStepCompletedCount / subStepCount) * 100)}%
-                    </span>
-                  </div>
+                )}
+                <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm flex-shrink-0">
+                  {renderActionButtons()}
                 </div>
-                <div className="mt-1 flex items-center justify-end gap-1">
-                  <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
+              </div>
+            )}
+            {subStepCount > 0 && (
+              <div>
+                <div className="flex items-end gap-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="h-1.5 bg-blue-100 rounded">
+                      <div
+                        className="h-1.5 bg-blue-500 rounded"
+                        style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex items-end justify-between gap-1 text-[10px] text-gray-500 min-w-0">
+                      <div className="flex flex-wrap items-end gap-1 min-w-0">
+                        {isAssignedToMe && (
+                          <span className="text-[10px] text-green-600">
+                            Assigned to you
+                          </span>
+                        )}
+                        {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                          <span className="text-[10px] text-blue-600">
+                            Assigned to {step.assigned_employee?.full_name || 'other'}
+                          </span>
+                        )}
+                        {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                          <span className="text-[10px] text-purple-600">
+                            Sub-step assigned to you
+                          </span>
+                        )}
+                        {step.assigned_due_date && (
+                          <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                        )}
+                        {/* Assigned at */}
+                        {step.assigned_at && (
+                          <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                        )}
+                        {/* Sub-step count - placed to the right of Assigned at */}
+                        {step.assigned_at && (
+                          <span>{subStepCompletedCount}/{subStepCount}</span>
+                        )}
+                        {/* Overdue badge for active steps - placed to the right of Assigned */}
+                        {getOverdueLabel() && (
+                          <span className={`ml-0 ${getOverdueLabel()!.className}`}>{getOverdueLabel()!.text}</span>
+                        )}
+                        {/* Finished timestamp - only show when completed */}
+                        {/* Use completed_at from task_steps table for finished date */}
+                        {isCompleted && completedAt && (
+                          <span className="text-gray-500">Finished: {formatDateTime(completedAt)}</span>
+                        )}
+                        {getFinishStatusLabel() && (
+                          <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className="font-medium">
+                          {Math.round((subStepCompletedCount / subStepCount) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm flex-shrink-0">
                     {renderActionButtons()}
                   </div>
                 </div>
               </div>
             )}
-            {subStepCount === 0 && (step.assigned_due_date || step.assigned_at) && (
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
-                {step.assigned_due_date && (
-                  <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
-                )}
-                {step.assigned_at && (
-                  <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
-                )}
-                {/* Overdue badge for active steps - placed to the right of Assigned */}
-                {getOverdueLabel() && (
-                  <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
-                )}
-                {getFinishStatusLabel() && (
-                  <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
-                )}
-              </div>
-            )}
           </div>
-
-          {/* Icons to the right on desktop when no sub-steps */}
-          {subStepCount === 0 && (
-            <div className="hidden md:flex items-center justify-end gap-1 flex-shrink-0">
-              <div className="inline-flex items-center gap-1 p-1.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm">
-                {renderActionButtons()}
-              </div>
-            </div>
-          )}
         </>
       </div>
 
