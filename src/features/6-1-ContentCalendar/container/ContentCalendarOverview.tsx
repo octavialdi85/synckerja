@@ -3,6 +3,7 @@ import { Calendar, CheckCircle2, Clock, AlertCircle, FileEdit } from 'lucide-rea
 import { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { ContentBalanceTab } from '@/features/6-1-dashboard/container/RightSection/ContentBalanceTab';
+import { ContentPillarTracker } from '@/features/6-1-dashboard/container/RightSection/ContentPillarTracker';
 
 interface MonthlyStats {
   total: number;
@@ -46,8 +47,9 @@ export const ContentCalendarOverview = ({
       <Tabs defaultValue="overview" className="w-full h-full flex flex-col overflow-hidden">
         {/* Tabs Header - Fixed */}
         <div className="px-4 py-2 border-b flex-shrink-0">
-          <TabsList className="grid w-full grid-cols-2 h-8 mb-2">
+          <TabsList className="grid w-full grid-cols-3 h-8 mb-2">
             <TabsTrigger value="overview" className="text-xs py-1">Overview</TabsTrigger>
+            <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
             <TabsTrigger value="content-balance" className="text-xs py-1">Content Balance</TabsTrigger>
           </TabsList>
           <p className="text-xs text-gray-500">{monthName}</p>
@@ -125,6 +127,13 @@ export const ContentCalendarOverview = ({
             ))}
           </div>
         )}
+        </TabsContent>
+
+        {/* Funnel Tab Content */}
+        <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
+          <div className="w-full h-full flex flex-col">
+            <ContentPillarTracker />
+          </div>
         </TabsContent>
 
         {/* Content Balance Tab Content */}

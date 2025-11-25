@@ -1,22 +1,34 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { Button } from '@/features/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 
 const indonesianMonths = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
+interface Service {
+  id: string;
+  name: string;
+}
+
 interface CalendarHeaderProps {
   currentDate: Date;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  services: Service[];
+  selectedService: string;
+  onServiceChange: (serviceId: string) => void;
 }
 
 export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
   currentDate,
   onPrevMonth,
-  onNextMonth
+  onNextMonth,
+  services,
+  selectedService,
+  onServiceChange
 }) => {
   return (
     <div className="space-y-3">
@@ -39,27 +51,47 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         </div>
       </div>
 
-      {/* Calendar Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded shadow-sm"></div>
-          <span className="text-gray-700">Not Approved</span>
+      {/* Calendar Legend and Service Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-500 rounded shadow-sm"></div>
+            <span className="text-gray-700">Not Approved</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-orange-500 rounded shadow-sm"></div>
+            <span className="text-gray-700">Approved (No Production)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-amber-400 rounded shadow-sm"></div>
+            <span className="text-gray-700">Production Approved</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded shadow-sm"></div>
+            <span className="text-gray-700">Completed</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded shadow-sm border-2 border-red-500"></div>
+            <span className="text-gray-700">Completed (Late)</span>
+          </div>
         </div>
+        
+        {/* Service Filter */}
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-orange-500 rounded shadow-sm"></div>
-          <span className="text-gray-700">Approved (No Production)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-amber-400 rounded shadow-sm"></div>
-          <span className="text-gray-700">Production Approved</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-500 rounded shadow-sm"></div>
-          <span className="text-gray-700">Completed</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-500 rounded shadow-sm border-2 border-red-500"></div>
-          <span className="text-gray-700">Completed (Late)</span>
+          <Filter className="h-4 w-4 text-gray-500" />
+          <Select value={selectedService} onValueChange={onServiceChange}>
+            <SelectTrigger className="w-[180px] h-8 text-xs">
+              <SelectValue placeholder="Filter by Service" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Services</SelectItem>
+              {services.map((service) => (
+                <SelectItem key={service.id} value={service.id}>
+                  {service.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

@@ -26,9 +26,18 @@ const ContentCalendarContent: React.FC = () => {
   const [showDayDialog, setShowDayDialog] = useState(false);
   const [showAddContentDialog, setShowAddContentDialog] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState('content-calendar');
+  const [selectedService, setSelectedService] = useState<string>('all');
   
   const { contentPlans, organizationId, services } = useSocialMediaData();
   const { addContentPlan, refreshMasterData } = useSocialMediaMutations();
+
+  // Filter content plans by selected service
+  const filteredContentPlans = useMemo(() => {
+    if (selectedService === 'all') {
+      return contentPlans;
+    }
+    return contentPlans.filter(plan => plan.service_id === selectedService);
+  }, [contentPlans, selectedService]);
 
   // Calendar calculations
   const monthStart = startOfMonth(currentDate);
@@ -64,11 +73,11 @@ const ContentCalendarContent: React.FC = () => {
     calendarDays.push({ date: day, isCurrentMonth: false });
   }
 
-  // Process content plans for the calendar
+  // Process content plans for the calendar (using filtered content plans)
   const plansByDate = useMemo(() => {
     const plans: { [key: string]: ContentPlan[] } = {};
     
-    contentPlans.forEach(plan => {
+    filteredContentPlans.forEach(plan => {
       if (plan.post_date) {
         const dateKey = format(new Date(plan.post_date), 'yyyy-MM-dd');
         if (!plans[dateKey]) plans[dateKey] = [];
@@ -77,7 +86,7 @@ const ContentCalendarContent: React.FC = () => {
     });
     
     return plans;
-  }, [contentPlans]);
+  }, [filteredContentPlans]);
 
   // Calculate day status and color based on approved, production_approved, done, and on_time_status
   const getDayInfo = (date: Date) => {
@@ -185,7 +194,7 @@ const ContentCalendarContent: React.FC = () => {
 
   // Calculate statistics for current month based on approved, production_approved, done, and on_time_status
   const monthlyStats = useMemo(() => {
-    const currentMonthPlans = contentPlans.filter(plan => {
+    const currentMonthPlans = filteredContentPlans.filter(plan => {
       if (!plan.post_date) return false;
       const postDate = new Date(plan.post_date);
       return postDate.getMonth() === currentDate.getMonth() && 
@@ -234,7 +243,7 @@ const ContentCalendarContent: React.FC = () => {
       greenWithLate: greenWithLateCount,
       total: currentMonthPlans.length 
     };
-  }, [contentPlans, currentDate]);
+  }, [filteredContentPlans, currentDate]);
 
   // Handle day click
   const handleDayClick = (date: Date, dayInfo: any) => {
@@ -292,7 +301,7 @@ const ContentCalendarContent: React.FC = () => {
       const dateKey = format(day, 'yyyy-MM-dd');
       return plansByDate[dateKey] && plansByDate[dateKey].length > 0;
     }).length;
-    const totalPostsInMonth = contentPlans.filter(plan => {
+    const totalPostsInMonth = filteredContentPlans.filter(plan => {
       if (!plan.post_date) return false;
       const postDate = new Date(plan.post_date);
       return postDate.getMonth() === currentDate.getMonth() && 
@@ -304,7 +313,7 @@ const ContentCalendarContent: React.FC = () => {
       activeDays: daysWithContent,
       totalPosts: totalPostsInMonth
     };
-  }, [daysInMonth, plansByDate, contentPlans, currentDate]);
+  }, [daysInMonth, plansByDate, filteredContentPlans, currentDate]);
 
   return (
     <StandardLayout>
@@ -332,6 +341,9 @@ const ContentCalendarContent: React.FC = () => {
                           currentDate={currentDate}
                           onPrevMonth={handlePrevMonth}
                           onNextMonth={handleNextMonth}
+                          services={Array.isArray(services) ? services : []}
+                          selectedService={selectedService}
+                          onServiceChange={setSelectedService}
                         />
                       </div>
                     </div>
@@ -376,7 +388,7 @@ const ContentCalendarContent: React.FC = () => {
                     <ContentCalendarOverview 
                       monthlyStats={monthlyStats}
                       plansByDate={plansByDate}
-                      contentPlans={contentPlans}
+                      contentPlans={filteredContentPlans}
                       currentDate={currentDate}
                     />
                   </div>
