@@ -47,8 +47,8 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
       '/tools': [
         '/password-manager',
         '/tools/daily-task',
-        '/tools/campaign-calculator/services',
-        '/tools/campaign-calculator/sales'
+        '/tools/calculator/services',
+        '/tools/calculator/sales'
       ],
       '/digital-marketing': [
         '/digital-marketing',

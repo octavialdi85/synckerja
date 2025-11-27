@@ -26,5 +26,10 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/features/8-3-campaign-calculator1",
+    "src/features/8-3-CampaignCalculator/services",
+    "src/features/8-3-CampaignCalculator/Sales"
+  ]
 }

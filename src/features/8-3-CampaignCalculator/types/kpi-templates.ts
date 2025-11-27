@@ -1,4 +1,3 @@
-
 export interface KPITemplate {
   id: string;
   name: string;
@@ -39,6 +38,7 @@ export interface ServiceKPISettings {
   conversionFrequency: string;
   budget: string;
   cpm: string;
+  cpc?: string; // For Google Ads (CPC-based)
   ctrLink: string;
   adsClickToVisit: string;
   whatsappClick: string;
@@ -52,6 +52,9 @@ export interface ServiceKPISettings {
   // Remarketing controls
   remarketingAudienceSource: string;
   remarketingAudience: string;
+  
+  // Ad platform type for Traffic Calculator
+  adType?: 'meta' | 'google'; // 'meta' for Meta Ads (CPM), 'google' for Google Ads (CPC)
 }
 
 export interface SalesKPISettings {

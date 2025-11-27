@@ -74,10 +74,11 @@ import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
 import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
 import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
-import CampaignCalculator from "./features/8-3-campaign-calculator/pages/CampaignCalculator";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
+import { CalculatorServicesPage } from "./features/8-3-calculator/services";
+import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -171,25 +172,6 @@ const SubscriptionPlansRouteElement = () => {
 const SubscriptionManagementRouteElement = () => {
   const isMobile = useMobileDetection();
   return isMobile ? <ManagementTabPageMobile /> : <ManagementTabPageDesktop />;
-};
-
-// Route element selector for Campaign Calculator
-// Wrapper dengan key berdasarkan location untuk memastikan re-render saat route berubah
-const CampaignCalculatorRouteElement = () => {
-  const location = useLocation();
-  
-  // Only render if we're on the campaign calculator route (services or sales)
-  // This ensures the component is not rendered when navigating to other routes
-  const isCampaignCalculatorRoute = 
-    location.pathname === "/tools/campaign-calculator/services" ||
-    location.pathname === "/tools/campaign-calculator/sales";
-  
-  if (!isCampaignCalculatorRoute) {
-    return null;
-  }
-  
-  // Use location.pathname as key to force remount when route changes
-  return <CampaignCalculator key={location.pathname} />;
 };
 
 const App = () => (
@@ -293,36 +275,27 @@ const App = () => (
                   <MeetingNotesRouteElement />
                 </UniversalProtectedRoute>
               } />
-              {/* Campaign Calculator Routes - Nested with /services and /sales */}
-              <Route 
-                path="/tools/campaign-calculator" 
-                element={
-                  <UniversalProtectedRoute>
-                    <Navigate to="/tools/campaign-calculator/services" replace />
-                  </UniversalProtectedRoute>
-                }
-              />
-              <Route 
-                path="/tools/campaign-calculator/services" 
-                element={
-                  <UniversalProtectedRoute>
-                    <CampaignCalculatorRouteElement />
-                  </UniversalProtectedRoute>
-                }
-              />
-              <Route 
-                path="/tools/campaign-calculator/sales" 
-                element={
-                  <UniversalProtectedRoute>
-                    <CampaignCalculatorRouteElement />
-                  </UniversalProtectedRoute>
-                }
-              />
               <Route path="/tools/daily-task-report" element={
                 <UniversalProtectedRoute>
                   <DailyTaskReportRouteElement />
                 </UniversalProtectedRoute>
               } />
+              <Route 
+                path="/tools/calculator/services" 
+                element={
+                  <UniversalProtectedRoute>
+                    <CalculatorServicesPage />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/calculator/sales" 
+                element={
+                  <UniversalProtectedRoute>
+                    <CalculatorSalesPage />
+                  </UniversalProtectedRoute>
+                }
+              />
               
               {/* Digital Marketing Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
               <Route path="/digital-marketing/social-media" element={
