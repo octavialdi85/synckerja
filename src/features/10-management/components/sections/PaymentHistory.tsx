@@ -60,6 +60,7 @@ const PaymentHistory = () => {
   const downloadReceipt = async (payment: any) => {
     // Fetch organization data
     let orgData = null;
+    let subscriptionData = null;
     if (organizationId) {
       const { data } = await supabase
         .from('organizations')
@@ -67,6 +68,13 @@ const PaymentHistory = () => {
         .eq('id', organizationId)
         .single();
       orgData = data;
+
+      const { data: subscription } = await supabase
+        .from('organization_subscriptions')
+        .select('subscription_start_date, subscription_end_date, billing_cycle')
+        .eq('last_payment_id', payment.id)
+        .maybeSingle();
+      subscriptionData = subscription;
     }
     
     const doc = new jsPDF();
@@ -130,13 +138,19 @@ const PaymentHistory = () => {
       '-';
     
     // Calculate next billing date - use same format as invoiceDate
-    const nextBillingDate = payment.created_at ? 
-      new Date(new Date(payment.created_at).setMonth(new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1))).toLocaleDateString('id-ID', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }) : 
-      '-';
+    const nextBillingDate = subscriptionData?.subscription_end_date
+      ? format(new Date(subscriptionData.subscription_end_date), 'dd MMMM yyyy', { locale: id })
+      : payment.created_at
+        ? format(
+            new Date(
+              new Date(payment.created_at).setMonth(
+                new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1)
+              )
+            ),
+            'dd MMMM yyyy',
+            { locale: id }
+          )
+        : '-';
     
     // Invoice details (right side) - calculate proper position to avoid truncation
     const invoiceDetailsStartX = pageWidth / 2 + 10; // Start from middle + offset
@@ -237,10 +251,23 @@ const PaymentHistory = () => {
                             payment.billing_cycle === 'monthly' ? 'billed every month' : 
                             'billed every month';
     
-    const periodStart = payment.created_at ? 
-      format(new Date(payment.created_at), 'MMM dd, yyyy', { locale: id }) : 
-      '-';
-    const periodEnd = nextBillingDate;
+    const periodStartDate = subscriptionData?.subscription_start_date
+      ? new Date(subscriptionData.subscription_start_date)
+      : payment.created_at
+        ? new Date(payment.created_at)
+        : null;
+    const periodEndDate = subscriptionData?.subscription_end_date
+      ? new Date(subscriptionData.subscription_end_date)
+      : payment.created_at
+        ? new Date(
+            new Date(payment.created_at).setMonth(
+              new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1)
+            )
+          )
+        : null;
+
+    const periodStart = periodStartDate ? format(periodStartDate, 'MMM dd, yyyy', { locale: id }) : '-';
+    const periodEnd = periodEndDate ? format(periodEndDate, 'MMM dd, yyyy', { locale: id }) : '-';
     
     const tableData = [
       [

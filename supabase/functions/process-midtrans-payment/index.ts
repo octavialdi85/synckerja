@@ -1,0 +1,188 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const addBillingInterval = (baseDate: Date, billingCycle: string) => {
+  const result = new Date(baseDate);
+  if (billingCycle === "yearly") {
+    result.setFullYear(result.getFullYear() + 1);
+  } else {
+    result.setMonth(result.getMonth() + 1);
+  }
+  return result;
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
+
+    const notification = await req.json();
+    console.log("🔔 Midtrans webhook received:", notification);
+
+    const {
+      order_id,
+      transaction_status,
+      transaction_id,
+      fraud_status,
+      settlement_time,
+      transaction_time,
+      payment_type,
+      bank,
+      approval_code,
+    } = notification;
+
+    if (!order_id) {
+      throw new Error("Missing order_id in notification");
+    }
+
+    // Get payment record
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("order_id", order_id)
+      .single();
+
+    if (paymentError || !payment) {
+      console.error("❌ Payment not found:", paymentError);
+      throw new Error(`Payment not found for order_id: ${order_id}`);
+    }
+
+    // Determine final status
+    let finalStatus = "pending";
+    if (transaction_status === "settlement" || transaction_status === "capture") {
+      finalStatus = "success";
+    } else if (transaction_status === "pending") {
+      finalStatus = "pending";
+    } else if (
+      transaction_status === "cancel" ||
+      transaction_status === "expire" ||
+      transaction_status === "deny"
+    ) {
+      finalStatus = "failed";
+    }
+
+    console.log(`🔄 Updating payment ${payment.id} status from ${payment.status} to ${finalStatus}`);
+
+    const { error: updateError } = await supabase
+      .from("payments")
+      .update({
+        status: finalStatus,
+        transaction_id,
+        fraud_status,
+        settlement_time,
+        transaction_time,
+        payment_type,
+        bank,
+        approval_code,
+        webhook_received_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", payment.id);
+
+    if (updateError) {
+      console.error("❌ Failed to update payment:", updateError);
+      throw new Error("Failed to update payment status");
+    }
+
+    if (finalStatus === "success") {
+      console.log("✅ Payment successful, activating subscription...");
+
+      const { data: existingSubscription } = await supabase
+        .from("organization_subscriptions")
+        .select("id, subscription_end_date")
+        .eq("organization_id", payment.organization_id)
+        .maybeSingle();
+
+      const baseStartDate = existingSubscription?.subscription_end_date
+        ? new Date(existingSubscription.subscription_end_date)
+        : new Date();
+
+      const startDate = baseStartDate;
+      const endDate = addBillingInterval(startDate, payment.billing_cycle);
+
+      if (existingSubscription) {
+        await supabase
+          .from("organization_subscriptions")
+          .update({
+            subscription_plan_id: payment.plan_id,
+            member_count: payment.member_count,
+            billing_cycle: payment.billing_cycle,
+            status: "active",
+            subscription_start_date: startDate.toISOString(),
+            subscription_end_date: endDate.toISOString(),
+            last_payment_id: payment.id,
+            is_trial: false,
+            trial_start_date: null,
+            trial_end_date: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("organization_id", payment.organization_id);
+      } else {
+        await supabase.from("organization_subscriptions").insert({
+          organization_id: payment.organization_id,
+          subscription_plan_id: payment.plan_id,
+          status: "active",
+          subscription_start_date: startDate.toISOString(),
+          subscription_end_date: endDate.toISOString(),
+          member_count: payment.member_count,
+          billing_cycle: payment.billing_cycle,
+          last_payment_id: payment.id,
+          is_trial: false,
+        });
+      }
+
+      await supabase
+        .from("organizations")
+        .update({
+          has_active_subscription: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.organization_id);
+
+      console.log("✅ Subscription activated successfully");
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Webhook processed successfully",
+      }),
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("❌ Webhook processing error:", error);
+    return new Response(
+      JSON.stringify({
+        error: "Webhook processing failed",
+        message: (error as Error).message,
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }
+});
+
+

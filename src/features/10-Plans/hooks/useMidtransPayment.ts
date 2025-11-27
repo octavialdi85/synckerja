@@ -168,6 +168,42 @@ export const useMidtransPayment = () => {
       const successRedirectUrl = `${appOrigin}/subscription/overview`;
       const fallbackRedirectUrl = `${appOrigin}/subscription/plans`;
 
+      const syncPaymentStatus = async (result: any, statusOverride?: 'success' | 'pending' | 'failed') => {
+        try {
+          const payload = {
+            order_id: result?.order_id || data.order_id,
+            transaction_status: statusOverride || result?.transaction_status || 'pending',
+            transaction_id: result?.transaction_id || '',
+            fraud_status: result?.fraud_status || 'accept',
+            settlement_time: result?.settlement_time || (statusOverride === 'success' ? new Date().toISOString() : null),
+            transaction_time: result?.transaction_time || new Date().toISOString(),
+            gross_amount: result?.gross_amount || String(params.amount),
+            payment_type: result?.payment_type || 'credit_card',
+            bank: result?.bank || result?.va_numbers?.[0]?.bank || null,
+            approval_code: result?.approval_code || null
+          };
+
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/process-midtrans-payment`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_PUBLISHABLE_KEY
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            console.error('❌ Failed to sync payment status:', errText);
+          } else {
+            console.log('✅ Payment status synced successfully');
+          }
+        } catch (syncError) {
+          console.error('❌ Error syncing payment status:', syncError);
+        }
+      };
+
       const snapConfig: any = {
         onSuccess: (result: any) => {
           console.log('✅ Payment success:', result);[
@@ -188,6 +224,7 @@ export const useMidtransPayment = () => {
     "version": "139"
   }
 ]
+          syncPaymentStatus(result, 'success');
           setIsPopupOpen(false);
           toast.success(t('subscription.plans.success.paymentSuccess', 'Payment successful! Your subscription is being activated...'));
           
@@ -199,6 +236,7 @@ export const useMidtransPayment = () => {
         },
         onPending: (result: any) => {
           console.log('⏳ Payment pending:', result);
+          syncPaymentStatus(result, 'pending');
           setIsPopupOpen(false);
           toast.info(t('subscription.plans.info.paymentProcessing', 'Payment is being processed...'));
           
