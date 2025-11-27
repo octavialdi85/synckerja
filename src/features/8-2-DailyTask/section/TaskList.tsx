@@ -510,12 +510,21 @@ export const TaskList = () => {
       'medium': 'bg-blue-100 text-blue-700 border-blue-200',
       'high': 'bg-orange-100 text-orange-700 border-orange-200',
       'urgent': 'bg-red-100 text-red-700 border-red-200',
+      'needs_to_be_presented': 'bg-purple-100 text-purple-700 border-purple-200',
+    };
+    
+    const displayText: Record<string, string> = {
+      'low': 'LOW',
+      'medium': 'MEDIUM',
+      'high': 'HIGH',
+      'urgent': 'URGENT',
+      'needs_to_be_presented': 'PRESENTATION',
     };
     
     return (
       <Badge className={`${variants[priority] || ''} px-2 py-1 text-xs font-medium rounded-md hover:bg-inherit hover:text-inherit hover:opacity-100`}>
         <Flag className="w-3 h-3 mr-1" />
-        {priority.toUpperCase()}
+        {displayText[priority] || priority.toUpperCase()}
       </Badge>
     );
   };
@@ -676,7 +685,7 @@ export const TaskList = () => {
                 <TableHead className="px-2 pr-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                   Blocker
                 </TableHead>
-                <TableHead className="px-2 pr-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                <TableHead className="px-2 pr-8 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }}>
                   Priority
                 </TableHead>
                 <TableHead className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
@@ -934,7 +943,7 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* Priority */}
-                        <TableCell className="px-2 pr-4 py-3 text-center" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                        <TableCell className="px-2 pr-8 py-3 text-center" style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -979,6 +988,13 @@ export const TaskList = () => {
                               >
                                 <Flag className="w-3 h-3 text-red-600" />
                                 <span className="text-red-700">Urgent</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handlePriorityChange(task.id, 'needs_to_be_presented')}
+                                className="flex items-center gap-2"
+                              >
+                                <Flag className="w-3 h-3 text-purple-600" />
+                                <span className="text-purple-700">Presentation</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                             )}

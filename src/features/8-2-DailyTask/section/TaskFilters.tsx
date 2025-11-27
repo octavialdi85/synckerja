@@ -207,6 +207,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           <SelectItem value="medium">Medium</SelectItem>
           <SelectItem value="high">High</SelectItem>
           <SelectItem value="urgent">Urgent</SelectItem>
+          <SelectItem value="needs_to_be_presented">Presentation</SelectItem>
         </SelectContent>
       </Select>
 

@@ -63,7 +63,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
       await updateTask(taskId, {
         title: title.trim(),
         description: description.trim(),
-        priority: priority as 'low' | 'medium' | 'high' | 'urgent',
+        priority: priority as 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented',
         status: status as 'pending' | 'in_progress' | 'completed' | 'cancelled',
         due_date: dueDate || null,
         assigned_to: assignedTo || null,
@@ -172,6 +172,12 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
                     <div className="flex items-center gap-2">
                       <Flag className="w-4 h-4 text-red-600" />
                       Urgent
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="needs_to_be_presented">
+                    <div className="flex items-center gap-2">
+                      <Flag className="w-4 h-4 text-purple-600" />
+                      Presentation
                     </div>
                   </SelectItem>
                 </SelectContent>

@@ -82,7 +82,7 @@ export const TaskForm = () => {
       await addTask({
         title: title.trim(),
         description: description.trim(),
-        priority: priority as 'low' | 'medium' | 'high' | 'urgent',
+        priority: priority as 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented',
         due_date: assignment.deadline || null,
         assigned_to: assignment.employeeId || null,
         objective_id: objectiveId,
@@ -147,6 +147,12 @@ export const TaskForm = () => {
                 <div className="flex items-center gap-2">
                   <Flag className="w-4 h-4 text-red-600" />
                   Urgent
+                </div>
+              </SelectItem>
+              <SelectItem value="needs_to_be_presented">
+                <div className="flex items-center gap-2">
+                  <Flag className="w-4 h-4 text-purple-600" />
+                  Presentation
                 </div>
               </SelectItem>
             </SelectContent>

@@ -117,7 +117,7 @@ export interface Task {
   title: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  priority: 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented';
   due_date: string | null;
   finish_date: string | null;
   created_at: string;
