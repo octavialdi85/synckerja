@@ -27,6 +27,7 @@ interface PlanCardProps {
   IconComponent: LucideIcon;
   currentMemberCount: number;
   currentEmployeeCount: number;
+  isRenewEligible: boolean;
   subscriptionStatus?: {
     is_trial?: boolean;
     days_until_expiry?: number;
@@ -34,7 +35,8 @@ interface PlanCardProps {
   };
   onMemberCountChange: (planId: string, count: number) => void;
   onBillingCycleChange: (planId: string, isYearly: boolean) => void;
-  onUpgrade: (plan: SubscriptionPlan, memberCount: number) => void;
+  onUpgrade: (plan: SubscriptionPlan, memberCount: number, billingCycle: 'monthly' | 'yearly') => void;
+  onRenew?: (plan: SubscriptionPlan, memberCount: number, billingCycle: 'monthly' | 'yearly') => void;
 }
 
 export const PlanCard = memo(({
@@ -53,15 +55,29 @@ export const PlanCard = memo(({
   IconComponent,
   currentMemberCount,
   currentEmployeeCount,
+  isRenewEligible,
   subscriptionStatus,
   onMemberCountChange,
   onBillingCycleChange,
   onUpgrade,
+  onRenew,
 }: PlanCardProps) => {
   const { t } = useAppTranslation();
   const isYearly = billingCycle === 'yearly';
   const isComingSoon = plan.description?.toLowerCase().includes('coming soon') || 
                        plan.description?.toLowerCase().includes('comming soon');
+  const shouldRenew =
+    isRenewEligible &&
+    isCurrent &&
+    memberCount === currentMemberCount &&
+    !hasBillingCycleChange;
+  const handlePrimaryAction = () => {
+    if (shouldRenew && onRenew) {
+      onRenew(plan, memberCount, billingCycle);
+    } else {
+      onUpgrade(plan, memberCount, billingCycle);
+    }
+  };
 
   return (
     <Card 
@@ -189,11 +205,11 @@ export const PlanCard = memo(({
                       ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                       : 'bg-gray-900 hover:bg-gray-800 text-white'
             }`}
-            onClick={() => onUpgrade(plan, memberCount)}
+            onClick={handlePrimaryAction}
             disabled={
               isComingSoon ||
               !canChange || 
-              (isCurrent && memberCount === currentMemberCount && !hasBillingCycleChange)
+              (isCurrent && memberCount === currentMemberCount && !hasBillingCycleChange && !isRenewEligible)
             }
           >
             {isComingSoon ? t('subscription.plans.button.comingSoon', 'Coming Soon') : buttonText}

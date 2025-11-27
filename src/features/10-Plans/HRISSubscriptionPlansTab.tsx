@@ -18,6 +18,8 @@ import { LoadingDots } from '@/components/LoadingDots';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
 
+const RENEWAL_WINDOW_DAYS = 7;
+
 const HRISSubscriptionPlansTab = () => {
   const { t } = useAppTranslation();
   const [memberCounts, setMemberCounts] = useState<{ [key: string]: number }>({});
@@ -112,10 +114,10 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     return isYearly ? basePrice * 12 : basePrice;
   };
 
-  const handleUpgrade = useCallback(async (plan: SubscriptionPlan, memberCount: number) => {
+  const handleUpgrade = useCallback(async (plan: SubscriptionPlan, memberCount: number, billingCycleOverride?: 'monthly' | 'yearly') => {
     console.log('🚀 Starting upgrade process for plan:', plan.name, 'with', memberCount, 'members');
     
-    const selectedBillingCycle = billingCycles[plan.id] || 'monthly';
+    const selectedBillingCycle = billingCycleOverride || billingCycles[plan.id] || 'monthly';
     console.log('🔄 Selected billing cycle:', selectedBillingCycle);
     
     setSelectedPlan(plan);
@@ -156,9 +158,32 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       setProRatedData(null);
       setIsModalOpen(true);
     }
-  }, [proRateCalculation]);
+  }, [proRateCalculation, billingCycles]);
 
   const schedulePlanChange = useSchedulePlanChange();
+
+  const handleRenew = useCallback(async (plan: SubscriptionPlan, memberCount: number, billingCycle: 'monthly' | 'yearly') => {
+    if (!subscriptionStatus) return;
+
+    const chargeCycle = subscriptionStatus.billing_cycle === 'yearly' ? 'yearly' : billingCycle;
+    const basePrice = plan.base_price_per_member;
+    const finalAmount = chargeCycle === 'yearly'
+      ? getYearlyPriceForMembers(basePrice, memberCount)
+      : getMonthlyPriceForMembers(basePrice, memberCount);
+
+    try {
+      await initiateMidtransPayment({
+        planId: plan.id,
+        planName: plan.name,
+        amount: finalAmount,
+        memberCount,
+        billingCycle: chargeCycle,
+      });
+    } catch (error) {
+      console.error('❌ Renewal payment failed:', error);
+      toast.error(t('subscription.plans.error.renewalFailed', 'Unable to start renewal payment. Please try again.'));
+    }
+  }, [subscriptionStatus, initiateMidtransPayment, t]);
 
   const handleConfirmUpgrade = useCallback(async () => {
     if (!selectedPlan) return;
@@ -305,12 +330,15 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     return currentEmployeeCount <= newMemberCount;
   };
 
-  const getButtonText = (plan: any, memberCount: number, billingCycle: string) => {
+  const getButtonText = (plan: any, memberCount: number, billingCycle: string, isRenewEligible: boolean) => {
     const isCurrent = isCurrentPlan(plan);
     const currentMemberLimit = subscriptionStatus?.member_count || 0;
     const currentBillingCycle = subscriptionStatus?.billing_cycle || 'monthly';
     
     if (isCurrent) {
+      if (isRenewEligible && memberCount === currentMemberLimit && billingCycle === currentBillingCycle) {
+        return t('subscription.plans.button.renew', 'Perpanjang Sekarang');
+      }
       if (memberCount > currentMemberLimit) {
         return t('subscription.plans.button.upgrade', 'Upgrade Plan');
       } else if (memberCount < currentMemberLimit) {
@@ -328,6 +356,10 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     
     return t('subscription.plans.button.select', 'Select Plan');
   };
+  
+  const daysUntilExpiry = subscriptionStatus?.days_until_expiry ?? null;
+  const isRenewWindow = typeof daysUntilExpiry === 'number' && daysUntilExpiry >= 0 && daysUntilExpiry <= RENEWAL_WINDOW_DAYS;
+  const isRenewEligibleBase = Boolean(subscriptionStatus) && Boolean(isRenewWindow) && !subscriptionStatus?.is_trial;
   if (isLoading) {
     return (
       <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
@@ -373,6 +405,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
                     const isTrialPlan = plan.name === 'Trial' || plan.base_price_per_member === 0;
                     const maxEmployees = isTrialPlan ? getEmployeeLimitFromFeatures(plan.features) : 100;
                     const isCurrent = isCurrentPlan(plan);
+                    const isRenewEligible = isCurrent && isRenewEligibleBase;
                     
                     // Use memberCounts state value for slider - this makes it interactive
                     // Only use fallback if memberCounts[plan.id] is undefined
@@ -391,7 +424,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
                     
                     const isPopular = plan.name.toLowerCase().includes('professional');
                     const canChange = canChangePlan(plan, memberCount);
-                    const buttonText = getButtonText(plan, memberCount, billingCycle);
+                    const buttonText = getButtonText(plan, memberCount, billingCycle, isRenewEligible);
                     const currentBillingCycle = subscriptionStatus?.billing_cycle || 'monthly';
                     const hasBillingCycleChange = isCurrent && billingCycle !== currentBillingCycle;
                     
@@ -413,7 +446,9 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
                         IconComponent={IconComponent}
                         currentMemberCount={currentMemberCount}
                         currentEmployeeCount={currentEmployeeCount}
+                        isRenewEligible={isRenewEligible}
                         subscriptionStatus={subscriptionStatus}
+                        onRenew={handleRenew}
                         onMemberCountChange={handleMemberCountChange}
                         onBillingCycleChange={handleBillingCycleChange}
                         onUpgrade={handleUpgrade}
