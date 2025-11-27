@@ -11,6 +11,7 @@ import { DueDateDialog } from './DueDateDialog';
 import { AssignInitiativeItemDialog } from './AssignInitiativeItemDialog';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
+import { ModalViewSubSteps } from './ModalViewSubSteps';
 
 // Export stats for parent component
 export interface InitiativeStats {
@@ -39,7 +40,14 @@ interface TaskInitiativeProps {
 }
 
 const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
-  const { tasks, isLoading: tasksLoading } = useDailyTask();
+  const { 
+    tasks, 
+    isLoading: tasksLoading,
+    setFilters,
+    setExpandedTasks,
+    navigateToTask,
+    scrollToStep
+  } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
@@ -54,6 +62,58 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<UncompletedItem | null>(null);
   const [selectedItemForAssign, setSelectedItemForAssign] = useState<UncompletedItem | null>(null);
+  const [subStepModal, setSubStepModal] = useState<{
+    open: boolean;
+    parentStepId: string;
+    parentStepTitle: string;
+  }>({
+    open: false,
+    parentStepId: '',
+    parentStepTitle: '',
+  });
+  const handleItemNavigation = useCallback((item: UncompletedItem) => {
+    if (!item || !item.title) return;
+
+    if (item.type === 'task') {
+      setFilters(prev => ({ ...prev, search: item.title }));
+      navigateToTask(item.id);
+      return;
+    }
+
+    if (item.type === 'step') {
+      setFilters(prev => ({ ...prev, search: item.title }));
+      if (item.taskId) {
+        setExpandedTasks(prev => new Set([...prev, item.taskId]));
+        navigateToTask(item.taskId);
+      }
+      setTimeout(() => {
+        scrollToStep(item.id);
+      }, 250);
+      return;
+    }
+
+    if (item.type === 'substep') {
+      const searchValue = item.parentStepTitle || item.title;
+      setFilters(prev => ({ ...prev, search: searchValue }));
+
+      if (item.taskId) {
+        setExpandedTasks(prev => new Set([...prev, item.taskId]));
+        navigateToTask(item.taskId);
+      }
+
+      if (item.parentStepId) {
+        setSubStepModal({
+          open: true,
+          parentStepId: item.parentStepId,
+          parentStepTitle: item.parentStepTitle || item.title,
+        });
+        setTimeout(() => {
+          scrollToStep(item.parentStepId as string);
+        }, 250);
+      }
+    }
+  }, [navigateToTask, scrollToStep, setExpandedTasks, setFilters]);
+
 
   // Get current employee ID
   useEffect(() => {
@@ -636,7 +696,10 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
                   </div>
 
                   {/* Title */}
-                  <h5 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-2">
+                  <h5 
+                    className="text-sm font-semibold text-gray-900 mb-1 line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors"
+                    onClick={() => handleItemNavigation(item)}
+                  >
                     {item.title}
                   </h5>
 
@@ -750,6 +813,13 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
           parentStepTitle: selectedItemForAssign.parentStepTitle
         } : null}
         onAssign={fetchUncompletedItems}
+      />
+
+      <ModalViewSubSteps
+        open={subStepModal.open}
+        onOpenChange={(open) => setSubStepModal(prev => ({ ...prev, open }))}
+        parentStepId={subStepModal.parentStepId}
+        parentStepTitle={subStepModal.parentStepTitle}
       />
     </div>
   );
