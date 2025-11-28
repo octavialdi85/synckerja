@@ -23,6 +23,9 @@ const UNRESTRICTED_DURING_LOADING = [
   '/tools/meeting-notes',           // Meeting notes management
   '/tools/calculator/services',               // Calculator tool - Services
   '/tools/calculator/sales',                  // Calculator tool - Sales
+  '/tools/pph21-calculator',                  // PPh 21 calculator
+  '/tools/pricing-tools',                     // Pricing tool
+  '/tools/promo-simulation',                  // Promo simulation
   '/tools'                          // Tools section
   // REMOVED: /employees and /employees/add - these should be restricted by database config
 ];

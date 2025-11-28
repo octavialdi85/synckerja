@@ -122,6 +122,24 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     requiresPermissions: false,
     description: 'Calculator - Sales - accessible to all authenticated users'
   },
+  {
+    path: '/tools/pph21-calculator',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'PPh 21 calculator - accessible to all authenticated users'
+  },
+  {
+    path: '/tools/pricing-tools',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Pricing tools - accessible to all authenticated users'
+  },
+  {
+    path: '/tools/promo-simulation',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Promo simulation - accessible to all authenticated users'
+  },
 
   // Employee Self-Service (accessible to all authenticated users)
   {

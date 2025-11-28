@@ -98,6 +98,20 @@ export const menuItems: MenuItem[] = [
         description: "General purpose calculator tools",
         descriptionKey: "sidebar.tools.calculator.description",
       },
+      {
+        title: "PPh 21 Calculator",
+        titleKey: "sidebar.tools.pph21Calculator.title",
+        url: "/tools/pph21-calculator",
+        description: "Calculate Indonesian payroll tax automatically",
+        descriptionKey: "sidebar.tools.pph21Calculator.description",
+      },
+      {
+        title: "Pricing Tool",
+        titleKey: "sidebar.tools.pricingTools.title",
+        url: "/tools/pricing-tools",
+        description: "Analyze pricing scenarios and profitability",
+        descriptionKey: "sidebar.tools.pricingTools.description",
+      },
     ],
   },
   {

@@ -79,6 +79,9 @@ import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPag
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import { CalculatorServicesPage } from "./features/8-3-calculator/services";
 import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
+import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
+import { PricingTools as PricingToolsPage } from "./features/8_2_pricing-tools/pages";
+import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -293,6 +296,30 @@ const App = () => (
                 element={
                   <UniversalProtectedRoute>
                     <CalculatorSalesPage />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/pph21-calculator"
+                element={
+                  <UniversalProtectedRoute>
+                    <PPh21CalculatorPage />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/pricing-tools"
+                element={
+                  <UniversalProtectedRoute>
+                    <PricingToolsPage />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/promo-simulation"
+                element={
+                  <UniversalProtectedRoute>
+                    <PromoSimulationPage />
                   </UniversalProtectedRoute>
                 }
               />

@@ -48,7 +48,10 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
         '/password-manager',
         '/tools/daily-task',
         '/tools/calculator/services',
-        '/tools/calculator/sales'
+        '/tools/calculator/sales',
+        '/tools/pph21-calculator',
+        '/tools/pricing-tools',
+        '/tools/promo-simulation'
       ],
       '/digital-marketing': [
         '/digital-marketing',
