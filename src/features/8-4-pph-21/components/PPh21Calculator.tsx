@@ -130,10 +130,13 @@ export const PPh21Calculator = () => {
     const netIncome = annualGross - professionalAllowance - bpjsKesehatanAmount - bpjsPensiunAmount;
     
     // PTKP
-    const ptkp = ptkpStatus === 'custom' ? parseCurrency(customPtkp) : PTKP_RATES[ptkpStatus as keyof typeof PTKP_RATES];
+    const ptkp = ptkpStatus === 'custom' 
+      ? parseCurrency(customPtkp) 
+      : (PTKP_RATES[ptkpStatus as keyof typeof PTKP_RATES] || 0);
     
     // PKP (Penghasilan Kena Pajak)
-    const pkp = Math.max(0, netIncome - ptkp - parseCurrency(nonTaxableAllowance));
+    const nonTaxableAllowanceAmount = parseCurrency(nonTaxableAllowance);
+    const pkp = Math.max(0, netIncome - ptkp - nonTaxableAllowanceAmount);
     
     // Calculate tax using progressive rates
     let remainingPkp = pkp;
@@ -145,13 +148,19 @@ export const PPh21Calculator = () => {
       rate: number;
     }> = [];
     
+    // Loop through brackets to calculate progressive tax
     for (const bracket of TAX_BRACKETS) {
       if (remainingPkp <= 0) break;
       
-      const taxableInBracket = Math.min(remainingPkp, bracket.max - bracket.min);
-      const taxInBracket = taxableInBracket * bracket.rate;
+      // Calculate how much of PKP falls in this bracket
+      const bracketSize = bracket.max === Infinity 
+        ? remainingPkp 
+        : (bracket.max - bracket.min);
+      const taxableInBracket = Math.min(remainingPkp, bracketSize);
       
       if (taxableInBracket > 0) {
+        const taxInBracket = taxableInBracket * bracket.rate;
+        
         taxBreakdown.push({
           bracket: `${formatCurrency(bracket.min)} - ${bracket.max === Infinity ? '∞' : formatCurrency(bracket.max)}`,
           amount: taxableInBracket,
@@ -165,10 +174,16 @@ export const PPh21Calculator = () => {
     }
     
     const monthlyTax = totalTax / 12;
-    const takeHomePay = grossSalary - monthlyTax - (bpjsKesehatanAmount / 12) - (bpjsPensiunAmount / 12);
     
-    // Total company cost per month (gross salary + company BPJS contributions)
-    const totalCompanyCost = grossSalary + (bpjsKesehatanCompany / 12) + (bpjsPensiunCompany / 12);
+    // Calculate take-home pay: Gross salary - PPh 21 - BPJS deductions (only if enabled)
+    const monthlyBpjsKesehatan = bpjsKesehatan ? (bpjsKesehatanAmount / 12) : 0;
+    const monthlyBpjsPensiun = bpjsPensiun ? (bpjsPensiunAmount / 12) : 0;
+    const takeHomePay = grossSalary - monthlyTax - monthlyBpjsKesehatan - monthlyBpjsPensiun;
+    
+    // Total company cost per month (gross salary + company BPJS contributions, only if enabled)
+    const monthlyBpjsKesehatanCompany = bpjsKesehatan ? (bpjsKesehatanCompany / 12) : 0;
+    const monthlyBpjsPensiunCompany = bpjsPensiun ? (bpjsPensiunCompany / 12) : 0;
+    const totalCompanyCost = grossSalary + monthlyBpjsKesehatanCompany + monthlyBpjsPensiunCompany;
     
     return {
       annualGross,
@@ -516,34 +531,26 @@ export const PPh21Calculator = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {TAX_BRACKETS.map((bracket, index) => {
-                          const pkp = result.pkp;
-                          const taxableInThisBracket = Math.min(Math.max(pkp - bracket.min, 0), bracket.max - bracket.min);
-                          const taxForThisBracket = taxableInThisBracket * bracket.rate;
-                          
-                          if (pkp <= bracket.min) return null;
-                          
-                          return (
-                            <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
-                              <td className="py-3 px-4 font-medium">
-                                {formatCurrency(bracket.min)} - {bracket.max === Infinity ? '∞' : formatCurrency(bracket.max)}
-                              </td>
-                              <td className="text-center py-3 px-4 font-semibold text-blue-600">
-                                {(bracket.rate * 100).toFixed(0)}%
-                              </td>
-                              <td className="text-right py-3 px-4">
-                                <div className="flex flex-col items-end">
-                                  <div className="text-sm text-gray-600 mb-1">
-                                    {(bracket.rate * 100).toFixed(0)}% × {formatCurrency(taxableInThisBracket)} =
-                                  </div>
-                                  <div className="text-red-600 font-bold text-base">
-                                    {formatCurrency(taxForThisBracket)}
-                                  </div>
+                        {result.taxBreakdown.map((breakdown, index) => (
+                          <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="py-3 px-4 font-medium">
+                              {breakdown.bracket}
+                            </td>
+                            <td className="text-center py-3 px-4 font-semibold text-blue-600">
+                              {breakdown.rate.toFixed(0)}%
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <div className="flex flex-col items-end">
+                                <div className="text-sm text-gray-600 mb-1">
+                                  {breakdown.rate.toFixed(0)}% × {formatCurrency(breakdown.amount)} =
                                 </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                <div className="text-red-600 font-bold text-base">
+                                  {formatCurrency(breakdown.tax)}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                         <tr className="bg-blue-100 border-t-2 border-blue-600">
                           <td className="py-4 px-4 text-blue-800 font-bold">Total PPh 21 Tahunan</td>
                           <td className="text-center py-4 px-4 font-bold">-</td>
