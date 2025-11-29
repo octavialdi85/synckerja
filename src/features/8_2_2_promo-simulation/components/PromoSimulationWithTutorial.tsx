@@ -8,21 +8,129 @@ import { Badge } from '@/features/ui/badge';
 import { Separator } from '@/features/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { ScrollArea } from '@/features/ui/scroll-area';
-import { Percent, TrendingDown, AlertTriangle, CheckCircle, BookOpen, Calculator, Target, TrendingUp } from 'lucide-react';
+import { Percent, TrendingDown, AlertTriangle, CheckCircle, BookOpen, Calculator, Target, TrendingUp, History, Download, Calendar } from 'lucide-react';
+import { usePricingCalculations, SavedCalculation } from '@/features/8_2_pricing-tools/hooks/usePricingCalculations';
+import { formatRupiah } from '@/features/8_2_pricing-tools/utils/pricingUtils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/features/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/features/ui/table';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 
 export const PromoSimulationWithTutorial = () => {
   const [simulationResults, setSimulationResults] = useState<any>(null);
+  const [basePrice, setBasePrice] = useState<string>('');
+  const [productionCost, setProductionCost] = useState<string>('');
+  const [discountType, setDiscountType] = useState<string>('percentage');
+  const [discountValue, setDiscountValue] = useState<string>('');
+  const [promoDuration, setPromoDuration] = useState<string>('');
+  const [currentVolume, setCurrentVolume] = useState<string>('');
+  const [expectedIncrease, setExpectedIncrease] = useState<string>('');
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  
+  // History integration
+  const { calculations = [], isLoading: isLoadingHistory = false } = usePricingCalculations();
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState<SavedCalculation | null>(null);
+
+  // Load calculation from history
+  const handleLoadFromHistory = (calculation: SavedCalculation) => {
+    const input = calculation.calculation_input;
+    const result = calculation.calculation_result;
+    
+    // Set base price from recommended selling price
+    setBasePrice(result.summary.recommendedSellingPrice.toString());
+    
+    // Set production cost from calculation
+    setProductionCost((input.productionCostPerUnit || 0).toString());
+    
+    // Set selected channels
+    if (input.selectedChannels && input.selectedChannels.length > 0) {
+      setSelectedChannels(input.selectedChannels);
+    }
+    
+    // Store selected calculation for reference
+    setSelectedCalculation(calculation);
+    setHistoryDialogOpen(false);
+  };
 
   const runSimulation = () => {
-    // Mock simulation for demo
+    const basePriceNum = parseFloat(basePrice) || 0;
+    const productionCostNum = parseFloat(productionCost) || 0;
+    const discountValueNum = parseFloat(discountValue) || 0;
+    const currentVolumeNum = parseFloat(currentVolume) || 0;
+    const expectedIncreaseNum = parseFloat(expectedIncrease) || 0;
+    
+    if (!basePriceNum || !productionCostNum) {
+      alert('Please fill in Base Selling Price and Production Cost');
+      return;
+    }
+    
+    // Calculate discounted price based on discount type
+    let discountedPrice = basePriceNum;
+    if (discountType === 'percentage') {
+      discountedPrice = basePriceNum * (1 - discountValueNum / 100);
+    } else if (discountType === 'fixed') {
+      discountedPrice = basePriceNum - discountValueNum;
+    } else if (discountType === 'bogo') {
+      // BOGO: Buy one get one means average price is half
+      discountedPrice = basePriceNum * 0.5;
+    }
+    
+    // Calculate profits
+    const originalProfit = basePriceNum - productionCostNum;
+    const newProfit = discountedPrice - productionCostNum;
+    const profitReduction = originalProfit > 0 ? ((originalProfit - newProfit) / originalProfit) * 100 : 0;
+    
+    // Calculate break-even units
+    // To maintain total profit: originalProfit * originalUnits = newProfit * newUnits
+    // newUnits = (originalProfit * originalUnits) / newProfit
+    const originalUnits = currentVolumeNum || 1;
+    const breakEvenUnits = newProfit > 0 ? Math.ceil((originalProfit * originalUnits) / newProfit) : Infinity;
+    
+    // Calculate recommended discount (conservative 15% or break-even discount)
+    const recommendedDiscount = Math.min(15, profitReduction * 0.8);
+    
+    // Calculate channel-specific profits
+    const channelResults: any = {};
+    if (selectedCalculation) {
+      const input = selectedCalculation.calculation_input;
+      const result = selectedCalculation.calculation_result;
+      if (result.channelPricing && Array.isArray(result.channelPricing)) {
+        result.channelPricing.forEach((channel) => {
+          const channelInput = input.salesChannels?.find(ch => ch.id === channel.channelId);
+          const feePercent = channelInput?.totalFeePercent || 0;
+          const channelFee = discountedPrice * (feePercent / 100);
+          channelResults[channel.channelId] = {
+            name: channel.channelName,
+            feePercent,
+            netProfit: discountedPrice - productionCostNum - channelFee,
+          };
+        });
+      }
+    }
+    
     const mockResults = {
-      originalPrice: 150000,
-      discountedPrice: 120000,
-      originalProfit: 50000,
-      newProfit: 20000,
-      profitReduction: 60,
-      breakEvenUnits: 25,
-      recommendedDiscount: 15
+      originalPrice: basePriceNum,
+      discountedPrice,
+      originalProfit,
+      newProfit,
+      profitReduction,
+      breakEvenUnits,
+      recommendedDiscount,
+      channelResults,
     };
     setSimulationResults(mockResults);
   };
@@ -265,10 +373,28 @@ export const PromoSimulationWithTutorial = () => {
       <div className="lg:col-span-2 space-y-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Percent className="h-5 w-5 text-red-600" />
-              Promotion Setup
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Percent className="h-5 w-5 text-red-600" />
+                Promotion Setup
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryDialogOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <History className="h-4 w-4" />
+                Load from History
+              </Button>
+            </div>
+            {selectedCalculation && (
+              <div className="mt-2">
+                <Badge variant="secondary" className="text-xs">
+                  Loaded: {selectedCalculation.calculation_name}
+                </Badge>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="grid grid-cols-2 gap-4">
@@ -279,6 +405,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="150000" 
                   className="mt-1"
+                  value={basePrice}
+                  onChange={(e) => setBasePrice(e.target.value)}
                 />
               </div>
               <div>
@@ -288,6 +416,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="100000" 
                   className="mt-1"
+                  value={productionCost}
+                  onChange={(e) => setProductionCost(e.target.value)}
                 />
               </div>
             </div>
@@ -295,7 +425,7 @@ export const PromoSimulationWithTutorial = () => {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="discount-type" className="text-sm font-medium">Discount Type</Label>
-                <Select>
+                <Select value={discountType} onValueChange={setDiscountType}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -313,6 +443,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="20" 
                   className="mt-1"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
                 />
               </div>
               <div>
@@ -322,6 +454,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="7" 
                   className="mt-1"
+                  value={promoDuration}
+                  onChange={(e) => setPromoDuration(e.target.value)}
                 />
               </div>
             </div>
@@ -333,55 +467,74 @@ export const PromoSimulationWithTutorial = () => {
             <CardTitle className="text-base">Sales Channel Impact</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border rounded-lg p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-medium">Online Marketplace</span>
-                  <Badge variant="outline">15% fees</Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Commission (10%):</span>
-                    <span className="text-red-600">-Rp 12,000</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Payment fee (3%):</span>
-                    <span className="text-red-600">-Rp 3,600</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Ad spend (2%):</span>
-                    <span className="text-red-600">-Rp 2,400</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-medium">
-                    <span>Net after fees:</span>
-                    <span>Rp 102,000</span>
-                  </div>
-                </div>
+            {selectedCalculation && selectedCalculation.calculation_result?.channelPricing && selectedCalculation.calculation_result.channelPricing.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedCalculation.calculation_result.channelPricing.map((channel) => {
+                  const channelInput = selectedCalculation.calculation_input.salesChannels?.find(
+                    ch => ch.id === channel.channelId
+                  );
+                  const basePriceNum = parseFloat(basePrice) || 0;
+                  const feePercent = channelInput?.totalFeePercent || 0;
+                  const commissionPercent = channelInput?.commissionPercent || 0;
+                  const paymentFeePercent = channelInput?.paymentFeePercent || 0;
+                  const adSpendPercent = channelInput?.adSpendPercent || 0;
+                  const otherFeePercent = channelInput?.otherFeePercent || 0;
+                  
+                  return (
+                    <div key={channel.channelId} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="font-medium">{channel.channelName}</span>
+                        <Badge variant="outline">{feePercent.toFixed(1)}% fees</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {commissionPercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span>Commission ({commissionPercent}%):</span>
+                            <span className="text-red-600">-{formatRupiah(basePriceNum * (commissionPercent / 100))}</span>
+                          </div>
+                        )}
+                        {paymentFeePercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span>Payment fee ({paymentFeePercent}%):</span>
+                            <span className="text-red-600">-{formatRupiah(basePriceNum * (paymentFeePercent / 100))}</span>
+                          </div>
+                        )}
+                        {adSpendPercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span>Ad spend ({adSpendPercent}%):</span>
+                            <span className="text-red-600">-{formatRupiah(basePriceNum * (adSpendPercent / 100))}</span>
+                          </div>
+                        )}
+                        {otherFeePercent > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span>Other fees ({otherFeePercent}%):</span>
+                            <span className="text-red-600">-{formatRupiah(basePriceNum * (otherFeePercent / 100))}</span>
+                          </div>
+                        )}
+                        <Separator />
+                        <div className="flex justify-between font-medium">
+                          <span>Net after fees:</span>
+                          <span>{formatRupiah(basePriceNum * (1 - feePercent / 100))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
-              <div className="border rounded-lg p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-medium">Offline Store</span>
-                  <Badge variant="outline">5% fees</Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Store rental (3%):</span>
-                    <span className="text-red-600">-Rp 3,600</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Staff cost (2%):</span>
-                    <span className="text-red-600">-Rp 2,400</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-medium">
-                    <span>Net after fees:</span>
-                    <span>Rp 114,000</span>
-                  </div>
-                </div>
+            ) : (
+              <div className="text-center py-4 text-gray-500 text-sm">
+                <p>Load a calculation from history to see channel-specific impact</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setHistoryDialogOpen(true)}
+                  className="mt-2"
+                >
+                  <History className="h-4 w-4 mr-2" />
+                  Load from History
+                </Button>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -398,6 +551,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="10" 
                   className="mt-1"
+                  value={currentVolume}
+                  onChange={(e) => setCurrentVolume(e.target.value)}
                 />
               </div>
               <div>
@@ -407,6 +562,8 @@ export const PromoSimulationWithTutorial = () => {
                   type="number" 
                   placeholder="50" 
                   className="mt-1"
+                  value={expectedIncrease}
+                  onChange={(e) => setExpectedIncrease(e.target.value)}
                 />
               </div>
               <div className="flex items-end">
@@ -512,21 +669,33 @@ export const PromoSimulationWithTutorial = () => {
                 <CardTitle className="text-base">Channel Comparison</CardTitle>
               </CardHeader>
               <CardContent>
-                {simulationResults && (
+                {simulationResults && simulationResults.channelResults && Object.keys(simulationResults.channelResults).length > 0 ? (
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                      <span className="text-sm font-medium">Online Net Profit:</span>
-                      <span className="font-bold text-blue-700">Rp 2,000</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-green-50 rounded">
-                      <span className="text-sm font-medium">Offline Net Profit:</span>
-                      <span className="font-bold text-green-700">Rp 14,000</span>
-                    </div>
+                    {Object.entries(simulationResults.channelResults).map(([channelId, channelData]: [string, any]) => (
+                      <div key={channelId} className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                        <span className="text-sm font-medium">{channelData.name}:</span>
+                        <span className={`font-bold ${channelData.netProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {formatRupiah(channelData.netProfit)}
+                        </span>
+                      </div>
+                    ))}
                     <div className="text-xs text-gray-600 mt-2">
                       * After deducting all fees and costs
                     </div>
                   </div>
-                )}
+                ) : simulationResults ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                      <span className="text-sm font-medium">Net Profit:</span>
+                      <span className={`font-bold ${simulationResults.newProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {formatRupiah(simulationResults.newProfit)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-2">
+                      * Load calculation from history to see channel-specific breakdown
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -536,6 +705,78 @@ export const PromoSimulationWithTutorial = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* History Dialog */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Select Calculation from History
+            </DialogTitle>
+            <DialogDescription>
+              Choose a saved pricing calculation to load its data into the promo simulation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {isLoadingHistory ? (
+              <div className="text-center py-8 text-gray-500">Loading calculations...</div>
+            ) : calculations.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <History className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+                <p className="text-sm">No saved calculations found.</p>
+                <p className="text-xs text-gray-400 mt-1">Go to Pricing Tools to create and save calculations.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px]">Calculation Name</TableHead>
+                      <TableHead className="min-w-[150px]">Product Name</TableHead>
+                      <TableHead className="min-w-[120px] text-right">Selling Price</TableHead>
+                      <TableHead className="min-w-[120px] text-right">Production Cost</TableHead>
+                      <TableHead className="min-w-[140px]">Date Created</TableHead>
+                      <TableHead className="min-w-[100px] text-center">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {calculations.map((calculation) => (
+                      <TableRow key={calculation.id}>
+                        <TableCell className="font-medium">{calculation.calculation_name}</TableCell>
+                        <TableCell>{calculation.calculation_input.productName || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          {formatRupiah(calculation.calculation_result.summary.recommendedSellingPrice)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatRupiah(calculation.calculation_input.productionCostPerUnit || 0)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-xs text-gray-600">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(calculation.created_at), 'dd MMM yyyy', { locale: id })}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleLoadFromHistory(calculation)}
+                            className="h-8 w-8 p-0"
+                            title="Load Calculation"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
