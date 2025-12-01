@@ -137,3 +137,4 @@ INSERT INTO pricing_templates (
 COMMENT ON TABLE pricing_templates IS 
 'Default template "Parfum Import" inserted for all tenants. This template serves as an example/starting point for pricing calculations in the perfume import business. Users should modify the data according to their actual costs and expenses.';
 
+

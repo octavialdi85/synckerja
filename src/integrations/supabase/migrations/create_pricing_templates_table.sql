@@ -103,3 +103,4 @@ CREATE POLICY "Users can delete organization templates"
         )
     );
 
+

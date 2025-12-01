@@ -26,3 +26,4 @@ SET template_data = jsonb_set(
 )
 WHERE template_name = 'Parfum Import - Template Contoh';
 
+

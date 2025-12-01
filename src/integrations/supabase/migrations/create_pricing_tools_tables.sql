@@ -272,3 +272,4 @@ COMMENT ON TABLE business_expenses IS 'Stores business operational expenses per 
 COMMENT ON TABLE sales_channels IS 'Stores sales channel configurations, with system-wide defaults and organization-specific overrides';
 COMMENT ON TABLE pricing_calculations IS 'Stores pricing calculation history with input and result data';
 
+

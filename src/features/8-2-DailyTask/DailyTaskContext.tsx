@@ -1542,13 +1542,23 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      if (!organizationId) {
+        throw new Error('Organization ID is required');
+      }
+
       const { data: currentEmployee } = await supabase
-        .from('employees' as any)
+        .from('employees')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .eq('organization_id', organizationId)
+        .maybeSingle();
 
       logger.userData('👤 Current employee ID:', currentEmployee?.id);
+
+      // If assigning (not unassigning), we need assigned_by to be set
+      if (employeeId && !currentEmployee?.id) {
+        throw new Error('Current employee not found. Cannot assign step without assigned_by.');
+      }
 
       if (employeeId) {
         // delete any existing assignment rows (we only keep latest)
@@ -1576,7 +1586,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             organization_id: (taskOrg as any)?.organization_id || null,
             task_step_id: stepId,
             employee_id: employeeId,
-            assigned_by: (currentEmployee as any)?.id || null,
+            assigned_by: currentEmployee!.id, // Validated above - must exist when assigning
             assigned_at: new Date().toISOString(),
           })
           .select('id')
