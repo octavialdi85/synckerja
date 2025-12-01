@@ -98,6 +98,15 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
   };
 
   const handleAssign = (employeeId: string) => {
+    // Validasi: due date harus dipilih terlebih dahulu
+    if (!dueDate) {
+      toast({
+        title: 'Due Date Required',
+        description: 'Please select a due date before assigning an employee.',
+        variant: 'destructive'
+      });
+      return;
+    }
     onAssign(employeeId, resolveDueDateIso());
   };
 
@@ -175,7 +184,9 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
 
           {/* Due Date (single field, autosave) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Due date</label>
+            <label className="text-sm font-medium text-gray-700">
+              Due date <span className="text-red-500">*</span>
+            </label>
             <Input
               type="date"
               className="h-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -207,6 +218,11 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
               }}
             />
             {savingDue && <div className="text-[10px] text-gray-400 mt-1">Saving…</div>}
+            {!dueDate && (
+              <p className="text-xs text-amber-600 mt-1">
+                ⚠️ Please select a due date before assigning an employee
+              </p>
+            )}
           </div>
 
           {/* Employee List */}
@@ -222,29 +238,38 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
                 <p className="text-sm text-gray-500">No employees found</p>
               </div>
             ) : (
-              filteredEmployees.map((employee) => (
-                <div
-                  key={employee.id}
-                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
-                    employee.id === step.assigned_to
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-200'
-                  }`}
-                  onClick={() => handleAssign(employee.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{employee.full_name}</p>
-                      {employee.email && (
-                        <p className="text-xs text-gray-500">{employee.email}</p>
+              filteredEmployees.map((employee) => {
+                const isDisabled = !dueDate && employee.id !== step.assigned_to;
+                return (
+                  <div
+                    key={employee.id}
+                    className={`p-3 border rounded-md transition-colors ${
+                      employee.id === step.assigned_to
+                        ? 'bg-green-50 border-green-200'
+                        : isDisabled
+                        ? 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
+                        : 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-200 cursor-pointer'
+                    }`}
+                    onClick={() => !isDisabled && handleAssign(employee.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`text-sm font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                          {employee.full_name}
+                        </p>
+                        {employee.email && (
+                          <p className={`text-xs ${isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {employee.email}
+                          </p>
+                        )}
+                      </div>
+                      {employee.id === step.assigned_to && (
+                        <div className="w-2 h-2 bg-green-500 rounded-full" />
                       )}
                     </div>
-                    {employee.id === step.assigned_to && (
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
