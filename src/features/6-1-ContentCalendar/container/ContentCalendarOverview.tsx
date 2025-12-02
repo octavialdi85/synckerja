@@ -132,14 +132,14 @@ export const ContentCalendarOverview = ({
         {/* Funnel Tab Content */}
         <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
           <div className="w-full h-full flex flex-col">
-            <ContentPillarTracker />
+            <ContentPillarTracker selectedMonth={currentDate} />
           </div>
         </TabsContent>
 
         {/* Content Balance Tab Content */}
         <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
           <div className="w-full h-full flex flex-col">
-            <ContentBalanceTab />
+            <ContentBalanceTab selectedMonth={currentDate} />
           </div>
         </TabsContent>
       </Tabs>
