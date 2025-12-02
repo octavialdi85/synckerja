@@ -6,11 +6,16 @@ import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { ScrollArea } from '@/features/ui/scroll-area';
-import { Save, X, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { Save, X, Plus, Trash2, ExternalLink, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useSocialMediaLinks } from '@/features/6-1-dashboard/hook/useSocialMediaLinks';
 import { useSocialMediaNames } from '../hook/useSocialMediaNames';
+import { useServiceRequiredPlatforms } from '../hook/useServiceRequiredPlatforms';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { CreateSocialMediaLinkData } from '@/types/social-media-links';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Progress } from '@/features/ui/progress';
+import { Badge } from '@/features/ui/badge';
 
 interface SocialMediaLinksDialogProps {
   isOpen: boolean;
@@ -25,6 +30,7 @@ interface SocialMediaLinkForm {
   social_media_name: string;
   url: string;
   isNew?: boolean;
+  urlError?: string;
 }
 
 const PLATFORM_OPTIONS = [
@@ -38,6 +44,57 @@ const PLATFORM_OPTIONS = [
   'Tokopedia',
   'Other'
 ];
+
+// URL validation function based on platform
+const validateUrlForPlatform = (url: string, platform: string): string | null => {
+  if (!url || url.trim() === '') {
+    return null; // Empty URL is handled separately
+  }
+
+  const urlLower = url.toLowerCase().trim();
+  
+  // Basic URL format validation
+  if (!urlLower.startsWith('http://') && !urlLower.startsWith('https://')) {
+    return 'URL must start with http:// or https://';
+  }
+
+  // Platform-specific validation
+  if (platform === 'TikTok') {
+    if (!urlLower.includes('tiktok.com')) {
+      return 'URL must be a valid TikTok link (e.g., https://www.tiktok.com/@username/video/...)';
+    }
+  } else if (platform === 'YouTube') {
+    if (!urlLower.includes('youtube.com') && !urlLower.includes('youtu.be')) {
+      return 'URL must be a valid YouTube link (e.g., https://www.youtube.com/watch?v=... or https://youtu.be/...)';
+    }
+  } else if (platform === 'Instagram') {
+    if (!urlLower.includes('instagram.com') && !urlLower.includes('facebook.com')) {
+      return 'URL must be a valid Instagram or Facebook link';
+    }
+  } else if (platform === 'Facebook') {
+    if (!urlLower.includes('facebook.com')) {
+      return 'URL must be a valid Facebook link';
+    }
+  } else if (platform === 'LinkedIn') {
+    if (!urlLower.includes('linkedin.com')) {
+      return 'URL must be a valid LinkedIn link';
+    }
+  } else if (platform === 'Twitter') {
+    if (!urlLower.includes('twitter.com') && !urlLower.includes('x.com')) {
+      return 'URL must be a valid Twitter/X link';
+    }
+  } else if (platform === 'Shopee') {
+    if (!urlLower.includes('shopee.co.id') && !urlLower.includes('shopee.com')) {
+      return 'URL must be a valid Shopee link';
+    }
+  } else if (platform === 'Tokopedia') {
+    if (!urlLower.includes('tokopedia.com')) {
+      return 'URL must be a valid Tokopedia link';
+    }
+  }
+
+  return null; // Valid URL
+};
 
 const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
   isOpen,
@@ -61,18 +118,117 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
   const { socialMediaNames, getNamesByPlatform, isLoading: isLoadingNames } = useSocialMediaNames(organizationId);
 
+  // Fetch plan data to get service_id and done status
+  const { data: planData } = useQuery({
+    queryKey: ['social-media-plan', socialMediaPlanId],
+    queryFn: async () => {
+      if (!socialMediaPlanId) return null;
+      const { data, error } = await supabase
+        .from('social_media_plans')
+        .select('service_id, done, organization_id')
+        .eq('id', socialMediaPlanId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!socialMediaPlanId && isOpen,
+  });
+
+  // Fetch required platforms for the service
+  const { requiredPlatforms, isLoading: isLoadingRequiredPlatforms } = useServiceRequiredPlatforms(
+    planData?.service_id || undefined
+  );
+
+  // Calculate validation status
+  const validationStatus = React.useMemo(() => {
+    if (!planData?.service_id || planData.done === true) {
+      // If plan is already done, no validation needed
+      return {
+        isValid: true,
+        progress: 100,
+        missingPlatforms: [],
+        totalRequired: 0,
+        filledRequired: 0
+      };
+    }
+
+    const activeRequiredPlatforms = requiredPlatforms.filter(rp => rp.is_active === true);
+    
+    if (activeRequiredPlatforms.length === 0) {
+      // No required platforms configured
+      return {
+        isValid: true,
+        progress: 100,
+        missingPlatforms: [],
+        totalRequired: 0,
+        filledRequired: 0
+      };
+    }
+
+    // Create a map of filled platforms: "platform:social_media_name"
+    // Only count links with valid URLs (no URL errors)
+    const filledPlatformsMap = new Set<string>();
+    formLinks.forEach(link => {
+      if (
+        link.platform && 
+        link.platform.trim() !== '' &&
+        link.social_media_name && 
+        link.social_media_name.trim() !== '' &&
+        link.url && 
+        link.url.trim() !== '' &&
+        !link.urlError // URL must be valid (no validation errors)
+      ) {
+        const key = `${link.platform}:${link.social_media_name}`;
+        filledPlatformsMap.add(key);
+      }
+    });
+
+    // Check which required platforms are missing
+    const missingPlatforms: string[] = [];
+    activeRequiredPlatforms.forEach(rp => {
+      const requiredKey = rp.social_media_name
+        ? `${rp.platform}:${rp.social_media_name.name}`
+        : `${rp.platform}:${rp.custom_platform_name || 'Custom'}`;
+      
+      if (!filledPlatformsMap.has(requiredKey)) {
+        missingPlatforms.push(
+          rp.social_media_name
+            ? `${rp.platform} - ${rp.social_media_name.name}`
+            : `${rp.platform} - ${rp.custom_platform_name || 'Custom'}`
+        );
+      }
+    });
+
+    const filledRequired = activeRequiredPlatforms.length - missingPlatforms.length;
+    const progress = activeRequiredPlatforms.length > 0
+      ? Math.round((filledRequired / activeRequiredPlatforms.length) * 100)
+      : 100;
+
+    return {
+      isValid: missingPlatforms.length === 0,
+      progress,
+      missingPlatforms,
+      totalRequired: activeRequiredPlatforms.length,
+      filledRequired
+    };
+  }, [formLinks, requiredPlatforms, planData]);
+
   // Initialize form data when dialog opens or links change
   useEffect(() => {
     if (isOpen) {
       if (links.length > 0) {
-        // Convert existing links to form format
-        const existingLinks: SocialMediaLinkForm[] = links.map(link => ({
-          id: link.id,
-          platform: link.platform,
-          social_media_name: link.social_media_name,
-          url: link.url,
-          isNew: false
-        }));
+        // Convert existing links to form format with URL validation
+        const existingLinks: SocialMediaLinkForm[] = links.map(link => {
+          const urlError = validateUrlForPlatform(link.url, link.platform) || undefined;
+          return {
+            id: link.id,
+            platform: link.platform,
+            social_media_name: link.social_media_name,
+            url: link.url,
+            isNew: false,
+            urlError
+          };
+        });
         setFormLinks(existingLinks);
       } else {
         // Start with one empty link
@@ -117,9 +273,23 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       if (link.id === id) {
         const updatedLink = { ...link, [field]: value };
         
-        // If platform changed, reset social_media_name
+        // If platform changed, reset social_media_name and URL error
         if (field === 'platform') {
           updatedLink.social_media_name = '';
+          updatedLink.urlError = undefined;
+          // Re-validate URL if it exists
+          if (updatedLink.url) {
+            updatedLink.urlError = validateUrlForPlatform(updatedLink.url, value) || undefined;
+          }
+        }
+        
+        // If URL changed, validate it
+        if (field === 'url') {
+          if (updatedLink.platform) {
+            updatedLink.urlError = validateUrlForPlatform(value, updatedLink.platform) || undefined;
+          } else {
+            updatedLink.urlError = undefined;
+          }
         }
         
         return updatedLink;
@@ -136,13 +306,37 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
   const handleSave = async () => {
     try {
-      // Validate all links
-      const validLinks = formLinks.filter(link => 
-        link.platform && link.platform.trim() !== '' && 
-        link.social_media_name && link.social_media_name.trim() !== '' &&
-        link.url && link.url.trim() !== '' &&
-        (link.url.startsWith('http://') || link.url.startsWith('https://') || link.url.includes('.'))
-      );
+      // Validate all links with platform-specific URL validation
+      const validLinks = formLinks.filter(link => {
+        // Basic validation
+        if (!link.platform || link.platform.trim() === '') return false;
+        if (!link.social_media_name || link.social_media_name.trim() === '') return false;
+        if (!link.url || link.url.trim() === '') return false;
+        
+        // URL format validation
+        const urlTrimmed = link.url.trim();
+        if (!urlTrimmed.startsWith('http://') && !urlTrimmed.startsWith('https://')) {
+          return false;
+        }
+        
+        // Platform-specific URL validation
+        const urlError = validateUrlForPlatform(urlTrimmed, link.platform);
+        if (urlError) {
+          // Set error and don't include in valid links
+          setFormLinks(prev => prev.map(l => 
+            l.id === link.id ? { ...l, urlError } : l
+          ));
+          return false;
+        }
+        
+        return true;
+      });
+
+      // Check if there are any URL errors
+      const hasUrlErrors = formLinks.some(link => link.urlError);
+      if (hasUrlErrors) {
+        return; // Don't save if there are URL validation errors
+      }
 
       if (validLinks.length === 0) {
         return;
@@ -202,8 +396,11 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
   const hasValidLinks = formLinks.some(link => 
     link.platform && link.platform.trim() !== '' && 
     link.social_media_name && link.social_media_name.trim() !== '' &&
-    link.url && link.url.trim() !== ''
+    link.url && link.url.trim() !== '' &&
+    !link.urlError // No URL validation errors
   );
+
+  const hasUrlErrors = formLinks.some(link => link.urlError);
 
   const isSaving = isCreating || isUpdating || isDeleting;
 
@@ -237,6 +434,43 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
         </DialogHeader>
 
         <div className="flex-1 flex flex-col min-h-0 px-6 pb-6">
+          {/* Required Platforms Progress Indicator */}
+          {planData?.service_id && !planData.done && validationStatus.totalRequired > 0 && (
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {validationStatus.isValid ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-orange-600" />
+                  )}
+                  <Label className="text-sm font-semibold">
+                    Required Platforms Progress
+                  </Label>
+                </div>
+                <Badge variant={validationStatus.isValid ? 'default' : 'secondary'}>
+                  {validationStatus.filledRequired} / {validationStatus.totalRequired}
+                </Badge>
+              </div>
+              <Progress 
+                value={validationStatus.progress} 
+                className="h-2 mb-2 [&>div]:bg-blue-600" 
+              />
+              {validationStatus.missingPlatforms.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-orange-700 dark:text-orange-400 mb-1">
+                    Missing required platforms:
+                  </p>
+                  <ul className="text-xs text-orange-600 dark:text-orange-500 list-disc list-inside space-y-0.5">
+                    {validationStatus.missingPlatforms.map((platform, idx) => (
+                      <li key={idx}>{platform}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <Label className="text-sm font-medium">Add social media links</Label>
             <Button
@@ -287,38 +521,48 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
                       <div className="col-span-3 space-y-1">
                         <Label className="text-xs text-gray-600">Social Media Name</Label>
                         {link.platform ? (
-                          <Select
-                            value={link.social_media_name}
-                            onValueChange={(value) => {
-                              // Prevent event bubbling that might close dialog
-                              handleFieldChange(link.id, 'social_media_name', value);
-                            }}
-                            disabled={isSaving}
-                          >
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Select account name" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {isLoadingNames ? (
-                                <SelectItem value="loading" disabled>
-                                  Loading...
-                                </SelectItem>
-                              ) : (
-                                <>
-                                  {getNamesByPlatform(link.platform).map((name) => (
-                                    <SelectItem key={name.id} value={name.name}>
-                                      {name.name}
-                                    </SelectItem>
-                                  ))}
-                                  {getNamesByPlatform(link.platform).length === 0 && (
-                                    <SelectItem value="no-names-available" disabled>
-                                      No names available for {link.platform}
-                                    </SelectItem>
-                                  )}
-                                </>
-                              )}
-                            </SelectContent>
-                          </Select>
+                          link.platform === 'Other' ? (
+                            <Input
+                              value={link.social_media_name}
+                              onChange={(e) => handleFieldChange(link.id, 'social_media_name', e.target.value)}
+                              placeholder="Enter custom name"
+                              className="h-10"
+                              disabled={isSaving}
+                            />
+                          ) : (
+                            <Select
+                              value={link.social_media_name}
+                              onValueChange={(value) => {
+                                // Prevent event bubbling that might close dialog
+                                handleFieldChange(link.id, 'social_media_name', value);
+                              }}
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger className="h-10">
+                                <SelectValue placeholder="Select account name" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isLoadingNames ? (
+                                  <SelectItem value="loading" disabled>
+                                    Loading...
+                                  </SelectItem>
+                                ) : (
+                                  <>
+                                    {getNamesByPlatform(link.platform).map((name) => (
+                                      <SelectItem key={name.id} value={name.name}>
+                                        {name.name}
+                                      </SelectItem>
+                                    ))}
+                                    {getNamesByPlatform(link.platform).length === 0 && (
+                                      <SelectItem value="no-names-available" disabled>
+                                        No names available for {link.platform}
+                                      </SelectItem>
+                                    )}
+                                  </>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          )
                         ) : (
                           <Input
                             value=""
@@ -335,11 +579,17 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
                           <Input
                             value={link.url}
                             onChange={(e) => handleFieldChange(link.id, 'url', e.target.value)}
-                            placeholder="https://..."
-                            className="h-10 pr-8"
+                            placeholder={
+                              link.platform === 'TikTok' 
+                                ? "https://www.tiktok.com/@username/video/..." 
+                                : link.platform === 'YouTube'
+                                ? "https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                                : "https://..."
+                            }
+                            className={`h-10 pr-8 ${link.urlError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                             disabled={isSaving}
                           />
-                          {link.url && (link.url.startsWith('http://') || link.url.startsWith('https://')) && (
+                          {link.url && !link.urlError && (link.url.startsWith('http://') || link.url.startsWith('https://')) && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -351,6 +601,12 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
                             </Button>
                           )}
                         </div>
+                        {link.urlError && (
+                          <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {link.urlError}
+                          </p>
+                        )}
                       </div>
 
                       <div className="col-span-1 flex justify-center">
@@ -402,7 +658,14 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
           <Button
             onClick={handleSave}
             className="flex items-center gap-2"
-            disabled={!hasValidLinks || isSaving}
+            disabled={!hasValidLinks || isSaving || !validationStatus.isValid || hasUrlErrors}
+            title={
+              hasUrlErrors 
+                ? 'Please fix URL validation errors before saving' 
+                : !validationStatus.isValid 
+                ? 'Please fill all required platforms before saving' 
+                : undefined
+            }
           >
             <Save className="h-4 w-4" />
             {isSaving ? 'Saving...' : 'Save Links'}

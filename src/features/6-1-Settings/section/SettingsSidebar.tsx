@@ -15,6 +15,13 @@ const settingsSections = [
     status: 'active'
   },
   {
+    id: 'scheduling',
+    title: 'Content Scheduling',
+    description: 'Set up posting schedules and automation',
+    icon: Calendar,
+    status: 'active'
+  },
+  {
     id: 'content-management',
     title: 'Content Management',
     description: 'Manage content types, pillars, and categories',
@@ -26,13 +33,6 @@ const settingsSections = [
     title: 'User Permissions',
     description: 'Configure user roles and access levels',
     icon: Users,
-    status: 'active'
-  },
-  {
-    id: 'scheduling',
-    title: 'Content Scheduling',
-    description: 'Set up posting schedules and automation',
-    icon: Calendar,
     status: 'active'
   },
   {

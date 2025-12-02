@@ -1073,7 +1073,7 @@ const SocialMediaContent = () => {
                             {/* Social Media Plan Table */}
                             <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative h-full">
                               {/* Filters Section - Sticky at top */}
-                              <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-30">
+                              <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-20">
                                 <SocialMediaErrorBoundary>
                                   <SocialMediaFilters 
                                     searchTerm={searchTerm} 

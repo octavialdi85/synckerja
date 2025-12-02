@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { HeaderAndTab } from './section/HeaderAndTab';
 import { SettingsSidebar } from './section/SettingsSidebar';
 import { ApprovalAccessSection } from './section/ApprovalAccessSection';
+import { ContentSchedulingSection } from './section/ContentSchedulingSection';
 import { ComingSoonSection } from './section/ComingSoonSection';
 import { ApprovalAccessModal } from './modal/ApprovalAccessModal';
 
@@ -185,6 +186,8 @@ export const SettingsPage: React.FC = () => {
             }}
           />
         );
+      case 'scheduling':
+        return <ContentSchedulingSection />;
       default:
         return <ComingSoonSection />;
     }
@@ -243,10 +246,13 @@ export const SettingsPage: React.FC = () => {
                         <div className="flex items-center justify-between">
                           <div className="min-w-0 flex-1">
                             <h2 className="text-sm font-semibold text-gray-900 truncate">
-                              {activeSection === 'approval-access' ? 'Approval Access' : 'Settings'}
+                              {activeSection === 'approval-access' ? 'Approval Access' : 
+                               activeSection === 'scheduling' ? 'Content Scheduling' : 'Settings'}
                             </h2>
                             <p className="text-xs text-gray-500 mt-1">
-                              {activeSection === 'approval-access' ? 'Manage approval access configurations' : 'Configure social media settings'}
+                              {activeSection === 'approval-access' ? 'Manage approval access configurations' : 
+                               activeSection === 'scheduling' ? 'Configure required platforms for content scheduling' : 
+                               'Configure social media settings'}
                             </p>
                           </div>
                           {activeSection === 'approval-access' && (
