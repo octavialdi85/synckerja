@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/features/ui/dropdown-menu';
-import { Plus, X, Save, Trash2 } from 'lucide-react';
+import { Plus, X, Save, Trash2, Search } from 'lucide-react';
 import { useSocialMediaNames } from '../../../hook/useSocialMediaNames';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { SocialMediaName } from '@/types/social-media-names';
@@ -46,6 +46,8 @@ export const SocialMediaNameManager: React.FC<SocialMediaNameManagerProps> = ({ 
     isDeleting 
   } = useSocialMediaNames(organizationId);
 
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingName, setEditingName] = useState<SocialMediaName | null>(null);
   const [formData, setFormData] = useState({
@@ -122,7 +124,24 @@ export const SocialMediaNameManager: React.FC<SocialMediaNameManagerProps> = ({ 
     }
   };
 
-  const groupedNames = socialMediaNames.reduce((acc, name) => {
+  // Clear search when dropdown closes
+  const handleDropdownChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      setSearchQuery('');
+    }
+  };
+
+  // Filter names by search query, then group by platform
+  const filteredNames = searchQuery
+    ? socialMediaNames.filter(name => 
+        name.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        name.platform.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (name.description && name.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : socialMediaNames;
+
+  const groupedNames = filteredNames.reduce((acc, name) => {
     if (!acc[name.platform]) {
       acc[name.platform] = [];
     }
@@ -134,7 +153,7 @@ export const SocialMediaNameManager: React.FC<SocialMediaNameManagerProps> = ({ 
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={isOpen} onOpenChange={handleDropdownChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant="outline" 
@@ -160,12 +179,32 @@ export const SocialMediaNameManager: React.FC<SocialMediaNameManagerProps> = ({ 
             </div>
           </div>
           
+          {/* Sticky Search */}
+          <div className="sticky top-[50px] bg-white z-10 border-b">
+            <div className="px-2 py-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search social media names..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          </div>
+          
           {/* Scrollable Content */}
-          <div className="overflow-y-auto seamless-scroll max-h-[calc(20rem-50px)] p-2">
+          <div className="overflow-y-auto seamless-scroll max-h-[calc(20rem-91px)] p-2">
             {isLoading ? (
               <div className="text-xs text-gray-500 py-2">Loading...</div>
             ) : Object.keys(groupedNames).length === 0 ? (
-              <div className="text-xs text-gray-500 py-2">No social media names yet</div>
+              <div className="text-xs text-gray-500 py-2">
+                {searchQuery ? `No social media names found for "${searchQuery}"` : 'No social media names yet'}
+              </div>
             ) : (
               <div>
                 {Object.entries(groupedNames).map(([platform, names], index) => (

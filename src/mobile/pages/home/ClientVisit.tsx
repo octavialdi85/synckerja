@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useClientVisitData } from "@/mobile/hooks/useClientVisitData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
-let confetti: any; try { confetti = require("canvas-confetti"); } catch {}
+import confetti from "canvas-confetti";
 
 export default function ClientVisit() {
   const { toast } = useToast();

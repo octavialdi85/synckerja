@@ -3,9 +3,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Button } from '@/features/ui/button';
-import { MoreVertical, Plus, Edit, Trash2, Lock } from 'lucide-react';
+import { MoreVertical, Plus, Edit, Trash2, Lock, Search } from 'lucide-react';
 import { useMasterData } from '../../../hook/useMasterData';
 import { Service } from '../../../types/social-media';
+import { Input } from '@/features/ui/input';
 
 interface ServiceManagerProps {
   onDataChange: () => void;
@@ -13,6 +14,7 @@ interface ServiceManagerProps {
 
 export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDataChange }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [modalData, setModalData] = useState<{
     open: boolean;
     mode: 'add' | 'edit';
@@ -109,13 +111,26 @@ export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDat
     }
   }, [handleSave]);
 
-  // Separate default and custom services
-  const defaultServices = (services || []).filter(item => !item.organization_id);
-  const customServices = (services || []).filter(item => item.organization_id);
+  // Clear search when dropdown closes
+  const handleDropdownChange = useCallback((open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      setSearchQuery('');
+    }
+  }, []);
+
+  // Separate default and custom services, then filter by search query
+  const defaultServices = (services || [])
+    .filter(item => !item.organization_id)
+    .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+  const customServices = (services || [])
+    .filter(item => item.organization_id)
+    .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <>
-      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenu open={isOpen} onOpenChange={handleDropdownChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant="ghost" 
@@ -134,8 +149,26 @@ export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDat
             </DropdownMenuItem>
           </div>
           
+          {/* Sticky Search */}
+          <div className="sticky top-[41px] bg-white z-10 border-b">
+            <div className="px-2 py-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search services..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          </div>
+          
           {/* Scrollable Content */}
-          <div className="overflow-y-auto seamless-scroll max-h-[calc(20rem-41px)]">
+          <div className="overflow-y-auto seamless-scroll max-h-[calc(20rem-82px)]">
           {(defaultServices.length > 0 || customServices.length > 0) && (
             <>
               <DropdownMenuSeparator />
@@ -193,7 +226,7 @@ export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDat
               )}
 
               {/* Show message if no custom services */}
-              {customServices.length === 0 && defaultServices.length > 0 && (
+              {customServices.length === 0 && defaultServices.length > 0 && !searchQuery && (
                 <>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-2 text-xs text-gray-500 text-center italic">
@@ -207,7 +240,7 @@ export const ServiceManager: React.FC<ServiceManagerProps> = React.memo(({ onDat
                 <>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-2 text-xs text-gray-500 text-center italic">
-                    No services available
+                    {searchQuery ? `No services found for "${searchQuery}"` : 'No services available'}
                   </div>
                 </>
               )}
