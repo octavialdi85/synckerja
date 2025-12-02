@@ -168,7 +168,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           {plan?.title || 'Untitled'}
                         </div>
                         
-                        {/* PIC */}
+                        {/* PIC, Content Type, Pillar */}
                         <div className={`truncate text-[10px] ${
                           planStatus === 'green' ? 'text-emerald-100' :
                           planStatus === 'yellow' ? 'text-gray-700' :
@@ -176,7 +176,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           planStatus === 'red' ? 'text-red-100' :
                           'text-blue-600'
                         }`}>
-                          PIC: {plan?.pic?.full_name || 'Unassigned'}
+                          {[
+                            plan?.pic?.full_name || 'Unassigned',
+                            plan?.content_type?.name,
+                            plan?.content_pillar?.name
+                          ].filter(Boolean).join(' • ')}
                         </div>
                         
                         {/* NEW: Green cards - Display all social media links */}
