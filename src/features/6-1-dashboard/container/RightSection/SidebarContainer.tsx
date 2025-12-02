@@ -2,10 +2,14 @@ import React from 'react';
 import { ReminderTab } from './ReminderTab';
 import { SocialMediaErrorBoundary } from '../../hook/ErrorBoundary';
 
-export const SidebarContainer: React.FC = () => {
+interface SidebarContainerProps {
+  selectedMonth?: Date;
+}
+
+export const SidebarContainer: React.FC<SidebarContainerProps> = ({ selectedMonth }) => {
   return (
     <SocialMediaErrorBoundary>
-      <ReminderTab />
+      <ReminderTab selectedMonth={selectedMonth} />
     </SocialMediaErrorBoundary>
   );
 };

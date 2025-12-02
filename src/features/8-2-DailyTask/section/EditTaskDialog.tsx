@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Flag, User } from 'lucide-react';
+import { X, Flag, User, Calendar } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -16,9 +16,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/features/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
 import { DueDatePicker } from './DueDatePicker';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { MonthPicker } from '@/features/share/calendar';
+import { format, startOfMonth } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 
 interface EditTaskDialogProps {
   isOpen: boolean;
@@ -34,6 +42,8 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
   const [priority, setPriority] = useState('medium');
   const [status, setStatus] = useState('pending');
   const [dueDate, setDueDate] = useState<string>('');
+  const [planDate, setPlanDate] = useState<Date | null>(null);
+  const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -49,6 +59,12 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         setStatus(task.status || 'pending');
         setDueDate(task.due_date || '');
         setAssignedTo(task.assigned_to || '');
+        // Load plan_date - convert string to Date if exists
+        if (task.plan_date) {
+          setPlanDate(startOfMonth(new Date(task.plan_date)));
+        } else {
+          setPlanDate(null);
+        }
       }
     }
   }, [isOpen, taskId, tasks]);
@@ -60,12 +76,16 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
 
     setIsSubmitting(true);
     try {
+      // Format plan_date as YYYY-MM-01 (first day of month) if exists
+      const planDateFormatted = planDate ? format(startOfMonth(planDate), 'yyyy-MM-dd') : null;
+      
       await updateTask(taskId, {
         title: title.trim(),
         description: description.trim(),
         priority: priority as 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented',
         status: status as 'pending' | 'in_progress' | 'completed' | 'cancelled',
         due_date: dueDate || null,
+        plan_date: planDateFormatted,
         assigned_to: assignedTo || null,
       });
 
@@ -204,6 +224,46 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Plan Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Plan Date
+              </label>
+              <Popover open={isPlanDatePickerOpen} onOpenChange={setIsPlanDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+                  >
+                    {planDate ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm text-left">
+                          {format(planDate, 'MMMM yyyy', { locale: idLocale })}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-500 text-sm">Select Plan Date</span>
+                      </div>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="start">
+                  <MonthPicker
+                    selected={planDate || undefined}
+                    onSelect={(date) => {
+                      setPlanDate(date);
+                      setIsPlanDatePickerOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
             {/* Due Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

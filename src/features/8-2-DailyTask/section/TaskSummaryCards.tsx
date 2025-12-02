@@ -70,6 +70,15 @@ const TaskSummaryCards = () => {
       textColor: 'text-emerald-600', 
       borderColor: 'border-emerald-200' 
     },
+    { 
+      label: 'Planned This Month', 
+      count: summaryData.tasksPlannedThisMonth, 
+      color: 'indigo', 
+      icon: Calendar, 
+      bgColor: 'bg-indigo-50', 
+      textColor: 'text-indigo-600', 
+      borderColor: 'border-indigo-200' 
+    },
   ];
 
   if (isLoading) {

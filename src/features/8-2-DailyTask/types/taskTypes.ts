@@ -120,6 +120,7 @@ export interface Task {
   priority: 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented';
   due_date: string | null;
   finish_date: string | null;
+  plan_date: string | null; // Planned month (format: YYYY-MM-01, first day of month)
   created_at: string;
   updated_at: string;
   organization_id: string;
@@ -143,6 +144,7 @@ export interface SummaryData {
   overdue: number;
   totalSteps: number;
   completedSteps: number;
+  tasksPlannedThisMonth: number; // Tasks planned for current month based on plan_date
 }
 
 export interface RecentStepFilters {

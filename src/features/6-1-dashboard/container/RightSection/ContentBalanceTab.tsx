@@ -1,14 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { MoreVertical, Download, RefreshCw, Wifi, Calendar, ChevronLeft, ChevronRight, Image, Video, CheckCircle2 } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { MoreVertical, Download, RefreshCw, Wifi, Image, Video, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
-import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
-import { Calendar as CalendarComponent } from '@/features/ui/calendar';
+import { format, startOfMonth } from 'date-fns';
 
 // Content type mapping - exact match dari content_type.name
 const VIDEO_TYPES = ['Youtube', 'Reel'];
@@ -43,9 +41,13 @@ interface PICProductionStats {
   completedTotalCount: number;
 }
 
-export const ContentBalanceTab: React.FC = () => {
-  const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+interface ContentBalanceTabProps {
+  selectedMonth?: Date;
+}
+
+export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMonth: propSelectedMonth }) => {
+  // Use prop selectedMonth if provided, otherwise default to current month
+  const selectedMonth = propSelectedMonth || startOfMonth(new Date());
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
   const { contentPlans, contentTypes, isLoading } = useOptimizedSocialMedia();
@@ -243,21 +245,6 @@ export const ContentBalanceTab: React.FC = () => {
   const contentBalance = useMemo(() => calculateContentBalance(), [contentPlans, contentTypes, selectedMonth]);
   const picProductionStats = useMemo(() => calculatePICProductionStats(), [contentPlans, contentTypes, selectedMonth]);
 
-  const handlePreviousMonth = () => {
-    setSelectedMonth(startOfMonth(subMonths(selectedMonth, 1)));
-  };
-
-  const handleNextMonth = () => {
-    setSelectedMonth(startOfMonth(addMonths(selectedMonth, 1)));
-  };
-
-  const handleMonthSelect = (date: Date | undefined) => {
-    if (date) {
-      setSelectedMonth(startOfMonth(date));
-      setIsMonthPickerOpen(false);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col min-h-0">
@@ -290,11 +277,6 @@ export const ContentBalanceTab: React.FC = () => {
           </div>
           <div className="text-sm text-gray-600 mb-2">
             Month Distribution - Total: {contentBalance.total} content
-            {contentBalance.completed.total > 0 && (
-              <span className="ml-2 text-green-600 font-medium">
-                | {contentBalance.completed.total} completed ({contentBalance.completed.image} image, {contentBalance.completed.video} video)
-              </span>
-            )}
           </div>
         </div>
         <DropdownMenu>
@@ -314,50 +296,6 @@ export const ContentBalanceTab: React.FC = () => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      {/* Month Selector */}
-      <div className="p-2 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePreviousMonth}
-            className="h-8 w-8 p-0"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <Popover open={isMonthPickerOpen} onOpenChange={setIsMonthPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="flex-1 h-8 text-sm font-medium justify-start"
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {format(selectedMonth, 'MMM yyyy')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="center">
-              <CalendarComponent
-                mode="single"
-                selected={selectedMonth}
-                onSelect={handleMonthSelect}
-                defaultMonth={selectedMonth}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNextMonth}
-            className="h-8 w-8 p-0"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
       {/* Content Balance Stats */}

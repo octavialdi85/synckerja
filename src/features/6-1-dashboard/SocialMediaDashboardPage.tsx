@@ -130,7 +130,7 @@ const SocialMediaContent = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [activePerformanceTab, setActivePerformanceTab] = useState("content-planner");
 
-  // Date states for performance tabs
+  // Date states for performance tabs and Content Pillar Tracker filter
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -216,7 +216,8 @@ const SocialMediaContent = () => {
   const filteredContentPlans = useOptimizedFiltering(
     loading ? [] : contentPlans, 
     searchTerm, 
-    statusFilter
+    statusFilter,
+    selectedMonth
   );
 
   // Calculate metrics from contentPlans filtered by active performance tab
@@ -243,8 +244,11 @@ const SocialMediaContent = () => {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const todayDateString = `${year}-${month}-${day}`; // Format: YYYY-MM-DD (local timezone)
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    
+    // Use selectedMonth if provided, otherwise use current month
+    const filterDate = selectedMonth || today;
+    const currentMonth = filterDate.getMonth();
+    const currentYear = filterDate.getFullYear();
 
     // Filter plans based on active performance tab
     let filteredPlans = contentPlans;
@@ -617,7 +621,7 @@ const SocialMediaContent = () => {
       monthlyRevisedContent: monthlyContentPlans.filter(needsRevision).length,
       monthlyTotalContent: monthlyContentPlans.length
     };
-  }, [contentPlans, activePerformanceTab, allSocialMediaLinks, loading]); // Add loading to prevent flicker
+  }, [contentPlans, activePerformanceTab, allSocialMediaLinks, loading, selectedMonth]); // Add selectedMonth to recalculate when month filter changes
 
   // Callback handlers
   const handleSelectItem = useCallback((id: string, checked: boolean) => {
@@ -1082,7 +1086,9 @@ const SocialMediaContent = () => {
                                     setStatusFilter={setStatusFilter} 
                                     selectedItems={selectedItems} 
                                     onAddContent={handleAddContent} 
-                                    onDeleteSelected={handleDeleteSelected} 
+                                    onDeleteSelected={handleDeleteSelected}
+                                    selectedMonth={selectedMonth}
+                                    setSelectedMonth={setSelectedMonth}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
@@ -1128,7 +1134,7 @@ const SocialMediaContent = () => {
                            {/* Right Section - Sidebar (25% width / 3 cols) */}
                            <div className="col-span-3 space-y-2 flex flex-col min-h-0 h-full">
                              <div className="h-full flex flex-col">
-                               <SidebarContainer />
+                               <SidebarContainer selectedMonth={selectedMonth} />
                              </div>
                            </div>
                         </div>

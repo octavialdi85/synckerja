@@ -1,16 +1,38 @@
 
 import { useMemo } from 'react';
 import { ContentPlan } from '../types/social-media';
+import { startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 
 export const useOptimizedFiltering = (
   contentPlans: ContentPlan[],
   searchTerm: string,
-  statusFilter: string
+  statusFilter: string,
+  selectedMonth?: Date
 ) => {
   return useMemo(() => {
     const lowerSearchTerm = searchTerm.toLowerCase();
     
+    // Prepare month filter range if selectedMonth is provided
+    let monthStart: Date | null = null;
+    let monthEnd: Date | null = null;
+    if (selectedMonth) {
+      monthStart = startOfMonth(selectedMonth);
+      monthEnd = endOfMonth(selectedMonth);
+    }
+    
     return contentPlans.filter(plan => {
+      // Month filter - filter by post_date
+      let matchesMonth = true;
+      if (monthStart && monthEnd && plan.post_date) {
+        try {
+          const planDate = new Date(plan.post_date);
+          matchesMonth = isWithinInterval(planDate, { start: monthStart, end: monthEnd });
+        } catch (error) {
+          // If date parsing fails, include the plan (don't filter it out)
+          matchesMonth = true;
+        }
+      }
+      
       // Search filter
       const serviceName = plan.service?.name || '';
       const matchesSearch = !searchTerm || (
@@ -91,7 +113,7 @@ export const useOptimizedFiltering = (
         }
       }
 
-      return matchesSearch && matchesStatus;
+      return matchesMonth && matchesSearch && matchesStatus;
     });
-  }, [contentPlans, searchTerm, statusFilter]);
+  }, [contentPlans, searchTerm, statusFilter, selectedMonth]);
 };

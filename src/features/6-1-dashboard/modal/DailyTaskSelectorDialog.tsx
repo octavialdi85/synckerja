@@ -530,6 +530,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
           }
         }}
         defaultTitle={prefillTitle}
+        defaultPlanDate={dueDate ? new Date(dueDate as string) : null}
       />
     </DailyTaskProvider>
     </>

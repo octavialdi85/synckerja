@@ -1165,6 +1165,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
             }
           }}
           defaultTitle={createPrefillTitle}
+          defaultPlanDate={plan.post_date ? new Date(plan.post_date) : null}
         />
       </DailyTaskProvider>
     </>;

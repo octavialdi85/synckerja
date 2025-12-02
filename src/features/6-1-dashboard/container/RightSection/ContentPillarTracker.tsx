@@ -32,7 +32,11 @@ const FUNNEL_CONFIG = {
   }
 };
 
-export const ContentPillarTracker: React.FC = () => {
+interface ContentPillarTrackerProps {
+  selectedMonth?: Date;
+}
+
+export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ selectedMonth }) => {
   const [selectedFunnel, setSelectedFunnel] = useState<'top' | 'middle' | 'bottom'>('top');
   const {
     organizationId
@@ -43,7 +47,7 @@ export const ContentPillarTracker: React.FC = () => {
     isLoading,
     error,
     refetch
-  } = useContentPillarData();
+  } = useContentPillarData(selectedMonth);
   const {
     contentPlans
   } = useOptimizedSocialMedia();
@@ -74,19 +78,19 @@ export const ContentPillarTracker: React.FC = () => {
     toast.success('Content pillar data exported successfully');
   };
 
-  // Calculate funnel percentages based on current month's content
+  // Calculate funnel percentages based on selected month's content
   const calculateFunnelPercentages = () => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
+    const filterDate = selectedMonth || new Date();
+    const filterYear = filterDate.getFullYear();
+    const filterMonth = filterDate.getMonth();
 
-    // Filter content plans for current month
-    const currentMonthContent = contentPlans.filter(plan => {
+    // Filter content plans for selected month
+    const filteredMonthContent = contentPlans.filter(plan => {
       if (!plan.post_date) return false;
       const planDate = new Date(plan.post_date);
-      return planDate.getFullYear() === currentYear && planDate.getMonth() === currentMonth;
+      return planDate.getFullYear() === filterYear && planDate.getMonth() === filterMonth;
     });
-    const totalContent = currentMonthContent.length;
+    const totalContent = filteredMonthContent.length;
     if (totalContent === 0) {
       return {
         total: 0,
@@ -111,7 +115,7 @@ export const ContentPillarTracker: React.FC = () => {
       middle: 0,
       bottom: 0
     };
-    currentMonthContent.forEach(plan => {
+    filteredMonthContent.forEach(plan => {
       if (plan.content_pillar_id) {
         const pillar = pillarData.find(p => p.pillar_id === plan.content_pillar_id);
         if (pillar) {
@@ -188,7 +192,7 @@ export const ContentPillarTracker: React.FC = () => {
             </div>
           </div>
           <div className="text-sm text-gray-600 mb-2">
-            Current Month Distribution ({new Date().toLocaleDateString('en-US', {
+            {selectedMonth ? 'Selected' : 'Current'} Month Distribution ({(selectedMonth || new Date()).toLocaleDateString('en-US', {
               month: 'short',
               year: 'numeric'
             })}) - Total: {funnelStats.total} content

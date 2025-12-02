@@ -25,6 +25,7 @@ export interface Database {
           id: string
           objective_id: string | null
           organization_id: string
+          plan_date: string | null
           priority: string
           status: string
           title: string
@@ -40,6 +41,7 @@ export interface Database {
           id?: string
           objective_id?: string | null
           organization_id: string
+          plan_date?: string | null
           priority?: string
           status?: string
           title: string
@@ -55,6 +57,7 @@ export interface Database {
           id?: string
           objective_id?: string | null
           organization_id?: string
+          plan_date?: string | null
           priority?: string
           status?: string
           title?: string

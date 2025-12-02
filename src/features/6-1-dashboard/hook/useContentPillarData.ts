@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { PillarData } from '../types/social-media';
+import { startOfMonth, endOfMonth } from 'date-fns';
 
-export const useContentPillarData = () => {
+export const useContentPillarData = (selectedMonth?: Date) => {
   const { organizationId } = useCurrentOrg();
 
   return useQuery({
-    queryKey: ['contentPillarData', organizationId],
+    queryKey: ['contentPillarData', organizationId, selectedMonth?.getTime()],
     queryFn: async (): Promise<PillarData[]> => {
       try {
         // Starting content pillar data fetch
@@ -40,42 +41,44 @@ export const useContentPillarData = () => {
           return true;
         });
 
-        // Get usage data for current and previous month if organization exists
+        // Get usage data for selected month and previous month if organization exists
         let usageData: any[] = [];
         let prevUsageData: any[] = [];
 
         if (organizationId) {
-          const currentMonth = new Date().getMonth() + 1;
-          const currentYear = new Date().getFullYear();
+          const filterDate = selectedMonth || new Date();
+          const filterMonthStart = startOfMonth(filterDate);
+          const filterMonthEnd = endOfMonth(filterDate);
           
-          // Fetching usage data
-
-          // Current month usage - Count all plans, not just this month for realtime accuracy
+          // Fetching usage data for selected month
           const { data: currentUsage, error: usageError } = await supabase
             .from('social_media_plans')
-            .select('content_pillar_id')
+            .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
-            .not('content_pillar_id', 'is', null);
+            .not('content_pillar_id', 'is', null)
+            .gte('post_date', filterMonthStart.toISOString().split('T')[0])
+            .lte('post_date', filterMonthEnd.toISOString().split('T')[0]);
 
           if (usageError) {
             console.error('Error fetching usage data:', usageError);
           } else {
             usageData = currentUsage || [];
-            console.log('All time usage data:', usageData);
+            console.log('Selected month usage data:', usageData);
           }
 
           // Previous month usage for comparison
-          const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-          const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+          const prevMonthStart = new Date(filterMonthStart);
+          prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
+          const prevMonthEnd = endOfMonth(prevMonthStart);
           
-          console.log('Fetching usage for previous month:', prevMonth, prevYear);
+          console.log('Fetching usage for previous month:', prevMonthStart, prevMonthEnd);
 
           const { data: prevUsage, error: prevUsageError } = await supabase
             .from('social_media_plans')
-            .select('content_pillar_id')
+            .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
-            .gte('post_date', `${prevYear}-${prevMonth.toString().padStart(2, '0')}-01`)
-            .lt('post_date', `${prevYear}-${(prevMonth + 1).toString().padStart(2, '0')}-01`)
+            .gte('post_date', prevMonthStart.toISOString().split('T')[0])
+            .lte('post_date', prevMonthEnd.toISOString().split('T')[0])
             .not('content_pillar_id', 'is', null);
 
           if (prevUsageError) {

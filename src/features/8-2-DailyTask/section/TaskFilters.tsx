@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Search, FilterX, CalendarIcon, Plus } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
@@ -9,11 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/features/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
-import { format } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { CreateTaskDialog } from './CreateTaskDialog';
+import { MonthPicker } from '@/features/share/calendar';
 
 interface TaskFiltersProps {
   onAddTask?: () => void;
@@ -23,8 +30,10 @@ interface TaskFiltersProps {
 export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
   const { filters, setFilters, tasks } = useDailyTask();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
+  const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
   const { isOwner } = useCentralizedUserData();
+  const planDateSelectTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Get unique employees from all task steps for PIC filter
   const availableEmployees = useMemo(() => {
@@ -114,6 +123,56 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     }));
   };
 
+  // Effect to handle opening popover after Select closes
+  useEffect(() => {
+    if (isPlanDatePickerOpen && planDateSelectTriggerRef.current) {
+      // Popover will position relative to the trigger
+      // The trigger is the SelectTrigger which is already rendered
+    }
+  }, [isPlanDatePickerOpen]);
+
+  const handlePlanDateRangeChange = (value: string) => {
+    if (value === 'custom_month_plan') {
+      // Delay opening popover to ensure Select closes first
+      setTimeout(() => {
+        setIsPlanDatePickerOpen(true);
+      }, 150);
+    } else {
+      setFilters(prev => ({ 
+        ...prev, 
+        planDateRange: value === "all" ? undefined : value as any,
+        customPlanMonth: undefined
+      }));
+    }
+  };
+
+  const handleCustomPlanMonthSelect = (date: Date) => {
+    const monthStart = startOfMonth(date);
+    setFilters(prev => ({ 
+      ...prev, 
+      planDateRange: 'custom_month_plan',
+      customPlanMonth: format(monthStart, 'yyyy-MM-dd')
+    }));
+    setIsPlanDatePickerOpen(false);
+  };
+
+  const getPlanDateRangeDisplayText = () => {
+    if (filters.planDateRange === 'custom_month_plan' && filters.customPlanMonth) {
+      const month = new Date(filters.customPlanMonth);
+      return format(month, 'MMMM yyyy', { locale: idLocale });
+    }
+    if (filters.planDateRange) {
+      const labels: Record<string, string> = {
+        'this_month_plan': 'This Month Plan',
+        'next_month_plan': 'Next Month Plan',
+        'last_month_plan': 'Last Month Plan',
+        'custom_month_plan': 'Custom Month'
+      };
+      return labels[filters.planDateRange] || 'All Plans';
+    }
+    return 'All Plans';
+  };
+
   const clearFilters = () => {
     setFilters({
       search: '',
@@ -123,6 +182,8 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       dateRange: undefined,
       customStartDate: undefined,
       customEndDate: undefined,
+      planDateRange: undefined,
+      customPlanMonth: undefined,
       pic: '',
       myTask: filters.myTask || 'my_task' // Preserve myTask preference (from localStorage)
     });
@@ -211,7 +272,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectContent>
       </Select>
 
-      {/* Date Range Filter */}
+      {/* Due Date Range Filter */}
       <Select 
         value={filters.dateRange || "all"} 
         onValueChange={handleDateRangeChange}
@@ -235,8 +296,73 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectContent>
       </Select>
 
+      {/* Plan Date Range Filter */}
+      <div className="relative">
+        <Select 
+          value={filters.planDateRange || "all"} 
+          onValueChange={handlePlanDateRangeChange}
+        >
+          <SelectTrigger 
+            ref={planDateSelectTriggerRef}
+            className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden"
+          >
+            <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+              <CalendarIcon className="h-4 w-4 text-blue-500" />
+              <SelectValue placeholder="All Plans" className="truncate">
+                {getPlanDateRangeDisplayText()}
+              </SelectValue>
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Plans</SelectItem>
+            <SelectItem value="this_month_plan">This Month Plan</SelectItem>
+            <SelectItem value="next_month_plan">Next Month Plan</SelectItem>
+            <SelectItem value="last_month_plan">Last Month Plan</SelectItem>
+            <SelectItem value="custom_month_plan">Custom Month</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        {/* Month Picker Popover - positioned relative to SelectTrigger */}
+        <Popover open={isPlanDatePickerOpen} onOpenChange={setIsPlanDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+              aria-hidden="true"
+              tabIndex={-1}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                opacity: 0,
+                pointerEvents: 'none'
+              }}
+            />
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" 
+            align="start"
+            side="bottom"
+            sideOffset={4}
+          >
+            <div className="p-2">
+              <div className="text-sm font-medium text-gray-700 mb-2 px-2 flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4 text-blue-500" />
+                Select Plan Date
+              </div>
+              <MonthPicker
+                selected={filters.customPlanMonth ? new Date(filters.customPlanMonth) : undefined}
+                onSelect={handleCustomPlanMonthSelect}
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
       {/* Clear Filters Button */}
-      {(filters.search || filters.status || filters.priority || filters.pic || filters.dateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
+      {(filters.search || filters.status || filters.priority || filters.pic || filters.dateRange || filters.planDateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
         <button
           onClick={clearFilters}
           className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center ml-auto"
@@ -265,6 +391,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         initialStartDate={filters.customStartDate ? new Date(filters.customStartDate) : undefined}
         initialEndDate={filters.customEndDate ? new Date(filters.customEndDate) : undefined}
       />
+
 
       {/* Create Task Dialog */}
       {showAddTaskButton && (

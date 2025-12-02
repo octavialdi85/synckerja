@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { Task, TaskStep } from '../types';
 import { calculateProgress } from '../utils/taskUtils';
+import { startOfMonth, isSameMonth, addMonths, subMonths } from 'date-fns';
 
 export interface TaskFilters {
   search: string;
@@ -10,6 +11,8 @@ export interface TaskFilters {
   dateRange?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'custom';
   customStartDate?: string;
   customEndDate?: string;
+  planDateRange?: 'this_month_plan' | 'next_month_plan' | 'last_month_plan' | 'custom_month_plan';
+  customPlanMonth?: string; // Format: YYYY-MM-01
   pic: string;
   myTask?: 'all' | 'my_task';
 }
@@ -198,6 +201,51 @@ export const useTaskFilters = ({
   );
 
   /**
+   * Check if task matches plan date range filter
+   */
+  const matchesPlanDateRange = useCallback(
+    (task: Task): boolean => {
+      // If no plan date filter, show the task
+      if (!filters.planDateRange) {
+        return true;
+      }
+
+      // If task has no plan_date, exclude it when plan date filter is active
+      if (!task.plan_date) {
+        return false;
+      }
+
+      const planDate = startOfMonth(new Date(task.plan_date));
+      const now = new Date();
+      const currentMonth = startOfMonth(now);
+
+      switch (filters.planDateRange) {
+        case 'this_month_plan': {
+          return isSameMonth(planDate, currentMonth);
+        }
+        case 'next_month_plan': {
+          const nextMonth = addMonths(currentMonth, 1);
+          return isSameMonth(planDate, nextMonth);
+        }
+        case 'last_month_plan': {
+          const lastMonth = subMonths(currentMonth, 1);
+          return isSameMonth(planDate, lastMonth);
+        }
+        case 'custom_month_plan': {
+          if (filters.customPlanMonth) {
+            const customMonth = startOfMonth(new Date(filters.customPlanMonth));
+            return isSameMonth(planDate, customMonth);
+          }
+          return true;
+        }
+        default:
+          return true;
+      }
+    },
+    [filters.planDateRange, filters.customPlanMonth]
+  );
+
+  /**
    * Helper function untuk mendapatkan status priority
    * Urutan: Pending (1) > In Progress (2) > Completed (3) > Cancelled (4)
    */
@@ -292,9 +340,15 @@ export const useTaskFilters = ({
         return false;
       }
 
-      // Early exit 6: Date range filter
+      // Early exit 6: Date range filter (Due date)
       // Hanya apply jika dateRange diisi dan bukan 'all'
       if (filters.dateRange && filters.dateRange !== 'all' && !matchesDateRange(task)) {
+        return false;
+      }
+
+      // Early exit 7: Plan date range filter
+      // Apply filter jika planDateRange diisi (AND logic dengan dateRange)
+      if (filters.planDateRange && !matchesPlanDateRange(task)) {
         return false;
       }
 
@@ -358,6 +412,7 @@ export const useTaskFilters = ({
     isMyTask,
     matchesSearch,
     matchesDateRange,
+    matchesPlanDateRange,
     hasStepAssignedToPic,
     getStatusPriority,
     getTaskProgress,

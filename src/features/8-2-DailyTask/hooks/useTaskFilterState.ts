@@ -11,6 +11,8 @@ const defaultFilters: TaskFilters = {
   dateRange: undefined,
   customStartDate: undefined,
   customEndDate: undefined,
+  planDateRange: undefined,
+  customPlanMonth: undefined,
   pic: '',
   myTask: 'my_task', // Default to "My Task"
 };

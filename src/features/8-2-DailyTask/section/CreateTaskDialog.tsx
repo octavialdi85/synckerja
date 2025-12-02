@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Flag, User, Target, UserPlus, ArrowLeft } from 'lucide-react';
+import { Plus, Flag, User, Target, UserPlus, ArrowLeft, Calendar } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -18,6 +18,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/features/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
 import { AssignTaskModal } from './AssignTaskModal';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
@@ -28,17 +33,23 @@ import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hook
 import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
 import { ObjectiveHierarchyDialog as MobileObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { MonthPicker } from '@/features/share/calendar';
+import { format } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
+import { startOfMonth } from 'date-fns';
 
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTitle?: string;
+  defaultPlanDate?: Date | null; // Optional: for auto-create from social media dashboard
 }
 
 export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   open,
   onOpenChange,
   defaultTitle,
+  defaultPlanDate,
 }) => {
   const isMobile = useIsMobile();
   const { addTask } = useDailyTask();
@@ -65,6 +76,8 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isObjectiveDialogOpen, setIsObjectiveDialogOpen] = useState(false);
+  const [planDate, setPlanDate] = useState<Date | null>(null);
+  const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   
   // Assignment state - will be set via modal
   const [assignment, setAssignment] = useState<{
@@ -76,12 +89,18 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   });
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  // Prefill title when dialog opens
+  // Prefill title and plan date when dialog opens
   React.useEffect(() => {
     if (open) {
       setTitle(defaultTitle || '');
+      // Set plan date from defaultPlanDate if provided, otherwise null (user must select)
+      if (defaultPlanDate) {
+        setPlanDate(startOfMonth(defaultPlanDate));
+      } else {
+        setPlanDate(null);
+      }
     }
-  }, [open, defaultTitle]);
+  }, [open, defaultTitle, defaultPlanDate]);
 
   const handleAssign = (newAssignment: { employeeId: string | null; deadline: string | null }) => {
     setAssignment(newAssignment);
@@ -98,8 +117,17 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       return;
     }
 
+    // Validate that Plan date is selected (required)
+    if (!planDate) {
+      alert('Please select a Plan date before creating the task.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      // Format plan_date as YYYY-MM-01 (first day of month)
+      const planDateFormatted = format(startOfMonth(planDate), 'yyyy-MM-dd');
+      
       await addTask({
         title: title.trim(),
         description: description.trim(),
@@ -107,6 +135,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         due_date: assignment.deadline || null,
         assigned_to: assignment.employeeId || null,
         objective_id: objectiveId,
+        plan_date: planDateFormatted,
         status: 'pending'
       } as any);
 
@@ -116,6 +145,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       setPriority('medium');
       setObjectiveId('');
       setObjectiveContext(null);
+      setPlanDate(null);
       setAssignment({ employeeId: null, deadline: null });
       onOpenChange(false);
     } catch (error) {
@@ -132,6 +162,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     setPriority('medium');
     setObjectiveId('');
     setObjectiveContext(null);
+    setPlanDate(null);
     setAssignment({ employeeId: null, deadline: null });
     onOpenChange(false);
   };
@@ -289,6 +320,46 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                   </div>
                 </div>
 
+                {/* Plan Date */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    Plan Date <span className="text-red-500">*</span>
+                  </Label>
+                  <Popover open={isPlanDatePickerOpen} onOpenChange={setIsPlanDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isSubmitting}
+                        className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+                      >
+                        {planDate ? (
+                          <div className="flex items-center gap-2 w-full">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm text-left">
+                              {format(planDate, 'MMMM yyyy', { locale: idLocale })}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-gray-500" />
+                            <span className="text-gray-500 text-sm">Select Plan Date</span>
+                          </div>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="start">
+                      <MonthPicker
+                        selected={planDate || undefined}
+                        onSelect={(date) => {
+                          setPlanDate(date);
+                          setIsPlanDatePickerOpen(false);
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
                 {/* Assignment */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Assignment</Label>
@@ -334,7 +405,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!title.trim() || !objectiveId || isSubmitting}
+                  disabled={!title.trim() || !objectiveId || !planDate || isSubmitting}
                   className="min-w-[140px] flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (

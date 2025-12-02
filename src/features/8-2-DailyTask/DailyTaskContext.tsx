@@ -389,6 +389,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           priority,
           due_date,
           finish_date,
+          plan_date,
           organization_id,
           created_by,
           objective_id,
@@ -928,6 +929,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
 
   // Calculate summary data from tasks
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  
   const summaryData: SummaryData = {
     pending: (tasks || []).filter(task => task && task.status === 'pending').length,
     inProgress: (tasks || []).filter(task => task && task.status === 'in_progress').length,
@@ -940,7 +945,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     totalSteps: (tasks || []).reduce((sum, task) => sum + (task?.steps?.length || 0), 0),
     completedSteps: (tasks || []).reduce((sum, task) => 
       sum + (task?.steps?.filter(step => step && step.is_completed).length || 0), 0
-    )
+    ),
+    tasksPlannedThisMonth: (tasks || []).filter(task => {
+      if (!task || !task.plan_date) return false;
+      const planDate = new Date(task.plan_date);
+      return planDate >= currentMonthStart && planDate < nextMonthStart;
+    }).length
   };
 
   const addTask = async (data: Partial<Task>) => {
@@ -958,6 +968,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           status: data.status || 'pending',
           priority: data.priority || 'medium',
           due_date: data.due_date || null,
+          plan_date: (data as any).plan_date || null,
           objective_id: (data as any).objective_id || null,
           created_by: (await supabase.auth.getUser()).data.user?.id || null
         })

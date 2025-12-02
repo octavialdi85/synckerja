@@ -84,7 +84,8 @@ import { DeadlineHistoryDialog } from './DeadlineHistoryDialog';
 import { EditTaskDialog } from './EditTaskDialog';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import './TaskList.css';
-import { format, differenceInDays, startOfDay } from 'date-fns';
+import { format, differenceInDays, startOfDay, startOfMonth, isSameMonth } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -677,6 +678,9 @@ export const TaskList = () => {
                   PIC
                 </TableHead>
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                  Plan Date
+                </TableHead>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
                   Due Date
                 </TableHead>
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
@@ -702,7 +706,7 @@ export const TaskList = () => {
             <TableBody>
               {filteredTasks.length === 0 ? (
                 <TableRow className="w-full">
-                  <TableCell colSpan={11} className="text-center py-8 text-gray-500 w-full" style={{ width: '100%' }}>
+                  <TableCell colSpan={12} className="text-center py-8 text-gray-500 w-full" style={{ width: '100%' }}>
                     <div className="flex flex-col items-center w-full">
                       <CheckSquare className="w-8 h-8 mb-2 text-gray-300" />
                       <p>No tasks found</p>
@@ -843,6 +847,31 @@ export const TaskList = () => {
                               </span>
                             )}
                           </div>
+                        </TableCell>
+
+                        {/* Plan Date */}
+                        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+                          {task.plan_date ? (() => {
+                            const planDateObj = new Date(task.plan_date);
+                            const dueDateObj = task.due_date ? new Date(task.due_date) : null;
+                            const isDifferent = dueDateObj && !isSameMonth(planDateObj, dueDateObj);
+                            
+                            return (
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-blue-600" />
+                                <span className="text-sm text-blue-600 font-medium">
+                                  {format(planDateObj, 'MMM yyyy', { locale: idLocale })}
+                                </span>
+                                {isDifferent && (
+                                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-100 text-orange-700 text-xs font-bold" title="Plan date berbeda dari Due date">
+                                    !
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })() : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
                         </TableCell>
 
                         {/* Due Date */}
@@ -1122,7 +1151,7 @@ export const TaskList = () => {
                       {/* Expanded Content Row */}
             {isExpanded && (
                         <TableRow className="w-full">
-                          <TableCell colSpan={11} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
+                          <TableCell colSpan={12} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
                             isHighlighted 
                               ? 'bg-blue-100 border-l-4 border-l-blue-500' 
                               : 'bg-blue-50'
