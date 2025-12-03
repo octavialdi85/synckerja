@@ -144,7 +144,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       });
 
       if (!hasBrandingTask) {
-        setCreatePrefillTitle(`Branding Plan ${serviceName} ${format(d, 'MMMM yyyy', { locale: idLocale })}`);
+        setCreatePrefillTitle(`${serviceName} - Branding Plan ${format(d, 'MMMM yyyy', { locale: idLocale })}`);
         setIsCreateTaskOpen(true);
         setCreateTriggeredOnce(true);
       }

@@ -203,7 +203,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
         if (!exists) {
           const d = new Date(dueDate as string);
           const monthText = format(d, 'MMMM yyyy', { locale: idLocale });
-          setPrefillTitle(`Branding Plan ${serviceName} ${monthText}`);
+          setPrefillTitle(`${serviceName} - Branding Plan ${monthText}`);
           setIsCreateTaskOpen(true);
           setCreateOpenedOnce(true);
         }
