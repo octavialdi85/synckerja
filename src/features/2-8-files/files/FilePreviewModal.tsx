@@ -9,11 +9,12 @@ import {
 } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Separator } from '@/features/ui/separator';
-import { Eye, Download, FileText } from 'lucide-react';
+import { Eye, Download, FileText, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { CompanyFile, isImageFile, isPdfFile, FILE_CATEGORIES, FILE_VISIBILITY, formatFileSize } from '@/features/2-8-dashboard/utils/fileTypes';
 import { supabase } from '@/integrations/supabase/client';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
 import { format } from 'date-fns';
+import { getLinkIcon } from '../utils/linkUtils';
 
 interface FilePreviewModalProps {
   file: CompanyFile | null;
@@ -29,17 +30,23 @@ export const FilePreviewModal = ({ file, isOpen, onClose, onDownload }: FilePrev
 
   React.useEffect(() => {
     if (file && isOpen) {
-      generatePreviewUrl();
+      if (file.source_type === 'link') {
+        // For links, use the link URL directly
+        setPreviewUrl(file.file_path);
+        setIsLoading(false);
+      } else {
+        generatePreviewUrl();
+      }
     }
     return () => {
-      if (previewUrl) {
+      if (previewUrl && file?.source_type === 'upload') {
         URL.revokeObjectURL(previewUrl);
       }
     };
   }, [file, isOpen]);
 
   const generatePreviewUrl = async () => {
-    if (!file) return;
+    if (!file || file.source_type === 'link') return;
 
     setIsLoading(true);
     try {
@@ -63,7 +70,64 @@ export const FilePreviewModal = ({ file, isOpen, onClose, onDownload }: FilePrev
   };
 
   const renderPreview = () => {
-    if (!file || !previewUrl) {
+    if (!file) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Preview not available</p>
+        </div>
+      );
+    }
+
+    // Render link preview
+    if (file.source_type === 'link') {
+      return (
+        <div className="text-center py-8 space-y-4">
+          <div className="flex flex-col items-center gap-4">
+            {/* Thumbnail */}
+            {file.link_thumbnail_url ? (
+              <img
+                src={file.link_thumbnail_url}
+                alt={file.link_title || file.file_name}
+                className="max-w-full max-h-[200px] object-contain mx-auto rounded border border-gray-200"
+                onError={(e) => {
+                  // Fallback to icon if thumbnail fails to load
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="text-6xl mb-2">{getLinkIcon(file.file_path)}</div>
+            )}
+            
+            {/* Link Info */}
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {file.link_title || file.file_name}
+              </h3>
+              {file.link_description && (
+                <p className="text-sm text-gray-600 max-w-md">{file.link_description}</p>
+              )}
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                <LinkIcon className="w-4 h-4" />
+                <span className="truncate max-w-md">{file.file_path}</span>
+              </div>
+            </div>
+
+            {/* Open Link Button */}
+            <Button
+              onClick={() => window.open(file.file_path, '_blank')}
+              className="mt-4"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open Link
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Render uploaded file preview
+    if (!previewUrl) {
       return (
         <div className="text-center py-8">
           <FileText className="h-12 w-12 text-gray-300 mx-auto mb-2" />
@@ -170,7 +234,9 @@ export const FilePreviewModal = ({ file, isOpen, onClose, onDownload }: FilePrev
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Size</p>
-                      <p className="text-sm font-medium text-gray-900">{formatFileSize(file.file_size)}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {file.source_type === 'link' ? '—' : formatFileSize(file.file_size || 0)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Category</p>
@@ -192,13 +258,35 @@ export const FilePreviewModal = ({ file, isOpen, onClose, onDownload }: FilePrev
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Type</p>
-                      <p className="text-sm font-medium text-gray-900">{file.mime_type}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {file.source_type === 'link' ? 'External Link' : file.mime_type}
+                      </p>
                     </div>
+                    {file.source_type === 'link' && file.link_modified_at && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Last Modified</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {format(new Date(file.link_modified_at), 'MMM dd, yyyy')}
+                        </p>
+                      </div>
+                    )}
+                    {file.source_type === 'link' && file.link_owner && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Document Owner</p>
+                        <p className="text-sm font-medium text-gray-900">{file.link_owner}</p>
+                      </div>
+                    )}
                   </div>
                   {file.description && (
                     <div className="pt-3 border-t">
                       <p className="text-xs text-gray-500 mb-1">Description</p>
                       <p className="text-sm text-gray-900">{file.description}</p>
+                    </div>
+                  )}
+                  {file.source_type === 'link' && file.link_description && (
+                    <div className="pt-3 border-t">
+                      <p className="text-xs text-gray-500 mb-1">Link Description</p>
+                      <p className="text-sm text-gray-900">{file.link_description}</p>
                     </div>
                   )}
                 </div>
@@ -216,13 +304,23 @@ export const FilePreviewModal = ({ file, isOpen, onClose, onDownload }: FilePrev
             >
               Close
             </Button>
-            <Button
-              onClick={() => onDownload(file)}
-              className="min-w-[120px]"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </Button>
+            {file.source_type === 'link' ? (
+              <Button
+                onClick={() => window.open(file.file_path, '_blank')}
+                className="min-w-[120px]"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open Link
+              </Button>
+            ) : (
+              <Button
+                onClick={() => onDownload(file)}
+                className="min-w-[120px]"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

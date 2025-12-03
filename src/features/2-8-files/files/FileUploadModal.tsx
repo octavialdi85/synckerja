@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,13 +18,14 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { Separator } from '@/features/ui/separator';
-import { Upload, X, FileText, AlertCircle } from 'lucide-react';
-import { FILE_CATEGORIES, FILE_VISIBILITY } from '@/features/2-8-dashboard/utils/fileTypes';
+import { Upload, X, FileText, AlertCircle, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { FILE_CATEGORIES, FILE_VISIBILITY, FileSourceType } from '@/features/2-8-dashboard/utils/fileTypes';
 import { validateFile } from '@/features/2-8-dashboard/utils/fileValidation';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
 import { useQueryClient } from '@tanstack/react-query';
+import { isValidUrl, verifyUrlAccess, extractLinkMetadata, getLinkIcon } from '../utils/linkUtils';
 
 interface FileUploadModalProps {
   isOpen: boolean;
@@ -32,7 +33,11 @@ interface FileUploadModalProps {
 }
 
 export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
+  const [sourceType, setSourceType] = useState<FileSourceType>('upload');
   const [file, setFile] = useState<File | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkMetadata, setLinkMetadata] = useState<any>(null);
+  const [validatingLink, setValidatingLink] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({
     file_name: '',
@@ -44,6 +49,13 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
   const { organizationId } = useCurrentOrg();
   const showToast = useShowToast();
   const queryClient = useQueryClient();
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -65,8 +77,84 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
     }
   };
 
+  const handleLinkChange = async (url: string) => {
+    setLinkUrl(url);
+    setLinkMetadata(null);
+    
+    if (!url.trim()) return;
+    
+    // Validate URL format
+    if (!isValidUrl(url)) {
+      showToast({
+        title: 'Invalid URL',
+        description: 'Please enter a valid URL (must start with http:// or https://)',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // Verify URL access and extract metadata
+    setValidatingLink(true);
+    try {
+      const isAccessible = await verifyUrlAccess(url);
+      if (!isAccessible) {
+        showToast({
+          title: 'Warning',
+          description: 'Unable to verify URL accessibility. The link may still be valid.',
+          variant: 'default'
+        });
+      }
+      
+      const metadata = await extractLinkMetadata(url);
+      setLinkMetadata(metadata);
+      
+      // Auto-fill file name from metadata
+      if (metadata.title && !formData.file_name) {
+        setFormData(prev => ({
+          ...prev,
+          file_name: metadata.title
+        }));
+      }
+      
+      // Auto-fill description from metadata
+      if (metadata.description && !formData.description) {
+        setFormData(prev => ({
+          ...prev,
+          description: metadata.description
+        }));
+      }
+    } catch (error: any) {
+      console.error('Error extracting link metadata:', error);
+      showToast({
+        title: 'Warning',
+        description: 'Could not extract metadata from link, but you can still save it.',
+        variant: 'default'
+      });
+    } finally {
+      setValidatingLink(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFile(null);
+    setLinkUrl('');
+    setLinkMetadata(null);
+    setSourceType('upload');
+    setFormData({
+      file_name: '',
+      file_category: 'dokumen',
+      visibility: 'internal',
+      description: ''
+    });
+  };
+
   const handleUpload = async () => {
-    if (!file || !organizationId) return;
+    if (!organizationId) return;
+    
+    // Validate based on source type
+    if (sourceType === 'upload' && !file) return;
+    if (sourceType === 'link' && !linkUrl.trim()) return;
+    if (!formData.file_name.trim()) return;
 
     setUploading(true);
     try {
@@ -94,49 +182,71 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
         employeeId = employee?.id || null;
       }
 
-      // Generate unique file path based on visibility
-      const timestamp = Date.now();
-      const randomString = Math.random().toString(36).substring(2, 8);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${formData.file_name}_${timestamp}_${randomString}.${fileExt}`;
-      
-      // Set file path based on visibility
-      let filePath: string;
       let insertData: any = {
         organization_id: organizationId,
         file_name: formData.file_name,
-        original_name: file.name,
-        file_path: '',
-        file_size: file.size,
-        mime_type: file.type,
         file_category: formData.file_category,
         description: formData.description,
         visibility: formData.visibility,
         owner_id: user.id,
-        owner_name: profile?.full_name || user.email || 'Unknown'
+        owner_name: profile?.full_name || user.email || 'Unknown',
+        source_type: sourceType
       };
 
-      if (formData.visibility === 'privat') {
-        // For private files: use user_id or employee_id
-        const identifierId = employeeId || user.id;
-        filePath = `${organizationId}/private/${identifierId}/${fileName}`;
+      if (sourceType === 'upload') {
+        if (!file) throw new Error('File is required');
+        
+        // Generate unique file path based on visibility
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 8);
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${formData.file_name}_${timestamp}_${randomString}.${fileExt}`;
+        
+        let filePath: string;
+        if (formData.visibility === 'privat') {
+          const identifierId = employeeId || user.id;
+          filePath = `${organizationId}/private/${identifierId}/${fileName}`;
+        } else {
+          filePath = `${organizationId}/${fileName}`;
+        }
+        
+        insertData.original_name = file.name;
         insertData.file_path = filePath;
-        // Optionally store employee_id if available
-        if (employeeId) {
+        insertData.file_size = file.size;
+        insertData.mime_type = file.type;
+
+        // Upload to storage
+        const { error: uploadError } = await supabase.storage
+          .from('company-files')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+        
+        if (employeeId && formData.visibility === 'privat') {
           insertData.employee_id = employeeId;
         }
       } else {
-        // For internal files: use organization_id
-        filePath = `${organizationId}/${fileName}`;
-        insertData.file_path = filePath;
+        // For links
+        if (!linkUrl.trim()) throw new Error('Link URL is required');
+        
+        insertData.original_name = linkMetadata?.title || 'External Link';
+        insertData.file_path = linkUrl; // Store URL in file_path
+        insertData.file_size = null; // Links have no file size
+        insertData.mime_type = linkMetadata?.mimeType || 'text/html';
+        
+        // Add link metadata
+        if (linkMetadata) {
+          insertData.link_title = linkMetadata.title;
+          insertData.link_description = linkMetadata.description;
+          insertData.link_modified_at = linkMetadata.modifiedAt || null;
+          insertData.link_owner = linkMetadata.owner || null;
+          insertData.link_thumbnail_url = linkMetadata.thumbnailUrl || null;
+        }
+        
+        if (employeeId && formData.visibility === 'privat') {
+          insertData.employee_id = employeeId;
+        }
       }
-
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('company-files')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
 
       // Save to database
       const { error: dbError } = await supabase
@@ -150,24 +260,18 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
 
       showToast({
         title: 'Success',
-        description: 'File uploaded successfully',
+        description: sourceType === 'upload' ? 'File uploaded successfully' : 'Link added successfully',
       });
 
       // Reset form and close modal
-      setFile(null);
-      setFormData({
-        file_name: '',
-        file_category: 'dokumen',
-        visibility: 'internal',
-        description: ''
-      });
+      resetForm();
       onClose();
 
     } catch (error: any) {
       console.error('Upload error:', error);
       showToast({
         title: 'Error',
-        description: 'Failed to upload file',
+        description: sourceType === 'upload' ? 'Failed to upload file' : 'Failed to add link',
         variant: 'destructive'
       });
     } finally {
@@ -180,6 +284,12 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
     setFormData(prev => ({ ...prev, file_name: '' }));
   };
 
+  const removeLink = () => {
+    setLinkUrl('');
+    setLinkMetadata(null);
+    setFormData(prev => ({ ...prev, file_name: '', description: '' }));
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[600px] h-[600px] max-w-[90vw] max-h-[90vh] p-0 flex flex-col">
@@ -189,9 +299,13 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
               <Upload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-semibold">Upload File</DialogTitle>
+              <DialogTitle className="text-xl font-semibold">
+                {sourceType === 'upload' ? 'Upload File' : 'Add Link'}
+              </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground mt-1">
-                Upload and manage company files and documents
+                {sourceType === 'upload' 
+                  ? 'Upload and manage company files and documents'
+                  : 'Add external links (Google Docs, Dropbox, etc.)'}
               </DialogDescription>
             </div>
           </div>
@@ -206,70 +320,173 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
           }}
         >
           <div className="space-y-6">
-            {/* File Selection Section */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="file-upload" className="text-sm font-medium text-foreground">
-                  Select File <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="file"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  id="file-upload"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+            {/* Source Type Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Type <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={sourceType === 'upload' ? 'default' : 'outline'}
+                  onClick={() => {
+                    setSourceType('upload');
+                    setLinkUrl('');
+                    setLinkMetadata(null);
+                  }}
                   disabled={uploading}
-                />
-                {!file ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => document.getElementById('file-upload')?.click()}
-                    disabled={uploading}
-                    className="w-full h-24 border-2 border-dashed border-input hover:border-primary/50 transition-colors"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      {uploading ? (
-                        <>
-                          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          <span className="text-sm text-muted-foreground">Uploading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-6 h-6 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            Click to upload file or drag and drop
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            PDF, DOC, XLS, PPT, Images up to 100MB
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </Button>
-                ) : (
-                  <div className="flex items-center justify-between p-3 border border-green-200 bg-green-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-gray-700 font-medium">{file.name}</span>
-                      <span className="text-xs text-gray-500">
-                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={removeFile}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={uploading}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                  className="flex-1"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload File
+                </Button>
+                <Button
+                  type="button"
+                  variant={sourceType === 'link' ? 'default' : 'outline'}
+                  onClick={() => {
+                    setSourceType('link');
+                    setFile(null);
+                  }}
+                  disabled={uploading}
+                  className="flex-1"
+                >
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Add Link
+                </Button>
               </div>
             </div>
+
+            <Separator />
+
+            {/* File Selection Section */}
+            {sourceType === 'upload' ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="file-upload" className="text-sm font-medium text-foreground">
+                    Select File <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="file-upload"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                    disabled={uploading}
+                  />
+                  {!file ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                      disabled={uploading}
+                      className="w-full h-24 border-2 border-dashed border-input hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        {uploading ? (
+                          <>
+                            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm text-muted-foreground">Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-6 h-6 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Click to upload file or drag and drop
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              PDF, DOC, XLS, PPT, Images up to 100MB
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </Button>
+                  ) : (
+                    <div className="flex items-center justify-between p-3 border border-green-200 bg-green-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <span className="text-sm text-gray-700 font-medium">{file.name}</span>
+                        <span className="text-xs text-gray-500">
+                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={removeFile}
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={uploading}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="link-url" className="text-sm font-medium text-foreground">
+                    Link URL <span className="text-red-500">*</span>
+                  </label>
+                  <div className="space-y-2">
+                    <Input
+                      id="link-url"
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => handleLinkChange(e.target.value)}
+                      placeholder="https://docs.google.com/document/d/..."
+                      disabled={uploading || validatingLink}
+                      className="w-full"
+                    />
+                    {validatingLink && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Validating and extracting metadata...</span>
+                      </div>
+                    )}
+                    {linkMetadata && (
+                      <div className="p-3 border border-green-200 bg-green-50 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <div className="text-2xl">{getLinkIcon(linkUrl)}</div>
+                          <div className="flex-1">
+                            <div className="font-medium text-sm text-gray-900">
+                              {linkMetadata.title}
+                            </div>
+                            {linkMetadata.description && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                {linkMetadata.description}
+                              </div>
+                            )}
+                            {linkMetadata.owner && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Owner: {linkMetadata.owner}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={removeLink}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={uploading}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {linkUrl && !linkMetadata && !validatingLink && (
+                      <div className="flex items-center gap-2 text-sm text-amber-600">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Could not extract metadata. You can still save the link.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Separator />
 
@@ -368,16 +585,21 @@ export const FileUploadModal = ({ isOpen, onClose }: FileUploadModalProps) => {
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={!file || !formData.file_name || uploading}
+              disabled={
+                uploading || 
+                !formData.file_name.trim() || 
+                (sourceType === 'upload' && !file) ||
+                (sourceType === 'link' && !linkUrl.trim())
+              }
               className="min-w-[120px]"
             >
               {uploading ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Uploading...
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {sourceType === 'upload' ? 'Uploading...' : 'Saving...'}
                 </>
               ) : (
-                'Upload File'
+                sourceType === 'upload' ? 'Upload File' : 'Add Link'
               )}
             </Button>
           </div>

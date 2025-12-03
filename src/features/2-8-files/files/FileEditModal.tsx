@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { Separator } from '@/features/ui/separator';
-import { Edit, AlertCircle } from 'lucide-react';
+import { Edit, AlertCircle, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { CompanyFile, FILE_CATEGORIES, FILE_VISIBILITY } from '@/features/2-8-dashboard/utils/fileTypes';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,6 +27,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { isValidUrl, verifyUrlAccess, extractLinkMetadata } from '../utils/linkUtils';
+import { useShowToast } from '@/features/share/hooks/useShowToast';
 
 interface FileEditModalProps {
   file: CompanyFile | null;
@@ -46,6 +48,11 @@ export const FileEditModal = ({
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
   const { data: employee } = useCurrentEmployee();
+  const showToast = useShowToast();
+  const [linkUrl, setLinkUrl] = React.useState('');
+  const [linkMetadata, setLinkMetadata] = React.useState<any>(null);
+  const [validatingLink, setValidatingLink] = React.useState(false);
+  
   const {
     register,
     handleSubmit,
@@ -68,8 +75,73 @@ export const FileEditModal = ({
         description: file.description || '',
         expires_at: file.expires_at ? new Date(file.expires_at).toISOString().split('T')[0] : ''
       });
+      
+      // Set link URL and metadata if it's a link
+      if (file.source_type === 'link') {
+        setLinkUrl(file.file_path);
+        if (file.link_title || file.link_description) {
+          setLinkMetadata({
+            title: file.link_title,
+            description: file.link_description,
+            modifiedAt: file.link_modified_at,
+            owner: file.link_owner,
+            thumbnailUrl: file.link_thumbnail_url,
+            mimeType: file.mime_type
+          });
+        }
+      } else {
+        setLinkUrl('');
+        setLinkMetadata(null);
+      }
     }
   }, [file, isOpen, reset]);
+
+  const handleLinkChange = async (url: string) => {
+    setLinkUrl(url);
+    setLinkMetadata(null);
+    
+    if (!url.trim()) return;
+    
+    // Validate URL format
+    if (!isValidUrl(url)) {
+      showToast({
+        title: 'Invalid URL',
+        description: 'Please enter a valid URL (must start with http:// or https://)',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // Verify URL access and extract metadata
+    setValidatingLink(true);
+    try {
+      const isAccessible = await verifyUrlAccess(url);
+      if (!isAccessible) {
+        showToast({
+          title: 'Warning',
+          description: 'Unable to verify URL accessibility. The link may still be valid.',
+          variant: 'default'
+        });
+      }
+      
+      const metadata = await extractLinkMetadata(url);
+      setLinkMetadata(metadata);
+      
+      // Auto-update file name if empty
+      if (metadata.title && !watch('file_name')) {
+        setValue('file_name', metadata.title);
+      }
+    } catch (error: any) {
+      console.error('Error extracting link metadata:', error);
+      showToast({
+        title: 'Warning',
+        description: 'Could not extract metadata from link, but you can still save it.',
+        variant: 'default'
+      });
+    } finally {
+      setValidatingLink(false);
+    }
+  };
 
   const onSubmit = async (data: FileUploadData) => {
     if (!file || !organizationId || !user) return;
@@ -84,6 +156,23 @@ export const FileEditModal = ({
         expires_at: data.expires_at ? new Date(data.expires_at).toISOString() : null,
         updated_at: new Date().toISOString()
       };
+
+      // For links, update URL and metadata if changed
+      if (file.source_type === 'link') {
+        if (linkUrl.trim() && linkUrl !== file.file_path) {
+          updateData.file_path = linkUrl;
+          
+          // Update link metadata if available
+          if (linkMetadata) {
+            updateData.link_title = linkMetadata.title;
+            updateData.link_description = linkMetadata.description;
+            updateData.link_modified_at = linkMetadata.modifiedAt || null;
+            updateData.link_owner = linkMetadata.owner || null;
+            updateData.link_thumbnail_url = linkMetadata.thumbnailUrl || null;
+            updateData.mime_type = linkMetadata.mimeType || file.mime_type;
+          }
+        }
+      }
 
       // Handle employee_id based on visibility change
       if (data.visibility === 'privat') {
@@ -117,9 +206,13 @@ export const FileEditModal = ({
               <Edit className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-semibold">Edit File</DialogTitle>
+              <DialogTitle className="text-xl font-semibold">
+                {file.source_type === 'link' ? 'Edit Link' : 'Edit File'}
+              </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground mt-1">
-                Update file information and metadata
+                {file.source_type === 'link' 
+                  ? 'Update link information and metadata'
+                  : 'Update file information and metadata'}
               </DialogDescription>
             </div>
           </div>
@@ -135,17 +228,65 @@ export const FileEditModal = ({
             }}
           >
             <div className="space-y-6">
+              {/* Link URL Section (only for links) */}
+              {file.source_type === 'link' && (
+                <>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label htmlFor="link-url" className="text-sm font-medium text-foreground">
+                        Link URL <span className="text-red-500">*</span>
+                      </label>
+                      <div className="space-y-2">
+                        <Input
+                          id="link-url"
+                          type="url"
+                          value={linkUrl}
+                          onChange={(e) => handleLinkChange(e.target.value)}
+                          placeholder="https://docs.google.com/document/d/..."
+                          disabled={isUpdating || validatingLink}
+                          className="w-full"
+                        />
+                        {validatingLink && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Validating and extracting metadata...</span>
+                          </div>
+                        )}
+                        {linkMetadata && (
+                          <div className="p-3 border border-green-200 bg-green-50 rounded-lg">
+                            <div className="flex items-start gap-3">
+                              <LinkIcon className="h-4 w-4 text-green-600 mt-0.5" />
+                              <div className="flex-1">
+                                <div className="font-medium text-sm text-gray-900">
+                                  {linkMetadata.title || 'Link'}
+                                </div>
+                                {linkMetadata.description && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    {linkMetadata.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
               {/* File Information Section */}
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label htmlFor="file_name" className="text-sm font-medium text-foreground">
-                      File Name <span className="text-red-500">*</span>
+                      {file.source_type === 'link' ? 'Link Name' : 'File Name'} <span className="text-red-500">*</span>
                     </label>
                     <Input
                       id="file_name"
                       {...register('file_name')}
-                      placeholder="Enter file name"
+                      placeholder={file.source_type === 'link' ? 'Enter link name' : 'Enter file name'}
                       className={errors.file_name ? 'border-red-500' : ''}
                     />
                     {errors.file_name && (
@@ -280,11 +421,11 @@ export const FileEditModal = ({
               >
                 {isUpdating ? (
                   <>
-                    <span className="animate-spin mr-2">⏳</span>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Updating...
                   </>
                 ) : (
-                  'Update File'
+                  file.source_type === 'link' ? 'Update Link' : 'Update File'
                 )}
               </Button>
             </div>

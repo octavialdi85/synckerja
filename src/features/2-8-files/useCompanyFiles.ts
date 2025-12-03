@@ -89,16 +89,18 @@ export const useCompanyFiles = () => {
       const file = files.find(f => f.id === fileId);
       if (!file) throw new Error('File not found');
 
-      // Delete from storage first
-      const { error: storageError } = await supabase.storage
-        .from('company-files')
-        .remove([file.file_path]);
+      // Only delete from storage if it's an uploaded file, not a link
+      if (file.source_type === 'upload') {
+        const { error: storageError } = await supabase.storage
+          .from('company-files')
+          .remove([file.file_path]);
 
-      if (storageError) {
-        console.error('Storage delete error:', storageError);
+        if (storageError) {
+          console.error('Storage delete error:', storageError);
+        }
       }
 
-      // Delete from database
+      // Delete from database (works for both uploads and links)
       const { error: dbError } = await supabase
         .from('company_files')
         .delete()
@@ -153,9 +155,20 @@ export const useCompanyFiles = () => {
     }
   });
 
-  // Download file function
+  // Download file function (only for uploaded files)
   const downloadFile = async (file: CompanyFile) => {
     try {
+      // For links, open in new tab instead
+      if (file.source_type === 'link') {
+        window.open(file.file_path, '_blank');
+        toast({
+          title: 'Success',
+          description: 'Link opened in new tab',
+        });
+        return;
+      }
+
+      // For uploaded files, download from storage
       const { data, error } = await supabase.storage
         .from('company-files')
         .download(file.file_path);

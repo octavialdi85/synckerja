@@ -12,8 +12,9 @@ import {
 } from '@/features/ui/dropdown-menu';
 import { format } from 'date-fns';
 import { formatFileSize, getFileExtension, FILE_CATEGORIES, FILE_VISIBILITY } from '@/features/2-8-dashboard/utils/fileTypes';
-import { FileText, Image } from 'lucide-react';
+import { FileText, Image, Link as LinkIcon } from 'lucide-react';
 import { CompanyFile } from '@/features/2-8-dashboard/utils/fileTypes';
+import { getLinkIcon } from '../utils/linkUtils';
 
 interface FileRowProps {
   file: CompanyFile;
@@ -34,36 +35,69 @@ export const FileRow = ({ file, onViewDetails, onEditFile, onDeleteFile }: FileR
     }
   };
 
-  const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) {
+  const getFileIcon = (file: CompanyFile) => {
+    // For links, show link icon
+    if (file.source_type === 'link') {
+      return LinkIcon;
+    }
+    // For uploaded files
+    if (file.mime_type.startsWith('image/')) {
       return Image;
     }
     return FileText;
   };
 
-  const FileIcon = getFileIcon(file.mime_type);
+  const FileIcon = getFileIcon(file);
 
   return (
     <TableRow className="hover:bg-gray-50">
       <TableCell className="font-medium">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-md bg-gray-100">
-            <FileIcon className="h-4 w-4 text-gray-600" />
+          <div className={`p-2 rounded-md ${file.source_type === 'link' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+            {file.source_type === 'link' ? (
+              <span className="text-lg">{getLinkIcon(file.file_path)}</span>
+            ) : (
+              <FileIcon className="h-4 w-4 text-gray-600" />
+            )}
           </div>
           <div className="space-y-0.5">
-            <p className="text-sm font-medium leading-tight text-gray-900">{file.file_name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium leading-tight text-gray-900">
+                {file.source_type === 'link' && file.link_title ? file.link_title : file.file_name}
+              </p>
+              {file.source_type === 'link' && (
+                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                  Link
+                </Badge>
+              )}
+            </div>
             {file.description && (
               <p className="text-xs text-gray-500 line-clamp-1">{file.description}</p>
+            )}
+            {file.source_type === 'link' && file.link_description && (
+              <p className="text-xs text-gray-500 line-clamp-1">{file.link_description}</p>
             )}
           </div>
         </div>
       </TableCell>
       <TableCell>{FILE_CATEGORIES[file.file_category]}</TableCell>
-      <TableCell>{formatFileSize(file.file_size)}</TableCell>
       <TableCell>
-        <Badge variant="secondary" className="text-xs">
-          {getFileExtension(file.file_name)}
-        </Badge>
+        {file.source_type === 'link' ? (
+          <span className="text-xs text-gray-400">—</span>
+        ) : (
+          formatFileSize(file.file_size || 0)
+        )}
+      </TableCell>
+      <TableCell>
+        {file.source_type === 'link' ? (
+          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+            LINK
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="text-xs">
+            {getFileExtension(file.file_name)}
+          </Badge>
+        )}
       </TableCell>
       <TableCell>
         <Badge className={getVisibilityColor(file.visibility)} variant="secondary">

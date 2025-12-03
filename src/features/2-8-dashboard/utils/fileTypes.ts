@@ -26,13 +26,15 @@ export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 export type FileCategory = keyof typeof FILE_CATEGORIES;
 export type FileVisibility = keyof typeof FILE_VISIBILITY;
 
+export type FileSourceType = 'upload' | 'link';
+
 export interface CompanyFile {
   id: string;
   organization_id: string;
   file_name: string;
   original_name: string;
   file_path: string;
-  file_size: number;
+  file_size: number | null;
   mime_type: string;
   file_category: FileCategory;
   description?: string;
@@ -41,6 +43,13 @@ export interface CompanyFile {
   owner_name: string;
   employee_id?: string | null;
   expires_at?: string;
+  source_type: FileSourceType;
+  // Link metadata (only for source_type = 'link')
+  link_title?: string | null;
+  link_description?: string | null;
+  link_modified_at?: string | null;
+  link_owner?: string | null;
+  link_thumbnail_url?: string | null;
   created_at: string;
   updated_at: string;
 }
