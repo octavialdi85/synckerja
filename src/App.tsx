@@ -5,12 +5,12 @@ import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
-import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { CentralizedUserDataProvider } from "@/features/1-login/contets/CentralizedUserDataContet";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
 import { HomeAccessGuard } from "@/components/HomeAccessGuard";
-import { SubscriptionExpiryGuard } from "@/components/SubscriptionExpiryGuard";
-import Index from "./features/1-login/pages/Index";
+import { SubscriptionEpiryGuard } from "@/components/SubscriptionEpiryGuard";
+import Inde from "./features/1-login/pages/Inde";
 import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
 import VerifyEmail from "./features/1-login/pages/VerifyEmail";
@@ -36,9 +36,9 @@ import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashbo
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
 import UserSettingsPage from "./features/Settings/SettingsPage";
-import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
-import OverviewTabPageDesktop from "./features/10-overview/OverviewTabPage";
-import PlansTabPageDesktop from "./features/10-Plans/PlansTabPage";
+import ManagementTabPageDesktop from "./features/1-management/pages/ManagementTabPage";
+import OverviewTabPageDesktop from "./features/1-overview/OverviewTabPage";
+import PlansTabPageDesktop from "./features/1-Plans/PlansTabPage";
 import ManagementTabPageMobile from "./mobile/pages/subscription/ManagementTabPage";
 import OverviewTabPageMobile from "./mobile/pages/subscription/OverviewTabPage";
 import PlansTabPageMobile from "./mobile/pages/subscription/PlansTabPage";
@@ -51,7 +51,7 @@ import EmployeeAddressInfo from "./features/2-1-employees/MyInfo/AddressInformat
 import EmployeeEmploymentInfo from "./features/2-1-employees/MyInfo/Employment/pages/EmployeeEmploymentInfo";
 import EmployeeEducationFormal from "./features/2-1-employees/MyInfo/Education/pages/EmployeeEducationFormal";
 import EmployeeEducationInformal from "./features/2-1-employees/MyInfo/InformalEducation/pages/EmployeeEducationInformal";
-import EmployeeWork from "./features/2-1-employees/MyInfo/WorkExperience/pages/EmployeeWork";
+import EmployeeWork from "./features/2-1-employees/MyInfo/WorkEperience/pages/EmployeeWork";
 import EmployeeFamily from "./features/2-1-employees/MyInfo/FamilyMembers/pages/EmployeeFamily";
 import EmployeeAttendance from "./features/2-1-employees/MyInfo/Attendance/pages/EmployeeAttendance";
 import EmployeeLeavePermit from "./features/2-1-employees/MyInfo/LeavePermit/pages/EmployeeLeavePermit";
@@ -72,7 +72,7 @@ import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
 import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
-import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
+import { Settings, Users, UserCheck, FileTet, Briefcase } from "lucide-react";
 import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
@@ -105,7 +105,7 @@ const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Route element selector for Login: uses viewport hook + UA heuristics
-// Always use the feature-based Login.tsx for all devices (mobile and desktop)
+// Always use the feature-based Login.ts for all devices (mobile and desktop)
 const LoginRouteElement = () => {
   return <Login />;
 };
@@ -120,7 +120,7 @@ const HomeRouteElement = () => {
 };
 
 // Route element selector for EmployeeWelcome
-// Always use the feature-based EmployeeWelcome.tsx for all devices (mobile and desktop)
+// Always use the feature-based EmployeeWelcome.ts for all devices (mobile and desktop)
 const EmployeeWelcomeRouteElement = () => {
   return <EmployeeWelcome />;
 };
@@ -197,7 +197,7 @@ const App = () => (
             }}
           >
             <SecurityWrapper>
-              <SubscriptionExpiryGuard>
+              <SubscriptionEpiryGuard>
                 <Routes>
                 {/* ======= PROTECTED ROUTES ======= */}
                 {/* PROTECTION SYSTEM */}
@@ -358,7 +358,7 @@ const App = () => (
                   <CustomerServicePage />
                 </ProtectedRoute>
               }>
-                <Route index element={<Navigate to="/operations/customer-service/dashboard" replace />} />
+                <Route inde element={<Navigate to="/operations/customer-service/dashboard" replace />} />
                 <Route path="dashboard" element={<CustomerServiceDashboard />} />
               </Route>
               <Route path="/operations/customer-service/tickets" element={
@@ -537,7 +537,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="Admin Panel" 
                     description="Panel administrasi sistem akan segera tersedia"
-                    icon={<Settings className="h-8 w-8 text-gray-500" />}
+                    icon={<Settings className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -546,7 +546,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="Admin Settings" 
                     description="Pengaturan administrasi sistem akan segera tersedia"
-                    icon={<Settings className="h-8 w-8 text-gray-500" />}
+                    icon={<Settings className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -555,7 +555,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="Admin Users" 
                     description="Manajemen pengguna admin akan segera tersedia"
-                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                    icon={<Users className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -566,7 +566,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="User Permissions" 
                     description="Manajemen izin pengguna akan segera tersedia"
-                    icon={<UserCheck className="h-8 w-8 text-gray-500" />}
+                    icon={<UserCheck className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -575,7 +575,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="User Roles Management" 
                     description="Manajemen peran pengguna akan segera tersedia"
-                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                    icon={<Users className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -586,7 +586,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="Recruitment" 
                     description="Sistem rekrutmen akan segera tersedia"
-                    icon={<Briefcase className="h-8 w-8 text-gray-500" />}
+                    icon={<Briefcase className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -595,7 +595,7 @@ const App = () => (
                   <PlaceholderPage 
                     title="Interviewees" 
                     description="Manajemen kandidat interview akan segera tersedia"
-                    icon={<Users className="h-8 w-8 text-gray-500" />}
+                    icon={<Users className="h-8 w-8 tet-gray-5" />}
                   />
                 </ProtectedRoute>
               } />
@@ -711,7 +711,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
                 </Routes>
-              </SubscriptionExpiryGuard>
+              </SubscriptionEpiryGuard>
             </SecurityWrapper>
           </BrowserRouter>
         </CentralizedUserDataProvider>
@@ -721,4 +721,3 @@ const App = () => (
 );
 
 export default App;
-                                                                                                                                                                                                                                                                                                                                              
