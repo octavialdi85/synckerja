@@ -357,7 +357,7 @@ const App = () => (
                   <CustomerServicePage />
                 </ProtectedRoute>
               }>
-                <Route inde element={<Navigate to="/operations/customer-service/dashboard" replace />} />
+                <Route index element={<Navigate to="/operations/customer-service/dashboard" replace />} />
                 <Route path="dashboard" element={<CustomerServiceDashboard />} />
               </Route>
               <Route path="/operations/customer-service/tickets" element={

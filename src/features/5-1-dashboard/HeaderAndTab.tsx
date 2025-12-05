@@ -17,7 +17,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       label: 'Dashboard',
       icon: LayoutDashboard,
       description: 'Customer service dashboard and overview',
-      route: '/operations/customer-service'
+      route: '/operations/customer-service/dashboard'
     },
     {
       id: 'tickets',
@@ -40,7 +40,7 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
     if (location.pathname === '/operations/customer-service/tickets') {
       return 'tickets';
     }
-    if (location.pathname === '/operations/customer-service') {
+    if (location.pathname === '/operations/customer-service' || location.pathname === '/operations/customer-service/dashboard') {
       return 'dashboard';
     }
     return 'dashboard';
