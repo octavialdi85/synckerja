@@ -341,6 +341,48 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     defaultRoles: ['owner']
   },
   {
+    path: '/operations/customer-service',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Customer Service Dashboard - manage customer service tickets and support',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/customer-service/dashboard',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Customer Service Dashboard - overview and analytics',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/customer-service/tickets',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Customer Service Tickets - manage and track customer service tickets',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/sales/activities',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Sales Activities - manage sales activities and transactions',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/consultant/dashboard',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'CRM Dashboard - manage CRM leads and consultant activities',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/consultant/leads-management',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'CRM Leads Management - manage CRM leads and consultant activities',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
     path: '/recruitment',
     requiresAuth: true,
     requiresPermissions: true,

@@ -63,6 +63,16 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
         '/subscription/plans',
         '/subscription/management'
       ],
+      '/operations': [
+        '/operations',
+        '/operations/customer-service',
+        '/operations/customer-service/dashboard',
+        '/operations/customer-service/tickets',
+        '/operations/sales',
+        '/operations/consultant',
+        '/operations/consultant/dashboard',
+        '/operations/consultant/leads-management'
+      ],
       '/admin': [
         '/admin',
         '/admin/settings',

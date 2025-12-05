@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Home, Wrench, Megaphone, CreditCard, Users, Target } from "lucide-react";
+import { Home, Wrench, Megaphone, CreditCard, Users, Target, Briefcase } from "lucide-react";
 
 export const menuItems: MenuItem[] = [
   {
@@ -67,6 +67,36 @@ export const menuItems: MenuItem[] = [
         url: "/digital-marketing/social-media",
         description: "Manage and analyze social media performance",
         descriptionKey: "sidebar.digitalMarketing.socialMedia.description",
+      },
+    ],
+  },
+  {
+    title: "Operations",
+    titleKey: "sidebar.operations.title",
+    icon: Briefcase,
+    url: "#",
+    hasSubSidebar: true,
+    subSidebarItems: [
+      {
+        title: "Customer Service",
+        titleKey: "sidebar.operations.customerService.title",
+        url: "/operations/customer-service",
+        description: "Manage customer service tickets and support",
+        descriptionKey: "sidebar.operations.customerService.description",
+      },
+      {
+        title: "Sales",
+        titleKey: "sidebar.operations.sales.title",
+        url: "/operations/sales/activities",
+        description: "Manage sales activities and transactions",
+        descriptionKey: "sidebar.operations.sales.description",
+      },
+      {
+        title: "CRM",
+        titleKey: "sidebar.operations.crm.title",
+        url: "/operations/consultant/leads-management",
+        description: "Manage CRM leads and consultant activities",
+        descriptionKey: "sidebar.operations.crm.description",
       },
     ],
   },

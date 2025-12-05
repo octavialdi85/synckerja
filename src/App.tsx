@@ -82,6 +82,12 @@ import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
 import { PricingTools as PricingToolsPage } from "./features/8_2_pricing-tools/pages";
 import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
+import { CustomerServicePage } from "./features/5-1-dashboard/CustomerServicePage";
+import { CustomerServiceDashboard } from "./features/5-1-dashboard";
+import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
+import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
+import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
+import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -343,6 +349,51 @@ const App = () => (
               <Route path="/digital-marketing/social-media/settings" element={
                 <ProtectedRoute>
                   <SettingsPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Operations Routes - PROTECTED */}
+              <Route path="/operations/customer-service" element={
+                <ProtectedRoute>
+                  <CustomerServicePage />
+                </ProtectedRoute>
+              }>
+                <Route index element={<Navigate to="/operations/customer-service/dashboard" replace />} />
+                <Route path="dashboard" element={<CustomerServiceDashboard />} />
+              </Route>
+              <Route path="/operations/customer-service/tickets" element={
+                <ProtectedRoute>
+                  <CustomerServiceTicketsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/sales" element={
+                <ProtectedRoute>
+                  <Navigate to="/operations/sales/activities" replace />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/sales/activities" element={
+                <ProtectedRoute>
+                  <SalesOperationsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/sales/jadwal-kunjungan" element={
+                <ProtectedRoute>
+                  <SalesOperationsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/sales/client-visits" element={
+                <ProtectedRoute>
+                  <SalesOperationsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/dashboard" element={
+                <ProtectedRoute>
+                  <CRMDashboardPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/leads-management" element={
+                <ProtectedRoute>
+                  <ConsultantDashboardPage />
                 </ProtectedRoute>
               } />
               
@@ -670,3 +721,4 @@ const App = () => (
 );
 
 export default App;
+                                                                                                                                                                                                                                                                                                                                              

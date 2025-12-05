@@ -21,6 +21,11 @@ const idTranslations: TranslationDictionary = {
   "sidebar.digitalMarketing.socialMedia.title": "Manajemen Media Sosial",
   "sidebar.digitalMarketing.socialMedia.description": "Kelola dan analisis performa media sosial",
   "sidebar.tools.title": "Alat",
+  "sidebar.operations.title": "Operasi",
+  "sidebar.operations.customerService.title": "Layanan Pelanggan",
+  "sidebar.operations.customerService.description": "Kelola tiket layanan pelanggan dan dukungan",
+  "sidebar.operations.sales.title": "Penjualan",
+  "sidebar.operations.sales.description": "Kelola aktivitas penjualan dan transaksi",
   "sidebar.subscription.title": "Langganan",
 
   "sidebar.tools.passwordManager.title": "Manajemen Kata Sandi",
@@ -1417,6 +1422,11 @@ const enTranslations: TranslationDictionary = {
   "sidebar.digitalMarketing.socialMedia.title": "Social Media Management",
   "sidebar.digitalMarketing.socialMedia.description": "Manage and analyze social media performance",
   "sidebar.tools.title": "Tools",
+  "sidebar.operations.title": "Operations",
+  "sidebar.operations.customerService.title": "Customer Service",
+  "sidebar.operations.customerService.description": "Manage customer service tickets and support",
+  "sidebar.operations.sales.title": "Sales",
+  "sidebar.operations.sales.description": "Manage sales activities and transactions",
   "sidebar.subscription.title": "Subscription",
 
   "sidebar.tools.passwordManager.title": "Password Manager",
