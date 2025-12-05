@@ -1,15 +1,14 @@
-import { useEffect } from "react";
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
-import { CentralizedUserDataProvider } from "@/features/1-login/contets/CentralizedUserDataContet";
+import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
 import { HomeAccessGuard } from "@/components/HomeAccessGuard";
-import { SubscriptionEpiryGuard } from "@/components/SubscriptionEpiryGuard";
+import { SubscriptionExpiryGuard } from "@/components/SubscriptionExpiryGuard";
 import Inde from "./features/1-login/pages/Inde";
 import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
@@ -36,9 +35,9 @@ import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashbo
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
 import UserSettingsPage from "./features/Settings/SettingsPage";
-import ManagementTabPageDesktop from "./features/1-management/pages/ManagementTabPage";
-import OverviewTabPageDesktop from "./features/1-overview/OverviewTabPage";
-import PlansTabPageDesktop from "./features/1-Plans/PlansTabPage";
+import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
+import OverviewTabPageDesktop from "./features/10-overview/OverviewTabPage";
+import PlansTabPageDesktop from "./features/10-Plans/PlansTabPage";
 import ManagementTabPageMobile from "./mobile/pages/subscription/ManagementTabPage";
 import OverviewTabPageMobile from "./mobile/pages/subscription/OverviewTabPage";
 import PlansTabPageMobile from "./mobile/pages/subscription/PlansTabPage";
@@ -51,7 +50,7 @@ import EmployeeAddressInfo from "./features/2-1-employees/MyInfo/AddressInformat
 import EmployeeEmploymentInfo from "./features/2-1-employees/MyInfo/Employment/pages/EmployeeEmploymentInfo";
 import EmployeeEducationFormal from "./features/2-1-employees/MyInfo/Education/pages/EmployeeEducationFormal";
 import EmployeeEducationInformal from "./features/2-1-employees/MyInfo/InformalEducation/pages/EmployeeEducationInformal";
-import EmployeeWork from "./features/2-1-employees/MyInfo/WorkEperience/pages/EmployeeWork";
+import EmployeeWork from "./features/2-1-employees/MyInfo/WorkExperience/pages/EmployeeWork";
 import EmployeeFamily from "./features/2-1-employees/MyInfo/FamilyMembers/pages/EmployeeFamily";
 import EmployeeAttendance from "./features/2-1-employees/MyInfo/Attendance/pages/EmployeeAttendance";
 import EmployeeLeavePermit from "./features/2-1-employees/MyInfo/LeavePermit/pages/EmployeeLeavePermit";
@@ -197,7 +196,7 @@ const App = () => (
             }}
           >
             <SecurityWrapper>
-              <SubscriptionEpiryGuard>
+              <SubscriptionExpiryGuard>
                 <Routes>
                 {/* ======= PROTECTED ROUTES ======= */}
                 {/* PROTECTION SYSTEM */}
@@ -711,7 +710,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
                 </Routes>
-              </SubscriptionEpiryGuard>
+              </SubscriptionExpiryGuard>
             </SecurityWrapper>
           </BrowserRouter>
         </CentralizedUserDataProvider>
