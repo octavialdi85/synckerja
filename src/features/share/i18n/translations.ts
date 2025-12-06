@@ -1403,7 +1403,109 @@ const idTranslations: TranslationDictionary = {
   "pricingTools.marketing.roas.method.roas": "ROAS-based (Recommended)",
   "pricingTools.marketing.roas.method.flatRate": "Flat Rate (seperti Overhead)",
   "pricingTools.marketing.roas.method.manual": "Manual (Cost per Unit langsung)",
-  "pricingTools.marketing.roas.method.title": "Metode Perhitungan Marketing:"
+  "pricingTools.marketing.roas.method.title": "Metode Perhitungan Marketing:",
+  
+  // Pricing Tools - Wizard Steps
+  "pricingTools.wizard.steps.product": "Product Info",
+  "pricingTools.wizard.steps.costs": "Production Costs",
+  "pricingTools.wizard.steps.expenses": "Business Expenses",
+  "pricingTools.wizard.steps.channels": "Sales Channels",
+  "pricingTools.wizard.steps.pricing": "Pricing Settings",
+  "pricingTools.wizard.steps.summary": "Final Summary",
+  
+  // Pricing Tools - Step 1: Product Information
+  "pricingTools.wizard.step1.title": "Product Information",
+  "pricingTools.wizard.step1.productName": "Product Name *",
+  "pricingTools.wizard.step1.productName.placeholder": "Enter product name",
+  "pricingTools.wizard.step1.category": "Category *",
+  "pricingTools.wizard.step1.category.placeholder": "Enter product category",
+  
+  // Pricing Tools - Step 2: Production Costs
+  "pricingTools.wizard.step2.title": "Production Costs",
+  
+  // Pricing Tools - Step 3: Business Expenses
+  "pricingTools.wizard.step3.title": "Business Expenses",
+  "pricingTools.wizard.step3.timePeriod": "Time Period",
+  "pricingTools.wizard.step3.timePeriod.monthly": "Monthly",
+  "pricingTools.wizard.step3.timePeriod.yearly": "Yearly",
+  "pricingTools.wizard.step3.allocationMethod": "Cost Allocation Method",
+  "pricingTools.wizard.step3.allocationMethod.fixedCost": "Fixed Cost",
+  "pricingTools.wizard.step3.allocationMethod.perUnit": "Per Unit",
+  "pricingTools.wizard.step3.allocationMethod.fixedCost.description": "Business expenses are treated as fixed costs (not included in cost per unit)",
+  "pricingTools.wizard.step3.allocationMethod.perUnit.description": "Business expenses are allocated per unit (included in cost per unit)",
+  
+  // Pricing Tools - Step 4: Sales Channels
+  "pricingTools.wizard.step4.title": "Sales Channels",
+  
+  // Pricing Tools - Step 5: Pricing Settings
+  "pricingTools.wizard.step5.title": "Pricing Settings",
+  "pricingTools.wizard.step5.calculationMethod": "Pricing Calculation Method",
+  "pricingTools.wizard.step5.calculationMethod.markup": "Markup (% dari Production Cost)",
+  "pricingTools.wizard.step5.calculationMethod.margin": "Margin (% dari Production Cost)",
+  "pricingTools.wizard.step5.calculationMethod.fixed": "Fixed Profit (Rp)",
+  "pricingTools.wizard.step5.markupPercent": "Markup (%)",
+  "pricingTools.wizard.step5.marginPercent": "Margin (%)",
+  "pricingTools.wizard.step5.fixedProfit": "Profit Tetap (Rp)",
+  "pricingTools.wizard.step5.fromProductionCost": "From Production Cost",
+  "pricingTools.wizard.step5.targetProfit": "Target Profit (%) dari Total Biaya",
+  "pricingTools.wizard.step5.targetProfit.placeholder": "10",
+  "pricingTools.wizard.step5.minimumMargin": "Minimum Margin (Opsional)",
+  "pricingTools.wizard.step5.minimumMargin.percent": "Minimum Margin (%)",
+  "pricingTools.wizard.step5.breakEven.title": "Break-Even Analysis",
+  "pricingTools.wizard.step5.breakEven.recommendedPrice": "Recommended Selling Price",
+  "pricingTools.wizard.step5.breakEven.unitsRequired": "Units Required",
+  "pricingTools.wizard.step5.breakEven.revenueRequired": "Revenue Required",
+  "pricingTools.wizard.step5.breakEven.profitPerUnit": "Profit per Unit",
+  "pricingTools.wizard.step5.breakEven.profitMargin": "Profit Margin",
+  "pricingTools.wizard.step5.breakEven.recommendedMarketingSpend": "Recommended Marketing Spend",
+  "pricingTools.wizard.step5.targetProfit.title": "Target Profit Analysis",
+  "pricingTools.wizard.step5.targetProfit.unitsRequired": "Units Required",
+  "pricingTools.wizard.step5.targetProfit.revenueRequired": "Revenue Required",
+  "pricingTools.wizard.step5.targetProfit.recommendedMarketingSpend": "Recommended Marketing Spend",
+  "pricingTools.wizard.step5.targetSales.title": "Analisis Target Penjualan",
+  "pricingTools.wizard.step5.targetSales.fromTotalCost": "From Total Cost",
+  "pricingTools.wizard.step5.targetSales.totalCostBreakdown": "Total Biaya (untuk {{units}} unit)",
+  "pricingTools.wizard.step5.targetSales.productionCost": "Production Cost",
+  "pricingTools.wizard.step5.targetSales.operationalCost": "Operational Cost",
+  "pricingTools.wizard.step5.targetSales.channelFee": "Channel Fee",
+  "pricingTools.wizard.step5.targetSales.totalCost": "Total Cost",
+  "pricingTools.wizard.step5.marketingSpend.title": "Marketing Spend (per bulan)",
+  "pricingTools.wizard.step5.marketingSpend.optional": "OPSIONAL",
+  "pricingTools.wizard.step5.marketingSpend.amount": "Marketing Spend (per bulan)",
+  "pricingTools.wizard.step5.marketingSpend.amount.placeholder": "0",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS": "Target ROAS",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS.placeholder": "0",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS.description": "ROAS 3:1 = setiap Rp 1 spend menghasilkan Rp 3 revenue",
+  "pricingTools.wizard.step5.marketingResults.title": "Marketing Results",
+  "pricingTools.wizard.step5.marketingResults.finalSellingPrice": "Final Selling Price",
+  "pricingTools.wizard.step5.marketingResults.from": "From",
+  "pricingTools.wizard.step5.marketingResults.to": "To",
+  "pricingTools.wizard.step5.marketingResults.unit": "unit",
+  "pricingTools.wizard.step5.marketingResults.profitPerUnit": "Profit per Unit",
+  "pricingTools.wizard.step5.marketingResults.profitMargin": "Profit Margin",
+  "pricingTools.wizard.step5.marketingResults.expectedRevenue": "Expected Revenue",
+  "pricingTools.wizard.step5.marketingResults.estimatedUnits": "Estimated Units Sold",
+  "pricingTools.wizard.step5.marketingResults.marketingCostPerUnit": "Marketing Cost per Unit",
+  "pricingTools.wizard.step5.marketingResults.placeholder": "Isi Marketing Spend dan Target ROAS, lalu klik \"Final Summary\" untuk melihat hasil",
+  "pricingTools.wizard.step5.buttons.calculatePrice": "Hitung Harga Jual",
+  "pricingTools.wizard.step5.buttons.calculateTarget": "Hitung Target Penjualan",
+  "pricingTools.wizard.step5.buttons.finalSummary": "Final Summary",
+  "pricingTools.wizard.step5.minimumMargin.title": "Minimum Margin (Opsional)",
+  
+  // Pricing Tools - Step 6: Final Summary
+  "pricingTools.wizard.step6.title": "Final Summary",
+  "pricingTools.wizard.step6.pleaseComplete": "Silakan selesaikan Step 5 (Pricing Settings) terlebih dahulu.",
+  "pricingTools.wizard.step6.backToPricing": "Kembali ke Pricing Settings",
+  
+  // Pricing Tools - Common
+  "pricingTools.common.next": "Next",
+  "pricingTools.common.previous": "Previous",
+  "pricingTools.common.calculate": "Calculate",
+  "pricingTools.common.save": "Save",
+  "pricingTools.common.cancel": "Cancel",
+  "pricingTools.common.reset": "Reset",
+  "pricingTools.common.required": "Required",
+  "pricingTools.common.optional": "Optional"
 };
 
 const enTranslations: TranslationDictionary = {
@@ -2807,7 +2909,109 @@ const enTranslations: TranslationDictionary = {
   "pricingTools.marketing.roas.method.roas": "ROAS-based (Recommended)",
   "pricingTools.marketing.roas.method.flatRate": "Flat Rate (like Overhead)",
   "pricingTools.marketing.roas.method.manual": "Manual (Direct Cost per Unit)",
-  "pricingTools.marketing.roas.method.title": "Marketing Calculation Method:"
+  "pricingTools.marketing.roas.method.title": "Marketing Calculation Method:",
+  
+  // Pricing Tools - Wizard Steps
+  "pricingTools.wizard.steps.product": "Product Info",
+  "pricingTools.wizard.steps.costs": "Production Costs",
+  "pricingTools.wizard.steps.expenses": "Business Expenses",
+  "pricingTools.wizard.steps.channels": "Sales Channels",
+  "pricingTools.wizard.steps.pricing": "Pricing Settings",
+  "pricingTools.wizard.steps.summary": "Final Summary",
+  
+  // Pricing Tools - Step 1: Product Information
+  "pricingTools.wizard.step1.title": "Product Information",
+  "pricingTools.wizard.step1.productName": "Product Name *",
+  "pricingTools.wizard.step1.productName.placeholder": "Enter product name",
+  "pricingTools.wizard.step1.category": "Category *",
+  "pricingTools.wizard.step1.category.placeholder": "Enter product category",
+  
+  // Pricing Tools - Step 2: Production Costs
+  "pricingTools.wizard.step2.title": "Production Costs",
+  
+  // Pricing Tools - Step 3: Business Expenses
+  "pricingTools.wizard.step3.title": "Business Expenses",
+  "pricingTools.wizard.step3.timePeriod": "Time Period",
+  "pricingTools.wizard.step3.timePeriod.monthly": "Monthly",
+  "pricingTools.wizard.step3.timePeriod.yearly": "Yearly",
+  "pricingTools.wizard.step3.allocationMethod": "Cost Allocation Method",
+  "pricingTools.wizard.step3.allocationMethod.fixedCost": "Fixed Cost",
+  "pricingTools.wizard.step3.allocationMethod.perUnit": "Per Unit",
+  "pricingTools.wizard.step3.allocationMethod.fixedCost.description": "Business expenses are treated as fixed costs (not included in cost per unit)",
+  "pricingTools.wizard.step3.allocationMethod.perUnit.description": "Business expenses are allocated per unit (included in cost per unit)",
+  
+  // Pricing Tools - Step 4: Sales Channels
+  "pricingTools.wizard.step4.title": "Sales Channels",
+  
+  // Pricing Tools - Step 5: Pricing Settings
+  "pricingTools.wizard.step5.title": "Pricing Settings",
+  "pricingTools.wizard.step5.calculationMethod": "Pricing Calculation Method",
+  "pricingTools.wizard.step5.calculationMethod.markup": "Markup (% from Production Cost)",
+  "pricingTools.wizard.step5.calculationMethod.margin": "Margin (% from Production Cost)",
+  "pricingTools.wizard.step5.calculationMethod.fixed": "Fixed Profit (Rp)",
+  "pricingTools.wizard.step5.markupPercent": "Markup (%)",
+  "pricingTools.wizard.step5.marginPercent": "Margin (%)",
+  "pricingTools.wizard.step5.fixedProfit": "Fixed Profit (Rp)",
+  "pricingTools.wizard.step5.fromProductionCost": "From Production Cost",
+  "pricingTools.wizard.step5.targetProfit": "Target Profit (%) from Total Cost",
+  "pricingTools.wizard.step5.targetProfit.placeholder": "10",
+  "pricingTools.wizard.step5.minimumMargin": "Minimum Margin (Optional)",
+  "pricingTools.wizard.step5.minimumMargin.percent": "Minimum Margin (%)",
+  "pricingTools.wizard.step5.breakEven.title": "Break-Even Analysis",
+  "pricingTools.wizard.step5.breakEven.recommendedPrice": "Recommended Selling Price",
+  "pricingTools.wizard.step5.breakEven.unitsRequired": "Units Required",
+  "pricingTools.wizard.step5.breakEven.revenueRequired": "Revenue Required",
+  "pricingTools.wizard.step5.breakEven.profitPerUnit": "Profit per Unit",
+  "pricingTools.wizard.step5.breakEven.profitMargin": "Profit Margin",
+  "pricingTools.wizard.step5.breakEven.recommendedMarketingSpend": "Recommended Marketing Spend",
+  "pricingTools.wizard.step5.targetProfit.title": "Target Profit Analysis",
+  "pricingTools.wizard.step5.targetProfit.unitsRequired": "Units Required",
+  "pricingTools.wizard.step5.targetProfit.revenueRequired": "Revenue Required",
+  "pricingTools.wizard.step5.targetProfit.recommendedMarketingSpend": "Recommended Marketing Spend",
+  "pricingTools.wizard.step5.targetSales.title": "Target Sales Analysis",
+  "pricingTools.wizard.step5.targetSales.fromTotalCost": "From Total Cost",
+  "pricingTools.wizard.step5.targetSales.totalCostBreakdown": "Total Cost (for {{units}} units)",
+  "pricingTools.wizard.step5.targetSales.productionCost": "Production Cost",
+  "pricingTools.wizard.step5.targetSales.operationalCost": "Operational Cost",
+  "pricingTools.wizard.step5.targetSales.channelFee": "Channel Fee",
+  "pricingTools.wizard.step5.targetSales.totalCost": "Total Cost",
+  "pricingTools.wizard.step5.marketingSpend.title": "Marketing Spend (per month)",
+  "pricingTools.wizard.step5.marketingSpend.optional": "OPTIONAL",
+  "pricingTools.wizard.step5.marketingSpend.amount": "Marketing Spend (per month)",
+  "pricingTools.wizard.step5.marketingSpend.amount.placeholder": "0",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS": "Target ROAS",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS.placeholder": "0",
+  "pricingTools.wizard.step5.marketingSpend.targetROAS.description": "ROAS 3:1 = every Rp 1 spend generates Rp 3 revenue",
+  "pricingTools.wizard.step5.marketingResults.title": "Marketing Results",
+  "pricingTools.wizard.step5.marketingResults.finalSellingPrice": "Final Selling Price",
+  "pricingTools.wizard.step5.marketingResults.from": "From",
+  "pricingTools.wizard.step5.marketingResults.to": "To",
+  "pricingTools.wizard.step5.marketingResults.unit": "unit",
+  "pricingTools.wizard.step5.marketingResults.profitPerUnit": "Profit per Unit",
+  "pricingTools.wizard.step5.marketingResults.profitMargin": "Profit Margin",
+  "pricingTools.wizard.step5.marketingResults.expectedRevenue": "Expected Revenue",
+  "pricingTools.wizard.step5.marketingResults.estimatedUnits": "Estimated Units Sold",
+  "pricingTools.wizard.step5.marketingResults.marketingCostPerUnit": "Marketing Cost per Unit",
+  "pricingTools.wizard.step5.marketingResults.placeholder": "Fill in Marketing Spend and Target ROAS, then click \"Final Summary\" to see results",
+  "pricingTools.wizard.step5.buttons.calculatePrice": "Calculate Selling Price",
+  "pricingTools.wizard.step5.buttons.calculateTarget": "Calculate Target Sales",
+  "pricingTools.wizard.step5.buttons.finalSummary": "Final Summary",
+  "pricingTools.wizard.step5.minimumMargin.title": "Minimum Margin (Optional)",
+  
+  // Pricing Tools - Step 6: Final Summary
+  "pricingTools.wizard.step6.title": "Final Summary",
+  "pricingTools.wizard.step6.pleaseComplete": "Please complete Step 5 (Pricing Settings) first.",
+  "pricingTools.wizard.step6.backToPricing": "Back to Pricing Settings",
+  
+  // Pricing Tools - Common
+  "pricingTools.common.next": "Next",
+  "pricingTools.common.previous": "Previous",
+  "pricingTools.common.calculate": "Calculate",
+  "pricingTools.common.save": "Save",
+  "pricingTools.common.cancel": "Cancel",
+  "pricingTools.common.reset": "Reset",
+  "pricingTools.common.required": "Required",
+  "pricingTools.common.optional": "Optional"
 };
 
 export const defaultTranslations: Record<AppLanguage, TranslationDictionary> = {

@@ -18,6 +18,11 @@ const PricingTools = () => {
   const [activeView, setActiveView] = useState<'calculator' | 'history' | 'comparison'>('calculator');
   const [calculationResults, setCalculationResults] = useState<PricingCalculationResult | null>(null);
   const [calculationInput, setCalculationInput] = useState<PricingCalculationInput | null>(null);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [finalSellingPrice, setFinalSellingPrice] = useState<number | undefined>(undefined);
+  const [marketingCostPerUnit, setMarketingCostPerUnit] = useState<number | undefined>(undefined);
+  const [channelFeePercent, setChannelFeePercent] = useState<number | undefined>(undefined);
+  const [baseTotalCostPerUnit, setBaseTotalCostPerUnit] = useState<number | undefined>(undefined);
   const wizardRef = useRef<PricingWizardRef>(null);
 
   const handleTabChange = useCallback((tab: string) => {
@@ -27,6 +32,20 @@ const PricingTools = () => {
   const handleCalculate = useCallback((results: PricingCalculationResult, input: PricingCalculationInput) => {
     setCalculationResults(results);
     setCalculationInput(input);
+  }, []);
+
+  const handleStepChange = useCallback((data: {
+    currentStep: number;
+    finalSellingPrice?: number;
+    marketingCostPerUnit?: number;
+    channelFeePercent?: number;
+    baseTotalCostPerUnit?: number;
+  }) => {
+    setCurrentStep(data.currentStep);
+    setFinalSellingPrice(data.finalSellingPrice);
+    setMarketingCostPerUnit(data.marketingCostPerUnit);
+    setChannelFeePercent(data.channelFeePercent);
+    setBaseTotalCostPerUnit(data.baseTotalCostPerUnit);
   }, []);
 
   const handleLoadCalculation = useCallback((calculation: SavedCalculation) => {
@@ -107,7 +126,11 @@ const PricingTools = () => {
                         <div className="flex-1 min-h-0 overflow-hidden">
                           <div className="h-full overflow-y-auto seamless-scroll px-4 py-6">
                             {activeTab === 'pricing' && activeView === 'calculator' && (
-                              <PricingToolsLayout ref={wizardRef} onCalculate={handleCalculate} />
+                              <PricingToolsLayout 
+                                ref={wizardRef} 
+                                onCalculate={handleCalculate}
+                                onStepChange={handleStepChange}
+                              />
                             )}
                             {activeTab === 'pricing' && activeView === 'history' && (
                               <CalculationHistoryViewer onLoadCalculation={handleLoadCalculation} />
@@ -137,6 +160,11 @@ const PricingTools = () => {
                     <PricingToolsSidebar 
                       calculationResults={calculationResults} 
                       calculationInput={calculationInput || undefined}
+                      currentStep={currentStep}
+                      finalSellingPrice={finalSellingPrice}
+                      marketingCostPerUnit={marketingCostPerUnit}
+                      channelFeePercent={channelFeePercent}
+                      baseTotalCostPerUnit={baseTotalCostPerUnit}
                     />
                   ) : (
                     <div className="h-full space-y-2">

@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Card, CardContent } from '@/features/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Button } from '@/features/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/features/ui/radio-group';
 import { Separator } from '@/features/ui/separator';
-import { Package, Calculator, Check, ChevronRight } from 'lucide-react';
+import { Package, Calculator, Check, ChevronRight, AlertTriangle, Target, TrendingUp, ArrowRight } from 'lucide-react';
 import { Badge } from '@/features/ui/badge';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { DynamicCostBreakdown } from './DynamicCostBreakdown';
 import { BusinessExpensesForm } from './BusinessExpensesForm';
 import { SalesChannelManager } from './SalesChannelManager';
 import { TargetCalculationResults } from './TargetCalculationResults';
+import { MarketingCostsForm } from './MarketingCostsForm';
+import { FinalSummary } from './FinalSummary';
 import {
   PricingCalculationInput,
   PricingCalculationResult,
@@ -23,12 +26,21 @@ import {
   CostCategory,
 } from '../types/pricingTypes';
 import { calculatePricing } from '../utils/pricingCalculationEngine';
-import { formatRupiah } from '../utils/pricingUtils';
+import { formatRupiah, formatNumber, formatInputNumber, parseInputNumber, calculateRecommendedMarketingSpend, calculateFinalUnitsWithMarketingSpend, MarketingRecommendation } from '../utils/pricingUtils';
 import { SavedCalculation } from '../hooks/usePricingCalculations';
 import { LoadTemplateModal } from './LoadTemplateModal';
 
+interface StepChangeData {
+  currentStep: number;
+  finalSellingPrice?: number;
+  marketingCostPerUnit?: number;
+  channelFeePercent?: number;
+  baseTotalCostPerUnit?: number;
+}
+
 interface PricingWizardProps {
   onCalculate?: (results: PricingCalculationResult, input: PricingCalculationInput) => void;
+  onStepChange?: (data: StepChangeData) => void;
 }
 
 export interface PricingWizardRef {
@@ -36,16 +48,18 @@ export interface PricingWizardRef {
   resetForm: () => void;
 }
 
-const STEPS = [
-  { id: 1, name: 'Product', label: 'Product Info' },
-  { id: 2, name: 'Costs', label: 'Production Costs' },
-  { id: 3, name: 'Expenses', label: 'Business Expenses' },
-  { id: 4, name: 'Channels', label: 'Sales Channels' },
-  { id: 5, name: 'Pricing', label: 'Pricing Settings' },
-];
-
 export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
-  ({ onCalculate }, ref) => {
+  ({ onCalculate, onStepChange }, ref) => {
+  const { t } = useAppTranslation();
+  
+  const STEPS = [
+    { id: 1, name: 'Product', label: t('pricingTools.wizard.steps.product', 'Product Info') },
+    { id: 2, name: 'Costs', label: t('pricingTools.wizard.steps.costs', 'Production Costs') },
+    { id: 3, name: 'Expenses', label: t('pricingTools.wizard.steps.expenses', 'Business Expenses') },
+    { id: 4, name: 'Channels', label: t('pricingTools.wizard.steps.channels', 'Sales Channels') },
+    { id: 5, name: 'Pricing', label: t('pricingTools.wizard.steps.pricing', 'Pricing Settings') },
+    { id: 6, name: 'Summary', label: t('pricingTools.wizard.steps.summary', 'Final Summary') },
+  ];
   const [currentStep, setCurrentStep] = useState(1);
   const [calculationResult, setCalculationResult] = useState<PricingCalculationResult | null>(null);
   const [loadKey, setLoadKey] = useState<string>(''); // Key untuk force re-render komponen child
@@ -78,6 +92,25 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
   const [fixedProfit, setFixedProfit] = useState<number>(0);
   const [targetProfitPercent, setTargetProfitPercent] = useState<number>(10);
   const [minimumMarginPercent, setMinimumMarginPercent] = useState<number>(15);
+  
+  // Marketing costs (moved to Step 5)
+  const [marketingSpend, setMarketingSpend] = useState<number>(0);
+  const [marketingSpendDisplay, setMarketingSpendDisplay] = useState<string>('');
+  const [targetROAS, setTargetROAS] = useState<number>(2);
+  const [targetROASDisplay, setTargetROASDisplay] = useState<string>('');
+  const [marketingCostPerUnit, setMarketingCostPerUnit] = useState<number>(0);
+  // Calculated values from Marketing Results
+  const [calculatedFinalSellingPrice, setCalculatedFinalSellingPrice] = useState<number>(0);
+  const [calculatedMarketingCostPerUnit, setCalculatedMarketingCostPerUnit] = useState<number>(0);
+  const [preliminaryResult, setPreliminaryResult] = useState<PricingCalculationResult | null>(null);
+  
+  // Marketing recommendations (NEW)
+  const [breakEvenRecommendation, setBreakEvenRecommendation] = useState<any>(null);
+  const [targetProfitRecommendation, setTargetProfitRecommendation] = useState<any>(null);
+  
+  // Track which calculations have been performed
+  const [hasCalculatedBreakEven, setHasCalculatedBreakEven] = useState<boolean>(false);
+  const [hasCalculatedTargetProfit, setHasCalculatedTargetProfit] = useState<boolean>(false);
 
   // Update selected channels when channels change
   useEffect(() => {
@@ -88,6 +121,217 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
       return validSelected.length > 0 ? validSelected : activeChannels;
     });
   }, [salesChannels]);
+
+  // Recalculate marketing recommendations when targetROAS changes (if calculation already exists)
+  useEffect(() => {
+    if (calculationResult && targetROAS > 0) {
+      // Get recommended channel fee percent
+      const recommendedChannelId = calculationResult.summary.recommendedChannel 
+        ? calculationResult.channelPricing.find(c => c.channelName === calculationResult.summary.recommendedChannel)?.channelId
+        : null;
+      const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+      const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+      
+      let breakEvenRec: MarketingRecommendation | null = null;
+      let targetProfitRec: MarketingRecommendation | null = null;
+      
+      // Calculate Break-Even Recommendation
+      if (calculationResult.breakEven.unitsRequired > 0 && calculationResult.breakEven.unitsRequired !== Infinity) {
+        breakEvenRec = calculateRecommendedMarketingSpend(
+          calculationResult.breakEven.unitsRequired,
+          calculationResult.baseSellingPrice,
+          calculationResult.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod
+        );
+      }
+      
+      // Calculate Target Profit Recommendation
+      if (calculationResult.targetProfit && calculationResult.targetProfit.unitsRequired > 0 && calculationResult.targetProfit.unitsRequired !== Infinity) {
+        targetProfitRec = calculateRecommendedMarketingSpend(
+          calculationResult.targetProfit.unitsRequired,
+          calculationResult.baseSellingPrice,
+          calculationResult.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod,
+          calculationResult.targetProfit.targetProfitAmount || 0
+        );
+      }
+      
+      setBreakEvenRecommendation(breakEvenRec);
+      setTargetProfitRecommendation(targetProfitRec);
+      
+      // Update marketing spend default
+      if (targetProfitRec) {
+        const recommendedSpend = Math.round(targetProfitRec.recommendedMarketingSpend);
+        setMarketingSpend(recommendedSpend);
+        setMarketingSpendDisplay(formatInputNumber(recommendedSpend));
+      } else if (breakEvenRec) {
+        const recommendedSpend = Math.round(breakEvenRec.recommendedMarketingSpend);
+        setMarketingSpend(recommendedSpend);
+        setMarketingSpendDisplay(formatInputNumber(recommendedSpend));
+      }
+    } else if (targetROAS === 0) {
+      // Clear recommendations when ROAS is 0
+      setBreakEvenRecommendation(null);
+      setTargetProfitRecommendation(null);
+    }
+  }, [targetROAS, calculationResult, salesChannels, totalOperationalExpenses, costAllocationMethod, timePeriod]);
+
+  // Auto-update preliminaryResult when pricing settings change (only when calculation already exists)
+  // This ensures Final Summary always shows the latest data from step 5
+  useEffect(() => {
+    // Only recalculate if we have a preliminary result (calculation was done before)
+    // and we're on step 5 or step 6 (to keep Final Summary updated)
+    if (preliminaryResult && (currentStep === 5 || currentStep === 6)) {
+      const input: PricingCalculationInput = {
+        productName,
+        category,
+        costBreakdown: costBreakdown || initialCostBreakdown,
+        productionCostPerUnit,
+        operationalExpenses,
+        totalOperationalExpenses,
+        costAllocationMethod,
+        timePeriod,
+        calculationMethod,
+        markupPercent: calculationMethod === 'markup' ? markupPercent : undefined,
+        marginPercent: calculationMethod === 'margin' ? marginPercent : undefined,
+        fixedProfit: calculationMethod === 'fixed' ? fixedProfit : undefined,
+        salesChannels,
+        selectedChannels,
+        targetProfitPercent,
+        minimumMarginPercent,
+      };
+
+      const results = calculatePricing(input);
+      results.isPreliminary = true;
+      results.preliminaryResults = {
+        baseSellingPrice: results.baseSellingPrice,
+        totalCostPerUnit: results.totalCostPerUnit,
+        breakEven: results.breakEven,
+        targetProfit: results.targetProfit,
+      };
+      
+      setCalculationResult(results);
+      setPreliminaryResult(results);
+    }
+  }, [
+    currentStep,
+    calculationMethod,
+    markupPercent,
+    marginPercent,
+    fixedProfit,
+    targetProfitPercent,
+    minimumMarginPercent,
+    productionCostPerUnit,
+    totalOperationalExpenses,
+    costAllocationMethod,
+    salesChannels,
+    selectedChannels,
+    timePeriod,
+    // Note: We intentionally don't include preliminaryResult in deps to avoid infinite loop
+    // Instead, we check if it exists in the effect body
+  ]);
+
+  // Notify parent when step changes and calculate finalSellingPrice when marketing data is available
+  useEffect(() => {
+    if (onStepChange) {
+      let stepData: StepChangeData = {
+        currentStep,
+      };
+      
+      // When Marketing Results are calculated, send data to sidebar
+      if (preliminaryResult && calculatedFinalSellingPrice > 0 && calculatedMarketingCostPerUnit > 0) {
+        // Use calculated values from Marketing Results
+        const recommendedChannelId = preliminaryResult.summary.recommendedChannel
+          ? preliminaryResult.channelPricing.find(c => c.channelName === preliminaryResult.summary.recommendedChannel)?.channelId
+          : null;
+        const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+        const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+        
+        stepData = {
+          currentStep,
+          finalSellingPrice: calculatedFinalSellingPrice,
+          marketingCostPerUnit: calculatedMarketingCostPerUnit,
+          channelFeePercent,
+          baseTotalCostPerUnit: preliminaryResult.totalCostPerUnit,
+        };
+      } else if (currentStep === 5 && preliminaryResult && marketingSpend > 0 && targetROAS > 0) {
+        // Fallback: when step 5 is active and marketing data is available, use simple calculation
+        const finalSellingPrice = preliminaryResult.baseSellingPrice + marketingCostPerUnit;
+        
+        // Get channel fee percent from recommended channel
+        const recommendedChannelId = preliminaryResult.summary.recommendedChannel
+          ? preliminaryResult.channelPricing.find(c => c.channelName === preliminaryResult.summary.recommendedChannel)?.channelId
+          : null;
+        const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+        const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+        
+        stepData = {
+          currentStep,
+          finalSellingPrice,
+          marketingCostPerUnit,
+          channelFeePercent,
+          baseTotalCostPerUnit: preliminaryResult.totalCostPerUnit,
+        };
+      }
+      
+      onStepChange(stepData);
+    }
+  }, [currentStep, preliminaryResult, marketingCostPerUnit, marketingSpend, targetROAS, calculatedFinalSellingPrice, calculatedMarketingCostPerUnit, salesChannels, onStepChange]);
+
+  // Update calculated values from Marketing Results when marketing data changes
+  useEffect(() => {
+    if (calculationResult && marketingSpend > 0 && targetROAS > 0) {
+      // Calculate expected revenue
+      const expectedRevenue = marketingSpend * targetROAS;
+      
+      // Calculate marketing cost per unit and final selling price using iteration
+      let estimatedUnitsSold = calculationResult.baseSellingPrice > 0 
+        ? expectedRevenue / calculationResult.baseSellingPrice 
+        : 0;
+      let calcMarketingCostPerUnit = 0;
+      let calcFinalSellingPrice = calculationResult.baseSellingPrice;
+      
+      // Iterate to converge (max 10 iterations)
+      for (let i = 0; i < 10; i++) {
+        if (estimatedUnitsSold <= 0) break;
+        
+        calcMarketingCostPerUnit = marketingSpend / estimatedUnitsSold;
+        calcFinalSellingPrice = calculationResult.baseSellingPrice + calcMarketingCostPerUnit;
+        
+        const newEstimatedUnitsSold = calcFinalSellingPrice > 0 
+          ? expectedRevenue / calcFinalSellingPrice 
+          : 0;
+        
+        if (Math.abs(newEstimatedUnitsSold - estimatedUnitsSold) < 0.01) {
+          estimatedUnitsSold = newEstimatedUnitsSold;
+          break;
+        }
+        
+        estimatedUnitsSold = newEstimatedUnitsSold;
+      }
+      
+      // Update state with calculated values only if different (to avoid infinite loops)
+      if (Math.abs(calcFinalSellingPrice - calculatedFinalSellingPrice) > 0.01 || 
+          Math.abs(calcMarketingCostPerUnit - calculatedMarketingCostPerUnit) > 0.01) {
+        setCalculatedFinalSellingPrice(calcFinalSellingPrice);
+        setCalculatedMarketingCostPerUnit(calcMarketingCostPerUnit);
+      }
+    } else {
+      // Reset when marketing data is cleared
+      if (calculatedFinalSellingPrice !== 0 || calculatedMarketingCostPerUnit !== 0) {
+        setCalculatedFinalSellingPrice(0);
+        setCalculatedMarketingCostPerUnit(0);
+      }
+    }
+  }, [calculationResult, marketingSpend, targetROAS]);
 
   const handleProductionCostChange = useCallback((costPerUnit: number) => {
     setProductionCostPerUnit(costPerUnit);
@@ -105,6 +349,166 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
   const handleChannelsChange = useCallback((channels: SalesChannel[]) => {
     setSalesChannels(channels);
   }, []);
+
+  // Helper function to perform calculation
+  const performCalculation = (includeTargetProfit: boolean = true) => {
+    const input: PricingCalculationInput = {
+      productName,
+      category,
+      costBreakdown: costBreakdown || initialCostBreakdown,
+      productionCostPerUnit,
+      operationalExpenses,
+      totalOperationalExpenses,
+      costAllocationMethod,
+      timePeriod,
+      calculationMethod,
+      markupPercent: calculationMethod === 'markup' ? markupPercent : undefined,
+      marginPercent: calculationMethod === 'margin' ? marginPercent : undefined,
+      fixedProfit: calculationMethod === 'fixed' ? fixedProfit : undefined,
+      salesChannels,
+      selectedChannels,
+      targetProfitPercent: includeTargetProfit ? targetProfitPercent : undefined,
+      minimumMarginPercent,
+    };
+
+    const results = calculatePricing(input);
+    // Mark as preliminary (without marketing)
+    results.isPreliminary = true;
+    results.preliminaryResults = {
+      baseSellingPrice: results.baseSellingPrice,
+      totalCostPerUnit: results.totalCostPerUnit,
+      breakEven: results.breakEven,
+      targetProfit: results.targetProfit,
+    };
+    
+    return results;
+  };
+
+  // Calculate only Break-Even Analysis (for "Calculate Selling Price" button)
+  const handleCalculateBreakEven = () => {
+    const results = performCalculation(false); // Don't include target profit calculation
+    
+    // Calculate Recommended Marketing Spend for Break-Even if target ROAS is set
+    let breakEvenRec: MarketingRecommendation | null = null;
+    
+    if (targetROAS > 0) {
+      // Get recommended channel fee percent
+      const recommendedChannelId = results.summary.recommendedChannel 
+        ? results.channelPricing.find(c => c.channelName === results.summary.recommendedChannel)?.channelId
+        : null;
+      const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+      const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+      
+      // Calculate Break-Even Recommendation
+      if (results.breakEven.unitsRequired > 0 && results.breakEven.unitsRequired !== Infinity) {
+        breakEvenRec = calculateRecommendedMarketingSpend(
+          results.breakEven.unitsRequired,
+          results.baseSellingPrice,
+          results.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod
+        );
+      }
+    }
+    
+    setBreakEvenRecommendation(breakEvenRec);
+    setCalculationResult(results);
+    setPreliminaryResult(results);
+    setHasCalculatedBreakEven(true);
+    
+    const input: PricingCalculationInput = {
+      productName,
+      category,
+      costBreakdown: costBreakdown || initialCostBreakdown,
+      productionCostPerUnit,
+      operationalExpenses,
+      totalOperationalExpenses,
+      costAllocationMethod,
+      timePeriod,
+      calculationMethod,
+      markupPercent: calculationMethod === 'markup' ? markupPercent : undefined,
+      marginPercent: calculationMethod === 'margin' ? marginPercent : undefined,
+      fixedProfit: calculationMethod === 'fixed' ? fixedProfit : undefined,
+      salesChannels,
+      selectedChannels,
+      targetProfitPercent: undefined,
+      minimumMarginPercent,
+    };
+    
+    if (onCalculate) {
+      onCalculate(results, input);
+    }
+  };
+
+  // Calculate Target Profit Analysis (for "Calculate Target Sales" button)
+  const handleCalculateTargetProfit = () => {
+    const results = performCalculation(true); // Include target profit calculation
+    
+    // Calculate Recommended Marketing Spend for Target Profit if target ROAS is set
+    let targetProfitRec: MarketingRecommendation | null = null;
+    
+    if (targetROAS > 0) {
+      // Get recommended channel fee percent
+      const recommendedChannelId = results.summary.recommendedChannel 
+        ? results.channelPricing.find(c => c.channelName === results.summary.recommendedChannel)?.channelId
+        : null;
+      const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+      const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+      
+      // Calculate Target Profit Recommendation
+      if (results.targetProfit && results.targetProfit.unitsRequired > 0 && results.targetProfit.unitsRequired !== Infinity) {
+        targetProfitRec = calculateRecommendedMarketingSpend(
+          results.targetProfit.unitsRequired,
+          results.baseSellingPrice,
+          results.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod,
+          results.targetProfit.targetProfitAmount || 0 // Include target profit amount
+        );
+      }
+      
+      // Use target profit recommendation as default for marketing spend
+      if (targetProfitRec) {
+        const recommendedSpend = Math.round(targetProfitRec.recommendedMarketingSpend);
+        setMarketingSpend(recommendedSpend);
+        setMarketingSpendDisplay(formatInputNumber(recommendedSpend));
+      }
+    }
+    
+    setTargetProfitRecommendation(targetProfitRec);
+    setCalculationResult(results);
+    setPreliminaryResult(results);
+    setHasCalculatedTargetProfit(true);
+    
+    const input: PricingCalculationInput = {
+      productName,
+      category,
+      costBreakdown: costBreakdown || initialCostBreakdown,
+      productionCostPerUnit,
+      operationalExpenses,
+      totalOperationalExpenses,
+      costAllocationMethod,
+      timePeriod,
+      calculationMethod,
+      markupPercent: calculationMethod === 'markup' ? markupPercent : undefined,
+      marginPercent: calculationMethod === 'margin' ? marginPercent : undefined,
+      fixedProfit: calculationMethod === 'fixed' ? fixedProfit : undefined,
+      salesChannels,
+      selectedChannels,
+      targetProfitPercent,
+      minimumMarginPercent,
+    };
+    
+    if (onCalculate) {
+      onCalculate(results, input);
+    }
+  };
 
   const handleCalculate = () => {
     const input: PricingCalculationInput = {
@@ -127,12 +531,111 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
     };
 
     const results = calculatePricing(input);
+    // Mark as preliminary (without marketing)
+    results.isPreliminary = true;
+    results.preliminaryResults = {
+      baseSellingPrice: results.baseSellingPrice,
+      totalCostPerUnit: results.totalCostPerUnit,
+      breakEven: results.breakEven,
+      targetProfit: results.targetProfit,
+    };
+    
+    // Calculate Recommended Marketing Spend if target ROAS is set
+    let breakEvenRec: MarketingRecommendation | null = null;
+    let targetProfitRec: MarketingRecommendation | null = null;
+    
+    if (targetROAS > 0) {
+      // Get recommended channel fee percent
+      const recommendedChannelId = results.summary.recommendedChannel 
+        ? results.channelPricing.find(c => c.channelName === results.summary.recommendedChannel)?.channelId
+        : null;
+      const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+      const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+      
+      // Calculate Break-Even Recommendation
+      if (results.breakEven.unitsRequired > 0 && results.breakEven.unitsRequired !== Infinity) {
+        breakEvenRec = calculateRecommendedMarketingSpend(
+          results.breakEven.unitsRequired,
+          results.baseSellingPrice,
+          results.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod
+        );
+      }
+      
+      // Calculate Target Profit Recommendation
+      if (results.targetProfit && results.targetProfit.unitsRequired > 0 && results.targetProfit.unitsRequired !== Infinity) {
+        targetProfitRec = calculateRecommendedMarketingSpend(
+          results.targetProfit.unitsRequired,
+          results.baseSellingPrice,
+          results.totalCostPerUnit,
+          totalOperationalExpenses,
+          channelFeePercent,
+          targetROAS,
+          costAllocationMethod,
+          timePeriod,
+          results.targetProfit.targetProfitAmount || 0 // Include target profit amount
+        );
+      }
+      
+      // Determine which recommendation to use as default (show both, but use target profit if available)
+      if (targetProfitRec) {
+        const recommendedSpend = Math.round(targetProfitRec.recommendedMarketingSpend);
+        setMarketingSpend(recommendedSpend);
+        setMarketingSpendDisplay(formatInputNumber(recommendedSpend));
+      } else if (breakEvenRec) {
+        const recommendedSpend = Math.round(breakEvenRec.recommendedMarketingSpend);
+        setMarketingSpend(recommendedSpend);
+        setMarketingSpendDisplay(formatInputNumber(recommendedSpend));
+      }
+    }
+    
+    setBreakEvenRecommendation(breakEvenRec);
+    setTargetProfitRecommendation(targetProfitRec);
+    
     setCalculationResult(results);
+    setPreliminaryResult(results); // Store for Final Summary
     
     if (onCalculate) {
       onCalculate(results, input);
     }
   };
+
+  const handleMarketingChange = useCallback((spend: number, roas: number, costPerUnit: number) => {
+    setMarketingSpend(spend);
+    setTargetROAS(roas);
+    setTargetROASDisplay(roas > 0 ? roas.toString() : '');
+    setMarketingCostPerUnit(costPerUnit);
+    
+    // Notify parent about final selling price change when marketing data is available
+    if (onStepChange && currentStep === 5 && preliminaryResult && marketingSpend > 0 && targetROAS > 0) {
+      const finalSellingPrice = preliminaryResult.baseSellingPrice + costPerUnit;
+      
+      // Get channel fee percent from recommended channel
+      const recommendedChannelId = preliminaryResult.summary.recommendedChannel
+        ? preliminaryResult.channelPricing.find(c => c.channelName === preliminaryResult.summary.recommendedChannel)?.channelId
+        : null;
+      const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+      const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+      
+      onStepChange({
+        currentStep,
+        finalSellingPrice,
+        marketingCostPerUnit: costPerUnit,
+        channelFeePercent,
+        baseTotalCostPerUnit: preliminaryResult.totalCostPerUnit,
+      });
+    }
+    
+    // Recalculate final pricing with marketing
+    if (preliminaryResult) {
+      // TODO: Recalculate with marketing cost included
+      // This will be implemented in pricingCalculationEngine
+    }
+  }, [preliminaryResult, onStepChange, currentStep, salesChannels]);
 
   const handleReset = () => {
     setProductName('');
@@ -148,6 +651,17 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
     setSelectedChannels([]);
     setCalculationResult(null);
     setLoadKey(''); // Reset load key
+    // Reset marketing state
+    setMarketingSpend(0);
+    setMarketingSpendDisplay('');
+    setTargetROAS(2);
+    setTargetROASDisplay('');
+    setMarketingCostPerUnit(0);
+    setPreliminaryResult(null);
+    setBreakEvenRecommendation(null);
+    setTargetProfitRecommendation(null);
+    setHasCalculatedBreakEven(false);
+    setHasCalculatedTargetProfit(false);
     setCurrentStep(1);
   };
 
@@ -206,8 +720,17 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
     setTargetProfitPercent(input.targetProfitPercent || 10);
     setMinimumMarginPercent(input.minimumMarginPercent || 15);
     
+    // Load marketing data (if exists)
+    if (input.targetROAS !== undefined) {
+      setTargetROAS(input.targetROAS);
+      setTargetROASDisplay(input.targetROAS > 0 ? input.targetROAS.toString() : '');
+    }
+    if (input.marketingSpend !== undefined) setMarketingSpend(input.marketingSpend);
+    if (input.marketingCostPerUnit !== undefined) setMarketingCostPerUnit(input.marketingCostPerUnit);
+    
     // Load calculation result
     setCalculationResult(calculation.calculation_result);
+    setPreliminaryResult(calculation.calculation_result); // Store for Final Summary
     
     // Trigger onCalculate if needed
     if (onCalculate) {
@@ -346,6 +869,10 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
         if (calculationMethod === 'margin') return marginPercent !== undefined && marginPercent > 0 && marginPercent < 100;
         if (calculationMethod === 'fixed') return fixedProfit !== undefined && fixedProfit > 0;
         return false;
+      case 6:
+        return true; // Marketing is optional, can skip
+      case 7:
+        return true; // Final Summary can always be viewed
       default:
         return false;
     }
@@ -405,18 +932,18 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold">Product Information</h3>
+                  <h3 className="text-lg font-semibold">{t('pricingTools.wizard.step1.title', 'Product Information')}</h3>
                 </div>
                 <LoadTemplateModal onLoadTemplate={loadTemplate} />
               </div>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="product-name" className="text-sm font-medium">
-                    Product Name *
+                    {t('pricingTools.wizard.step1.productName', 'Product Name *')}
                   </Label>
                   <Input
                     id="product-name"
-                    placeholder="Enter product name"
+                    placeholder={t('pricingTools.wizard.step1.productName.placeholder', 'Enter product name')}
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                     className="mt-1"
@@ -424,11 +951,11 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
                 </div>
                 <div>
                   <Label htmlFor="product-category" className="text-sm font-medium">
-                    Category *
+                    {t('pricingTools.wizard.step1.category', 'Category *')}
                   </Label>
                   <Input
                     id="product-category"
-                    placeholder="Enter product category"
+                    placeholder={t('pricingTools.wizard.step1.category.placeholder', 'Enter product category')}
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className="mt-1"
@@ -519,166 +1046,604 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
                 <Calculator className="h-5 w-5 text-purple-600" />
                 <h3 className="text-lg font-semibold">Pengaturan Harga Jual</h3>
               </div>
-              <div className="space-y-6">
-                {/* Bagian 1: Tentukan Harga Jual (WAJIB) */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h4 className="text-sm font-semibold text-blue-800">
-                      1. Tentukan Harga Jual per Unit
-                    </h4>
-                    <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
-                      WAJIB
-                    </Badge>
+              <div className="space-y-4">
+                {/* Grid 3 kolom: Tentukan Harga Jual (kiri) | Tombol Hitung (tengah) | Break-Even Analysis (kanan) */}
+                <div className="grid grid-cols-[2fr_auto_2fr] gap-4">
+                  {/* Kolom 1: Tentukan Harga Jual per Unit - Left Column */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-blue-800">
+                        Tentukan Harga Jual per Unit
+                      </h4>
+                      <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
+                        WAJIB
+                      </Badge>
+                    </div>
+                    
+                    <RadioGroup
+                      value={calculationMethod}
+                      onValueChange={(value: CalculationMethod) => setCalculationMethod(value)}
+                      className="space-y-2 mb-4"
+                    >
+                      <div className="flex items-start space-x-3 p-2 border rounded-lg bg-white">
+                        <RadioGroupItem value="markup" id="markup" className="mt-1" />
+                        <Label htmlFor="markup" className="text-sm cursor-pointer">
+                          Markup (% dari total biaya)
+                        </Label>
+                      </div>
+                      <div className="flex items-start space-x-3 p-2 border rounded-lg bg-white">
+                        <RadioGroupItem value="margin" id="margin" className="mt-1" />
+                        <Label htmlFor="margin" className="text-sm cursor-pointer">
+                          Margin (% dari Production Cost)
+                        </Label>
+                      </div>
+                      <div className="flex items-start space-x-3 p-2 border rounded-lg bg-white">
+                        <RadioGroupItem value="fixed" id="fixed" className="mt-1" />
+                        <Label htmlFor="fixed" className="text-sm cursor-pointer">
+                          Profit Tetap (Rp per unit)
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    <div>
+                      <Label className="text-sm font-medium">
+                        {calculationMethod === 'markup' ? 'Markup (%)' : calculationMethod === 'margin' ? 'Margin (%)' : 'Profit Tetap (Rp)'}
+                      </Label>
+                      <Input
+                        type="number"
+                        placeholder={calculationMethod === 'fixed' ? "5000" : "50"}
+                        value={
+                          calculationMethod === 'markup'
+                            ? markupPercent
+                            : calculationMethod === 'margin'
+                            ? marginPercent
+                            : fixedProfit
+                        }
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          if (calculationMethod === 'markup') setMarkupPercent(value);
+                          else if (calculationMethod === 'margin') setMarginPercent(value);
+                          else setFixedProfit(value);
+                        }}
+                        className="mt-2"
+                        min="0"
+                        step={calculationMethod === 'fixed' ? '1000' : '0.1'}
+                        max={calculationMethod === 'margin' ? '99' : undefined}
+                      />
+                    </div>
+                    
+                    {/* Field "From Production Cost" - Hanya muncul jika memilih Margin */}
+                    {calculationMethod === 'margin' && (
+                      <div className="mt-3">
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <div className="text-center">
+                            <p className="text-sm text-blue-600 font-medium">
+                              From Production Cost
+                            </p>
+                            <p className="text-2xl font-bold text-blue-700">
+                              {formatRupiah(productionCostPerUnit)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-700 mb-4">
-                    Pilih metode untuk menghitung harga jual produk Anda. Ini akan menentukan <strong>profit per unit</strong> dan <strong>harga jual akhir</strong> yang akan digunakan di semua channel penjualan.
-                  </p>
-                  
-                  <RadioGroup
-                    value={calculationMethod}
-                    onValueChange={(value: CalculationMethod) => setCalculationMethod(value)}
-                    className="space-y-3"
-                  >
-                    {/* Opsi 1: Markup */}
-                    <div className="flex items-start space-x-3 p-3 border rounded-lg bg-white hover:border-blue-300 transition-colors">
-                      <RadioGroupItem value="markup" id="markup" className="mt-1" />
-                      <div className="flex-1">
-                        <Label htmlFor="markup" className="text-sm font-medium cursor-pointer">
-                          Tambah Persentase dari Total Biaya (Markup)
-                        </Label>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Tambahkan persentase tertentu ke total biaya produksi + operasional
-                        </p>
-                        <p className="text-xs text-blue-600 mt-1 font-medium">
-                          <strong>Contoh:</strong> Biaya Rp 10.000 + Markup 50% = Harga Jual Rp 15.000
-                        </p>
-                      </div>
-                    </div>
 
-                    {/* Opsi 2: Margin */}
-                    <div className="flex items-start space-x-3 p-3 border rounded-lg bg-white hover:border-blue-300 transition-colors">
-                      <RadioGroupItem value="margin" id="margin" className="mt-1" />
-                      <div className="flex-1">
-                        <Label htmlFor="margin" className="text-sm font-medium cursor-pointer">
-                          Profit Persentase dari Harga Jual (Margin)
-                        </Label>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Tetapkan berapa persen profit yang diinginkan dari harga jual akhir
-                        </p>
-                        <p className="text-xs text-blue-600 mt-1 font-medium">
-                          <strong>Contoh:</strong> Harga Jual Rp 20.000 dengan Margin 30% = Profit Rp 6.000
-                        </p>
-                      </div>
-                    </div>
+                  {/* Kolom 2: Tombol Hitung - Middle Column */}
+                  <div className="flex items-center justify-center">
+                    <Button onClick={handleCalculateBreakEven} size="sm" className="flex items-center justify-center gap-2 whitespace-nowrap w-[200px]">
+                      {t('pricingTools.wizard.step5.buttons.calculatePrice', 'Hitung Harga Jual')}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-                    {/* Opsi 3: Fixed Profit */}
-                    <div className="flex items-start space-x-3 p-3 border rounded-lg bg-white hover:border-blue-300 transition-colors">
-                      <RadioGroupItem value="fixed" id="fixed" className="mt-1" />
-                      <div className="flex-1">
-                        <Label htmlFor="fixed" className="text-sm font-medium cursor-pointer">
-                          Tambah Keuntungan Tetap per Unit
-                        </Label>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Tambahkan jumlah keuntungan tetap (Rp) ke setiap unit yang dijual
-                        </p>
-                        <p className="text-xs text-blue-600 mt-1 font-medium">
-                          <strong>Contoh:</strong> Biaya Rp 10.000 + Profit Tetap Rp 5.000 = Harga Jual Rp 15.000
-                        </p>
-                      </div>
+                  {/* Kolom 3: Break-Even Analysis - Right Column */}
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="h-4 w-4 text-green-600" />
+                      <h4 className="text-sm font-semibold text-green-800">
+                        Break-Even Analysis
+                      </h4>
                     </div>
-                  </RadioGroup>
-
-                  {/* Input berdasarkan pilihan */}
-                  <div className="mt-4 p-4 bg-white border rounded-lg">
-                    <Label className="text-sm font-medium">
-                      {calculationMethod === 'markup'
-                        ? 'Berapa persen yang ingin ditambahkan? (Markup %)'
-                        : calculationMethod === 'margin'
-                        ? 'Berapa persen profit yang diinginkan? (Margin %)'
-                        : 'Berapa keuntungan tetap per unit? (Rp)'}
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder={calculationMethod === 'fixed' ? "5.000" : "50"}
-                      value={
-                        calculationMethod === 'markup'
-                          ? markupPercent
-                          : calculationMethod === 'margin'
-                          ? marginPercent
-                          : fixedProfit
-                      }
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        if (calculationMethod === 'markup') setMarkupPercent(value);
-                        else if (calculationMethod === 'margin') setMarginPercent(value);
-                        else setFixedProfit(value);
-                      }}
-                      className="mt-2"
-                      min="0"
-                      step={calculationMethod === 'fixed' ? '1000' : '0.1'}
-                      max={calculationMethod === 'margin' ? '99' : undefined}
-                    />
-                    <p className="text-xs text-gray-500 mt-2">
-                      {calculationMethod === 'markup' && 'Masukkan angka tanpa %. Contoh: 50 berarti 50%'}
-                      {calculationMethod === 'margin' && 'Masukkan angka tanpa %. Contoh: 30 berarti 30%'}
-                      {calculationMethod === 'fixed' && 'Masukkan jumlah dalam Rupiah. Contoh: 5000'}
-                    </p>
+                    {calculationResult ? (
+                      <div className="space-y-2">
+                        <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                          <span className="text-xs text-green-700">Recommended Selling Price:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-green-800">
+                              {formatRupiah(calculationResult.summary.recommendedSellingPrice)}
+                            </span>
+                            {calculationResult.summary.recommendedChannel && (
+                              <p className="text-xs text-green-600 mt-0.5">
+                                Best on: {calculationResult.summary.recommendedChannel}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                          <span className="text-xs text-green-700">Profit per Unit:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-green-800">
+                              {formatRupiah(calculationResult.profitPerUnit)}
+                            </span>
+                            <p className="text-xs text-green-600 mt-0.5">
+                              per unit
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                          <span className="text-xs text-green-700">Profit Margin:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-green-800">
+                              {calculationResult.profitMarginPercent.toFixed(2)}%
+                            </span>
+                            <p className="text-xs text-green-600 mt-0.5">
+                              dari harga jual
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                          <span className="text-xs text-green-700">Units Required:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-green-800">
+                              {calculationResult.breakEven.unitsRequired === Infinity 
+                                ? '∞' 
+                                : formatNumber(calculationResult.breakEven.unitsRequired)}
+                            </span>
+                            <p className="text-xs text-green-600 mt-0.5">
+                              {timePeriod === 'monthly' ? 'unit/bulan' : 'unit/tahun'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                          <span className="text-xs text-green-700">Revenue Required:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-green-800">
+                              {calculationResult.breakEven.revenueRequired === Infinity 
+                                ? '∞' 
+                                : formatRupiah(calculationResult.breakEven.revenueRequired)}
+                            </span>
+                            <p className="text-xs text-green-600 mt-0.5">
+                              {timePeriod === 'monthly' ? 'target/bulan' : 'target/tahun'}
+                            </p>
+                          </div>
+                        </div>
+                        {breakEvenRecommendation && targetROAS > 0 && (
+                          <div className="bg-white p-2.5 rounded border border-green-200 flex justify-between items-center">
+                            <span className="text-xs text-green-700">Recommended Marketing Spend:</span>
+                            <div className="text-right">
+                              <span className="text-sm font-semibold text-green-800">
+                                {formatRupiah(breakEvenRecommendation.recommendedMarketingSpend)}
+                              </span>
+                              <p className="text-xs text-green-600 mt-0.5">
+                                ROAS {targetROAS}:1
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>Klik tombol "Hitung Harga Jual" untuk melihat hasil</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <Separator />
+                {/* Grid 3 kolom: Analisis Target Penjualan (kiri) | Tombol Hitung Target Penjualan (tengah) | Target Profit Analysis (kanan) */}
+                <div className="grid grid-cols-[2fr_auto_2fr] gap-4">
+                  {/* Kolom Kiri: Analisis Target Penjualan */}
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-purple-800">
+                        Analisis Target Penjualan
+                      </h4>
+                      <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
+                        OPSIONAL
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Target Profit (%) dari Total Biaya</Label>
+                      <Input
+                        type="number"
+                        placeholder="10"
+                        value={targetProfitPercent || ''}
+                        onChange={(e) => setTargetProfitPercent(parseFloat(e.target.value) || 0)}
+                        className="mt-2"
+                        min="0"
+                        step="0.1"
+                      />
+                      {preliminaryResult && preliminaryResult.totalCostPerUnit > 0 && hasCalculatedTargetProfit && (() => {
+                        // Get recommended channel fee percent
+                        const recommendedChannelId = preliminaryResult.summary.recommendedChannel 
+                          ? preliminaryResult.channelPricing.find(c => c.channelName === preliminaryResult.summary.recommendedChannel)?.channelId
+                          : null;
+                        const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+                        const channelFeePercent = recommendedChannel?.totalFeePercent || 0;
+                        
+                        // Calculate net profit per unit after channel fee
+                        const sellingPrice = preliminaryResult.baseSellingPrice;
+                        const channelFeePerUnit = (sellingPrice * channelFeePercent) / 100;
+                        const netProfitPerUnitAfterFee = sellingPrice - productionCostPerUnit - channelFeePerUnit;
+                        
+                        // Calculate units needed to cover business expenses
+                        const unitsForBusinessExpenses = totalOperationalExpenses > 0 && netProfitPerUnitAfterFee > 0
+                          ? Math.ceil(totalOperationalExpenses / netProfitPerUnitAfterFee)
+                          : 0;
+                        const businessExpensesPerUnit = unitsForBusinessExpenses > 0
+                          ? totalOperationalExpenses / unitsForBusinessExpenses
+                          : 0;
+                        
+                        // Calculate units for target profit
+                        const targetProfitAmount = targetProfitPercent > 0 && preliminaryResult.targetProfit
+                          ? preliminaryResult.targetProfit.targetProfitAmount
+                          : 0;
+                        const unitsForTargetProfit = targetProfitAmount > 0 && netProfitPerUnitAfterFee > 0
+                          ? Math.ceil(targetProfitAmount / netProfitPerUnitAfterFee)
+                          : 0;
+                        
+                        return (
+                          <div className="mt-3 space-y-2">
+                            {/* Total Biaya - Style seperti "From Production Cost" */}
+                            {preliminaryResult.targetProfit && preliminaryResult.targetProfit.totalCost > 0 && (
+                              <div>
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                  <div className="text-center">
+                                    <p className="text-sm text-blue-600 font-medium">
+                                      From Total Cost
+                                    </p>
+                                    <p className="text-2xl font-bold text-blue-700">
+                                      {formatRupiah(preliminaryResult.targetProfit.totalCost)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Total Biaya untuk Target Profit */}
+                            {preliminaryResult.targetProfit && preliminaryResult.targetProfit.totalCost > 0 && (
+                              <div className="bg-white p-3 rounded-lg border border-purple-200">
+                                <div className="text-xs text-gray-600 mb-2">Total Biaya (untuk {formatNumber(preliminaryResult.targetProfit.unitsRequired)} unit)</div>
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-600">Production Cost</span>
+                                    <span className="text-xs font-medium text-gray-700">
+                                      {formatRupiah(preliminaryResult.targetProfit.productionCost)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-600">Operational Cost</span>
+                                    <span className="text-xs font-medium text-gray-700">
+                                      {formatRupiah(preliminaryResult.targetProfit.operationalCost)}
+                                    </span>
+                                  </div>
+                                  {preliminaryResult.targetProfit.channelFee > 0 && (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-xs text-gray-600">Channel Fee</span>
+                                      <span className="text-xs font-medium text-gray-700">
+                                        {formatRupiah(preliminaryResult.targetProfit.channelFee)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="pt-1.5 border-t border-gray-200">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-xs font-medium text-purple-700">Total Cost</span>
+                                      <span className="text-sm font-semibold text-purple-700">
+                                        {formatRupiah(preliminaryResult.targetProfit.totalCost)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
 
-                {/* Bagian 2: Analisis Target Penjualan (OPSIONAL) */}
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h4 className="text-sm font-semibold text-purple-800">
-                      2. Analisis Target Penjualan
-                    </h4>
-                    <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
-                      OPSIONAL
-                    </Badge>
+                  {/* Kolom Tengah: Tombol Hitung Target Penjualan */}
+                  <div className="flex items-center justify-center">
+                    <Button onClick={handleCalculateTargetProfit} size="sm" className="flex items-center justify-center gap-2 whitespace-nowrap w-[200px]">
+                      {t('pricingTools.wizard.step5.buttons.calculateTarget', 'Hitung Target Penjualan')}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                    <p className="text-xs text-yellow-800 font-medium">
-                      <strong>⚠️ PENTING:</strong> Bagian ini <strong>TIDAK mengubah harga jual</strong> yang sudah ditentukan di atas. 
-                      Ini hanya untuk <strong>analisis</strong> - menghitung berapa unit yang harus dijual untuk mencapai target profit tertentu.
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">
-                      Target Profit (%) dari Total Biaya
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="10"
-                      value={targetProfitPercent || ''}
-                      onChange={(e) => setTargetProfitPercent(parseFloat(e.target.value) || 0)}
-                      className="mt-2"
-                      min="0"
-                      step="0.1"
-                    />
-                    <p className="text-xs text-gray-600 mt-2">
-                      <strong>Penjelasan:</strong> Masukkan target profit yang ingin dicapai dari total biaya (produksi + operasional). 
-                      Sistem akan menghitung berapa unit yang harus dijual dengan <strong>harga jual yang sudah ditentukan di Bagian 1</strong> untuk mencapai target profit ini.
-                    </p>
-                    <p className="text-xs text-purple-600 mt-1 font-medium">
-                      <strong>Contoh:</strong> Total biaya Rp 1.000.000, Target Profit 10% = Keuntungan target Rp 100.000. 
-                      Sistem akan menghitung: dengan harga jual yang sudah ditentukan, berapa unit harus dijual untuk mendapatkan profit Rp 100.000?
-                    </p>
+
+                  {/* Kolom Kanan: Target Profit Analysis */}
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="h-4 w-4 text-purple-600" />
+                      <h4 className="text-sm font-semibold text-purple-800">
+                        Target Profit Analysis
+                      </h4>
+                    </div>
+                    {calculationResult && calculationResult.targetProfit ? (
+                      <div className="space-y-2">
+                        <div className="bg-white p-2.5 rounded border border-purple-200 flex justify-between items-center">
+                          <span className="text-xs text-purple-700">Units Required:</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold text-purple-800">
+                              {calculationResult.targetProfit.unitsRequired === Infinity 
+                                ? '∞' 
+                                : formatNumber(calculationResult.targetProfit.unitsRequired)}
+                            </span>
+                            <p className="text-xs text-purple-600 mt-0.5">
+                              {timePeriod === 'monthly' ? 'unit/bulan' : 'unit/tahun'}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Total Biaya Breakdown */}
+                        <div className="bg-white p-3 rounded-lg border border-purple-200">
+                          <div className="text-xs text-gray-600 mb-2">Total Biaya (untuk {formatNumber(calculationResult.targetProfit.unitsRequired)} unit)</div>
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Production Cost</span>
+                              <span className="text-xs font-medium text-gray-700">
+                                {formatRupiah(calculationResult.targetProfit.productionCost)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Operational Cost</span>
+                              <span className="text-xs font-medium text-gray-700">
+                                {formatRupiah(calculationResult.targetProfit.operationalCost)}
+                              </span>
+                            </div>
+                            {calculationResult.targetProfit.channelFee > 0 && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-gray-600">Channel Fee</span>
+                                <span className="text-xs font-medium text-gray-700">
+                                  {formatRupiah(calculationResult.targetProfit.channelFee)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="pt-1.5 border-t border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-medium text-purple-700">Total Biaya</span>
+                                <span className="text-sm font-semibold text-purple-700">
+                                  {formatRupiah(calculationResult.targetProfit.totalCost)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Revenue Required Breakdown */}
+                        <div className="bg-white p-3 rounded-lg border border-purple-200">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Total Biaya</span>
+                              <span className="text-xs font-medium text-gray-700">
+                                {formatRupiah(calculationResult.targetProfit.totalCost)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">Target Profit ({targetProfitPercent}% dari Total Biaya)</span>
+                              <span className="text-xs font-medium text-purple-700">
+                                {formatRupiah(calculationResult.targetProfit.targetProfitAmount)}
+                              </span>
+                            </div>
+                            <div className="pt-1.5 border-t border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-medium text-purple-700">Revenue Required</span>
+                                <span className="text-sm font-semibold text-purple-700">
+                                  {formatRupiah(calculationResult.targetProfit.revenueRequired)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {targetProfitRecommendation && targetROAS > 0 && (
+                          <div className="bg-white p-2.5 rounded border border-purple-200 flex justify-between items-center">
+                            <span className="text-xs text-purple-700">Recommended Marketing Spend:</span>
+                            <div className="text-right">
+                              <span className="text-sm font-semibold text-purple-800">
+                                {formatRupiah(targetProfitRecommendation.recommendedMarketingSpend)}
+                              </span>
+                              <p className="text-xs text-purple-600 mt-0.5">
+                                ROAS {targetROAS}:1
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>Klik tombol "Hitung Target Penjualan" untuk melihat hasil</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <Separator />
+                {/* Grid 3 kolom: Marketing Spend (kiri) | Tombol Final Summary (tengah) | Marketing Results (kanan) */}
+                <div className="grid grid-cols-[2fr_auto_2fr] gap-4">
+                  {/* Kolom Kiri: Marketing Spend (per bulan) */}
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-purple-800">
+                        {t('pricingTools.wizard.step5.marketingSpend.title', 'Marketing Spend (per bulan)')}
+                      </h4>
+                      <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
+                        {t('pricingTools.wizard.step5.marketingSpend.optional', 'OPSIONAL')}
+                      </Badge>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm font-medium">Marketing Spend ({timePeriod === 'monthly' ? 'per bulan' : 'per tahun'})</Label>
+                        <Input
+                          type="text"
+                          placeholder="5.000.000"
+                          value={marketingSpendDisplay}
+                          onChange={(e) => {
+                            const rawValue = e.target.value;
+                            // Parse untuk mendapatkan nilai numerik
+                            const parsedValue = parseInputNumber(rawValue);
+                            // Format dengan formatInputNumber yang sudah handle string dengan benar
+                            const formattedValue = formatInputNumber(parsedValue);
+                            setMarketingSpendDisplay(formattedValue);
+                            setMarketingSpend(parsedValue);
+                          }}
+                          onBlur={(e) => {
+                            const parsedValue = parseInputNumber(e.target.value);
+                            const roundedValue = Math.round(parsedValue);
+                            setMarketingSpend(roundedValue);
+                            setMarketingSpendDisplay(formatInputNumber(roundedValue));
+                          }}
+                          className="mt-2"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Target ROAS (untuk Marketing)</Label>
+                        <Input
+                          type="text"
+                          placeholder="0"
+                          value={targetROASDisplay}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Allow empty string, numbers, and single decimal point
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                              setTargetROASDisplay(value);
+                              
+                              if (value === '' || value === '.') {
+                                setTargetROAS(0);
+                              } else {
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0) {
+                                  setTargetROAS(numValue);
+                                }
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim();
+                            if (value === '' || value === '.') {
+                              setTargetROAS(0);
+                              setTargetROASDisplay('');
+                            } else {
+                              const numValue = parseFloat(value);
+                              if (!isNaN(numValue) && numValue >= 0) {
+                                setTargetROAS(numValue);
+                                setTargetROASDisplay(numValue.toString());
+                              } else {
+                                // Reset to current targetROAS value or empty
+                                setTargetROASDisplay(targetROAS > 0 ? targetROAS.toString() : '');
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            // Allow backspace and delete to clear the field
+                            if (e.key === 'Backspace' || e.key === 'Delete') {
+                              // Let the default behavior happen
+                              return;
+                            }
+                            // Allow numbers, decimal point, and control keys
+                            if (!/[0-9.]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+                              e.preventDefault();
+                            }
+                          }}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">ROAS 3:1 = setiap Rp 1 spend menghasilkan Rp 3 revenue</p>
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Bagian 3: Peringatan Margin (Opsional) */}
+                  {/* Kolom Tengah: Tombol Final Summary */}
+                  <div className="flex items-center justify-center">
+                    <Button 
+                      onClick={() => {
+                        // Recalculate to ensure latest data before showing summary
+                        if (preliminaryResult) {
+                          handleCalculate();
+                        }
+                        setCurrentStep(6);
+                      }} 
+                      size="sm" 
+                      className="flex items-center justify-center gap-2 whitespace-nowrap w-[200px]"
+                    >
+                      Final Summary
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Kolom Kanan: Marketing Results - Tampilkan setelah klik Final Summary */}
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-purple-800">
+                        Marketing Results
+                      </h4>
+                    </div>
+                    {calculationResult && hasCalculatedTargetProfit && marketingSpend > 0 && targetROAS > 0 && calculatedFinalSellingPrice > 0 && calculatedMarketingCostPerUnit > 0 ? (
+                      (() => {
+                        // Calculate expected revenue
+                        const expectedRevenue = marketingSpend * targetROAS;
+                        
+                        // Calculate estimated units sold based on final selling price
+                        const estimatedUnitsSold = calculatedFinalSellingPrice > 0 
+                          ? expectedRevenue / calculatedFinalSellingPrice 
+                          : 0;
+                        
+                        return (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-white p-3 rounded border border-purple-200">
+                              <div className="text-xs text-gray-600 mb-1">Marketing Cost per Unit</div>
+                              <div className="text-sm font-semibold text-purple-700">
+                                {formatRupiah(calculatedMarketingCostPerUnit)}
+                              </div>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-green-200">
+                              <div className="text-xs text-gray-600 mb-1">Final Selling Price</div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1">
+                                  <div className="text-xs text-gray-500">From</div>
+                                  <div className="text-xs font-semibold text-green-700">
+                                    {formatRupiah(calculationResult.baseSellingPrice)}
+                                  </div>
+                                </div>
+                                <div className="text-gray-300">→</div>
+                                <div className="flex-1">
+                                  <div className="text-xs text-gray-500">To</div>
+                                  <div className="text-sm font-semibold text-green-700">
+                                    {formatRupiah(calculatedFinalSellingPrice)} <span className="text-xs text-gray-500">unit</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-blue-200">
+                              <div className="text-xs text-gray-600 mb-1">Units to Sell</div>
+                              <div className="text-sm font-semibold text-blue-700">
+                                {formatNumber(Math.round(estimatedUnitsSold))} <span className="text-xs text-gray-500">unit</span>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">(for ROAS target)</div>
+                            </div>
+                            <div className="bg-white p-3 rounded border border-green-200">
+                              <div className="text-xs text-gray-600 mb-1">Expected Revenue</div>
+                              <div className="text-sm font-semibold text-green-700">
+                                {formatRupiah(expectedRevenue)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        <p>{hasCalculatedTargetProfit 
+                          ? t('pricingTools.wizard.step5.marketingResults.placeholder', 'Isi Marketing Spend dan Target ROAS, lalu klik "Final Summary" untuk melihat hasil')
+                          : 'Klik tombol "Hitung Target Penjualan" untuk melihat hasil'
+                        }</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bagian 3: Minimum Margin */}
                 <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                  <h4 className="text-sm font-semibold text-orange-800 mb-4">
-                    3. Minimum Margin yang Diizinkan (Opsional)
+                  <h4 className="text-sm font-semibold text-orange-800 mb-3">
+                    Minimum Margin (Opsional)
                   </h4>
                   <div>
-                    <Label className="text-sm font-medium">
-                      Minimum Margin (%)
-                    </Label>
+                    <Label className="text-sm font-medium">Minimum Margin (%)</Label>
                     <Input
                       type="number"
                       placeholder="15"
@@ -688,21 +1653,10 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
                       min="0"
                       step="0.1"
                     />
-                    <p className="text-xs text-gray-600 mt-2">
-                      <strong>Penjelasan:</strong> Jika margin profit hasil perhitungan lebih rendah dari nilai ini, 
-                      sistem akan menampilkan peringatan. Ini membantu memastikan harga jual Anda tetap menguntungkan.
-                    </p>
-                    <p className="text-xs text-orange-600 mt-1 font-medium">
-                      <strong>Contoh:</strong> Set Minimum Margin 15%. Jika hasil perhitungan margin hanya 10%, sistem akan memperingatkan Anda.
-                    </p>
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button onClick={handleCalculate} className="flex-1" size="lg">
-                    <Calculator className="mr-2 h-4 w-4" />
-                    Hitung Harga Jual
-                  </Button>
                   <Button onClick={handleReset} variant="outline" size="lg">
                     Reset
                   </Button>
@@ -711,15 +1665,76 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
             </CardContent>
           </Card>
         )}
+
+        {/* Step 6: Final Summary */}
+        {currentStep === 6 && (
+          <div className="space-y-4">
+            {preliminaryResult && preliminaryResult.baseSellingPrice > 0 ? (
+              <FinalSummary
+                preliminaryResult={preliminaryResult}
+                marketingSpend={marketingSpend}
+                targetROAS={targetROAS}
+                marketingCostPerUnit={calculatedMarketingCostPerUnit > 0 ? calculatedMarketingCostPerUnit : marketingCostPerUnit}
+                finalSellingPrice={calculatedFinalSellingPrice > 0 ? calculatedFinalSellingPrice : (preliminaryResult.baseSellingPrice + marketingCostPerUnit)}
+                operationalExpenses={totalOperationalExpenses}
+                costAllocationMethod={costAllocationMethod}
+                channelFeePercent={(() => {
+                  const recommendedChannelId = preliminaryResult.summary.recommendedChannel
+                    ? preliminaryResult.channelPricing.find(c => c.channelName === preliminaryResult.summary.recommendedChannel)?.channelId
+                    : null;
+                  const recommendedChannel = salesChannels.find(c => c.id === recommendedChannelId);
+                  return recommendedChannel?.totalFeePercent || 0;
+                })()}
+                baseTotalCostPerUnit={preliminaryResult.totalCostPerUnit}
+                timePeriod={timePeriod}
+                calculationMethod={calculationMethod}
+                markupPercent={markupPercent}
+                marginPercent={marginPercent}
+                fixedProfit={fixedProfit}
+                targetProfitPercent={targetProfitPercent}
+                minimumMarginPercent={minimumMarginPercent}
+                productName={productName}
+                category={category}
+              />
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-8">
+                    <AlertTriangle className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      Silakan selesaikan Step 5 (Pricing Settings) terlebih dahulu.
+                    </p>
+                    <Button 
+                      onClick={() => goToStep(5)} 
+                      className="mt-4"
+                    >
+                      Kembali ke Pricing Settings
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Calculation Results */}
-      {calculationResult && (
-        <TargetCalculationResults results={calculationResult} timePeriod={timePeriod} />
+      {/* Calculation Results - Hide on Pricing Settings (step 5) and Final Summary step (step 6) */}
+      {calculationResult && currentStep !== 5 && currentStep !== 6 && (
+        <TargetCalculationResults 
+          results={calculationResult} 
+          timePeriod={timePeriod}
+          breakEvenRecommendation={breakEvenRecommendation}
+          targetProfitRecommendation={targetProfitRecommendation}
+          targetROAS={targetROAS}
+          isPreliminary={calculationResult.isPreliminary || false}
+          currentStep={currentStep}
+          targetProfitPercent={targetProfitPercent}
+        />
       )}
 
       {/* Navigation Buttons */}
-      {!calculationResult && (
+      {/* Show navigation buttons if no result yet, or if we're on Step 5/6/7 (after calculation) */}
+      {(!calculationResult || currentStep >= 5) && (
         <div className="flex justify-between items-center pt-4">
           <Button
             onClick={prevStep}
@@ -728,13 +1743,15 @@ export const PricingWizard = forwardRef<PricingWizardRef, PricingWizardProps>(
           >
             Previous
           </Button>
-          <Button
-            onClick={nextStep}
-            disabled={currentStep === STEPS.length || !isStepValid(currentStep)}
-          >
-            Next
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
+          {currentStep < STEPS.length && (
+            <Button
+              onClick={nextStep}
+              disabled={currentStep >= STEPS.length || !isStepValid(currentStep)}
+            >
+              Next
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </div>
       )}
     </div>

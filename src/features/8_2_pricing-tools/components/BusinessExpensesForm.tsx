@@ -17,7 +17,6 @@ interface BusinessExpensesFormProps {
   timePeriod: TimePeriod;
   costAllocationMethod: CostAllocationMethod;
   initialExpenses?: BusinessExpenseItem[];
-  key?: string;
 }
 
 // DEFAULT_CATEGORIES dan MONTHS akan dibuat di dalam component untuk menggunakan translation
@@ -37,8 +36,7 @@ export const BusinessExpensesForm = ({
   onExpensesChange,
   timePeriod,
   costAllocationMethod,
-  initialExpenses,
-  key
+  initialExpenses
 }: BusinessExpensesFormProps) => {
   const { t } = useAppTranslation();
   

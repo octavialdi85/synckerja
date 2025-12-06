@@ -16,12 +16,56 @@ import { SaveTemplateModal } from './SaveTemplateModal';
 interface PricingToolsSidebarProps {
   calculationResults?: PricingCalculationResult | null;
   calculationInput?: PricingCalculationInput;
+  currentStep?: number;
+  finalSellingPrice?: number;
+  marketingCostPerUnit?: number;
+  channelFeePercent?: number;
+  baseTotalCostPerUnit?: number;
 }
 
-export const PricingToolsSidebar = ({ calculationResults, calculationInput }: PricingToolsSidebarProps) => {
+export const PricingToolsSidebar = ({ 
+  calculationResults, 
+  calculationInput,
+  currentStep = 1,
+  finalSellingPrice,
+  marketingCostPerUnit,
+  channelFeePercent,
+  baseTotalCostPerUnit
+}: PricingToolsSidebarProps) => {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [calculationName, setCalculationName] = useState('');
   const { saveCalculation, isSaving } = usePricingCalculations();
+
+  // Calculate profit per unit and profit margin when marketing results are available
+  const calculateFinalProfit = () => {
+    // Check if marketing results are available (marketingSpend > 0 and targetROAS > 0 means Marketing Results is calculated)
+    const hasMarketingResults = finalSellingPrice && finalSellingPrice > 0 && marketingCostPerUnit !== undefined && 
+        channelFeePercent !== undefined && baseTotalCostPerUnit !== undefined;
+    
+    if (hasMarketingResults) {
+      // Calculate final total cost per unit (base + marketing)
+      const finalTotalCostPerUnit = baseTotalCostPerUnit + marketingCostPerUnit;
+      
+      // Calculate channel fee per unit
+      const channelFeePerUnit = (finalSellingPrice * channelFeePercent) / 100;
+      
+      // Calculate final net profit per unit
+      const finalNetProfitPerUnit = finalSellingPrice - finalTotalCostPerUnit - channelFeePerUnit;
+      
+      // Calculate final profit margin percent
+      const finalProfitMarginPercent = finalSellingPrice > 0 
+        ? (finalNetProfitPerUnit / finalSellingPrice) * 100 
+        : 0;
+      
+      return {
+        profitPerUnit: finalNetProfitPerUnit,
+        profitMarginPercent: finalProfitMarginPercent,
+      };
+    }
+    return null;
+  };
+
+  const finalProfit = calculateFinalProfit();
 
   const handleSaveCalculation = async () => {
     if (!calculationResults || !calculationInput || !calculationName.trim()) {
@@ -151,10 +195,32 @@ export const PricingToolsSidebar = ({ calculationResults, calculationInput }: Pr
                 {/* Recommended Price */}
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <div className="text-center">
-                    <p className="text-sm text-blue-600 font-medium">Recommended Selling Price</p>
-                    <p className="text-2xl font-bold text-blue-700">
-                      {formatRupiah(calculationResults.summary.recommendedSellingPrice)}
+                    <p className="text-sm text-blue-600 font-medium">
+                      {finalSellingPrice && finalSellingPrice > 0 ? 'Final Selling Price' : 'Recommended Selling Price'}
                     </p>
+                    {finalSellingPrice && finalSellingPrice > 0 && calculationResults ? (
+                      <>
+                        <div className="mt-2 flex items-center justify-center gap-3">
+                          <div className="text-center">
+                            <p className="text-xs text-blue-500">From</p>
+                            <p className="text-lg font-semibold text-blue-700">
+                              {formatRupiah(calculationResults.summary.recommendedSellingPrice)}
+                            </p>
+                          </div>
+                          <div className="text-blue-400 text-xl">→</div>
+                          <div className="text-center">
+                            <p className="text-xs text-blue-500">To</p>
+                            <p className="text-2xl font-bold text-blue-700">
+                              {formatRupiah(finalSellingPrice)}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-2xl font-bold text-blue-700">
+                        {formatRupiah(calculationResults.summary.recommendedSellingPrice)}
+                      </p>
+                    )}
                     {calculationResults.summary.recommendedChannel && (
                       <p className="text-xs text-blue-600 mt-1">
                         Best on: {calculationResults.summary.recommendedChannel}
@@ -168,13 +234,21 @@ export const PricingToolsSidebar = ({ calculationResults, calculationInput }: Pr
                   <div className="bg-green-50 p-3 rounded-lg text-center">
                     <p className="text-xs text-green-600 font-medium">Profit per Unit</p>
                     <p className="text-lg font-bold text-green-700">
-                      {formatRupiah(calculationResults.profitPerUnit)}
+                      {formatRupiah(
+                        finalProfit 
+                          ? finalProfit.profitPerUnit 
+                          : calculationResults.profitPerUnit
+                      )}
                     </p>
                   </div>
                   <div className="bg-purple-50 p-3 rounded-lg text-center">
                     <p className="text-xs text-purple-600 font-medium">Profit Margin</p>
                     <p className="text-lg font-bold text-purple-700">
-                      {calculationResults.profitMarginPercent.toFixed(2)}%
+                      {(
+                        finalProfit 
+                          ? finalProfit.profitMarginPercent 
+                          : calculationResults.profitMarginPercent
+                      ).toFixed(2)}%
                     </p>
                   </div>
                 </div>

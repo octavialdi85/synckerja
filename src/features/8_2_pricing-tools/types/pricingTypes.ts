@@ -78,9 +78,9 @@ export interface PricingCalculationInput {
   productName: string;
   category: string;
   
-  // Production Costs (dari DynamicCostBreakdown)
+  // Production Costs (dari DynamicCostBreakdown) - WITHOUT Marketing Cost
   costBreakdown?: CostCategory[]; // Full structure untuk populate DynamicCostBreakdown
-  productionCostPerUnit: number; // Cost per unit dari cost breakdown
+  productionCostPerUnit: number; // Cost per unit dari cost breakdown (tanpa marketing)
   
   // Operational Expenses
   operationalExpenses: BusinessExpenseItem[];
@@ -103,6 +103,12 @@ export interface PricingCalculationInput {
   
   // Minimum Margin Threshold
   minimumMarginPercent: number;
+  
+  // Marketing Costs (NEW - after Pricing Settings)
+  marketingSpend?: number; // Marketing spend bulanan
+  targetROAS?: number; // Target ROAS (mis. 3 berarti 3:1)
+  marketingCostPerUnit?: number; // Calculated marketing cost per unit
+  baseSellingPrice?: number; // Selling price sebelum marketing (from Step 5)
 }
 
 export interface ChannelPricingResult {
@@ -120,18 +126,20 @@ export interface BreakEvenAnalysis {
   revenueRequired: number;
   monthsToBreakEven?: number; // Jika monthly, estimasi bulan
   // Breakdown fields
-  totalExpenses?: number; // Total expenses yang perlu ditutup (Production + Operational + Channel Fee)
+  totalExpenses?: number; // Total expenses yang perlu ditutup (Production + Operational + Channel Fee + Marketing)
   productionCost?: number; // Breakdown untuk break-even units
   operationalCost?: number; // Breakdown untuk break-even units
   channelFee?: number; // Breakdown untuk break-even units
+  marketingCost?: number; // Breakdown untuk break-even units (NEW)
   netProfitPerUnit?: number; // Net profit per unit setelah channel fee
 }
 
 export interface TargetProfitAnalysis {
-  totalCost: number; // Total biaya (production + operational + channel fee) yang digunakan untuk menghitung target profit
+  totalCost: number; // Total biaya (production + operational + channel fee + marketing) yang digunakan untuk menghitung target profit
   productionCost: number; // Breakdown: Biaya produksi
   operationalCost: number; // Breakdown: Biaya operasional
   channelFee: number; // Breakdown: Biaya sales channel fee
+  marketingCost?: number; // Breakdown: Biaya marketing (NEW)
   targetProfitAmount: number;
   unitsRequired: number;
   revenueRequired: number;
@@ -148,7 +156,7 @@ export interface PricingCalculationWarnings {
 export interface PricingCalculationResult {
   // Base Calculation
   baseSellingPrice: number;
-  totalCostPerUnit: number; // Production + Operational (jika per-unit)
+  totalCostPerUnit: number; // Production + Operational (jika per-unit) - WITHOUT marketing
   profitPerUnit: number;
   profitMarginPercent: number;
   markupPercent: number;
@@ -156,10 +164,10 @@ export interface PricingCalculationResult {
   // Channel Pricing
   channelPricing: ChannelPricingResult[];
   
-  // Break-Even Analysis
+  // Break-Even Analysis (PRELIMINARY - without marketing if isPreliminary = true)
   breakEven: BreakEvenAnalysis;
   
-  // Target Profit Analysis
+  // Target Profit Analysis (PRELIMINARY - without marketing if isPreliminary = true)
   targetProfit: TargetProfitAnalysis | null;
   
   // Warnings
@@ -167,14 +175,37 @@ export interface PricingCalculationResult {
   
   // Summary
   summary: {
-    totalExpenses: number; // Production + Operational + Channel Fee
-    recommendedSellingPrice: number;
+    totalExpenses: number; // Production + Operational + Channel Fee (without marketing)
+    recommendedSellingPrice: number; // Base selling price (before marketing)
     recommendedChannel?: string;
     productionCostPerUnit: number;
     operationalCostPerUnit: number;
     breakEvenChannelFee?: number; // Channel fee untuk break-even
     netProfitPerUnit?: number; // Net profit per unit setelah channel fee
     channelFeePercentage?: number; // Persentase channel fee
+  };
+  
+  // NEW: Preliminary vs Final Analysis
+  isPreliminary?: boolean; // true = preliminary (without marketing), false = final (with marketing)
+  preliminaryResults?: {
+    baseSellingPrice: number;
+    totalCostPerUnit: number;
+    breakEven: BreakEvenAnalysis;
+    targetProfit: TargetProfitAnalysis | null;
+  };
+  
+  // NEW: Marketing Analysis (only if marketing is added)
+  marketing?: {
+    marketingSpend: number;
+    targetROAS: number;
+    expectedRevenue: number;
+    estimatedUnitsSold: number;
+    marketingCostPerUnit: number;
+    baseSellingPrice: number; // Selling price sebelum marketing
+    finalSellingPrice: number; // Selling price setelah marketing
+    finalTotalCostPerUnit: number; // Total cost dengan marketing
+    finalBreakEven: BreakEvenAnalysis;
+    finalTargetProfit: TargetProfitAnalysis | null;
   };
 }
 

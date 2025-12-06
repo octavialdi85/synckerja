@@ -80,12 +80,7 @@ const DEFAULT_CATEGORIES: CostCategory[] = [
     items: [],
     color: 'text-purple-600'
   },
-  {
-    id: 'marketing-cost',
-    title: 'Marketing Cost',
-    items: [],
-    color: 'text-red-600'
-  },
+  // Marketing Cost removed - now handled in Step 6 (Marketing Costs)
   {
     id: 'other-cost',
     title: 'Other Costs',
@@ -111,8 +106,10 @@ export const DynamicCostBreakdown: React.FC<DynamicCostBreakdownProps> = ({
   useEffect(() => {
     if (initialCostCategories && initialCostCategories.length > 0) {
       // Filter out admin-cost category (moved to Business Expenses)
+      // Filter out marketing-cost category (moved to Step 6 - Marketing Costs)
+      // But keep it for backward compatibility display (will be excluded from total calculation)
       const filteredCategories = initialCostCategories.filter(
-        category => category.id !== 'admin-cost'
+        category => category.id !== 'admin-cost' && category.id !== 'marketing-cost'
       );
       setCostCategories(filteredCategories);
     } else if (!initialCostCategories) {
@@ -355,8 +352,11 @@ export const DynamicCostBreakdown: React.FC<DynamicCostBreakdownProps> = ({
   };
 
   const getGrandTotal = () => {
-    // Total cost per unit
-    return costCategories.reduce((total, category) => total + getCategoryTotal(category), 0);
+    // Total cost per unit - EXCLUDE marketing cost (marketing moved to Step 6)
+    // Still support backward compatibility if marketing category exists in old data
+    return costCategories
+      .filter(category => !isMarketingCategory(category))
+      .reduce((total, category) => total + getCategoryTotal(category), 0);
   };
 
   // Get production cost per unit WITHOUT marketing cost (untuk estimasi marketing)
@@ -464,8 +464,9 @@ export const DynamicCostBreakdown: React.FC<DynamicCostBreakdownProps> = ({
     }
     if (onCostBreakdownChange) {
       // Filter out admin-cost category (moved to Business Expenses)
+      // Filter out marketing-cost category (moved to Step 6 - Marketing Costs)
       const filteredCategories = costCategories.filter(
-        category => category.id !== 'admin-cost'
+        category => category.id !== 'admin-cost' && category.id !== 'marketing-cost'
       );
       onCostBreakdownChange(filteredCategories);
     }
@@ -500,7 +501,7 @@ export const DynamicCostBreakdown: React.FC<DynamicCostBreakdownProps> = ({
       </CardHeader>
       <CardContent className="space-y-6">
         {costCategories
-          .filter(category => category.id !== 'admin-cost') // Filter out admin-cost (moved to Business Expenses)
+          .filter(category => category.id !== 'admin-cost' && category.id !== 'marketing-cost') // Filter out admin-cost (moved to Business Expenses) and marketing-cost (moved to Step 6)
           .map((category) => (
           <div key={category.id} className="space-y-3">
             <div className="flex items-center justify-between">

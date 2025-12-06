@@ -22,4 +22,6 @@ export { CalculationHistoryViewer } from './CalculationHistoryViewer';
 export { MultipleProductComparison } from './MultipleProductComparison';
 export { LoadTemplateModal } from './LoadTemplateModal';
 export { SaveTemplateModal } from './SaveTemplateModal';
+export { MarketingCostsForm } from './MarketingCostsForm';
+export { FinalSummary } from './FinalSummary';
 export type { PricingWizardRef } from './PricingWizard';

@@ -14,7 +14,6 @@ import { useSalesChannels } from '../hooks/useSalesChannels';
 interface SalesChannelManagerProps {
   onChannelsChange: (channels: SalesChannel[]) => void;
   initialChannels?: SalesChannel[];
-  key?: string;
 }
 
 const DEFAULT_CHANNELS: SalesChannel[] = [
@@ -68,7 +67,7 @@ const DEFAULT_CHANNELS: SalesChannel[] = [
   },
 ];
 
-export const SalesChannelManager = ({ onChannelsChange, initialChannels, key }: SalesChannelManagerProps) => {
+export const SalesChannelManager = ({ onChannelsChange, initialChannels }: SalesChannelManagerProps) => {
   const [channels, setChannels] = useState<SalesChannel[]>(() => {
     return initialChannels || DEFAULT_CHANNELS;
   });
