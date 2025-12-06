@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, DollarSign, Calendar, Download, Upload } from 'lucide-react';
 import { Separator } from '@/features/ui/separator';
 import { Badge } from '@/features/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { BusinessExpenseItem, BusinessExpenseCategory, TimePeriod, CostAllocationMethod } from '../types/pricingTypes';
 import { formatRupiah } from '../utils/pricingUtils';
 import { useBusinessExpenses } from '../hooks/useBusinessExpenses';
@@ -205,82 +206,115 @@ export const BusinessExpensesForm = ({
           </Button>
         </div>
 
-        {/* Expense Items */}
-        <div className="space-y-3">
-          {expenses.map((item) => {
-            const category = categories.find(c => c.id === item.category);
-            return (
-              <div key={item.id} className="p-3 border rounded-lg bg-gray-50 space-y-2">
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <Input
-                      placeholder={t('pricingTools.businessExpenses.expenseName', 'Nama expense (e.g., Sewa Toko, Gaji Admin)')}
-                      value={item.name}
-                      onChange={(e) => updateExpenseItem(item.id, 'name', e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeExpenseItem(item.id)}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <Select
-                    value={item.category}
-                    onValueChange={(value) => updateExpenseItem(item.id, 'category', value)}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {timePeriod === 'monthly' && (
-                    <Select
-                      value={(item.month ?? 0).toString()}
-                      onValueChange={(value) => updateExpenseItem(item.id, 'month', parseInt(value))}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MONTHS.map((month) => (
-                          <SelectItem key={month.value} value={month.value.toString()}>
-                            {month.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      placeholder="Jumlah"
-                      value={item.amount || ''}
-                      onChange={(e) => updateExpenseItem(item.id, 'amount', parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm"
-                      min="0"
-                      step="1000"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {/* Expense Items Table */}
+        {expenses.length > 0 ? (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="seamless-scroll max-h-[calc(100vh-400px)] overflow-x-auto overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-blue-600 text-white">
+                    <TableHead className="bg-blue-600 font-semibold text-white min-w-[200px] border-r border-blue-500 h-10 px-3 py-2">
+                      {t('pricingTools.businessExpenses.table.expenseName', 'Expense Name')}
+                    </TableHead>
+                    <TableHead className="bg-blue-600 font-semibold text-white min-w-[180px] border-r border-blue-500 h-10 px-3 py-2">
+                      {t('pricingTools.businessExpenses.table.category', 'Category')}
+                    </TableHead>
+                    {timePeriod === 'monthly' && (
+                      <TableHead className="bg-blue-600 font-semibold text-white min-w-[150px] border-r border-blue-500 h-10 px-3 py-2">
+                        {t('pricingTools.businessExpenses.table.month', 'Month')}
+                      </TableHead>
+                    )}
+                    <TableHead className="bg-blue-600 font-semibold text-white text-right min-w-[150px] border-r border-blue-500 h-10 px-3 py-2">
+                      {t('pricingTools.businessExpenses.table.amount', 'Amount')}
+                    </TableHead>
+                    <TableHead className="bg-blue-600 font-semibold text-white text-center min-w-[100px] h-10 px-3 py-2">
+                      {t('pricingTools.businessExpenses.table.actions', 'Actions')}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.map((item) => {
+                    const category = categories.find(c => c.id === item.category);
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="min-w-[200px] border-r border-gray-200 py-2 px-3">
+                          <Input
+                            placeholder={t('pricingTools.businessExpenses.expenseName', 'Nama expense (e.g., Sewa Toko, Gaji Admin)')}
+                            value={item.name}
+                            onChange={(e) => updateExpenseItem(item.id, 'name', e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[180px] border-r border-gray-200 py-2 px-3">
+                          <Select
+                            value={item.category}
+                            onValueChange={(value) => updateExpenseItem(item.id, 'category', value)}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        {timePeriod === 'monthly' && (
+                          <TableCell className="min-w-[150px] border-r border-gray-200 py-2 px-3">
+                            <Select
+                              value={(item.month ?? 0).toString()}
+                              onValueChange={(value) => updateExpenseItem(item.id, 'month', parseInt(value))}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MONTHS.map((month) => (
+                                  <SelectItem key={month.value} value={month.value.toString()}>
+                                    {month.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        )}
+                        <TableCell className="text-right min-w-[150px] border-r border-gray-200 py-2 px-3">
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={item.amount || ''}
+                            onChange={(e) => updateExpenseItem(item.id, 'amount', parseFloat(e.target.value) || 0)}
+                            className="h-8 text-sm text-right"
+                            min="0"
+                            step="1000"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center min-w-[100px] py-2 px-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExpenseItem(item.id)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400 text-sm border rounded-lg bg-gray-50">
+            <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>{t('pricingTools.businessExpenses.noExpenses', 'Belum ada expense. Klik "Tambah Expense" untuk menambahkan.')}</p>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <Button onClick={addExpenseItem} variant="outline" className="flex-1" size="sm">

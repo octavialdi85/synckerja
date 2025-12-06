@@ -38,9 +38,15 @@ export const PricingToolsSidebar = ({
 
   // Calculate profit per unit and profit margin when marketing results are available
   const calculateFinalProfit = () => {
-    // Check if marketing results are available (marketingSpend > 0 and targetROAS > 0 means Marketing Results is calculated)
-    const hasMarketingResults = finalSellingPrice && finalSellingPrice > 0 && marketingCostPerUnit !== undefined && 
-        channelFeePercent !== undefined && baseTotalCostPerUnit !== undefined;
+    // Check if marketing results are available
+    // Marketing Results is considered available only if:
+    // 1. marketingCostPerUnit > 0 (has valid marketing cost)
+    // 2. finalSellingPrice is significantly different from recommendedSellingPrice (more than 1% difference)
+    const hasMarketingResults = finalSellingPrice && finalSellingPrice > 0 && 
+        marketingCostPerUnit !== undefined && marketingCostPerUnit > 0 && 
+        channelFeePercent !== undefined && baseTotalCostPerUnit !== undefined &&
+        calculationResults && 
+        Math.abs(finalSellingPrice - calculationResults.summary.recommendedSellingPrice) > (calculationResults.summary.recommendedSellingPrice * 0.01);
     
     if (hasMarketingResults) {
       // Calculate final total cost per unit (base + marketing)
@@ -196,9 +202,9 @@ export const PricingToolsSidebar = ({
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <div className="text-center">
                     <p className="text-sm text-blue-600 font-medium">
-                      {finalSellingPrice && finalSellingPrice > 0 ? 'Final Selling Price' : 'Recommended Selling Price'}
+                      {finalProfit ? 'Final Selling Price' : 'Recommended Selling Price'}
                     </p>
-                    {finalSellingPrice && finalSellingPrice > 0 && calculationResults ? (
+                    {finalProfit && finalSellingPrice && finalSellingPrice > 0 && calculationResults ? (
                       <>
                         <div className="mt-2 flex items-center justify-center gap-3">
                           <div className="text-center">
