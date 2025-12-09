@@ -1005,7 +1005,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
             type="file"
             onChange={handleFileSelect}
             className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar"
+            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar,.wav,.mp3,.m4a,.aac,.ogg,.flac,.mp4,.avi,.mov,.wmv,.flv,.webm,.mkv,.m4v"
           />
           
           <Button

@@ -654,45 +654,43 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // DISABLED: Task files query causes timeout with many IDs - not critical for initial load
-      // Files can be loaded lazily when user views a specific step
+      // Fetch task files for all steps - use batch processing to avoid timeout
       let taskFilesData: any[] = [];
       if (stepIds.length > 0) {
-        if (isDev) {
-          logger.debug('ℹ️ Task files query disabled to prevent timeout');
-          logger.debug(`📋 Skipping task files for ${stepIds.length} steps`);
-        }
-      }
-      
-      /* COMMENTED OUT: Task files query disabled to prevent timeout
-      // Fetch task files for all steps
-      if (isDev) {
-        logger.query('🔍 Fetching task files for steps:', stepIds.length);
-      }
-      if (stepIds.length > 0) {
-        const { data: filesData, error: filesError } = await supabase
-          .from('task_files')
-          .select(`
-            id,
-            task_steps_id,
-            filename,
-            file_url,
-            file_size,
-            created_at
-          `)
-          .in('task_steps_id', stepIds)
-          .order('created_at', { ascending: false });
-
-        if (filesError) {
-          console.error('❌ Error fetching task files:', filesError);
-        } else {
-          taskFilesData = filesData || [];
+        try {
+          if (isDev) {
+            logger.query('🔍 Fetching task files for steps:', stepIds.length);
+          }
+          // Use batch processing to prevent timeout with many IDs
+          const filesBatches = await batchQuery(
+            stepIds,
+            async (batch) => {
+              const { data, error } = await supabase
+                .from('task_files')
+                .select(`
+                  id,
+                  task_steps_id,
+                  filename,
+                  file_url,
+                  file_size,
+                  created_at
+                `)
+                .in('task_steps_id', batch)
+                .order('created_at', { ascending: false });
+              
+              return { data: data || [], error };
+            }
+          );
+          
+          taskFilesData = filesBatches;
           if (isDev) {
             logger.query('✅ Fetched task files:', taskFilesData.length);
           }
+        } catch (error) {
+          console.error('❌ Error fetching task files:', error);
+          taskFilesData = [];
         }
       }
-      */
 
       // Group task files by step_id
       const filesByStepId: Record<string, any[]> = {};
