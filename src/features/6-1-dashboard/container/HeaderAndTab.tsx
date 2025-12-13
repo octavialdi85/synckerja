@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Calendar, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar, BookOpen, Settings } from 'lucide-react';
 
 interface HeaderAndTabProps {
   activeMainTab: string;
@@ -27,6 +27,13 @@ export const HeaderAndTab = ({ activeMainTab, handleTabChange }: HeaderAndTabPro
       route: '/digital-marketing/social-media/content-calendar'
     },
     {
+      id: 'product-knowledge',
+      label: 'Product Knowledge',
+      icon: BookOpen,
+      description: 'Manage product knowledge',
+      route: '/digital-marketing/social-media/product-knowledge'
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
@@ -45,6 +52,9 @@ export const HeaderAndTab = ({ activeMainTab, handleTabChange }: HeaderAndTabPro
   const getActiveTab = () => {
     if (location.pathname.includes('content-calendar')) {
       return 'content-calendar';
+    }
+    if (location.pathname.includes('product-knowledge')) {
+      return 'product-knowledge';
     }
     if (location.pathname.includes('settings')) {
       return 'settings';
