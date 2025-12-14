@@ -1,0 +1,815 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { Label } from '@/features/ui/label';
+import { Textarea } from '@/features/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/features/ui/select';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { ScriptGeneratorRequest } from '../services/scriptGeneratorService';
+import { useProductKnowledge } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledge';
+import { useProductKnowledgeStyle } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeStyle';
+
+interface ScriptGeneratorFormProps {
+  onGenerate: (data: ScriptGeneratorRequest) => Promise<void>;
+  isGenerating: boolean;
+}
+
+export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
+  onGenerate,
+  isGenerating
+}) => {
+  const { t } = useAppTranslation();
+  const { organizationId } = useCurrentOrg();
+  
+  const [formData, setFormData] = useState<ScriptGeneratorRequest>({
+    content_type: '',
+    service_name: '',
+    sub_service_name: '',
+    content_pillar: '',
+    duration_minutes: undefined,
+    slide: undefined,
+    duration_value: undefined,
+    duration_unit: 'menit',
+    target_market: '',
+    gender: '',
+    age: '',
+    buying_roles: '',
+    keinginan: '',
+    kebutuhan: '',
+    hidden_needs_1: '',
+    hidden_needs_2: '',
+    problem_1: '',
+    problem_2: '',
+    impact_1: '',
+    impact_2: '',
+    solution: '',
+    style_name: '',
+    style_instruksi: '',
+    structure: ''
+  });
+  
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
+  const [selectedStyleName, setSelectedStyleName] = useState<string>('');
+
+  // Master data
+  const [contentTypes, setContentTypes] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
+  const [subServices, setSubServices] = useState<any[]>([]);
+  const [contentPillars, setContentPillars] = useState<any[]>([]);
+  const [filteredSubServices, setFilteredSubServices] = useState<any[]>([]);
+  
+  // Fetch product knowledge for wants and needs
+  const { data: productKnowledgeData = [] } = useProductKnowledge();
+  
+  // Fetch product knowledge style for style instructions
+  const { data: productKnowledgeStyles = [] } = useProductKnowledgeStyle();
+  
+  // Filter product knowledge that has wants and needs
+  const productKnowledgeWithWantsNeeds = productKnowledgeData.filter(
+    (pk) => pk.wants && pk.wants.trim() !== '' && pk.needs && pk.needs.trim() !== ''
+  );
+  
+  // Helper function to parse hidden_needs string into array
+  const parseHiddenNeeds = (hiddenNeeds: string | null | undefined): string[] => {
+    if (!hiddenNeeds || hiddenNeeds.trim() === '') return [];
+    
+    // Split by double newline first (like problems_solved format)
+    if (hiddenNeeds.includes('\n\n')) {
+      return hiddenNeeds
+        .split(/\n\n+/)
+        .map((item) => item.trim())
+        .filter((item) => item !== '');
+    }
+    
+    // Fallback to single newline
+    return hiddenNeeds
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => item !== '');
+  };
+  
+  // Helper function to parse impact string into array
+  const parseImpact = (impact: string | null | undefined): string[] => {
+    if (!impact || impact.trim() === '') return [];
+    
+    // Split by double newline first (like problems_solved format)
+    if (impact.includes('\n\n')) {
+      return impact
+        .split(/\n\n+/)
+        .map((item) => item.trim())
+        .filter((item) => item !== '');
+    }
+    
+    // Fallback to single newline
+    return impact
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => item !== '');
+  };
+  
+  // Helper function to format problems array to display string
+  const formatProblemsForDisplay = (problems: string[] | null | undefined): string => {
+    if (!problems || problems.length === 0) return '';
+    // Format dengan newline dan baris kosong di antara setiap masalah untuk pemisahan visual
+    return problems.filter(Boolean).join('\n\n');
+  };
+
+  // Load master data
+  useEffect(() => {
+    const loadMasterData = async () => {
+      if (!organizationId) return;
+
+      try {
+        const [contentTypesResult, servicesResult, subServicesResult, contentPillarsResult] = await Promise.all([
+          supabase
+            .from('content_types')
+            .select('*')
+            .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+            .eq('is_active', true)
+            .order('name'),
+          supabase
+            .from('services')
+            .select('*')
+            .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+            .eq('is_active', true)
+            .order('name'),
+          supabase
+            .from('sub_services')
+            .select('*')
+            .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+            .eq('is_active', true)
+            .order('name'),
+          supabase
+            .from('content_pillars')
+            .select('*')
+            .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+            .eq('is_active', true)
+            .order('name')
+        ]);
+
+        // Filter out any items with empty/null names to prevent SelectItem error
+        setContentTypes((contentTypesResult.data || []).filter((t: any) => t?.name && typeof t.name === 'string' && t.name.trim() !== ''));
+        setServices((servicesResult.data || []).filter((s: any) => s?.name && typeof s.name === 'string' && s.name.trim() !== '' && s?.id));
+        setSubServices((subServicesResult.data || []).filter((ss: any) => ss?.name && typeof ss.name === 'string' && ss.name.trim() !== '' && ss?.id));
+        setContentPillars((contentPillarsResult.data || []).filter((cp: any) => cp?.name && typeof cp.name === 'string' && cp.name.trim() !== ''));
+      } catch (error) {
+        console.error('Error loading master data:', error);
+      }
+    };
+
+    loadMasterData();
+  }, [organizationId]);
+
+  // Filter sub services based on selected service
+  useEffect(() => {
+    if (selectedServiceId && subServices.length > 0) {
+      const filtered = subServices.filter(
+        (ss: any) => ss.service_id === selectedServiceId && ss.name && ss.name.trim() !== ''
+      );
+      setFilteredSubServices(filtered);
+    } else {
+      setFilteredSubServices([]);
+    }
+  }, [selectedServiceId, subServices]);
+
+  const handleInputChange = (field: keyof ScriptGeneratorRequest, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Reset sub_service when service changes
+    if (field === 'service_name') {
+      setFormData(prev => ({
+        ...prev,
+        service_name: value,
+        sub_service_name: ''
+      }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onGenerate(formData);
+  };
+
+  const handleReset = () => {
+    setFormData({
+      content_type: '',
+      service_name: '',
+      sub_service_name: '',
+      content_pillar: '',
+      duration_minutes: undefined,
+      slide: undefined,
+      duration_value: undefined,
+      duration_unit: 'menit',
+      target_market: '',
+      gender: '',
+      age: '',
+      buying_roles: '',
+      keinginan: '',
+      kebutuhan: '',
+      hidden_needs_1: '',
+      hidden_needs_2: '',
+      problem_1: '',
+      problem_2: '',
+      impact_1: '',
+      impact_2: '',
+      solution: '',
+      style_name: '',
+      style_instruksi: '',
+      structure: ''
+    });
+    setSelectedServiceId('');
+    setSelectedStyleName('');
+  };
+
+  // Determine field type based on content type
+  const contentTypeLower = (formData.content_type || '').toLowerCase();
+  const isPostOrCarousel = contentTypeLower === 'post' || contentTypeLower === 'carousel';
+  const isReelStoryYoutube = contentTypeLower === 'reel' || contentTypeLower === 'story' || contentTypeLower === 'youtube';
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Content Type */}
+        <div className="space-y-2">
+          <Label htmlFor="content_type">Content Type</Label>
+          <Select
+            value={formData.content_type || undefined}
+            onValueChange={(value) => {
+              handleInputChange('content_type', value);
+              // Reset duration/slide when content type changes
+              setFormData(prev => ({
+                ...prev,
+                content_type: value,
+                slide: undefined,
+                duration_value: undefined,
+                duration_unit: 'menit'
+              }));
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Content Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {contentTypes
+                .filter((type) => {
+                  const name = type?.name;
+                  return name && typeof name === 'string' && name.trim() !== '' && type?.id;
+                })
+                .map((type) => {
+                  const value = String(type.name).trim();
+                  return (
+                    <SelectItem key={type.id} value={value}>
+                      {type.name}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Slide or Duration - conditional based on Content Type */}
+        {isPostOrCarousel ? (
+          <div className="space-y-2">
+            <Label htmlFor="slide">Slide</Label>
+            <Input
+              id="slide"
+              type="number"
+              min="1"
+              value={formData.slide || ''}
+              onChange={(e) => handleInputChange('slide', parseInt(e.target.value) || undefined)}
+              placeholder="Contoh: 5"
+            />
+          </div>
+        ) : isReelStoryYoutube ? (
+          <div className="space-y-2">
+            <Label htmlFor="duration_value">Durasi</Label>
+            <div className="flex gap-2">
+              <Input
+                id="duration_value"
+                type="number"
+                min="1"
+                value={formData.duration_value || ''}
+                onChange={(e) => handleInputChange('duration_value', parseInt(e.target.value) || undefined)}
+                placeholder="Contoh: 60"
+                className="flex-1"
+              />
+              <Select
+                value={formData.duration_unit || 'menit'}
+                onValueChange={(value) => handleInputChange('duration_unit', value as 'menit' | 'detik')}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="menit">Menit</SelectItem>
+                  <SelectItem value="detik">Detik</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Service */}
+        <div className="space-y-2">
+          <Label htmlFor="service_name">Service</Label>
+          <Select
+            value={selectedServiceId || undefined}
+            onValueChange={(serviceId) => {
+              const selectedService = services.find(s => s.id === serviceId);
+              setSelectedServiceId(serviceId);
+              handleInputChange('service_name', selectedService?.name || '');
+              handleInputChange('sub_service_name', ''); // Reset sub service
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Service" />
+            </SelectTrigger>
+            <SelectContent>
+              {services
+                .filter((service) => {
+                  const id = service?.id;
+                  const name = service?.name;
+                  return id && name && typeof name === 'string' && name.trim() !== '' && typeof id === 'string' && id.trim() !== '';
+                })
+                .map((service) => {
+                  const value = String(service.id).trim();
+                  return (
+                    <SelectItem key={service.id} value={value}>
+                      {service.name}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Sub Service */}
+        <div className="space-y-2">
+          <Label htmlFor="sub_service_name">Sub Service</Label>
+          <Select
+            value={formData.sub_service_name || undefined}
+            onValueChange={(value) => handleInputChange('sub_service_name', value)}
+            disabled={!selectedServiceId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={selectedServiceId ? "Pilih Sub Service" : "Pilih Service dulu"} />
+            </SelectTrigger>
+            <SelectContent>
+              {filteredSubServices
+                .filter((subService) => {
+                  const name = subService?.name;
+                  return name && typeof name === 'string' && name.trim() !== '' && subService?.id;
+                })
+                .map((subService) => {
+                  const value = String(subService.name).trim();
+                  return (
+                    <SelectItem key={subService.id} value={value}>
+                      {subService.name}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Content Pillar */}
+        <div className="space-y-2">
+          <Label htmlFor="content_pillar">Content Pillar</Label>
+          <Select
+            value={formData.content_pillar || undefined}
+            onValueChange={(value) => handleInputChange('content_pillar', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Content Pillar" />
+            </SelectTrigger>
+            <SelectContent>
+              {contentPillars
+                .filter((pillar) => {
+                  const name = pillar?.name;
+                  return name && typeof name === 'string' && name.trim() !== '' && pillar?.id;
+                })
+                .map((pillar) => {
+                  const value = String(pillar.name).trim();
+                  return (
+                    <SelectItem key={pillar.id} value={value}>
+                      {pillar.name}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Target Market */}
+        <div className="space-y-2">
+          <Label htmlFor="target_market">Target Market</Label>
+          <Input
+            id="target_market"
+            value={formData.target_market || ''}
+            onChange={(e) => handleInputChange('target_market', e.target.value)}
+            placeholder="Contoh: Small Business Owner"
+          />
+        </div>
+
+        {/* Gender */}
+        <div className="space-y-2">
+          <Label htmlFor="gender">Gender</Label>
+          <Select
+            value={formData.gender || undefined}
+            onValueChange={(value) => handleInputChange('gender', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Gender" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+              <SelectItem value="Perempuan">Perempuan</SelectItem>
+              <SelectItem value="Semua">Semua</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Age */}
+        <div className="space-y-2">
+          <Label htmlFor="age">Umur</Label>
+          <Input
+            id="age"
+            value={formData.age || ''}
+            onChange={(e) => handleInputChange('age', e.target.value)}
+            placeholder="Contoh: 25-40 tahun"
+          />
+        </div>
+
+        {/* Buying Roles */}
+        <div className="space-y-2">
+          <Label htmlFor="buying_roles">Buying Roles</Label>
+          <Input
+            id="buying_roles"
+            value={formData.buying_roles || ''}
+            onChange={(e) => handleInputChange('buying_roles', e.target.value)}
+            placeholder="Contoh: Decision Maker, Influencer"
+          />
+        </div>
+      </div>
+
+      {/* Text Fields */}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="keinginan">Keinginan</Label>
+          <Select
+            value={formData.keinginan || undefined}
+            onValueChange={(value) => {
+              // Find the product knowledge item with this wants value
+              const selectedPK = productKnowledgeWithWantsNeeds.find(
+                (pk) => pk.wants?.trim() === value
+              );
+              
+              // Auto-fill needs if found
+              if (selectedPK && selectedPK.needs) {
+                handleInputChange('kebutuhan', selectedPK.needs.trim());
+              }
+              
+              // Auto-fill hidden needs if found
+              if (selectedPK && selectedPK.hidden_needs) {
+                const hiddenNeedsArray = parseHiddenNeeds(selectedPK.hidden_needs);
+                if (hiddenNeedsArray.length > 0) {
+                  handleInputChange('hidden_needs_1', hiddenNeedsArray[0]);
+                  if (hiddenNeedsArray.length > 1) {
+                    handleInputChange('hidden_needs_2', hiddenNeedsArray[1]);
+                  } else {
+                    handleInputChange('hidden_needs_2', '');
+                  }
+                } else {
+                  handleInputChange('hidden_needs_1', '');
+                  handleInputChange('hidden_needs_2', '');
+                }
+              } else {
+                // Clear hidden needs if no product knowledge found
+                handleInputChange('hidden_needs_1', '');
+                handleInputChange('hidden_needs_2', '');
+              }
+              
+              // Auto-fill problems if found
+              if (selectedPK && selectedPK.problems_solved && Array.isArray(selectedPK.problems_solved) && selectedPK.problems_solved.length > 0) {
+                // problems_solved is already an array, so use it directly
+                const problemsArray = selectedPK.problems_solved.filter(Boolean);
+                if (problemsArray.length > 0) {
+                  handleInputChange('problem_1', problemsArray[0]);
+                  if (problemsArray.length > 1) {
+                    handleInputChange('problem_2', problemsArray[1]);
+                  } else {
+                    handleInputChange('problem_2', '');
+                  }
+                } else {
+                  handleInputChange('problem_1', '');
+                  handleInputChange('problem_2', '');
+                }
+              } else {
+                // Clear problems if no product knowledge found
+                handleInputChange('problem_1', '');
+                handleInputChange('problem_2', '');
+              }
+              
+              // Auto-fill impact if found
+              if (selectedPK && selectedPK.impact) {
+                const impactArray = parseImpact(selectedPK.impact);
+                if (impactArray.length > 0) {
+                  handleInputChange('impact_1', impactArray[0]);
+                  if (impactArray.length > 1) {
+                    handleInputChange('impact_2', impactArray[1]);
+                  } else {
+                    handleInputChange('impact_2', '');
+                  }
+                } else {
+                  handleInputChange('impact_1', '');
+                  handleInputChange('impact_2', '');
+                }
+              } else {
+                // Clear impact if no product knowledge found
+                handleInputChange('impact_1', '');
+                handleInputChange('impact_2', '');
+              }
+              
+              handleInputChange('keinginan', value);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Keinginan dari Product Knowledge" />
+            </SelectTrigger>
+            <SelectContent>
+              {productKnowledgeWithWantsNeeds.length === 0 ? (
+                <SelectItem value="no-data" disabled>
+                  Tidak ada data Product Knowledge dengan Wants dan Needs
+                </SelectItem>
+              ) : (
+                productKnowledgeWithWantsNeeds
+                  .filter((pk) => pk.wants && pk.wants.trim() !== '')
+                  .map((pk) => {
+                    const wantsValue = pk.wants!.trim();
+                    return (
+                      <SelectItem key={pk.id} value={wantsValue}>
+                        {wantsValue}
+                      </SelectItem>
+                    );
+                  })
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="kebutuhan">Kebutuhan</Label>
+          <Select
+            value={formData.kebutuhan || undefined}
+            onValueChange={(value) => handleInputChange('kebutuhan', value)}
+            disabled={!formData.keinginan}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={formData.keinginan ? "Kebutuhan otomatis terisi" : "Pilih Keinginan terlebih dahulu"} />
+            </SelectTrigger>
+            <SelectContent>
+              {formData.keinginan ? (
+                // Show needs that match the selected wants
+                (() => {
+                  // Find all product knowledge items with matching wants
+                  const matchingPKs = productKnowledgeWithWantsNeeds.filter(
+                    (pk) => pk.wants?.trim() === formData.keinginan
+                  );
+                  
+                  if (matchingPKs.length > 0) {
+                    // If multiple matches, show all unique needs
+                    const uniqueNeeds = new Map<string, string>();
+                    matchingPKs.forEach((pk) => {
+                      if (pk.needs) {
+                        const needsValue = pk.needs.trim();
+                        if (needsValue && !uniqueNeeds.has(needsValue)) {
+                          uniqueNeeds.set(needsValue, pk.id);
+                        }
+                      }
+                    });
+                    
+                    return Array.from(uniqueNeeds.entries()).map(([needsValue, pkId]) => (
+                      <SelectItem key={pkId} value={needsValue}>
+                        {needsValue}
+                      </SelectItem>
+                    ));
+                  }
+                  
+                  // Fallback: show all needs if no exact match
+                  return productKnowledgeWithWantsNeeds
+                    .filter((pk) => pk.needs && pk.needs.trim() !== '')
+                    .map((pk) => {
+                      const needsValue = pk.needs!.trim();
+                      return (
+                        <SelectItem key={pk.id} value={needsValue}>
+                          {needsValue}
+                        </SelectItem>
+                      );
+                    });
+                })()
+              ) : (
+                <SelectItem value="select-wants-first" disabled>
+                  Pilih Keinginan terlebih dahulu
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="hidden_needs_1">Hidden Needs 1</Label>
+          <Textarea
+            id="hidden_needs_1"
+            value={formData.hidden_needs_1 || ''}
+            onChange={(e) => handleInputChange('hidden_needs_1', e.target.value)}
+            placeholder="Kebutuhan tersembunyi pertama"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="hidden_needs_2">Hidden Needs 2</Label>
+          <Textarea
+            id="hidden_needs_2"
+            value={formData.hidden_needs_2 || ''}
+            onChange={(e) => handleInputChange('hidden_needs_2', e.target.value)}
+            placeholder="Kebutuhan tersembunyi kedua"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="problem_1">Problem 1</Label>
+          <Textarea
+            id="problem_1"
+            value={formData.problem_1 || ''}
+            onChange={(e) => handleInputChange('problem_1', e.target.value)}
+            placeholder="Masalah pertama yang dihadapi"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="problem_2">Problem 2</Label>
+          <Textarea
+            id="problem_2"
+            value={formData.problem_2 || ''}
+            onChange={(e) => handleInputChange('problem_2', e.target.value)}
+            placeholder="Masalah kedua yang dihadapi"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="impact_1">Impact 1</Label>
+          <Textarea
+            id="impact_1"
+            value={formData.impact_1 || ''}
+            onChange={(e) => handleInputChange('impact_1', e.target.value)}
+            placeholder="Dampak dari masalah pertama"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="impact_2">Impact 2</Label>
+          <Textarea
+            id="impact_2"
+            value={formData.impact_2 || ''}
+            onChange={(e) => handleInputChange('impact_2', e.target.value)}
+            placeholder="Dampak dari masalah kedua"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="solution">Solution</Label>
+          <Textarea
+            id="solution"
+            value={formData.solution || ''}
+            onChange={(e) => handleInputChange('solution', e.target.value)}
+            placeholder="Solusi yang ditawarkan"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="style_name">Style Name</Label>
+          <Select
+            value={selectedStyleName || undefined}
+            onValueChange={(value) => {
+              setSelectedStyleName(value);
+              
+              // Find the selected style
+              const selectedStyle = productKnowledgeStyles.find(
+                (style) => style.name === value
+              );
+              
+              // Auto-fill style_name and style_instruksi if found
+              if (selectedStyle) {
+                // Set style_name (the name selected)
+                handleInputChange('style_name', value);
+                
+                if (selectedStyle.description) {
+                  handleInputChange('style_instruksi', selectedStyle.description);
+                }
+                
+                // Auto-fill structure if found
+                if (selectedStyle.structure) {
+                  handleInputChange('structure', selectedStyle.structure);
+                }
+              } else {
+                // Clear fields if no style found
+                handleInputChange('style_name', '');
+                handleInputChange('style_instruksi', '');
+                handleInputChange('structure', '');
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Style Name" />
+            </SelectTrigger>
+            <SelectContent>
+              {productKnowledgeStyles.length === 0 ? (
+                <SelectItem value="no-data" disabled>
+                  Tidak ada Style tersedia
+                </SelectItem>
+              ) : (
+                productKnowledgeStyles
+                  .filter((style) => style.name && style.name.trim() !== '')
+                  .map((style) => (
+                    <SelectItem key={style.id} value={style.name}>
+                      {style.name}
+                    </SelectItem>
+                  ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="style_instruksi">Style Instruksi</Label>
+          <Textarea
+            id="style_instruksi"
+            value={formData.style_instruksi || ''}
+            onChange={(e) => handleInputChange('style_instruksi', e.target.value)}
+            placeholder="Instruksi style untuk script (contoh: formal, casual, friendly, dll)"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="structure">Structure</Label>
+          <Textarea
+            id="structure"
+            value={formData.structure || ''}
+            onChange={(e) => handleInputChange('structure', e.target.value)}
+            placeholder="Struktur script yang diinginkan (contoh: Hook - Problem - Solution - CTA)"
+            rows={3}
+          />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-4">
+        <Button
+          type="submit"
+          disabled={isGenerating}
+          className="flex-1"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generate Script
+            </>
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleReset}
+          disabled={isGenerating}
+        >
+          Reset
+        </Button>
+      </div>
+    </form>
+  );
+};

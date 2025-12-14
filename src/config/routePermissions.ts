@@ -451,6 +451,14 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     notes: 'Maps to /digital-marketing permission configuration'
   },
   {
+    path: '/digital-marketing/social-media/script-generator',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/digital-marketing',
+    description: 'Script generator - role-based access',
+    notes: 'Maps to /digital-marketing permission configuration'
+  },
+  {
     path: '/digital-marketing/social-media/settings',
     requiresAuth: true,
     requiresPermissions: true,

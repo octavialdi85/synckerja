@@ -46,7 +46,9 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
   // Format problems array to display
   const formatProblems = (problems: string[] | null | undefined): string => {
     if (!problems || problems.length === 0) return '';
-    return problems.join(', ');
+    // Format dengan newline dan baris kosong di antara setiap masalah untuk pemisahan visual
+    // Pertahankan spasi di tengah baris
+    return problems.filter(Boolean).join('\n\n');
   };
 
   // Get Product/Service name
@@ -64,7 +66,7 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
     <div className="w-full max-w-full">
       <div className="rounded-md border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto seamless-scroll">
-          <table className="border-collapse" style={{ minWidth: '1768px', width: '100%' }}>
+          <table className="border-collapse" style={{ minWidth: '3048px', width: '100%' }}>
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="px-2 py-2 text-center border-r border-gray-200 border-b-2 border-gray-300">
@@ -95,15 +97,24 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.targetMarket', 'Target Market')}
                 </th>
                 <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.wants', 'Wants')}
+                </th>
+                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.needs', 'Needs')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.hiddenNeeds', 'Hidden Needs')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.problem', 'Problem')}
                 </th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.impact', 'Impact')}
                 </th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.solution', 'Solution')}
                 </th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300">
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
                 </th>
               </tr>
@@ -111,13 +122,13 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={13} className="text-center py-8 border-b border-gray-200">
                     <LoadingDots />
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={13} className="text-center py-8 border-b border-gray-200">
                     <p className="text-gray-500 text-sm">{t('productKnowledge.table.emptyState', 'No product knowledge found')}</p>
                   </td>
                 </tr>
@@ -172,6 +183,9 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   const [isEditingProblems, setIsEditingProblems] = useState(false);
   const [isEditingImpact, setIsEditingImpact] = useState(false);
   const [isEditingSolution, setIsEditingSolution] = useState(false);
+  const [isEditingWants, setIsEditingWants] = useState(false);
+  const [isEditingNeeds, setIsEditingNeeds] = useState(false);
+  const [isEditingHiddenNeeds, setIsEditingHiddenNeeds] = useState(false);
   const [isEditingCompetitiveAdvantage, setIsEditingCompetitiveAdvantage] = useState(false);
 
   const handleCheckboxChange = (checked: boolean) => {
@@ -222,7 +236,39 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   };
 
   const handleProblemsBlur = (value: string) => {
-    const problemsArray = value.split(',').map(p => p.trim()).filter(Boolean);
+    // Parse string dengan double newline (\n\n) sebagai pemisah utama antar masalah
+    // Jika tidak ada double newline, gunakan single newline sebagai fallback
+    // Pertahankan spasi di dalam setiap baris, termasuk indentasi di awal
+    // Hanya hapus trailing whitespace (spasi di akhir baris)
+    
+    let problemsArray: string[] = [];
+    
+    // Coba split berdasarkan double newline terlebih dahulu
+    if (value.includes('\n\n')) {
+      problemsArray = value
+        .split(/\n\n+/)
+        .map(p => p.replace(/\s+$/, '')) // Hapus trailing whitespace saja
+        .filter(p => p.trim().length > 0); // Hanya filter yang benar-benar kosong
+    } else {
+      // Fallback: split berdasarkan single newline dan kelompokkan
+      // Baris kosong bertindak sebagai pemisah
+      const lines = value.split(/\n/).map(p => p.replace(/\s+$/, ''));
+      let currentProblem: string[] = [];
+      
+      for (const line of lines) {
+        if (line.trim().length > 0) {
+          currentProblem.push(line);
+        } else if (currentProblem.length > 0) {
+          problemsArray.push(currentProblem.join('\n'));
+          currentProblem = [];
+        }
+      }
+      
+      if (currentProblem.length > 0) {
+        problemsArray.push(currentProblem.join('\n'));
+      }
+    }
+    
     if (JSON.stringify(problemsArray) !== JSON.stringify(item.problems_solved || [])) {
       onFieldChange(item.id, 'problems_solved', problemsArray);
     }
@@ -243,12 +289,35 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     setIsEditingSolution(false);
   };
 
+  const handleWantsBlur = (value: string) => {
+    if (value !== (item.wants || '')) {
+      onFieldChange(item.id, 'wants', value);
+    }
+    setIsEditingWants(false);
+  };
+
+  const handleNeedsBlur = (value: string) => {
+    if (value !== (item.needs || '')) {
+      onFieldChange(item.id, 'needs', value);
+    }
+    setIsEditingNeeds(false);
+  };
+
+  const handleHiddenNeedsBlur = (value: string) => {
+    if (value !== (item.hidden_needs || '')) {
+      onFieldChange(item.id, 'hidden_needs', value);
+    }
+    setIsEditingHiddenNeeds(false);
+  };
+
   // Format competitive_advantage (JSONB) to string
   const formatCompetitiveAdvantage = (competitiveAdvantage: any): string => {
     if (!competitiveAdvantage) return '';
     if (typeof competitiveAdvantage === 'string') return competitiveAdvantage;
     if (Array.isArray(competitiveAdvantage)) {
-      return competitiveAdvantage.join(', ');
+      // Format dengan newline dan baris kosong di antara setiap advantage untuk pemisahan visual
+      // Pertahankan spasi di tengah baris
+      return competitiveAdvantage.filter(Boolean).join('\n\n');
     }
     if (typeof competitiveAdvantage === 'object') {
       return JSON.stringify(competitiveAdvantage);
@@ -263,8 +332,40 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     try {
       return JSON.parse(value);
     } catch {
-      // If not valid JSON, treat as comma-separated array
-      const items = value.split(',').map(item => item.trim()).filter(Boolean);
+      // If not valid JSON, treat as newline-separated array (seperti Problem)
+      // Parse string dengan double newline (\n\n) sebagai pemisah utama antar advantage
+      // Jika tidak ada double newline, gunakan single newline sebagai fallback
+      // Pertahankan spasi di dalam setiap baris, termasuk indentasi di awal
+      // Hanya hapus trailing whitespace (spasi di akhir baris)
+      
+      let items: string[] = [];
+      
+      // Coba split berdasarkan double newline terlebih dahulu
+      if (value.includes('\n\n')) {
+        items = value
+          .split(/\n\n+/)
+          .map(p => p.replace(/\s+$/, '')) // Hapus trailing whitespace saja
+          .filter(p => p.trim().length > 0); // Hanya filter yang benar-benar kosong
+      } else {
+        // Fallback: split berdasarkan single newline dan kelompokkan
+        // Baris kosong bertindak sebagai pemisah
+        const lines = value.split(/\n/).map(p => p.replace(/\s+$/, ''));
+        let currentItem: string[] = [];
+        
+        for (const line of lines) {
+          if (line.trim().length > 0) {
+            currentItem.push(line);
+          } else if (currentItem.length > 0) {
+            items.push(currentItem.join('\n'));
+            currentItem = [];
+          }
+        }
+        
+        if (currentItem.length > 0) {
+          items.push(currentItem.join('\n'));
+        }
+      }
+      
       return items.length > 0 ? items : null;
     }
   };
@@ -272,8 +373,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   const handleCompetitiveAdvantageBlur = (value: string) => {
     const parsed = parseCompetitiveAdvantage(value);
     const currentValue = item.competitive_advantage;
-    const currentString = Array.isArray(currentValue) ? currentValue.join(', ') : (currentValue || '');
-    if (parsed !== currentValue && JSON.stringify(parsed) !== JSON.stringify(currentValue)) {
+    if (JSON.stringify(parsed) !== JSON.stringify(currentValue)) {
       onFieldChange(item.id, 'competitive_advantage', parsed);
     }
     setIsEditingCompetitiveAdvantage(false);
@@ -419,27 +519,104 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         )}
       </td>
 
-      {/* Problem */}
+      {/* Wants */}
       <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingProblems ? (
-          <Input
-            defaultValue={formatProblems(item.problems_solved)}
-            onBlur={(e) => handleProblemsBlur(e.target.value)}
+        {isEditingWants ? (
+          <textarea
+            defaultValue={item.wants || ''}
+            onBlur={(e) => handleWantsBlur(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleProblemsBlur(e.currentTarget.value);
-              } else if (e.key === 'Escape') {
-                setIsEditingProblems(false);
+              if (e.key === 'Escape') {
+                setIsEditingWants(false);
               }
             }}
             autoFocus
-            className="h-8 text-sm"
-            placeholder={t('productKnowledge.table.problemPlaceholder', 'Problem 1, Problem 2, ...')}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
+            rows={3}
           />
         ) : (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            onClick={() => setIsEditingWants(true)}
+          >
+            {item.wants || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Needs */}
+      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingNeeds ? (
+          <textarea
+            defaultValue={item.needs || ''}
+            onBlur={(e) => handleNeedsBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingNeeds(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
+            rows={3}
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            onClick={() => setIsEditingNeeds(true)}
+          >
+            {item.needs || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Hidden Needs */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingHiddenNeeds ? (
+          <textarea
+            defaultValue={item.hidden_needs || ''}
+            onBlur={(e) => handleHiddenNeedsBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingHiddenNeeds(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Hidden Needs 1: ...&#10;Hidden Needs 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingHiddenNeeds(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {item.hidden_needs || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Problem */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingProblems ? (
+          <textarea
+            defaultValue={formatProblems(item.problems_solved)}
+            onBlur={(e) => handleProblemsBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingProblems(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Masalah 1: ...&#10;Masalah 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
             onClick={() => setIsEditingProblems(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {formatProblems(item.problems_solved) || '-'}
             {item.problem_tags && item.problem_tags.length > 0 && (
@@ -459,7 +636,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       </td>
 
       {/* Dampak */}
-      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingImpact ? (
           <textarea
             defaultValue={item.impact || ''}
@@ -470,13 +647,15 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
               }
             }}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Impact 1: ...&#10;&#10;Impact 2: ..."
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
             onClick={() => setIsEditingImpact(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {item.impact || '-'}
           </div>
@@ -484,7 +663,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       </td>
 
       {/* Solusi */}
-      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingSolution ? (
           <textarea
             defaultValue={item.solusi || ''}
@@ -495,13 +674,15 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
               }
             }}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Solution 1: ...&#10;&#10;Solution 2: ..."
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
             onClick={() => setIsEditingSolution(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {item.solusi || '-'}
           </div>
@@ -509,7 +690,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       </td>
 
       {/* Competitive Advantage */}
-      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1">
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1">
         {isEditingCompetitiveAdvantage ? (
           <textarea
             defaultValue={formatCompetitiveAdvantage(item.competitive_advantage)}
@@ -520,14 +701,15 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
               }
             }}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
-            placeholder="Advantage 1, Advantage 2, ..."
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Advantage 1: ...&#10;Advantage 2: ..."
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
             onClick={() => setIsEditingCompetitiveAdvantage(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
           </div>

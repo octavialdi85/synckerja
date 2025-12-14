@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Calendar, BookOpen, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar, BookOpen, Settings, FileText } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface HeaderAndTabProps {
@@ -36,6 +36,13 @@ export const HeaderAndTab = ({ activeMainTab, handleTabChange }: HeaderAndTabPro
       route: '/digital-marketing/social-media/product-knowledge'
     },
     {
+      id: 'script-generator',
+      label: t('productKnowledge.tabs.scriptGenerator', 'Script Generator'),
+      icon: FileText,
+      description: t('productKnowledge.tabs.scriptGeneratorDescription', 'Generate marketing scripts'),
+      route: '/digital-marketing/social-media/script-generator'
+    },
+    {
       id: 'settings',
       label: t('productKnowledge.tabs.settings', 'Settings'),
       icon: Settings,
@@ -57,6 +64,9 @@ export const HeaderAndTab = ({ activeMainTab, handleTabChange }: HeaderAndTabPro
     }
     if (location.pathname.includes('product-knowledge')) {
       return 'product-knowledge';
+    }
+    if (location.pathname.includes('script-generator')) {
+      return 'script-generator';
     }
     if (location.pathname.includes('settings')) {
       return 'settings';

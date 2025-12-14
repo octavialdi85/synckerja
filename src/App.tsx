@@ -34,6 +34,7 @@ import DesktopMeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPa
 import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
 import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarPage";
 import ProductKnowledgePage from "./features/6-1-ProductKnowledge/ProductKnowledgePage";
+import ScriptGeneratorPage from "./features/6-1-ScriptGenerator/ScriptGeneratorPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
 import UserSettingsPage from "./features/Settings/SettingsPage";
 import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
@@ -376,6 +377,11 @@ const App = () => (
               <Route path="/digital-marketing/social-media/product-knowledge" element={
                 <ProtectedRoute>
                   <ProductKnowledgePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/digital-marketing/social-media/script-generator" element={
+                <ProtectedRoute>
+                  <ScriptGeneratorPage />
                 </ProtectedRoute>
               } />
               <Route path="/digital-marketing/social-media/settings" element={

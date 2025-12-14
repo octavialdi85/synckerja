@@ -13,6 +13,9 @@ export interface ProductKnowledge {
   problem_tags: string[] | null;
   impact: string;
   solusi: string | null;
+  wants: string | null;
+  needs: string | null;
+  hidden_needs: string | null;
   use_cases: any;
   target_audience: any;
   competitive_advantage: any;

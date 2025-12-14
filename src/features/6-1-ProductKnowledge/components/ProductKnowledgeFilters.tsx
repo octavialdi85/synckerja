@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
-import { Search, Plus, Trash2 } from 'lucide-react';
+import { Search, Plus, Trash2, Sparkles } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface ProductKnowledgeFiltersProps {
@@ -10,6 +10,8 @@ interface ProductKnowledgeFiltersProps {
   selectedItems: string[];
   onAdd: () => void;
   onDeleteSelected: () => void;
+  onGenerateContent?: () => void;
+  isGenerating?: boolean;
 }
 
 export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = ({
@@ -18,6 +20,8 @@ export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = (
   selectedItems,
   onAdd,
   onDeleteSelected,
+  onGenerateContent,
+  isGenerating = false,
 }) => {
   const { t } = useAppTranslation();
 
@@ -33,6 +37,14 @@ export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = (
     onDeleteSelected();
   };
 
+  const handleGenerateContent = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onGenerateContent) {
+      onGenerateContent();
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
@@ -45,6 +57,21 @@ export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = (
             className="pl-10" 
           />
         </div>
+        {onGenerateContent && (
+          <Button 
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleGenerateContent}
+            disabled={isGenerating || selectedItems.length === 0}
+          >
+            <Sparkles className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+            {isGenerating 
+              ? t('productKnowledge.filters.generating', 'Generating...') 
+              : t('productKnowledge.filters.generateContent', 'Generate Content ({{count}})', { count: selectedItems.length })
+            }
+          </Button>
+        )}
         <Button 
           type="button"
           size="sm" 
