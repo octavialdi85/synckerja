@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -230,9 +230,14 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
     };
   }, [formLinks, requiredPlatforms, planData, isLoadingRequiredPlatforms]);
 
+  // Track if form has been initialized to prevent reset on refetch
+  const formInitializedRef = useRef(false);
+  
   // Initialize form data when dialog opens or links change
+  // Only initialize once when dialog opens, not on every links change
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !formInitializedRef.current) {
+      formInitializedRef.current = true;
       if (links.length > 0) {
         // Convert existing links to form format with URL validation
         const existingLinks: SocialMediaLinkForm[] = links.map(link => {
@@ -257,6 +262,9 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
           isNew: true
         }]);
       }
+    } else if (!isOpen) {
+      // Reset flag when dialog closes
+      formInitializedRef.current = false;
     }
   }, [isOpen, links]);
 

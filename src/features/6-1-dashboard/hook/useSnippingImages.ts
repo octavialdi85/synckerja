@@ -132,6 +132,8 @@ const useSnippingImagesQuery = (socialMediaPlanId: string, linkUrl: string) => {
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: false,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
 };
 

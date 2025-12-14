@@ -36,6 +36,9 @@ export const useEmployeeTargets = (employeeId?: string) => {
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
 
   // Create target mutation

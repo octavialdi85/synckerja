@@ -1,7 +1,7 @@
 import { Toaster } from "@/features/ui/toaster";
 import { Toaster as Sonner } from "@/features/ui/sonner";
 import { TooltipProvider } from "@/features/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
@@ -95,7 +95,34 @@ if (process.env.NODE_ENV === 'development') {
   import('./utils/testRouteProtection');
 }
 
-const queryClient = new QueryClient();
+// Disable React Query focusManager globally to prevent any refetch on window focus
+// This is the most aggressive way to prevent reloads when switching windows
+// We completely disable the focus event listener to prevent any refetch on window focus
+focusManager.setEventListener((onFocus) => {
+  // Completely ignore focus events - do not call onFocus at all
+  // This prevents React Query from refetching queries when window regains focus
+  // Return a cleanup function that does nothing
+  return () => {
+    // Cleanup - do nothing
+  };
+});
+
+// Configure QueryClient with default options to prevent automatic refetch on window focus
+// This prevents unwanted reloads when switching between windows, especially when copying links
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // Disabled globally to prevent reload when switching windows
+      refetchOnMount: true, // Allow refetch on mount (but not on window focus)
+      staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
+      gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data for 5 minutes
+      retry: 1, // Reduced retry attempts
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 // Security Wrapper Component
 const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {

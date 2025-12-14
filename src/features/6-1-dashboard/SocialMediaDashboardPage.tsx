@@ -102,6 +102,7 @@ const SocialMediaContent = () => {
   });
 
   // Fetch all social media links for Content Post metrics (same logic as ContentPostTab)
+  // Disabled polling - rely on realtime updates instead of refetchInterval
   const { data: allSocialMediaLinks = [] } = useQuery({
     queryKey: ['all-social-media-links'],
     queryFn: async () => {
@@ -116,11 +117,11 @@ const SocialMediaContent = () => {
       
       return data || [];
     },
-    staleTime: 10000, // 10 seconds - data is fresh for 10s, reduces unnecessary refetches
-    gcTime: 2 * 60 * 1000, // 2 minutes - keep cached data
-    refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates (only if stale)
+    staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data
+    refetchInterval: false, // Disabled - realtime updates handle changes, no need for polling
     refetchOnMount: false, // Don't refetch on mount if data is fresh
-    refetchOnWindowFocus: false, // Don't refetch on focus (already polling)
+    refetchOnWindowFocus: false, // Don't refetch on focus - realtime handles updates
   });
 
   // State hooks

@@ -55,8 +55,11 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth }) => {
       return data || [];
     },
     enabled: !!organizationId,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // Refetch every minute
+    staleTime: 5 * 60 * 1000, // 5 minutes - reminder data doesn't change frequently
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    refetchInterval: false, // Disabled - no need for polling, data changes infrequently
   });
 
   // Helper function to determine holiday type based on name or country code

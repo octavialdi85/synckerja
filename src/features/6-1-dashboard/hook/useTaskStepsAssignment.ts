@@ -41,6 +41,8 @@ export const useTaskStepsAssignment = (socialMediaPlanId: string | null) => {
     enabled: !!socialMediaPlanId && !!organizationId,
     staleTime: 30000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
   
   return {
@@ -98,6 +100,8 @@ export const useTaskStepsAssignments = (socialMediaPlanIds: string[]) => {
     enabled: socialMediaPlanIds.length > 0 && !!organizationId,
     staleTime: 30000,
     gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
   
   return {

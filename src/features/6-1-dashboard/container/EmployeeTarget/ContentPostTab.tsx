@@ -41,6 +41,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
   const { targets } = useEmployeeTargets();
 
   // Fetch all social media links to ensure we have the latest data
+  // Disabled polling - rely on realtime updates instead of refetchInterval
   const { data: allSocialMediaLinks = [] } = useQuery({
     queryKey: ['all-social-media-links'],
     queryFn: async () => {
@@ -55,10 +56,11 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
       
       return data || [];
     },
-    refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates
+    staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data
+    refetchInterval: false, // Disabled - realtime updates handle changes, no need for polling
     refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (realtime handles updates)
-    refetchOnMount: true, // Refetch when component mounts
-    staleTime: 0, // Always consider data stale to ensure fresh updates
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
 
   // Auto-revert functionality for daily date

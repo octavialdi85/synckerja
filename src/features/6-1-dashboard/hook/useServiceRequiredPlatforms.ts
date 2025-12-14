@@ -90,7 +90,7 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
     staleTime: 5 * 60 * 1000, // 5 minutes - required platforms don't change often
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
     refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
-    refetchOnMount: true, // Refetch on mount to ensure fresh data when service_id changes
+    refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces unnecessary requests)
     retry: 1,
   });
 

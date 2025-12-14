@@ -28,7 +28,7 @@ export const useSocialMediaLinks = (planId?: string) => {
     staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
     refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
-    refetchOnMount: true, // Enable refetch on mount
+    refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces unnecessary requests)
     retry: 1,
   });
 

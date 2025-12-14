@@ -127,7 +127,7 @@ export const useContentPillarData = (selectedMonth?: Date) => {
     staleTime: 30 * 1000, // Reduced to 30 seconds for realtime feel
     gcTime: 2 * 60 * 1000, // Reduced to 2 minutes
     refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (realtime handles updates)
-    refetchOnMount: true,
+    refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces unnecessary requests)
     retry: 2,
     retryDelay: 2000,
   });

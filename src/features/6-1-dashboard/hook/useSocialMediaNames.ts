@@ -27,6 +27,10 @@ export const useSocialMediaNames = (organizationId?: string) => {
       return data as SocialMediaName[];
     },
     enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - social media names don't change often
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
   });
 
   // Get names by platform (case-insensitive comparison)

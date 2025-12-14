@@ -66,9 +66,11 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
     enabled: !!socialMediaPlanId && isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 10 * 60 * 1000, // 10 minutes
-    // Only refetch if approved prop not provided (backward compatibility)
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    // Disabled polling - rely on realtime updates or parent prop updates
     // If approved prop is provided, parent will handle real-time updates for approved status
-    refetchInterval: isOpen && approvedProp === undefined ? 2000 : false,
+    refetchInterval: false, // Disabled - no polling needed, realtime handles updates
   });
 
   // Use prop if available (no delay), otherwise use fetched data
