@@ -17,11 +17,96 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { ScriptGeneratorRequest } from '../services/scriptGeneratorService';
 import { useProductKnowledge } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledge';
 import { useProductKnowledgeStyle } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeStyle';
+import { useProductKnowledgeHooks } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeHooks';
 
 interface ScriptGeneratorFormProps {
   onGenerate: (data: ScriptGeneratorRequest) => Promise<void>;
   isGenerating: boolean;
 }
+
+// Judul templates - bisa digunakan oleh semua multi tenant
+const judulTemplates = [
+  {
+    value: 'cara-melakukan',
+    label: 'Cara [Melakukan Sesuatu] Dalam [Waktu Singkat] Dengan [Hasil Hebat]',
+    template: 'Cara [Melakukan Sesuatu] Dalam [Waktu Singkat] Dengan [Hasil Hebat]'
+  },
+  {
+    value: 'tips-mencapai',
+    label: '[#] Tips untuk [Mencapai Tujuan/Hasil] yang Lebih Baik',
+    template: '[#] Tips untuk [Mencapai Tujuan/Hasil] yang Lebih Baik'
+  },
+  {
+    value: 'orang-tidak-tahu',
+    label: '[#%] Orang Tidak Tahu [Fakta atau Statistik Penting]',
+    template: '[#%] Orang Tidak Tahu [Fakta atau Statistik Penting]'
+  },
+  {
+    value: 'testimoni',
+    label: 'Pelanggan Kami Berkata: [Kutipan Positif Tentang Produk/Layanan]',
+    template: 'Pelanggan Kami Berkata: [Kutipan Positif Tentang Produk/Layanan]'
+  },
+  {
+    value: 'jangan-pernah',
+    label: 'Jangan Pernah [Lakukan Sesuatu] Jika Anda Ingin [Hasil yang Lebih Baik]',
+    template: 'Jangan Pernah [Lakukan Sesuatu] Jika Anda Ingin [Hasil yang Lebih Baik]'
+  },
+  {
+    value: 'masalah-solusi',
+    label: 'Masalah [Masalah Umum]? Inilah Solusinya!',
+    template: 'Masalah [Masalah Umum]? Inilah Solusinya!'
+  },
+  {
+    value: 'garansi',
+    label: '100% Garansi [Manfaat atau Hasil] atau Uang Anda Kembali!',
+    template: '100% Garansi [Manfaat atau Hasil] atau Uang Anda Kembali!'
+  },
+  {
+    value: 'rahasia',
+    label: 'Rahasia Terbesar dalam [Industri atau Topik] Terungkap!',
+    template: 'Rahasia Terbesar dalam [Industri atau Topik] Terungkap!'
+  },
+  {
+    value: 'perbandingan',
+    label: '[Produk/Layanan A] vs. [Produk/Layanan B]: Mana yang Lebih Baik?',
+    template: '[Produk/Layanan A] vs. [Produk/Layanan B]: Mana yang Lebih Baik?'
+  },
+  {
+    value: 'panduan-langkah',
+    label: 'Langkah-demi-Langkah Panduan Mendapatkan [Hasil yang Diinginkan]',
+    template: 'Langkah-demi-Langkah Panduan Mendapatkan [Hasil yang Diinginkan]'
+  },
+  {
+    value: 'panduan-khusus',
+    label: 'Panduan Khusus Hanya untuk [Audience/Target Market]',
+    template: 'Panduan Khusus Hanya untuk [Audience/Target Market]'
+  },
+  {
+    value: 'seberapa-aman',
+    label: 'Seberapa Aman [Sesuatu yang Berharga] dari [Ancaman]?',
+    template: 'Seberapa Aman [Sesuatu yang Berharga] dari [Ancaman]?'
+  },
+  {
+    value: 'tanda-peringatan',
+    label: '[#Tanda] Peringatan Bahwa Ada [Sesuatu Yang Buruk]',
+    template: '[#Tanda] Peringatan Bahwa Ada [Sesuatu Yang Buruk]'
+  },
+  {
+    value: 'peringatan',
+    label: 'Peringatan! [Masukan Sesuatu yang Buruk]',
+    template: 'Peringatan! [Masukan Sesuatu yang Buruk]'
+  },
+  {
+    value: 'resiko-faktor',
+    label: '[#] Resiko/Faktor yang Sedikit Diketahui yang Dapat Menjadi [Sesuatu yang Buruk] pada [Sesuatu yang Berharga]',
+    template: '[#] Resiko/Faktor yang Sedikit Diketahui yang Dapat Menjadi [Sesuatu yang Buruk] pada [Sesuatu yang Berharga]'
+  },
+  {
+    value: 'kebenaran',
+    label: 'Kebenaran Mengejutkan tentang [Sesuatu yang Berharga]',
+    template: 'Kebenaran Mengejutkan tentang [Sesuatu yang Berharga]'
+  }
+];
 
 export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   onGenerate,
@@ -52,13 +137,20 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     impact_1: '',
     impact_2: '',
     solution: '',
+    hook_name: '',
+    hook_description: '',
+    hook_content: '',
     style_name: '',
     style_instruksi: '',
-    structure: ''
+    structure: '',
+    judul: '',
+    judul_custom: ''
   });
   
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
+  const [selectedHookName, setSelectedHookName] = useState<string>('');
   const [selectedStyleName, setSelectedStyleName] = useState<string>('');
+  const [selectedJudulTemplate, setSelectedJudulTemplate] = useState<string>('');
 
   // Master data
   const [contentTypes, setContentTypes] = useState<any[]>([]);
@@ -72,6 +164,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   
   // Fetch product knowledge style for style instructions
   const { data: productKnowledgeStyles = [] } = useProductKnowledgeStyle();
+  
+  // Fetch product knowledge hooks
+  const { data: productKnowledgeHooks = [] } = useProductKnowledgeHooks();
   
   // Filter product knowledge that has wants and needs
   const productKnowledgeWithWantsNeeds = productKnowledgeData.filter(
@@ -223,14 +318,21 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       problem_1: '',
       problem_2: '',
       impact_1: '',
-      impact_2: '',
-      solution: '',
-      style_name: '',
-      style_instruksi: '',
-      structure: ''
-    });
+    impact_2: '',
+    solution: '',
+    hook_name: '',
+    hook_description: '',
+    hook_content: '',
+    style_name: '',
+    style_instruksi: '',
+    structure: '',
+    judul: '',
+    judul_custom: ''
+  });
     setSelectedServiceId('');
+    setSelectedHookName('');
     setSelectedStyleName('');
+    setSelectedJudulTemplate('');
   };
 
   // Determine field type based on content type
@@ -706,6 +808,80 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="hook_name">Hook Name</Label>
+          <Select
+            value={selectedHookName || undefined}
+            onValueChange={(value) => {
+              setSelectedHookName(value);
+              
+              // Find the selected hook
+              const selectedHook = productKnowledgeHooks.find(
+                (hook) => hook.name === value
+              );
+              
+              // Auto-fill hook_name, hook_description, and hook_content if found
+              if (selectedHook) {
+                handleInputChange('hook_name', value);
+                handleInputChange('hook_description', selectedHook.description || '');
+                handleInputChange('hook_content', selectedHook.hook_content || '');
+              } else {
+                // Clear fields if no hook found
+                handleInputChange('hook_name', '');
+                handleInputChange('hook_description', '');
+                handleInputChange('hook_content', '');
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Hook Name" />
+            </SelectTrigger>
+            <SelectContent>
+              {productKnowledgeHooks.length === 0 ? (
+                <SelectItem value="no-data" disabled>
+                  Tidak ada Hook tersedia
+                </SelectItem>
+              ) : (
+                productKnowledgeHooks
+                  .filter((hook) => hook.name && hook.name.trim() !== '')
+                  .map((hook) => (
+                    <SelectItem key={hook.id} value={hook.name}>
+                      {hook.name}
+                    </SelectItem>
+                  ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {formData.hook_description && (
+          <div className="space-y-2">
+            <Label htmlFor="hook_description">Hook Description</Label>
+            <Textarea
+              id="hook_description"
+              value={formData.hook_description || ''}
+              readOnly
+              className="bg-gray-50 cursor-not-allowed"
+              placeholder="Deskripsi hook akan muncul di sini"
+              rows={2}
+            />
+          </div>
+        )}
+
+        {formData.hook_content && (
+          <div className="space-y-2">
+            <Label htmlFor="hook_content">Hook Content</Label>
+            <Textarea
+              id="hook_content"
+              value={formData.hook_content || ''}
+              readOnly
+              className="bg-gray-50 cursor-not-allowed"
+              placeholder="Konten hook akan muncul di sini"
+              rows={4}
+            />
+          </div>
+        )}
+
+        <div className="space-y-2">
           <Label htmlFor="style_name">Style Name</Label>
           <Select
             value={selectedStyleName || undefined}
@@ -779,6 +955,69 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             placeholder="Struktur script yang diinginkan (contoh: Hook - Problem - Solution - CTA)"
             rows={3}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="judul">Judul</Label>
+          <Select
+            value={selectedJudulTemplate || undefined}
+            onValueChange={(value) => {
+              setSelectedJudulTemplate(value);
+              
+              // Find the selected template
+              const template = judulTemplates.find(t => t.value === value);
+              
+              if (template) {
+                // Set the template as judul and also as judul_custom for editing
+                handleInputChange('judul', template.template);
+                handleInputChange('judul_custom', template.template);
+              } else {
+                handleInputChange('judul', '');
+                handleInputChange('judul_custom', '');
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih Template Judul" />
+            </SelectTrigger>
+            <SelectContent>
+              {judulTemplates.map((template) => (
+                <SelectItem key={template.value} value={template.value}>
+                  {template.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {formData.judul && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <Label htmlFor="judul_custom" className="text-sm font-medium text-gray-700 mb-2 block">
+                Edit Judul (Opsional)
+              </Label>
+              <Textarea
+                id="judul_custom"
+                value={formData.judul_custom || ''}
+                onChange={(e) => {
+                  handleInputChange('judul_custom', e.target.value);
+                  handleInputChange('judul', e.target.value);
+                }}
+                placeholder="Edit template judul sesuai kebutuhan"
+                rows={2}
+                className="text-sm"
+              />
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-600 font-medium">
+                  💡 <strong>Cara Menggunakan Template:</strong>
+                </p>
+                <ul className="text-xs text-gray-500 ml-4 list-disc space-y-1">
+                  <li>Ganti teks dalam <strong>[kurung siku]</strong> dengan konten yang relevan</li>
+                  <li><strong>[#]</strong> = ganti dengan angka (contoh: "5 Tips", "10 Cara")</li>
+                  <li><strong>[#%]</strong> = ganti dengan persentase (contoh: "90% Orang", "75% Pelanggan")</li>
+                  <li><strong>[#Tanda]</strong> = ganti dengan tanda/ikon (contoh: "⚠️ Peringatan", "🚨 Alert")</li>
+                  <li>Pastikan judul relevan dengan produk/layanan dan target audience Anda</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
