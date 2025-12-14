@@ -49,10 +49,10 @@ const ScriptGeneratorContent: React.FC = () => {
 
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
-        <div className="flex flex-1 min-h-0">
+      <div className="min-h-screen max-h-screen bg-gray-100 flex flex-col font-sans relative overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4 overflow-hidden">
             <div className="h-full flex flex-col overflow-hidden max-w-full">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
@@ -63,44 +63,38 @@ const ScriptGeneratorContent: React.FC = () => {
               </div>
               
               {/* Main Content Area */}
-              <div className="flex-1 min-h-0 min-w-0">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-120px)] overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                   {/* Scrollable Content Area */}
-                  <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll p-6">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                      {/* Title */}
-                      <div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Script Generator</h2>
-                        <p className="text-sm text-gray-600">
-                          Isi form di bawah untuk generate script konten digital marketing sesuai kebutuhan Anda
-                        </p>
-                      </div>
-
-                      {/* Form and Result Grid */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Form Section */}
-                        <div className="space-y-4">
-                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <ScriptGeneratorForm
-                              onGenerate={handleGenerate}
-                              isGenerating={isGenerating}
-                            />
+                  <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[calc(100vh-120px)]">
+                    <div className="p-6 w-full min-w-0">
+                      <div className="space-y-6">
+                        {/* Form and Result Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Form Section */}
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                              <ScriptGeneratorForm
+                                onGenerate={handleGenerate}
+                                isGenerating={isGenerating}
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Result Section */}
-                        <div className="space-y-4">
-                          {generatedScript ? (
-                            <div className="bg-white rounded-lg p-4 border border-gray-200">
-                              <ScriptResult script={generatedScript} />
-                            </div>
-                          ) : (
-                            <div className="bg-gray-50 rounded-lg p-8 border border-gray-200 border-dashed text-center">
-                              <p className="text-gray-500 text-sm">
-                                Hasil prompt untuk ChatGPT akan muncul di sini setelah Anda mengisi form dan klik "Generate Script"
-                              </p>
-                            </div>
-                          )}
+                          {/* Result Section */}
+                          <div className="space-y-4">
+                            {generatedScript ? (
+                              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                <ScriptResult script={generatedScript} />
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 rounded-lg p-8 border border-gray-200 border-dashed text-center">
+                                <p className="text-gray-500 text-sm">
+                                  Hasil prompt untuk ChatGPT akan muncul di sini setelah Anda mengisi form dan klik "Generate Script"
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

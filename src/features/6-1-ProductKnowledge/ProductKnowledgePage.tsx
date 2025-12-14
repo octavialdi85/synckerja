@@ -330,32 +330,32 @@ const ProductKnowledgeContent: React.FC = () => {
                   <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full">
                     {/* Product Knowledge Table */}
                     <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative h-full">
-                      {/* Filters Section - Sticky at top */}
-                      <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-20">
-                        <ProductKnowledgeFilters
-                          searchTerm={searchTerm}
-                          setSearchTerm={setSearchTerm}
-                          selectedItems={selectedItems}
-                          onAdd={handleAdd}
-                          onDeleteSelected={handleDeleteSelected}
+                  {/* Filters Section - Sticky at top */}
+                  <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-20">
+                    <ProductKnowledgeFilters
+                      searchTerm={searchTerm}
+                      setSearchTerm={setSearchTerm}
+                      selectedItems={selectedItems}
+                      onAdd={handleAdd}
+                      onDeleteSelected={handleDeleteSelected}
                           onGenerateContent={handleGenerateContent}
                           isGenerating={isGenerating}
-                        />
-                      </div>
-                      
-                      {/* Scrollable Content Area */}
+                    />
+                  </div>
+                  
+                  {/* Scrollable Content Area */}
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[calc(100vh-120px)]">
                         <div className="p-6 w-full min-w-0 overflow-x-auto">
-                          <ProductKnowledgeTable 
-                            data={filteredData}
-                            isLoading={isLoading || isLoadingServices || isLoadingSubServices}
-                            selectedItems={selectedItems}
-                            onSelectItem={handleSelectItem}
-                            onFieldChange={handleFieldChange}
-                            services={services}
-                            subServices={subServices}
-                          />
-                        </div>
+                      <ProductKnowledgeTable 
+                        data={filteredData}
+                        isLoading={isLoading || isLoadingServices || isLoadingSubServices}
+                        selectedItems={selectedItems}
+                        onSelectItem={handleSelectItem}
+                        onFieldChange={handleFieldChange}
+                        services={services}
+                        subServices={subServices}
+                      />
+                    </div>
                       </div>
                     </div>
                   </div>
