@@ -75,7 +75,7 @@ export const useOptimizedSocialMediaData = () => {
     },
     staleTime: 30000, // 30 seconds - data is fresh for 30s, reduces flicker on initial load
     gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data for 5 minutes
-    refetchOnWindowFocus: true, // Refetch when user switches tabs
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (realtime handles updates)
     refetchOnMount: false, // Don't refetch on mount if data is fresh (reduces flicker)
     refetchInterval: false, // No polling - rely on realtime updates and manual mutations
     retry: 1, // Reduced retry attempts

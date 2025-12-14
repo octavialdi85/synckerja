@@ -25,6 +25,11 @@ export const useSocialMediaLinks = (planId?: string) => {
       return data as SocialMediaLink[];
     },
     enabled: !!planId,
+    staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
+    gcTime: 5 * 60 * 1000, // 5 minutes cache time
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: true, // Enable refetch on mount
+    retry: 1,
   });
 
   // Helper function to calculate on-time status

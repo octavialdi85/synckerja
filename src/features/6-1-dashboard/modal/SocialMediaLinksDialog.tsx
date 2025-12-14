@@ -119,7 +119,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
   const { socialMediaNames, getNamesByPlatform, isLoading: isLoadingNames } = useSocialMediaNames(organizationId);
 
   // Fetch plan data to get service_id and done status
-  const { data: planData } = useQuery({
+  const { data: planData, isLoading: isLoadingPlanData } = useQuery({
     queryKey: ['social-media-plan', socialMediaPlanId],
     queryFn: async () => {
       if (!socialMediaPlanId) return null;
@@ -132,6 +132,10 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       return data;
     },
     enabled: !!socialMediaPlanId && isOpen,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    retry: 1,
   });
 
   // Fetch required platforms for the service
@@ -141,6 +145,17 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
   // Calculate validation status
   const validationStatus = React.useMemo(() => {
+    // If still loading required platforms, return default state
+    if (isLoadingRequiredPlatforms) {
+      return {
+        isValid: false,
+        progress: 0,
+        missingPlatforms: [],
+        totalRequired: 0,
+        filledRequired: 0
+      };
+    }
+
     if (!planData?.service_id || planData.done === true) {
       // If plan is already done, no validation needed
       return {
@@ -165,9 +180,10 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       };
     }
 
-    // Create a map of filled platforms: "platform:social_media_name"
-    // Only count links with valid URLs (no URL errors)
-    const filledPlatformsMap = new Set<string>();
+    // Create a set of filled platforms (only platform, not platform + name)
+    // Required platforms only require the platform to be filled, not a specific social_media_name
+    const filledPlatformsSet = new Set<string>();
+    
     formLinks.forEach(link => {
       if (
         link.platform && 
@@ -178,24 +194,25 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
         link.url.trim() !== '' &&
         !link.urlError // URL must be valid (no validation errors)
       ) {
-        const key = `${link.platform}:${link.social_media_name}`;
-        filledPlatformsMap.add(key);
+        const platform = link.platform.trim();
+        filledPlatformsSet.add(platform);
       }
     });
 
     // Check which required platforms are missing
+    // Required platforms only require the platform to be filled, regardless of social_media_name
     const missingPlatforms: string[] = [];
     activeRequiredPlatforms.forEach(rp => {
-      const requiredKey = rp.social_media_name
-        ? `${rp.platform}:${rp.social_media_name.name}`
-        : `${rp.platform}:${rp.custom_platform_name || 'Custom'}`;
+      const platform = rp.platform.trim();
       
-      if (!filledPlatformsMap.has(requiredKey)) {
-        missingPlatforms.push(
-          rp.social_media_name
-            ? `${rp.platform} - ${rp.social_media_name.name}`
-            : `${rp.platform} - ${rp.custom_platform_name || 'Custom'}`
-        );
+      if (!filledPlatformsSet.has(platform)) {
+        // Display name for missing platform
+        const displayName = rp.social_media_name
+          ? `${rp.platform} - ${rp.social_media_name.name}`
+          : rp.custom_platform_name
+          ? `${rp.platform} - ${rp.custom_platform_name}`
+          : rp.platform;
+        missingPlatforms.push(displayName);
       }
     });
 
@@ -211,7 +228,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       totalRequired: activeRequiredPlatforms.length,
       filledRequired
     };
-  }, [formLinks, requiredPlatforms, planData]);
+  }, [formLinks, requiredPlatforms, planData, isLoadingRequiredPlatforms]);
 
   // Initialize form data when dialog opens or links change
   useEffect(() => {
@@ -435,8 +452,21 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
         <div className="flex-1 flex flex-col min-h-0 px-6 pb-6">
           {/* Required Platforms Progress Indicator */}
-          {planData?.service_id && !planData.done && validationStatus.totalRequired > 0 && (
-            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          {/* Show progress bar if: plan has service_id, not done, and has required platforms OR is still loading */}
+          {!isLoadingPlanData && planData?.service_id && !planData.done && (
+            isLoadingRequiredPlatforms ? (
+              // Show loading state
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <Label className="text-sm text-muted-foreground">
+                    Loading required platforms...
+                  </Label>
+                </div>
+              </div>
+            ) : validationStatus.totalRequired > 0 ? (
+              // Show progress bar when there are required platforms
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {validationStatus.isValid ? (
@@ -469,6 +499,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
                 </div>
               )}
             </div>
+            ) : null
           )}
 
           <div className="flex items-center justify-between mb-4">
@@ -486,8 +517,9 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
           </div>
 
           <ScrollArea className="flex-1">
-            {isLoading ? (
+            {isLoading || isLoadingPlanData || isLoadingRequiredPlatforms ? (
               <div className="text-center py-8 text-gray-500">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
                 <p className="text-sm">Loading...</p>
               </div>
             ) : (

@@ -126,7 +126,7 @@ export const useContentPillarData = (selectedMonth?: Date) => {
     enabled: true,
     staleTime: 30 * 1000, // Reduced to 30 seconds for realtime feel
     gcTime: 2 * 60 * 1000, // Reduced to 2 minutes
-    refetchOnWindowFocus: true, // Enable refetch on focus for better realtime feel
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (realtime handles updates)
     refetchOnMount: true,
     retry: 2,
     retryDelay: 2000,

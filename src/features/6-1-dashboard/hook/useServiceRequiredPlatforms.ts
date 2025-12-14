@@ -76,9 +76,22 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
       const { data, error } = await query;
 
       if (error) throw error;
+      
+      console.log('📋 useServiceRequiredPlatforms fetched:', {
+        organizationId,
+        serviceId,
+        count: data?.length || 0,
+        platforms: data?.map(rp => `${rp.platform} (active: ${rp.is_active})`) || []
+      });
+      
       return data as ServiceRequiredPlatform[];
     },
     enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - required platforms don't change often
+    gcTime: 10 * 60 * 1000, // 10 minutes cache time
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+    refetchOnMount: true, // Refetch on mount to ensure fresh data when service_id changes
+    retry: 1,
   });
 
   // Get required platforms by service

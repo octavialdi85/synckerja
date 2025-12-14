@@ -56,7 +56,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
       return data || [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds to ensure real-time updates
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (realtime handles updates)
     refetchOnMount: true, // Refetch when component mounts
     staleTime: 0, // Always consider data stale to ensure fresh updates
   });

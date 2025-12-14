@@ -88,7 +88,7 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
     enabled: !!socialMediaPlanId,
     staleTime: 30 * 1000, // 30 seconds - reduced cache time for better real-time updates
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
-    refetchOnWindowFocus: true, // Enable refetch on window focus
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows (especially when copying links)
     refetchOnMount: true, // Enable refetch on mount
     refetchOnReconnect: true, // Enable refetch on reconnect
     retry: 1,
