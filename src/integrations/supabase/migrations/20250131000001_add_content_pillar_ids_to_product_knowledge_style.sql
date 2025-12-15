@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_product_knowledge_style_content_pillar_ids
 COMMENT ON COLUMN public.product_knowledge_style.content_pillar_ids IS 'Array of content pillar IDs that this style applies to. Empty array means the style applies to all pillars (universal style)';
 
 
+

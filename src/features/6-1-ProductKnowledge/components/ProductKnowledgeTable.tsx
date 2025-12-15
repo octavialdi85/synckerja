@@ -88,13 +88,13 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.subService', 'Sub Service')}
                 </th>
                 <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.feature', 'Feature')}
-                </th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
-                </th>
-                <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.targetMarket', 'Target Market')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.problem', 'Problem')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.impact', 'Impact')}
                 </th>
                 <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.wants', 'Wants')}
@@ -106,13 +106,13 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.hiddenNeeds', 'Hidden Needs')}
                 </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.problem', 'Problem')}
-                </th>
-                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.impact', 'Impact')}
-                </th>
-                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.solution', 'Solution')}
+                </th>
+                <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.feature', 'Feature')}
+                </th>
+                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
                 </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
@@ -443,57 +443,6 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         </Select>
       </td>
 
-      {/* Fitur */}
-      <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureName ? (
-          <Input
-            defaultValue={item.feature_name || ''}
-            onBlur={(e) => handleFeatureNameBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleFeatureNameBlur(e.currentTarget.value);
-              } else if (e.key === 'Escape') {
-                setIsEditingFeatureName(false);
-              }
-            }}
-            autoFocus
-            className="h-8 text-sm"
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingFeatureName(true)}
-          >
-            {item.feature_name || '-'}
-          </div>
-        )}
-      </td>
-
-      {/* Fitur Description */}
-      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureDescription ? (
-          <textarea
-            defaultValue={item.feature_description || ''}
-            onBlur={(e) => handleFeatureDescriptionBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingFeatureDescription(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingFeatureDescription(true)}
-          >
-            {item.feature_description || '-'}
-          </div>
-        )}
-      </td>
-
       {/* Target Market */}
       <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingTargetMarket ? (
@@ -515,6 +464,72 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             onClick={() => setIsEditingTargetMarket(true)}
           >
             {formatTargetMarket(item.target_audience) || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Problem */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingProblems ? (
+          <textarea
+            defaultValue={formatProblems(item.problems_solved)}
+            onBlur={(e) => handleProblemsBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingProblems(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Masalah 1: ...&#10;Masalah 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingProblems(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {formatProblems(item.problems_solved) || '-'}
+            {item.problem_tags && item.problem_tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {item.problem_tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* Dampak */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingImpact ? (
+          <textarea
+            defaultValue={item.impact || ''}
+            onBlur={(e) => handleImpactBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingImpact(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Impact 1: ...&#10;&#10;Impact 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingImpact(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {item.impact || '-'}
           </div>
         )}
       </td>
@@ -596,72 +611,6 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         )}
       </td>
 
-      {/* Problem */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingProblems ? (
-          <textarea
-            defaultValue={formatProblems(item.problems_solved)}
-            onBlur={(e) => handleProblemsBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingProblems(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Masalah 1: ...&#10;Masalah 2: ..."
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingProblems(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          >
-            {formatProblems(item.problems_solved) || '-'}
-            {item.problem_tags && item.problem_tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {item.problem_tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </td>
-
-      {/* Dampak */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingImpact ? (
-          <textarea
-            defaultValue={item.impact || ''}
-            onBlur={(e) => handleImpactBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingImpact(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Impact 1: ...&#10;&#10;Impact 2: ..."
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingImpact(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          >
-            {item.impact || '-'}
-          </div>
-        )}
-      </td>
-
       {/* Solusi */}
       <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingSolution ? (
@@ -685,6 +634,57 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {item.solusi || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Fitur */}
+      <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFeatureName ? (
+          <Input
+            defaultValue={item.feature_name || ''}
+            onBlur={(e) => handleFeatureNameBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleFeatureNameBlur(e.currentTarget.value);
+              } else if (e.key === 'Escape') {
+                setIsEditingFeatureName(false);
+              }
+            }}
+            autoFocus
+            className="h-8 text-sm"
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            onClick={() => setIsEditingFeatureName(true)}
+          >
+            {item.feature_name || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Fitur Description */}
+      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFeatureDescription ? (
+          <textarea
+            defaultValue={item.feature_description || ''}
+            onBlur={(e) => handleFeatureDescriptionBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingFeatureDescription(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
+            rows={3}
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
+            onClick={() => setIsEditingFeatureDescription(true)}
+          >
+            {item.feature_description || '-'}
           </div>
         )}
       </td>

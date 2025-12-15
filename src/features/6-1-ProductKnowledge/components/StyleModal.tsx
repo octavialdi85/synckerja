@@ -357,10 +357,16 @@ export const StyleModal: React.FC<StyleModalProps> = ({
                 <PopoverContent 
                   className="w-[var(--radix-popover-trigger-width)] p-0 bg-white border shadow-lg flex flex-col" 
                   align="start"
-                  style={{ maxHeight: '400px' }}
+                  style={{ 
+                    maxHeight: '400px',
+                    height: '400px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden'
+                  }}
                 >
                   {/* Search Bar */}
-                  <div className="p-2 border-b sticky top-0 bg-white z-10">
+                  <div className="p-2 border-b flex-shrink-0 bg-white">
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <Input
@@ -376,7 +382,17 @@ export const StyleModal: React.FC<StyleModalProps> = ({
                   </div>
                   
                   {/* Scrollable Pillar List */}
-                  <div className="max-h-[280px] overflow-y-auto seamless-scroll p-2">
+                  <div 
+                    className="seamless-scroll p-2 flex-1 min-h-0"
+                    style={{
+                      maxHeight: '320px',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      WebkitOverflowScrolling: 'touch',
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none'
+                    }}
+                  >
                     {(() => {
                       const filteredPillars = contentPillars.filter((pillar) =>
                         pillar.name.toLowerCase().includes(pillarSearchQuery.toLowerCase())
