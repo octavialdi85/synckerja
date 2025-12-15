@@ -28,6 +28,7 @@ export interface ScriptGeneratorRequest {
   structure?: string;
   judul?: string; // Title template selected from dropdown
   judul_custom?: string; // Custom title if user wants to edit the template
+  selling_approach?: 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling'; // Selling approach: no product, soft selling, or hard selling
 }
 
 export interface ScriptGeneratorResponse {
@@ -80,8 +81,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Opening - Simple and clear
   promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi detail di bawah ini.');
-  promptParts.push('');
-  promptParts.push('===========================================================');
+  promptParts.push('=================================================================================================================================');
   promptParts.push('');
   promptParts.push('PENTING:');
   promptParts.push('1. Baca SEMUA informasi dengan teliti sebelum membuat script');
@@ -89,8 +89,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('3. Pastikan output mudah dibaca dengan struktur yang jelas');
   promptParts.push('');
   promptParts.push('INFORMASI DETAIL UNTUK SCRIPT');
-  promptParts.push('');
-  promptParts.push('==========================');
+  promptParts.push('==============================');
   promptParts.push('');
   
   // Content Type & Format
@@ -175,7 +174,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Customer Insights
   if (request.keinginan || request.kebutuhan || request.hidden_needs_1 || request.hidden_needs_2) {
     promptParts.push('## Insights Pelanggan');
-    promptParts.push('================');
+    promptParts.push('=====================');
     promptParts.push('');
     if (request.keinginan) {
       promptParts.push(`- **Keinginan (Wants):** ${request.keinginan}`);
@@ -198,7 +197,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Problems - Clean duplicated labels
   if (request.problem_1 || request.problem_2) {
     promptParts.push('## Masalah yang Dihadapi');
-    promptParts.push('====================');
+    promptParts.push('=========================');
     promptParts.push('');
     if (request.problem_1) {
       const cleaned1 = cleanLabelDuplication(request.problem_1, 'Masalah 1');
@@ -214,7 +213,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Impact - Clean duplicated labels
   if (request.impact_1 || request.impact_2) {
     promptParts.push('## Dampak dari Masalah');
-    promptParts.push('===================');
+    promptParts.push('=======================');
     promptParts.push('');
     if (request.impact_1) {
       const cleaned1 = cleanLabelDuplication(request.impact_1, 'Impact 1');
@@ -230,16 +229,53 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Solution
   if (request.solution) {
     promptParts.push(`## Solusi`);
+    promptParts.push('=========');
     promptParts.push(`${request.solution}`);
     promptParts.push('');
     promptParts.push('**⚠️ PENTING:** Dalam script, solusi harus dijelaskan secara spesifik dan konkret. Tunjukkan fitur, keunggulan, atau metode yang jelas dari produk/layanan. Hindari penjelasan yang terlalu generic.');
     promptParts.push('');
   }
   
+  // Selling Approach
+  if (request.selling_approach) {
+    promptParts.push('## Pendekatan Penjualan');
+    promptParts.push('===================');
+    promptParts.push('');
+    if (request.selling_approach === 'Tanpa Produk') {
+      promptParts.push('- **Pendekatan:** Tanpa Produk');
+      promptParts.push('- **Instruksi:** Script TIDAK BOLEH membahas produk/layanan sama sekali. Fokus pada edukasi, informasi umum, atau konten yang memberikan value dan experience tanpa menyebutkan produk/layanan spesifik.');
+      promptParts.push('  - Jangan menyebutkan nama produk, layanan, fitur, atau keunggulan produk');
+      promptParts.push('  - Fokus pada memberikan insight, tips, atau informasi yang bermanfaat untuk audience');
+      promptParts.push('  - Jika perlu menyebutkan solusi, gunakan solusi umum atau konsep, bukan produk spesifik');
+      promptParts.push('  - Script harus memberikan value tanpa ada unsur promosi produk');
+    } else if (request.selling_approach === 'Soft Selling') {
+      promptParts.push('- **Pendekatan:** Soft Selling');
+      promptParts.push('- **Instruksi:** Script boleh membahas produk/layanan tetapi dengan pendekatan yang sangat soft dan tidak agresif.');
+      promptParts.push('  - Sebutkan produk/layanan secara subtle dan natural, tidak terlalu menonjol');
+      promptParts.push('  - Fokus pada Experience, value dan benefit untuk audience, bukan pada fitur produk secara detail');
+      promptParts.push('  - Gunakan bahasa yang lebih edukatif dan informatif daripada promosi');
+      promptParts.push('  - Hindari hard sell, pressure, atau urgency yang berlebihan');
+      promptParts.push('  - Produk/layanan disebutkan sebagai bagian dari solusi, bukan sebagai fokus utama');
+      promptParts.push('  - Gunakan pendekatan storytelling atau edukasi yang mengarah ke produk secara halus');
+    } else if (request.selling_approach === 'Hard Selling') {
+      promptParts.push('- **Pendekatan:** Hard Selling');
+      promptParts.push('- **Instruksi:** Script harus 100% fokus pada produk/layanan, keunggulan, dan fitur-fitur spesifik.');
+      promptParts.push('  - Sebutkan produk/layanan dengan jelas dan menonjol');
+      promptParts.push('  - Jelaskan fitur-fitur spesifik produk/layanan secara detail dan konkret');
+      promptParts.push('  - Tunjukkan keunggulan kompetitif dan value proposition yang jelas');
+      promptParts.push('  - Gunakan bahasa yang persuasif dan menunjukkan urgency jika relevan');
+      promptParts.push('  - Fokus pada bagaimana produk/layanan mengatasi masalah dan memberikan benefit spesifik');
+      promptParts.push('  - Jelaskan cara kerja fitur-fitur utama dengan detail');
+      promptParts.push('  - Bandingkan dengan alternatif lain jika relevan untuk menunjukkan keunggulan');
+      promptParts.push('  - CTA harus jelas dan langsung mengarah ke produk/layanan');
+    }
+    promptParts.push('');
+  }
+  
   // Hook Information
   if (request.hook_name || request.hook_content) {
     promptParts.push('## Hook untuk Script');
-    promptParts.push('================');
+    promptParts.push('=====================');
     promptParts.push('');
     if (request.hook_name) {
       promptParts.push(`- **Nama Hook:** ${request.hook_name}`);
@@ -251,7 +287,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Konten Hook:** ${request.hook_content}`);
       promptParts.push('');
       promptParts.push('**⚠️ PENTING untuk Hook:**');
-      promptParts.push('=====================');
+      promptParts.push('========================');
       promptParts.push('');
       promptParts.push('- Gunakan konten hook di atas sebagai referensi untuk membuat opening/hook yang menarik di awal script');
       promptParts.push('- Hook HARUS sangat RINGKAS dan IMPACTFUL - maksimal 1-2 kalimat untuk video (3-5 detik) atau 1 kalimat untuk post/carousel');
@@ -269,7 +305,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Style & Structure
   if (request.style_instruksi || request.structure || request.style_name) {
     promptParts.push('## Style & Struktur');
-    promptParts.push('===============');
+    promptParts.push('====================');
     promptParts.push('');
     if (request.style_instruksi) {
       promptParts.push(`- **Style Instruksi:** ${request.style_instruksi}`);
@@ -302,6 +338,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Instructions for ChatGPT - More focused and concise
   promptParts.push('## Instruksi');
+  promptParts.push('=============');
+  promptParts.push('');
   promptParts.push('Berdasarkan informasi di atas, buatkan script konten digital marketing yang:');
   if (request.hook_content) {
     promptParts.push('1. Menggunakan hook yang sudah disediakan di bagian "Hook untuk Script" sebagai dasar, kemudian susun ulang dengan bahasa yang lebih natural, mudah dipahami, dan engaging untuk menarik perhatian di awal');
@@ -310,19 +348,39 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   }
   promptParts.push('2. Menjelaskan masalah dengan jelas sesuai konteks target audience');
   promptParts.push('3. Menunjukkan dampak konkret dari masalah tersebut');
-  promptParts.push('4. Menawarkan solusi yang relevan dan menarik');
-  promptParts.push('5. Menjelaskan benefit dan value proposition dengan jelas');
-  promptParts.push('6. Memiliki call-to-action yang jelas, persuasif, dan actionable');
+  if (request.selling_approach === 'Tanpa Produk') {
+    promptParts.push('4. Menawarkan solusi umum yang relevan dan menarik, TIDAK menyebutkan produk/layanan spesifik');
+    promptParts.push('5. Menjelaskan benefit dan value dari solusi secara umum, tanpa promosi produk');
+    promptParts.push('6. Memiliki call-to-action yang edukatif dan informatif, bukan promosi produk');
+  } else if (request.selling_approach === 'Soft Selling') {
+    promptParts.push('4. Menawarkan solusi yang relevan dan menarik dengan pendekatan soft, produk/layanan disebutkan secara subtle');
+    promptParts.push('5. Menjelaskan benefit dan value proposition dengan fokus pada value untuk audience, bukan detail produk');
+    promptParts.push('6. Memiliki call-to-action yang soft dan tidak agresif, lebih mengarah ke edukasi atau informasi');
+  } else if (request.selling_approach === 'Hard Selling') {
+    promptParts.push('4. Menawarkan solusi produk/layanan yang relevan dan menarik dengan fokus pada produk');
+    promptParts.push('5. Menjelaskan benefit dan value proposition produk/layanan dengan jelas dan detail');
+    promptParts.push('6. Memiliki call-to-action yang jelas, persuasif, dan langsung mengarah ke produk/layanan');
+  } else {
+    promptParts.push('4. Menawarkan solusi yang relevan dan menarik');
+    promptParts.push('5. Menjelaskan benefit dan value proposition dengan jelas');
+    promptParts.push('6. Memiliki call-to-action yang jelas, persuasif, dan actionable');
+  }
   promptParts.push('');
   promptParts.push('');
   promptParts.push('**⚠️ WAJIB DIPENUHI:**');
-  promptParts.push('===================');
+  promptParts.push('====================');
   promptParts.push('');
   promptParts.push('- Semua field yang diisi HARUS muncul dan dieksplorasi dalam script (Keinginan, Kebutuhan, Hidden Needs, Problem, Impact, Solution)');
   if (request.kebutuhan) {
     promptParts.push(`- Pastikan "Kebutuhan (Needs)" jelas ter-explore dan dijelaskan bagaimana solusi memenuhi kebutuhan ini: ${request.kebutuhan}`);
-    promptParts.push('  - Jangan hanya menyebutkan kebutuhan, tapi jelaskan secara spesifik bagaimana produk/layanan mengatasi kebutuhan tersebut');
-    promptParts.push('  - Tunjukkan fitur atau metode konkret yang menjawab kebutuhan tersebut');
+    if (request.selling_approach === 'Tanpa Produk') {
+      promptParts.push('  - Jelaskan bagaimana solusi umum atau konsep mengatasi kebutuhan tersebut, tanpa menyebutkan produk/layanan spesifik');
+    } else if (request.selling_approach === 'Soft Selling') {
+      promptParts.push('  - Jelaskan secara soft bagaimana solusi mengatasi kebutuhan tersebut, fokus pada benefit bukan detail teknis');
+    } else {
+      promptParts.push('  - Jangan hanya menyebutkan kebutuhan, tapi jelaskan secara spesifik bagaimana produk/layanan mengatasi kebutuhan tersebut');
+      promptParts.push('  - Tunjukkan fitur atau metode konkret yang menjawab kebutuhan tersebut');
+    }
   }
   if (request.hidden_needs_1 || request.hidden_needs_2) {
     promptParts.push('- Hidden Needs harus di jawab Dengan emosional Hook');
@@ -348,14 +406,44 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   const pillarLowerForSolution = (request.content_pillar || '').toLowerCase();
   const isStoryOrMotivational = pillarLowerForSolution.includes('story') || pillarLowerForSolution.includes('motivational') || pillarLowerForSolution.includes('motivasi');
   
-  if (!isStoryOrMotivational) {
-    promptParts.push('- Solution HARUS sangat spesifik dan konkret, tidak generic. Jelaskan fitur, platform, atau keunggulan yang jelas dari produk/layanan. (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
-    promptParts.push('  - Sebutkan nama platform, fitur spesifik, atau metode yang konkret, bukan hanya konsep umum (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
-    promptParts.push('  - Untuk setiap fitur yang disebutkan, jelaskan CARA KERJANYA secara singkat (contoh: "Sistem otomatis match event dengan audience yang sesuai demografi" bukan hanya "Sistem matching") > (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
-    promptParts.push('  - Berikan detail yang bisa diukur atau divisualisasikan (contoh: "jangkauan 1 juta pengguna", "targeting ke audience X", dll)');
-    promptParts.push('  - Jika ada multiple fitur, jelaskan satu per satu dengan format: "Fitur #1: [nama] - Cara kerja: [penjelasan singkat]"');
+  // Adjust solution instructions based on selling approach
+  if (request.selling_approach === 'Tanpa Produk') {
+    promptParts.push('- Solution: Jelaskan solusi secara umum dan konseptual, TIDAK menyebutkan produk/layanan spesifik');
+    promptParts.push('  - Fokus pada solusi umum, metode, atau pendekatan yang bisa diterapkan secara luas');
+    promptParts.push('  - Hindari menyebutkan nama produk, platform, atau layanan spesifik');
+    promptParts.push('  - Gunakan bahasa yang edukatif dan informatif tentang solusi secara umum');
+  } else if (request.selling_approach === 'Soft Selling') {
+    if (!isStoryOrMotivational) {
+      promptParts.push('- Solution: Jelaskan solusi dengan pendekatan soft, fokus pada benefit dan value untuk audience');
+      promptParts.push('  - Sebutkan produk/layanan secara subtle dan natural');
+      promptParts.push('  - Fokus pada bagaimana solusi mengatasi masalah, bukan detail teknis fitur');
+      promptParts.push('  - Gunakan bahasa yang lebih edukatif daripada promosi');
+      promptParts.push('  - Hindari terlalu detail tentang spesifikasi teknis atau fitur-fitur spesifik');
+    } else {
+      promptParts.push('- Solution: Jelaskan solusi dengan cara yang sesuai dengan pillar Story Telling atau Motivational (tidak perlu detail fitur spesifik)');
+    }
+  } else if (request.selling_approach === 'Hard Selling') {
+    if (!isStoryOrMotivational) {
+      promptParts.push('- Solution HARUS sangat spesifik dan konkret, tidak generic. Jelaskan fitur, platform, atau keunggulan yang jelas dari produk/layanan.');
+      promptParts.push('  - Sebutkan nama platform, fitur spesifik, atau metode yang konkret, bukan hanya konsep umum');
+      promptParts.push('  - Untuk setiap fitur yang disebutkan, jelaskan CARA KERJANYA secara singkat (contoh: "Sistem otomatis match event dengan audience yang sesuai demografi" bukan hanya "Sistem matching")');
+      promptParts.push('  - Berikan detail yang bisa diukur atau divisualisasikan (contoh: "jangkauan 1 juta pengguna", "targeting ke audience X", dll)');
+      promptParts.push('  - Jika ada multiple fitur, jelaskan satu per satu dengan format: "Fitur #1: [nama] - Cara kerja: [penjelasan singkat]"');
+      promptParts.push('  - Tunjukkan keunggulan kompetitif dan value proposition yang jelas');
+    } else {
+      promptParts.push('- Solution: Jelaskan solusi dengan cara yang sesuai dengan pillar Story Telling atau Motivational, tetapi tetap fokus pada produk/layanan dan keunggulannya');
+    }
   } else {
-    promptParts.push('- Solution: Jelaskan solusi dengan cara yang sesuai dengan pillar Story Telling atau Motivational (tidak perlu detail fitur spesifik)');
+    // Default behavior (no selling approach selected)
+    if (!isStoryOrMotivational) {
+      promptParts.push('- Solution HARUS sangat spesifik dan konkret, tidak generic. Jelaskan fitur, platform, atau keunggulan yang jelas dari produk/layanan. (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
+      promptParts.push('  - Sebutkan nama platform, fitur spesifik, atau metode yang konkret, bukan hanya konsep umum (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
+      promptParts.push('  - Untuk setiap fitur yang disebutkan, jelaskan CARA KERJANYA secara singkat (contoh: "Sistem otomatis match event dengan audience yang sesuai demografi" bukan hanya "Sistem matching") > (Penjelasan Fitur spesifik dan lengkap Tidak Berlaku untuk pillar Story telling dan Pilar Motivational)');
+      promptParts.push('  - Berikan detail yang bisa diukur atau divisualisasikan (contoh: "jangkauan 1 juta pengguna", "targeting ke audience X", dll)');
+      promptParts.push('  - Jika ada multiple fitur, jelaskan satu per satu dengan format: "Fitur #1: [nama] - Cara kerja: [penjelasan singkat]"');
+    } else {
+      promptParts.push('- Solution: Jelaskan solusi dengan cara yang sesuai dengan pillar Story Telling atau Motivational (tidak perlu detail fitur spesifik)');
+    }
   }
   promptParts.push('');
   

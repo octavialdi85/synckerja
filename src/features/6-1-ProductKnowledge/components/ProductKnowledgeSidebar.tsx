@@ -158,7 +158,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
     }
   };
 
-  const handleSaveStyle = async (data: { name: string; description: string; structure?: string }) => {
+  const handleSaveStyle = async (data: { name: string; description: string; structure?: string; content_pillar_ids?: string[] }) => {
     try {
       // Validate name
       const trimmedName = (data.name || '').trim();
@@ -169,7 +169,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
 
       if (editingStyle) {
         // Update existing style
-        const updateInput: { name: string; description?: string; structure?: string } = {
+        const updateInput: { name: string; description?: string; structure?: string; content_pillar_ids?: string[] } = {
           name: trimmedName,
         };
         
@@ -183,6 +183,11 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
         if (data.structure !== undefined && data.structure !== null) {
           const trimmedStruct = data.structure.trim();
           updateInput.structure = trimmedStruct || undefined;
+        }
+        
+        // Include content_pillar_ids (empty array means universal)
+        if (data.content_pillar_ids !== undefined) {
+          updateInput.content_pillar_ids = data.content_pillar_ids.length > 0 ? data.content_pillar_ids : [];
         }
         
         console.log('Updating style:', { 
@@ -214,6 +219,9 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
           name: trimmedName,
           description: data.description?.trim() || undefined,
           structure: data.structure?.trim() || undefined,
+          content_pillar_ids: data.content_pillar_ids && data.content_pillar_ids.length > 0 
+            ? data.content_pillar_ids 
+            : [],
         });
         toast.success(
           t('productKnowledge.style.toast.createSuccess', 'Style created successfully')

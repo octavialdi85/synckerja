@@ -9,6 +9,7 @@ export interface ProductKnowledgeStyle {
   name: string;
   description: string | null;
   structure: string | null;
+  content_pillar_ids: string[] | null; // Array of content pillar IDs, null or empty means universal (all pillars)
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -18,12 +19,14 @@ export interface CreateProductKnowledgeStyleInput {
   name: string;
   description?: string;
   structure?: string;
+  content_pillar_ids?: string[]; // Array of content pillar IDs, empty or undefined means universal (all pillars)
 }
 
 export interface UpdateProductKnowledgeStyleInput {
   name?: string;
   description?: string;
   structure?: string;
+  content_pillar_ids?: string[]; // Array of content pillar IDs, empty or undefined means universal (all pillars)
 }
 
 export const useProductKnowledgeStyle = () => {
@@ -73,6 +76,9 @@ export const useProductKnowledgeStyleMutations = () => {
           name: input.name,
           description: input.description || null,
           structure: input.structure || null,
+          content_pillar_ids: input.content_pillar_ids && input.content_pillar_ids.length > 0 
+            ? input.content_pillar_ids 
+            : [],
           created_by: userId,
         })
         .select()
@@ -104,6 +110,7 @@ export const useProductKnowledgeStyleMutations = () => {
         name: string;
         description?: string | null;
         structure?: string | null;
+        content_pillar_ids?: string[];
         updated_at: string;
       } = {
         name: input.name.trim(),
@@ -116,6 +123,11 @@ export const useProductKnowledgeStyleMutations = () => {
       }
       if (input.structure !== undefined) {
         updateData.structure = input.structure || null;
+      }
+      if (input.content_pillar_ids !== undefined) {
+        updateData.content_pillar_ids = input.content_pillar_ids && input.content_pillar_ids.length > 0 
+          ? input.content_pillar_ids 
+          : [];
       }
 
       console.log('Updating product knowledge style:', { id, updateData });

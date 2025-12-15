@@ -144,13 +144,15 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     style_instruksi: '',
     structure: '',
     judul: '',
-    judul_custom: ''
+    judul_custom: '',
+    selling_approach: undefined
   });
   
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [selectedHookName, setSelectedHookName] = useState<string>('');
   const [selectedStyleName, setSelectedStyleName] = useState<string>('');
   const [selectedJudulTemplate, setSelectedJudulTemplate] = useState<string>('');
+  const [isSellingApproachLocked, setIsSellingApproachLocked] = useState<boolean>(false);
 
   // Master data
   const [contentTypes, setContentTypes] = useState<any[]>([]);
@@ -276,6 +278,80 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     }
   }, [selectedServiceId, subServices]);
 
+  // Auto-select and lock Hard Selling for specific content pillars
+  useEffect(() => {
+    const pillarName = (formData.content_pillar || '').toLowerCase().trim();
+    const promoPillars = ['attractive offers', 'buy 1 get 1', 'promo'];
+    
+    // Check if the pillar name matches any of the promo pillars (case-insensitive, partial match)
+    const isPromoPillar = pillarName && promoPillars.some(promo => {
+      const promoLower = promo.toLowerCase();
+      // Check for exact match or if pillar name contains the promo keyword
+      return pillarName === promoLower || pillarName.includes(promoLower);
+    });
+    
+    if (isPromoPillar) {
+      // Auto-select Hard Selling and lock the field for promo pillars
+      setFormData(prev => ({
+        ...prev,
+        selling_approach: 'Hard Selling' as const
+      }));
+      setIsSellingApproachLocked(true);
+    } else {
+      // Unlock the field if pillar changes to non-promo or is cleared
+      setIsSellingApproachLocked(false);
+      
+      // Clear Hard Selling if it was selected and pillar is not promo
+      setFormData(prev => {
+        if (prev.selling_approach === 'Hard Selling') {
+          return {
+            ...prev,
+            selling_approach: undefined
+          };
+        }
+        return prev;
+      });
+    }
+  }, [formData.content_pillar]);
+
+  // Clear selected style if it doesn't match the selected content pillar
+  useEffect(() => {
+    if (!formData.content_pillar || !formData.style_name) {
+      return;
+    }
+    
+    // Find the selected style
+    const selectedStyle = productKnowledgeStyles.find(
+      (style) => style.name === formData.style_name
+    );
+    
+    if (!selectedStyle) {
+      return;
+    }
+    
+    // Find the content pillar ID from the pillar name
+    const selectedPillar = contentPillars.find(
+      (pillar) => pillar.name === formData.content_pillar
+    );
+    
+    if (!selectedPillar) {
+      return;
+    }
+    
+    // Check if style is compatible with selected pillar
+    const pillarIds = selectedStyle.content_pillar_ids || [];
+    const isUniversal = pillarIds.length === 0;
+    const includesSelectedPillar = pillarIds.includes(selectedPillar.id);
+    
+    // If style is not universal and doesn't include selected pillar, clear it
+    if (!isUniversal && !includesSelectedPillar) {
+      setSelectedStyleName('');
+      handleInputChange('style_name', '');
+      handleInputChange('style_instruksi', '');
+      handleInputChange('structure', '');
+    }
+  }, [formData.content_pillar, formData.style_name, productKnowledgeStyles, contentPillars]);
+
   const handleInputChange = (field: keyof ScriptGeneratorRequest, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -327,12 +403,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     style_instruksi: '',
     structure: '',
     judul: '',
-    judul_custom: ''
+    judul_custom: '',
+    selling_approach: undefined
   });
     setSelectedServiceId('');
     setSelectedHookName('');
     setSelectedStyleName('');
     setSelectedJudulTemplate('');
+    setIsSellingApproachLocked(false);
   };
 
   // Determine field type based on content type
@@ -514,6 +592,46 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           </Select>
         </div>
 
+        {/* Selling Approach */}
+        <div className="space-y-2">
+          <Label htmlFor="selling_approach">
+            Pendekatan Penjualan
+            {isSellingApproachLocked && (
+              <span className="ml-2 text-xs text-gray-500">(Otomatis terkunci untuk Content Pillar ini)</span>
+            )}
+            {!isSellingApproachLocked && formData.content_pillar && (
+              <span className="ml-2 text-xs text-gray-500">(Hard Selling hanya tersedia untuk pillar Promo)</span>
+            )}
+          </Label>
+          <Select
+            value={formData.selling_approach || undefined}
+            onValueChange={(value) => handleInputChange('selling_approach', value as 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling')}
+            disabled={isSellingApproachLocked}
+          >
+            <SelectTrigger className={isSellingApproachLocked ? 'bg-gray-100 cursor-not-allowed' : ''}>
+              <SelectValue placeholder="Pilih Pendekatan Penjualan" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Tanpa Produk">
+                Tanpa Produk - Tidak membahas produk sama sekali
+              </SelectItem>
+              <SelectItem value="Soft Selling">
+                Soft Selling - Bicara produk tetapi sangat soft
+              </SelectItem>
+              <SelectItem 
+                value="Hard Selling"
+                disabled={!isSellingApproachLocked}
+                className={!isSellingApproachLocked ? 'opacity-50 cursor-not-allowed' : ''}
+              >
+                Hard Selling - 100% bicara Produk, keunggulan dan fitur
+                {!isSellingApproachLocked && formData.content_pillar && (
+                  <span className="ml-2 text-xs text-gray-400">(Hanya untuk pillar Promo)</span>
+                )}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Target Market */}
         <div className="space-y-2">
           <Label htmlFor="target_market">Target Market</Label>
@@ -573,6 +691,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           <Select
             value={formData.keinginan || undefined}
             onValueChange={(value) => {
+              // Update keinginan first
+              handleInputChange('keinginan', value);
+              
               // Find the product knowledge item with this wants value
               const selectedPK = productKnowledgeWithWantsNeeds.find(
                 (pk) => pk.wants?.trim() === value
@@ -580,7 +701,20 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               
               // Auto-fill needs if found
               if (selectedPK && selectedPK.needs) {
-                handleInputChange('kebutuhan', selectedPK.needs.trim());
+                const needsValue = selectedPK.needs.trim();
+                handleInputChange('kebutuhan', needsValue);
+              } else {
+                // Clear kebutuhan if no product knowledge found or no needs available
+                handleInputChange('kebutuhan', '');
+              }
+              
+              // Auto-fill solution if found
+              if (selectedPK && selectedPK.solusi) {
+                const solusiValue = selectedPK.solusi.trim();
+                handleInputChange('solution', solusiValue);
+              } else {
+                // Clear solution if no product knowledge found or no solusi available
+                handleInputChange('solution', '');
               }
               
               // Auto-fill hidden needs if found
@@ -643,8 +777,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 handleInputChange('impact_1', '');
                 handleInputChange('impact_2', '');
               }
-              
-              handleInputChange('keinginan', value);
             }}
           >
             <SelectTrigger>
@@ -679,7 +811,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             disabled={!formData.keinginan}
           >
             <SelectTrigger>
-              <SelectValue placeholder={formData.keinginan ? "Kebutuhan otomatis terisi" : "Pilih Keinginan terlebih dahulu"} />
+              <SelectValue placeholder={formData.keinginan ? (formData.kebutuhan ? "" : "Pilih Kebutuhan") : "Pilih Keinginan terlebih dahulu"} />
             </SelectTrigger>
             <SelectContent>
               {formData.keinginan ? (
@@ -690,9 +822,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     (pk) => pk.wants?.trim() === formData.keinginan
                   );
                   
+                  // Collect all unique needs from matching product knowledge
+                  const uniqueNeeds = new Map<string, string>();
+                  
                   if (matchingPKs.length > 0) {
-                    // If multiple matches, show all unique needs
-                    const uniqueNeeds = new Map<string, string>();
                     matchingPKs.forEach((pk) => {
                       if (pk.needs) {
                         const needsValue = pk.needs.trim();
@@ -701,25 +834,38 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                         }
                       }
                     });
-                    
-                    return Array.from(uniqueNeeds.entries()).map(([needsValue, pkId]) => (
-                      <SelectItem key={pkId} value={needsValue}>
-                        {needsValue}
-                      </SelectItem>
-                    ));
                   }
                   
-                  // Fallback: show all needs if no exact match
-                  return productKnowledgeWithWantsNeeds
-                    .filter((pk) => pk.needs && pk.needs.trim() !== '')
-                    .map((pk) => {
-                      const needsValue = pk.needs!.trim();
-                      return (
-                        <SelectItem key={pk.id} value={needsValue}>
-                          {needsValue}
-                        </SelectItem>
+                  // CRITICAL: Always ensure the current kebutuhan value is available as SelectItem
+                  // This ensures autofilled values are always displayed correctly
+                  if (formData.kebutuhan) {
+                    const kebutuhanValue = formData.kebutuhan.trim();
+                    if (kebutuhanValue && !uniqueNeeds.has(kebutuhanValue)) {
+                      // Find the PK that has this kebutuhan value (might be from autofill)
+                      const pkWithKebutuhan = productKnowledgeWithWantsNeeds.find(
+                        (pk) => pk.needs?.trim() === kebutuhanValue
                       );
+                      uniqueNeeds.set(kebutuhanValue, pkWithKebutuhan?.id || 'autofilled');
+                    }
+                  }
+                  
+                  // If no matches found, show all needs as fallback
+                  if (uniqueNeeds.size === 0) {
+                    productKnowledgeWithWantsNeeds.forEach((pk) => {
+                      if (pk.needs) {
+                        const needsValue = pk.needs.trim();
+                        if (needsValue && !uniqueNeeds.has(needsValue)) {
+                          uniqueNeeds.set(needsValue, pk.id);
+                        }
+                      }
                     });
+                  }
+                  
+                  return Array.from(uniqueNeeds.entries()).map(([needsValue, pkId]) => (
+                    <SelectItem key={pkId} value={needsValue}>
+                      {needsValue}
+                    </SelectItem>
+                  ));
                 })()
               ) : (
                 <SelectItem value="select-wants-first" disabled>
@@ -918,19 +1064,55 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               <SelectValue placeholder="Pilih Style Name" />
             </SelectTrigger>
             <SelectContent>
-              {productKnowledgeStyles.length === 0 ? (
-                <SelectItem value="no-data" disabled>
-                  Tidak ada Style tersedia
-                </SelectItem>
-              ) : (
-                productKnowledgeStyles
-                  .filter((style) => style.name && style.name.trim() !== '')
-                  .map((style) => (
-                    <SelectItem key={style.id} value={style.name}>
-                      {style.name}
+              {(() => {
+                // Filter styles based on selected content pillar
+                const filteredStyles = productKnowledgeStyles.filter((style) => {
+                  // Always show styles with valid names
+                  if (!style.name || style.name.trim() === '') {
+                    return false;
+                  }
+                  
+                  // If no content pillar is selected, show all styles
+                  if (!formData.content_pillar) {
+                    return true;
+                  }
+                  
+                  // Find the content pillar ID from the pillar name
+                  const selectedPillar = contentPillars.find(
+                    (pillar) => pillar.name === formData.content_pillar
+                  );
+                  
+                  if (!selectedPillar) {
+                    // If pillar not found, show all styles
+                    return true;
+                  }
+                  
+                  // Show style if:
+                  // 1. Style has no pillars (universal) - content_pillar_ids is null or empty array
+                  // 2. Style includes the selected pillar ID
+                  const pillarIds = style.content_pillar_ids || [];
+                  const isUniversal = pillarIds.length === 0;
+                  const includesSelectedPillar = pillarIds.includes(selectedPillar.id);
+                  
+                  return isUniversal || includesSelectedPillar;
+                });
+                
+                if (filteredStyles.length === 0) {
+                  return (
+                    <SelectItem value="no-data" disabled>
+                      {formData.content_pillar 
+                        ? `Tidak ada Style tersedia untuk pillar "${formData.content_pillar}"`
+                        : 'Tidak ada Style tersedia'}
                     </SelectItem>
-                  ))
-              )}
+                  );
+                }
+                
+                return filteredStyles.map((style) => (
+                  <SelectItem key={style.id} value={style.name}>
+                    {style.name}
+                  </SelectItem>
+                ));
+              })()}
             </SelectContent>
           </Select>
         </div>
