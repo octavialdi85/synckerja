@@ -390,6 +390,7 @@ const ContentCalendarContent: React.FC = () => {
                       plansByDate={plansByDate}
                       contentPlans={filteredContentPlans}
                       currentDate={currentDate}
+                      serviceFilter={selectedService}
                     />
                   </div>
                 </div>

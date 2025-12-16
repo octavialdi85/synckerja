@@ -21,6 +21,7 @@ interface ContentCalendarOverviewProps {
   plansByDate: { [key: string]: ContentPlan[] };
   contentPlans: ContentPlan[];
   currentDate: Date;
+  serviceFilter?: string;
 }
 
 export const ContentCalendarOverview = ({
@@ -28,6 +29,7 @@ export const ContentCalendarOverview = ({
   plansByDate,
   contentPlans,
   currentDate,
+  serviceFilter,
 }: ContentCalendarOverviewProps) => {
   const monthName = format(currentDate, 'MMMM yyyy');
 
@@ -132,14 +134,14 @@ export const ContentCalendarOverview = ({
         {/* Funnel Tab Content */}
         <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
           <div className="w-full h-full flex flex-col">
-            <ContentPillarTracker selectedMonth={currentDate} />
+            <ContentPillarTracker selectedMonth={currentDate} serviceFilter={serviceFilter} />
           </div>
         </TabsContent>
 
         {/* Content Balance Tab Content */}
         <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
           <div className="w-full h-full flex flex-col">
-            <ContentBalanceTab selectedMonth={currentDate} />
+            <ContentBalanceTab selectedMonth={currentDate} serviceFilter={serviceFilter} />
           </div>
         </TabsContent>
       </Tabs>
