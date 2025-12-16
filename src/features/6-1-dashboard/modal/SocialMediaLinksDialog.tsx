@@ -84,8 +84,8 @@ const validateUrlForPlatform = (url: string, platform: string): string | null =>
       return 'URL must be a valid Twitter/X link';
     }
   } else if (platform === 'Shopee') {
-    if (!urlLower.includes('shopee.co.id') && !urlLower.includes('shopee.com')) {
-      return 'URL must be a valid Shopee link';
+    if (!urlLower.includes('shopee.co.id') && !urlLower.includes('shopee.com') && !urlLower.includes('shp.ee')) {
+      return 'URL must be a valid Shopee link (e.g., https://shopee.co.id/... or https://id.shp.ee/...)';
     }
   } else if (platform === 'Tokopedia') {
     if (!urlLower.includes('tokopedia.com')) {

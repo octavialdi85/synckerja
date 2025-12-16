@@ -35,7 +35,7 @@ export const HeaderAndTab = ({ activeMainTab, handleTabChange }: HeaderAndTabPro
     },
     {
       id: 'script-generator',
-      label: 'Script Generator',
+      label: 'Customer Persona',
       icon: FileText,
       description: 'Generate marketing scripts',
       route: '/digital-marketing/social-media/script-generator'
