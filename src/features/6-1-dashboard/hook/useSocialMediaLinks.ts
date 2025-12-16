@@ -207,13 +207,158 @@ export const useSocialMediaLinks = (planId?: string) => {
   // Batch create multiple links
   const createMultipleLinksMutation = useMutation({
     mutationFn: async (linksData: CreateSocialMediaLinkData[]) => {
-      const { data, error } = await supabase
-        .from('social_media_links')
-        .insert(linksData)
-        .select();
-
-      if (error) throw error;
-      return data as SocialMediaLink[];
+      // Validate and sanitize data before sending to prevent JSON errors
+      const sanitizedLinks = linksData.map(link => {
+        // Ensure all fields are strings and not null/undefined
+        // Remove any potential problematic characters that could cause JSON parsing issues
+        const sanitizeString = (str: any, isUrl: boolean = false): string => {
+          if (str === null || str === undefined) return '';
+          let cleaned = String(str).trim();
+          // Remove null bytes which can break JSON
+          cleaned = cleaned.replace(/\0/g, '');
+          
+          if (isUrl) {
+            // For URLs, be more lenient - only remove truly problematic control characters
+            // Keep most characters including query parameters, fragments, etc.
+            cleaned = cleaned.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+          } else {
+            // For other fields, remove control characters but keep printable characters
+            cleaned = cleaned.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+          }
+          
+          return cleaned;
+        };
+        
+        const sanitized: CreateSocialMediaLinkData = {
+          social_media_plan_id: sanitizeString(link.social_media_plan_id, false),
+          platform: sanitizeString(link.platform, false),
+          social_media_name: sanitizeString(link.social_media_name, false),
+          url: sanitizeString(link.url, true) // URL needs more lenient sanitization
+        };
+        
+        // Validate required fields
+        if (!sanitized.social_media_plan_id || !sanitized.platform || !sanitized.social_media_name || !sanitized.url) {
+          console.error('Invalid link data:', {
+            original: link,
+            sanitized: sanitized,
+            hasPlanId: !!sanitized.social_media_plan_id,
+            hasPlatform: !!sanitized.platform,
+            hasName: !!sanitized.social_media_name,
+            hasUrl: !!sanitized.url
+          });
+          throw new Error(`Invalid link data: missing required fields`);
+        }
+        
+        // Additional validation: ensure UUID format for social_media_plan_id
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(sanitized.social_media_plan_id)) {
+          console.error('Invalid UUID format:', sanitized.social_media_plan_id);
+          throw new Error(`Invalid social_media_plan_id format: ${sanitized.social_media_plan_id}`);
+        }
+        
+        // Ensure URL is valid format
+        if (!sanitized.url.startsWith('http://') && !sanitized.url.startsWith('https://')) {
+          console.error('Invalid URL format:', sanitized.url);
+          throw new Error(`Invalid URL format: must start with http:// or https://`);
+        }
+        
+        return sanitized;
+      }).filter(link => 
+        link.social_media_plan_id && 
+        link.platform && 
+        link.social_media_name && 
+        link.url
+      );
+      
+      if (sanitizedLinks.length === 0) {
+        throw new Error('No valid links to create');
+      }
+      
+      // Log sanitized data for debugging (remove sensitive data if needed)
+      console.log('Attempting to insert social media links:', sanitizedLinks.map(l => ({
+        social_media_plan_id: l.social_media_plan_id,
+        platform: l.platform,
+        social_media_name: l.social_media_name?.substring(0, 50),
+        url: l.url?.substring(0, 50)
+      })));
+      
+      // Insert one by one to avoid JSON errors in batch insert
+      // This is more reliable and helps identify which specific link causes issues
+      const results: SocialMediaLink[] = [];
+      
+      for (const link of sanitizedLinks) {
+        try {
+          // Ensure data is properly formatted as plain objects (not class instances)
+          // Create a fresh object to avoid any prototype pollution or hidden properties
+          // Don't use JSON.parse/stringify as it might cause issues with special characters
+          const insertData: CreateSocialMediaLinkData = {
+            social_media_plan_id: String(link.social_media_plan_id).trim(),
+            platform: String(link.platform).trim(),
+            social_media_name: String(link.social_media_name).trim(),
+            url: String(link.url).trim()
+          };
+          
+          // Final validation before insert
+          if (!insertData.social_media_plan_id || !insertData.platform || !insertData.social_media_name || !insertData.url) {
+            console.error('Invalid link data - missing fields:', {
+              hasPlanId: !!insertData.social_media_plan_id,
+              hasPlatform: !!insertData.platform,
+              hasName: !!insertData.social_media_name,
+              hasUrl: !!insertData.url,
+              originalLink: link
+            });
+            throw new Error(`Invalid link data: missing required fields`);
+          }
+          
+          // Ensure all values are non-empty strings
+          if (insertData.social_media_plan_id.length === 0 || 
+              insertData.platform.length === 0 || 
+              insertData.social_media_name.length === 0 || 
+              insertData.url.length === 0) {
+            console.error('Invalid link data - empty strings:', insertData);
+            throw new Error(`Invalid link data: empty string values`);
+          }
+          
+          const { data: singleData, error: singleError } = await supabase
+            .from('social_media_links')
+            .insert(insertData)
+            .select()
+            .single();
+          
+          if (singleError) {
+            console.error('Failed to insert link:', {
+              platform: insertData.platform,
+              social_media_name: insertData.social_media_name,
+              url: insertData.url,
+              social_media_plan_id: insertData.social_media_plan_id,
+              error: singleError,
+              errorCode: singleError.code,
+              errorMessage: singleError.message,
+              errorDetails: singleError.details,
+              errorHint: singleError.hint,
+              fullInsertData: JSON.stringify(insertData)
+            });
+            throw singleError;
+          }
+          
+          if (singleData) {
+            results.push(singleData as SocialMediaLink);
+          }
+        } catch (singleError: any) {
+          // If single insert fails, log detailed error and throw
+          console.error('Single insert failed:', {
+            link: {
+              platform: link.platform,
+              social_media_name: link.social_media_name?.substring(0, 50),
+              url: link.url?.substring(0, 50)
+            },
+            error: singleError
+          });
+          throw singleError;
+        }
+      }
+      
+      return results;
     },
     onSuccess: async (newLinks) => {
       if (newLinks.length > 0 && planId) {

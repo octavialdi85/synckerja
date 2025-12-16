@@ -372,27 +372,38 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       const updatedLinks: { id: string; updates: any }[] = [];
 
       for (const link of validLinks) {
+        // Ensure all fields are trimmed and valid
+        const platform = link.platform?.trim() || '';
+        const socialMediaName = link.social_media_name?.trim() || '';
+        const url = link.url?.trim() || '';
+        
+        // Skip if any required field is empty (should not happen due to validation above)
+        if (!platform || !socialMediaName || !url) {
+          console.warn('Skipping link with empty required fields:', link);
+          continue;
+        }
+        
         if (link.isNew) {
           newLinks.push({
             social_media_plan_id: socialMediaPlanId,
-            platform: link.platform,
-            social_media_name: link.social_media_name,
-            url: link.url
+            platform: platform,
+            social_media_name: socialMediaName,
+            url: url
           });
         } else {
           // Check if the existing link has changes
           const originalLink = links.find(l => l.id === link.id);
           if (originalLink && (
-            originalLink.platform !== link.platform ||
-            originalLink.social_media_name !== link.social_media_name ||
-            originalLink.url !== link.url
+            originalLink.platform !== platform ||
+            originalLink.social_media_name !== socialMediaName ||
+            originalLink.url !== url
           )) {
             updatedLinks.push({
               id: link.id,
               updates: {
-                platform: link.platform,
-                social_media_name: link.social_media_name,
-                url: link.url
+                platform: platform,
+                social_media_name: socialMediaName,
+                url: url
               }
             });
           }
@@ -401,11 +412,37 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
       // Execute mutations
       if (newLinks.length > 0) {
-        await createMultipleLinks(newLinks);
+        // Data is already validated and sanitized above, just ensure it's in correct format
+        // Hook will do additional sanitization, but we ensure basic structure here
+        const finalNewLinks = newLinks.map(link => ({
+          social_media_plan_id: link.social_media_plan_id,
+          platform: link.platform,
+          social_media_name: link.social_media_name,
+          url: link.url
+        }));
+        
+        await createMultipleLinks(finalNewLinks);
       }
 
       for (const updatedLink of updatedLinks) {
-        await updateLink(updatedLink);
+        // Ensure update data is valid (prevent JSON errors)
+        const validatedUpdates: any = {};
+        if (updatedLink.updates.platform) {
+          validatedUpdates.platform = String(updatedLink.updates.platform).trim();
+        }
+        if (updatedLink.updates.social_media_name) {
+          validatedUpdates.social_media_name = String(updatedLink.updates.social_media_name).trim();
+        }
+        if (updatedLink.updates.url) {
+          validatedUpdates.url = String(updatedLink.updates.url).trim();
+        }
+        
+        if (Object.keys(validatedUpdates).length > 0) {
+          await updateLink({
+            id: updatedLink.id,
+            updates: validatedUpdates
+          });
+        }
       }
 
       onClose();
