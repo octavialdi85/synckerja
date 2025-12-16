@@ -19,9 +19,10 @@ import { applyVariables } from '@/features/share/i18n/translations';
 
 interface ReminderTabProps {
   selectedMonth?: Date;
+  serviceFilter?: string;
 }
 
-const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth }) => {
+const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth, serviceFilter }) => {
   const { t, language } = useAppTranslation();
   const dateLocale = language === 'id' ? id : enUS;
   // const { data: nationalHolidays = [], isLoading } = useOptimizedNationalHolidays(); // Commented out - hook not available
@@ -186,7 +187,7 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth }) => {
             <div className="w-full h-full flex flex-col">
               {/* Content Pillar Tracker - Full Width */}
               <div className="w-full h-full flex-1 min-h-0">
-                <ContentPillarTracker selectedMonth={selectedMonth} />
+                <ContentPillarTracker selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
               </div>
             </div>
           </TabsContent>
@@ -195,7 +196,7 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth }) => {
             <div className="w-full h-full flex flex-col">
               {/* Content Balance Tab - Full Width */}
               <div className="w-full h-full flex-1 min-h-0">
-                <ContentBalanceTab selectedMonth={selectedMonth} />
+                <ContentBalanceTab selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
               </div>
             </div>
           </TabsContent>

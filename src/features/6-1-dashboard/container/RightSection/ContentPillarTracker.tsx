@@ -34,9 +34,10 @@ const FUNNEL_CONFIG = {
 
 interface ContentPillarTrackerProps {
   selectedMonth?: Date;
+  serviceFilter?: string;
 }
 
-export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ selectedMonth }) => {
+export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ selectedMonth, serviceFilter }) => {
   const [selectedFunnel, setSelectedFunnel] = useState<'top' | 'middle' | 'bottom'>('top');
   const {
     organizationId
@@ -47,7 +48,7 @@ export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ sele
     isLoading,
     error,
     refetch
-  } = useContentPillarData(selectedMonth);
+  } = useContentPillarData(selectedMonth, serviceFilter);
   const {
     contentPlans
   } = useOptimizedSocialMedia();
@@ -84,11 +85,18 @@ export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ sele
     const filterYear = filterDate.getFullYear();
     const filterMonth = filterDate.getMonth();
 
-    // Filter content plans for selected month
+    // Filter content plans for selected month and service
     const filteredMonthContent = contentPlans.filter(plan => {
       if (!plan.post_date) return false;
       const planDate = new Date(plan.post_date);
-      return planDate.getFullYear() === filterYear && planDate.getMonth() === filterMonth;
+      const matchesMonth = planDate.getFullYear() === filterYear && planDate.getMonth() === filterMonth;
+      
+      // Apply service filter if provided
+      if (serviceFilter && serviceFilter !== 'all') {
+        return matchesMonth && plan.service_id === serviceFilter;
+      }
+      
+      return matchesMonth;
     });
     const totalContent = filteredMonthContent.length;
     if (totalContent === 0) {

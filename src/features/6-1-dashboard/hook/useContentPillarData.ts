@@ -4,11 +4,11 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { PillarData } from '../types/social-media';
 import { startOfMonth, endOfMonth } from 'date-fns';
 
-export const useContentPillarData = (selectedMonth?: Date) => {
+export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: string) => {
   const { organizationId } = useCurrentOrg();
 
   return useQuery({
-    queryKey: ['contentPillarData', organizationId, selectedMonth?.getTime()],
+    queryKey: ['contentPillarData', organizationId, selectedMonth?.getTime(), serviceFilter],
     queryFn: async (): Promise<PillarData[]> => {
       try {
         // Starting content pillar data fetch
@@ -51,13 +51,20 @@ export const useContentPillarData = (selectedMonth?: Date) => {
           const filterMonthEnd = endOfMonth(filterDate);
           
           // Fetching usage data for selected month
-          const { data: currentUsage, error: usageError } = await supabase
+          let currentUsageQuery = supabase
             .from('social_media_plans')
             .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
             .not('content_pillar_id', 'is', null)
             .gte('post_date', filterMonthStart.toISOString().split('T')[0])
             .lte('post_date', filterMonthEnd.toISOString().split('T')[0]);
+          
+          // Apply service filter if provided
+          if (serviceFilter && serviceFilter !== 'all') {
+            currentUsageQuery = currentUsageQuery.eq('service_id', serviceFilter);
+          }
+          
+          const { data: currentUsage, error: usageError } = await currentUsageQuery;
 
           if (usageError) {
             console.error('Error fetching usage data:', usageError);
@@ -73,13 +80,20 @@ export const useContentPillarData = (selectedMonth?: Date) => {
           
           console.log('Fetching usage for previous month:', prevMonthStart, prevMonthEnd);
 
-          const { data: prevUsage, error: prevUsageError } = await supabase
+          let prevUsageQuery = supabase
             .from('social_media_plans')
             .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
             .gte('post_date', prevMonthStart.toISOString().split('T')[0])
             .lte('post_date', prevMonthEnd.toISOString().split('T')[0])
             .not('content_pillar_id', 'is', null);
+          
+          // Apply service filter if provided
+          if (serviceFilter && serviceFilter !== 'all') {
+            prevUsageQuery = prevUsageQuery.eq('service_id', serviceFilter);
+          }
+          
+          const { data: prevUsage, error: prevUsageError } = await prevUsageQuery;
 
           if (prevUsageError) {
             console.error('Error fetching previous usage data:', prevUsageError);

@@ -129,6 +129,7 @@ const SocialMediaContent = () => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("all");
   const [activePerformanceTab, setActivePerformanceTab] = useState("content-planner");
 
   // Date states for performance tabs and Content Pillar Tracker filter
@@ -218,7 +219,8 @@ const SocialMediaContent = () => {
     loading ? [] : contentPlans, 
     searchTerm, 
     statusFilter,
-    selectedMonth
+    selectedMonth,
+    serviceFilter
   );
 
   // Calculate metrics from contentPlans filtered by active performance tab
@@ -1085,6 +1087,9 @@ const SocialMediaContent = () => {
                                     setSearchTerm={setSearchTerm} 
                                     statusFilter={statusFilter} 
                                     setStatusFilter={setStatusFilter} 
+                                    serviceFilter={serviceFilter}
+                                    setServiceFilter={setServiceFilter}
+                                    services={services}
                                     selectedItems={selectedItems} 
                                     onAddContent={handleAddContent} 
                                     onDeleteSelected={handleDeleteSelected}
@@ -1135,7 +1140,7 @@ const SocialMediaContent = () => {
                            {/* Right Section - Sidebar (25% width / 3 cols) */}
                            <div className="col-span-3 space-y-2 flex flex-col min-h-0 h-full">
                              <div className="h-full flex flex-col">
-                               <SidebarContainer selectedMonth={selectedMonth} />
+                               <SidebarContainer selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
                              </div>
                            </div>
                         </div>

@@ -8,11 +8,19 @@ import { MonthPicker } from '@/features/share/calendar';
 import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
+interface Service {
+  id: string;
+  name: string;
+}
+
 interface SocialMediaFiltersProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   statusFilter: string;
   setStatusFilter: (status: string) => void;
+  serviceFilter: string;
+  setServiceFilter: (service: string) => void;
+  services: Service[];
   selectedItems: string[];
   onAddContent: () => void;
   onDeleteSelected: () => void;
@@ -25,6 +33,9 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
   setSearchTerm,
   statusFilter,
   setStatusFilter,
+  serviceFilter,
+  setServiceFilter,
+  services,
   selectedItems,
   onAddContent,
   onDeleteSelected,
@@ -133,6 +144,21 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
             <SelectItem value="Content Revision">Content Revision</SelectItem>
             <SelectItem value="Prod Revision">Prod Revision</SelectItem>
             <SelectItem value="Prod Need Review">Prod Need Review</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        <Select value={serviceFilter} onValueChange={setServiceFilter}>
+          <SelectTrigger className="w-48 h-9">
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Filter by service" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Services</SelectItem>
+            {services && services.length > 0 && services.map((service) => (
+              <SelectItem key={service.id} value={service.id}>
+                {service.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         

@@ -43,9 +43,10 @@ interface PICProductionStats {
 
 interface ContentBalanceTabProps {
   selectedMonth?: Date;
+  serviceFilter?: string;
 }
 
-export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMonth: propSelectedMonth }) => {
+export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMonth: propSelectedMonth, serviceFilter }) => {
   // Use prop selectedMonth if provided, otherwise default to current month
   const selectedMonth = propSelectedMonth || startOfMonth(new Date());
   const { organizationId } = useCurrentOrg();
@@ -111,12 +112,19 @@ export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMo
     const selectedYear = selectedMonth.getFullYear();
     const selectedMonthIndex = selectedMonth.getMonth();
 
-    // Filter content plans for selected month
+    // Filter content plans for selected month and service
     const monthContent = contentPlans.filter(plan => {
       if (!plan?.post_date) return false;
       try {
         const planDate = new Date(plan.post_date);
-        return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+        const matchesMonth = planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+        
+        // Apply service filter if provided
+        if (serviceFilter && serviceFilter !== 'all') {
+          return matchesMonth && plan.service_id === serviceFilter;
+        }
+        
+        return matchesMonth;
       } catch {
         return false;
       }
@@ -174,12 +182,19 @@ export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMo
     const selectedYear = selectedMonth.getFullYear();
     const selectedMonthIndex = selectedMonth.getMonth();
 
-    // Filter content plans for selected month with PIC Production
+    // Filter content plans for selected month with PIC Production and service
     const monthContent = contentPlans.filter(plan => {
       if (!plan?.post_date || !plan?.pic_production_id) return false;
       try {
         const planDate = new Date(plan.post_date);
-        return planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+        const matchesMonth = planDate.getFullYear() === selectedYear && planDate.getMonth() === selectedMonthIndex;
+        
+        // Apply service filter if provided
+        if (serviceFilter && serviceFilter !== 'all') {
+          return matchesMonth && plan.service_id === serviceFilter;
+        }
+        
+        return matchesMonth;
       } catch {
         return false;
       }
@@ -242,8 +257,8 @@ export const ContentBalanceTab: React.FC<ContentBalanceTabProps> = ({ selectedMo
     return picStatsArray.sort((a, b) => b.totalCount - a.totalCount);
   };
 
-  const contentBalance = useMemo(() => calculateContentBalance(), [contentPlans, contentTypes, selectedMonth]);
-  const picProductionStats = useMemo(() => calculatePICProductionStats(), [contentPlans, contentTypes, selectedMonth]);
+  const contentBalance = useMemo(() => calculateContentBalance(), [contentPlans, contentTypes, selectedMonth, serviceFilter]);
+  const picProductionStats = useMemo(() => calculatePICProductionStats(), [contentPlans, contentTypes, selectedMonth, serviceFilter]);
 
   if (isLoading) {
     return (

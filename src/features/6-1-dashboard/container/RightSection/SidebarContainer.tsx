@@ -4,12 +4,13 @@ import { SocialMediaErrorBoundary } from '../../hook/ErrorBoundary';
 
 interface SidebarContainerProps {
   selectedMonth?: Date;
+  serviceFilter?: string;
 }
 
-export const SidebarContainer: React.FC<SidebarContainerProps> = ({ selectedMonth }) => {
+export const SidebarContainer: React.FC<SidebarContainerProps> = ({ selectedMonth, serviceFilter }) => {
   return (
     <SocialMediaErrorBoundary>
-      <ReminderTab selectedMonth={selectedMonth} />
+      <ReminderTab selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
     </SocialMediaErrorBoundary>
   );
 };

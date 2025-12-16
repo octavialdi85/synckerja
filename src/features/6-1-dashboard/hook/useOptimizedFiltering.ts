@@ -7,7 +7,8 @@ export const useOptimizedFiltering = (
   contentPlans: ContentPlan[],
   searchTerm: string,
   statusFilter: string,
-  selectedMonth?: Date
+  selectedMonth?: Date,
+  serviceFilter?: string
 ) => {
   return useMemo(() => {
     const lowerSearchTerm = searchTerm.toLowerCase();
@@ -31,6 +32,12 @@ export const useOptimizedFiltering = (
           // If date parsing fails, include the plan (don't filter it out)
           matchesMonth = true;
         }
+      }
+      
+      // Service filter
+      let matchesService = true;
+      if (serviceFilter && serviceFilter !== "all") {
+        matchesService = plan.service_id === serviceFilter;
       }
       
       // Search filter
@@ -113,7 +120,7 @@ export const useOptimizedFiltering = (
         }
       }
 
-      return matchesMonth && matchesSearch && matchesStatus;
+      return matchesMonth && matchesSearch && matchesStatus && matchesService;
     });
-  }, [contentPlans, searchTerm, statusFilter, selectedMonth]);
+  }, [contentPlans, searchTerm, statusFilter, selectedMonth, serviceFilter]);
 };
