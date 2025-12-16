@@ -66,7 +66,7 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
     <div className="w-full max-w-full">
       <div className="rounded-md border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto seamless-scroll">
-          <table className="border-collapse" style={{ minWidth: '3048px', width: '100%' }}>
+          <table className="border-collapse" style={{ minWidth: '3888px', width: '100%' }}>
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="px-2 py-2 text-center border-r border-gray-200 border-b-2 border-gray-300">
@@ -106,6 +106,15 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.hiddenNeeds', 'Hidden Needs')}
                 </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.falseBelief', 'False Belief')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.falseBeliefImpact', 'False Belief Impact')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.solution', 'Solution')}
                 </th>
                 <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
@@ -122,13 +131,13 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={13} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={16} className="text-center py-8 border-b border-gray-200">
                     <LoadingDots />
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={16} className="text-center py-8 border-b border-gray-200">
                     <p className="text-gray-500 text-sm">{t('productKnowledge.table.emptyState', 'No product knowledge found')}</p>
                   </td>
                 </tr>
@@ -144,6 +153,7 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                     formatProblems={formatProblems}
                     services={services}
                     subServices={subServices}
+                    allProductKnowledge={data}
                   />
                 ))
               )}
@@ -164,6 +174,7 @@ interface ProductKnowledgeRowProps {
   formatProblems: (problems: string[] | null | undefined) => string;
   services: Service[];
   subServices: SubService[];
+  allProductKnowledge: ProductKnowledge[]; // Add this to check for duplicates
 }
 
 const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
@@ -175,6 +186,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   formatProblems,
   services,
   subServices,
+  allProductKnowledge,
 }) => {
   const { t } = useAppTranslation();
   const [isEditingFeatureName, setIsEditingFeatureName] = useState(false);
@@ -186,6 +198,9 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   const [isEditingWants, setIsEditingWants] = useState(false);
   const [isEditingNeeds, setIsEditingNeeds] = useState(false);
   const [isEditingHiddenNeeds, setIsEditingHiddenNeeds] = useState(false);
+  const [isEditingFalseBelief, setIsEditingFalseBelief] = useState(false);
+  const [isEditingFalseBeliefImpact, setIsEditingFalseBeliefImpact] = useState(false);
+  const [isEditingWhatMakesThemStop, setIsEditingWhatMakesThemStop] = useState(false);
   const [isEditingCompetitiveAdvantage, setIsEditingCompetitiveAdvantage] = useState(false);
 
   const handleCheckboxChange = (checked: boolean) => {
@@ -227,8 +242,37 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     }
   };
 
+  // Helper function to normalize target_audience for comparison
+  const normalizeTargetAudience = (targetAudience: any): string => {
+    if (!targetAudience) return '';
+    if (typeof targetAudience === 'string') return targetAudience.trim().toLowerCase();
+    if (typeof targetAudience === 'object') {
+      try {
+        return JSON.stringify(targetAudience).toLowerCase();
+      } catch {
+        return String(targetAudience).toLowerCase();
+      }
+    }
+    return String(targetAudience).toLowerCase();
+  };
+
   const handleTargetMarketBlur = (value: string) => {
     const parsed = parseTargetMarket(value);
+    const normalizedNewValue = normalizeTargetAudience(parsed);
+    
+    // Check for duplicates (excluding current item)
+    const hasDuplicate = allProductKnowledge.some((pk) => {
+      if (pk.id === item.id) return false; // Skip current item
+      const normalizedExisting = normalizeTargetAudience(pk.target_audience);
+      return normalizedExisting !== '' && normalizedExisting === normalizedNewValue;
+    });
+    
+    if (hasDuplicate) {
+      alert('Target Market (Customer Persona) ini sudah digunakan di baris lain. Harap gunakan nilai yang berbeda untuk memastikan setiap Customer Persona unik.');
+      setIsEditingTargetMarket(false);
+      return;
+    }
+    
     if (JSON.stringify(parsed) !== JSON.stringify(item.target_audience)) {
       onFieldChange(item.id, 'target_audience', parsed);
     }
@@ -308,6 +352,27 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       onFieldChange(item.id, 'hidden_needs', value);
     }
     setIsEditingHiddenNeeds(false);
+  };
+
+  const handleFalseBeliefBlur = (value: string) => {
+    if (value !== (item.false_belief || '')) {
+      onFieldChange(item.id, 'false_belief', value);
+    }
+    setIsEditingFalseBelief(false);
+  };
+
+  const handleFalseBeliefImpactBlur = (value: string) => {
+    if (value !== (item.false_belief_impact || '')) {
+      onFieldChange(item.id, 'false_belief_impact', value);
+    }
+    setIsEditingFalseBeliefImpact(false);
+  };
+
+  const handleWhatMakesThemStopBlur = (value: string) => {
+    if (value !== (item.what_makes_them_stop || '')) {
+      onFieldChange(item.id, 'what_makes_them_stop', value);
+    }
+    setIsEditingWhatMakesThemStop(false);
   };
 
   // Format competitive_advantage (JSONB) to string
@@ -607,6 +672,87 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {item.hidden_needs || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* False Belief */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFalseBelief ? (
+          <textarea
+            defaultValue={item.false_belief || ''}
+            onBlur={(e) => handleFalseBeliefBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingFalseBelief(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="False Belief 1: ...&#10;&#10;False Belief 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingFalseBelief(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {item.false_belief || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* False Belief Impact */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFalseBeliefImpact ? (
+          <textarea
+            defaultValue={item.false_belief_impact || ''}
+            onBlur={(e) => handleFalseBeliefImpactBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingFalseBeliefImpact(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="False Belief Impact 1: ...&#10;&#10;False Belief Impact 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingFalseBeliefImpact(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {item.false_belief_impact || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* What Makes Them Stop */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingWhatMakesThemStop ? (
+          <textarea
+            defaultValue={item.what_makes_them_stop || ''}
+            onBlur={(e) => handleWhatMakesThemStopBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingWhatMakesThemStop(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="What Makes Them Stop 1: ...&#10;&#10;What Makes Them Stop 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
+            onClick={() => setIsEditingWhatMakesThemStop(true)}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {item.what_makes_them_stop || '-'}
           </div>
         )}
       </td>

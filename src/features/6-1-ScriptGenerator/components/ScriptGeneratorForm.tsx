@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
@@ -130,12 +130,15 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     buying_roles: '',
     keinginan: '',
     kebutuhan: '',
-    hidden_needs_1: '',
-    hidden_needs_2: '',
-    problem_1: '',
-    problem_2: '',
-    impact_1: '',
-    impact_2: '',
+    hidden_needs: '',
+    problem: '',
+    impact: '',
+    false_belief: '',
+    false_belief_impact: '',
+    what_makes_them_stop: '',
+    feature_name: '',
+    feature_description: '',
+    competitive_advantage: '',
     solution: '',
     hook_name: '',
     hook_description: '',
@@ -174,6 +177,49 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const productKnowledgeWithWantsNeeds = productKnowledgeData.filter(
     (pk) => pk.wants && pk.wants.trim() !== '' && pk.needs && pk.needs.trim() !== ''
   );
+  
+  // Extract unique target_audience (Customer Persona) from product knowledge
+  const extractTargetAudienceAsString = (targetAudience: any): string => {
+    if (!targetAudience) return '';
+    if (typeof targetAudience === 'string') return targetAudience.trim();
+    if (typeof targetAudience === 'object') {
+      // If it's an object, try to stringify it or extract meaningful string
+      try {
+        const str = JSON.stringify(targetAudience);
+        // If it's a simple object with one key-value, return the value
+        if (Object.keys(targetAudience).length === 1) {
+          return String(Object.values(targetAudience)[0]).trim();
+        }
+        return str;
+      } catch {
+        return String(targetAudience);
+      }
+    }
+    return String(targetAudience).trim();
+  };
+  
+  // Get unique customer personas from product knowledge filtered by selected service
+  const customerPersonas = useMemo(() => {
+    // Only show personas if service is selected
+    if (!selectedServiceId) {
+      return [];
+    }
+    
+    const personasSet = new Set<string>();
+    
+    // Filter product knowledge by selected service
+    productKnowledgeData.forEach((pk) => {
+      // Check if service_id matches selected service
+      if (pk.service_id === selectedServiceId && pk.target_audience) {
+        const personaStr = extractTargetAudienceAsString(pk.target_audience);
+        if (personaStr && personaStr.trim() !== '') {
+          personasSet.add(personaStr);
+        }
+      }
+    });
+    
+    return Array.from(personasSet).sort();
+  }, [productKnowledgeData, selectedServiceId]);
   
   // Helper function to parse hidden_needs string into array
   const parseHiddenNeeds = (hiddenNeeds: string | null | undefined): string[] => {
@@ -218,6 +264,26 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     if (!problems || problems.length === 0) return '';
     // Format dengan newline dan baris kosong di antara setiap masalah untuk pemisahan visual
     return problems.filter(Boolean).join('\n\n');
+  };
+
+  // Helper function to parse competitive_advantage (can be array or string)
+  const parseCompetitiveAdvantage = (competitiveAdvantage: any): string => {
+    if (!competitiveAdvantage) return '';
+    
+    if (typeof competitiveAdvantage === 'string') {
+      return competitiveAdvantage.trim();
+    }
+    
+    if (Array.isArray(competitiveAdvantage)) {
+      // Format dengan newline dan baris kosong di antara setiap advantage
+      return competitiveAdvantage.filter(Boolean).join('\n\n');
+    }
+    
+    if (typeof competitiveAdvantage === 'object') {
+      return JSON.stringify(competitiveAdvantage);
+    }
+    
+    return String(competitiveAdvantage);
   };
 
   // Load master data
@@ -389,23 +455,26 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       buying_roles: '',
       keinginan: '',
       kebutuhan: '',
-      hidden_needs_1: '',
-      hidden_needs_2: '',
-      problem_1: '',
-      problem_2: '',
-      impact_1: '',
-    impact_2: '',
-    solution: '',
-    hook_name: '',
-    hook_description: '',
-    hook_content: '',
-    style_name: '',
-    style_instruksi: '',
-    structure: '',
-    judul: '',
-    judul_custom: '',
-    selling_approach: undefined
-  });
+      hidden_needs: '',
+      problem: '',
+      impact: '',
+      false_belief: '',
+      false_belief_impact: '',
+      what_makes_them_stop: '',
+      feature_name: '',
+      feature_description: '',
+      competitive_advantage: '',
+      solution: '',
+      hook_name: '',
+      hook_description: '',
+      hook_content: '',
+      style_name: '',
+      style_instruksi: '',
+      structure: '',
+      judul: '',
+      judul_custom: '',
+      selling_approach: undefined
+    });
     setSelectedServiceId('');
     setSelectedHookName('');
     setSelectedStyleName('');
@@ -511,6 +580,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               setSelectedServiceId(serviceId);
               handleInputChange('service_name', selectedService?.name || '');
               handleInputChange('sub_service_name', ''); // Reset sub service
+              handleInputChange('target_market', ''); // Reset Customer Persona when service changes
             }}
           >
             <SelectTrigger>
@@ -632,15 +702,164 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           </Select>
         </div>
 
-        {/* Target Market */}
+        {/* Customer Persona */}
         <div className="space-y-2">
-          <Label htmlFor="target_market">Target Market</Label>
-          <Input
-            id="target_market"
-            value={formData.target_market || ''}
-            onChange={(e) => handleInputChange('target_market', e.target.value)}
-            placeholder="Contoh: Small Business Owner"
-          />
+          <Label htmlFor="target_market">Customer Persona</Label>
+          <Select
+            value={formData.target_market || undefined}
+            onValueChange={(value) => {
+              handleInputChange('target_market', value);
+              
+              // Find product knowledge items with matching target_audience AND service_id
+              const matchingPKs = productKnowledgeData.filter((pk) => {
+                // Must match both service and target_audience
+                if (pk.service_id !== selectedServiceId) return false;
+                if (!pk.target_audience) return false;
+                const pkPersonaStr = extractTargetAudienceAsString(pk.target_audience);
+                return pkPersonaStr === value;
+              });
+              
+              // If found, auto-fill all fields from the first matching product knowledge
+              if (matchingPKs.length > 0) {
+                const selectedPK = matchingPKs[0]; // Use first match
+                
+                // Auto-fill keinginan (wants)
+                if (selectedPK.wants) {
+                  handleInputChange('keinginan', selectedPK.wants.trim());
+                }
+                
+                // Auto-fill kebutuhan (needs)
+                if (selectedPK.needs) {
+                  handleInputChange('kebutuhan', selectedPK.needs.trim());
+                }
+                
+                // Auto-fill hidden needs
+                if (selectedPK.hidden_needs) {
+                  const hiddenNeedsArray = parseHiddenNeeds(selectedPK.hidden_needs);
+                  if (hiddenNeedsArray.length > 0) {
+                    const hiddenNeedsStr = hiddenNeedsArray.join('\n\n');
+                    handleInputChange('hidden_needs', hiddenNeedsStr);
+                  } else {
+                    handleInputChange('hidden_needs', '');
+                  }
+                } else {
+                  handleInputChange('hidden_needs', '');
+                }
+                
+                // Auto-fill problems
+                if (selectedPK.problems_solved && Array.isArray(selectedPK.problems_solved) && selectedPK.problems_solved.length > 0) {
+                  const problemsArray = selectedPK.problems_solved.filter(Boolean);
+                  if (problemsArray.length > 0) {
+                    const problemsStr = problemsArray.join('\n\n');
+                    handleInputChange('problem', problemsStr);
+                  } else {
+                    handleInputChange('problem', '');
+                  }
+                } else {
+                  handleInputChange('problem', '');
+                }
+                
+                // Auto-fill impact
+                if (selectedPK.impact) {
+                  const impactArray = parseImpact(selectedPK.impact);
+                  if (impactArray.length > 0) {
+                    const impactStr = impactArray.join('\n\n');
+                    handleInputChange('impact', impactStr);
+                  } else {
+                    handleInputChange('impact', '');
+                  }
+                } else {
+                  handleInputChange('impact', '');
+                }
+                
+                // Auto-fill false_belief
+                if (selectedPK.false_belief) {
+                  handleInputChange('false_belief', selectedPK.false_belief.trim());
+                } else {
+                  handleInputChange('false_belief', '');
+                }
+                
+                // Auto-fill false_belief_impact
+                if (selectedPK.false_belief_impact) {
+                  handleInputChange('false_belief_impact', selectedPK.false_belief_impact.trim());
+                } else {
+                  handleInputChange('false_belief_impact', '');
+                }
+                
+                // Auto-fill what_makes_them_stop
+                if (selectedPK.what_makes_them_stop) {
+                  handleInputChange('what_makes_them_stop', selectedPK.what_makes_them_stop.trim());
+                } else {
+                  handleInputChange('what_makes_them_stop', '');
+                }
+                
+                // Auto-fill solution
+                if (selectedPK.solusi) {
+                  handleInputChange('solution', selectedPK.solusi.trim());
+                } else {
+                  handleInputChange('solution', '');
+                }
+                
+                // Auto-fill feature_name
+                if (selectedPK.feature_name) {
+                  handleInputChange('feature_name', selectedPK.feature_name.trim());
+                } else {
+                  handleInputChange('feature_name', '');
+                }
+                
+                // Auto-fill feature_description
+                if (selectedPK.feature_description) {
+                  handleInputChange('feature_description', selectedPK.feature_description.trim());
+                } else {
+                  handleInputChange('feature_description', '');
+                }
+                
+                // Auto-fill competitive_advantage
+                if (selectedPK.competitive_advantage) {
+                  const competitiveAdvantageStr = parseCompetitiveAdvantage(selectedPK.competitive_advantage);
+                  handleInputChange('competitive_advantage', competitiveAdvantageStr);
+                } else {
+                  handleInputChange('competitive_advantage', '');
+                }
+              } else {
+                // Clear all fields if no matching product knowledge found
+                handleInputChange('keinginan', '');
+                handleInputChange('kebutuhan', '');
+                handleInputChange('hidden_needs', '');
+                handleInputChange('problem', '');
+                handleInputChange('impact', '');
+                handleInputChange('false_belief', '');
+                handleInputChange('false_belief_impact', '');
+                handleInputChange('what_makes_them_stop', '');
+                handleInputChange('solution', '');
+                handleInputChange('feature_name', '');
+                handleInputChange('feature_description', '');
+                handleInputChange('competitive_advantage', '');
+              }
+            }}
+            disabled={!selectedServiceId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={selectedServiceId ? "Pilih Customer Persona" : "Pilih Service terlebih dahulu"} />
+            </SelectTrigger>
+            <SelectContent>
+              {!selectedServiceId ? (
+                <SelectItem value="select-service-first" disabled>
+                  Pilih Service terlebih dahulu
+                </SelectItem>
+              ) : customerPersonas.length === 0 ? (
+                <SelectItem value="no-data" disabled>
+                  Tidak ada Customer Persona tersedia untuk Service ini
+                </SelectItem>
+              ) : (
+                customerPersonas.map((persona, index) => (
+                  <SelectItem key={index} value={persona}>
+                    {persona}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Gender */}
@@ -721,20 +940,15 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               if (selectedPK && selectedPK.hidden_needs) {
                 const hiddenNeedsArray = parseHiddenNeeds(selectedPK.hidden_needs);
                 if (hiddenNeedsArray.length > 0) {
-                  handleInputChange('hidden_needs_1', hiddenNeedsArray[0]);
-                  if (hiddenNeedsArray.length > 1) {
-                    handleInputChange('hidden_needs_2', hiddenNeedsArray[1]);
-                  } else {
-                    handleInputChange('hidden_needs_2', '');
-                  }
+                  // Join array dengan double newline untuk pemisahan visual
+                  const hiddenNeedsStr = hiddenNeedsArray.join('\n\n');
+                  handleInputChange('hidden_needs', hiddenNeedsStr);
                 } else {
-                  handleInputChange('hidden_needs_1', '');
-                  handleInputChange('hidden_needs_2', '');
+                  handleInputChange('hidden_needs', '');
                 }
               } else {
                 // Clear hidden needs if no product knowledge found
-                handleInputChange('hidden_needs_1', '');
-                handleInputChange('hidden_needs_2', '');
+                handleInputChange('hidden_needs', '');
               }
               
               // Auto-fill problems if found
@@ -742,40 +956,73 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 // problems_solved is already an array, so use it directly
                 const problemsArray = selectedPK.problems_solved.filter(Boolean);
                 if (problemsArray.length > 0) {
-                  handleInputChange('problem_1', problemsArray[0]);
-                  if (problemsArray.length > 1) {
-                    handleInputChange('problem_2', problemsArray[1]);
-                  } else {
-                    handleInputChange('problem_2', '');
-                  }
+                  // Join array dengan double newline untuk pemisahan visual
+                  const problemsStr = problemsArray.join('\n\n');
+                  handleInputChange('problem', problemsStr);
                 } else {
-                  handleInputChange('problem_1', '');
-                  handleInputChange('problem_2', '');
+                  handleInputChange('problem', '');
                 }
               } else {
                 // Clear problems if no product knowledge found
-                handleInputChange('problem_1', '');
-                handleInputChange('problem_2', '');
+                handleInputChange('problem', '');
               }
               
               // Auto-fill impact if found
               if (selectedPK && selectedPK.impact) {
                 const impactArray = parseImpact(selectedPK.impact);
                 if (impactArray.length > 0) {
-                  handleInputChange('impact_1', impactArray[0]);
-                  if (impactArray.length > 1) {
-                    handleInputChange('impact_2', impactArray[1]);
-                  } else {
-                    handleInputChange('impact_2', '');
-                  }
+                  // Join array dengan double newline untuk pemisahan visual
+                  const impactStr = impactArray.join('\n\n');
+                  handleInputChange('impact', impactStr);
                 } else {
-                  handleInputChange('impact_1', '');
-                  handleInputChange('impact_2', '');
+                  handleInputChange('impact', '');
                 }
               } else {
                 // Clear impact if no product knowledge found
-                handleInputChange('impact_1', '');
-                handleInputChange('impact_2', '');
+                handleInputChange('impact', '');
+              }
+              
+              // Auto-fill false_belief if found
+              if (selectedPK && selectedPK.false_belief) {
+                handleInputChange('false_belief', selectedPK.false_belief.trim());
+              } else {
+                handleInputChange('false_belief', '');
+              }
+              
+              // Auto-fill false_belief_impact if found
+              if (selectedPK && selectedPK.false_belief_impact) {
+                handleInputChange('false_belief_impact', selectedPK.false_belief_impact.trim());
+              } else {
+                handleInputChange('false_belief_impact', '');
+              }
+              
+              // Auto-fill what_makes_them_stop if found
+              if (selectedPK && selectedPK.what_makes_them_stop) {
+                handleInputChange('what_makes_them_stop', selectedPK.what_makes_them_stop.trim());
+              } else {
+                handleInputChange('what_makes_them_stop', '');
+              }
+              
+              // Auto-fill feature_name if found
+              if (selectedPK && selectedPK.feature_name) {
+                handleInputChange('feature_name', selectedPK.feature_name.trim());
+              } else {
+                handleInputChange('feature_name', '');
+              }
+              
+              // Auto-fill feature_description if found
+              if (selectedPK && selectedPK.feature_description) {
+                handleInputChange('feature_description', selectedPK.feature_description.trim());
+              } else {
+                handleInputChange('feature_description', '');
+              }
+              
+              // Auto-fill competitive_advantage if found
+              if (selectedPK && selectedPK.competitive_advantage) {
+                const competitiveAdvantageStr = parseCompetitiveAdvantage(selectedPK.competitive_advantage);
+                handleInputChange('competitive_advantage', competitiveAdvantageStr);
+              } else {
+                handleInputChange('competitive_advantage', '');
               }
             }}
           >
@@ -877,67 +1124,67 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="hidden_needs_1">Hidden Needs 1</Label>
+          <Label htmlFor="hidden_needs">Hidden Needs</Label>
           <Textarea
-            id="hidden_needs_1"
-            value={formData.hidden_needs_1 || ''}
-            onChange={(e) => handleInputChange('hidden_needs_1', e.target.value)}
-            placeholder="Kebutuhan tersembunyi pertama"
+            id="hidden_needs"
+            value={formData.hidden_needs || ''}
+            onChange={(e) => handleInputChange('hidden_needs', e.target.value)}
+            placeholder="Kebutuhan tersembunyi (pisahkan dengan baris kosong untuk multiple needs)"
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="problem">Problem</Label>
+          <Textarea
+            id="problem"
+            value={formData.problem || ''}
+            onChange={(e) => handleInputChange('problem', e.target.value)}
+            placeholder="Masalah yang dihadapi (pisahkan dengan baris kosong untuk multiple problems)"
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="impact">Impact</Label>
+          <Textarea
+            id="impact"
+            value={formData.impact || ''}
+            onChange={(e) => handleInputChange('impact', e.target.value)}
+            placeholder="Dampak dari masalah (pisahkan dengan baris kosong untuk multiple impacts)"
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="false_belief">False Belief</Label>
+          <Textarea
+            id="false_belief"
+            value={formData.false_belief || ''}
+            onChange={(e) => handleInputChange('false_belief', e.target.value)}
+            placeholder="Keyakinan salah yang dimiliki pelanggan"
             rows={2}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="hidden_needs_2">Hidden Needs 2</Label>
+          <Label htmlFor="false_belief_impact">False Belief Impact</Label>
           <Textarea
-            id="hidden_needs_2"
-            value={formData.hidden_needs_2 || ''}
-            onChange={(e) => handleInputChange('hidden_needs_2', e.target.value)}
-            placeholder="Kebutuhan tersembunyi kedua"
+            id="false_belief_impact"
+            value={formData.false_belief_impact || ''}
+            onChange={(e) => handleInputChange('false_belief_impact', e.target.value)}
+            placeholder="Dampak dari keyakinan salah terhadap perilaku pelanggan"
             rows={2}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="problem_1">Problem 1</Label>
+          <Label htmlFor="what_makes_them_stop">What Makes Them Stop?</Label>
           <Textarea
-            id="problem_1"
-            value={formData.problem_1 || ''}
-            onChange={(e) => handleInputChange('problem_1', e.target.value)}
-            placeholder="Masalah pertama yang dihadapi"
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="problem_2">Problem 2</Label>
-          <Textarea
-            id="problem_2"
-            value={formData.problem_2 || ''}
-            onChange={(e) => handleInputChange('problem_2', e.target.value)}
-            placeholder="Masalah kedua yang dihadapi"
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="impact_1">Impact 1</Label>
-          <Textarea
-            id="impact_1"
-            value={formData.impact_1 || ''}
-            onChange={(e) => handleInputChange('impact_1', e.target.value)}
-            placeholder="Dampak dari masalah pertama"
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="impact_2">Impact 2</Label>
-          <Textarea
-            id="impact_2"
-            value={formData.impact_2 || ''}
-            onChange={(e) => handleInputChange('impact_2', e.target.value)}
-            placeholder="Dampak dari masalah kedua"
+            id="what_makes_them_stop"
+            value={formData.what_makes_them_stop || ''}
+            onChange={(e) => handleInputChange('what_makes_them_stop', e.target.value)}
+            placeholder="Apa yang membuat pelanggan berhenti atau ragu-ragu"
             rows={2}
           />
         </div>
@@ -949,6 +1196,38 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             value={formData.solution || ''}
             onChange={(e) => handleInputChange('solution', e.target.value)}
             placeholder="Solusi yang ditawarkan"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="feature_name">Feature</Label>
+          <Input
+            id="feature_name"
+            value={formData.feature_name || ''}
+            onChange={(e) => handleInputChange('feature_name', e.target.value)}
+            placeholder="Nama fitur produk/layanan"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="feature_description">Feature Description</Label>
+          <Textarea
+            id="feature_description"
+            value={formData.feature_description || ''}
+            onChange={(e) => handleInputChange('feature_description', e.target.value)}
+            placeholder="Deskripsi detail fitur produk/layanan"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="competitive_advantage">Competitive Advantage</Label>
+          <Textarea
+            id="competitive_advantage"
+            value={formData.competitive_advantage || ''}
+            onChange={(e) => handleInputChange('competitive_advantage', e.target.value)}
+            placeholder="Keunggulan kompetitif produk/layanan"
             rows={3}
           />
         </div>

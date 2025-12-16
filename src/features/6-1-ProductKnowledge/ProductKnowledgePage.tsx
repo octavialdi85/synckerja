@@ -55,6 +55,9 @@ const ProductKnowledgeContent: React.FC = () => {
         item.problems_solved?.some(p => p.toLowerCase().includes(searchLower)) ||
         item.service_name?.toLowerCase().includes(searchLower) ||
         item.sub_service_name?.toLowerCase().includes(searchLower) ||
+        item.false_belief?.toLowerCase().includes(searchLower) ||
+        item.false_belief_impact?.toLowerCase().includes(searchLower) ||
+        item.what_makes_them_stop?.toLowerCase().includes(searchLower) ||
         competitiveAdvantageStr?.toLowerCase().includes(searchLower);
     });
   }, [productKnowledgeData, searchTerm]);

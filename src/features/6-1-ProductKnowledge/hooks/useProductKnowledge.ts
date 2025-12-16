@@ -16,6 +16,9 @@ export interface ProductKnowledge {
   wants: string | null;
   needs: string | null;
   hidden_needs: string | null;
+  false_belief: string | null;
+  false_belief_impact: string | null;
+  what_makes_them_stop: string | null;
   use_cases: any;
   target_audience: any;
   competitive_advantage: any;
