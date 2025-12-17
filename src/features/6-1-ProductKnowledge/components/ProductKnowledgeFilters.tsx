@@ -1,27 +1,31 @@
 import React from 'react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
-import { Search, Plus, Trash2, Sparkles } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
+import { Search, Plus, Trash2 } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { Service } from '../hooks/useServices';
 
 interface ProductKnowledgeFiltersProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
+  selectedServiceId: string;
+  setSelectedServiceId: (serviceId: string) => void;
   selectedItems: string[];
+  services: Service[];
   onAdd: () => void;
   onDeleteSelected: () => void;
-  onGenerateContent?: () => void;
-  isGenerating?: boolean;
 }
 
 export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = ({
   searchTerm,
   setSearchTerm,
+  selectedServiceId,
+  setSelectedServiceId,
   selectedItems,
+  services = [],
   onAdd,
   onDeleteSelected,
-  onGenerateContent,
-  isGenerating = false,
 }) => {
   const { t } = useAppTranslation();
 
@@ -37,14 +41,6 @@ export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = (
     onDeleteSelected();
   };
 
-  const handleGenerateContent = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onGenerateContent) {
-      onGenerateContent();
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
@@ -57,21 +53,21 @@ export const ProductKnowledgeFilters: React.FC<ProductKnowledgeFiltersProps> = (
             className="pl-10" 
           />
         </div>
-        {onGenerateContent && (
-          <Button 
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleGenerateContent}
-            disabled={isGenerating || selectedItems.length === 0}
-          >
-            <Sparkles className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
-            {isGenerating 
-              ? t('productKnowledge.filters.generating', 'Generating...') 
-              : t('productKnowledge.filters.generateContent', 'Generate Content ({{count}})', { count: selectedItems.length })
-            }
-          </Button>
-        )}
+        <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
+          <SelectTrigger className="w-[200px] h-9 text-sm">
+            <SelectValue placeholder={t('productKnowledge.filters.servicePlaceholder', 'All Services')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              {t('productKnowledge.filters.allServices', 'All Services')}
+            </SelectItem>
+            {services.map((service) => (
+              <SelectItem key={service.id} value={service.id}>
+                {service.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button 
           type="button"
           size="sm" 
