@@ -1,14 +1,20 @@
 import React from 'react';
 import { Button } from '@/features/ui/button';
-import { Copy, Download, Check } from 'lucide-react';
+import { Copy, Download, Check, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 interface ScriptResultProps {
   script: string;
+  onGenerateGemini?: () => void;
+  isGeneratingGemini?: boolean;
 }
 
-export const ScriptResult: React.FC<ScriptResultProps> = ({ script }) => {
+export const ScriptResult: React.FC<ScriptResultProps> = ({ 
+  script, 
+  onGenerateGemini,
+  isGeneratingGemini = false 
+}) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -40,6 +46,18 @@ export const ScriptResult: React.FC<ScriptResultProps> = ({ script }) => {
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Generated Prompt untuk ChatGPT</h3>
         <div className="flex gap-2">
+          {onGenerateGemini && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onGenerateGemini}
+              disabled={isGeneratingGemini}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {isGeneratingGemini ? 'Generating...' : 'Generate dengan Gemini'}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

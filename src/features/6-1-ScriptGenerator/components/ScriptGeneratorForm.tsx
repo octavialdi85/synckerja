@@ -494,7 +494,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="content_type">Content Type</Label>
           <Select
-            value={formData.content_type || undefined}
+            value={formData.content_type || ""}
             onValueChange={(value) => {
               handleInputChange('content_type', value);
               // Reset duration/slide when content type changes
@@ -574,7 +574,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="service_name">Service</Label>
           <Select
-            value={selectedServiceId || undefined}
+            value={selectedServiceId || ""}
             onValueChange={(serviceId) => {
               const selectedService = services.find(s => s.id === serviceId);
               setSelectedServiceId(serviceId);
@@ -609,7 +609,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="sub_service_name">Sub Service</Label>
           <Select
-            value={formData.sub_service_name || undefined}
+            value={formData.sub_service_name || ""}
             onValueChange={(value) => handleInputChange('sub_service_name', value)}
             disabled={!selectedServiceId}
           >
@@ -638,7 +638,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="content_pillar">Content Pillar</Label>
           <Select
-            value={formData.content_pillar || undefined}
+            value={formData.content_pillar || ""}
             onValueChange={(value) => handleInputChange('content_pillar', value)}
           >
             <SelectTrigger>
@@ -674,7 +674,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             )}
           </Label>
           <Select
-            value={formData.selling_approach || undefined}
+            value={formData.selling_approach || ""}
             onValueChange={(value) => handleInputChange('selling_approach', value as 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling')}
             disabled={isSellingApproachLocked}
           >
@@ -706,7 +706,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="target_market">Customer Persona</Label>
           <Select
-            value={formData.target_market || undefined}
+            value={formData.target_market || ""}
             onValueChange={(value) => {
               handleInputChange('target_market', value);
               
@@ -866,7 +866,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="gender">Gender</Label>
           <Select
-            value={formData.gender || undefined}
+            value={formData.gender || ""}
             onValueChange={(value) => handleInputChange('gender', value)}
           >
             <SelectTrigger>
@@ -908,7 +908,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="keinginan">Keinginan</Label>
           <Select
-            value={formData.keinginan || undefined}
+            value={formData.keinginan || ""}
             onValueChange={(value) => {
               // Update keinginan first
               handleInputChange('keinginan', value);
@@ -1053,7 +1053,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="kebutuhan">Kebutuhan</Label>
           <Select
-            value={formData.kebutuhan || undefined}
+            value={formData.kebutuhan || ""}
             onValueChange={(value) => handleInputChange('kebutuhan', value)}
             disabled={!formData.keinginan}
           >
@@ -1235,7 +1235,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="hook_name">Hook Name</Label>
           <Select
-            value={selectedHookName || undefined}
+            value={selectedHookName || ""}
             onValueChange={(value) => {
               setSelectedHookName(value);
               
@@ -1309,7 +1309,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="style_name">Style Name</Label>
           <Select
-            value={selectedStyleName || undefined}
+            value={selectedStyleName || ""}
             onValueChange={(value) => {
               setSelectedStyleName(value);
               
@@ -1421,7 +1421,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
         <div className="space-y-2">
           <Label htmlFor="judul">Judul</Label>
           <Select
-            value={selectedJudulTemplate || undefined}
+            value={selectedJudulTemplate || ""}
             onValueChange={(value) => {
               setSelectedJudulTemplate(value);
               
