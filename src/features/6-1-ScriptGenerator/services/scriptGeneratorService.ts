@@ -12,6 +12,7 @@ export interface ScriptGeneratorRequest {
   age?: string;
   buying_roles?: string;
   keywords?: string[]; // SEO keywords (max 3)
+  useKeyword?: boolean; // Flag to enable/disable keyword usage in prompt
   keinginan?: string;
   kebutuhan?: string;
   hidden_needs?: string;
@@ -86,11 +87,15 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Opening - Concise and clear
   promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi di bawah ini.');
+  promptParts.push('======================================================================================');
   promptParts.push('');
   promptParts.push('PENTING:');
   promptParts.push('1. Baca semua informasi sebelum membuat script');
   promptParts.push('2. Buat Caption setelah script selesai');
-  promptParts.push('3. Output mudah dibaca dengan struktur jelas');
+  promptParts.push('3. Pastikan Output mudah dibaca dengan struktur jelas');
+  promptParts.push('');
+  promptParts.push('## INFORMASI DETAIL UNTUK SCRIPT. ##');
+  promptParts.push('====================================');
   // Content Type & Format
   promptParts.push('## Format Konten ##');
   if (request.content_type) {
@@ -135,7 +140,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   }
   
   // Target Audience
-  if (request.target_market || request.gender || request.age || request.buying_roles || (request.keywords && request.keywords.length > 0)) {
+  // Only include keywords if useKeyword is true (default to true for backward compatibility)
+  const shouldUseKeywords = request.useKeyword !== false && request.keywords && request.keywords.length > 0;
+  if (request.target_market || request.gender || request.age || request.buying_roles || shouldUseKeywords) {
     promptParts.push('## Target Audience ##');
     if (request.target_market) {
       promptParts.push(`- **Customer Persona:** ${request.target_market}`);
@@ -149,15 +156,16 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     if (request.buying_roles) {
       promptParts.push(`- **Buying Roles:** ${request.buying_roles}`);
     }
-    if (request.keywords && request.keywords.length > 0) {
-      promptParts.push(`- **Keyword SEO:** ${request.keywords.join(', ')}`);
+    if (shouldUseKeywords) {
+      promptParts.push(`- **Keyword SEO:** ${request.keywords!.join(', ')}`);
     }
     promptParts.push('');
   }
-  
+  promptParts.push('');
   // Customer Insights
   if (request.keinginan || request.kebutuhan || request.hidden_needs) {
     promptParts.push('## Insights Pelanggan ##');
+    promptParts.push('========================');
     if (request.keinginan) {
       promptParts.push(`- **Keinginan:** ${request.keinginan}`);
     }
@@ -168,42 +176,58 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Hidden Needs:** ${request.hidden_needs}`);
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Problems
   if (request.problem) {
     promptParts.push('## Masalah yang Dihadapi ##');
+    promptParts.push('============================');
     promptParts.push(`${request.problem}`);
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Impact
   if (request.impact) {
     promptParts.push('## Dampak dari Masalah ##');
+    promptParts.push('=========================');
     promptParts.push(`${request.impact}`);
     promptParts.push('');
+    promptParts.push('');
+    
   }
   
   // False Belief & Related Fields
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
     promptParts.push('## Keyakinan Salah & Hambatan ##');
+    promptParts.push('================================');
     if (request.false_belief) {
-      promptParts.push(`- **False Belief:** ${request.false_belief}`);
+      promptParts.push(`- **False Belief:** ${request.false_belief} - Ini adalah keyakinan atau asumsi salah yang dimiliki pelanggan tentang produk/layanan atau solusi`);
+      promptParts.push('');
     }
     if (request.false_belief_impact) {
-      promptParts.push(`- **Dampak:** ${request.false_belief_impact}`);
+      promptParts.push(`- **Dampak:** ${request.false_belief_impact} - Ini menjelaskan bagaimana keyakinan salah tersebut mempengaruhi perilaku atau keputusan pelanggan`);
+      promptParts.push('');
     }
     if (request.what_makes_them_stop) {
-      promptParts.push(`- **What Makes Them Stop:** ${request.what_makes_them_stop}`);
+      promptParts.push(`- **What Makes Them Stop:** ${request.what_makes_them_stop} - Ini menjelaskan faktor-faktor yang membuat pelanggan ragu-ragu, berhenti, atau tidak mengambil tindakan`);
+      promptParts.push('');
     }
     promptParts.push('');
-    promptParts.push('**⚠️ KRITIS:** False Belief → Blind Spot → Masalah Lebih Besar. Dampak memperparah Impact awal. Gunakan bahasa sederhana, tunjukkan koneksi jelas.');
+    promptParts.push('**⚠️⚠️⚠️ KRITIS - KONSEP UTAMA FALSE BELIEF');
+    promptParts.push('=============================================');
+    promptParts.push(' - Dampak dari False Belief hampir selalu memperparah Impact awal.');
+    promptParts.push(' - Keyakinan yang salah menciptakan blind spot → tidak ada pencegahan → masalah lebih besar, lebih mahal, lebih merusak reputasi.');
+    promptParts.push(' - Gunakan bahasa sederhana, relatable, dan tunjukkan koneksi jelas antara False Belief dengan Impact yang diperparah.');
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Feature & Competitive Advantage
   if (request.feature_name || request.feature_description || request.competitive_advantage) {
-    promptParts.push('## Fitur & Keunggulan ##');
+    promptParts.push('## FITUR & KEUNGGULAN ##');
+    promptParts.push('========================');
     if (request.feature_name) {
       promptParts.push(`- **Feature:** ${request.feature_name}`);
     }
@@ -214,12 +238,15 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Keunggulan:** ${request.competitive_advantage}`);
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Solution
   if (request.solution) {
     promptParts.push(`## Solusi ##`);
+    promptParts.push('============');
     promptParts.push(`${request.solution}`);
+    promptParts.push('');
     promptParts.push('');
   }
   
@@ -316,8 +343,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('## Instruksi ##');
   promptParts.push('===============');
   
-  // Add keyword instructions at the beginning if keywords exist
-  if (request.keywords && request.keywords.length > 0) {
+  // Add keyword instructions at the beginning if keywords exist and useKeyword is enabled
+  if (shouldUseKeywords) {
     const firstKeyword = request.keywords[0];
     promptParts.push('**⚠️ PENTING - SEO KEYWORDS:**');
     promptParts.push(`- Keyword yang WAJIB digunakan: ${request.keywords.join(', ')}`);
@@ -331,7 +358,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Untuk JUDUL:** Gunakan keyword "${firstKeyword}" jika memungkinkan`);
     }
     promptParts.push(`- **Untuk CAPTION:** SETIAP PARAGRAF body caption HARUS mengandung minimal 1 keyword, distribusikan semua keyword secara merata. Struktur kalimat tetap harus baik dan mudah dipahami.`);
-    promptParts.push(`- Hashtag HARUS menggunakan keyword: ${request.keywords.map(k => `#${k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')}`);
+    promptParts.push(`- Hashtag HARUS menggunakan keyword: ${request.keywords!.map(k => `#${k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')}`);
     promptParts.push('');
   }
   
@@ -384,8 +411,11 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   }
   
   promptParts.push('');
+  promptParts.push('');
   promptParts.push('**⚠️ WAJIB DIPENUHI:**');
-  promptParts.push('- Semua field yang diisi HARUS muncul dalam script');
+  promptParts.push('=======================');
+  promptParts.push('- Semua field yang diisi HARUS muncul dan dieksplorasi dalam script (Keinginan, Kebutuhan, Hidden Needs, Problem, Impact, False Belief, False Belief Impact, What Makes Them Stop, Feature, Feature Description, Competitive Advantage, Solution');
+  promptParts.push('');
   if (request.kebutuhan) {
     const needInstr = request.selling_approach === 'Tanpa Produk' 
       ? '→ Solusi umum (tanpa produk spesifik)'
@@ -393,19 +423,24 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       ? '→ Solusi soft, fokus benefit'
       : '→ Solusi spesifik, tunjukkan fitur konkret';
     promptParts.push(`- Kebutuhan: ${request.kebutuhan} ${needInstr}`);
+    promptParts.push('');
   }
   if (request.hidden_needs) {
     promptParts.push(`- Hidden Needs: ${request.hidden_needs} → Jawab dengan hook emosional`);
+    promptParts.push('');
   }
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
     if (request.false_belief) {
-      promptParts.push(`- False Belief: ${request.false_belief} → Bahasa sederhana, tunjukkan blind spot`);
+      promptParts.push(`- False Belief: ${request.false_belief} → Jelaskan dengan bahasa sederhana, tunjukkan blind spot yang berbahaya`);
+      promptParts.push('');
     }
     if (request.false_belief_impact) {
       promptParts.push(`- Dampak: ${request.false_belief_impact} → TEKANKAN: memperparah Impact awal`);
+      promptParts.push('');
     }
     if (request.what_makes_them_stop) {
       promptParts.push(`- What Makes Them Stop: ${request.what_makes_them_stop} → Tunjukkan solusi`);
+      promptParts.push('');
     }
     promptParts.push('- FOKUS: False Belief → Blind Spot → Masalah Lebih Besar');
   }
@@ -419,7 +454,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   const isStoryOrMotivational = pillarLowerForSolution.includes('story') || pillarLowerForSolution.includes('motivational') || pillarLowerForSolution.includes('motivasi');
   
   if (request.selling_approach === 'Tanpa Produk') {
-    promptParts.push('- Solution: Umum/konseptual, tanpa produk spesifik. Bahasa edukatif.');
+    promptParts.push('- Solution: Umum/konseptual,  TIDAK menyebut produk spesifik. Bahasa edukatif.');
   } else if (request.selling_approach === 'Soft Selling') {
     promptParts.push(isStoryOrMotivational ? '- Solution: Sesuai pillar Story/Motivational' : '- Solution: Produk subtle, fokus benefit, bahasa edukatif');
   } else if (request.selling_approach === 'Hard Selling') {
@@ -428,6 +463,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push(isStoryOrMotivational ? '- Solution: Sesuai pillar Story/Motivational' : '- Solution: Spesifik - platform/fitur, cara kerja, detail terukur');
   }
   promptParts.push('');
+  promptParts.push('');
   
   // Judul Information
   if (request.judul || request.judul_custom) {
@@ -435,24 +471,25 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('## Judul Script ##');
     promptParts.push(`**Template:** ${judulToUse}`);
     promptParts.push('**⚠️ Ganti [ ] dengan konten relevan. Format: [#]=angka, [#%]=persentase, [#Tanda]=ikon. Ringkas, menarik, relevan.');
-    if (request.keywords && request.keywords.length > 0) {
-      const firstKeyword = request.keywords[0];
-      if (request.keywords.length > 1) {
+    if (shouldUseKeywords) {
+      const firstKeyword = request.keywords![0];
+      if (request.keywords!.length > 1) {
         promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword)`);
       } else {
         promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan.`);
       }
     }
     promptParts.push('');
-  } else if (request.keywords && request.keywords.length > 0) {
+  } else if (shouldUseKeywords) {
     // If no judul template, still remind about keywords
-    const firstKeyword = request.keywords[0];
+    const firstKeyword = request.keywords![0];
     promptParts.push('## Judul Script ##');
-    if (request.keywords.length > 1) {
+    if (request.keywords!.length > 1) {
       promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword)`);
     } else {
       promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan.`);
     }
+    promptParts.push('');
     promptParts.push('');
   }
   
@@ -467,7 +504,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`Untuk format ${request.content_type} dengan ${request.slide} slide, berikan output dalam format berikut:`);
       promptParts.push('');
       promptParts.push('**⚠️ PENTING - Instruksi Copywriting untuk Slide:**');
-      promptParts.push('==================================================');
+      promptParts.push('====================================================');
       promptParts.push('- **Ukuran Slide:** Setiap slide berukuran 1080 x 1080 piksel (format persegi/instagram square)');
       promptParts.push('- **Copywriting Realistis:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG agar design carousel/post tidak terlalu full');
       promptParts.push('- **Prinsip Copywriting:**');
@@ -481,9 +518,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('**Gunakan garis pembatas untuk setiap section:**');
       promptParts.push('');
       if (request.judul || request.judul_custom) {
-        if (request.keywords && request.keywords.length > 0) {
-          const firstKeyword = request.keywords[0];
-          if (request.keywords.length > 1) {
+        if (shouldUseKeywords) {
+          const firstKeyword = request.keywords![0];
+          if (request.keywords!.length > 1) {
             promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
           } else {
             promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
@@ -492,9 +529,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
           promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
         }
       } else {
-        if (request.keywords && request.keywords.length > 0) {
-          const firstKeyword = request.keywords[0];
-          if (request.keywords.length > 1) {
+        if (shouldUseKeywords) {
+          const firstKeyword = request.keywords![0];
+          if (request.keywords!.length > 1) {
             promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
           } else {
             promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
@@ -506,8 +543,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('2. **Format & Style** (format konten dan tone)');
       promptParts.push(`3. **Breakdown per Slide** (untuk setiap slide dari ${request.slide} slide, berikan:`);
       promptParts.push('   - **Visual Suggestion:** Deskripsi singkat visual/gambar yang sesuai');
-      if (request.keywords && request.keywords.length > 0) {
-        promptParts.push(`   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080). HARUS menggunakan keyword: ${request.keywords.join(', ')}`);
+      if (shouldUseKeywords) {
+        promptParts.push(`   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080). HARUS menggunakan keyword: ${request.keywords!.join(', ')}`);
       } else {
         promptParts.push('   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080)');
       }
@@ -539,8 +576,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push('- **Judul Script**');
       }
       promptParts.push('- **Visual Suggestion** (deskripsi singkat visual)');
-      if (request.keywords && request.keywords.length > 0) {
-        promptParts.push(`- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang. HARUS menggunakan keyword: ${request.keywords.join(', ')})`);
+      if (shouldUseKeywords) {
+        promptParts.push(`- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang. HARUS menggunakan keyword: ${request.keywords!.join(', ')})`);
       } else {
         promptParts.push('- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang)');
       }
@@ -564,9 +601,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push(`Untuk format ${request.content_type} dengan durasi ${duration} (total ${totalSeconds} detik), berikan output dalam format berikut:`);
     promptParts.push('');
     if (request.judul || request.judul_custom) {
-      if (request.keywords && request.keywords.length > 0) {
-        const firstKeyword = request.keywords[0];
-        if (request.keywords.length > 1) {
+      if (shouldUseKeywords) {
+        const firstKeyword = request.keywords![0];
+        if (request.keywords!.length > 1) {
           promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
         } else {
           promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
@@ -575,9 +612,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
       }
     } else {
-      if (request.keywords && request.keywords.length > 0) {
-        const firstKeyword = request.keywords[0];
-        if (request.keywords.length > 1) {
+      if (shouldUseKeywords) {
+        const firstKeyword = request.keywords![0];
+        if (request.keywords!.length > 1) {
           promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
         } else {
           promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
@@ -600,13 +637,13 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('## Detail kolom: ##');
     promptParts.push('===================');
     promptParts.push('- **Timing:** Range waktu spesifik (contoh: "0-3s", "3-8s")');
-    if (request.keywords && request.keywords.length > 0) {
-      promptParts.push(`- **VO:** Script yang diucapkan dengan timing tepat. HARUS menggunakan keyword: ${request.keywords.join(', ')}`);
+    if (shouldUseKeywords) {
+      promptParts.push(`- **VO:** Script yang diucapkan dengan timing tepat. HARUS menggunakan keyword: ${request.keywords!.join(', ')}`);
     } else {
       promptParts.push('- **VO:** Script yang diucapkan dengan timing tepat');
     }
-    if (request.keywords && request.keywords.length > 0) {
-      promptParts.push(`- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi) yang HARUS menampilkan keyword: ${request.keywords.join(', ')}, transisi, ekspresi/gesture host, background/setting`);
+    if (shouldUseKeywords) {
+      promptParts.push(`- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi) yang HARUS menampilkan keyword: ${request.keywords!.join(', ')}, transisi, ekspresi/gesture host, background/setting`);
     } else {
       promptParts.push('- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi), transisi, ekspresi/gesture host, background/setting');
     }
@@ -683,10 +720,10 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('## CAPTION - WAJIB DIBUAT: ##');
   promptParts.push('=============================');
   promptParts.push('Setelah script selesai, buatkan CAPTION (150-300 kata) yang mencerminkan semua informasi field yang diisi.');
-  if (request.keywords && request.keywords.length > 0) {
+  if (shouldUseKeywords) {
     promptParts.push('');
     promptParts.push(`**⚠️ PENTING - Keyword di Caption:**`);
-    promptParts.push(`- Keyword yang harus digunakan: ${request.keywords.join(', ')}`);
+    promptParts.push(`- Keyword yang harus digunakan: ${request.keywords!.join(', ')}`);
     promptParts.push(`- SETIAP PARAGRAF di body caption HARUS mengandung minimal 1 keyword`);
     promptParts.push(`- Distribusikan semua keyword secara merata di seluruh paragraf body caption`);
     promptParts.push(`- Pastikan keyword muncul secara natural dan tidak memaksa struktur kalimat`);
@@ -694,11 +731,16 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push(`- Jangan mengorbankan kualitas kalimat hanya untuk menempatkan keyword`);
   }
   promptParts.push('');
+  promptParts.push('');
   promptParts.push('## Struktur: ##');
   promptParts.push('===============');
   promptParts.push('[Opening/Hook 1-2 kalimat]');
   promptParts.push('');
-  promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field. BAGI menjadi beberapa paragraf yang terstruktur dengan baik. SETIAP PARAGRAF harus mengandung keyword secara natural]');
+  if (shouldUseKeywords) {
+    promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field. BAGI menjadi beberapa paragraf yang terstruktur dengan baik. SETIAP PARAGRAF harus mengandung keyword secara natural]');
+  } else {
+    promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field. BAGI menjadi beberapa paragraf yang terstruktur dengan baik]');
+  }
   promptParts.push('');
   promptParts.push('[CTA yang jelas dan actionable]');
   if (request.cta_type === 'use_solution') {
@@ -730,18 +772,19 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   }
   promptParts.push('');
   
-  // Hashtag section - use keywords if available
+  // Hashtag section - use keywords if available and enabled
   promptParts.push('');
   promptParts.push('**⚠️ HASHTAG - WAJIB:**');
-  if (request.keywords && request.keywords.length > 0) {
-    const keywordHashtags = request.keywords.map(k => {
+  promptParts.push('========================');
+  if (shouldUseKeywords) {
+    const keywordHashtags = request.keywords!.map(k => {
       // Convert keyword to hashtag format: remove spaces and special chars, keep alphanumeric
       const hashtag = k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
       return `#${hashtag}`;
     }).join(' ');
     promptParts.push(`**HASHTAG WAJIB menggunakan keyword:** ${keywordHashtags}`);
     promptParts.push('');
-    promptParts.push(`- Hashtag HARUS menggunakan semua keyword: ${request.keywords.join(', ')}`);
+    promptParts.push(`- Hashtag HARUS menggunakan semua keyword: ${request.keywords!.join(', ')}`);
     promptParts.push('- Format hashtag: hilangkan spasi, gunakan huruf dan angka saja');
     promptParts.push('- Boleh tambahkan hashtag relevan lainnya, tetapi keyword di atas WAJIB ada');
   } else {

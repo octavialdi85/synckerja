@@ -39,6 +39,7 @@ import { useProductKnowledgeStyle } from '@/features/6-1-ProductKnowledge/hooks/
 import { useProductKnowledgeHooks } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeHooks';
 import { useKeywords } from '@/features/6-1-ProductKnowledge/hooks/useKeywords';
 import { toast } from 'sonner';
+import { Checkbox } from '@/features/ui/checkbox';
 
 interface ScriptGeneratorFormProps {
   onGenerate: (data: ScriptGeneratorRequest) => Promise<void>;
@@ -182,6 +183,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const [errors, setErrors] = useState<{ target_market?: string; keywords?: string }>({});
   const [keywordSearchOpen, setKeywordSearchOpen] = useState<boolean>(false);
   const [keywordSearchQuery, setKeywordSearchQuery] = useState<string>('');
+  const [useKeyword, setUseKeyword] = useState<boolean>(true);
 
   // Master data
   const [contentTypes, setContentTypes] = useState<any[]>([]);
@@ -483,14 +485,15 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation: Customer Persona and Keywords are required
+    // Validation: Customer Persona and Keywords are required (keywords only if useKeyword is checked)
     const newErrors: { target_market?: string; keywords?: string } = {};
     
     if (!formData.target_market || formData.target_market.trim() === '') {
       newErrors.target_market = 'Customer Persona wajib diisi';
     }
     
-    if (!formData.keywords || formData.keywords.length === 0) {
+    // Keywords are only required if useKeyword checkbox is checked
+    if (useKeyword && (!formData.keywords || formData.keywords.length === 0)) {
       newErrors.keywords = 'Keyword wajib diisi (minimal 1 keyword)';
     }
     
@@ -502,7 +505,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     
     // Clear errors if validation passes
     setErrors({});
-    await onGenerate(formData);
+    // Pass useKeyword flag to the service
+    await onGenerate({ ...formData, useKeyword });
   };
 
   const handleReset = () => {
@@ -548,6 +552,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     setSelectedStyleName('');
     setSelectedJudulTemplate('');
     setIsSellingApproachLocked(false);
+    setUseKeyword(true);
     setErrors({});
   };
 
@@ -1056,9 +1061,32 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
 
               {/* Keywords - Full width */}
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="keywords">
-                  Keyword (Maksimal 3) <span className="text-red-500">*</span>
-                </Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="keywords" className="cursor-pointer">
+                    Keyword (Maksimal 3)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="use-keyword"
+                      checked={useKeyword}
+                      onCheckedChange={(checked) => {
+                        setUseKeyword(checked === true);
+                        // Clear keywords error when checkbox is unchecked
+                        if (!checked && errors.keywords) {
+                          setErrors(prev => ({ ...prev, keywords: undefined }));
+                        }
+                        // Validate when checkbox is checked
+                        if (checked && (!formData.keywords || formData.keywords.length === 0)) {
+                          setErrors(prev => ({ ...prev, keywords: 'Keyword wajib diisi (minimal 1 keyword)' }));
+                        }
+                      }}
+                    />
+                    <Label htmlFor="use-keyword" className="text-sm font-normal cursor-pointer">
+                      Gunakan Keyword
+                    </Label>
+                  </div>
+                  {useKeyword && <span className="text-red-500">*</span>}
+                </div>
                 <Popover open={keywordSearchOpen} onOpenChange={setKeywordSearchOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1067,9 +1095,11 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       role="combobox"
                       aria-expanded={keywordSearchOpen}
                       className={`w-full justify-between ${errors.keywords ? 'border-red-500' : ''}`}
-                      disabled={!selectedServiceId || (formData.keywords && formData.keywords.length >= 3)}
+                      disabled={!useKeyword || !selectedServiceId || (formData.keywords && formData.keywords.length >= 3)}
                     >
-                      {!selectedServiceId
+                      {!useKeyword
+                        ? "Aktifkan checkbox untuk menggunakan keyword"
+                        : !selectedServiceId
                         ? "Pilih Service terlebih dahulu"
                         : formData.keywords && formData.keywords.length >= 3
                         ? "Maksimal 3 keyword sudah tercapai"
@@ -1142,7 +1172,12 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     Maksimal 3 keyword sudah tercapai
                   </p>
                 )}
-                {!selectedServiceId && (
+                {!useKeyword && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Centang checkbox "Gunakan Keyword" untuk mengaktifkan field keyword
+                  </p>
+                )}
+                {useKeyword && !selectedServiceId && (
                   <p className="text-xs text-gray-500 mt-1">
                     Pilih Service terlebih dahulu untuk memilih keyword
                   </p>
