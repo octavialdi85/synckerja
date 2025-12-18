@@ -719,7 +719,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('');
   promptParts.push('## CAPTION - WAJIB DIBUAT: ##');
   promptParts.push('=============================');
-  promptParts.push('Setelah script selesai, buatkan CAPTION (150-300 kata) yang mencerminkan semua informasi field yang diisi.');
+  promptParts.push('Setelah script selesai, buatkan CAPTION Dengan Singkat dan padat (Maksimal 150 kata)yang mencerminkan semua informasi field yang diisi.');
   if (shouldUseKeywords) {
     promptParts.push('');
     promptParts.push(`**⚠️ PENTING - Keyword di Caption:**`);
