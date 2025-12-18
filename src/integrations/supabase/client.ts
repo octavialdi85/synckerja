@@ -20,8 +20,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   global: {
     // Better error handling for network issues with retry logic
     fetch: async (url, options = {}) => {
-      const MAX_RETRIES = 2;
-      const TIMEOUT_MS = 30000; // Increased to 30 seconds for better reliability
+      const MAX_RETRIES = 1; // Reduced retries for faster failure detection
+      const TIMEOUT_MS = 15000; // Reduced to 15 seconds for faster failure detection
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         // Create abort controller for timeout if not already provided

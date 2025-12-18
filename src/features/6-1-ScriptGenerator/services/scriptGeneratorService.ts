@@ -11,6 +11,7 @@ export interface ScriptGeneratorRequest {
   gender?: string;
   age?: string;
   buying_roles?: string;
+  keywords?: string[]; // SEO keywords (max 3)
   keinginan?: string;
   kebutuhan?: string;
   hidden_needs?: string;
@@ -83,17 +84,13 @@ function cleanLabelDuplication(text: string | null | undefined, label: string): 
 function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   const promptParts: string[] = [];
   
-  // Opening - Simple and clear
-  promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi detail di bawah ini.');
-  promptParts.push('================================================================');
+  // Opening - Concise and clear
+  promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi di bawah ini.');
   promptParts.push('');
   promptParts.push('PENTING:');
-  promptParts.push('1. Baca SEMUA informasi dengan teliti sebelum membuat script');
+  promptParts.push('1. Baca semua informasi sebelum membuat script');
   promptParts.push('2. Buat Caption setelah script selesai');
-  promptParts.push('3. Pastikan output mudah dibaca dengan struktur yang jelas');
-  promptParts.push('');
-  promptParts.push('INFORMASI DETAIL UNTUK SCRIPT');
-  promptParts.push('==============================');
+  promptParts.push('3. Output mudah dibaca dengan struktur jelas');
   // Content Type & Format
   promptParts.push('## Format Konten ##');
   if (request.content_type) {
@@ -125,38 +122,20 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Content Pillar
   if (request.content_pillar) {
-    promptParts.push(`## Content Pillar ##\n- **Pillar:** ${request.content_pillar}\n`);
+    promptParts.push(`## Content Pillar ##`);
+    promptParts.push(`- **Pillar:** ${request.content_pillar}`);
     
-    // Add specific guidance based on Content Pillar type
     const pillarLower = request.content_pillar.toLowerCase();
     if (pillarLower.includes('compar') || pillarLower.includes('banding')) {
-      promptParts.push('**⚠️ PENTING untuk Content Pillar ini:**');
-      promptParts.push('- Script HARUS menampilkan perbandingan yang jelas dan konkret antara metode/platform/pendekatan LAMA vs BARU');
-      promptParts.push('- Bandingkan secara spesifik dengan DATA dan ANGKA yang terukur dalam hal: fitur, hasil, biaya, waktu, atau manfaat');
-      promptParts.push('- Setiap poin perbandingan HARUS disertai dengan angka konkret (contoh: "50x lebih luas", "hemat 70%", "hemat 35 jam per minggu")');
-      promptParts.push('- Format perbandingan: "Metode Lama: [angka/kondisi] → Solusi: [angka/kondisi] (perbandingan: [Xx lebih baik/hemat Y%])"');
-      promptParts.push('- Tunjukkan perbedaan yang jelas dengan visual comparison (side-by-side, before-after) yang detail dan spesifik');
-      promptParts.push('- Pastikan perbandingan relevan dengan konteks produk/layanan dan target audience yang sudah ditentukan');
-      promptParts.push('- Jangan hanya menyebutkan perbedaan secara umum, tapi berikan detail spesifik dan terukur untuk setiap aspek yang dibandingkan');
-      promptParts.push('');
-    } else if (pillarLower.includes('q&a') || pillarLower.includes('qa') || pillarLower.includes('tanya') || pillarLower.includes('jawab') || pillarLower.includes('product')) {
-      // Check if it's Q&A Product specifically
-      if (pillarLower.includes('q&a') || pillarLower.includes('qa') || pillarLower.includes('tanya') || pillarLower.includes('jawab')) {
-        promptParts.push('**⚠️ PENTING untuk Content Pillar ini:**');
-        promptParts.push('- Script HARUS menggunakan format Q&A (Tanya-Jawab) secara konsisten sepanjang konten');
-        promptParts.push('- Mulai dengan pertanyaan yang relevan dan menarik di hook/intro');
-        promptParts.push('- Struktur script harus mengikuti pola: Pertanyaan → Penjelasan/Jawaban → Insight/Nilai');
-        promptParts.push('- Setiap section bisa dimulai dengan pertanyaan atau mengarah ke pertanyaan berikutnya');
-        promptParts.push('- Format Q&A harus natural dan conversational, tidak terlalu kaku');
-        promptParts.push('- Gunakan pertanyaan yang mencerminkan pain point atau curiosity target audience');
-        promptParts.push('- Jangan hanya menggunakan format Q&A di awal, tapi konsisten sepanjang script');
-        promptParts.push('');
-      }
+      promptParts.push('**⚠️ Perbandingan:** Bandingkan LAMA vs BARU dengan data/angka terukur. Format: "Metode Lama: [angka] → Solusi: [angka] (Xx lebih baik/hemat Y%)". Setiap poin wajib pakai angka konkret.');
+    } else if (pillarLower.includes('q&a') || pillarLower.includes('qa') || pillarLower.includes('tanya') || pillarLower.includes('jawab')) {
+      promptParts.push('**⚠️ Q&A:** Format Tanya-Jawab konsisten sepanjang script. Pola: Pertanyaan → Jawaban → Insight. Natural & conversational.');
     }
+    promptParts.push('');
   }
   
   // Target Audience
-  if (request.target_market || request.gender || request.age || request.buying_roles) {
+  if (request.target_market || request.gender || request.age || request.buying_roles || (request.keywords && request.keywords.length > 0)) {
     promptParts.push('## Target Audience ##');
     if (request.target_market) {
       promptParts.push(`- **Customer Persona:** ${request.target_market}`);
@@ -170,100 +149,77 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     if (request.buying_roles) {
       promptParts.push(`- **Buying Roles:** ${request.buying_roles}`);
     }
-    promptParts.push('');
+    if (request.keywords && request.keywords.length > 0) {
+      promptParts.push(`- **Keyword SEO:** ${request.keywords.join(', ')}`);
+    }
     promptParts.push('');
   }
   
   // Customer Insights
   if (request.keinginan || request.kebutuhan || request.hidden_needs) {
     promptParts.push('## Insights Pelanggan ##');
-    promptParts.push('========================');
     if (request.keinginan) {
-      promptParts.push(`- **Keinginan (Wants):** ${request.keinginan}`);
+      promptParts.push(`- **Keinginan:** ${request.keinginan}`);
     }
     if (request.kebutuhan) {
-      promptParts.push(`- **Kebutuhan (Needs):** ${request.kebutuhan}`);
+      promptParts.push(`- **Kebutuhan:** ${request.kebutuhan}`);
     }
     if (request.hidden_needs) {
       promptParts.push(`- **Hidden Needs:** ${request.hidden_needs}`);
     }
-    promptParts.push('');
     promptParts.push('');
   }
   
   // Problems
   if (request.problem) {
     promptParts.push('## Masalah yang Dihadapi ##');
-    promptParts.push('===========================');
     promptParts.push(`${request.problem}`);
-    promptParts.push('');
     promptParts.push('');
   }
   
   // Impact
   if (request.impact) {
     promptParts.push('## Dampak dari Masalah ##');
-    promptParts.push('=========================');
     promptParts.push(`${request.impact}`);
-    promptParts.push('');
     promptParts.push('');
   }
   
   // False Belief & Related Fields
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
-    promptParts.push('## Keyakinan yang Salah & Hambatan Pelanggan ##');
-    promptParts.push('===============================================');
+    promptParts.push('## Keyakinan Salah & Hambatan ##');
     if (request.false_belief) {
-      promptParts.push(`- **False Belief (Keyakinan Salah):** ${request.false_belief}`);
-      promptParts.push('  - Ini adalah keyakinan atau asumsi salah yang dimiliki pelanggan tentang produk/layanan atau solusi');
-      promptParts.push('');
+      promptParts.push(`- **False Belief:** ${request.false_belief}`);
     }
     if (request.false_belief_impact) {
-      promptParts.push(`- **Dampak False Belief:** ${request.false_belief_impact}`);
-      promptParts.push('  - Ini menjelaskan bagaimana keyakinan salah tersebut mempengaruhi perilaku atau keputusan pelanggan');
-      promptParts.push('');
+      promptParts.push(`- **Dampak:** ${request.false_belief_impact}`);
     }
     if (request.what_makes_them_stop) {
-      promptParts.push(`- **What Makes Them Stop (Apa yang Membuat Mereka Berhenti):** ${request.what_makes_them_stop}`);
-      promptParts.push('  - Ini menjelaskan faktor-faktor yang membuat pelanggan ragu-ragu, berhenti, atau tidak mengambil tindakan');
+      promptParts.push(`- **What Makes Them Stop:** ${request.what_makes_them_stop}`);
     }
     promptParts.push('');
-    promptParts.push('');
-    promptParts.push('**⚠️⚠️⚠️ KRITIS - KONSEP UTAMA False Belief:**');
-    promptParts.push('===============================================');
-    promptParts.push('Dampak dari False Belief hampir selalu memperparah Impact awal. Keyakinan salah menciptakan blind spot → tidak ada pencegahan → masalah lebih besar, lebih mahal, lebih merusak reputasi.');
-    promptParts.push('');
-    promptParts.push('**HARUS DITUNJUKKAN:** False Belief → Blind Spot → Masalah Lebih Besar. Gunakan bahasa sederhana, relatable, dan tunjukkan koneksi jelas antara False Belief dengan Impact yang diperparah.');
-    promptParts.push('');
+    promptParts.push('**⚠️ KRITIS:** False Belief → Blind Spot → Masalah Lebih Besar. Dampak memperparah Impact awal. Gunakan bahasa sederhana, tunjukkan koneksi jelas.');
     promptParts.push('');
   }
   
   // Feature & Competitive Advantage
   if (request.feature_name || request.feature_description || request.competitive_advantage) {
-    promptParts.push('## Fitur & Keunggulan Kompetitif ##');
-    promptParts.push('=================================');
+    promptParts.push('## Fitur & Keunggulan ##');
     if (request.feature_name) {
-      promptParts.push(`- **Feature (Fitur):** ${request.feature_name}`);
-      promptParts.push('  - Ini adalah nama fitur utama dari produk/layanan');
+      promptParts.push(`- **Feature:** ${request.feature_name}`);
     }
     if (request.feature_description) {
-      promptParts.push(`- **Feature Description (Deskripsi Fitur):** ${request.feature_description}`);
-      promptParts.push('  - Ini menjelaskan detail bagaimana fitur bekerja dan manfaatnya');
+      promptParts.push(`- **Deskripsi:** ${request.feature_description}`);
     }
     if (request.competitive_advantage) {
-      promptParts.push(`- **Competitive Advantage (Keunggulan Kompetitif):** ${request.competitive_advantage}`);
-      promptParts.push('  - Ini menjelaskan keunggulan produk/layanan dibandingkan dengan kompetitor');
+      promptParts.push(`- **Keunggulan:** ${request.competitive_advantage}`);
     }
-    promptParts.push('');
     promptParts.push('');
   }
   
   // Solution
   if (request.solution) {
     promptParts.push(`## Solusi ##`);
-    promptParts.push('============');
     promptParts.push(`${request.solution}`);
-    promptParts.push('');
     promptParts.push('');
   }
   
@@ -359,6 +315,26 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   // Instructions for ChatGPT - More focused and concise
   promptParts.push('## Instruksi ##');
   promptParts.push('===============');
+  
+  // Add keyword instructions at the beginning if keywords exist
+  if (request.keywords && request.keywords.length > 0) {
+    const firstKeyword = request.keywords[0];
+    promptParts.push('**⚠️ PENTING - SEO KEYWORDS:**');
+    promptParts.push(`- Keyword yang WAJIB digunakan: ${request.keywords.join(', ')}`);
+    promptParts.push(`- Keyword HARUS muncul di: Voice Over (VO), Text overlay di video, Caption, dan HASHTAG`);
+    promptParts.push(`- Semua keyword HARUS digunakan secara natural dalam script`);
+    promptParts.push(`- Contoh: Jika keyword "Cara Membuat SEO di TikTok", maka VO dan text HARUS menyebutkan "Cara Membuat SEO di TikTok"`);
+    promptParts.push('');
+    if (request.keywords.length > 1) {
+      promptParts.push(`- **Untuk JUDUL:** Gunakan HANYA keyword PERTAMA: "${firstKeyword}" (bukan semua keyword)`);
+    } else {
+      promptParts.push(`- **Untuk JUDUL:** Gunakan keyword "${firstKeyword}" jika memungkinkan`);
+    }
+    promptParts.push(`- **Untuk CAPTION:** SETIAP PARAGRAF body caption HARUS mengandung minimal 1 keyword, distribusikan semua keyword secara merata. Struktur kalimat tetap harus baik dan mudah dipahami.`);
+    promptParts.push(`- Hashtag HARUS menggunakan keyword: ${request.keywords.map(k => `#${k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')}`);
+    promptParts.push('');
+  }
+  
   promptParts.push('Berdasarkan informasi di atas, buatkan script konten digital marketing yang:');
   promptParts.push('');
   if (request.hook_content) {
@@ -408,113 +384,75 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   }
   
   promptParts.push('');
-  promptParts.push('');
   promptParts.push('**⚠️ WAJIB DIPENUHI:**');
-  promptParts.push('=======================');
-  promptParts.push('- Semua field yang diisi HARUS muncul dan dieksplorasi dalam script (Keinginan, Kebutuhan, Hidden Needs, Problem, Impact, False Belief, False Belief Impact, What Makes Them Stop, Feature, Feature Description, Competitive Advantage, Solution)');
+  promptParts.push('- Semua field yang diisi HARUS muncul dalam script');
   if (request.kebutuhan) {
-    if (request.selling_approach === 'Tanpa Produk') {
-      promptParts.push('');
-      promptParts.push('');
-      promptParts.push(`- Kebutuhan: ${request.kebutuhan} → Jelaskan bagaimana solusi umum/konsep mengatasi kebutuhan ini (tanpa menyebut produk spesifik)`);
-    } else if (request.selling_approach === 'Soft Selling') {
-      promptParts.push(`- Kebutuhan: ${request.kebutuhan} → Jelaskan secara soft bagaimana solusi mengatasi kebutuhan, fokus benefit (bukan detail teknis)`);
-    } else {
-      promptParts.push(`- Kebutuhan: ${request.kebutuhan} → Jelaskan spesifik bagaimana produk/layanan mengatasi kebutuhan, tunjukkan fitur/metode konkret`);
-    }
+    const needInstr = request.selling_approach === 'Tanpa Produk' 
+      ? '→ Solusi umum (tanpa produk spesifik)'
+      : request.selling_approach === 'Soft Selling'
+      ? '→ Solusi soft, fokus benefit'
+      : '→ Solusi spesifik, tunjukkan fitur konkret';
+    promptParts.push(`- Kebutuhan: ${request.kebutuhan} ${needInstr}`);
   }
   if (request.hidden_needs) {
-    promptParts.push('');
-    promptParts.push('');
-    promptParts.push('- Hidden Needs harus di jawab Dengan emosional Hook');
-    promptParts.push(`  - Hidden Needs: ${request.hidden_needs}`);
+    promptParts.push(`- Hidden Needs: ${request.hidden_needs} → Jawab dengan hook emosional`);
   }
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
-    promptParts.push('');
-    promptParts.push('');
-    promptParts.push('**⚠️ KRITIS - False Belief:**');
-    promptParts.push('==============================');
     if (request.false_belief) {
-      promptParts.push(`  - False Belief: ${request.false_belief} → Jelaskan dengan bahasa sederhana, tunjukkan blind spot yang berbahaya`);
+      promptParts.push(`- False Belief: ${request.false_belief} → Bahasa sederhana, tunjukkan blind spot`);
     }
     if (request.false_belief_impact) {
-      promptParts.push('');
-      promptParts.push('');
-      promptParts.push(`  - Dampak: ${request.false_belief_impact} → **TEKANKAN:** Ini memperparah Impact awal (lebih besar, lebih mahal, lebih merusak)`);
+      promptParts.push(`- Dampak: ${request.false_belief_impact} → TEKANKAN: memperparah Impact awal`);
     }
     if (request.what_makes_them_stop) {
-      promptParts.push('');
-      promptParts.push('');
-      promptParts.push(`  - What Makes Them Stop: ${request.what_makes_them_stop} → Tunjukkan bagaimana solusi mengatasi hambatan ini`);
+      promptParts.push(`- What Makes Them Stop: ${request.what_makes_them_stop} → Tunjukkan solusi`);
     }
-    promptParts.push('');
-    promptParts.push('');
-    promptParts.push('  - **FOKUS:** False Belief → Blind Spot → Masalah Lebih Besar (bukan hanya menambah masalah baru)');
-    promptParts.push('');
-    promptParts.push('');
+    promptParts.push('- FOKUS: False Belief → Blind Spot → Masalah Lebih Besar');
   }
   if (request.feature_name || request.feature_description || request.competitive_advantage) {
-    promptParts.push('- **Feature & Keunggulan:** Jelaskan dengan bahasa sederhana, fokus benefit (bukan teknis), tunjukkan value proposition, gunakan contoh konkret jika perlu:');
-    if (request.feature_name) {
-      promptParts.push(`  - Feature: ${request.feature_name} → Sebutkan jelas, tunjukkan relevansi dengan masalah`);
-    }
-    if (request.feature_description) {
-      promptParts.push(`  - Deskripsi: ${request.feature_description} → Cara kerja sederhana, manfaat konkret`);
-    }
-    if (request.competitive_advantage) {
-      promptParts.push(`  - Keunggulan: ${request.competitive_advantage} → Value proposition jelas, bandingkan implisit tanpa merendahkan kompetitor`);
-    }
+    promptParts.push('- Feature & Keunggulan: Bahasa sederhana, fokus benefit, value proposition jelas');
+    if (request.feature_name) promptParts.push(`  - Feature: ${request.feature_name}`);
+    if (request.feature_description) promptParts.push(`  - Deskripsi: ${request.feature_description}`);
+    if (request.competitive_advantage) promptParts.push(`  - Keunggulan: ${request.competitive_advantage}`);
   }
-  if (request.content_pillar) {
-    const pillarLower = request.content_pillar.toLowerCase();
-    if (pillarLower.includes('compar') || pillarLower.includes('banding')) {
-      promptParts.push(`- Content Pillar "${request.content_pillar}" HARUS dieksplorasi dengan perbandingan yang jelas dan konkret dengan DATA/ANGKA`);
-      promptParts.push(`  - Setiap poin perbandingan HARUS disertai angka terukur (contoh: "50x lebih luas", "hemat 70%", "naik 50x lipat")`);
-      promptParts.push(`  - Format perbandingan: "Metode Lama: [angka/kondisi] → Solusi: [angka/kondisi] (perbandingan: [Xx lebih baik/hemat Y%])"`);
-    } else if (pillarLower.includes('q&a') || pillarLower.includes('qa') || pillarLower.includes('tanya') || pillarLower.includes('jawab')) {
-      promptParts.push(`- Content Pillar "${request.content_pillar}" HARUS menggunakan format Q&A (Tanya-Jawab) secara konsisten sepanjang script`);
-      promptParts.push('  - Format Q&A harus terlihat jelas di setiap section, bukan hanya di awal');
-    }
-  }
-  // Check if content pillar is Story Telling or Motivational
   const pillarLowerForSolution = (request.content_pillar || '').toLowerCase();
   const isStoryOrMotivational = pillarLowerForSolution.includes('story') || pillarLowerForSolution.includes('motivational') || pillarLowerForSolution.includes('motivasi');
   
-  // Adjust solution instructions based on selling approach
   if (request.selling_approach === 'Tanpa Produk') {
-    promptParts.push('- Solution: Solusi umum/konseptual, TIDAK menyebut produk spesifik. Fokus metode/pendekatan yang bisa diterapkan luas, bahasa edukatif.');
+    promptParts.push('- Solution: Umum/konseptual, tanpa produk spesifik. Bahasa edukatif.');
   } else if (request.selling_approach === 'Soft Selling') {
-    if (!isStoryOrMotivational) {
-      promptParts.push('- Solution: Sebutkan produk subtle, fokus benefit/value (bukan detail teknis), bahasa edukatif.');
-    } else {
-      promptParts.push('- Solution: Sesuai pillar Story Telling/Motivational (tidak perlu detail fitur spesifik).');
-    }
+    promptParts.push(isStoryOrMotivational ? '- Solution: Sesuai pillar Story/Motivational' : '- Solution: Produk subtle, fokus benefit, bahasa edukatif');
   } else if (request.selling_approach === 'Hard Selling') {
-    if (!isStoryOrMotivational) {
-      promptParts.push('- Solution: Spesifik & konkret - sebutkan platform/fitur, jelaskan cara kerja singkat, berikan detail terukur. Format: "Fitur #1: [nama] - Cara kerja: [penjelasan]". Tunjukkan value proposition jelas.');
-    } else {
-      promptParts.push('- Solution: Sesuai pillar Story Telling/Motivational, tetap fokus produk & keunggulan.');
-    }
+    promptParts.push(isStoryOrMotivational ? '- Solution: Story/Motivational, fokus produk' : '- Solution: Spesifik - platform/fitur, cara kerja, detail terukur. Format: "Fitur #1: [nama] - Cara kerja: [penjelasan]"');
   } else {
-    // Default behavior (no selling approach selected)
-    if (!isStoryOrMotivational) {
-      promptParts.push('- Solution: Spesifik & konkret - sebutkan platform/fitur, jelaskan cara kerja singkat, detail terukur. Format: "Fitur #1: [nama] - Cara kerja: [penjelasan]". (Tidak berlaku untuk pillar Story Telling & Motivational)');
-    } else {
-      promptParts.push('- Solution: Sesuai pillar Story Telling/Motivational (tidak perlu detail fitur spesifik).');
-    }
+    promptParts.push(isStoryOrMotivational ? '- Solution: Sesuai pillar Story/Motivational' : '- Solution: Spesifik - platform/fitur, cara kerja, detail terukur');
   }
-  promptParts.push('');
   promptParts.push('');
   
   // Judul Information
   if (request.judul || request.judul_custom) {
     const judulToUse = request.judul_custom || request.judul || '';
     promptParts.push('## Judul Script ##');
-    promptParts.push('==================');
-    promptParts.push(`**Template Judul:** ${judulToUse}`);
+    promptParts.push(`**Template:** ${judulToUse}`);
+    promptParts.push('**⚠️ Ganti [ ] dengan konten relevan. Format: [#]=angka, [#%]=persentase, [#Tanda]=ikon. Ringkas, menarik, relevan.');
+    if (request.keywords && request.keywords.length > 0) {
+      const firstKeyword = request.keywords[0];
+      if (request.keywords.length > 1) {
+        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword)`);
+      } else {
+        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan.`);
+      }
+    }
     promptParts.push('');
-    promptParts.push('**⚠️ Judul:** Gunakan template sebagai dasar, ganti [ ] dengan konten relevan. Format: [#] = angka konkret, [#%] = persentase, [#Tanda] = ikon relevan. Judul harus ringkas, menarik, relevan dengan target audience & produk/layanan.');
-    promptParts.push('');
+  } else if (request.keywords && request.keywords.length > 0) {
+    // If no judul template, still remind about keywords
+    const firstKeyword = request.keywords[0];
+    promptParts.push('## Judul Script ##');
+    if (request.keywords.length > 1) {
+      promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword)`);
+    } else {
+      promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan.`);
+    }
     promptParts.push('');
   }
   
@@ -543,14 +481,36 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('**Gunakan garis pembatas untuk setiap section:**');
       promptParts.push('');
       if (request.judul || request.judul_custom) {
-        promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
+        if (request.keywords && request.keywords.length > 0) {
+          const firstKeyword = request.keywords[0];
+          if (request.keywords.length > 1) {
+            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+          } else {
+            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+          }
+        } else {
+          promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
+        }
       } else {
-        promptParts.push('1. **Judul Script** (singkat dan menarik)');
+        if (request.keywords && request.keywords.length > 0) {
+          const firstKeyword = request.keywords[0];
+          if (request.keywords.length > 1) {
+            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+          } else {
+            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+          }
+        } else {
+          promptParts.push('1. **Judul Script** (singkat dan menarik)');
+        }
       }
       promptParts.push('2. **Format & Style** (format konten dan tone)');
       promptParts.push(`3. **Breakdown per Slide** (untuk setiap slide dari ${request.slide} slide, berikan:`);
       promptParts.push('   - **Visual Suggestion:** Deskripsi singkat visual/gambar yang sesuai');
-      promptParts.push('   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080)');
+      if (request.keywords && request.keywords.length > 0) {
+        promptParts.push(`   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080). HARUS menggunakan keyword: ${request.keywords.join(', ')}`);
+      } else {
+        promptParts.push('   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080)');
+      }
       promptParts.push('   - **Element tambahan:** (jika ada) seperti hashtag, CTA, dll');
       promptParts.push('');
       promptParts.push('   **Gunakan sub-separator (───) di antara setiap slide untuk memudahkan pembacaan**');
@@ -579,7 +539,11 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push('- **Judul Script**');
       }
       promptParts.push('- **Visual Suggestion** (deskripsi singkat visual)');
-      promptParts.push('- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang)');
+      if (request.keywords && request.keywords.length > 0) {
+        promptParts.push(`- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang. HARUS menggunakan keyword: ${request.keywords.join(', ')})`);
+      } else {
+        promptParts.push('- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang)');
+      }
       promptParts.push('');
       promptParts.push('**⚠️ REMINDER:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG untuk ukuran post 1080x1080!');
     }
@@ -600,9 +564,27 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push(`Untuk format ${request.content_type} dengan durasi ${duration} (total ${totalSeconds} detik), berikan output dalam format berikut:`);
     promptParts.push('');
     if (request.judul || request.judul_custom) {
-      promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
+      if (request.keywords && request.keywords.length > 0) {
+        const firstKeyword = request.keywords[0];
+        if (request.keywords.length > 1) {
+          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+        } else {
+          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+        }
+      } else {
+        promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
+      }
     } else {
-      promptParts.push('1. **Judul Script** (singkat dan menarik)');
+      if (request.keywords && request.keywords.length > 0) {
+        const firstKeyword = request.keywords[0];
+        if (request.keywords.length > 1) {
+          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+        } else {
+          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+        }
+      } else {
+        promptParts.push('1. **Judul Script** (singkat dan menarik)');
+      }
     }
     promptParts.push('2. **Format & Style** (format konten dan tone)');
     promptParts.push('3. **Breakdown Script dalam bentuk TABLE (HARUS tepat ' + totalSeconds + ' detik):**');
@@ -618,8 +600,16 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('## Detail kolom: ##');
     promptParts.push('===================');
     promptParts.push('- **Timing:** Range waktu spesifik (contoh: "0-3s", "3-8s")');
-    promptParts.push('- **VO:** Script yang diucapkan dengan timing tepat');
-    promptParts.push('- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi), transisi, ekspresi/gesture host, background/setting');
+    if (request.keywords && request.keywords.length > 0) {
+      promptParts.push(`- **VO:** Script yang diucapkan dengan timing tepat. HARUS menggunakan keyword: ${request.keywords.join(', ')}`);
+    } else {
+      promptParts.push('- **VO:** Script yang diucapkan dengan timing tepat');
+    }
+    if (request.keywords && request.keywords.length > 0) {
+      promptParts.push(`- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi) yang HARUS menampilkan keyword: ${request.keywords.join(', ')}, transisi, ekspresi/gesture host, background/setting`);
+    } else {
+      promptParts.push('- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi), transisi, ekspresi/gesture host, background/setting');
+    }
     promptParts.push('- **Element Lainnya:** SFX/Music cues, text overlay tambahan');
     promptParts.push('- **Tagging:** Tag detail untuk Visual yang di shoot, mempermudah pencarian clip saat editing. PERATURAN: (1) TAG harus KATA KUNCI BAHASA INDONESIA dipisahkan tanda hubung (-), (2) HANYA tag informasi yang disebutkan dalam deskripsi visual, (3) Urutan: JENIS_SHOT-GERAKAN_KAMERA-SUBJEK-AKSI-SETTING-WAKTU-SUASANA, (4) HENTIKAN jika informasi sudah habis (jangan tambahkan elemen kosong). Contoh: Close-up wajah wanita tersenyum di taman siang hari, kamera diam → "CU-diam-wanita-tersenyum-taman-siang". Medium shot pria berjalan di kantor, kamera follow → "MS-follow-pria-berjalan-kantor". Wide shot kerumunan di konser malam hari → "WS-kerumunan-konser-malam". Untuk "Setting" wajib mengisi apaakah di "Indoor" atau "Outdoor" baru di terangkan Indor nya di mana apakah studio, apakah di kamar dan lain lain, begitu juga dengan setting "Outdoor" apakah sedang di taman, di jalan');
     promptParts.push('');
@@ -693,12 +683,22 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('## CAPTION - WAJIB DIBUAT: ##');
   promptParts.push('=============================');
   promptParts.push('Setelah script selesai, buatkan CAPTION (150-300 kata) yang mencerminkan semua informasi field yang diisi.');
+  if (request.keywords && request.keywords.length > 0) {
+    promptParts.push('');
+    promptParts.push(`**⚠️ PENTING - Keyword di Caption:**`);
+    promptParts.push(`- Keyword yang harus digunakan: ${request.keywords.join(', ')}`);
+    promptParts.push(`- SETIAP PARAGRAF di body caption HARUS mengandung minimal 1 keyword`);
+    promptParts.push(`- Distribusikan semua keyword secara merata di seluruh paragraf body caption`);
+    promptParts.push(`- Pastikan keyword muncul secara natural dan tidak memaksa struktur kalimat`);
+    promptParts.push(`- Struktur kalimat HARUS tetap baik, mudah dipahami, dan mengalir natural`);
+    promptParts.push(`- Jangan mengorbankan kualitas kalimat hanya untuk menempatkan keyword`);
+  }
   promptParts.push('');
   promptParts.push('## Struktur: ##');
   promptParts.push('===============');
   promptParts.push('[Opening/Hook 1-2 kalimat]');
   promptParts.push('');
-  promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field]');
+  promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field. BAGI menjadi beberapa paragraf yang terstruktur dengan baik. SETIAP PARAGRAF harus mengandung keyword secara natural]');
   promptParts.push('');
   promptParts.push('[CTA yang jelas dan actionable]');
   if (request.cta_type === 'use_solution') {
@@ -729,9 +729,28 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     }
   }
   promptParts.push('');
-  promptParts.push('#hashtag1 #hashtag2 #hashtag3');
+  
+  // Hashtag section - use keywords if available
   promptParts.push('');
-  promptParts.push('**Format:** Gunakan emoji relevan, paragraf jelas, tone sesuai style, 3-5 hashtag (Instagram) atau 1-2 (LinkedIn).');
+  promptParts.push('**⚠️ HASHTAG - WAJIB:**');
+  if (request.keywords && request.keywords.length > 0) {
+    const keywordHashtags = request.keywords.map(k => {
+      // Convert keyword to hashtag format: remove spaces and special chars, keep alphanumeric
+      const hashtag = k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+      return `#${hashtag}`;
+    }).join(' ');
+    promptParts.push(`**HASHTAG WAJIB menggunakan keyword:** ${keywordHashtags}`);
+    promptParts.push('');
+    promptParts.push(`- Hashtag HARUS menggunakan semua keyword: ${request.keywords.join(', ')}`);
+    promptParts.push('- Format hashtag: hilangkan spasi, gunakan huruf dan angka saja');
+    promptParts.push('- Boleh tambahkan hashtag relevan lainnya, tetapi keyword di atas WAJIB ada');
+  } else {
+    promptParts.push('#hashtag1 #hashtag2 #hashtag3');
+    promptParts.push('');
+    promptParts.push('- Gunakan 3-5 hashtag untuk Instagram atau 1-2 untuk LinkedIn');
+  }
+  promptParts.push('');
+  promptParts.push('**Format Caption:** Gunakan emoji relevan, paragraf jelas, tone sesuai style.');
   promptParts.push('');
   
   return promptParts.join('\n');

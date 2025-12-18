@@ -4,7 +4,7 @@ import { useProductKnowledgeStyle, ProductKnowledgeStyle } from '../hooks/usePro
 import { useProductKnowledgeHooks, ProductKnowledgeHook } from '../hooks/useProductKnowledgeHooks';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { LoadingDots } from '@/components/LoadingDots';
-import { BookOpen, Search, X, Plus, ChevronLeft, Palette, Edit, Trash2, Link2, Copy } from 'lucide-react';
+import { BookOpen, Search, X, Plus, ChevronLeft, Palette, Edit, Trash2, Link2, Copy, Hash } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,12 @@ import { ProductKnowledgeDetailModal } from './ProductKnowledgeDetailModal';
 import { useProductKnowledgeDetailMutations } from '../hooks/useProductKnowledgeDetail';
 import { useProductKnowledgeStyleMutations } from '../hooks/useProductKnowledgeStyle';
 import { useProductKnowledgeHooksMutations } from '../hooks/useProductKnowledgeHooks';
+import { useKeywords, Keyword, useKeywordsMutations } from '../hooks/useKeywords';
 import { toast } from 'sonner';
 import { ProductKnowledgeSidebarFooter } from './ProductKnowledgeSidebarFooter';
 import { StyleModal } from './StyleModal';
 import { HooksModal } from './HooksModal';
+import { KeywordModal } from './KeywordModal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,22 +42,28 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
   const { data: productKnowledgeDetailData = [], isLoading } = useProductKnowledgeDetail();
   const { data: productKnowledgeStyleData = [], isLoading: isStylesLoading } = useProductKnowledgeStyle();
   const { data: productKnowledgeHooksData = [], isLoading: isHooksLoading } = useProductKnowledgeHooks();
+  const { data: keywordsData = [], isLoading: isKeywordsLoading } = useKeywords();
   const [searchTerm, setSearchTerm] = useState('');
   const [styleSearchTerm, setStyleSearchTerm] = useState('');
   const [hooksSearchTerm, setHooksSearchTerm] = useState('');
+  const [keywordsSearchTerm, setKeywordsSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
   const [isHooksModalOpen, setIsHooksModalOpen] = useState(false);
+  const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
   const [editingDetail, setEditingDetail] = useState<ProductKnowledgeDetail | null>(null);
   const [editingStyle, setEditingStyle] = useState<ProductKnowledgeStyle | null>(null);
   const [editingHook, setEditingHook] = useState<ProductKnowledgeHook | null>(null);
+  const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
   const [deletingDetailId, setDeletingDetailId] = useState<string | null>(null);
   const [deletingStyleId, setDeletingStyleId] = useState<string | null>(null);
   const [deletingHookId, setDeletingHookId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'knowledge' | 'style' | 'hooks'>('knowledge');
+  const [deletingKeywordId, setDeletingKeywordId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'knowledge' | 'style' | 'hooks' | 'keywords'>('knowledge');
   const [selectedDetail, setSelectedDetail] = useState<ProductKnowledgeDetail | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<ProductKnowledgeStyle | null>(null);
   const [selectedHook, setSelectedHook] = useState<ProductKnowledgeHook | null>(null);
+  const [selectedKeyword, setSelectedKeyword] = useState<Keyword | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingDeleteDetailId, setPendingDeleteDetailId] = useState<string | null>(null);
   const {
@@ -82,6 +90,16 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
     isUpdating: isUpdatingHook,
     isDeleting: isDeletingHook,
   } = useProductKnowledgeHooksMutations();
+  const {
+    createKeyword,
+    createMultipleKeywords,
+    updateKeyword,
+    deleteKeyword,
+    isCreating: isCreatingKeyword,
+    isCreatingMultiple: isCreatingMultipleKeywords,
+    isUpdating: isUpdatingKeyword,
+    isDeleting: isDeletingKeyword,
+  } = useKeywordsMutations();
 
   // Filter data based on search term
   const filteredData = useMemo(() => {
@@ -123,6 +141,19 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
       );
     });
   }, [productKnowledgeHooksData, hooksSearchTerm]);
+
+  // Filter keywords data based on search term
+  const filteredKeywordsData = useMemo(() => {
+    if (!keywordsSearchTerm) return keywordsData;
+
+    const searchLower = keywordsSearchTerm.toLowerCase();
+    return keywordsData.filter((item) => {
+      return (
+        item.keyword?.toLowerCase().includes(searchLower) ||
+        item.service_name?.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [keywordsData, keywordsSearchTerm]);
 
   // Get Product/Service name
   const getProductServiceName = (item: ProductKnowledgeDetail): string => {
@@ -475,6 +506,127 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
     setSelectedHook(null);
   };
 
+  const handleClearKeywordsSearch = () => {
+    setKeywordsSearchTerm('');
+  };
+
+  const handleSaveKeyword = async (data: { service_id: string; keyword: string }) => {
+    try {
+      if (editingKeyword) {
+        // Update existing keyword
+        await updateKeyword({
+          id: editingKeyword.id,
+          input: {
+            service_id: data.service_id,
+            keyword: data.keyword,
+          },
+        });
+        toast.success(t('productKnowledge.keywords.toast.updateSuccess', 'Keyword updated successfully'));
+        setEditingKeyword(null);
+        setIsKeywordModalOpen(false);
+      } else {
+        // Create new keyword
+        await createKeyword(data);
+        toast.success(t('productKnowledge.keywords.toast.createSuccess', 'Keyword created successfully'));
+        setIsKeywordModalOpen(false);
+      }
+    } catch (error: any) {
+      console.error('Error saving keyword:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      toast.error(
+        editingKeyword
+          ? t('productKnowledge.keywords.toast.updateError', 'Error updating keyword') + ': ' + errorMessage
+          : t('productKnowledge.keywords.toast.createError', 'Error creating keyword') + ': ' + errorMessage
+      );
+      throw error;
+    }
+  };
+
+  const handleSaveAndAddAnotherKeyword = async (data: { service_id: string; keyword: string }) => {
+    try {
+      // Only allow save and add another for new keywords (not edit mode)
+      if (editingKeyword) {
+        // If editing, just save normally
+        await handleSaveKeyword(data);
+        return;
+      }
+
+      // Create new keyword and keep modal open for next entry
+      await createKeyword(data);
+      toast.success(t('productKnowledge.keywords.toast.createSuccess', 'Keyword created successfully'));
+      // Don't close modal - keep it open for next entry
+      // Form will be reset by KeywordModal's useEffect
+    } catch (error: any) {
+      console.error('Error saving keyword:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      toast.error(t('productKnowledge.keywords.toast.createError', 'Error creating keyword') + ': ' + errorMessage);
+      throw error;
+    }
+  };
+
+  const handleSaveMultipleKeywords = async (keywordsList: { service_id: string; keyword: string }[]) => {
+    try {
+      if (keywordsList.length === 0) {
+        throw new Error('No keywords to save');
+      }
+
+      await createMultipleKeywords(keywordsList);
+      toast.success(
+        t('productKnowledge.keywords.toast.createMultipleSuccess', '{count} keywords created successfully', {
+          count: keywordsList.length,
+        })
+      );
+      setIsKeywordModalOpen(false);
+    } catch (error: any) {
+      console.error('Error saving keywords:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      toast.error(
+        t('productKnowledge.keywords.toast.createMultipleError', 'Error creating keywords') + ': ' + errorMessage
+      );
+      throw error;
+    }
+  };
+
+  const handleEditKeyword = (keyword: Keyword, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Set editing keyword and open modal for edit mode
+    setEditingKeyword(keyword);
+    setIsKeywordModalOpen(true);
+  };
+
+  const handleDeleteKeyword = async (keywordId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!confirm(t('productKnowledge.keywords.deleteConfirm', 'Are you sure you want to delete this keyword?'))) {
+      return;
+    }
+
+    try {
+      setDeletingKeywordId(keywordId);
+      await deleteKeyword(keywordId);
+      toast.success(t('productKnowledge.keywords.toast.deleteSuccess', 'Keyword deleted successfully'));
+      if (selectedKeyword?.id === keywordId) {
+        setSelectedKeyword(null);
+      }
+    } catch (error) {
+      console.error('Error deleting keyword:', error);
+      toast.error(t('productKnowledge.keywords.toast.deleteError', 'Error deleting keyword'));
+    } finally {
+      setDeletingKeywordId(null);
+    }
+  };
+
+  const handleKeywordClick = (id: string) => {
+    const keyword = keywordsData.find((item) => item.id === id);
+    if (keyword) {
+      setSelectedKeyword(keyword);
+    }
+  };
+
+  const handleBackToKeywordsList = () => {
+    setSelectedKeyword(null);
+  };
+
   return (
     <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm max-h-[calc(100vh-135px)]">
       {/* Header */}
@@ -487,6 +639,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               setSelectedDetail(null);
               setSelectedStyle(null);
               setSelectedHook(null);
+              setSelectedKeyword(null);
             }}
             className={cn(
               'flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2',
@@ -503,6 +656,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               setSelectedDetail(null);
               setSelectedStyle(null);
               setSelectedHook(null);
+              setSelectedKeyword(null);
             }}
             className={cn(
               'flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2',
@@ -519,6 +673,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               setSelectedDetail(null);
               setSelectedStyle(null);
               setSelectedHook(null);
+              setSelectedKeyword(null);
             }}
             className={cn(
               'flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2',
@@ -528,6 +683,23 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
             )}
           >
             {t('productKnowledge.sidebar.tabs.hooks', 'Hooks')}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('keywords');
+              setSelectedDetail(null);
+              setSelectedStyle(null);
+              setSelectedHook(null);
+              setSelectedKeyword(null);
+            }}
+            className={cn(
+              'flex-1 px-4 py-2 text-sm font-medium transition-colors border-b-2',
+              activeTab === 'keywords'
+                ? 'text-blue-600 border-blue-600 bg-blue-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-transparent'
+            )}
+          >
+            {t('productKnowledge.sidebar.tabs.keywords', 'Keyword')}
           </button>
         </div>
 
@@ -559,12 +731,22 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               >
                 <ChevronLeft className="h-5 w-5 text-gray-700" />
               </button>
+            ) : activeTab === 'keywords' && selectedKeyword ? (
+              <button
+                onClick={handleBackToKeywordsList}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title={t('productKnowledge.keywords.sidebar.backToList', 'Back to list')}
+              >
+                <ChevronLeft className="h-5 w-5 text-gray-700" />
+              </button>
             ) : activeTab === 'knowledge' ? (
               <BookOpen className="h-5 w-5 text-gray-700" />
             ) : activeTab === 'style' ? (
               <Palette className="h-5 w-5 text-gray-700" />
-            ) : (
+            ) : activeTab === 'hooks' ? (
               <Link2 className="h-5 w-5 text-gray-700" />
+            ) : (
+              <Hash className="h-5 w-5 text-gray-700" />
             )}
               <h2 className="text-lg font-semibold text-gray-800">
                 {activeTab === 'knowledge'
@@ -575,9 +757,13 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
                     ? selectedStyle
                       ? t('productKnowledge.style.sidebar.detailTitle', 'Style Detail')
                       : t('productKnowledge.sidebar.styleTitle', 'Style')
-                    : selectedHook
-                      ? t('productKnowledge.hooks.sidebar.detailTitle', 'Hook Detail')
-                      : t('productKnowledge.sidebar.hooksTitle', 'Hooks')}
+                    : activeTab === 'hooks'
+                      ? selectedHook
+                        ? t('productKnowledge.hooks.sidebar.detailTitle', 'Hook Detail')
+                        : t('productKnowledge.sidebar.hooksTitle', 'Hooks')
+                      : selectedKeyword
+                        ? t('productKnowledge.keywords.sidebar.detailTitle', 'Keyword Detail')
+                        : t('productKnowledge.sidebar.keywordsTitle', 'Keyword')}
               </h2>
             </div>
             {activeTab === 'knowledge' && !selectedDetail && (
@@ -617,6 +803,19 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               >
                 <Plus className="h-4 w-4 mr-1" />
                 {t('productKnowledge.hooks.sidebar.addButton', 'Add')}
+              </Button>
+            )}
+            {activeTab === 'keywords' && !selectedKeyword && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingKeyword(null);
+                  setIsKeywordModalOpen(true);
+                }}
+                className="h-8 px-3"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {t('productKnowledge.keywords.sidebar.addButton', 'Add Keyword')}
               </Button>
             )}
           </div>
@@ -707,12 +906,217 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
               </div>
             </>
           )}
+
+          {/* Search Input - Only show in keywords tab when not viewing detail */}
+          {activeTab === 'keywords' && !selectedKeyword && (
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder={t('productKnowledge.keywords.sidebar.searchPlaceholder', 'Search keywords...')}
+                  value={keywordsSearchTerm}
+                  onChange={(e) => setKeywordsSearchTerm(e.target.value)}
+                  className="pl-9 pr-9 h-9 text-sm"
+                />
+                {keywordsSearchTerm && (
+                  <button
+                    onClick={handleClearKeywordsSearch}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Count */}
+              <div className="mt-2 text-xs text-gray-500">
+                {filteredKeywordsData.length} {t('productKnowledge.keywords.sidebar.items', 'keywords')}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
-        {activeTab === 'hooks' ? (
+        {activeTab === 'keywords' ? (
+          selectedKeyword ? (
+          /* Keyword Detail View */
+          <div className="p-4 space-y-4 pb-4">
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pb-2 border-b border-gray-200">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingKeyword(selectedKeyword);
+                  setIsKeywordModalOpen(true);
+                }}
+                disabled={isUpdatingKeyword || isDeletingKeyword}
+                className="h-8 px-3"
+              >
+                <Edit className="h-3.5 w-3.5 mr-1.5" />
+                {t('productKnowledge.keywords.edit', 'Edit')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  if (!confirm(t('productKnowledge.keywords.deleteConfirm', 'Are you sure you want to delete this keyword?'))) {
+                    return;
+                  }
+
+                  try {
+                    setDeletingKeywordId(selectedKeyword.id);
+                    await deleteKeyword(selectedKeyword.id);
+                    toast.success(
+                      t('productKnowledge.keywords.toast.deleteSuccess', 'Keyword deleted successfully')
+                    );
+                    setSelectedKeyword(null);
+                  } catch (error) {
+                    console.error('Error deleting keyword:', error);
+                    toast.error(t('productKnowledge.keywords.toast.deleteError', 'Error deleting keyword'));
+                  } finally {
+                    setDeletingKeywordId(null);
+                  }
+                }}
+                disabled={isUpdatingKeyword || isDeletingKeyword || deletingKeywordId === selectedKeyword.id}
+                className="h-8 px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                {t('productKnowledge.keywords.delete', 'Delete')}
+              </Button>
+            </div>
+
+            {/* Keyword */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-800">
+                {t('productKnowledge.keywords.detail.keyword', 'Keyword')}
+              </h3>
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-900">{selectedKeyword.keyword}</p>
+              </div>
+            </div>
+
+            {/* Service */}
+            {selectedKeyword.service_name && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  {t('productKnowledge.keywords.detail.service', 'Service')}
+                </h3>
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-sm text-gray-700">{selectedKeyword.service_name}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Metadata */}
+            <div className="pt-2 border-t border-gray-200">
+              <div className="text-xs text-gray-500 space-y-1">
+                {selectedKeyword.created_at && (
+                  <div>
+                    {t('productKnowledge.keywords.detail.createdAt', 'Created')}:{' '}
+                    {new Date(selectedKeyword.created_at).toLocaleDateString('id-ID', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                )}
+                {selectedKeyword.updated_at && selectedKeyword.updated_at !== selectedKeyword.created_at && (
+                  <div>
+                    {t('productKnowledge.keywords.detail.updatedAt', 'Updated')}:{' '}
+                    {new Date(selectedKeyword.updated_at).toLocaleDateString('id-ID', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Keywords List View */
+          <>
+            {isKeywordsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <LoadingDots />
+              </div>
+            ) : filteredKeywordsData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                <Hash className="h-12 w-12 text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">
+                  {keywordsSearchTerm
+                    ? t('productKnowledge.keywords.sidebar.noResults', 'No results found')
+                    : t('productKnowledge.keywords.sidebar.noData', 'No keywords available')}
+                </p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-1">
+                {filteredKeywordsData.map((keyword) => (
+                  <div
+                    key={keyword.id}
+                    onClick={() => handleKeywordClick(keyword.id)}
+                    className={cn(
+                      'p-3 rounded-lg cursor-pointer transition-colors border',
+                      selectedKeyword?.id === keyword.id
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3
+                          className={cn(
+                            'font-medium text-sm line-clamp-2',
+                            selectedKeyword?.id === keyword.id ? 'text-blue-900' : 'text-gray-900'
+                          )}
+                        >
+                          {keyword.keyword}
+                        </h3>
+                        {keyword.service_name && (
+                          <p className="text-xs text-gray-500 line-clamp-1 mt-1">{keyword.service_name}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={(e) => handleEditKeyword(keyword, e)}
+                          className={cn(
+                            'p-1.5 rounded hover:bg-gray-200 transition-colors',
+                            selectedKeyword?.id === keyword.id ? 'text-blue-700' : 'text-gray-600'
+                          )}
+                          title={t('productKnowledge.keywords.edit', 'Edit keyword')}
+                          disabled={isUpdatingKeyword || isDeletingKeyword}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteKeyword(keyword.id, e)}
+                          className={cn(
+                            'p-1.5 rounded hover:bg-red-100 transition-colors',
+                            selectedKeyword?.id === keyword.id ? 'text-red-700' : 'text-red-600',
+                            deletingKeywordId === keyword.id && 'opacity-50 cursor-not-allowed'
+                          )}
+                          title={t('productKnowledge.keywords.delete', 'Delete keyword')}
+                          disabled={isUpdatingKeyword || isDeletingKeyword || deletingKeywordId === keyword.id}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )
+        ) : activeTab === 'hooks' ? (
           selectedHook ? (
           /* Hook Detail View */
           <div className="p-4 space-y-4 pb-4">
@@ -1310,7 +1714,9 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
             ? filteredData.length
             : activeTab === 'style'
               ? filteredStyleData.length
-              : filteredHooksData.length
+              : activeTab === 'hooks'
+                ? filteredHooksData.length
+                : filteredKeywordsData.length
         }
       />
 
@@ -1350,6 +1756,23 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
         onSave={handleSaveHook}
         isLoading={isCreatingHook || isUpdatingHook}
         initialData={editingHook}
+      />
+      <KeywordModal
+        open={isKeywordModalOpen}
+        onOpenChange={(open) => {
+          setIsKeywordModalOpen(open);
+          if (!open) {
+            setEditingKeyword(null);
+          }
+        }}
+        onSave={handleSaveKeyword}
+        onSaveMultiple={handleSaveMultipleKeywords}
+        onSaveAndAddAnother={handleSaveAndAddAnotherKeyword}
+        onSwitchToAddMode={() => {
+          setEditingKeyword(null);
+        }}
+        isLoading={isCreatingKeyword || isCreatingMultipleKeywords || isUpdatingKeyword}
+        initialData={editingKeyword}
       />
 
       {/* Delete Confirmation Dialog */}

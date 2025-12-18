@@ -146,40 +146,69 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setError(null);
       
       // Run profile and email verification queries in parallel with timeout
-      const QUERY_TIMEOUT = 45000; // 45 seconds timeout (higher than Supabase client 30s to allow retries)
+      const QUERY_TIMEOUT = 10000; // 10 seconds timeout - reduced for faster failure detection
       
+      // Optimize queries - use single() instead of maybeSingle() for faster response
       const profilePromise = supabase
         .from('profiles')
         .select('user_id, full_name, email, active_organization_id')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .single();
         
-      const verificationPromise = supabase
-        .from('email_verification_tokens')
-        .select('email_verified')
-        .eq('user_id', user.id)
-        .order('used_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Email verification can be optional - wrap in promise to handle errors gracefully
+      const verificationPromise = (async () => {
+        try {
+          return await supabase
+            .from('email_verification_tokens')
+            .select('email_verified')
+            .eq('user_id', user.id)
+            .order('used_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        } catch (error) {
+          // Don't fail if verification query fails - return null data
+          return { data: null, error: null };
+        }
+      })();
       
-      // Race queries against timeout - timeout must be higher than Supabase client timeout (30s) to allow retries
+      // Race queries against timeout - handle timeout gracefully
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('User data query timeout')), QUERY_TIMEOUT)
       );
       
-      const [
-        { data: profileData, error: profileError },
-        { data: verificationToken, error: verificationError }
-      ] = await Promise.race([
-        Promise.all([profilePromise, verificationPromise]),
-        timeoutPromise
-      ]) as any;
+      let profileData: any = null;
+      let profileError: any = null;
+      let verificationToken: any = null;
+      
+      try {
+        // Use Promise.allSettled to handle partial failures, then race against timeout
+        const queriesPromise = Promise.allSettled([profilePromise, verificationPromise]);
+        
+        const results = await Promise.race([queriesPromise, timeoutPromise]) as PromiseSettledResult<any>[];
+        
+        // Process profile result
+        if (results[0]?.status === 'fulfilled') {
+          profileData = results[0].value.data;
+          profileError = results[0].value.error;
+        } else if (results[0]?.status === 'rejected') {
+          profileError = results[0].reason;
+        }
+        
+        // Process verification result (optional)
+        if (results[1]?.status === 'fulfilled') {
+          verificationToken = results[1].value.data;
+        }
+      } catch (timeoutError: any) {
+        if (timeoutError.message === 'User data query timeout') {
+          throw timeoutError;
+        }
+        profileError = timeoutError;
+      }
       
       if (import.meta.env.DEV) {
         logger.userData('CentralizedUserDataContext: Email verification check:', {
           userId: user.id,
           verificationToken,
-          verificationError,
           verificationStatus: verificationToken?.email_verified
         });
       }
@@ -262,14 +291,15 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         );
         
         try {
-          const [
-            { data: employeeData },
-            { data: roleData },
-            { data: orgData }
-          ] = await Promise.race([
-            Promise.all([employeePromise, rolePromise, organizationPromise]),
+          // Use Promise.allSettled to handle partial failures gracefully
+          const results = await Promise.race([
+            Promise.allSettled([employeePromise, rolePromise, organizationPromise]),
             orgDataTimeoutPromise
-          ]) as any;
+          ]) as PromiseSettledResult<any>[];
+          
+          const employeeData = results[0]?.status === 'fulfilled' ? results[0].value.data : null;
+          const roleData = results[1]?.status === 'fulfilled' ? results[1].value.data : null;
+          const orgData = results[2]?.status === 'fulfilled' ? results[2].value.data : null;
 
           setEmployee(employeeData);
           setUserRole(roleData?.role || null);

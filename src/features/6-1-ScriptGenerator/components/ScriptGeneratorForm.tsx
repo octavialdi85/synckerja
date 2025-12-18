@@ -11,12 +11,25 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/features/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/features/ui/command';
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/features/ui/accordion';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, X, ChevronDown, Check } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -24,6 +37,8 @@ import { ScriptGeneratorRequest } from '../services/scriptGeneratorService';
 import { useProductKnowledge } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledge';
 import { useProductKnowledgeStyle } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeStyle';
 import { useProductKnowledgeHooks } from '@/features/6-1-ProductKnowledge/hooks/useProductKnowledgeHooks';
+import { useKeywords } from '@/features/6-1-ProductKnowledge/hooks/useKeywords';
+import { toast } from 'sonner';
 
 interface ScriptGeneratorFormProps {
   onGenerate: (data: ScriptGeneratorRequest) => Promise<void>;
@@ -134,6 +149,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     gender: '',
     age: '',
     buying_roles: '',
+    keywords: [],
     keinginan: '',
     kebutuhan: '',
     hidden_needs: '',
@@ -163,6 +179,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const [selectedStyleName, setSelectedStyleName] = useState<string>('');
   const [selectedJudulTemplate, setSelectedJudulTemplate] = useState<string>('');
   const [isSellingApproachLocked, setIsSellingApproachLocked] = useState<boolean>(false);
+  const [errors, setErrors] = useState<{ target_market?: string; keywords?: string }>({});
+  const [keywordSearchOpen, setKeywordSearchOpen] = useState<boolean>(false);
+  const [keywordSearchQuery, setKeywordSearchQuery] = useState<string>('');
 
   // Master data
   const [contentTypes, setContentTypes] = useState<any[]>([]);
@@ -179,6 +198,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   
   // Fetch product knowledge hooks
   const { data: productKnowledgeHooks = [] } = useProductKnowledgeHooks();
+  
+  // Fetch keywords
+  const { data: keywords = [] } = useKeywords();
   
   // Filter product knowledge that has wants and needs
   const productKnowledgeWithWantsNeeds = productKnowledgeData.filter(
@@ -460,6 +482,26 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation: Customer Persona and Keywords are required
+    const newErrors: { target_market?: string; keywords?: string } = {};
+    
+    if (!formData.target_market || formData.target_market.trim() === '') {
+      newErrors.target_market = 'Customer Persona wajib diisi';
+    }
+    
+    if (!formData.keywords || formData.keywords.length === 0) {
+      newErrors.keywords = 'Keyword wajib diisi (minimal 1 keyword)';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error('Mohon lengkapi field yang wajib diisi');
+      return;
+    }
+    
+    // Clear errors if validation passes
+    setErrors({});
     await onGenerate(formData);
   };
 
@@ -477,6 +519,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       gender: '',
       age: '',
       buying_roles: '',
+      keywords: [],
       keinginan: '',
       kebutuhan: '',
       hidden_needs: '',
@@ -505,6 +548,69 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     setSelectedStyleName('');
     setSelectedJudulTemplate('');
     setIsSellingApproachLocked(false);
+    setErrors({});
+  };
+
+  // Filter keywords by selected service
+  const filteredKeywords = useMemo(() => {
+    if (!selectedServiceId) return [];
+    return keywords.filter(k => k.service_id === selectedServiceId);
+  }, [keywords, selectedServiceId]);
+
+  // Filter keywords by search query
+  const searchableKeywords = useMemo(() => {
+    const availableKeywords = filteredKeywords.filter(
+      (kw) => !formData.keywords?.includes(kw.keyword)
+    );
+    
+    if (!keywordSearchQuery.trim()) {
+      return availableKeywords;
+    }
+    
+    const query = keywordSearchQuery.toLowerCase();
+    return availableKeywords.filter((kw) =>
+      kw.keyword.toLowerCase().includes(query)
+    );
+  }, [filteredKeywords, formData.keywords, keywordSearchQuery]);
+
+  // Reset search query when popover closes
+  useEffect(() => {
+    if (!keywordSearchOpen) {
+      setKeywordSearchQuery('');
+    }
+  }, [keywordSearchOpen]);
+
+  const handleAddKeyword = (keywordText: string) => {
+    if (formData.keywords && formData.keywords.length >= 3) {
+      toast.error('Maksimal 3 keyword');
+      return;
+    }
+    if (formData.keywords?.includes(keywordText)) {
+      toast.error('Keyword sudah ada');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      keywords: [...(prev.keywords || []), keywordText]
+    }));
+    // Clear error when keyword is added
+    if (errors.keywords) {
+      setErrors(prev => ({ ...prev, keywords: undefined }));
+    }
+  };
+
+  const handleRemoveKeyword = (keywordToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      keywords: prev.keywords?.filter(k => k !== keywordToRemove) || []
+    }));
+    // Validate after removal
+    const remainingKeywords = formData.keywords?.filter(k => k !== keywordToRemove) || [];
+    if (remainingKeywords.length === 0 && errors.keywords) {
+      setErrors(prev => ({ ...prev, keywords: 'Keyword wajib diisi (minimal 1 keyword)' }));
+    } else if (remainingKeywords.length > 0 && errors.keywords) {
+      setErrors(prev => ({ ...prev, keywords: undefined }));
+    }
   };
 
   // Determine field type based on content type
@@ -613,6 +719,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     handleInputChange('service_name', selectedService?.name || '');
                     handleInputChange('sub_service_name', ''); // Reset sub service
                     handleInputChange('target_market', ''); // Reset Customer Persona when service changes
+                    handleInputChange('keywords', []); // Reset keywords when service changes
                   }}
                 >
                   <SelectTrigger>
@@ -698,9 +805,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               <div className="space-y-2">
                 <Label htmlFor="selling_approach">
                   Pendekatan Penjualan
-                  {!isSellingApproachLocked && formData.content_pillar && (
-                    <span className="ml-2 text-xs text-gray-500">(Hard Selling hanya tersedia untuk pillar Promo)</span>
-                  )}
                 </Label>
                 <Select
                   value={formData.selling_approach || ""}
@@ -743,11 +847,17 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               {/* Customer Persona */}
               <div className="space-y-2">
-                <Label htmlFor="target_market">Customer Persona</Label>
+                <Label htmlFor="target_market">
+                  Customer Persona <span className="text-red-500">*</span>
+                </Label>
                 <Select
                   value={formData.target_market || ""}
                   onValueChange={(value) => {
                     handleInputChange('target_market', value);
+                    // Clear error when value changes
+                    if (errors.target_market) {
+                      setErrors(prev => ({ ...prev, target_market: undefined }));
+                    }
                     
                     // Find product knowledge items with matching target_audience AND service_id
                     const matchingPKs = productKnowledgeData.filter((pk) => {
@@ -878,7 +988,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   }}
                   disabled={!selectedServiceId}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={errors.target_market ? 'border-red-500' : ''}>
                     <SelectValue placeholder={selectedServiceId ? "Pilih Customer Persona" : "Pilih Service terlebih dahulu"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -899,6 +1009,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     )}
                   </SelectContent>
                 </Select>
+                {errors.target_market && (
+                  <p className="text-sm text-red-500 mt-1">{errors.target_market}</p>
+                )}
               </div>
 
               {/* Gender */}
@@ -939,6 +1052,104 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   onChange={(e) => handleInputChange('buying_roles', e.target.value)}
                   placeholder="Contoh: Decision Maker, Influencer"
                 />
+              </div>
+
+              {/* Keywords - Full width */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="keywords">
+                  Keyword (Maksimal 3) <span className="text-red-500">*</span>
+                </Label>
+                <Popover open={keywordSearchOpen} onOpenChange={setKeywordSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="keywords"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={keywordSearchOpen}
+                      className={`w-full justify-between ${errors.keywords ? 'border-red-500' : ''}`}
+                      disabled={!selectedServiceId || (formData.keywords && formData.keywords.length >= 3)}
+                    >
+                      {!selectedServiceId
+                        ? "Pilih Service terlebih dahulu"
+                        : formData.keywords && formData.keywords.length >= 3
+                        ? "Maksimal 3 keyword sudah tercapai"
+                        : "Pilih Keyword"}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Cari keyword..."
+                        value={keywordSearchQuery}
+                        onValueChange={setKeywordSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {!selectedServiceId
+                            ? "Pilih Service terlebih dahulu"
+                            : filteredKeywords.length === 0
+                            ? "Tidak ada keyword tersedia untuk Service ini"
+                            : "Keyword tidak ditemukan"}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {searchableKeywords.map((kw) => (
+                            <CommandItem
+                              key={kw.id}
+                              value={kw.keyword}
+                              onSelect={() => {
+                                handleAddKeyword(kw.keyword);
+                                setKeywordSearchQuery('');
+                                setKeywordSearchOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  formData.keywords?.includes(kw.keyword)
+                                    ? 'opacity-100'
+                                    : 'opacity-0'
+                                }`}
+                              />
+                              {kw.keyword}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {formData.keywords && formData.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.keywords.map((keyword, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        <span>{keyword}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKeyword(keyword)}
+                          className="ml-1 hover:bg-blue-200 rounded-full p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {formData.keywords && formData.keywords.length >= 3 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maksimal 3 keyword sudah tercapai
+                  </p>
+                )}
+                {!selectedServiceId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Pilih Service terlebih dahulu untuk memilih keyword
+                  </p>
+                )}
+                {errors.keywords && (
+                  <p className="text-sm text-red-500 mt-1">{errors.keywords}</p>
+                )}
               </div>
             </div>
           </AccordionContent>
