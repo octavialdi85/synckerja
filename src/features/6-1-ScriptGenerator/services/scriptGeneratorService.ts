@@ -32,6 +32,7 @@ export interface ScriptGeneratorRequest {
   judul?: string; // Title template selected from dropdown
   judul_custom?: string; // Custom title if user wants to edit the template
   selling_approach?: 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling'; // Selling approach: no product, soft selling, or hard selling
+  cta_type?: 'use_solution' | 'use_comment'; // CTA type: use solution or use comment for engagement and leads
 }
 
 export interface ScriptGeneratorResponse {
@@ -84,7 +85,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Opening - Simple and clear
   promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi detail di bawah ini.');
-  promptParts.push('=================================================================================================================================');
+  promptParts.push('================================================================');
   promptParts.push('');
   promptParts.push('PENTING:');
   promptParts.push('1. Baca SEMUA informasi dengan teliti sebelum membuat script');
@@ -93,10 +94,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('');
   promptParts.push('INFORMASI DETAIL UNTUK SCRIPT');
   promptParts.push('==============================');
-  promptParts.push('');
-  
   // Content Type & Format
-  promptParts.push('## Format Konten');
+  promptParts.push('## Format Konten ##');
   if (request.content_type) {
     promptParts.push(`- **Jenis Konten:** ${request.content_type}`);
   }
@@ -114,7 +113,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Service Information
   if (request.service_name || request.sub_service_name) {
-    promptParts.push('## Informasi Produk/Layanan');
+    promptParts.push('## Informasi Produk/Layanan ##');
     if (request.service_name) {
       promptParts.push(`- **Service:** ${request.service_name}`);
     }
@@ -126,7 +125,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Content Pillar
   if (request.content_pillar) {
-    promptParts.push(`## Content Pillar\n- **Pillar:** ${request.content_pillar}\n`);
+    promptParts.push(`## Content Pillar ##\n- **Pillar:** ${request.content_pillar}\n`);
     
     // Add specific guidance based on Content Pillar type
     const pillarLower = request.content_pillar.toLowerCase();
@@ -158,7 +157,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Target Audience
   if (request.target_market || request.gender || request.age || request.buying_roles) {
-    promptParts.push('## Target Audience');
+    promptParts.push('## Target Audience ##');
     if (request.target_market) {
       promptParts.push(`- **Customer Persona:** ${request.target_market}`);
     }
@@ -172,13 +171,13 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Buying Roles:** ${request.buying_roles}`);
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Customer Insights
   if (request.keinginan || request.kebutuhan || request.hidden_needs) {
-    promptParts.push('## Insights Pelanggan');
-    promptParts.push('=====================');
-    promptParts.push('');
+    promptParts.push('## Insights Pelanggan ##');
+    promptParts.push('========================');
     if (request.keinginan) {
       promptParts.push(`- **Keinginan (Wants):** ${request.keinginan}`);
     }
@@ -189,56 +188,60 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Hidden Needs:** ${request.hidden_needs}`);
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Problems
   if (request.problem) {
-    promptParts.push('## Masalah yang Dihadapi');
-    promptParts.push('=========================');
-    promptParts.push('');
+    promptParts.push('## Masalah yang Dihadapi ##');
+    promptParts.push('===========================');
     promptParts.push(`${request.problem}`);
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Impact
   if (request.impact) {
-    promptParts.push('## Dampak dari Masalah');
-    promptParts.push('=======================');
-    promptParts.push('');
+    promptParts.push('## Dampak dari Masalah ##');
+    promptParts.push('=========================');
     promptParts.push(`${request.impact}`);
+    promptParts.push('');
     promptParts.push('');
   }
   
   // False Belief & Related Fields
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
-    promptParts.push('## Keyakinan Salah & Hambatan Pelanggan');
-    promptParts.push('========================================');
-    promptParts.push('');
+    promptParts.push('## Keyakinan yang Salah & Hambatan Pelanggan ##');
+    promptParts.push('===============================================');
     if (request.false_belief) {
       promptParts.push(`- **False Belief (Keyakinan Salah):** ${request.false_belief}`);
       promptParts.push('  - Ini adalah keyakinan atau asumsi salah yang dimiliki pelanggan tentang produk/layanan atau solusi');
+      promptParts.push('');
     }
     if (request.false_belief_impact) {
       promptParts.push(`- **Dampak False Belief:** ${request.false_belief_impact}`);
       promptParts.push('  - Ini menjelaskan bagaimana keyakinan salah tersebut mempengaruhi perilaku atau keputusan pelanggan');
+      promptParts.push('');
     }
     if (request.what_makes_them_stop) {
       promptParts.push(`- **What Makes Them Stop (Apa yang Membuat Mereka Berhenti):** ${request.what_makes_them_stop}`);
       promptParts.push('  - Ini menjelaskan faktor-faktor yang membuat pelanggan ragu-ragu, berhenti, atau tidak mengambil tindakan');
     }
     promptParts.push('');
+    promptParts.push('');
     promptParts.push('**⚠️⚠️⚠️ KRITIS - KONSEP UTAMA False Belief:**');
+    promptParts.push('===============================================');
     promptParts.push('Dampak dari False Belief hampir selalu memperparah Impact awal. Keyakinan salah menciptakan blind spot → tidak ada pencegahan → masalah lebih besar, lebih mahal, lebih merusak reputasi.');
     promptParts.push('');
     promptParts.push('**HARUS DITUNJUKKAN:** False Belief → Blind Spot → Masalah Lebih Besar. Gunakan bahasa sederhana, relatable, dan tunjukkan koneksi jelas antara False Belief dengan Impact yang diperparah.');
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Feature & Competitive Advantage
   if (request.feature_name || request.feature_description || request.competitive_advantage) {
-    promptParts.push('## Fitur & Keunggulan Kompetitif');
+    promptParts.push('## Fitur & Keunggulan Kompetitif ##');
     promptParts.push('=================================');
-    promptParts.push('');
     if (request.feature_name) {
       promptParts.push(`- **Feature (Fitur):** ${request.feature_name}`);
       promptParts.push('  - Ini adalah nama fitur utama dari produk/layanan');
@@ -252,21 +255,22 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('  - Ini menjelaskan keunggulan produk/layanan dibandingkan dengan kompetitor');
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Solution
   if (request.solution) {
-    promptParts.push(`## Solusi`);
-    promptParts.push('=========');
+    promptParts.push(`## Solusi ##`);
+    promptParts.push('============');
     promptParts.push(`${request.solution}`);
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Selling Approach
   if (request.selling_approach) {
-    promptParts.push('## Pendekatan Penjualan');
-    promptParts.push('===================');
-    promptParts.push('');
+    promptParts.push('## Pendekatan Penjualan ##');
+    promptParts.push('==========================');
     if (request.selling_approach === 'Tanpa Produk') {
       promptParts.push('- **Pendekatan:** Tanpa Produk - Fokus edukasi/informasi umum, TIDAK menyebut produk/layanan spesifik. Berikan insight/tips yang bermanfaat, gunakan solusi umum/konsep jika perlu.');
     } else if (request.selling_approach === 'Soft Selling') {
@@ -275,13 +279,13 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('- **Pendekatan:** Hard Selling - 100% fokus produk, fitur detail & konkret, value proposition jelas, jelaskan cara kerja fitur, bandingkan dengan alternatif, CTA langsung ke produk.');
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Hook Information
   if (request.hook_name || request.hook_content) {
-    promptParts.push('## Hook untuk Script');
-    promptParts.push('=====================');
-    promptParts.push('');
+    promptParts.push('## Hook untuk Script ##');
+    promptParts.push('=======================');
     if (request.hook_name) {
       promptParts.push(`- **Nama Hook:** ${request.hook_name}`);
     }
@@ -291,16 +295,16 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     if (request.hook_content) {
       promptParts.push(`- **Konten Hook:** ${request.hook_content}`);
       promptParts.push('');
-      promptParts.push('**⚠️ Hook:** Gunakan sebagai referensi, susun ulang natural (jangan copy-paste). Ringkas & impactful: 1-2 kalimat untuk video (3-5 detik) atau 1 kalimat untuk post/carousel. Adaptasi template seperti "[X] dari pada [Y]" dengan konteks spesifik. Gunakan pause 1-2 detik setelah hook untuk membangun tension.');
+      promptParts.push('- **⚠️ Hook:** Gunakan sebagai referensi, susun ulang natural (jangan copy-paste). Ringkas & impactful: 1-2 kalimat untuk video (3-5 detik) atau 1 kalimat untuk post/carousel. Adaptasi template seperti "[X] dari pada [Y]" dengan konteks spesifik. Gunakan pause 1-2 detik setelah hook untuk membangun tension.');
     }
+    promptParts.push('');
     promptParts.push('');
   }
   
   // Style & Structure
   if (request.style_instruksi || request.structure || request.style_name) {
-    promptParts.push('## Style & Struktur');
-    promptParts.push('====================');
-    promptParts.push('');
+    promptParts.push('## Style & Struktur ##');
+    promptParts.push('======================');
     if (request.style_instruksi) {
       // Remove the specific detail examples section
       let styleInstruksi = request.style_instruksi;
@@ -349,13 +353,14 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push(`- **Struktur Script:** ${request.style_name}`);
     }
     promptParts.push('');
+    promptParts.push('');
   }
   
   // Instructions for ChatGPT - More focused and concise
-  promptParts.push('## Instruksi');
-  promptParts.push('=============');
-  promptParts.push('');
+  promptParts.push('## Instruksi ##');
+  promptParts.push('===============');
   promptParts.push('Berdasarkan informasi di atas, buatkan script konten digital marketing yang:');
+  promptParts.push('');
   if (request.hook_content) {
     promptParts.push('1. Menggunakan hook yang sudah disediakan di bagian "Hook untuk Script" sebagai dasar, kemudian susun ulang dengan bahasa yang lebih natural, mudah dipahami, dan engaging untuk menarik perhatian di awal');
   } else {
@@ -380,14 +385,37 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('5. Menjelaskan benefit dan value proposition dengan jelas');
     promptParts.push('6. Memiliki call-to-action yang jelas, persuasif, dan actionable');
   }
+  // Use style_name for instruction 7 - keep it short, details already in Style & Struktur section
+  if (request.style_name) {
+    promptParts.push(`7. Menggunakan style: ${request.style_name} (lihat detail di bagian ## Style & Struktur ##)`);
+  } else if (request.style_instruksi) {
+    promptParts.push(`7. Menggunakan style sesuai instruksi di bagian ## Style & Struktur ##`);
+  }
+  // Keep structure reference short
+  if (request.structure) {
+    const instructionNumber = (request.style_name || request.style_instruksi) ? '8' : '7';
+    promptParts.push(`${instructionNumber}. Mengikuti struktur yang telah dijelaskan di bagian ## Style & Struktur ##`);
+    
+    // Add reminder for Tarik-Tahan-Tembak structure
+    const structureLower = request.structure.toLowerCase();
+    if (structureLower.includes('tarik') && structureLower.includes('tahan') && structureLower.includes('tembak')) {
+      promptParts.push('');
+      promptParts.push('**⚠️ PENTING - Penerapan Struktur "Tarik-Tahan-Tembak":**');
+      promptParts.push('- Struktur ini HARUS terasa sebagai pola narasi yang natural, bukan sekadar label');
+      promptParts.push('- Gunakan PAUSE efektif untuk membangun tension: pause 2-3 detik setelah hook, pause 1-2 detik sebelum solusi');
+      promptParts.push('- Timing pause sangat penting untuk membangun anticipation dan engagement');
+    }
+  }
+  
   promptParts.push('');
   promptParts.push('');
   promptParts.push('**⚠️ WAJIB DIPENUHI:**');
-  promptParts.push('====================');
-  promptParts.push('');
+  promptParts.push('=======================');
   promptParts.push('- Semua field yang diisi HARUS muncul dan dieksplorasi dalam script (Keinginan, Kebutuhan, Hidden Needs, Problem, Impact, False Belief, False Belief Impact, What Makes Them Stop, Feature, Feature Description, Competitive Advantage, Solution)');
   if (request.kebutuhan) {
     if (request.selling_approach === 'Tanpa Produk') {
+      promptParts.push('');
+      promptParts.push('');
       promptParts.push(`- Kebutuhan: ${request.kebutuhan} → Jelaskan bagaimana solusi umum/konsep mengatasi kebutuhan ini (tanpa menyebut produk spesifik)`);
     } else if (request.selling_approach === 'Soft Selling') {
       promptParts.push(`- Kebutuhan: ${request.kebutuhan} → Jelaskan secara soft bagaimana solusi mengatasi kebutuhan, fokus benefit (bukan detail teknis)`);
@@ -396,21 +424,33 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     }
   }
   if (request.hidden_needs) {
+    promptParts.push('');
+    promptParts.push('');
     promptParts.push('- Hidden Needs harus di jawab Dengan emosional Hook');
     promptParts.push(`  - Hidden Needs: ${request.hidden_needs}`);
   }
   if (request.false_belief || request.false_belief_impact || request.what_makes_them_stop) {
-    promptParts.push('- **⚠️ KRITIS - False Belief:**');
+    promptParts.push('');
+    promptParts.push('');
+    promptParts.push('**⚠️ KRITIS - False Belief:**');
+    promptParts.push('==============================');
     if (request.false_belief) {
       promptParts.push(`  - False Belief: ${request.false_belief} → Jelaskan dengan bahasa sederhana, tunjukkan blind spot yang berbahaya`);
     }
     if (request.false_belief_impact) {
+      promptParts.push('');
+      promptParts.push('');
       promptParts.push(`  - Dampak: ${request.false_belief_impact} → **TEKANKAN:** Ini memperparah Impact awal (lebih besar, lebih mahal, lebih merusak)`);
     }
     if (request.what_makes_them_stop) {
+      promptParts.push('');
+      promptParts.push('');
       promptParts.push(`  - What Makes Them Stop: ${request.what_makes_them_stop} → Tunjukkan bagaimana solusi mengatasi hambatan ini`);
     }
+    promptParts.push('');
+    promptParts.push('');
     promptParts.push('  - **FOKUS:** False Belief → Blind Spot → Masalah Lebih Besar (bukan hanya menambah masalah baru)');
+    promptParts.push('');
     promptParts.push('');
   }
   if (request.feature_name || request.feature_description || request.competitive_advantage) {
@@ -464,43 +504,22 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     }
   }
   promptParts.push('');
-  
-  // Use style_name for instruction 7 - keep it short, details already in Style & Struktur section
-  if (request.style_name) {
-    promptParts.push(`7. Menggunakan style: ${request.style_name} (lihat detail di bagian Style & Struktur)`);
-  } else if (request.style_instruksi) {
-    promptParts.push(`7. Menggunakan style sesuai instruksi di bagian Style & Struktur`);
-  }
-  
-  // Keep structure reference short
-  if (request.structure) {
-    const instructionNumber = (request.style_name || request.style_instruksi) ? '8' : '7';
-    promptParts.push(`${instructionNumber}. Mengikuti struktur yang telah dijelaskan di bagian Style & Struktur`);
-    
-    // Add reminder for Tarik-Tahan-Tembak structure
-    const structureLower = request.structure.toLowerCase();
-    if (structureLower.includes('tarik') && structureLower.includes('tahan') && structureLower.includes('tembak')) {
-      promptParts.push('');
-      promptParts.push('**⚠️ PENTING - Penerapan Struktur "Tarik-Tahan-Tembak":**');
-      promptParts.push('- Struktur ini HARUS terasa sebagai pola narasi yang natural, bukan sekadar label');
-      promptParts.push('- Gunakan PAUSE efektif untuk membangun tension: pause 2-3 detik setelah hook, pause 1-2 detik sebelum solusi');
-      promptParts.push('- Timing pause sangat penting untuk membangun anticipation dan engagement');
-    }
-  }
-  
   promptParts.push('');
   
   // Judul Information
   if (request.judul || request.judul_custom) {
     const judulToUse = request.judul_custom || request.judul || '';
-    promptParts.push('## Judul Script');
-    promptParts.push(`- **Template Judul:** ${judulToUse}`);
+    promptParts.push('## Judul Script ##');
+    promptParts.push('==================');
+    promptParts.push(`**Template Judul:** ${judulToUse}`);
     promptParts.push('');
     promptParts.push('**⚠️ Judul:** Gunakan template sebagai dasar, ganti [ ] dengan konten relevan. Format: [#] = angka konkret, [#%] = persentase, [#Tanda] = ikon relevan. Judul harus ringkas, menarik, relevan dengan target audience & produk/layanan.');
     promptParts.push('');
+    promptParts.push('');
   }
   
-  promptParts.push('## Format Output Script');
+  promptParts.push('## Format Output Script ##');
+  promptParts.push('==========================');
   
   // Format output berdasarkan content type
   const contentTypeLower = (request.content_type || '').toLowerCase();
@@ -508,6 +527,18 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   if (contentTypeLower === 'carousel' || contentTypeLower === 'post') {
     if (request.slide) {
       promptParts.push(`Untuk format ${request.content_type} dengan ${request.slide} slide, berikan output dalam format berikut:`);
+      promptParts.push('');
+      promptParts.push('**⚠️ PENTING - Instruksi Copywriting untuk Slide:**');
+      promptParts.push('==================================================');
+      promptParts.push('- **Ukuran Slide:** Setiap slide berukuran 1080 x 1080 piksel (format persegi/instagram square)');
+      promptParts.push('- **Copywriting Realistis:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG agar design carousel/post tidak terlalu full');
+      promptParts.push('- **Prinsip Copywriting:**');
+      promptParts.push('  • Maksimal 2-3 kalimat pendek per slide (jangan lebih dari 15-20 kata per slide)');
+      promptParts.push('  • Gunakan kalimat yang ringkas, padat, dan mudah dibaca');
+      promptParts.push('  • Hindari copy yang terlalu panjang yang akan membuat slide terlihat penuh dan sulit dibaca');
+      promptParts.push('  • Prioritaskan pesan utama yang ingin disampaikan di setiap slide');
+      promptParts.push('  • Pastikan copy proporsional dengan ruang visual yang tersedia (1080x1080)');
+      promptParts.push('  • Copy harus mudah dibaca dalam waktu singkat (3-5 detik per slide)');
       promptParts.push('');
       promptParts.push('**Gunakan garis pembatas untuk setiap section:**');
       promptParts.push('');
@@ -519,14 +550,26 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('2. **Format & Style** (format konten dan tone)');
       promptParts.push(`3. **Breakdown per Slide** (untuk setiap slide dari ${request.slide} slide, berikan:`);
       promptParts.push('   - **Visual Suggestion:** Deskripsi singkat visual/gambar yang sesuai');
-      promptParts.push('   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut');
+      promptParts.push('   - **Copy:** Teks/konten yang akan ditampilkan di slide tersebut (MAKSIMAL 2-3 kalimat pendek, realistis untuk ukuran 1080x1080)');
       promptParts.push('   - **Element tambahan:** (jika ada) seperti hashtag, CTA, dll');
       promptParts.push('');
       promptParts.push('   **Gunakan sub-separator (───) di antara setiap slide untuk memudahkan pembacaan**');
       promptParts.push('');
       promptParts.push('Pastikan setiap slide memiliki alur yang jelas dan saling terhubung.');
+      promptParts.push('');
+      promptParts.push('**⚠️ REMINDER:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG untuk ukuran slide 1080x1080!');
     } else {
       promptParts.push(`Untuk format ${request.content_type}, berikan output dalam format:`);
+      promptParts.push('');
+      promptParts.push('**⚠️ PENTING - Instruksi Copywriting untuk Post:**');
+      promptParts.push('==================================================');
+      promptParts.push('- **Ukuran Post:** Post berukuran 1080 x 1080 piksel (format persegi/instagram square)');
+      promptParts.push('- **Copywriting Realistis:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG agar design post tidak terlalu full');
+      promptParts.push('- **Prinsip Copywriting:**');
+      promptParts.push('  • Copy harus ringkas dan mudah dibaca dalam format 1080x1080');
+      promptParts.push('  • Hindari copy yang terlalu panjang yang akan membuat post terlihat penuh');
+      promptParts.push('  • Prioritaskan pesan utama yang ingin disampaikan');
+      promptParts.push('  • Copy harus proporsional dengan ruang visual yang tersedia');
       promptParts.push('');
       promptParts.push('**Gunakan garis pembatas untuk setiap section:**');
       promptParts.push('');
@@ -536,7 +579,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push('- **Judul Script**');
       }
       promptParts.push('- **Visual Suggestion** (deskripsi singkat visual)');
-      promptParts.push('- **Copy/Konten** (teks lengkap untuk konten)');
+      promptParts.push('- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang)');
+      promptParts.push('');
+      promptParts.push('**⚠️ REMINDER:** Copy harus REALISTIS dan TIDAK TERLALU PANJANG untuk ukuran post 1080x1080!');
     }
   } else if (contentTypeLower === 'reel' || contentTypeLower === 'story' || contentTypeLower === 'youtube') {
     const duration = request.duration_value ? `${request.duration_value} ${request.duration_unit || 'menit'}` : 
@@ -562,49 +607,127 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('2. **Format & Style** (format konten dan tone)');
     promptParts.push('3. **Breakdown Script dalam bentuk TABLE (HARUS tepat ' + totalSeconds + ' detik):**');
     promptParts.push('');
-    promptParts.push('**FORMAT TABLE:**');
-    promptParts.push('| Timing | VO (Voice Over) | Visual | Element Lainnya |');
-    promptParts.push('|--------|------------------|--------|-----------------|');
-    promptParts.push('| 0-3s   | [Script VO]     | [Visual detail] | [SFX/Music/Text overlay] |');
     promptParts.push('');
-    promptParts.push('**Detail kolom:**');
+    promptParts.push('## FORMAT TABLE: ##');
+    promptParts.push('===================');
+    promptParts.push('| Timing | VO (Voice Over) | Visual | Element Lainnya | Tagging |');
+    promptParts.push('|--------|-----------------|--------|-----------------|---------|');
+    promptParts.push('| 0-3s   | [Script VO]     | [Visual detail] | [SFX/Music/Text overlay] | [Tagging] |');
+    promptParts.push('');
+    promptParts.push('');
+    promptParts.push('## Detail kolom: ##');
+    promptParts.push('===================');
     promptParts.push('- **Timing:** Range waktu spesifik (contoh: "0-3s", "3-8s")');
     promptParts.push('- **VO:** Script yang diucapkan dengan timing tepat');
     promptParts.push('- **Visual:** Deskripsi SANGAT SPESIFIK - frame-by-frame, jenis visual/graphic, text overlay (font/warna/animasi), transisi, ekspresi/gesture host, background/setting');
     promptParts.push('- **Element Lainnya:** SFX/Music cues, text overlay tambahan');
+    promptParts.push('- **Tagging:** Tag detail untuk Visual yang di shoot, mempermudah pencarian clip saat editing. PERATURAN: (1) TAG harus KATA KUNCI BAHASA INDONESIA dipisahkan tanda hubung (-), (2) HANYA tag informasi yang disebutkan dalam deskripsi visual, (3) Urutan: JENIS_SHOT-GERAKAN_KAMERA-SUBJEK-AKSI-SETTING-WAKTU-SUASANA, (4) HENTIKAN jika informasi sudah habis (jangan tambahkan elemen kosong). Contoh: Close-up wajah wanita tersenyum di taman siang hari, kamera diam → "CU-diam-wanita-tersenyum-taman-siang". Medium shot pria berjalan di kantor, kamera follow → "MS-follow-pria-berjalan-kantor". Wide shot kerumunan di konser malam hari → "WS-kerumunan-konser-malam". Untuk "Setting" wajib mengisi apaakah di "Indoor" atau "Outdoor" baru di terangkan Indor nya di mana apakah studio, apakah di kamar dan lain lain, begitu juga dengan setting "Outdoor" apakah sedang di taman, di jalan');
     promptParts.push('');
-    promptParts.push('**⚠️ KRITIS - TIMING:** Total durasi SEMUA bagian HARUS tepat ' + totalSeconds + ' detik (tidak lebih tidak kurang)');
+    promptParts.push('');
+    promptParts.push('## ⚠️ KRITIS - TIMING: ## )');
+    promptParts.push('==========================');
+    promptParts.push('- Total durasi SEMUA bagian HARUS tepat ' + totalSeconds + ' detik (tidak lebih tidak kurang)');
     if (totalSeconds <= 60) {
       promptParts.push('- Untuk video pendek (≤60 detik), setiap section harus sangat ringkas dan impactful');
       promptParts.push('- Jangan membuat section terlalu panjang, prioritaskan kejelasan dan impact');
     }
-    promptParts.push('- **CTA HARUS sangat jelas, urgent, dan actionable:**');
-    promptParts.push('  - Sebutkan benefit spesifik dari CTA (contoh: "FREE ROI Calculator", "FREE 30 menit strategy session")');
-    promptParts.push('  - Tambahkan sense of urgency (contoh: "Cuma untuk 5 pertama", "Slot terbatas", "Hari ini saja")');
-    promptParts.push('  - CTA harus spesifik dan mudah diikuti (contoh: "KOMEN \'COMPARE\' sekarang!" bukan hanya "Hubungi kami")');
+    promptParts.push('');
+    promptParts.push('');
+    promptParts.push('## ⚠️ CTA HARUS sangat jelas, urgent, dan actionable: ##');
+    promptParts.push('======================================================');
+    if (request.cta_type === 'use_solution') {
+      // Validate: CTA Solution tidak boleh digunakan jika selling approach is "Tanpa Produk"
+      if (request.selling_approach === 'Tanpa Produk') {
+        promptParts.push('  - **TIPE CTA: Menggunakan Comment** (CTA Solution tidak tersedia untuk Pendekatan Tanpa Produk)');
+        promptParts.push('  - CTA harus meminta audience untuk memberikan comment/komentar');
+        promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+        promptParts.push('  - Contoh CTA comment: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan"');
+      } else if (request.solution) {
+        promptParts.push('  - **TIPE CTA: Menggunakan Solution** - CTA harus mengarahkan ke Solution yang sudah dijelaskan');
+        promptParts.push(`  - Solution yang digunakan: ${request.solution}`);
+        promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
+        promptParts.push('  - Sebutkan benefit spesifik dari Solution (contoh: "Coba Solution ini sekarang!", "Implementasikan Solution ini untuk hasil maksimal")');
+      } else {
+        promptParts.push('  - **TIPE CTA: Menggunakan Solution** - ⚠️ PERINGATAN: Field Solution belum diisi, pastikan Solution sudah diisi di accordion "Product/Service Details"');
+      }
+    } else if (request.cta_type === 'use_comment') {
+      // Validate: CTA Comment tidak boleh digunakan jika selling approach is "Hard Selling" (Soft Selling is exception)
+      if (request.selling_approach === 'Hard Selling') {
+        promptParts.push('  - **TIPE CTA: Menggunakan Solution** (CTA Comment tidak tersedia untuk Pendekatan Hard Selling)');
+        if (request.solution) {
+          promptParts.push('  - CTA harus mengarahkan ke Solution yang sudah dijelaskan');
+          promptParts.push(`  - Solution yang digunakan: ${request.solution}`);
+          promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
+        } else {
+          promptParts.push('  - ⚠️ PERINGATAN: Field Solution belum diisi, pastikan Solution sudah diisi di accordion "Product/Service Details"');
+        }
+      } else {
+        promptParts.push('  - **TIPE CTA: Menggunakan Comment untuk Engagement dan Leads**');
+        promptParts.push('  - CTA harus meminta audience untuk memberikan comment/komentar');
+        promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+        promptParts.push('  - Contoh CTA comment: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan", "Share di comment jika kamu pernah mengalami hal ini"');
+        promptParts.push('  - CTA comment harus spesifik dan mudah diikuti, hindari generic seperti "Komentar di bawah"');
+        promptParts.push('  - Tambahkan sense of urgency atau value (contoh: "KOMEN sekarang, saya akan reply semua!", "KOMEN \'YA\' jika setuju, saya akan share tips lebih lanjut")');
+      }
+    } else {
+      // Default CTA instructions if no cta_type selected
+      promptParts.push('  - Sebutkan benefit spesifik dari CTA (contoh: "FREE ROI Calculator", "FREE 30 menit strategy session")');
+      promptParts.push('  - Tambahkan sense of urgency (contoh: "Cuma untuk 5 pertama", "Slot terbatas", "Hari ini saja")');
+      promptParts.push('  - CTA harus spesifik dan mudah diikuti (contoh: "KOMEN \'COMPARE\' sekarang!" bukan hanya "Hubungi kami")');
+    }
     promptParts.push('  - Panjang CTA: untuk video ≤60 detik, maksimal 5 detik; untuk video lebih panjang, maksimal 10 detik');
     promptParts.push('- Jika perlu mengurangi durasi suatu bagian, prioritaskan untuk mempertahankan hook dan CTA yang kuat');
   } else {
     promptParts.push('Berikan output script dalam format yang jelas dan terstruktur, dengan breakdown per bagian/section.');
   }
-  
   promptParts.push('');
-  promptParts.push('**Prinsip Utama:**');
-  promptParts.push('- Gunakan bahasa natural, conversational, kalimat pendek, struktur sederhana');
+  promptParts.push('');
+  promptParts.push('## Prinsip Utama:##');
+  promptParts.push('===================');
+  promptParts.push('- Gunakan bahasa natural dan yang mudah di pahami, conversational, kalimat pendek, struktur sederhana');
+  promptParts.push('- hindari bahasa yang sulit di pahami seperti "False belief", "Blind Spot" dan lain lain');
   promptParts.push('- Jika konsep kompleks, gunakan analogi/contoh sehari-hari');
   promptParts.push('- Script harus sesuai durasi/format, engaging, dan mudah dipahami');
   promptParts.push('');
-  promptParts.push('**CAPTION - WAJIB DIBUAT:**');
   promptParts.push('');
+  promptParts.push('## CAPTION - WAJIB DIBUAT: ##');
+  promptParts.push('=============================');
   promptParts.push('Setelah script selesai, buatkan CAPTION (150-300 kata) yang mencerminkan semua informasi field yang diisi.');
   promptParts.push('');
-  promptParts.push('**Struktur:**');
-  promptParts.push('═══════════════════════════════════════');
+  promptParts.push('## Struktur: ##');
+  promptParts.push('===============');
   promptParts.push('[Opening/Hook 1-2 kalimat]');
   promptParts.push('');
-  promptParts.push('[Body: Ringkasan masalah, solusi, benefit dari semua field]');
+  promptParts.push('[Body: harus berdasarkan analisa dari penjelasan di ## Style & Struktur ## sampai dengan ## Instruksi ## dan boleh di acak atau tidak harus berurutan, yang penting hasilnya bagus, di tambah solusi, benefit dari semua field]');
   promptParts.push('');
   promptParts.push('[CTA yang jelas dan actionable]');
+  if (request.cta_type === 'use_solution') {
+    if (request.selling_approach === 'Tanpa Produk') {
+      promptParts.push('  - **CTA Type: Menggunakan Comment** (CTA Solution tidak tersedia untuk Pendekatan Tanpa Produk)');
+      promptParts.push('  - CTA caption harus meminta audience untuk memberikan comment');
+      promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+    } else if (request.solution) {
+      promptParts.push('  - **CTA Type: Menggunakan Solution** - CTA caption harus mengarahkan ke Solution yang sudah dijelaskan');
+      promptParts.push(`  - Solution: ${request.solution}`);
+      promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
+    } else {
+      promptParts.push('  - **CTA Type: Menggunakan Solution** - ⚠️ PERINGATAN: Field Solution belum diisi');
+    }
+  } else if (request.cta_type === 'use_comment') {
+    if (request.selling_approach === 'Hard Selling') {
+      promptParts.push('  - **CTA Type: Menggunakan Solution** (CTA Comment tidak tersedia untuk Pendekatan Hard Selling)');
+      if (request.solution) {
+        promptParts.push(`  - Solution: ${request.solution}`);
+        promptParts.push('  - CTA caption harus mengarahkan ke Solution yang sudah dijelaskan');
+      } else {
+        promptParts.push('  - ⚠️ PERINGATAN: Field Solution belum diisi');
+      }
+    } else {
+      promptParts.push('  - **CTA Type: Menggunakan Comment** - CTA caption harus meminta audience untuk memberikan comment');
+      promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+      promptParts.push('  - Contoh: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan"');
+    }
+  }
   promptParts.push('');
   promptParts.push('#hashtag1 #hashtag2 #hashtag3');
   promptParts.push('');

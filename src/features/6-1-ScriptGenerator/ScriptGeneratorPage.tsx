@@ -7,9 +7,7 @@ import OptimizedErrorBoundary from '@/features/6-1-dashboard/OptimizedErrorBound
 import { PICFilterProvider } from '@/features/6-1-dashboard/PICFilterContext';
 import { ScriptGeneratorForm } from './components/ScriptGeneratorForm';
 import { ScriptResult } from './components/ScriptResult';
-import { GeminiResult } from './components/GeminiResult';
 import { generateScript, ScriptGeneratorRequest } from './services/scriptGeneratorService';
-import { generateWithGemini } from './services/geminiService';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
@@ -18,9 +16,7 @@ const ScriptGeneratorContent: React.FC = () => {
   const { t } = useAppTranslation();
   const [activeMainTab, setActiveMainTab] = useState('script-generator');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingGemini, setIsGeneratingGemini] = useState(false);
   const [generatedScript, setGeneratedScript] = useState<string | null>(null);
-  const [geminiResult, setGeminiResult] = useState<string | null>(null);
 
   const handleTabChange = (newTab: string) => {
     setActiveMainTab(newTab);
@@ -30,7 +26,6 @@ const ScriptGeneratorContent: React.FC = () => {
   const handleGenerate = async (data: ScriptGeneratorRequest) => {
     setIsGenerating(true);
     setGeneratedScript(null);
-    setGeminiResult(null);
 
     // Small delay to show loading state
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -50,32 +45,6 @@ const ScriptGeneratorContent: React.FC = () => {
       toast.error('Terjadi error saat generate prompt');
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const handleGenerateGemini = async () => {
-    if (!generatedScript) {
-      toast.error('Prompt belum di-generate. Silakan generate prompt terlebih dahulu.');
-      return;
-    }
-
-    setIsGeneratingGemini(true);
-    setGeminiResult(null);
-
-    try {
-      const geminiResponse = await generateWithGemini(generatedScript);
-      
-      if (geminiResponse.success && geminiResponse.content) {
-        setGeminiResult(geminiResponse.content);
-        toast.success('Hasil Gemini berhasil di-generate!');
-      } else {
-        toast.error(geminiResponse.error || 'Gagal generate dengan Gemini API');
-      }
-    } catch (geminiError) {
-      console.error('Error generating with Gemini:', geminiError);
-      toast.error('Terjadi error saat generate dengan Gemini API');
-    } finally {
-      setIsGeneratingGemini(false);
     }
   };
 
@@ -102,7 +71,7 @@ const ScriptGeneratorContent: React.FC = () => {
                     <div className="p-6 w-full min-w-0">
                       <div className="space-y-6">
                         {/* Form and Result Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {/* Form Section */}
                           <div className="space-y-4">
                             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -119,8 +88,6 @@ const ScriptGeneratorContent: React.FC = () => {
                               <div className="bg-white rounded-lg p-4 border border-gray-200 h-full">
                                 <ScriptResult 
                                   script={generatedScript}
-                                  onGenerateGemini={handleGenerateGemini}
-                                  isGeneratingGemini={isGeneratingGemini}
                                 />
                               </div>
                             ) : (
@@ -130,16 +97,6 @@ const ScriptGeneratorContent: React.FC = () => {
                                 </p>
                               </div>
                             )}
-                          </div>
-
-                          {/* Gemini Result Section */}
-                          <div className="space-y-4">
-                            <div className="bg-white rounded-lg p-4 border border-gray-200 h-full">
-                              <GeminiResult 
-                                content={geminiResult} 
-                                isGenerating={isGeneratingGemini}
-                              />
-                            </div>
                           </div>
                         </div>
                       </div>
