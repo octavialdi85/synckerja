@@ -349,15 +349,16 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('**⚠️ PENTING - SEO KEYWORDS:**');
     promptParts.push(`- Keyword yang WAJIB digunakan: ${request.keywords.join(', ')}`);
     promptParts.push(`- Keyword HARUS muncul di: Voice Over (VO), Text overlay di video, Caption, dan HASHTAG`);
-    promptParts.push(`- Semua keyword HARUS digunakan secara natural dalam script`);
+    promptParts.push(`- Semua keyword HARUS digunakan secara natural dalam script Voice Over (VO) dan text overlay di video`);
     promptParts.push(`- Contoh: Jika keyword "Cara Membuat SEO di TikTok", maka VO dan text HARUS menyebutkan "Cara Membuat SEO di TikTok"`);
+    promptParts.push(`- Pendistribusian keywords di keseluruhan Voice over maksimal 2 atau sampai dengan 3 Keywords saja agar tidak terkesan memaksa struktur kalimat"`);
     promptParts.push('');
     if (request.keywords.length > 1) {
       promptParts.push(`- **Untuk JUDUL:** Gunakan HANYA keyword PERTAMA: "${firstKeyword}" (bukan semua keyword)`);
     } else {
       promptParts.push(`- **Untuk JUDUL:** Gunakan keyword "${firstKeyword}" jika memungkinkan`);
     }
-    promptParts.push(`- **Untuk CAPTION:** SETIAP PARAGRAF body caption HARUS mengandung minimal 1 keyword, distribusikan semua keyword secara merata. Struktur kalimat tetap harus baik dan mudah dipahami.`);
+    promptParts.push(`- **Untuk CAPTION:** Keseluruhan isi Caption HARUS mengandung Maksimal 3 keyword, distribusikan semua keyword secara merata. Struktur kalimat tetap harus baik dan mudah dipahami.`);
     promptParts.push(`- Hashtag HARUS menggunakan keyword: ${request.keywords!.map(k => `#${k.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')}`);
     promptParts.push('');
   }
@@ -474,9 +475,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     if (shouldUseKeywords) {
       const firstKeyword = request.keywords![0];
       if (request.keywords!.length > 1) {
-        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword)`);
+        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword PERTAMA: "${firstKeyword}" ke dalam judul secara natural dan relevan. (Gunakan hanya keyword pertama, bukan semua keyword). Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword`);
       } else {
-        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan.`);
+        promptParts.push(`**⚠️ PENTING - Keyword di Judul:** Jika memungkinkan, SISIPKAN keyword: "${firstKeyword}" ke dalam judul secara natural dan relevan. Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword`);
       }
     }
     promptParts.push('');
@@ -521,9 +522,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         if (shouldUseKeywords) {
           const firstKeyword = request.keywords![0];
           if (request.keywords!.length > 1) {
-            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
           } else {
-            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+            promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
           }
         } else {
           promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
@@ -532,9 +533,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         if (shouldUseKeywords) {
           const firstKeyword = request.keywords![0];
           if (request.keywords!.length > 1) {
-            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
           } else {
-            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+            promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
           }
         } else {
           promptParts.push('1. **Judul Script** (singkat dan menarik)');
@@ -577,7 +578,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       }
       promptParts.push('- **Visual Suggestion** (deskripsi singkat visual)');
       if (shouldUseKeywords) {
-        promptParts.push(`- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang. HARUS menggunakan keyword: ${request.keywords!.join(', ')})`);
+        promptParts.push(`- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang. Dari total keseluruhan slide, setikaknya HARUS menggunakan maksimal 2 keyword: ${request.keywords!.join(', ')}) - Jika di dalam text atau copy Tidak memungkinkan menggunakan keyword, maka boleh diabaikan penggunaan keyword`);
       } else {
         promptParts.push('- **Copy/Konten** (teks lengkap untuk konten - REALISTIS untuk ukuran 1080x1080, tidak terlalu panjang)');
       }
@@ -604,9 +605,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       if (shouldUseKeywords) {
         const firstKeyword = request.keywords![0];
         if (request.keywords!.length > 1) {
-          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
         } else {
-          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+          promptParts.push(`1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
         }
       } else {
         promptParts.push('1. **Judul Script** (gunakan template judul yang sudah disediakan, ganti [ ] dengan konten yang relevan)');
@@ -615,9 +616,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       if (shouldUseKeywords) {
         const firstKeyword = request.keywords![0];
         if (request.keywords!.length > 1) {
-          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama)`);
+          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword PERTAMA: "${firstKeyword}" jika memungkinkan secara natural. Gunakan hanya keyword pertama, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
         } else {
-          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural)`);
+          promptParts.push(`1. **Judul Script** (singkat dan menarik. ⚠️ SISIPKAN keyword: "${firstKeyword}" jika memungkinkan secara natural, Jika Tidak memungkinkan di gabungkan dengan template judul, maka boleh diabaikan penggunaan keyword)`);
         }
       } else {
         promptParts.push('1. **Judul Script** (singkat dan menarik)');
@@ -724,9 +725,8 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('');
     promptParts.push(`**⚠️ PENTING - Keyword di Caption:**`);
     promptParts.push(`- Keyword yang harus digunakan: ${request.keywords!.join(', ')}`);
-    promptParts.push(`- SETIAP PARAGRAF di body caption HARUS mengandung minimal 1 keyword`);
-    promptParts.push(`- Distribusikan semua keyword secara merata di seluruh paragraf body caption`);
-    promptParts.push(`- Pastikan keyword muncul secara natural dan tidak memaksa struktur kalimat`);
+    promptParts.push(`- Caption secara keseluruhanHARUS mengandung minimal 2 keyword`);
+    promptParts.push(`- Pastikan keyword muncul secara natural dan tidak terkesan terlalu memaksa struktur kalimat`);
     promptParts.push(`- Struktur kalimat HARUS tetap baik, mudah dipahami, dan mengalir natural`);
     promptParts.push(`- Jangan mengorbankan kualitas kalimat hanya untuk menempatkan keyword`);
   }
