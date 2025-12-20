@@ -82,7 +82,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
           .eq('organization_id', profile.active_organization_id)
           .eq('column_type', columnType)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
         if (configError || !config) {
           // If no configuration found, fall back to admin-only access

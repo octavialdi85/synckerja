@@ -307,7 +307,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       const {
         data: anyConfig,
         error: anyConfigError
-      } = await supabase.from('approval_access_configurations').select('is_active').eq('organization_id', profile.active_organization_id).eq('column_type', 'revision').single();
+      } = await supabase.from('approval_access_configurations').select('is_active').eq('organization_id', profile.active_organization_id).eq('column_type', 'revision').maybeSingle();
 
       // If any configuration exists but is inactive, hide refresh icon
       if (anyConfig && !anyConfig.is_active) {
@@ -320,7 +320,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       const {
         data: config,
         error: configError
-      } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'revision').eq('is_active', true).single();
+      } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'revision').eq('is_active', true).maybeSingle();
       if (configError || !config) {
         const result = userRole.role === 'owner' || userRole.role === 'admin';
         approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });
@@ -397,7 +397,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       const {
         data: anyConfig,
         error: anyConfigError
-      } = await supabase.from('approval_access_configurations').select('is_active').eq('organization_id', profile.active_organization_id).eq('column_type', 'production_revision').single();
+      } = await supabase.from('approval_access_configurations').select('is_active').eq('organization_id', profile.active_organization_id).eq('column_type', 'production_revision').maybeSingle();
 
       // If any configuration exists but is inactive, hide refresh icon
       if (anyConfig && !anyConfig.is_active) {
@@ -410,7 +410,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       const {
         data: config,
         error: configError
-      } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'production_revision').eq('is_active', true).single();
+      } = await supabase.from('approval_access_configurations').select('*').eq('organization_id', profile.active_organization_id).eq('column_type', 'production_revision').eq('is_active', true).maybeSingle();
       if (configError || !config) {
         const result = userRole.role === 'owner' || userRole.role === 'admin';
         approvalCheckCache.set(cacheKey, { result, timestamp: Date.now() });

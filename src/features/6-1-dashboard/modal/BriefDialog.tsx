@@ -111,7 +111,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
           .eq('organization_id', profile.active_organization_id)
           .eq('column_type', 'approved')
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
         if (configError || !config) {
           // If no configuration found, fall back to admin-only access
