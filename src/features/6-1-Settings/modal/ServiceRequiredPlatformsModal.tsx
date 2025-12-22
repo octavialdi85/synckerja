@@ -37,7 +37,7 @@ export const ServiceRequiredPlatformsModal: React.FC<ServiceRequiredPlatformsMod
 }) => {
   const { organizationId } = useCurrentOrg();
   const { socialMediaNames, getNamesByPlatform } = useSocialMediaNames(organizationId);
-  const { createRequiredPlatform, updateRequiredPlatform, isCreating, isUpdating } = useServiceRequiredPlatforms(serviceId || undefined);
+  const { createRequiredPlatform, createRequiredPlatformAsync, updateRequiredPlatform, isCreating, isUpdating, requiredPlatforms } = useServiceRequiredPlatforms(serviceId || undefined);
 
   const [formData, setFormData] = useState({
     platform: '',
@@ -90,6 +90,25 @@ export const ServiceRequiredPlatformsModal: React.FC<ServiceRequiredPlatformsMod
       return;
     }
 
+    // Check for duplicate before creating (only for new platforms)
+    if (!editingPlatform) {
+      const socialMediaNameId = formData.useCustom ? null : formData.social_media_name_id || null;
+      const duplicateExists = requiredPlatforms.some(rp => 
+        rp.service_id === serviceId &&
+        rp.platform === formData.platform &&
+        rp.social_media_name_id === socialMediaNameId &&
+        rp.id !== editingPlatform?.id // Exclude current editing platform if updating
+      );
+
+      if (duplicateExists) {
+        const platformName = formData.useCustom 
+          ? formData.custom_platform_name 
+          : socialMediaNames.find(n => n.id === formData.social_media_name_id)?.name || 'selected social media name';
+        toast.error(`This platform (${formData.platform}) with ${platformName} is already configured as a required platform for this service.`);
+        return;
+      }
+    }
+
     try {
       if (editingPlatform) {
         // Update existing platform
@@ -106,10 +125,13 @@ export const ServiceRequiredPlatformsModal: React.FC<ServiceRequiredPlatformsMod
           updates.custom_platform_name = null;
         }
 
+        // Update mutation handles success/error via callbacks
         updateRequiredPlatform({
           id: editingPlatform.id,
           updates
         });
+        // Close modal after update (success toast will be shown by hook)
+        setTimeout(() => onClose(), 100);
       } else {
         // Create new platform
         const data: CreateServiceRequiredPlatformData = {
@@ -127,10 +149,15 @@ export const ServiceRequiredPlatformsModal: React.FC<ServiceRequiredPlatformsMod
           data.custom_platform_name = null;
         }
 
-        createRequiredPlatform(data);
+        // Use async version to handle success/error properly
+        try {
+          await createRequiredPlatformAsync(data);
+          onClose();
+        } catch (error: any) {
+          // Error is already handled in the hook's onError callback
+          // Don't close modal on error so user can fix the issue
+        }
       }
-
-      onClose();
     } catch (error: any) {
       console.error('Error saving required platform:', error);
       toast.error(error.message || 'Failed to save required platform');

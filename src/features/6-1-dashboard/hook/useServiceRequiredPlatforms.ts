@@ -108,6 +108,48 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
         throw new Error('You do not have permission to manage required platforms');
       }
 
+      // Check if a duplicate exists (including inactive ones)
+      const { data: existingPlatforms, error: checkError } = await supabase
+        .from('service_required_platforms')
+        .select('id, is_active')
+        .eq('service_id', data.service_id)
+        .eq('platform', data.platform)
+        .eq('social_media_name_id', data.social_media_name_id || null);
+
+      if (checkError) {
+        throw checkError;
+      }
+
+      // If duplicate exists and is inactive, reactivate it instead of creating new
+      if (existingPlatforms && existingPlatforms.length > 0) {
+        const existingPlatform = existingPlatforms[0];
+        if (!existingPlatform.is_active) {
+          // Reactivate the existing platform
+          const { data: reactivatedPlatform, error: updateError } = await supabase
+            .from('service_required_platforms')
+            .update({
+              is_active: true,
+              custom_platform_name: data.custom_platform_name || null,
+            })
+            .eq('id', existingPlatform.id)
+            .select(`
+              *,
+              service:services(id, name),
+              social_media_name:social_media_names(id, name, platform)
+            `)
+            .single();
+
+          if (updateError) throw updateError;
+          return reactivatedPlatform as ServiceRequiredPlatform;
+        } else {
+          // Active duplicate exists - throw user-friendly error
+          const platformName = data.custom_platform_name || 
+            (data.social_media_name_id ? 'selected social media name' : 'this platform');
+          throw new Error(`This platform (${data.platform}) with ${platformName} is already configured as a required platform for this service.`);
+        }
+      }
+
+      // No duplicate exists, create new platform
       const { data: result, error } = await supabase
         .from('service_required_platforms')
         .insert([{
@@ -126,7 +168,15 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Handle unique constraint violation with user-friendly message
+        if (error.code === '23505' || error.message?.includes('unique constraint') || error.message?.includes('duplicate key')) {
+          const platformName = data.custom_platform_name || 
+            (data.social_media_name_id ? 'selected social media name' : 'this platform');
+          throw new Error(`This platform (${data.platform}) with ${platformName} is already configured as a required platform for this service.`);
+        }
+        throw error;
+      }
       return result as ServiceRequiredPlatform;
     },
     onSuccess: (newPlatform) => {
@@ -141,7 +191,8 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
     },
     onError: (error: any) => {
       console.error('Failed to create required platform:', error);
-      toast.error(error.message || 'Failed to add required platform');
+      const errorMessage = error.message || 'Failed to add required platform';
+      toast.error(errorMessage);
     },
   });
 
@@ -150,6 +201,36 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateServiceRequiredPlatformData }) => {
       if (!canManage) {
         throw new Error('You do not have permission to manage required platforms');
+      }
+
+      // Get current platform data to check for duplicates
+      const { data: currentPlatform, error: fetchError } = await supabase
+        .from('service_required_platforms')
+        .select('service_id, platform, social_media_name_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Check if update would create a duplicate
+      const newPlatform = updates.platform || currentPlatform.platform;
+      const newSocialMediaNameId = updates.social_media_name_id !== undefined 
+        ? updates.social_media_name_id 
+        : currentPlatform.social_media_name_id;
+
+      const { data: duplicateCheck, error: checkError } = await supabase
+        .from('service_required_platforms')
+        .select('id')
+        .eq('service_id', currentPlatform.service_id)
+        .eq('platform', newPlatform)
+        .eq('social_media_name_id', newSocialMediaNameId || null)
+        .neq('id', id); // Exclude current platform
+
+      if (checkError) throw checkError;
+
+      if (duplicateCheck && duplicateCheck.length > 0) {
+        const platformName = updates.custom_platform_name || 'selected social media name';
+        throw new Error(`This platform (${newPlatform}) with ${platformName} is already configured as a required platform for this service.`);
       }
 
       const { data, error } = await supabase
@@ -163,7 +244,14 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Handle unique constraint violation with user-friendly message
+        if (error.code === '23505' || error.message?.includes('unique constraint') || error.message?.includes('duplicate key')) {
+          const platformName = updates.custom_platform_name || 'selected social media name';
+          throw new Error(`This platform (${newPlatform}) with ${platformName} is already configured as a required platform for this service.`);
+        }
+        throw error;
+      }
       return data as ServiceRequiredPlatform;
     },
     onSuccess: (updatedPlatform) => {
@@ -180,6 +268,46 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
     onError: (error: any) => {
       console.error('Failed to update required platform:', error);
       toast.error(error.message || 'Failed to update required platform');
+    },
+  });
+
+  // Toggle required platform status (active/inactive)
+  const toggleRequiredPlatformStatusMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      if (!canManage) {
+        throw new Error('You do not have permission to manage required platforms');
+      }
+
+      const { data, error } = await supabase
+        .from('service_required_platforms')
+        .update({ is_active: isActive })
+        .eq('id', id)
+        .select(`
+          *,
+          service:services(id, name),
+          social_media_name:social_media_names(id, name, platform)
+        `)
+        .single();
+
+      if (error) throw error;
+      return data as ServiceRequiredPlatform;
+    },
+    onSuccess: (updatedPlatform) => {
+      queryClient.setQueryData(
+        [SERVICE_REQUIRED_PLATFORMS_QUERY_KEY, organizationId, updatedPlatform.service_id],
+        (old: ServiceRequiredPlatform[] = []) =>
+          old.map(platform => 
+            platform.id === updatedPlatform.id ? updatedPlatform : platform
+          )
+      );
+      queryClient.invalidateQueries({ 
+        queryKey: [SERVICE_REQUIRED_PLATFORMS_QUERY_KEY, organizationId] 
+      });
+      toast.success(`Required platform ${updatedPlatform.is_active ? 'activated' : 'deactivated'} successfully`);
+    },
+    onError: (error: any) => {
+      console.error('Failed to toggle required platform status:', error);
+      toast.error(error.message || 'Failed to update required platform status');
     },
   });
 
@@ -230,12 +358,15 @@ export const useServiceRequiredPlatforms = (serviceId?: string) => {
 
     // Actions
     createRequiredPlatform: createRequiredPlatformMutation.mutate,
+    createRequiredPlatformAsync: createRequiredPlatformMutation.mutateAsync,
     updateRequiredPlatform: updateRequiredPlatformMutation.mutate,
+    toggleRequiredPlatformStatus: toggleRequiredPlatformStatusMutation.mutate,
     deleteRequiredPlatform: deleteRequiredPlatformMutation.mutate,
 
     // Loading states
     isCreating: createRequiredPlatformMutation.isPending,
     isUpdating: updateRequiredPlatformMutation.isPending,
+    isToggling: toggleRequiredPlatformStatusMutation.isPending,
     isDeleting: deleteRequiredPlatformMutation.isPending,
 
     // Permissions

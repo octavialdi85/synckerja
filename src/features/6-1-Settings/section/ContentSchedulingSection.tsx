@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/features/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Badge } from '@/features/ui/badge';
+import { Switch } from '@/features/ui/switch';
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useServiceRequiredPlatforms, ServiceRequiredPlatform } from '@/features/6-1-dashboard/hook/useServiceRequiredPlatforms';
 import { useMasterData } from '@/features/6-1-dashboard/hook/useMasterData';
@@ -16,7 +17,7 @@ interface Service {
 export const ContentSchedulingSection: React.FC = () => {
   const { organizationId } = useCurrentOrg();
   const { fetchData: fetchServices } = useMasterData('services');
-  const { requiredPlatforms, isLoading, canManage, deleteRequiredPlatform } = useServiceRequiredPlatforms();
+  const { requiredPlatforms, isLoading, canManage, deleteRequiredPlatform, toggleRequiredPlatformStatus, isToggling } = useServiceRequiredPlatforms();
   const [services, setServices] = useState<Service[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlatform, setEditingPlatform] = useState<ServiceRequiredPlatform | null>(null);
@@ -33,11 +34,19 @@ export const ContentSchedulingSection: React.FC = () => {
     loadServices();
   }, [organizationId, fetchServices]);
 
-  // Group required platforms by service
+  // Group required platforms by service (include both active and inactive)
+  // Sort: active platforms first, then inactive, then by platform name
   const platformsByService = services.reduce((acc, service) => {
-    const platforms = requiredPlatforms.filter(
-      rp => rp.service_id === service.id && rp.is_active === true
-    );
+    const platforms = requiredPlatforms
+      .filter(rp => rp.service_id === service.id)
+      .sort((a, b) => {
+        // Active platforms first
+        if (a.is_active !== b.is_active) {
+          return a.is_active ? -1 : 1;
+        }
+        // Then sort by platform name
+        return a.platform.localeCompare(b.platform);
+      });
     if (platforms.length > 0 || canManage) {
       acc[service.id] = platforms;
     }
@@ -111,7 +120,12 @@ export const ContentSchedulingSection: React.FC = () => {
                   <div>
                     <h4 className="font-semibold text-base">{service.name}</h4>
                     <p className="text-sm text-muted-foreground">
-                      {platforms.length} required platform{platforms.length !== 1 ? 's' : ''}
+                      {platforms.filter(p => p.is_active).length} active required platform{platforms.filter(p => p.is_active).length !== 1 ? 's' : ''} 
+                      {platforms.filter(p => !p.is_active).length > 0 && (
+                        <span className="text-muted-foreground/70">
+                          {' '}({platforms.filter(p => !p.is_active).length} inactive)
+                        </span>
+                      )}
                     </p>
                   </div>
                   {canManage && (
@@ -138,7 +152,10 @@ export const ContentSchedulingSection: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {platforms.map((platform) => (
-                        <TableRow key={platform.id}>
+                        <TableRow 
+                          key={platform.id}
+                          className={platform.is_active ? '' : 'opacity-60'}
+                        >
                           <TableCell className="font-medium">
                             {platform.platform}
                           </TableCell>
@@ -154,9 +171,27 @@ export const ContentSchedulingSection: React.FC = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={platform.is_active ? 'default' : 'secondary'}>
-                              {platform.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
+                            {canManage ? (
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={platform.is_active}
+                                  onCheckedChange={(checked) => {
+                                    toggleRequiredPlatformStatus({
+                                      id: platform.id,
+                                      isActive: checked
+                                    });
+                                  }}
+                                  disabled={isToggling}
+                                />
+                                <span className="text-sm text-muted-foreground">
+                                  {platform.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </div>
+                            ) : (
+                              <Badge variant={platform.is_active ? 'default' : 'secondary'}>
+                                {platform.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            )}
                           </TableCell>
                           {canManage && (
                             <TableCell className="text-right">
