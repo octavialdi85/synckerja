@@ -118,14 +118,14 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
 
   const { socialMediaNames, getNamesByPlatform, isLoading: isLoadingNames } = useSocialMediaNames(organizationId);
 
-  // Fetch plan data to get service_id and done status
+  // Fetch plan data to get service_id, done status, and content_type
   const { data: planData, isLoading: isLoadingPlanData } = useQuery({
     queryKey: ['social-media-plan', socialMediaPlanId],
     queryFn: async () => {
       if (!socialMediaPlanId) return null;
       const { data, error } = await supabase
         .from('social_media_plans')
-        .select('service_id, done, organization_id')
+        .select('service_id, done, organization_id, content_type:content_types(id, name)')
         .eq('id', socialMediaPlanId)
         .single();
       if (error) throw error;
@@ -180,6 +180,29 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       };
     }
 
+    // Get content type name from planData
+    const contentTypeName = planData?.content_type?.name || null;
+    
+    // Filter out YouTube and Shopee from required platforms if content type is "Carousel" or "Post"
+    const filteredRequiredPlatforms = activeRequiredPlatforms.filter(rp => {
+      if ((contentTypeName === 'Carousel' || contentTypeName === 'Post') && 
+          (rp.platform === 'YouTube' || rp.platform === 'Shopee')) {
+        return false; // Exclude YouTube and Shopee for Carousel and Post
+      }
+      return true;
+    });
+
+    if (filteredRequiredPlatforms.length === 0) {
+      // All required platforms were filtered out
+      return {
+        isValid: true,
+        progress: 100,
+        missingPlatforms: [],
+        totalRequired: 0,
+        filledRequired: 0
+      };
+    }
+
     // Create a set of filled platforms (only platform, not platform + name)
     // Required platforms only require the platform to be filled, not a specific social_media_name
     const filledPlatformsSet = new Set<string>();
@@ -202,7 +225,7 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
     // Check which required platforms are missing
     // Required platforms only require the platform to be filled, regardless of social_media_name
     const missingPlatforms: string[] = [];
-    activeRequiredPlatforms.forEach(rp => {
+    filteredRequiredPlatforms.forEach(rp => {
       const platform = rp.platform.trim();
       
       if (!filledPlatformsSet.has(platform)) {
@@ -216,16 +239,16 @@ const SocialMediaLinksDialog: React.FC<SocialMediaLinksDialogProps> = ({
       }
     });
 
-    const filledRequired = activeRequiredPlatforms.length - missingPlatforms.length;
-    const progress = activeRequiredPlatforms.length > 0
-      ? Math.round((filledRequired / activeRequiredPlatforms.length) * 100)
+    const filledRequired = filteredRequiredPlatforms.length - missingPlatforms.length;
+    const progress = filteredRequiredPlatforms.length > 0
+      ? Math.round((filledRequired / filteredRequiredPlatforms.length) * 100)
       : 100;
 
     return {
       isValid: missingPlatforms.length === 0,
       progress,
       missingPlatforms,
-      totalRequired: activeRequiredPlatforms.length,
+      totalRequired: filteredRequiredPlatforms.length,
       filledRequired
     };
   }, [formLinks, requiredPlatforms, planData, isLoadingRequiredPlatforms]);
