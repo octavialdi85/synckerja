@@ -7,6 +7,7 @@ import { LoadingDots } from '@/components/LoadingDots';
 import { BookOpen, Search, X, Plus, ChevronLeft, Palette, Edit, Trash2, Link2, Copy, Hash } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
+import { Badge } from '@/features/ui/badge';
 import { cn } from '@/lib/utils';
 import { ProductKnowledgeDetailModal } from './ProductKnowledgeDetailModal';
 import { useProductKnowledgeDetailMutations } from '../hooks/useProductKnowledgeDetail';
@@ -466,12 +467,24 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
 
   const handleEditHook = (hook: ProductKnowledgeHook, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Prevent editing default hooks
+    if (hook.organization_id === null) {
+      toast.error(t('productKnowledge.hooks.cannotEditDefault', 'Default hooks cannot be edited'));
+      return;
+    }
     setEditingHook(hook);
     setIsHooksModalOpen(true);
   };
 
   const handleDeleteHook = async (hookId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Find the hook to check if it's a default hook
+    const hook = productKnowledgeHooksData.find(h => h.id === hookId);
+    if (hook && hook.organization_id === null) {
+      toast.error(t('productKnowledge.hooks.cannotDeleteDefault', 'Default hooks cannot be deleted'));
+      return;
+    }
     
     if (!confirm(t('productKnowledge.hooks.deleteConfirm', 'Are you sure you want to delete this hook?'))) {
       return;
@@ -487,9 +500,9 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
       if (selectedHook?.id === hookId) {
         setSelectedHook(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting hook:', error);
-      toast.error(t('productKnowledge.hooks.toast.deleteError', 'Error deleting hook'));
+      toast.error(error?.message || t('productKnowledge.hooks.toast.deleteError', 'Error deleting hook'));
     } finally {
       setDeletingHookId(null);
     }
@@ -1126,43 +1139,62 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
                 size="sm"
                 variant="outline"
                 onClick={() => {
+                  // Prevent editing default hooks
+                  if (selectedHook.organization_id === null) {
+                    toast.error(t('productKnowledge.hooks.cannotEditDefault', 'Default hooks cannot be edited'));
+                    return;
+                  }
                   setEditingHook(selectedHook);
                   setIsHooksModalOpen(true);
                 }}
-                disabled={isUpdatingHook || isDeletingHook}
+                disabled={isUpdatingHook || isDeletingHook || selectedHook.organization_id === null}
                 className="h-8 px-3"
+                title={selectedHook.organization_id === null ? t('productKnowledge.hooks.cannotEditDefault', 'Default hooks cannot be edited') : undefined}
               >
                 <Edit className="h-3.5 w-3.5 mr-1.5" />
                 {t('productKnowledge.hooks.edit', 'Edit')}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  if (!confirm(t('productKnowledge.hooks.deleteConfirm', 'Are you sure you want to delete this hook?'))) {
-                    return;
-                  }
+              <div className="relative flex items-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    // Prevent deleting default hooks
+                    if (selectedHook.organization_id === null) {
+                      toast.error(t('productKnowledge.hooks.cannotDeleteDefault', 'Default hooks cannot be deleted'));
+                      return;
+                    }
 
-                  try {
-                    setDeletingHookId(selectedHook.id);
-                    await deleteProductKnowledgeHook(selectedHook.id);
-                    toast.success(
-                      t('productKnowledge.hooks.toast.deleteSuccess', 'Hook deleted successfully')
-                    );
-                    setSelectedHook(null);
-                  } catch (error) {
-                    console.error('Error deleting hook:', error);
-                    toast.error(t('productKnowledge.hooks.toast.deleteError', 'Error deleting hook'));
-                  } finally {
-                    setDeletingHookId(null);
-                  }
-                }}
-                disabled={isUpdatingHook || isDeletingHook || deletingHookId === selectedHook.id}
-                className="h-8 px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                {t('productKnowledge.hooks.delete', 'Delete')}
-              </Button>
+                    if (!confirm(t('productKnowledge.hooks.deleteConfirm', 'Are you sure you want to delete this hook?'))) {
+                      return;
+                    }
+
+                    try {
+                      setDeletingHookId(selectedHook.id);
+                      await deleteProductKnowledgeHook(selectedHook.id);
+                      toast.success(
+                        t('productKnowledge.hooks.toast.deleteSuccess', 'Hook deleted successfully')
+                      );
+                      setSelectedHook(null);
+                    } catch (error: any) {
+                      console.error('Error deleting hook:', error);
+                      toast.error(error?.message || t('productKnowledge.hooks.toast.deleteError', 'Error deleting hook'));
+                    } finally {
+                      setDeletingHookId(null);
+                    }
+                  }}
+                  disabled={isUpdatingHook || isDeletingHook || deletingHookId === selectedHook.id || selectedHook.organization_id === null}
+                  className="h-8 px-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  title={selectedHook.organization_id === null ? t('productKnowledge.hooks.cannotDeleteDefault', 'Default hooks cannot be deleted') : undefined}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {t('productKnowledge.hooks.delete', 'Delete')}
+                </Button>
+                {/* Green vertical strip indicator for default hooks */}
+                {selectedHook.organization_id === null && (
+                  <div className="w-1 h-6 bg-green-500 rounded ml-1" />
+                )}
+              </div>
             </div>
 
             {/* Hook Name */}
@@ -1286,26 +1318,44 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
                         <button
                           onClick={(e) => handleEditHook(hook, e)}
                           className={cn(
-                            'p-1.5 rounded hover:bg-gray-200 transition-colors',
-                            selectedHook?.id === hook.id ? 'text-blue-700' : 'text-gray-600'
+                            'p-1.5 rounded transition-colors',
+                            hook.organization_id === null 
+                              ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                              : selectedHook?.id === hook.id 
+                                ? 'text-blue-700 hover:bg-gray-200' 
+                                : 'text-gray-600 hover:bg-gray-200'
                           )}
-                          title={t('productKnowledge.hooks.edit', 'Edit hook')}
-                          disabled={isUpdatingHook || isDeletingHook}
+                          title={hook.organization_id === null 
+                            ? t('productKnowledge.hooks.cannotEditDefault', 'Default hooks cannot be edited') 
+                            : t('productKnowledge.hooks.edit', 'Edit hook')}
+                          disabled={isUpdatingHook || isDeletingHook || hook.organization_id === null}
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={(e) => handleDeleteHook(hook.id, e)}
-                          className={cn(
-                            'p-1.5 rounded hover:bg-red-100 transition-colors',
-                            selectedHook?.id === hook.id ? 'text-red-700' : 'text-red-600',
-                            deletingHookId === hook.id && 'opacity-50 cursor-not-allowed'
+                        <div className="relative flex items-center">
+                          <button
+                            onClick={(e) => handleDeleteHook(hook.id, e)}
+                            className={cn(
+                              'p-1.5 rounded transition-colors',
+                              hook.organization_id === null 
+                                ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                                : selectedHook?.id === hook.id 
+                                  ? 'text-red-700 hover:bg-red-100' 
+                                  : 'text-red-600 hover:bg-red-100',
+                              deletingHookId === hook.id && 'opacity-50 cursor-not-allowed'
+                            )}
+                            title={hook.organization_id === null 
+                              ? t('productKnowledge.hooks.cannotDeleteDefault', 'Default hooks cannot be deleted') 
+                              : t('productKnowledge.hooks.delete', 'Delete hook')}
+                            disabled={isUpdatingHook || isDeletingHook || deletingHookId === hook.id || hook.organization_id === null}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          {/* Green vertical strip indicator for default hooks */}
+                          {hook.organization_id === null && (
+                            <div className="w-1 h-6 bg-green-500 rounded ml-1" />
                           )}
-                          title={t('productKnowledge.hooks.delete', 'Delete hook')}
-                          disabled={isUpdatingHook || isDeletingHook || deletingHookId === hook.id}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </div>
                       </div>
                     </div>
                   </div>
