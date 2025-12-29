@@ -23,3 +23,4 @@ COMMENT ON COLUMN public.product_knowledge_style.content_pillar_ids IS 'Array of
 
 
 
+

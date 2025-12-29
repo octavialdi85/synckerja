@@ -359,7 +359,10 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
   
   const daysUntilExpiry = subscriptionStatus?.days_until_expiry ?? null;
   const isRenewWindow = typeof daysUntilExpiry === 'number' && daysUntilExpiry >= 0 && daysUntilExpiry <= RENEWAL_WINDOW_DAYS;
-  const isRenewEligibleBase = Boolean(subscriptionStatus) && Boolean(isRenewWindow) && !subscriptionStatus?.is_trial;
+  // Allow renewal if: (1) within renewal window OR (2) subscription is expired (not trial)
+  const isRenewEligibleBase = Boolean(subscriptionStatus) && 
+    (isRenewWindow || subscriptionStatus?.is_expired) && 
+    !subscriptionStatus?.is_trial;
   if (isLoading) {
     return (
       <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
