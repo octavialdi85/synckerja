@@ -129,7 +129,7 @@ export const useMidtransPayment = () => {
         }
       }
 
-      // Validate response data
+      // Validate response data - all payments must go through Midtrans
       if (!data || !data.token) {
         console.error('❌ Invalid response data:', data);
         throw new Error('No payment token received from server');

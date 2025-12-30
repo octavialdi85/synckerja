@@ -133,6 +133,16 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       });
 
       if (calculation?.success) {
+        // ✅ FIX: Jika subscription sudah expired, paksa charge_now = true
+        const isExpired = subscriptionStatus?.is_expired || false;
+        if (isExpired && calculation.calculation) {
+          calculation.calculation.charge_now = true;
+          // Set scheduled_date ke hari ini karena expired, perubahan harus langsung
+          calculation.calculation.scheduled_date = new Date().toISOString();
+          calculation.calculation.remaining_days = 0;
+          console.log('⚠️ Subscription expired - forcing immediate charge:', calculation.calculation);
+        }
+
         setProRatedData(calculation);
         console.log('✅ ProRate calculation completed:', calculation);
         
@@ -158,7 +168,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       setProRatedData(null);
       setIsModalOpen(true);
     }
-  }, [proRateCalculation, billingCycles]);
+  }, [proRateCalculation, billingCycles, subscriptionStatus]);
 
   const schedulePlanChange = useSchedulePlanChange();
 
@@ -189,8 +199,11 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     if (!selectedPlan) return;
 
     try {
-      // If prorate says no charge now, schedule the change for end of period
-      if (proRatedData?.calculation && proRatedData.calculation.charge_now === false) {
+      // ✅ FIX: Jika subscription sudah expired, jangan schedule, langsung proses
+      const isExpired = subscriptionStatus?.is_expired || false;
+      
+      // If prorate says no charge now AND subscription is NOT expired, schedule the change
+      if (proRatedData?.calculation && proRatedData.calculation.charge_now === false && !isExpired) {
         await schedulePlanChange.mutateAsync({
           current_plan_id: proRatedData.current_plan.id,
           target_plan_id: proRatedData.target_plan.id,
@@ -208,13 +221,14 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
         return;
       }
 
-      // Otherwise, proceed with immediate payment (upgrade/member increase)
+      // Otherwise, proceed with immediate payment (upgrade/member increase OR expired subscription)
       const basePrice = selectedPlan.base_price_per_member;
-      const finalAmount = proRatedData?.calculation?.prorate_amount ?? (
-        isYearly
-          ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
-          : getMonthlyPriceForMembers(basePrice, selectedMemberCount)
-      );
+      // Use prorate_amount if it exists and > 0, otherwise use full price
+      const prorateAmount = proRatedData?.calculation?.prorate_amount;
+      const fullPrice = isYearly
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
+      const finalAmount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
       await initiateMidtransPayment({
         planId: selectedPlan.id,
@@ -238,7 +252,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     } catch (error) {
       console.error('❌ Action failed:', error);
     }
-  }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData, schedulePlanChange]);
+  }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData, schedulePlanChange, subscriptionStatus]);
 
   const handleChooseImmediate = useCallback(async () => {
     setIsOptionsModalOpen(false);
@@ -248,11 +262,12 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     try {
       // Directly proceed with immediate payment
       const basePrice = selectedPlan.base_price_per_member;
-      const finalAmount = proRatedData?.calculation?.prorate_amount ?? (
-        isYearly
-          ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
-          : getMonthlyPriceForMembers(basePrice, selectedMemberCount)
-      );
+      // Use prorate_amount if it exists and > 0, otherwise use full price
+      const prorateAmount = proRatedData?.calculation?.prorate_amount;
+      const fullPrice = isYearly
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
+      const finalAmount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
       await initiateMidtransPayment({
         planId: selectedPlan.id,
@@ -556,6 +571,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           billingCycle={isYearly ? 'yearly' : 'monthly'}
           currentMemberCount={subscriptionStatus?.member_count}
           newMemberCount={selectedMemberCount}
+          currentEmployeeCount={currentEmployeeCount}
           proRatedData={proRatedData}
         />
       )}

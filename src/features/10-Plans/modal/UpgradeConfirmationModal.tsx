@@ -5,6 +5,9 @@ import { formatIDR } from '@/features/1-login/utils/subscriptionUtils';
 import { SubscriptionPlan } from '@/features/10-management/hooks/useOptimizedSubscription';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
+import { EmployeeRemovalSelector } from '../components/EmployeeRemovalSelector';
+import { useState, useCallback } from 'react';
+import { useEmployeeCount } from '@/features/share/hooks/useEmployeeCount';
 import './UpgradeConfirmationModal.css';
 
 interface ProRatedData {
@@ -46,6 +49,7 @@ interface UpgradeConfirmationModalProps {
   billingCycle: 'monthly' | 'yearly';
   currentMemberCount: number;
   newMemberCount: number;
+  currentEmployeeCount?: number;
   proRatedData?: ProRatedData;
   isLoading?: boolean;
 }
@@ -60,6 +64,7 @@ export const UpgradeConfirmationModal = ({
   billingCycle,
   currentMemberCount,
   newMemberCount,
+  currentEmployeeCount: propCurrentEmployeeCount = 0,
   proRatedData,
   isLoading
 }: UpgradeConfirmationModalProps) => {
@@ -68,13 +73,60 @@ export const UpgradeConfirmationModal = ({
   const memberCount = newMemberCount;
   const selectedPlan = newPlan;
   
-  // Calculate total amount based on plan and billing cycle
-  const totalAmount = isYearly 
-    ? (newPlan.base_price_per_member * newMemberCount * 12 * (1 - (newPlan.annual_discount_percentage || 0) / 100))
-    : (newPlan.base_price_per_member * newMemberCount);
+  // Also fetch employee count directly in modal as fallback
+  const { data: fetchedEmployeeCount = 0 } = useEmployeeCount();
+  // Use prop value if available, otherwise use fetched value
+  const currentEmployeeCount = propCurrentEmployeeCount > 0 ? propCurrentEmployeeCount : fetchedEmployeeCount;
+  
+  // State untuk tracking employee removal selection
+  const [isRemovalSelectionValid, setIsRemovalSelectionValid] = useState(false);
+  const [removalSelectionCount, setRemovalSelectionCount] = useState(0);
+  const [requiredRemovalCount, setRequiredRemovalCount] = useState(0);
+
+  // Calculate if this is a downgrade that requires employee removal
+  const effectiveCurrentCount = proRatedData?.current_plan?.member_count || currentMemberCount;
+  const effectiveNewCount = proRatedData?.calculation?.new_member_count || newMemberCount;
+  const isDowngrade = effectiveNewCount < effectiveCurrentCount;
+  
+  // Show removal selector if it's a downgrade - EmployeeRemovalSelector will handle the logic internally
+  // We show it if it's a downgrade, even if currentEmployeeCount is still loading (0)
+  // The component itself will handle the actual removal requirement check
+  const requiresRemoval = isDowngrade;
+
+  // Debug logging
+  if (isDowngrade) {
+    console.log('🔍 UpgradeConfirmationModal - Downgrade detected:', {
+      effectiveCurrentCount,
+      effectiveNewCount,
+      currentEmployeeCount,
+      propCurrentEmployeeCount,
+      fetchedEmployeeCount,
+      requiresRemoval,
+      proRatedData: proRatedData?.calculation
+    });
+  }
+
+  // Handler for selection change
+  const handleRemovalSelectionChange = useCallback((selectedCount: number, requiredCount: number) => {
+    setRemovalSelectionCount(selectedCount);
+    setRequiredRemovalCount(requiredCount);
+    setIsRemovalSelectionValid(selectedCount >= requiredCount);
+  }, []);
+  
+  // Calculate total amount - use prorate_amount if immediate charge and > 0, otherwise full price
   const isProRate = proRatedData?.calculation;
   const isScheduledChange = isProRate && !proRatedData.calculation.charge_now;
   const isImmediateCharge = isProRate && proRatedData.calculation.charge_now;
+  
+  // Use prorate_amount if it exists and > 0, otherwise use full price (consistent with HRISSubscriptionPlansTab.tsx)
+  const prorateAmount = proRatedData?.calculation?.prorate_amount;
+  const fullPrice = isYearly 
+    ? (newPlan.base_price_per_member * newMemberCount * 12 * (1 - (newPlan.annual_discount_percentage || 0) / 100))
+    : (newPlan.base_price_per_member * newMemberCount);
+  
+  const totalAmount = (isImmediateCharge && prorateAmount !== undefined && prorateAmount > 0)
+    ? prorateAmount
+    : fullPrice;
   const isPlanChange = isProRate && proRatedData.calculation.is_plan_change;
   const isMemberChange = isProRate && proRatedData.calculation.member_difference !== 0;
 
@@ -89,8 +141,15 @@ export const UpgradeConfirmationModal = ({
 
   const getButtonText = () => {
     if (isScheduledChange) return t('subscription.plans.modal.button.schedule', 'Schedule Change');
+    // Only disable if it's a downgrade AND currentEmployeeCount is available AND selection is not valid
+    if (requiresRemoval && currentEmployeeCount > 0 && !isRemovalSelectionValid) {
+      return t('subscription.plans.modal.button.selectEmployees', 'Select Employees First');
+    }
     return t('subscription.plans.modal.button.confirmPay', 'Confirm & Pay');
   };
+
+  // Only disable if it's a downgrade AND currentEmployeeCount > newCount AND selection is not valid
+  const isConfirmDisabled = requiresRemoval && currentEmployeeCount > effectiveNewCount && !isRemovalSelectionValid;
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return t('subscription.plans.modal.date.unavailable', 'Date unavailable');
@@ -128,7 +187,7 @@ export const UpgradeConfirmationModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[500px] h-[500px] max-w-[500px] max-h-[500px] p-0 flex flex-col">
+      <DialogContent className="w-[500px] h-[600px] max-w-[500px] max-h-[600px] p-0 flex flex-col">
         <DialogHeader className="p-6 pb-4 flex-shrink-0">
           <DialogTitle className="text-xl font-bold">
             {getModalTitle()}
@@ -216,6 +275,15 @@ export const UpgradeConfirmationModal = ({
                 💡 {t('subscription.plans.modal.scheduled.policy', 'Per our "no refund" policy, changes will take effect at the end of the current period')}
               </div>
             </div>
+          )}
+
+          {/* Employee Removal Selector - Show if downgrade requires removal */}
+          {requiresRemoval && (
+            <EmployeeRemovalSelector
+              currentEmployeeCount={currentEmployeeCount}
+              newMemberCount={effectiveNewCount}
+              onSelectionChange={handleRemovalSelectionChange}
+            />
           )}
 
           {/* Immediate Prorate Calculation */}
@@ -310,7 +378,7 @@ export const UpgradeConfirmationModal = ({
                 ? 'bg-orange-600 hover:bg-orange-700' 
                 : 'bg-green-600 hover:bg-green-700'
             }`}
-            disabled={isLoading}
+            disabled={isLoading || isConfirmDisabled}
           >
             {isLoading ? t('subscription.plans.modal.button.processing', 'Processing...') : getButtonText()}
           </Button>

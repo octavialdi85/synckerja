@@ -575,6 +575,16 @@ const HRISSubscriptionPlansTab = () => {
           target_plan_id: targetPlanId,
         });
 
+        // ✅ FIX: Jika subscription sudah expired, paksa charge_now = true
+        const isExpired = subscriptionStatus?.is_expired || false;
+        if (isExpired && calculation?.success && calculation.calculation) {
+          calculation.calculation.charge_now = true;
+          // Set scheduled_date ke hari ini karena expired, perubahan harus langsung
+          calculation.calculation.scheduled_date = new Date().toISOString();
+          calculation.calculation.remaining_days = 0;
+          console.log('⚠️ Subscription expired - forcing immediate charge:', calculation.calculation);
+        }
+
         setProRatedData(calculation);
         if (calculation?.success) {
           const info = calculation.calculation;
@@ -592,18 +602,19 @@ const HRISSubscriptionPlansTab = () => {
         setConfirmationOpen(true);
       }
     },
-    [proRateCalculation, subscriptionPlans],
+    [proRateCalculation, subscriptionPlans, subscriptionStatus],
   );
 
   const handleConfirmUpgrade = useCallback(async () => {
     if (!selectedPlan) return;
     try {
       const basePrice = selectedPlan.base_price_per_member;
-      const amount =
-        proRatedData?.calculation?.prorate_amount ??
-        (isYearly
-          ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
-          : getMonthlyPriceForMembers(basePrice, selectedMemberCount));
+      // Use prorate_amount if it exists and > 0, otherwise use full price
+      const prorateAmount = proRatedData?.calculation?.prorate_amount;
+      const fullPrice = isYearly
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
+      const amount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
        await initiateMidtransPayment({
         planId: selectedPlan.id,
@@ -638,6 +649,7 @@ const HRISSubscriptionPlansTab = () => {
     isYearly,
     initiateMidtransPayment,
     proRatedData,
+    subscriptionStatus,
   ]);
 
   const handleChooseImmediate = useCallback(async () => {
@@ -647,6 +659,15 @@ const HRISSubscriptionPlansTab = () => {
 
   const handleChooseScheduled = useCallback(async () => {
     if (!selectedPlan || !proRatedData?.calculation) return;
+    
+    // ✅ FIX: Jika subscription sudah expired, jangan schedule, langsung proses
+    const isExpired = subscriptionStatus?.is_expired || false;
+    if (isExpired) {
+      // Jika expired, paksa immediate payment
+      await handleConfirmUpgrade();
+      return;
+    }
+    
     try {
       await schedulePlanChange.mutateAsync({
         current_plan_id: proRatedData.current_plan.id,
@@ -666,7 +687,7 @@ const HRISSubscriptionPlansTab = () => {
       console.error(error);
       toast.error("Gagal menjadwalkan perubahan.");
     }
-  }, [schedulePlanChange, proRatedData, selectedPlan]);
+  }, [schedulePlanChange, proRatedData, selectedPlan, subscriptionStatus, handleConfirmUpgrade]);
 
   if (isLoading) {
     return (

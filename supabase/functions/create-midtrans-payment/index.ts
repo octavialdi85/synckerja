@@ -8,6 +8,16 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const addBillingInterval = (baseDate: Date, billingCycle: string) => {
+  const result = new Date(baseDate);
+  if (billingCycle === "yearly") {
+    result.setFullYear(result.getFullYear() + 1);
+  } else {
+    result.setMonth(result.getMonth() + 1);
+  }
+  return result;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -54,6 +64,12 @@ serve(async (req) => {
     const orderId = `ORD-${timestamp}-${randomStr}`;
     const grossAmount = Math.round(amount);
     console.log("Order details:", { orderId, grossAmount });
+
+    // All payments must go through Midtrans - reject zero amount payments
+    if (grossAmount <= 0) {
+      console.error("❌ Zero or negative amount not allowed - all payments must go through Midtrans");
+      throw new Error("Payment amount must be greater than 0. All payments must be processed through Midtrans.");
+    }
 
     const serverKey = Deno.env.get("MIDTRANS_SERVER_KEY");
     const clientKey = Deno.env.get("MIDTRANS_CLIENT_KEY");
