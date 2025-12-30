@@ -6,7 +6,7 @@ import { SubscriptionPlan } from '@/features/10-management/hooks/useOptimizedSub
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
 import { EmployeeRemovalSelector } from '../components/EmployeeRemovalSelector';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useEmployeeCount } from '@/features/share/hooks/useEmployeeCount';
 import './UpgradeConfirmationModal.css';
 
@@ -106,6 +106,15 @@ export const UpgradeConfirmationModal = ({
     });
   }
 
+  // Reset selection state when requiresRemoval changes
+  useEffect(() => {
+    if (!requiresRemoval) {
+      setIsRemovalSelectionValid(false);
+      setRemovalSelectionCount(0);
+      setRequiredRemovalCount(0);
+    }
+  }, [requiresRemoval]);
+
   // Handler for selection change
   const handleRemovalSelectionChange = useCallback((selectedCount: number, requiredCount: number) => {
     setRemovalSelectionCount(selectedCount);
@@ -148,8 +157,8 @@ export const UpgradeConfirmationModal = ({
     return t('subscription.plans.modal.button.confirmPay', 'Confirm & Pay');
   };
 
-  // Only disable if it's a downgrade AND currentEmployeeCount > newCount AND selection is not valid
-  const isConfirmDisabled = requiresRemoval && currentEmployeeCount > effectiveNewCount && !isRemovalSelectionValid;
+  // Disable button if removal is required and selection is not yet valid
+  const isConfirmDisabled = requiresRemoval && !isRemovalSelectionValid;
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return t('subscription.plans.modal.date.unavailable', 'Date unavailable');
