@@ -72,5 +72,12 @@ export const getCurrentActiveCycle = (cycles: OkrCycle[]): OkrCycle | undefined 
 
 export const getDefaultCycleForCurrentPeriod = (cycles: OkrCycle[]): string => {
   const currentCycle = getCurrentActiveCycle(cycles);
-  return currentCycle?.id || '';
+  if (currentCycle?.id) {
+    return currentCycle.id;
+  }
+  // Fallback to first available cycle (most recent)
+  if (cycles.length > 0) {
+    return cycles[0].id;
+  }
+  return '';
 };

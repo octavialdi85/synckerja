@@ -12,6 +12,7 @@ import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { toast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 // import { useCreateIndividualObjective } from '@/hooks/organized/okr'; // TODO: File not found
 import type { Objective } from '@/types/okr';
 
@@ -30,6 +31,7 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
 }) => {
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
   const { departments = [] } = useDepartments(organizationId);
   const { data: allEmployees = [] } = useEmployees();
   // TODO: Implement these hooks when available
@@ -199,6 +201,12 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
       }
 
       console.log('✅ Key result created successfully:', insertedKeyResult);
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['department-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['key-results'] });
+      queryClient.invalidateQueries({ queryKey: ['company-objectives'] });
+      queryClient.invalidateQueries({ queryKey: ['individual-objectives'] });
 
       toast({
         title: 'Success',

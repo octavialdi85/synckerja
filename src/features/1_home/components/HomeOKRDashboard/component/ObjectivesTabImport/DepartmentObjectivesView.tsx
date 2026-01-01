@@ -215,7 +215,10 @@ export const DepartmentObjectivesView = ({
   const handleCreateKR = (objective: any) => {
     setCreateKRDialog({
       open: true,
-      objective
+      objective: {
+        ...objective,
+        level: 'department' // Ensure level is set for CreateKeyResultDialog
+      }
     });
   };
   const handleCreateObjective = (departmentId: string) => {
@@ -587,129 +590,132 @@ export const DepartmentObjectivesView = ({
       </div>
     );
   }
-  return <div className="h-full w-full flex flex-col">
-      <div className="flex-1 w-full overflow-auto">
-        <div className="space-y-4 h-full">
-          
+  return (
+    <>
+      <div className="h-full w-full flex flex-col">
+        <div className="flex-1 w-full overflow-auto">
+          <div className="space-y-4 h-full">
+            
 
-          {/* Department List with Expand/Collapse */}
-          <div className="space-y-2">
-            {departments.filter(department => {
-              // Filter out departments that are actually organization names
-              const orgNamePatterns = [
-                'PT Softorb Technology Indonesia',
-                'Softorb Technology',
-                'Softorb',
-                'Technology Indonesia'
-              ];
-              return !orgNamePatterns.some(pattern => 
-                department.name.toLowerCase().includes(pattern.toLowerCase())
-              );
-            }).map(department => {
-            const departmentObjectivesMap = objectivesByDepartmentAndStatus.get(department.id) || new Map();
-            const activeObjectives = departmentObjectivesMap.get('active') || [];
-            const draftObjectives = departmentObjectivesMap.get('draft') || [];
-            const completedObjectives = departmentObjectivesMap.get('completed') || [];
-            const totalObjectives = activeObjectives.length + draftObjectives.length + completedObjectives.length;
-            return <div key={department.id} className="border border-gray-200 rounded-lg w-full">
-              <Collapsible open={expandedDepartments.has(department.id)} onOpenChange={() => toggleDepartment(department.id)}>
-                <CollapsibleTrigger asChild>
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors w-full">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center space-x-3 flex-1">
-                        {expandedDepartments.has(department.id) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-                        <Building className="h-4 w-4 text-purple-600" />
-                        <span className="font-medium text-gray-900">{department.name}</span>
-                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                          {totalObjectives} Objectives
-                        </Badge>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0">
-                        {/* Three Dots Dropdown Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={e => e.stopPropagation()}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={e => {
-                              e.stopPropagation();
-                              handleCreateObjective(department.id);
-                            }} className="flex items-center">
-                              <Plus className="h-4 w-4 mr-2" />
-                              Create Objective
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={e => {
-                              e.stopPropagation();
-                              handleAddContribution(department.id);
-                            }} className="flex items-center">
-                              <Target className="h-4 w-4 mr-2" />
-                              Add Contribution
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+            {/* Department List with Expand/Collapse */}
+            <div className="space-y-2">
+              {departments.filter(department => {
+                // Filter out departments that are actually organization names
+                const orgNamePatterns = [
+                  'PT Softorb Technology Indonesia',
+                  'Softorb Technology',
+                  'Softorb',
+                  'Technology Indonesia'
+                ];
+                return !orgNamePatterns.some(pattern => 
+                  department.name.toLowerCase().includes(pattern.toLowerCase())
+                );
+              }).map(department => {
+              const departmentObjectivesMap = objectivesByDepartmentAndStatus.get(department.id) || new Map();
+              const activeObjectives = departmentObjectivesMap.get('active') || [];
+              const draftObjectives = departmentObjectivesMap.get('draft') || [];
+              const completedObjectives = departmentObjectivesMap.get('completed') || [];
+              const totalObjectives = activeObjectives.length + draftObjectives.length + completedObjectives.length;
+              return <div key={department.id} className="border border-gray-200 rounded-lg w-full">
+                <Collapsible open={expandedDepartments.has(department.id)} onOpenChange={() => toggleDepartment(department.id)}>
+                  <CollapsibleTrigger asChild>
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors w-full">
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-3 flex-1">
+                          {expandedDepartments.has(department.id) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                          <Building className="h-4 w-4 text-purple-600" />
+                          <span className="font-medium text-gray-900">{department.name}</span>
+                          <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                            {totalObjectives} Objectives
+                          </Badge>
+                        </div>
+                        <div className="flex items-center space-x-2 flex-shrink-0">
+                          {/* Three Dots Dropdown Menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={e => e.stopPropagation()}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={e => {
+                                e.stopPropagation();
+                                handleCreateObjective(department.id);
+                              }} className="flex items-center">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Objective
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => {
+                                e.stopPropagation();
+                                handleAddContribution(department.id);
+                              }} className="flex items-center">
+                                <Target className="h-4 w-4 mr-2" />
+                                Add Contribution
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CollapsibleTrigger>
-                
-                <CollapsibleContent>
-                  <div className="p-4">
-                    {totalObjectives === 0 ? <DepartmentObjectivesEmptyState departmentName={department.name} onCreateObjective={() => handleCreateObjective(department.id)} onAddContribution={() => handleAddContribution(department.id)} /> : <div className="space-y-4">
-                        {/* Active Objectives */}
-                        {activeObjectives.length > 0 && <div>
-                            <div className="flex items-center space-x-2 mb-2">
-                              <TrendingUp className="h-4 w-4 text-green-600" />
-                              <span className="text-sm font-medium text-gray-900">Active</span>
-                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                                {activeObjectives.length}
-                              </Badge>
-                            </div>
-                            <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
-                              {activeObjectives.map(objective => renderObjectiveCard(objective, department.id, 'active', 'border-l-green-500', 'text-green-600'))}
-                            </Accordion>
-                          </div>}
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent>
+                    <div className="p-4">
+                      {totalObjectives === 0 ? <DepartmentObjectivesEmptyState departmentName={department.name} onCreateObjective={() => handleCreateObjective(department.id)} onAddContribution={() => handleAddContribution(department.id)} /> : <div className="space-y-4">
+                          {/* Active Objectives */}
+                          {activeObjectives.length > 0 && <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <TrendingUp className="h-4 w-4 text-green-600" />
+                                <span className="text-sm font-medium text-gray-900">Active</span>
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                  {activeObjectives.length}
+                                </Badge>
+                              </div>
+                              <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
+                                {activeObjectives.map(objective => renderObjectiveCard(objective, department.id, 'active', 'border-l-green-500', 'text-green-600'))}
+                              </Accordion>
+                            </div>}
 
-                        {/* Draft Objectives */}
-                        {draftObjectives.length > 0 && <div>
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Calendar className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm font-medium text-gray-900">Draft</span>
-                              <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
-                                {draftObjectives.length}
-                              </Badge>
-                            </div>
-                            <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
-                              {draftObjectives.map(objective => renderObjectiveCard(objective, department.id, 'draft', 'border-l-yellow-500', 'text-yellow-600'))}
-                            </Accordion>
-                          </div>}
+                          {/* Draft Objectives */}
+                          {draftObjectives.length > 0 && <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Calendar className="h-4 w-4 text-yellow-600" />
+                                <span className="text-sm font-medium text-gray-900">Draft</span>
+                                <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                                  {draftObjectives.length}
+                                </Badge>
+                              </div>
+                              <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
+                                {draftObjectives.map(objective => renderObjectiveCard(objective, department.id, 'draft', 'border-l-yellow-500', 'text-yellow-600'))}
+                              </Accordion>
+                            </div>}
 
-                        {/* Completed Objectives */}
-                        {completedObjectives.length > 0 && <div>
-                            <div className="flex items-center space-x-2 mb-2">
-                              <CheckCircle className="h-4 w-4 text-blue-600" />
-                              <span className="text-sm font-medium text-gray-900">Completed</span>
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                {completedObjectives.length}
-                              </Badge>
-                            </div>
-                             <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
-                               {completedObjectives.map(objective => renderObjectiveCard(objective, department.id, 'completed', 'border-l-blue-500', 'text-blue-600'))}
-                             </Accordion>
-                           </div>}
+                          {/* Completed Objectives */}
+                          {completedObjectives.length > 0 && <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <CheckCircle className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm font-medium text-gray-900">Completed</span>
+                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                  {completedObjectives.length}
+                                </Badge>
+                              </div>
+                               <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective} className="space-y-2">
+                                 {completedObjectives.map(objective => renderObjectiveCard(objective, department.id, 'completed', 'border-l-blue-500', 'text-blue-600'))}
+                               </Accordion>
+                             </div>}
 
-                        {/* Individual Objectives Section */}
-                        
-                      </div>}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>;
-          })}
+                          {/* Individual Objectives Section */}
+                          
+                        </div>}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>;
+            })}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
       
       {/* TODO: Use ModalAddDepartmentContribution instead */}
       {/* <ModalCreateObjective open={showCreateDialog} onOpenChange={setShowCreateDialog} organizationId={organizationId} cycleId={cycleId || ''} departmentId={selectedDepartmentId} level="company" // Use company level since that's what we have
@@ -724,22 +730,11 @@ export const DepartmentObjectivesView = ({
         cycleIds={finalCycleIds} 
         departmentId={selectedDepartmentId}
         onSuccess={() => {
-          console.log('Department contribution created successfully');
+          console.log("Department contribution created successfully");
         }} 
       />
       
-      {/* Debug logging for cycle IDs */}
-      {showContributionModal && (
-        <React.Fragment>
-          {console.log('DepartmentObjectivesView - Modal Cycle IDs Debug:', {
-            cycleId,
-            cycleIds,
-            finalCycleIds,
-            targetCycleId: '32531393-da93-405c-bf32-2f75c9f9941d',
-            targetCycleInFinal: finalCycleIds?.includes('32531393-da93-405c-bf32-2f75c9f9941d')
-          })}
-        </React.Fragment>
-      )}
+      {/* Debug logging for cycle IDs - moved to useEffect above */}
 
       {/* Create Key Result Dialog */}
       {createKRDialog.open && createKRDialog.objective && <CreateKeyResultDialog open={createKRDialog.open} onOpenChange={open => setCreateKRDialog({
@@ -772,5 +767,6 @@ export const DepartmentObjectivesView = ({
           }}
         />
       )}
-    </div>;
+    </>
+  );
 };

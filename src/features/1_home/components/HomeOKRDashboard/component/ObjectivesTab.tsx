@@ -101,7 +101,9 @@ export const ObjectivesTab = ({
   React.useEffect(() => {
     if (okrCycles.length > 0 && !selectedCycleId && filteredCycleIds.length === 0) {
       const defaultCycleId = getDefaultCycleForCurrentPeriod(okrCycles);
-      setSelectedCycleId(defaultCycleId);
+      if (defaultCycleId) {
+        setSelectedCycleId(defaultCycleId);
+      }
     }
   }, [okrCycles, selectedCycleId, filteredCycleIds]);
 
@@ -174,45 +176,31 @@ export const ObjectivesTab = ({
   }
 
   // Special handling for department objectives
-  if (type === 'department' && (hasMultipleCycles || selectedCycleId) && organizationId) {
+  if (type === 'department' && organizationId) {
     return (
       <div className="space-y-4 h-full w-full flex flex-col">
-        {hasYearQuarterSelection(yearQuarterSelection) ? (
-          <div className="flex-1">
-            <DepartmentObjectivesView 
-              organizationId={organizationId}
-              cycleId={hasMultipleCycles ? undefined : selectedCycleId}
-              cycleIds={hasMultipleCycles ? filteredCycleIds : undefined}
-            />
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500 flex-1 flex items-center justify-center">
-            <p>Please select a time period to view objectives</p>
-          </div>
-        )}
-
+        <div className="flex-1">
+          <DepartmentObjectivesView 
+            organizationId={organizationId}
+            cycleId={hasMultipleCycles ? undefined : selectedCycleId || undefined}
+            cycleIds={hasMultipleCycles ? filteredCycleIds : undefined}
+          />
+        </div>
       </div>
     );
   }
 
   // Special handling for individual objectives - show employee list
-  if (type === 'individual' && (hasMultipleCycles || selectedCycleId) && organizationId) {
+  if (type === 'individual' && organizationId) {
     return (
       <div className="space-y-4 h-full w-full flex flex-col">
-        {hasYearQuarterSelection(yearQuarterSelection) ? (
-          <div className="flex-1">
-            <IndividualObjectivesView 
-              organizationId={organizationId}
-              cycleId={hasMultipleCycles ? undefined : selectedCycleId}
-              cycleIds={hasMultipleCycles ? filteredCycleIds : undefined}
-            />
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500 flex-1 flex items-center justify-center">
-            <p>Please select a time period to view objectives</p>
-          </div>
-        )}
-
+        <div className="flex-1">
+          <IndividualObjectivesView 
+            organizationId={organizationId}
+            cycleId={hasMultipleCycles ? undefined : selectedCycleId || undefined}
+            cycleIds={hasMultipleCycles ? filteredCycleIds : undefined}
+          />
+        </div>
       </div>
     );
   }
