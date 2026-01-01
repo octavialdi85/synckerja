@@ -110,6 +110,11 @@ export const TableHeader: React.FC = () => {
           Post Link
         </th>
 
+        {/* PIC POST */}
+        <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
+          PIC POST
+        </th>
+
         {/* Done */}
         <th style={{ width: '64px', minWidth: '64px', maxWidth: '64px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
           Done

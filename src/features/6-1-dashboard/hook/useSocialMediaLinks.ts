@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SocialMediaLink, CreateSocialMediaLinkData, UpdateSocialMediaLinkData } from '@/types/social-media-links';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 const SOCIAL_MEDIA_LINKS_QUERY_KEY = 'socialMediaLinks';
 
 export const useSocialMediaLinks = (planId?: string) => {
   const queryClient = useQueryClient();
+  const { data: currentEmployee } = useCurrentEmployee();
 
   // Fetch social media links for a specific plan
   const { data: links = [], isLoading, error } = useQuery({
@@ -112,11 +114,55 @@ export const useSocialMediaLinks = (planId?: string) => {
         (old: SocialMediaLink[] = []) => [...old, newLink]
       );
       
+      // Check from database if this is the first link (more reliable than cache)
+      // We need to check BEFORE we update the cache, so we query the database
+      const { data: existingLinks, error: checkError } = await supabase
+        .from('social_media_links')
+        .select('id, created_at')
+        .eq('social_media_plan_id', newLink.social_media_plan_id)
+        .order('created_at', { ascending: true });
+      
+      // Check if this is the first link (oldest created_at)
+      const isFirstLink = !checkError && existingLinks && existingLinks.length > 0 
+        ? existingLinks[0].id === newLink.id // The link we just created is the oldest
+        : false;
+      
+      // Also check if post_link_created_by is already set
+      const { data: planData } = await supabase
+        .from('social_media_plans')
+        .select('post_link_created_by')
+        .eq('id', newLink.social_media_plan_id)
+        .single();
+      
+      const needsUpdate = isFirstLink && !planData?.post_link_created_by && currentEmployee?.id;
+      
       // Update actual post date when first link is created
       await updateActualPostDate(newLink.social_media_plan_id);
       
+      // If this is the first link and post_link_created_by is not set, set it
+      if (needsUpdate) {
+        const { error: updateError } = await supabase
+          .from('social_media_plans')
+          .update({ 
+            post_link_created_by: currentEmployee.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', newLink.social_media_plan_id);
+        
+        if (updateError) {
+          console.error('Failed to update post_link_created_by:', updateError);
+        } else {
+          console.log('✅ post_link_created_by set to:', currentEmployee.id, 'for plan:', newLink.social_media_plan_id);
+        }
+      } else if (isFirstLink && !currentEmployee?.id) {
+        console.warn('⚠️ Cannot set post_link_created_by: currentEmployee not available for plan:', newLink.social_media_plan_id);
+      } else if (isFirstLink && planData?.post_link_created_by) {
+        console.log('ℹ️ post_link_created_by already set for plan:', newLink.social_media_plan_id);
+      }
+      
       // Invalidate content plans to refresh the table
       queryClient.invalidateQueries({ queryKey: ['content-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
       // Invalidate all-social-media-links query to refresh ContentPostTab immediately
       queryClient.invalidateQueries({ 
         queryKey: ['all-social-media-links'],
@@ -186,10 +232,24 @@ export const useSocialMediaLinks = (planId?: string) => {
         const remainingLinks = queryClient.getQueryData([SOCIAL_MEDIA_LINKS_QUERY_KEY, planId]) as SocialMediaLink[] || [];
         if (remainingLinks.length === 0) {
           await clearActualPostDate(planId);
+          
+          // Clear post_link_created_by when all links are deleted
+          const { error: updateError } = await supabase
+            .from('social_media_plans')
+            .update({ 
+              post_link_created_by: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', planId);
+          
+          if (updateError) {
+            console.error('Failed to clear post_link_created_by:', updateError);
+          }
         }
         
         // Invalidate content plans to refresh the table
         queryClient.invalidateQueries({ queryKey: ['content-plans'] });
+        queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
       }
       // Invalidate all-social-media-links query to refresh ContentPostTab immediately
       queryClient.invalidateQueries({ 
@@ -362,16 +422,62 @@ export const useSocialMediaLinks = (planId?: string) => {
     },
     onSuccess: async (newLinks) => {
       if (newLinks.length > 0 && planId) {
+        const planIdForCheck = newLinks[0].social_media_plan_id;
+        
         queryClient.setQueryData(
           [SOCIAL_MEDIA_LINKS_QUERY_KEY, planId],
           (old: SocialMediaLink[] = []) => [...old, ...newLinks]
         );
         
+        // Check from database if these are the first links (more reliable than cache)
+        const { data: existingLinks, error: checkError } = await supabase
+          .from('social_media_links')
+          .select('id, created_at')
+          .eq('social_media_plan_id', planIdForCheck)
+          .order('created_at', { ascending: true });
+        
+        // Check if the new links are the first ones (oldest created_at)
+        const newLinkIds = new Set(newLinks.map(l => l.id));
+        const isFirstLinks = !checkError && existingLinks && existingLinks.length > 0
+          ? existingLinks.slice(0, newLinks.length).every(link => newLinkIds.has(link.id)) // All oldest links are the ones we just created
+          : false;
+        
+        // Also check if post_link_created_by is already set
+        const { data: planData } = await supabase
+          .from('social_media_plans')
+          .select('post_link_created_by')
+          .eq('id', planIdForCheck)
+          .single();
+        
+        const needsUpdate = isFirstLinks && !planData?.post_link_created_by && currentEmployee?.id;
+        
         // Update actual post date when links are created
-        await updateActualPostDate(newLinks[0].social_media_plan_id);
+        await updateActualPostDate(planIdForCheck);
+        
+        // If these are the first links and post_link_created_by is not set, set it
+        if (needsUpdate) {
+          const { error: updateError } = await supabase
+            .from('social_media_plans')
+            .update({ 
+              post_link_created_by: currentEmployee.id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', planIdForCheck);
+          
+          if (updateError) {
+            console.error('Failed to update post_link_created_by:', updateError);
+          } else {
+            console.log('✅ post_link_created_by set to:', currentEmployee.id, 'for plan:', planIdForCheck);
+          }
+        } else if (isFirstLinks && !currentEmployee?.id) {
+          console.warn('⚠️ Cannot set post_link_created_by: currentEmployee not available for plan:', planIdForCheck);
+        } else if (isFirstLinks && planData?.post_link_created_by) {
+          console.log('ℹ️ post_link_created_by already set for plan:', planIdForCheck);
+        }
         
         // Invalidate content plans to refresh the table
         queryClient.invalidateQueries({ queryKey: ['content-plans'] });
+        queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
       }
       // Invalidate all-social-media-links query to refresh ContentPostTab immediately
       queryClient.invalidateQueries({ 

@@ -1050,6 +1050,17 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         }} />
         </td>
 
+        {/* PIC POST - Show employee who added first link */}
+        <td style={{
+        width: '180px',
+        minWidth: '180px',
+        maxWidth: '180px'
+      }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
+          <span className="text-xs text-gray-600">
+            {plan.post_link_creator?.full_name || '-'}
+          </span>
+        </td>
+
         {/* Done - Auto-controlled by Social Media Links */}
         <td style={{
         width: '64px',

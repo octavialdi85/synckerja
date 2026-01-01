@@ -23,6 +23,7 @@ export interface ContentPlan {
   production_approved: boolean;
   production_approved_date: string | null;
   post_link: any | null; // Changed from Record<string, string> to any to handle Json type
+  post_link_created_by: string | null; // Employee who added the first post link
   done: boolean;
   actual_post_date: string | null;
   on_time_status: string;
@@ -51,6 +52,10 @@ export interface ContentPlan {
     full_name: string;
   };
   pic_production?: {
+    id: string;
+    full_name: string;
+  };
+  post_link_creator?: {
     id: string;
     full_name: string;
   };

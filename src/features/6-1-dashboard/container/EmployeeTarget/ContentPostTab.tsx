@@ -8,7 +8,6 @@ import "react-datepicker/dist/react-datepicker.css";
 // import "@/styles/datepicker.css"; // File tidak ada
 import { format } from 'date-fns';
 import { ContentManager } from '../../types/social-media';
-import { useDigitalMarketingEmployees } from '../../hook/useDigitalMarketingEmployees';
 import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
 import { useEmployeeTargets } from '../../hook/useEmployeeTargets';
 import { useQuery } from '@tanstack/react-query';
@@ -36,7 +35,6 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
   const dailyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const monthlyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { contentPlans } = useOptimizedSocialMedia();
   const { targets } = useEmployeeTargets();
 
@@ -165,6 +163,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
   // Logic: count when done=true (toggle Done = On) OR has social media links
   // Priority: actual_post_date > post_date for date matching
   // Use useCallback to memoize function and ensure it updates when dependencies change
+  // For Content Post tab, use post_link_created_by (PIC POST column) instead of pic_id
   const calculateDailyPosted = useCallback((picId: string, targetDate: Date) => {
     // Use local date to avoid timezone issues (same as ProductionTab and ContentPlannerTab)
     const year = targetDate.getFullYear();
@@ -173,8 +172,8 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
     const targetDateString = `${year}-${month}-${day}`;
     
     return contentPlans.filter(plan => {
-      // Must have pic_id
-      if (!plan.pic_id || plan.pic_id !== picId) {
+      // Must have post_link_created_by (PIC POST) and match the picId
+      if (!plan.post_link_created_by || plan.post_link_created_by !== picId) {
         return false;
       }
 
@@ -213,13 +212,14 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
 
   // Calculate monthly posted content count for specific PIC and month/year
   // Use useCallback to memoize function and ensure it updates when dependencies change
+  // For Content Post tab, use post_link_created_by (PIC POST column) instead of pic_id
   const calculateMonthlyPosted = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
     return contentPlans.filter(plan => {
-      // Must have pic_id
-      if (!plan.pic_id || plan.pic_id !== picId) {
+      // Must have post_link_created_by (PIC POST) and match the picId
+      if (!plan.post_link_created_by || plan.post_link_created_by !== picId) {
         return false;
       }
 
@@ -247,12 +247,14 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
 
   // Calculate on time rate for content posting
   // Use useCallback to memoize function and ensure it updates when dependencies change
+  // For Content Post tab, use post_link_created_by (PIC POST column) instead of pic_id
   const calculatePostingOnTimeRate = useCallback((picId: string, targetDate: Date) => {
     const targetYear = targetDate.getFullYear();
     const targetMonth = targetDate.getMonth();
     
     const monthlyPlans = contentPlans.filter(plan => {
-      if (!plan.pic_id || plan.pic_id !== picId || !plan.post_date) {
+      // Must have post_link_created_by (PIC POST) and match the picId
+      if (!plan.post_link_created_by || plan.post_link_created_by !== picId || !plan.post_date) {
         return false;
       }
       
@@ -291,20 +293,23 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
 
   // Get actual PIC names from content plans with calculated metrics
   // Use useMemo to recalculate when contentPlans, allSocialMediaLinks, or dates change
+  // For Content Post tab, use post_link_created_by (PIC POST column) instead of pic_id
   const actualPostingPICData = useMemo(() => {
     const picData = [];
     
-    // Get unique PICs from content plans
-    const uniquePICs = new Set();
+    // Get unique PICs from content plans based on post_link_created_by (PIC POST column)
+    const uniquePICs = new Set<string>();
     contentPlans.forEach(plan => {
-      if (plan.pic_id && !uniquePICs.has(plan.pic_id)) {
-        uniquePICs.add(plan.pic_id);
+      // Use post_link_created_by instead of pic_id for Content Post tab
+      if (plan.post_link_created_by && !uniquePICs.has(plan.post_link_created_by)) {
+        uniquePICs.add(plan.post_link_created_by);
         
-        const employee = digitalEmployees.find(emp => emp.id === plan.pic_id);
+        // Get employee data from post_link_creator relation (already in plan data from UI)
+        const employee = plan.post_link_creator;
         if (employee) {
-          const dailyPostedCount = calculateDailyPosted(plan.pic_id, dailyTargetDate);
-          const monthlyPostedCount = calculateMonthlyPosted(plan.pic_id, monthlyTargetDate);
-          const onTimeRate = calculatePostingOnTimeRate(plan.pic_id, monthlyTargetDate);
+          const dailyPostedCount = calculateDailyPosted(plan.post_link_created_by, dailyTargetDate);
+          const monthlyPostedCount = calculateMonthlyPosted(plan.post_link_created_by, monthlyTargetDate);
+          const onTimeRate = calculatePostingOnTimeRate(plan.post_link_created_by, monthlyTargetDate);
           const employeeTarget = getEmployeeTarget(employee.id);
           
           const currentValue = monthlyPostedCount; // Use monthly posted count as current value
@@ -335,7 +340,7 @@ const ContentPostTab: React.FC<ContentPostTabProps> = ({
     });
     
     return picData;
-  }, [contentPlans, allSocialMediaLinks, dailyTargetDate, monthlyTargetDate, digitalEmployees, targets, calculateDailyPosted, calculateMonthlyPosted, calculatePostingOnTimeRate]);
+  }, [contentPlans, allSocialMediaLinks, dailyTargetDate, monthlyTargetDate, targets, calculateDailyPosted, calculateMonthlyPosted, calculatePostingOnTimeRate]);
 
   const displayData = actualPostingPICData.slice(currentPICPage * 2, (currentPICPage + 1) * 2);
   

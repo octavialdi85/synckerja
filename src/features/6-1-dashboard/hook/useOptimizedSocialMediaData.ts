@@ -52,6 +52,7 @@ export const useOptimizedSocialMediaData = () => {
           production_approved,
           production_approved_date,
           post_link,
+          post_link_created_by,
           done,
           actual_post_date,
           on_time_status,
@@ -63,7 +64,8 @@ export const useOptimizedSocialMediaData = () => {
           sub_service:sub_services(id, name),
           content_pillar:content_pillars(id, name, color),
           pic:employees!social_media_plans_pic_id_fkey(id, full_name),
-          pic_production:employees!social_media_plans_pic_production_id_fkey(id, full_name)
+          pic_production:employees!social_media_plans_pic_production_id_fkey(id, full_name),
+          post_link_creator:employees!social_media_plans_post_link_created_by_fkey(id, full_name)
         `)
         .eq('organization_id', organizationId)
         .order('post_date', { ascending: false, nullsFirst: true })
