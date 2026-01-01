@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -11,6 +11,8 @@ import {
 } from '@/features/ui/accordion';
 import { Search, Building2, Users, Check, Target, Loader2, ChevronDown } from 'lucide-react';
 import { useObjectives } from '@/features/1_home/components/HomeOKRDashboard/component/ObjectivesTabImport/useObjectives';
+import { useCompanyObjectives } from '@/features/2-8-dashboard/hooks/useCompanyObjectives';
+import { useDepartmentObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useDepartmentObjectives';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { Progress } from '@/features/ui/progress';
 import {
@@ -62,6 +64,7 @@ interface ObjectiveHierarchyDialogProps {
   selectedObjectiveId?: string;
   organizationId: string;
   cycleIds: string[];
+  planDate?: Date | null; // Optional plan date to filter cycles
 }
 
 export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> = ({
@@ -71,24 +74,119 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   selectedObjectiveId,
   organizationId,
   cycleIds,
+  planDate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedObjectiveId);
   const [expandedCompany, setExpandedCompany] = useState<string | undefined>(undefined);
   const [expandedDepartments, setExpandedDepartments] = useState<Record<string, string | undefined>>({});
 
-  // Fetch Company Objectives with nested Department Objectives
-  const { data: companyObjectives = [], isLoading: isLoadingCompany } = useObjectives(
+  // Fetch Company Objectives - use useCompanyObjectives which supports multiple cycle IDs
+  const { data: companyObjectivesRaw = [], isLoading: isLoadingCompany } = useCompanyObjectives(
     organizationId,
-    cycleIds[0], // Use first cycle ID for company objectives
-    'company'
+    cycleIds.length > 0 ? cycleIds : undefined
   );
 
-  // Fetch Individual Objectives
-  const { data: individualObjectives = [], isLoading: isLoadingIndividual } = useIndividualObjectives(
+  // Fetch Department Objectives - use useDepartmentObjectives which supports multiple cycle IDs
+  const { data: departmentObjectivesRaw = [] } = useDepartmentObjectives(
+    organizationId,
+    cycleIds.length > 0 ? cycleIds : undefined,
+    false // Don't include individual objectives
+  );
+
+  // Also fetch ALL department objectives to find ones linked to company objectives (even if cycle_id differs)
+  // This ensures we show department objectives that are logically connected to company objectives
+  const { data: allDepartmentObjectivesRaw = [] } = useDepartmentObjectives(
+    organizationId,
+    undefined, // Fetch all department objectives
+    false
+  );
+
+  // Transform company objectives to include their department objectives
+  const companyObjectives = React.useMemo(() => {
+    if (!companyObjectivesRaw || companyObjectivesRaw.length === 0) return [];
+    
+    // Get company objective IDs from filtered results
+    const companyObjectiveIds = new Set(companyObjectivesRaw.map((co: any) => co.id));
+    
+    // Group department objectives by company_objective_id
+    // First, use filtered department objectives (same cycle)
+    const deptByCompany = new Map<string, any[]>();
+    departmentObjectivesRaw.forEach((dept: any) => {
+      if (dept.company_objective_id && companyObjectiveIds.has(dept.company_objective_id)) {
+        if (!deptByCompany.has(dept.company_objective_id)) {
+          deptByCompany.set(dept.company_objective_id, []);
+        }
+        deptByCompany.get(dept.company_objective_id)!.push(dept);
+      }
+    });
+    
+    // If no department objectives found for filtered cycles, try to find any department objectives
+    // linked to the company objectives (even if cycle_id differs)
+    if (deptByCompany.size === 0) {
+      allDepartmentObjectivesRaw.forEach((dept: any) => {
+        if (dept.company_objective_id && companyObjectiveIds.has(dept.company_objective_id)) {
+          if (!deptByCompany.has(dept.company_objective_id)) {
+            deptByCompany.set(dept.company_objective_id, []);
+          }
+          deptByCompany.get(dept.company_objective_id)!.push(dept);
+        }
+      });
+    }
+
+    // Map company objectives with their department objectives
+    return companyObjectivesRaw.map((co: any) => ({
+      ...co,
+      department_objectives: deptByCompany.get(co.id) || [],
+      key_results: deptByCompany.get(co.id) || [] // Also set as key_results for compatibility
+    }));
+  }, [companyObjectivesRaw, departmentObjectivesRaw, allDepartmentObjectivesRaw]);
+
+  // Fetch Individual Objectives - filtered by cycle
+  const { data: individualObjectivesFiltered = [], isLoading: isLoadingIndividualFiltered } = useIndividualObjectives(
     organizationId,
     cycleIds
   );
+  
+  // Also fetch ALL individual objectives to find ones linked to department objectives (even if cycle_id differs)
+  const { data: individualObjectivesAll = [] } = useIndividualObjectives(
+    organizationId,
+    undefined // Fetch all individual objectives
+  );
+  
+  // Use filtered individual objectives, but also include ones linked to department objectives we're showing
+  const departmentObjectiveIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    companyObjectives.forEach((co: any) => {
+      const depts = co.department_objectives || co.key_results || [];
+      depts.forEach((dept: any) => {
+        ids.add(dept.id);
+      });
+    });
+    return ids;
+  }, [companyObjectives]);
+  
+  const individualObjectives = React.useMemo(() => {
+    // Start with filtered individual objectives
+    const result = [...individualObjectivesFiltered];
+    
+    // If we have department objectives but no individual objectives in filtered results,
+    // add individual objectives linked to those department objectives (even if cycle_id differs)
+    if (departmentObjectiveIds.size > 0 && individualObjectivesFiltered.length === 0) {
+      individualObjectivesAll.forEach((indiv: any) => {
+        if (indiv.department_objective_id && departmentObjectiveIds.has(indiv.department_objective_id)) {
+          // Avoid duplicates
+          if (!result.find(r => r.id === indiv.id)) {
+            result.push(indiv);
+          }
+        }
+      });
+    }
+    
+    return result;
+  }, [individualObjectivesFiltered, individualObjectivesAll, departmentObjectiveIds]);
+  
+  const isLoadingIndividual = isLoadingIndividualFiltered;
 
   // Build hierarchy structure
   const hierarchy = useMemo(() => {
@@ -129,6 +227,18 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
       }
     });
 
+    // Calculate department progress from individual objectives if available
+    departmentMap.forEach((dept) => {
+      if (dept.individuals.length > 0) {
+        // Calculate average progress from individual objectives
+        const totalIndividualProgress = dept.individuals.reduce((sum, indiv) => {
+          return sum + (indiv.progress_percentage || 0);
+        }, 0);
+        dept.progress_percentage = totalIndividualProgress / dept.individuals.length;
+      }
+      // If no individual objectives, keep the original progress from key_results
+    });
+
     // Build final hierarchy
     const result = (companyObjectives as any[]).map((company) => {
       // Check both department_objectives and key_results (transformed format)
@@ -145,11 +255,21 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
         };
       });
 
+      // Calculate company objective progress from department objectives
+      // If there are department objectives, calculate average progress
+      let calculatedProgress = (company as any).progress_percentage || 0;
+      if (departments.length > 0) {
+        const totalDeptProgress = departments.reduce((sum, dept) => {
+          return sum + (dept.progress_percentage || 0);
+        }, 0);
+        calculatedProgress = totalDeptProgress / departments.length;
+      }
+
       return {
         id: company.id,
         title: company.title,
         status: company.status,
-        progress_percentage: (company as any).progress_percentage || 0,
+        progress_percentage: calculatedProgress,
         departments,
       };
     });
@@ -158,11 +278,27 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   }, [companyObjectives, individualObjectives]);
 
   // Get standalone Individual Objectives (without department)
+  // Also include individual objectives that have department_objective_id but no matching department in hierarchy
   const standaloneObjectives = useMemo(() => {
+    // Get all department IDs that exist in the hierarchy
+    const departmentIdsInHierarchy = new Set<string>();
+    hierarchy.forEach(company => {
+      company.departments.forEach(dept => {
+        departmentIdsInHierarchy.add(dept.id);
+      });
+    });
+
+    // Standalone = no department_objective_id OR department_objective_id not in hierarchy
     return individualObjectives.filter(
-      (indiv) => !indiv.department_objective_id
+      (indiv) => {
+        if (!indiv.department_objective_id) {
+          return true; // Truly standalone
+        }
+        // Has department_objective_id but department not in hierarchy (no company objectives)
+        return !departmentIdsInHierarchy.has(indiv.department_objective_id);
+      }
     );
-  }, [individualObjectives]);
+  }, [individualObjectives, hierarchy]);
 
   // Filter hierarchy based on search query
   const filteredHierarchy = useMemo(() => {
@@ -233,7 +369,27 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   };
 
   const isLoading = isLoadingCompany || isLoadingIndividual;
-  const hasData = hierarchy.length > 0 || standaloneObjectives.length > 0;
+  // Show data if we have hierarchy OR standalone objectives OR any individual objectives (even if no company objectives)
+  const hasData = hierarchy.length > 0 || standaloneObjectives.length > 0 || individualObjectives.length > 0;
+
+  // Debug logging
+  useEffect(() => {
+    if (!isLoading && open) {
+      console.log('🔍 ObjectiveHierarchyDialog Debug:', {
+        organizationId,
+        cycleIds,
+        companyObjectivesCount: companyObjectivesRaw.length,
+        departmentObjectivesCount: departmentObjectivesRaw.length,
+        individualObjectivesCount: individualObjectives.length,
+        hierarchyCount: hierarchy.length,
+        standaloneObjectivesCount: standaloneObjectives.length,
+        hasData,
+        companyObjectives: companyObjectivesRaw.map(co => ({ id: co.id, title: co.title, cycle_id: co.cycle_id })),
+        departmentObjectives: departmentObjectivesRaw.map(dept => ({ id: dept.id, title: dept.title, cycle_id: dept.cycle_id, company_objective_id: dept.company_objective_id })),
+        individualObjectives: individualObjectives.map(indiv => ({ id: indiv.id, title: indiv.title, cycle_id: (indiv as any).cycle_id, department_objective_id: indiv.department_objective_id }))
+      });
+    }
+  }, [organizationId, cycleIds, companyObjectivesRaw, departmentObjectivesRaw, individualObjectives, hierarchy, standaloneObjectives, hasData, isLoading, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -266,10 +422,12 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
               </div>
             </div>
           ) : !hasData ? (
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-12 px-4">
               <Target className="h-12 w-12 text-gray-300 mb-4" />
               <p className="text-sm font-medium text-gray-900 mb-1">No objectives available</p>
-              <p className="text-xs text-gray-500">Please create individual objectives first</p>
+              <p className="text-xs text-gray-500 text-center">
+                Please create individual objectives first in the OKR page.
+              </p>
             </div>
           ) : (
             <div className="space-y-4 overflow-x-hidden">

@@ -62,6 +62,7 @@ interface ObjectiveHierarchyDialogProps {
   selectedObjectiveId?: string;
   organizationId: string;
   cycleIds: string[];
+  planDate?: Date | null; // Optional plan date to filter cycles
 }
 
 export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> = ({
@@ -71,6 +72,7 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   selectedObjectiveId,
   organizationId,
   cycleIds,
+  planDate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedObjectiveId);

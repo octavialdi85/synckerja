@@ -58,13 +58,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const { organizationId } = useCurrentOrg();
   const { data: cycles = [] } = useOkrCycles(organizationId);
   
-  // Get active cycle IDs for current period
-  const activeCycleIds = cycles
-    .filter(cycle => (cycle as any).is_active === true)
-    .map(cycle => cycle.id);
-    
-  const { data: individualObjectives = [] } = useIndividualObjectives(organizationId, activeCycleIds);
-  
+  // State declarations - must be before useMemo that uses planDate
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -78,6 +72,174 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const [isObjectiveDialogOpen, setIsObjectiveDialogOpen] = useState(false);
   const [planDate, setPlanDate] = useState<Date | null>(null);
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
+  
+  // Get cycle IDs based on plan date
+  // If planDate is set, filter cycles that overlap with the plan date month
+  // Only show cycles where the plan date month falls within the cycle's date range
+  // Otherwise, include active cycles and cycles from current year and next year
+  const activeCycleIds = React.useMemo(() => {
+    if (planDate) {
+      // Filter cycles based on quarter logic
+      // For quarterly cycles: match the quarter that contains the plan date month
+      // For yearly cycles: match if the plan date falls within the cycle date range
+      const planDateObj = new Date(planDate);
+      const planYear = planDateObj.getFullYear();
+      const planMonth = planDateObj.getMonth() + 1; // 1-12 (January = 1)
+      
+      // Calculate first and last day of plan date month in local timezone
+      const planMonthStart = new Date(planYear, planMonth - 1, 1, 0, 0, 0, 0);
+      const planMonthEnd = new Date(planYear, planMonth, 0, 23, 59, 59, 999); // Last day of month
+      
+      // Determine which quarter the plan date month belongs to (both uppercase and lowercase)
+      let expectedQuarter: string | null = null;
+      let expectedQuarterLower: string | null = null;
+      if (planMonth >= 1 && planMonth <= 3) {
+        expectedQuarter = 'Q1';
+        expectedQuarterLower = 'q1';
+      } else if (planMonth >= 4 && planMonth <= 6) {
+        expectedQuarter = 'Q2';
+        expectedQuarterLower = 'q2';
+      } else if (planMonth >= 7 && planMonth <= 9) {
+        expectedQuarter = 'Q3';
+        expectedQuarterLower = 'q3';
+      } else if (planMonth >= 10 && planMonth <= 12) {
+        expectedQuarter = 'Q4';
+        expectedQuarterLower = 'q4';
+      }
+      
+      // Log all available cycles for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 All available cycles:', cycles.map(c => ({
+          id: c.id,
+          name: (c as any).name,
+          period_type: (c as any).period_type,
+          quarter: (c as any).quarter,
+          year: (c as any).year,
+          start_date: (c as any).start_date,
+          end_date: (c as any).end_date
+        })));
+        console.log('📅 Plan date info:', {
+          planDate: planDate.toISOString(),
+          planYear,
+          planMonth,
+          expectedQuarter,
+          expectedQuarterLower,
+          planMonthStart: planMonthStart.toISOString(),
+          planMonthEnd: planMonthEnd.toISOString()
+        });
+      }
+      
+      const filteredCycles = cycles
+        .filter(cycle => {
+          const cyclePeriodType = (cycle as any).period_type;
+          const cycleQuarter = (cycle as any).quarter;
+          const cycleYear = (cycle as any).year;
+          const cycleStartStr = (cycle as any).start_date;
+          const cycleEndStr = (cycle as any).end_date;
+          
+          // Parse cycle dates
+          const [startYear, startMonth, startDay] = cycleStartStr.split('-').map(Number);
+          const [endYear, endMonth, endDay] = cycleEndStr.split('-').map(Number);
+          
+          const cycleStart = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+          const cycleEnd = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+          
+          // Check date overlap first (applies to all cycle types)
+          const overlaps = cycleStart <= planMonthEnd && cycleEnd >= planMonthStart;
+          
+          // For quarterly cycles: check if quarter and year match (case-insensitive)
+          if (cyclePeriodType === 'quarterly' || cycleQuarter) {
+            // Check both uppercase and lowercase quarter values
+            const quarterMatches = cycleQuarter && (
+              cycleQuarter.toLowerCase() === expectedQuarterLower ||
+              cycleQuarter.toUpperCase() === expectedQuarter
+            );
+            const yearMatches = cycleYear === planYear;
+            
+            const matches = quarterMatches && yearMatches && overlaps;
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🔍 Quarterly cycle check:', {
+                cycleName: (cycle as any).name,
+                cycleQuarter,
+                expectedQuarter,
+                expectedQuarterLower,
+                quarterMatches,
+                cycleYear,
+                planYear,
+                yearMatches,
+                cycleStart: cycleStartStr,
+                cycleEnd: cycleEndStr,
+                planMonth,
+                overlaps,
+                matches
+              });
+            }
+            
+            return matches;
+          }
+          
+          // For yearly cycles: check date overlap only
+          if (cyclePeriodType === 'yearly') {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🔍 Yearly cycle check:', {
+                cycleName: (cycle as any).name,
+                cycleStart: cycleStartStr,
+                cycleEnd: cycleEndStr,
+                planMonth,
+                overlaps
+              });
+            }
+            
+            return overlaps;
+          }
+          
+          // Fallback: if period_type is not set, use date overlap
+          if (!cyclePeriodType) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🔍 Unknown period_type, using date overlap:', {
+                cycleName: (cycle as any).name,
+                cycleStart: cycleStartStr,
+                cycleEnd: cycleEndStr,
+                planMonth,
+                overlaps
+              });
+            }
+            
+            return overlaps;
+          }
+          
+          return false;
+        })
+        .map(cycle => cycle.id);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📅 Filtered cycles for plan date:', {
+          planDate: planDate.toISOString(),
+          planYear,
+          planMonth,
+          expectedQuarter,
+          totalCycles: cycles.length,
+          filteredCycleIds: filteredCycles,
+          filteredCycleNames: cycles.filter(c => filteredCycles.includes(c.id)).map(c => (c as any).name)
+        });
+      }
+      
+      return filteredCycles;
+    } else {
+      // Fallback: include active cycles and cycles from current year and next year
+      const currentYear = new Date().getFullYear();
+      return cycles
+        .filter(cycle => {
+          const cycleYear = (cycle as any).year;
+          return (cycle as any).is_active === true || 
+                 (cycleYear === currentYear || cycleYear === currentYear + 1);
+        })
+        .map(cycle => cycle.id);
+    }
+  }, [cycles, planDate]);
+    
+  const { data: individualObjectives = [] } = useIndividualObjectives(organizationId, activeCycleIds);
   
   // Assignment state - will be set via modal
   const [assignment, setAssignment] = useState<{
@@ -446,6 +608,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
           selectedObjectiveId={objectiveId}
           organizationId={organizationId || ''}
           cycleIds={activeCycleIds}
+          planDate={planDate}
         />
       ) : (
         <ObjectiveHierarchyDialog
@@ -458,6 +621,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
           selectedObjectiveId={objectiveId}
           organizationId={organizationId || ''}
           cycleIds={activeCycleIds}
+          planDate={planDate}
         />
       )}
     </>

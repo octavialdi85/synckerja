@@ -721,11 +721,25 @@ export const DepartmentObjectivesView = ({
         onOpenChange={setShowContributionModal} 
         organizationId={organizationId} 
         cycleId={finalCycleIds?.[0] || cycleId || ''} 
+        cycleIds={finalCycleIds} 
         departmentId={selectedDepartmentId}
         onSuccess={() => {
           console.log('🎯 Department contribution created successfully');
         }} 
       />
+      
+      {/* Debug logging for cycle IDs */}
+      {showContributionModal && (
+        <React.Fragment>
+          {console.log('🔍 DepartmentObjectivesView - Modal Cycle IDs Debug:', {
+            cycleId,
+            cycleIds,
+            finalCycleIds,
+            targetCycleId: '32531393-da93-405c-bf32-2f75c9f9941d',
+            targetCycleInFinal: finalCycleIds?.includes('32531393-da93-405c-bf32-2f75c9f9941d')
+          })}
+        </React.Fragment>
+      )}
 
       {/* Create Key Result Dialog */}
       {createKRDialog.open && createKRDialog.objective && <CreateKeyResultDialog open={createKRDialog.open} onOpenChange={open => setCreateKRDialog({

@@ -11,7 +11,7 @@ import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
-import { useObjectives } from '../component/ObjectivesTabImport/useObjectives';
+import { useCompanyObjectives } from '@/features/2-8-dashboard/hooks/useCompanyObjectives';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useToast } from '@/features/ui/use-toast';
 import { Building } from 'lucide-react';
@@ -22,6 +22,7 @@ export interface ModalAddDepartmentContributionProps {
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   cycleId: string;
+  cycleIds?: string[]; // Support for multiple cycle IDs (for filtered objectives)
   departmentId?: string;
   onSuccess?: () => void;
   editObjective?: any; // Add edit mode support
@@ -32,6 +33,7 @@ export const ModalAddDepartmentContribution = ({
   onOpenChange,
   organizationId,
   cycleId,
+  cycleIds,
   departmentId,
   onSuccess,
   editObjective
@@ -112,7 +114,71 @@ export const ModalAddDepartmentContribution = ({
   }, [editObjective, open]);
 
   // Get company objectives to show in dropdown
-  const { objectives: companyObjectives = [], isLoading: loadingObjectives, error: objectivesError } = useObjectives(organizationId, cycleId, 'company');
+  // Priority: Use cycleIds from filter if provided and not empty, otherwise use cycleId, otherwise show all
+  // This ensures company objectives match the active filter (e.g., Q1 2026)
+  const activeCycleIds = React.useMemo(() => {
+    // Check if cycleIds is provided and has valid IDs
+    if (cycleIds && Array.isArray(cycleIds) && cycleIds.length > 0) {
+      // Filter out empty strings and invalid IDs
+      const validCycleIds = cycleIds.filter(id => id && id.trim() !== '');
+      if (validCycleIds.length > 0) {
+        return validCycleIds;
+      }
+    }
+    // Fallback to cycleId if provided
+    if (cycleId && cycleId.trim() !== '') {
+      return [cycleId];
+    }
+    // If no valid cycle IDs, return undefined to fetch all company objectives
+    return undefined;
+  }, [cycleIds, cycleId]);
+  
+  // Fetch company objectives with filter
+  const { data: filteredCompanyObjectives = [], isLoading: loadingFiltered, error: filteredError } = useCompanyObjectives(organizationId, activeCycleIds);
+  
+  // Fetch all company objectives as fallback (only if filtered results are empty)
+  const { data: allCompanyObjectives = [], isLoading: loadingAll } = useCompanyObjectives(organizationId, undefined);
+  
+  // Use filtered objectives if available, otherwise fallback to all objectives
+  // This ensures users can always select a company objective
+  const companyObjectives = React.useMemo(() => {
+    if (filteredCompanyObjectives.length > 0) {
+      return filteredCompanyObjectives;
+    }
+    // If no filtered results and not loading, show all objectives as fallback
+    if (!loadingFiltered && filteredCompanyObjectives.length === 0) {
+      return allCompanyObjectives;
+    }
+    return filteredCompanyObjectives;
+  }, [filteredCompanyObjectives, allCompanyObjectives, loadingFiltered]);
+  
+  const loadingObjectives = loadingFiltered || loadingAll;
+  const objectivesError = filteredError;
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (open) {
+      console.log('🔍 ModalAddDepartmentContribution - Company Objectives Debug:', {
+        organizationId,
+        cycleId: cycleId || 'not provided',
+        cycleIds: cycleIds || 'not provided',
+        activeCycleIds,
+        filteredCount: filteredCompanyObjectives.length,
+        allCount: allCompanyObjectives.length,
+        finalCount: companyObjectives.length,
+        isLoading: loadingObjectives,
+        error: objectivesError,
+        filteredObjectives: filteredCompanyObjectives.map(obj => ({ id: obj.id, title: obj.title, cycle_id: obj.cycle_id })),
+        allObjectives: allCompanyObjectives.map(obj => ({ id: obj.id, title: obj.title, cycle_id: obj.cycle_id })),
+        finalObjectives: companyObjectives.map(obj => ({ id: obj.id, title: obj.title, cycle_id: obj.cycle_id })),
+        // Check if target objective is in the list
+        targetObjectiveFound: companyObjectives.some(obj => obj.id === '95cd16b9-fdfd-48e4-9998-440467fa8e76'),
+        targetCycleId: '32531393-da93-405c-bf32-2f75c9f9941d',
+        targetCycleInFilter: activeCycleIds?.includes('32531393-da93-405c-bf32-2f75c9f9941d'),
+        usingFallback: filteredCompanyObjectives.length === 0 && allCompanyObjectives.length > 0
+      });
+    }
+  }, [organizationId, cycleId, cycleIds, activeCycleIds, filteredCompanyObjectives, allCompanyObjectives, companyObjectives, loadingObjectives, objectivesError, open]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

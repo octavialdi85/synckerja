@@ -34,8 +34,15 @@ export const TaskForm = () => {
   const { data: cycles = [] } = useOkrCycles(organizationId);
   
   // Get active cycle IDs for current period
+  // Also include cycles from current year and next year to show all relevant objectives
+  const currentYear = new Date().getFullYear();
   const activeCycleIds = cycles
-    .filter(cycle => (cycle as any).is_active === true)
+    .filter(cycle => {
+      const cycleYear = (cycle as any).year;
+      // Include active cycles OR cycles from current year and next year
+      return (cycle as any).is_active === true || 
+             (cycleYear === currentYear || cycleYear === currentYear + 1);
+    })
     .map(cycle => cycle.id);
     
   const { data: individualObjectives = [] } = useIndividualObjectives(organizationId, activeCycleIds);
