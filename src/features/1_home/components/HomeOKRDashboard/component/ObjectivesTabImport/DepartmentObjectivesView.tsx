@@ -223,9 +223,9 @@ export const DepartmentObjectivesView = ({
     setShowCreateDialog(true);
   };
   const handleAddContribution = (departmentId: string) => {
-    console.log('🎯 Add Contribution clicked for department:', departmentId);
-    console.log('🎯 Setting selectedDepartmentId:', departmentId);
-    console.log('🎯 Opening contribution modal');
+    console.log('Add Contribution clicked for department:', departmentId);
+    console.log('Setting selectedDepartmentId:', departmentId);
+    console.log('Opening contribution modal');
     setSelectedDepartmentId(departmentId);
     setShowContributionModal(true);
   };
@@ -581,7 +581,7 @@ export const DepartmentObjectivesView = ({
           cycleId={finalCycleIds?.[0] || cycleId || ''}
           departmentId={selectedDepartmentId}
           onSuccess={() => {
-            console.log('🎯 Department contribution created successfully');
+            console.log('Department contribution created successfully');
           }}
         />
       </div>
@@ -724,14 +724,14 @@ export const DepartmentObjectivesView = ({
         cycleIds={finalCycleIds} 
         departmentId={selectedDepartmentId}
         onSuccess={() => {
-          console.log('🎯 Department contribution created successfully');
+          console.log('Department contribution created successfully');
         }} 
       />
       
       {/* Debug logging for cycle IDs */}
       {showContributionModal && (
         <React.Fragment>
-          {console.log('🔍 DepartmentObjectivesView - Modal Cycle IDs Debug:', {
+          {console.log('DepartmentObjectivesView - Modal Cycle IDs Debug:', {
             cycleId,
             cycleIds,
             finalCycleIds,
@@ -754,7 +754,7 @@ export const DepartmentObjectivesView = ({
         setSelectedEmployee(null);
       }
     }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
-      console.log('✅ Individual objective created successfully');
+      console.log('Individual objective created successfully');
     }} />}
 
       {/* Edit Department Objective Modal */}
@@ -767,7 +767,7 @@ export const DepartmentObjectivesView = ({
           departmentId={editModal.objective.department_id}
           editObjective={editModal.objective}
           onSuccess={() => {
-            console.log('✅ Department objective updated successfully');
+            console.log('Department objective updated successfully');
             setEditModal({ open: false });
           }}
         />
