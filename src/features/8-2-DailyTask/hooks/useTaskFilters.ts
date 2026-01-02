@@ -480,9 +480,15 @@ export const useTaskFilters = ({
         }
       };
 
+      // Check if user is task creator or task is assigned at task level
+      const isTaskCreator = task.created_by === currentUserId;
+      const isTaskAssignedToUser = task.assigned_to === currentEmployeeId;
+      const shouldShowAllSteps = isTaskCreator || isTaskAssignedToUser;
+
       // Priority 1: Individual PIC filter
+      // Skip PIC filter if user is task creator or task is assigned at task level
       let steps = task.steps;
-      if (filters.pic) {
+      if (filters.pic && !shouldShowAllSteps) {
         steps = steps.filter(
           (step) => step.assigned_employee?.id === filters.pic
         );
@@ -492,8 +498,9 @@ export const useTaskFilters = ({
 
       // Priority 3: My Task mode
       // If task is assigned at task level to current employee, show ALL steps
-      if (task.assigned_to === currentEmployeeId) {
-        // keep steps as-is
+      // OR if task is created by current user (task creator), show ALL steps
+      if (shouldShowAllSteps) {
+        // keep steps as-is (already filtered by PIC if needed)
       } else {
         // Otherwise, show only steps assigned to current employee or created by user or has assigned substeps
         steps = steps.filter(
@@ -507,7 +514,8 @@ export const useTaskFilters = ({
       // Apply date range filter at step level:
       // When a date filter is active, show steps whose assigned_due_date falls in range
       // OR steps that are overdue (assigned_due_date in past) and not completed
-      if (filters.dateRange && filters.dateRange !== 'all') {
+      // Skip date range filter if user is task creator or task is assigned at task level
+      if (filters.dateRange && filters.dateRange !== 'all' && !shouldShowAllSteps) {
         const now = new Date();
         const isOverdue = (step: TaskStep): boolean => {
           if (!step.assigned_due_date) return false;

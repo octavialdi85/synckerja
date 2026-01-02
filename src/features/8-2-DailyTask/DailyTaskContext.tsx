@@ -1825,131 +1825,179 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const deleteTaskStep = async (stepId: string) => {
-    try {
-      // Get task_id and social_media_plan_id before deleting
-      const { data: stepData } = await supabase
-        .from('task_steps')
-        .select('task_id, social_media_plan_id')
-        .eq('id', stepId)
-        .maybeSingle();
+    // Get task_id and social_media_plan_id before deleting (needed for sync logic)
+    const { data: stepData } = await supabase
+      .from('task_steps')
+      .select('task_id, social_media_plan_id')
+      .eq('id', stepId)
+      .maybeSingle();
 
+    // Optimistic update: remove step from local state immediately
+    const previousTasks = [...tasks];
+    setTasks(prevTasks =>
+      prevTasks.map(task => {
+        const filteredSteps = task.steps.filter(step => step.id !== stepId);
+        return {
+          ...task,
+          steps: filteredSteps,
+          // Update has_steps if this task had the step removed
+          has_steps: stepData?.task_id === task.id ? filteredSteps.length > 0 : task.has_steps
+        };
+      })
+    );
+
+    try {
+      // Delete step with timeout handling
       const { error } = await supabase
         .from('task_steps')
         .delete()
         .eq('id', stepId);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a timeout error
+        if (error.code === '57014' || error.message?.includes('timeout')) {
+          // For timeout errors, still show success but note it may take time
+          toast({
+            title: 'Deleting step...',
+            description: 'Step deletion is in progress. It may take a moment to complete.',
+          });
+          
+          // Continue with background operations even on timeout
+          // The database will eventually complete the deletion
+        } else {
+          throw error;
+        }
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Step deleted successfully'
+        });
+      }
 
+      // Move heavy operations to background (non-blocking)
       // Sync pic_production_id after step deletion if this step was linked to a plan
       if ((stepData as any)?.social_media_plan_id) {
-        try {
-          const planId = (stepData as any).social_media_plan_id;
-          // Get current plan data
-          const { data: planData } = await supabase
-            .from('social_media_plans')
-            .select('pic_production_id, pic_production_source, google_drive_link')
-            .eq('id', planId)
-            .maybeSingle();
-          
-          if (planData) {
-            // Get latest assignment for this plan (after step deletion)
-            const { data: assignmentData } = await supabase
-              .from('task_steps_assigned')
-              .select(`
-                id,
-                employee_id,
-                assigned_at,
-                task_steps!inner(
-                  id,
-                  social_media_plan_id
-                )
-              `)
-              .eq('task_steps.social_media_plan_id', planId)
-              .order('assigned_at', { ascending: false })
-              .limit(1)
+        // Run in background without blocking
+        (async () => {
+          try {
+            const planId = (stepData as any).social_media_plan_id;
+            // Get current plan data
+            const { data: planData } = await supabase
+              .from('social_media_plans')
+              .select('pic_production_id, pic_production_source, google_drive_link')
+              .eq('id', planId)
               .maybeSingle();
             
-            const assignedEmployeeId = assignmentData?.employee_id || null;
-            
-            // Determine new pic_production_id and source
-            let newPicProductionId: string | null = null;
-            let newPicProductionSource: string | null = null;
-            
-            if (assignedEmployeeId) {
-              newPicProductionId = assignedEmployeeId;
-              newPicProductionSource = 'task_steps_assigned';
-            } else if (planData.google_drive_link) {
-              if (planData.pic_production_source === 'google_drive_link' && planData.pic_production_id) {
-                newPicProductionId = planData.pic_production_id;
-                newPicProductionSource = 'google_drive_link';
+            if (planData) {
+              // Get latest assignment for this plan (after step deletion)
+              const { data: assignmentData } = await supabase
+                .from('task_steps_assigned')
+                .select(`
+                  id,
+                  employee_id,
+                  assigned_at,
+                  task_steps!inner(
+                    id,
+                    social_media_plan_id
+                  )
+                `)
+                .eq('task_steps.social_media_plan_id', planId)
+                .order('assigned_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              
+              const assignedEmployeeId = assignmentData?.employee_id || null;
+              
+              // Determine new pic_production_id and source
+              let newPicProductionId: string | null = null;
+              let newPicProductionSource: string | null = null;
+              
+              if (assignedEmployeeId) {
+                newPicProductionId = assignedEmployeeId;
+                newPicProductionSource = 'task_steps_assigned';
+              } else if (planData.google_drive_link) {
+                if (planData.pic_production_source === 'google_drive_link' && planData.pic_production_id) {
+                  newPicProductionId = planData.pic_production_id;
+                  newPicProductionSource = 'google_drive_link';
+                } else {
+                  newPicProductionId = null;
+                  newPicProductionSource = null;
+                }
               } else {
                 newPicProductionId = null;
                 newPicProductionSource = null;
               }
-            } else {
-              newPicProductionId = null;
-              newPicProductionSource = null;
-            }
-            
-            // Update database only if changed
-            if (newPicProductionId !== planData.pic_production_id || newPicProductionSource !== planData.pic_production_source) {
-              const { error: updateError } = await supabase
-                .from('social_media_plans')
-                .update({
-                  pic_production_id: newPicProductionId,
-                  pic_production_source: newPicProductionSource
-                })
-                .eq('id', planId);
               
-              if (updateError) {
-                console.error('❌ Error syncing pic_production_id after step deletion:', updateError);
-              } else {
-                logger.debug('✅ Synced pic_production_id after step deletion:', {
-                  planId,
-                  employeeId: newPicProductionId,
-                  source: newPicProductionSource
-                });
+              // Update database only if changed
+              if (newPicProductionId !== planData.pic_production_id || newPicProductionSource !== planData.pic_production_source) {
+                const { error: updateError } = await supabase
+                  .from('social_media_plans')
+                  .update({
+                    pic_production_id: newPicProductionId,
+                    pic_production_source: newPicProductionSource
+                  })
+                  .eq('id', planId);
+                
+                if (updateError) {
+                  console.error('❌ Error syncing pic_production_id after step deletion:', updateError);
+                } else {
+                  logger.debug('✅ Synced pic_production_id after step deletion:', {
+                    planId,
+                    employeeId: newPicProductionId,
+                    source: newPicProductionSource
+                  });
+                }
               }
             }
+          } catch (syncError) {
+            console.error('Error syncing pic_production_id after step deletion:', syncError);
+            // Don't fail the whole operation if sync fails
           }
-        } catch (syncError) {
-          console.error('Error syncing pic_production_id after step deletion:', syncError);
-          // Don't fail the whole operation if sync fails
-        }
+        })().catch(err => console.error('Background sync failed:', err));
       }
 
-      // Check if task still has steps after deletion
+      // Check if task still has steps after deletion (run in background)
       if (stepData?.task_id) {
-        const { data: remainingSteps } = await supabase
-          .from('task_steps')
-          .select('id')
-          .eq('task_id', stepData.task_id)
-          .limit(1);
+        // Run in background without blocking
+        (async () => {
+          try {
+            const { data: remainingSteps } = await supabase
+              .from('task_steps')
+              .select('id')
+              .eq('task_id', stepData.task_id)
+              .limit(1);
 
-        const { error: updateError } = await supabase
-          .from('daily_tasks')
-          .update({ has_steps: (remainingSteps?.length || 0) > 0 })
-          .eq('id', stepData.task_id);
-        
-        if (updateError) {
-          console.warn('Failed to update has_steps:', updateError);
-        }
+            const { error: updateError } = await supabase
+              .from('daily_tasks')
+              .update({ has_steps: (remainingSteps?.length || 0) > 0 })
+              .eq('id', stepData.task_id);
+            
+            if (updateError) {
+              console.warn('Failed to update has_steps:', updateError);
+            }
+          } catch (err) {
+            console.error('Error updating has_steps:', err);
+          }
+        })().catch(err => console.error('Background has_steps update failed:', err));
       }
 
-      toast({
-        title: 'Success',
-        description: 'Step deleted successfully'
-      });
-      
+      // Clear cache and refresh in background
       clearCache(`tasks_${organizationId}_*`);
-      await fetchTasks(true);
-    } catch (error) {
-      console.error('Error deleting step:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete step',
-        variant: 'destructive'
-      });
+      fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
+    } catch (error: any) {
+      // Rollback on error (only for non-timeout errors)
+      if (error.code !== '57014' && !error.message?.includes('timeout')) {
+        setTasks(previousTasks);
+        console.error('Error deleting step:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to delete step',
+          variant: 'destructive'
+        });
+      } else {
+        // For timeout, don't rollback - let it complete in background
+        console.warn('Step deletion timed out, but will complete in background:', error);
+      }
     }
   };
 
