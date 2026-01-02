@@ -1251,6 +1251,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const deleteTask = async (id: string) => {
+    // Optimistic update: remove task from local state immediately
+    const previousTasks = [...tasks];
+    setTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+
     try {
       const { error } = await supabase
         .from('daily_tasks')
@@ -1264,10 +1268,12 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         description: 'Task deleted successfully'
       });
       
-      // Clear cache for all users and refresh data immediately
+      // Clear cache for all users and refresh data in background
       clearCache(`tasks_${organizationId}_*`);
-      await fetchTasks(true);
+      fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
     } catch (error) {
+      // Rollback on error
+      setTasks(previousTasks);
       console.error('Error deleting task:', error);
       toast({
         title: 'Error',
