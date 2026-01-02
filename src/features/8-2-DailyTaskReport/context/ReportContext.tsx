@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useRef 
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
+import { getCached, setCache, clearCache } from '@/features/8-2-DailyTask/utils/optimizationUtils';
 
 export interface AssignmentRow {
   id: string;
@@ -269,6 +270,37 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
     const load = async () => {
       setLoading(true);
+      
+      try {
+        // Try to load cached data first for instant display
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const cacheKey = `report_${organizationId}_${user.id}`;
+          const cached = getCached<{ rows: AssignmentRow[]; blockers: any[]; recentUpdates: any[] }>(cacheKey, 60000);
+          if (cached !== undefined && cached !== null) {
+            // Show cached data immediately
+            setRows(cached.rows || []);
+            setBlockers(cached.blockers || []);
+            setRecentUpdates(cached.recentUpdates || []);
+            setLoading(false);
+            
+            // Fetch fresh data in background (non-blocking)
+            // Continue with normal load but don't block UI
+            loadFreshData().catch(err => console.error('Background refresh failed:', err));
+            return;
+          }
+        }
+      } catch (cacheError) {
+        // If cache check fails, continue with normal fetch
+        console.warn('Cache check failed, proceeding with normal fetch:', cacheError);
+      }
+      
+      // No cache available - fetch data normally
+      await loadFreshData();
+    };
+    
+    const loadFreshData = async () => {
+      let finalRows: AssignmentRow[] = [];
       try {
         // STEP 1: PARALLEL - Fetch step and sub-step assignments (optimized)
         const [stepAssignsResult, subStepAssignsResult] = await Promise.all([
@@ -494,6 +526,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
           // Combine: step assignments (filtered) + sub-step rows (all with due_date)
           const allMapped = [...filteredStepMapped, ...subStepMappedWithDueDate];
+          finalRows = allMapped;
           setRows(allMapped);
           logger.query(`✅ Loaded ${filteredStepMapped.length} step assignments and ${subStepMappedWithDueDate.length} sub-step rows (including unassigned)`);
           
@@ -512,6 +545,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           )] as string[];
         } else {
           // No sub-steps, use step assignments only
+          finalRows = stepMapped;
           setRows(stepMapped);
           logger.query(`✅ Loaded ${stepMapped.length} step assignments (no sub-steps)`);
           
@@ -524,85 +558,180 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           )] as string[];
         }
 
-        // STEP 2: PARALLEL - Fetch task IDs, completion dates, and blockers in parallel
-        const [taskIdsResult, completionHistoryResult, stepBlockersResult] = await Promise.all([
-          // Get task IDs (needed for history and sub-steps)
-          supabase
-            .from('daily_tasks')
-            .select('id')
-            .eq('organization_id', organizationId),
-          
-          // Get completion dates (only if there are completed steps)
-          completedStepIds.length > 0
-            ? supabase
-                .from('task_step_history')
-                .select('task_step_id, created_at, new_value')
-                .in('task_step_id', completedStepIds)
-                .eq('action_type', 'status_change')
-                .or('new_value.eq.completed,new_value.eq.COMPLETED')
-                .order('created_at', { ascending: true })
-            : Promise.resolve({ data: [], error: null }),
-          
-          // Get step blockers (use step IDs from assignments - REUSE DATA)
-          // Use batch processing to avoid 500 error with large arrays
-          allStepIdsFromAssignments.length > 0
-            ? (async () => {
-                // Split into smaller batches to avoid query timeout/error
-                const BLOCKER_BATCH_SIZE = 20; // Smaller batch size for blockers
+        // STEP 2: OPTIMIZED - Fetch only task IDs first (critical), move completion dates and blockers to background
+        const taskIdsResult = await supabase
+          .from('daily_tasks')
+          .select('id')
+          .eq('organization_id', organizationId);
+
+        const taskIdList = (taskIdsResult.data || []).map(t => t.id);
+        
+        // Initialize empty maps (will be updated in background)
+        let completionDateMap: Record<string, string> = {};
+        setCompletionDateMap(completionDateMap);
+        let unresolvedStepBlockers: any[] = [];
+        
+        // Load completion dates and blockers in background (non-blocking)
+        // These are non-critical for initial page display
+        if (completedStepIds.length > 0 || allStepIdsFromAssignments.length > 0) {
+          (async () => {
+            try {
+              // Fetch completion dates in background with batch processing
+              if (completedStepIds.length > 0) {
+                const COMPLETION_BATCH_SIZE = 10; // Smaller batch size
+                const completionBatches: string[][] = [];
+                for (let i = 0; i < completedStepIds.length; i += COMPLETION_BATCH_SIZE) {
+                  completionBatches.push(completedStepIds.slice(i, i + COMPLETION_BATCH_SIZE));
+                }
+                
+                const allCompletionDates: any[] = [];
+                for (const batch of completionBatches) {
+                  try {
+                    const timeoutPromise = new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Completion dates query timeout')), 8000)
+                    );
+                    
+                    const queryPromise = supabase
+                      .from('task_step_history')
+                      .select('task_step_id, created_at, new_value')
+                      .in('task_step_id', batch)
+                      .eq('action_type', 'status_change')
+                      .or('new_value.eq.completed,new_value.eq.COMPLETED')
+                      .order('created_at', { ascending: true });
+                    
+                    const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+                    
+                    if (result.data) {
+                      allCompletionDates.push(...result.data);
+                    }
+                  } catch (err: any) {
+                    // Skip on timeout/error (non-critical)
+                    if (!err?.message?.includes('timeout')) {
+                      console.warn('⚠️ Error fetching completion dates batch (non-critical):', err);
+                    }
+                  }
+                }
+                
+                const newCompletionDateMap: Record<string, string> = {};
+                allCompletionDates.forEach((entry: any) => {
+                  if (entry.task_step_id && !newCompletionDateMap[entry.task_step_id]) {
+                    newCompletionDateMap[entry.task_step_id] = entry.created_at;
+                  }
+                });
+                
+                setCompletionDateMap(newCompletionDateMap);
+                logger.query(`📅 Loaded completion dates in background: ${Object.keys(newCompletionDateMap).length} steps`);
+              }
+              
+              // Fetch step blockers in background with smaller batch size
+              if (allStepIdsFromAssignments.length > 0) {
+                const BLOCKER_BATCH_SIZE = 5; // Much smaller batch size to avoid timeout
                 const batches: string[][] = [];
                 for (let i = 0; i < allStepIdsFromAssignments.length; i += BLOCKER_BATCH_SIZE) {
                   batches.push(allStepIdsFromAssignments.slice(i, i + BLOCKER_BATCH_SIZE));
                 }
                 
-                // Process batches sequentially to avoid overwhelming the database
                 const allBlockers: any[] = [];
                 for (const batch of batches) {
                   try {
-                    const { data, error } = await supabase
+                    const timeoutPromise = new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Blockers query timeout')), 8000)
+                    );
+                    
+                    const queryPromise = supabase
                       .from('task_step_history')
                       .select('*')
                       .eq('action_type', 'blocker_added')
                       .in('task_step_id', batch);
                     
-                    if (error) {
-                      console.error('❌ Error fetching step blockers batch:', error);
-                      // Continue with other batches even if one fails
-                      continue;
-                    }
+                    const result = await Promise.race([queryPromise, timeoutPromise]) as any;
                     
-                    if (data) {
-                      allBlockers.push(...data);
+                    if (result.data) {
+                      allBlockers.push(...result.data);
                     }
-                  } catch (err) {
-                    console.error('❌ Exception fetching step blockers batch:', err);
-                    // Continue with other batches
+                  } catch (err: any) {
+                    // Skip on timeout/error (non-critical)
+                    if (!err?.message?.includes('timeout')) {
+                      console.warn('⚠️ Error fetching step blockers batch (non-critical):', err);
+                    }
                   }
+                  
+                  // Small delay between batches to avoid overwhelming database
+                  await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                return { data: allBlockers, error: null };
-              })()
-            : Promise.resolve({ data: [], error: null })
-        ]);
-
-        const taskIdList = (taskIdsResult.data || []).map(t => t.id);
-        
-        // Process completion dates
-        let completionDateMap: Record<string, string> = {};
-        if (completionHistoryResult.data) {
-          completionHistoryResult.data.forEach((entry: any) => {
-            if (entry.task_step_id && !completionDateMap[entry.task_step_id]) {
-              completionDateMap[entry.task_step_id] = entry.created_at;
+                const newUnresolvedStepBlockers = allBlockers.filter(
+                  (b: any) => b.is_resolved === null || b.is_resolved === false
+                );
+                
+                // Enrich step blockers before updating state
+                const blockerStepIds = [...new Set(newUnresolvedStepBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
+                
+                if (blockerStepIds.length > 0) {
+                  try {
+                    const { data: stepsData } = await supabase
+                      .from('task_steps')
+                      .select('id, title, task:daily_tasks(id, title)')
+                      .in('id', blockerStepIds);
+                    
+                    const stepMap: Record<string, any> = {};
+                    (stepsData || []).forEach((s: any) => { stepMap[s.id] = s; });
+                    
+                    const enriched = newUnresolvedStepBlockers.map((b: any) => {
+                      const step = b.task_step_id ? stepMap[b.task_step_id] : null;
+                      const task = step?.task || null;
+                      return {
+                        ...b,
+                        taskTitle: task?.title || '-',
+                        stepTitle: step?.title || '-',
+                        subStepTitle: null,
+                      };
+                    });
+                    
+                    // Update blockers in state with enriched data
+                    setBlockers(prevBlockers => {
+                      const combined = [...enriched, ...prevBlockers];
+                      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                      return combined;
+                    });
+                    
+                    // Update blocker counts
+                    const countMap: Record<string, number> = {};
+                    const byStep: Record<string, any[]> = {};
+                    enriched.forEach((b: any) => {
+                      const parentStepId = b.task_step_id;
+                      if (parentStepId) {
+                        countMap[parentStepId] = (countMap[parentStepId] || 0) + 1;
+                        (byStep[parentStepId] = byStep[parentStepId] || []).push(b);
+                      }
+                    });
+                    setBlockerCountByStep(prev => ({ ...prev, ...countMap }));
+                    setBlockersByStep(prev => ({ ...prev, ...byStep }));
+                  } catch (enrichErr) {
+                    console.warn('⚠️ Error enriching step blockers (non-critical):', enrichErr);
+                    // Still update with unenriched data
+                    setBlockers(prevBlockers => {
+                      const combined = [...newUnresolvedStepBlockers, ...prevBlockers];
+                      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                      return combined;
+                    });
+                  }
+                } else {
+                  // No blockers to enrich, just update state
+                  setBlockers(prevBlockers => {
+                    const combined = [...newUnresolvedStepBlockers, ...prevBlockers];
+                    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                    return combined;
+                  });
+                }
+                
+                logger.query(`📊 Step blockers loaded in background: ${allBlockers.length} total, ${newUnresolvedStepBlockers.length} unresolved`);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error loading completion dates/blockers in background (non-critical):', error);
             }
-          });
-          logger.query(`📅 Loaded completion dates for ${Object.keys(completionDateMap).length} steps`);
+          })().catch(err => console.warn('Background completion/blockers fetch failed:', err));
         }
-        setCompletionDateMap(completionDateMap);
-
-        // Process step blockers
-        const unresolvedStepBlockers = (stepBlockersResult.data || []).filter(
-          (b: any) => b.is_resolved === null || b.is_resolved === false
-        );
-        logger.query(`📊 Step blockers: ${(stepBlockersResult.data || []).length} total, ${unresolvedStepBlockers.length} unresolved`);
 
         // STEP 3: PARALLEL - Fetch step IDs and sub-step IDs in parallel
         let stepIdList: string[] = [];
@@ -629,171 +758,234 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             logger.query(`📋 Found ${subStepIdList.length} sub-steps in organization`);
           }
 
-          // STEP 4: PARALLEL - Fetch sub-step blockers and history in parallel
-          const [subStepBlockersResult, historyData] = await Promise.all([
-            // Get sub-step blockers (with batch processing to avoid 500 error)
-            subStepIdList.length > 0
-              ? (async () => {
-                  // Split into smaller batches to avoid query timeout/error
-                  const BLOCKER_BATCH_SIZE = 20; // Smaller batch size for blockers
+          // STEP 4: OPTIMIZED - Load sub-step blockers and history in background (non-blocking)
+          // Initialize empty arrays (will be updated in background)
+          let unresolvedSubStepBlockers: any[] = [];
+          let history: any[] = [];
+          
+          // Load sub-step blockers and history in background
+          if (subStepIdList.length > 0 || stepIdList.length > 0) {
+            (async () => {
+              try {
+                // Fetch sub-step blockers in background with smaller batch size
+                if (subStepIdList.length > 0) {
+                  const BLOCKER_BATCH_SIZE = 5; // Much smaller batch size
                   const batches: string[][] = [];
                   for (let i = 0; i < subStepIdList.length; i += BLOCKER_BATCH_SIZE) {
                     batches.push(subStepIdList.slice(i, i + BLOCKER_BATCH_SIZE));
                   }
                   
-                  // Process batches sequentially to avoid overwhelming the database
                   const allBlockers: any[] = [];
                   for (const batch of batches) {
                     try {
-                      const { data, error } = await supabase
+                      const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Sub-step blockers query timeout')), 8000)
+                      );
+                      
+                      const queryPromise = supabase
                         .from('task_step_history')
                         .select('*')
                         .eq('action_type', 'blocker_added')
                         .in('task_steps_to_steps_id', batch);
                       
-                      if (error) {
-                        console.error('❌ Error fetching blockers batch:', error);
-                        // Continue with other batches even if one fails
-                        continue;
-                      }
+                      const result = await Promise.race([queryPromise, timeoutPromise]) as any;
                       
-                      if (data) {
-                        allBlockers.push(...data);
+                      if (result.data) {
+                        allBlockers.push(...result.data);
                       }
-                    } catch (err) {
-                      console.error('❌ Exception fetching blockers batch:', err);
-                      // Continue with other batches
+                    } catch (err: any) {
+                      // Skip on timeout/error (non-critical)
+                      if (!err?.message?.includes('timeout')) {
+                        console.warn('⚠️ Error fetching sub-step blockers batch (non-critical):', err);
+                      }
                     }
+                    
+                    // Small delay between batches
+                    await new Promise(resolve => setTimeout(resolve, 100));
                   }
                   
-                  return { data: allBlockers, error: null };
-                })()
-              : Promise.resolve({ data: [], error: null }),
-            
-            // Fetch history for steps and sub-steps via optimized RPC
-            fetchHistoryBatch(stepIdList, subStepIdList, 50)
-          ]);
-
-          // Process sub-step blockers
-          if (subStepBlockersResult.data) {
-            unresolvedSubStepBlockers = subStepBlockersResult.data.filter(
-              (b: any) => b.is_resolved === null || b.is_resolved === false
-            );
-            logger.query(`📊 Sub-step blockers: ${subStepBlockersResult.data.length} total, ${unresolvedSubStepBlockers.length} unresolved`);
+                  const newUnresolvedSubStepBlockers = allBlockers.filter(
+                    (b: any) => b.is_resolved === null || b.is_resolved === false
+                  );
+                  
+                  // Enrich sub-step blockers before updating state
+                  const blockerSubStepIds = [...new Set(newUnresolvedSubStepBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
+                  
+                  if (blockerSubStepIds.length > 0) {
+                    try {
+                      const { data: subStepsData } = await supabase
+                        .from('task_steps_to_steps')
+                        .select('id, title, parent_step_id')
+                        .in('id', blockerSubStepIds);
+                      
+                      const subStepMap: Record<string, any> = {};
+                      (subStepsData || []).forEach((s: any) => { subStepMap[s.id] = s; });
+                      
+                      const parentStepIds = [...new Set((subStepsData || []).map((s: any) => s.parent_step_id).filter(Boolean))];
+                      const { data: stepsData } = await supabase
+                        .from('task_steps')
+                        .select('id, title, task:daily_tasks(id, title)')
+                        .in('id', parentStepIds);
+                      
+                      const stepMap: Record<string, any> = {};
+                      (stepsData || []).forEach((s: any) => { stepMap[s.id] = s; });
+                      
+                      const enriched = newUnresolvedSubStepBlockers.map((b: any) => {
+                        const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
+                        const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
+                        const task = parentStep?.task || null;
+                        return {
+                          ...b,
+                          taskTitle: task?.title || '-',
+                          stepTitle: parentStep?.title || '-',
+                          subStepTitle: sub?.title || null,
+                        };
+                      });
+                      
+                      // Update blockers in state with enriched data
+                      setBlockers(prevBlockers => {
+                        const combined = [...enriched, ...prevBlockers];
+                        combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                        return combined;
+                      });
+                      
+                      // Update blocker counts
+                      const countMap: Record<string, number> = {};
+                      const byStep: Record<string, any[]> = {};
+                      enriched.forEach((b: any) => {
+                        const parentStepId = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id]?.parent_step_id : b.task_step_id;
+                        if (parentStepId) {
+                          countMap[parentStepId] = (countMap[parentStepId] || 0) + 1;
+                          (byStep[parentStepId] = byStep[parentStepId] || []).push(b);
+                        }
+                      });
+                      setBlockerCountByStep(prev => ({ ...prev, ...countMap }));
+                      setBlockersByStep(prev => ({ ...prev, ...byStep }));
+                    } catch (enrichErr) {
+                      console.warn('⚠️ Error enriching sub-step blockers (non-critical):', enrichErr);
+                      // Still update with unenriched data
+                      setBlockers(prevBlockers => {
+                        const combined = [...newUnresolvedSubStepBlockers, ...prevBlockers];
+                        combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                        return combined;
+                      });
+                    }
+                  } else {
+                    // No blockers to enrich, just update state
+                    setBlockers(prevBlockers => {
+                      const combined = [...newUnresolvedSubStepBlockers, ...prevBlockers];
+                      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                      return combined;
+                    });
+                  }
+                  
+                  logger.query(`📊 Sub-step blockers loaded in background: ${allBlockers.length} total, ${newUnresolvedSubStepBlockers.length} unresolved`);
+                }
+                
+                // Fetch history in background (non-blocking)
+                if (stepIdList.length > 0 || subStepIdList.length > 0) {
+                  try {
+                    const historyData = await fetchHistoryBatch(stepIdList, subStepIdList, 50);
+                    
+                    // Enrich history before updating state
+                    if (historyData && historyData.length > 0) {
+                      const historyStepIds = [...new Set(historyData.map((h: any) => h.task_step_id).filter(Boolean))];
+                      const historySubStepIds = [...new Set(historyData.map((h: any) => h.task_steps_to_steps_id).filter(Boolean))];
+                      
+                      const [stepsResult, subStepsResult, assignmentsResult] = await Promise.all([
+                        historyStepIds.length > 0
+                          ? supabase
+                              .from('task_steps')
+                              .select('id, title, task:daily_tasks(id, title)')
+                              .in('id', historyStepIds)
+                          : Promise.resolve({ data: [], error: null }),
+                        historySubStepIds.length > 0
+                          ? supabase
+                              .from('task_steps_to_steps')
+                              .select('id, title, parent_step_id')
+                              .in('id', historySubStepIds)
+                          : Promise.resolve({ data: [], error: null }),
+                        historyStepIds.length > 0
+                          ? supabase
+                              .from('task_steps_assigned')
+                              .select('task_step_id, assigned_at')
+                              .in('task_step_id', historyStepIds)
+                              .order('assigned_at', { ascending: false })
+                          : Promise.resolve({ data: [], error: null })
+                      ]);
+                      
+                      const stepMap: Record<string, any> = {};
+                      const subStepMap: Record<string, any> = {};
+                      const assignedAtMap: Record<string, string> = {};
+                      
+                      (stepsResult.data || []).forEach((s: any) => { stepMap[s.id] = s; });
+                      (subStepsResult.data || []).forEach((s: any) => { subStepMap[s.id] = s; });
+                      (assignmentsResult.data || []).forEach((a: any) => {
+                        if (!assignedAtMap[a.task_step_id]) {
+                          assignedAtMap[a.task_step_id] = a.assigned_at;
+                        }
+                      });
+                      
+                      const enriched = historyData.map((b: any) => {
+                        const step = b.task_step_id ? stepMap[b.task_step_id] : null;
+                        const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
+                        const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
+                        const task = (step || parentStep)?.task || null;
+                        const assignedAt = b.task_step_id ? assignedAtMap[b.task_step_id] || null : null;
+                        return {
+                          ...b,
+                          taskTitle: task?.title || '-',
+                          stepTitle: (step || parentStep)?.title || '-',
+                          subStepTitle: sub?.title || null,
+                          assignedAt: assignedAt,
+                        };
+                      });
+                      
+                      // Update recent updates in state with enriched data
+                      setRecentUpdates(prevUpdates => {
+                        const combined = [...enriched, ...prevUpdates];
+                        combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                        return combined;
+                      });
+                      
+                      logger.query(`📚 History loaded and enriched in background: ${enriched.length} items`);
+                    } else {
+                      logger.query(`📚 History loaded in background: 0 items`);
+                    }
+                  } catch (err) {
+                    console.warn('⚠️ Error fetching history in background (non-critical):', err);
+                  }
+                }
+              } catch (error) {
+                console.warn('⚠️ Error loading sub-step blockers/history in background (non-critical):', error);
+              }
+            })().catch(err => console.warn('Background sub-step blockers/history fetch failed:', err));
           }
-
-          // Process history
-          history = historyData || [];
         }
 
-        // Combine all blockers
-        const rawBlockers = [...unresolvedStepBlockers, ...unresolvedSubStepBlockers];
-        rawBlockers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        logger.query(`📊 Total unresolved blockers: ${rawBlockers.length}`);
+        // STEP 5: OPTIMIZED - Enrichment will be done in background after blockers/history are loaded
+        // For now, set empty blockers (will be updated in background)
+        setBlockers([]);
+        setBlockerCountByStep({});
+        setBlockersByStep({});
 
-        // STEP 5: Collect IDs for enrichment
-        const blockerStepIds = [...new Set(rawBlockers.map((b: any) => b.task_step_id).filter(Boolean))];
-        const blockerSubStepIds = [...new Set(rawBlockers.map((b: any) => b.task_steps_to_steps_id).filter(Boolean))];
-        const historyStepIds = [...new Set(history.map((h: any) => h.task_step_id).filter(Boolean))];
-        const historySubStepIds = [...new Set(history.map((h: any) => h.task_steps_to_steps_id).filter(Boolean))];
+        // Recent updates will be enriched in background after history is loaded
+        setRecentUpdates([]);
         
-        const allStepIds = [...new Set([...blockerStepIds, ...historyStepIds])];
-        const allSubStepIds = [...new Set([...blockerSubStepIds, ...historySubStepIds])];
-
-        // STEP 6: PARALLEL - Fetch enrichment data (steps and sub-steps) in parallel
-        const [enrichmentStepsResult, enrichmentSubStepsResult] = await Promise.all([
-          allStepIds.length > 0
-            ? supabase
-                .from('task_steps')
-                .select('id, title, task:daily_tasks(id, title)')
-                .in('id', allStepIds)
-            : Promise.resolve({ data: [], error: null }),
-          
-          allSubStepIds.length > 0
-            ? supabase
-                .from('task_steps_to_steps')
-                .select('id, title, parent_step_id')
-                .in('id', allSubStepIds)
-            : Promise.resolve({ data: [], error: null })
-        ]);
-
-        // Build maps
-        const stepMap: Record<string, any> = {};
-        const subStepMap: Record<string, any> = {};
-        (enrichmentStepsResult.data || []).forEach((s: any) => { stepMap[s.id] = s; });
-        (enrichmentSubStepsResult.data || []).forEach((s: any) => { subStepMap[s.id] = s; });
-        logger.query(`📋 Loaded ${Object.keys(stepMap).length} steps into stepMap`);
-        logger.query(`📋 Loaded ${Object.keys(subStepMap).length} sub-steps into subStepMap`);
-
-        // Enrich blockers
-        const enriched = rawBlockers.map((b: any) => {
-          const step = b.task_step_id ? stepMap[b.task_step_id] : null;
-          const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
-          const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
-          const task = (step || parentStep)?.task || null;
-          return {
-            ...b,
-            taskTitle: task?.title || '-',
-            stepTitle: (step || parentStep)?.title || '-',
-            subStepTitle: sub?.title || null,
-          };
-        });
-        logger.query(`✅ Enriched ${enriched.length} blockers with task/step info`);
-        setBlockers(enriched);
-
-        // Build blocker count and map by step
-        const countMap: Record<string, number> = {};
-        const byStep: Record<string, any[]> = {};
-        enriched.forEach((b: any) => {
-          const parentStepId = b.task_step_id || (b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id]?.parent_step_id : null);
-          if (parentStepId) {
-            countMap[parentStepId] = (countMap[parentStepId] || 0) + 1;
-            (byStep[parentStepId] = byStep[parentStepId] || []).push(b);
-          }
-        });
-        setBlockerCountByStep(countMap);
-        setBlockersByStep(byStep);
-
-        // Fetch assigned_at for steps in recent updates
-        const stepIdsForAssignedAt = [...new Set(
-          history
-            .map((h: any) => h.task_step_id)
-            .filter(Boolean)
-        )] as string[];
-        
-        let assignedAtMap: Record<string, string> = {};
-        if (stepIdsForAssignedAt.length > 0) {
-          const { data: assignments } = await supabase
-            .from('task_steps_assigned')
-            .select('task_step_id, assigned_at')
-            .in('task_step_id', stepIdsForAssignedAt)
-            .order('assigned_at', { ascending: false });
-          
-          if (assignments) {
-            assignments.forEach((a: any) => {
-              if (!assignedAtMap[a.task_step_id]) {
-                assignedAtMap[a.task_step_id] = a.assigned_at;
-              }
+        // Save to cache for fast subsequent loads (without blockers/history for now)
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const cacheKey = `report_${organizationId}_${user.id}`;
+            setCache(cacheKey, {
+              rows: finalRows,
+              blockers: [],
+              recentUpdates: []
             });
           }
+        } catch (cacheError) {
+          console.warn('Failed to save cache:', cacheError);
         }
-
-        // Enrich recent updates
-        const recent = history.map((b: any) => {
-          const step = b.task_step_id ? stepMap[b.task_step_id] : null;
-          const sub = b.task_steps_to_steps_id ? subStepMap[b.task_steps_to_steps_id] : null;
-          const parentStep = sub?.parent_step_id ? stepMap[sub.parent_step_id] : null;
-          const task = (step || parentStep)?.task || null;
-          const assignedAt = b.task_step_id ? assignedAtMap[b.task_step_id] || null : null;
-          return {
-            ...b,
-            taskTitle: task?.title || '-',
-            stepTitle: (step || parentStep)?.title || '-',
-            subStepTitle: sub?.title || null,
-            assignedAt: assignedAt,
-          };
-        });
-        setRecentUpdates(recent);
       } finally {
         setLoading(false);
       }

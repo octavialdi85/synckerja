@@ -25,8 +25,8 @@ import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './servi
 // Helper function to batch process large ID arrays (Supabase has limits on .in() queries)
 // Optimized batch size to balance between speed and stability
 const BATCH_SIZE = 10; // Balanced batch size - small enough to prevent 500 errors, large enough for speed
-const MAX_RETRIES = 2; // Maximum retry attempts for failed queries
-const QUERY_TIMEOUT = 15000; // 15 seconds timeout per query
+const MAX_RETRIES = 1; // Reduced retries for faster failure detection (was 2)
+const QUERY_TIMEOUT = 10000; // Reduced to 10 seconds timeout per query for faster failure (was 15s)
 
 const batchQuery = async <T,>(
   ids: string[],
@@ -84,27 +84,41 @@ const batchQuery = async <T,>(
         let lastError: any = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
-            const result = await queryFn(batch);
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Query timeout')), QUERY_TIMEOUT)
+            );
+            
+            const queryPromise = queryFn(batch);
+            const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+            
             if (!result.error) {
               return result.data || [];
             }
             lastError = result.error;
-            // Don't retry on 4xx errors
+            // Don't retry on 4xx errors or timeout
             if (result.error?.status >= 400 && result.error?.status < 500) {
               break;
             }
             if (attempt < MAX_RETRIES) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+              await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt))); // Reduced delay
             }
-          } catch (error) {
+          } catch (error: any) {
             lastError = error;
+            // Skip retry on timeout
+            if (error?.message?.includes('timeout')) {
+              break;
+            }
             if (attempt < MAX_RETRIES) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+              await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt))); // Reduced delay
             }
           }
         }
         if (lastError) {
-          console.error('Batch query failed after retries:', lastError);
+          // Only log if not timeout (timeout is expected for slow queries)
+          if (!lastError?.message?.includes('timeout')) {
+            console.error('Batch query failed after retries:', lastError);
+          }
         }
         return [];
       })
@@ -250,6 +264,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const cached = getCached<any[]>(cacheKey, 60000); // 60s instead of 30s
         if (cached) {
           setTasks(cached);
+          // Return early with cached data - this allows page to render immediately
+          // Fresh data will be fetched in background if needed
           return;
         }
       }
@@ -654,86 +670,184 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // Fetch task files for all steps - use batch processing to avoid timeout
-      let taskFilesData: any[] = [];
+      // Fetch task files - SIMPLIFIED: Load in background, skip on errors (non-critical)
+      const filesByStepId: Record<string, any[]> = {};
+      
+      // Load files in background (non-blocking, simplified)
       if (stepIds.length > 0) {
-        try {
-          if (isDev) {
-            logger.query('🔍 Fetching task files for steps:', stepIds.length);
-          }
-          // Use batch processing to prevent timeout with many IDs
-          const filesBatches = await batchQuery(
-            stepIds,
-            async (batch) => {
-              const { data, error } = await supabase
-                .from('task_files')
-                .select(`
-                  id,
-                  task_steps_id,
-                  filename,
-                  file_url,
-                  file_size,
-                  created_at
-                `)
-                .in('task_steps_id', batch)
-                .order('created_at', { ascending: false });
+        (async () => {
+          try {
+            const BATCH_SIZE = 2; // Very small batch size
+            const MAX_ERRORS = 3; // Circuit breaker: stop after 3 errors
+            let errorCount = 0;
+            const allFiles: any[] = [];
+            
+            // Process sequentially (one batch at a time) to avoid overwhelming database
+            for (let i = 0; i < stepIds.length; i += BATCH_SIZE) {
+              // Circuit breaker: stop if too many errors
+              if (errorCount >= MAX_ERRORS) {
+                if (isDev) {
+                  logger.query('⚠️ Stopping files fetch due to too many errors');
+                }
+                break;
+              }
               
-              return { data: data || [], error };
+              const batch = stepIds.slice(i, i + BATCH_SIZE);
+              
+              try {
+                // Simple timeout (5 seconds)
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                
+                const queryPromise = supabase
+                  .from('task_files')
+                  .select('id, task_steps_id, filename, file_url, file_size, created_at')
+                  .in('task_steps_id', batch)
+                  .order('created_at', { ascending: false });
+                
+                const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+                
+                if (result?.data && !result.error) {
+                  allFiles.push(...result.data);
+                } else {
+                  errorCount++;
+                }
+              } catch (err: any) {
+                errorCount++;
+                // Skip this batch, continue with next
+              }
+              
+              // Small delay between batches
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
-          );
-          
-          taskFilesData = filesBatches;
-          if (isDev) {
-            logger.query('✅ Fetched task files:', taskFilesData.length);
+            
+            // Update state only if we got some files
+            if (allFiles.length > 0) {
+              const newFilesByStepId: Record<string, any[]> = {};
+              allFiles.forEach(file => {
+                if (!newFilesByStepId[file.task_steps_id]) {
+                  newFilesByStepId[file.task_steps_id] = [];
+                }
+                newFilesByStepId[file.task_steps_id].push(file);
+              });
+              
+              setTasks(prevTasks => 
+                prevTasks.map(task => ({
+                  ...task,
+                  steps: task.steps.map(step => ({
+                    ...step,
+                    files: newFilesByStepId[step.id] || step.files || []
+                  }))
+                }))
+              );
+            }
+          } catch (error) {
+            // Silently fail - files are non-critical
           }
-        } catch (error) {
-          console.error('❌ Error fetching task files:', error);
-          taskFilesData = [];
-        }
+        })().catch(() => {
+          // Silently fail
+        });
       }
 
-      // Group task files by step_id
-      const filesByStepId: Record<string, any[]> = {};
-      taskFilesData.forEach(file => {
-        if (!filesByStepId[file.task_steps_id]) {
-          filesByStepId[file.task_steps_id] = [];
-        }
-        filesByStepId[file.task_steps_id].push(file);
-      });
-
-      // Fetch due dates for step assignments - use batch processing
+      // Fetch due dates for step assignments - OPTIMIZED: Load in background if too many
       let stepDueDatesData: any[] = [];
       if (stepAssignmentsData.length > 0) {
         const assignmentIds = stepAssignmentsData.map((a: any) => a.id);
-        try {
-          // Use batch processing to prevent timeout with many IDs
-          const dueDatesBatches = await batchQuery(
-            assignmentIds,
-            async (batch) => {
-              const { data, error } = await supabase
-                .from('task_steps_assigned_duedate')
-                .select('task_steps_assigned_id, due_date')
-                .in('task_steps_assigned_id', batch)
-                .order('created_at', { ascending: false });
-              
-              return { data: data || [], error };
+        
+        // If too many assignments, load due dates in background (non-blocking)
+        if (assignmentIds.length > 50) {
+          // Load due dates in background for large datasets
+          // Store assignment mapping for later use
+          const assignmentIdToStepIdMap: Record<string, string> = {};
+          stepAssignmentsData.forEach(assignment => {
+            if (assignment.task_step_id) {
+              assignmentIdToStepIdMap[assignment.id] = assignment.task_step_id;
             }
-          );
+          });
           
-          stepDueDatesData = dueDatesBatches;
-        } catch (error) {
-          console.error('❌ Error fetching due dates:', error);
-          stepDueDatesData = [];
+          (async () => {
+            try {
+              const dueDatesBatches = await batchQuery(
+                assignmentIds,
+                async (batch) => {
+                  const { data, error } = await supabase
+                    .from('task_steps_assigned_duedate')
+                    .select('task_steps_assigned_id, due_date')
+                    .in('task_steps_assigned_id', batch)
+                    .order('created_at', { ascending: false });
+                  
+                  return { data: data || [], error };
+                }
+              );
+              
+              // Map due dates by step ID (not assignment ID) for easier update
+              const dueDatesByStepId: Record<string, string> = {};
+              dueDatesBatches.forEach((dueDate: any) => {
+                const stepId = assignmentIdToStepIdMap[dueDate.task_steps_assigned_id];
+                if (stepId && !dueDatesByStepId[stepId]) {
+                  dueDatesByStepId[stepId] = dueDate.due_date;
+                }
+              });
+              
+              // Update tasks with due dates
+              setTasks(prevTasks => 
+                prevTasks.map(task => ({
+                  ...task,
+                  steps: task.steps.map(step => {
+                    const dueDate = dueDatesByStepId[step.id];
+                    if (dueDate) {
+                      return {
+                        ...step,
+                        assigned_due_date: dueDate
+                      };
+                    }
+                    return step;
+                  })
+                }))
+              );
+            } catch (error) {
+              console.warn('⚠️ Error fetching due dates in background (non-critical):', error);
+            }
+          })().catch(err => console.warn('Background due dates fetch failed:', err));
+        } else {
+          // For smaller datasets, load normally but with timeout
+          try {
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Due dates query timeout')), 10000)
+            );
+            
+            const queryPromise = batchQuery(
+              assignmentIds,
+              async (batch) => {
+                const { data, error } = await supabase
+                  .from('task_steps_assigned_duedate')
+                  .select('task_steps_assigned_id, due_date')
+                  .in('task_steps_assigned_id', batch)
+                  .order('created_at', { ascending: false });
+                
+                return { data: data || [], error };
+              }
+            );
+            
+            stepDueDatesData = await Promise.race([queryPromise, timeoutPromise]) as any[];
+          } catch (error: any) {
+            // If timeout or error, continue without due dates (non-critical)
+            console.warn('⚠️ Error/timeout fetching due dates (non-critical, continuing):', error);
+            stepDueDatesData = [];
+          }
         }
       }
       
-      // Map due dates by assignment ID
+      // Map due dates by assignment ID (only if loaded synchronously)
       const dueDatesByAssignmentId: Record<string, string> = {};
-      stepDueDatesData.forEach((dueDate: any) => {
-        if (!dueDatesByAssignmentId[dueDate.task_steps_assigned_id]) {
-          dueDatesByAssignmentId[dueDate.task_steps_assigned_id] = dueDate.due_date;
-        }
-      });
+      if (stepDueDatesData.length > 0) {
+        stepDueDatesData.forEach((dueDate: any) => {
+          if (!dueDatesByAssignmentId[dueDate.task_steps_assigned_id]) {
+            dueDatesByAssignmentId[dueDate.task_steps_assigned_id] = dueDate.due_date;
+          }
+        });
+      }
 
       // Group step assignments by task_step_id (only keep the latest one per step)
       const stepAssignmentsByStepId: Record<string, any> = {};
@@ -877,8 +991,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Cache the results
       setCache(cacheKey, tasksWithProgress);
       
-      // Update status in database for tasks that need synchronization
-      await syncTaskStatusesInDatabase(tasksWithProgress, data || []);
+      // Update status in database for tasks that need synchronization (non-blocking)
+      // Run in background to not block page load
+      syncTaskStatusesInDatabase(tasksWithProgress, data || []).catch(err => 
+        console.warn('Background status sync failed:', err)
+      );
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -2321,14 +2438,49 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     recentlyUpdatedTasksRef,
   });
 
-  // Initial data fetch
+  // Initial data fetch - optimized for fast page load
   useEffect(() => {
     if (!organizationId) return;
 
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([fetchTasks(), fetchRecentStepUpdates()]);
-      setIsLoading(false);
+      
+      try {
+        // Try to load cached data first for instant display
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const cacheKey = `tasks_${organizationId}_${user.id}`;
+          const cached = getCached<any[]>(cacheKey, 60000);
+          if (cached !== undefined && cached !== null) {
+            // Show cached data immediately (even if empty array - means no tasks)
+            setTasks(cached);
+            setIsLoading(false);
+            
+            // Fetch fresh data in background (non-blocking)
+            fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
+            fetchRecentStepUpdates().catch(err => console.error('Background recent updates failed:', err));
+            return;
+          }
+        }
+      } catch (cacheError) {
+        // If cache check fails, continue with normal fetch
+        console.warn('Cache check failed, proceeding with normal fetch:', cacheError);
+      }
+      
+      // No cache available - fetch data normally
+      // Load tasks first (critical) - don't wait for recent updates
+      const tasksPromise = fetchTasks();
+      
+      // Set loading to false as soon as tasks are loaded (don't wait for recent updates)
+      tasksPromise.then(() => {
+        setIsLoading(false);
+      }).catch((err) => {
+        console.error('Error fetching tasks:', err);
+        setIsLoading(false);
+      });
+      
+      // Load recent updates in background (non-blocking, non-critical)
+      fetchRecentStepUpdates().catch(err => console.error('Background recent updates failed:', err));
     };
 
     loadData();

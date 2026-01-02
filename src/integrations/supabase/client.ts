@@ -20,8 +20,12 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   global: {
     // Better error handling for network issues with retry logic
     fetch: async (url, options = {}) => {
-      const MAX_RETRIES = 1; // Reduced retries for faster failure detection
-      const TIMEOUT_MS = 15000; // Reduced to 15 seconds for faster failure detection
+      const MAX_RETRIES = 2; // Increased retries for auth requests
+      
+      // Use longer timeout for auth requests (30 seconds)
+      // Regular requests use shorter timeout (15 seconds)
+      const isAuthRequest = url.includes('/auth/v1/');
+      const TIMEOUT_MS = isAuthRequest ? 30000 : 15000; // 30s for auth, 15s for others
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         // Create abort controller for timeout if not already provided
@@ -71,7 +75,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           if (attempt === MAX_RETRIES || (!isTimeout && !isNetworkError)) {
             // Map network errors to be more descriptive
             if (isTimeout) {
-              throw new Error(`Network request timeout after ${TIMEOUT_MS / 1000} seconds`);
+              const timeoutSeconds = TIMEOUT_MS / 1000;
+              throw new Error(`Network request timeout after ${timeoutSeconds} seconds${isAuthRequest ? ' (auth request)' : ''}`);
             }
             if (isNetworkError) {
               throw new Error('Network request failed - please check your connection');
