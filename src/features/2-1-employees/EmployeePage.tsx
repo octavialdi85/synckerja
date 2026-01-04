@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import {
   HeaderAndTab,
@@ -13,9 +13,18 @@ import { useCurrentUser } from './hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Plus } from 'lucide-react';
+import { filterEmployees, type EmployeeFilters as FilterType } from './utils/employeeUtils';
 
 export const EmployeePage = () => {
   const [activeTab, setActiveTab] = useState('employees');
+  const [filters, setFilters] = useState<FilterType>({
+    search: '',
+    department: 'all',
+    position: 'all',
+    status: 'all',
+    employmentType: 'all',
+    timePeriod: 'all'
+  });
   
   const { data: employees = [], isLoading, refetch } = useEmployees();
   const { user } = useCurrentUser();
@@ -36,6 +45,35 @@ export const EmployeePage = () => {
   const handleAddEmployee = useCallback(() => {
     navigate('/employees/add');
   }, [navigate]);
+
+  // Filter employees based on current filters
+  const filteredEmployees = useMemo(() => {
+    return filterEmployees(employees, filters);
+  }, [employees, filters]);
+
+  // Get unique departments and positions for filter options
+  const departments = useMemo(() => {
+    return [...new Set(employees.map(emp => emp.department_name).filter(Boolean))].sort() as string[];
+  }, [employees]);
+
+  const positions = useMemo(() => {
+    return [...new Set(employees.map(emp => emp.job_position_name).filter(Boolean))].sort() as string[];
+  }, [employees]);
+
+  const handleFilterChange = useCallback((key: keyof FilterType, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setFilters({
+      search: '',
+      department: 'all',
+      position: 'all',
+      status: 'all',
+      employmentType: 'all',
+      timePeriod: 'all'
+    });
+  }, []);
 
   return (
     <StandardLayout>
@@ -60,7 +98,13 @@ export const EmployeePage = () => {
                     {/* Filter Section */}
                     <div className="flex-shrink-0 mb-2">
                       <div className="bg-white border rounded-md p-2">
-                        <EmployeeFilters />
+                        <EmployeeFilters 
+                          filters={filters}
+                          departments={departments}
+                          positions={positions}
+                          onFilterChange={handleFilterChange}
+                          onClearFilters={handleClearFilters}
+                        />
                       </div>
                     </div>
                     
@@ -73,7 +117,7 @@ export const EmployeePage = () => {
                     <div className="flex-1 min-h-0">
                       <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
                         <EmployeeTable 
-                          employees={employees}
+                          employees={filteredEmployees}
                           currentUserEmail={user?.email}
                           onRefresh={handleRefresh}
                           onViewEmployee={handleViewEmployee}
@@ -108,15 +152,15 @@ export const EmployeePage = () => {
                       {/* Scrollable Sidebar Content */}
                       <div className="flex-1 min-h-0 overflow-hidden">
                         <div className="h-full p-4">
-                          <EmployeeOverview employees={employees} />
+                          <EmployeeOverview employees={filteredEmployees} />
                         </div>
                       </div>
 
                       {/* Sidebar Footer */}
                       <EmployeeSidebarFooter 
                         totalDepartments={[...new Set(employees.map(emp => emp.department_name).filter(Boolean))].length}
-                        selectedDepartment="all"
-                        totalEmployees={employees.length}
+                        selectedDepartment={filters.department || 'all'}
+                        totalEmployees={filteredEmployees.length}
                       />
                     </div>
                   </div>

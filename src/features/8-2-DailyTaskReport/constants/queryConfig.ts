@@ -1,0 +1,25 @@
+/**
+ * Query configuration constants for Daily Task Report
+ * Centralized configuration to avoid magic numbers and improve maintainability
+ */
+export const QUERY_CONFIG = {
+  BATCH_SIZES: {
+    COMPLETION_DATES: 5,
+    BLOCKERS: 3,
+    SUB_STEP_BLOCKERS: 3,
+    HISTORY: 25,
+  },
+  TIMEOUTS: {
+    COMPLETION_DATES: 5000,
+    BLOCKERS: 5000,
+    SUB_STEP_BLOCKERS: 5000,
+    HISTORY: 8000,
+  },
+  DELAYS: {
+    BETWEEN_BATCHES: 200,
+    BETWEEN_BLOCKER_BATCHES: 300,
+  },
+  MAX_CONCURRENT_BATCHES: 2,
+  MAX_QUERY_RESULTS: 100,
+} as const;
+

@@ -47,9 +47,8 @@ const HomeOKRDashboardContent = () => {
   // Get current active cycle ID (prefer active cycle, fallback to most recent)
   const getActiveCycleId = () => {
     if (!cycles.length) {
-      // Create a default cycle ID if no cycles exist
-      // Reduced logging frequency for performance
-      return 'default-cycle-2025-q4';
+      // Return undefined instead of invalid UUID to prevent query errors
+      return undefined;
     }
     
     // First try to find an active cycle

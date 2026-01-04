@@ -10,6 +10,7 @@ import { useDepartments } from './useDepartments';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { getEmployeeStatus } from '@/features/2-1-employees/utils/employeeUtils';
 import { toast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -53,20 +54,28 @@ export const CreateKeyResultDialog: React.FC<CreateKeyResultDialogProps> = ({
     assigned_employee_id: ''
   });
 
+  // Filter out terminated employees first
+  const activeEmployees = React.useMemo(() => {
+    return allEmployees.filter(employee => {
+      const status = getEmployeeStatus(employee);
+      return status.toLowerCase() !== 'terminated';
+    });
+  }, [allEmployees]);
+
   // Filter employees based on selected department or objective's department
   const getAvailableEmployees = () => {
     if (objective.level === 'department' && objective.department_id) {
       // For department objectives, show employees from that specific department
-      return allEmployees.filter(emp => emp.department_id === objective.department_id);
+      return activeEmployees.filter(emp => emp.department_id === objective.department_id);
     }
     
     if (formData.department_id) {
       // For company objectives with selected department, show employees from selected department
-      return allEmployees.filter(emp => emp.department_id === formData.department_id);
+      return activeEmployees.filter(emp => emp.department_id === formData.department_id);
     }
     
-    // Default: show all employees
-    return allEmployees;
+    // Default: show all active employees
+    return activeEmployees;
   };
 
   const availableEmployees = getAvailableEmployees();

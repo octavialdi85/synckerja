@@ -187,7 +187,7 @@ export const IndividualObjectivesProgressCard = ({
                 open={showCreateModal}
                 onOpenChange={setShowCreateModal}
                 organizationId={organizationId}
-                cycleId={cycleId || 'default-cycle'}
+                cycleId={cycleId}
                 departmentId={departmentId}
               />
             )}

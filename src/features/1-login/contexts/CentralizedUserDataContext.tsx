@@ -257,7 +257,19 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
       // Get employee record, role, and organization if organization exists (with timeout)
       if (organizationId) {
-        const employeePromise = supabase
+        // First, check if user is organization owner
+        const { data: orgOwnerCheck } = await supabase
+          .from('organizations')
+          .select('user_id')
+          .eq('id', organizationId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        const isOrgOwner = !!orgOwnerCheck;
+        
+        // Build employee query - include status for filtering
+        // Note: is_organization_owner is calculated, not a database field
+        let employeeQuery = supabase
           .from('employees')
           .select(`
             id,
@@ -266,11 +278,25 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             email,
             organization_id,
             department_id,
+            status,
+            employee_status_id,
+            user_id,
             departments:department_id(name)
           `)
           .eq('user_id', user.id)
-          .eq('organization_id', organizationId)
-          .maybeSingle();
+          .eq('organization_id', organizationId);
+        
+        // SECURITY: Filter out terminated employees UNLESS they are the organization owner
+        // Owner can access their own organization even if terminated in other organizations
+        if (!isOrgOwner) {
+          // For non-owners, exclude terminated employees
+          // Allow null status (new employees) but exclude 'terminated'
+          // Use or() to allow null or non-terminated status
+          employeeQuery = employeeQuery.or('status.is.null,status.neq.terminated');
+        }
+        // If isOrgOwner, allow access regardless of status (they own this org)
+        
+        const employeePromise = employeeQuery.maybeSingle();
 
         const rolePromise = supabase
           .from('user_roles')
@@ -281,7 +307,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 
         const organizationPromise = supabase
           .from('organizations')
-          .select('id, company_name, industry, address, website')
+          .select('id, company_name, industry, address, website, user_id')
           .eq('id', organizationId)
           .maybeSingle();
 
@@ -301,14 +327,41 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           const roleData = results[1]?.status === 'fulfilled' ? results[1].value.data : null;
           const orgData = results[2]?.status === 'fulfilled' ? results[2].value.data : null;
 
-          setEmployee(employeeData);
-          setUserRole(roleData?.role || null);
-          setOrganization(orgData);
+          // Calculate is_organization_owner (not a database field)
+          const calculatedIsOwner = employeeData && orgData && employeeData.user_id === (orgData as any).user_id;
           
-          // Update userData with department_id from employee data
-          if (employeeData?.department_id) {
-            const updatedUserData = { ...userData, department_id: employeeData.department_id };
-            setUserData(updatedUserData);
+          // SECURITY CHECK: If employee is terminated and not owner, block access
+          // This is a double-check in case query filter didn't work
+          if (employeeData && employeeData.status === 'terminated' && !isOrgOwner && !calculatedIsOwner) {
+            if (import.meta.env.DEV) {
+              console.warn('🚫 Access denied: Employee is terminated and not organization owner', {
+                employeeId: employeeData.id,
+                status: employeeData.status,
+                isOrgOwner,
+                calculatedIsOwner
+              });
+            }
+            // Set employee to null to block access
+            setEmployee(null);
+            setUserRole(null);
+            setOrganization(null);
+            // Don't update userData with department_id if access is denied
+          } else {
+            // Add calculated is_organization_owner to employee data
+            const enrichedEmployeeData = employeeData ? {
+              ...employeeData,
+              is_organization_owner: calculatedIsOwner || false
+            } : null;
+            
+            setEmployee(enrichedEmployeeData);
+            setUserRole(roleData?.role || null);
+            setOrganization(orgData);
+            
+            // Update userData with department_id from employee data
+            if (employeeData?.department_id) {
+              const updatedUserData = { ...userData, department_id: employeeData.department_id };
+              setUserData(updatedUserData);
+            }
           }
         } catch (orgError: any) {
           if (orgError.message === 'Organization data query timeout') {

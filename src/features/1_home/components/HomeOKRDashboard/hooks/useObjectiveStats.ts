@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/config/logger';
+import { filterValidCycleIds } from '@/utils/uuidValidation';
 
 interface ObjectiveStats {
   avgProgress: number;
@@ -31,11 +32,13 @@ export const useObjectiveStats = (
         .select('id, progress_percentage, end_date, status')
         .eq('organization_id', organizationId);
 
-      if (cycleIds && cycleIds.length > 0) {
-        logger.query(`🎯 [${type}] Filtering by cycle IDs:`, cycleIds);
-        query = query.in('cycle_id', cycleIds);
+      // Filter by valid cycle IDs only
+      const validCycleIds = filterValidCycleIds(cycleIds);
+      if (validCycleIds.length > 0) {
+        logger.query(`🎯 [${type}] Filtering by cycle IDs:`, validCycleIds);
+        query = query.in('cycle_id', validCycleIds);
       } else {
-        logger.query(`⚠️ [${type}] No cycle IDs provided, returning zero stats`);
+        logger.query(`⚠️ [${type}] No valid cycle IDs provided, returning zero stats`);
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 

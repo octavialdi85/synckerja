@@ -1,5 +1,6 @@
 import { Users, UserCheck, Calendar, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { countActiveEmployees, isEmployeeActive } from '../utils/employeeUtils';
 
 interface EmployeeOverviewProps {
   employees?: any[];
@@ -7,8 +8,8 @@ interface EmployeeOverviewProps {
 
 export const EmployeeOverview = ({ employees = [] }: EmployeeOverviewProps) => {
 
-  // Calculate real data from employees
-  const activeEmployees = employees.filter(e => (e.employee_status_name || e.status) === 'active').length;
+  // Calculate real data from employees using consistent logic
+  const activeEmployees = countActiveEmployees(employees);
   const newHiresThisMonth = employees.filter(e => {
     if (!e.join_date) return false;
     const joinDate = new Date(e.join_date);
@@ -129,7 +130,7 @@ export const EmployeeOverview = ({ employees = [] }: EmployeeOverviewProps) => {
                       {employee.join_date ? format(new Date(employee.join_date), 'MMM dd') : 'N/A'}
                     </p>
                     <div className={`w-2 h-2 rounded-full mt-1 ${
-                      (employee.employee_status_name || employee.status) === 'active' ? 'bg-green-500' : 'bg-yellow-500'
+                      isEmployeeActive(employee) ? 'bg-green-500' : 'bg-yellow-500'
                     }`}></div>
                   </div>
                 </div>

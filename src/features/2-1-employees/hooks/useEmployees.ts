@@ -29,6 +29,9 @@ export type Employee = {
   branch_name?: string;
   employee_status_name?: string;
   is_organization_owner?: boolean;
+  pending_removal?: boolean;
+  pending_removal_reason?: string | null;
+  pending_removal_date?: string | null;
 };
 
 export const useEmployees = () => {
@@ -73,7 +76,16 @@ export const useEmployees = () => {
             emp.employee_status_id ? supabase.from('employee_statuses').select('name').eq('id', emp.employee_status_id).maybeSingle() : Promise.resolve({ data: null })
           ]);
           
-          console.log(`Employee ${emp.full_name}: department_id=${emp.department_id}, department_name=${departmentData.data?.name}`);
+          // Enhanced logging for status debugging
+          const statusName = employeeStatusData.data?.name;
+          const rawStatus = emp.status;
+          console.log(`Employee ${emp.full_name}:`, {
+            raw_status: rawStatus,
+            employee_status_id: emp.employee_status_id,
+            employee_status_name: statusName,
+            pending_removal: emp.pending_removal,
+            final_status_name: statusName || rawStatus || null
+          });
           
           return {
             ...emp,
@@ -83,7 +95,13 @@ export const useEmployees = () => {
             job_position_name: jobPositionData.data?.name || null,
             job_level_name: jobLevelData.data?.name || null,
             branch_name: branchData.data?.name || null,
-            employee_status_name: employeeStatusData.data?.name || emp.status || null,
+            // IMPORTANT: Prioritize employee_status_name from employee_statuses table, fallback to status field
+            // This ensures we use the same data source as the detail page
+            employee_status_name: statusName || rawStatus || null,
+            // Ensure pending_removal fields are included
+            pending_removal: emp.pending_removal ?? false,
+            pending_removal_reason: emp.pending_removal_reason || null,
+            pending_removal_date: emp.pending_removal_date || null,
           } as Employee;
         })
       );

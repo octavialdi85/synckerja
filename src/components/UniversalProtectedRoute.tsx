@@ -44,7 +44,7 @@ export const UniversalProtectedRoute = ({
     configLoading
   } = useDepartmentAccess();
 
-  const { userRole, isOwner, isAdmin } = useCentralizedUserData();
+  const { userRole, isOwner, isAdmin, employee, organization } = useCentralizedUserData();
 
   // Universal access validation
   useEffect(() => {
@@ -65,6 +65,28 @@ export const UniversalProtectedRoute = ({
         }
         navigate(redirectTo, { state: { from: location }, replace: true });
         return;
+      }
+
+      // Step 1.5: SECURITY - Check if employee is terminated (except owners)
+      // Owner can access their own organization even if terminated in other organizations
+      if (requiresAuth && user && employee && organization && !isOwner) {
+        const employeeStatus = employee.status || (employee as any).employee_status_name;
+        const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+        
+        if (isTerminated) {
+          if (isDev) {
+            logger.debug('🚫 ACCESS DENIED: Employee is terminated', {
+              employeeId: employee.id,
+              status: employeeStatus,
+              currentPath
+            });
+          }
+          
+          setAccessDenied(true);
+          setDeniedReason('Status karyawan Anda adalah Terminated. Anda tidak memiliki akses ke organisasi ini.');
+          setIsValidating(false);
+          return;
+        }
       }
 
       // Step 2: Wait for configurations to load
@@ -113,7 +135,12 @@ export const UniversalProtectedRoute = ({
     isOwner, 
     isAdmin, 
     configLoading, 
-    requiresAuth
+    requiresAuth,
+    employee,
+    organization,
+    canAccessPage,
+    getAccessLevel,
+    getDepartmentRestrictionMessage
   ]);
 
   // Unified loading state - combine all loading checks into one simple message

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { logger } from '@/config/logger';
+import { filterValidCycleIds } from '@/utils/uuidValidation';
 
 export interface IndividualObjective {
   id: string;
@@ -136,9 +137,10 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         .eq('organization_id', organizationId)
         .limit(50); // Limit results to prevent timeout
 
-      // Filter by multiple cycle IDs if provided
-      if (cycleIds && cycleIds.length > 0) {
-        query = query.in('cycle_id', cycleIds);
+      // Filter by multiple cycle IDs if provided (only valid UUIDs)
+      const validCycleIds = filterValidCycleIds(cycleIds);
+      if (validCycleIds.length > 0) {
+        query = query.in('cycle_id', validCycleIds);
       }
 
       // TIMEOUT PROTECTION: Add timeout to prevent hanging

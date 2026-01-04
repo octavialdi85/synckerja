@@ -8,6 +8,7 @@ import { EmployeeActionsDropdown } from './EmployeeActionsDropdown';
 import type { Employee } from '../hooks/useEmployees';
 import { useOptimizedPerformanceMonitor } from '../hooks/useOptimizedPerformanceMonitor';
 import { EmployeeTableFooter } from './EmployeeTableFooter';
+import { getEmployeeStatus, countActiveEmployees } from '../utils/employeeUtils';
 import './EmployeeTable.css';
 
 interface EmployeeTableProps {
@@ -49,6 +50,8 @@ const EmployeeRow = memo(({
       case 'terminated':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'pending':
+      case 'pending removal':
+      case 'pendingremoval':
         return 'bg-orange-100 text-orange-800 border-orange-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -72,8 +75,27 @@ const EmployeeRow = memo(({
     onViewEmployee(employee.id);
   }, [employee.id, onViewEmployee]);
 
-  // Use employee_status_name if available, otherwise fallback to status
-  const displayStatus = employee.employee_status_name || employee.status || 'Active';
+  // Use consistent status display logic
+  const displayStatus = getEmployeeStatus(employee);
+  
+  // Debug logging for ALL employees to track status sync issues (only in development)
+  if (import.meta.env.DEV) {
+    // Log for Shally specifically or any employee with status issues
+    if (employee.full_name?.toLowerCase().includes('shally') || 
+        employee.status === 'terminated' || 
+        employee.employee_status_name === 'terminated' ||
+        employee.pending_removal) {
+      console.log(`[EmployeeTable] ${employee.full_name}:`, {
+        id: employee.id,
+        raw_status: employee.status,
+        employee_status_id: (employee as any).employee_status_id,
+        employee_status_name: employee.employee_status_name,
+        pending_removal: employee.pending_removal,
+        final_displayStatus: displayStatus,
+        getEmployeeStatus_result: getEmployeeStatus(employee)
+      });
+    }
+  }
 
   return (
     <TableRow className="hover:bg-gray-50/50 h-12 transition-colors">
@@ -218,7 +240,7 @@ export const EmployeeTable = memo(({
       {/* Table Footer */}
       <EmployeeTableFooter 
         totalEmployees={employees.length}
-        activeEmployees={employees.filter(emp => (emp.employee_status_name || emp.status) === 'active').length}
+        activeEmployees={countActiveEmployees(employees)}
         filteredEmployees={employees.length}
         selectedDepartment="all"
       />

@@ -40,8 +40,8 @@ export const ProtectedRoute = ({
   // Determine the path to check for permissions
   const pathToCheck = pagePath || location.pathname;
 
-  // Get additional context from useCentralizedUserData to check organization loading
-  const { hasOrganization, organization } = useCentralizedUserData();
+  // Get additional context from useCentralizedUserData to check organization loading and employee status
+  const { hasOrganization, organization, employee, isOwner } = useCentralizedUserData();
 
   // Show loading spinner while checking auth state and permissions
   // Also wait for organization data to load when permissions are required
@@ -69,6 +69,51 @@ export const ProtectedRoute = ({
   // If authentication is required but user is not authenticated, redirect to login
   if (requiresAuth && !user) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
+  }
+
+  // SECURITY: Check if employee is terminated (except owners)
+  // Owner can access their own organization even if terminated in other organizations
+  if (requiresAuth && user && employee && organization) {
+    const employeeStatus = employee.status || (employee as any).employee_status_name;
+    const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+    
+    if (isTerminated && !isOwner) {
+      // Employee is terminated and not owner - block access
+      return (
+        <StandardLayout>
+          <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+            <div className="flex flex-1 min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
+                <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
+                  <div className="h-full flex flex-col overflow-hidden">
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="max-w-md mx-auto">
+                        <div className="text-center">
+                          <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                            <XCircle className="h-12 w-12 text-red-500" />
+                          </div>
+                          <div className="bg-white rounded-lg shadow-sm border p-6">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-3">
+                              Akses Ditolak
+                            </h2>
+                            <p className="text-gray-600 mb-4">
+                              Status karyawan Anda adalah <strong>Terminated</strong>. Anda tidak memiliki akses ke organisasi ini.
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Silakan hubungi administrator organisasi untuk informasi lebih lanjut.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          </div>
+        </StandardLayout>
+      );
+    }
   }
 
   // Check permissions if required

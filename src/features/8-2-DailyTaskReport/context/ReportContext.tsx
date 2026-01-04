@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
 import { getCached, setCache, clearCache } from '@/features/8-2-DailyTask/utils/optimizationUtils';
+import { fetchCompletionDates, fetchStepBlockers } from '../utils/batchQueryProcessor';
+import { filterPerformanceData, filterBySearchAndFilters, getDateRangeFromFilter } from '../utils/filterUtils';
 
 export interface AssignmentRow {
   id: string;
@@ -576,55 +578,23 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         if (completedStepIds.length > 0 || allStepIdsFromAssignments.length > 0) {
           (async () => {
             try {
-              // Fetch completion dates in background with batch processing
+              // Fetch completion dates in background using utility
               if (completedStepIds.length > 0) {
-                const COMPLETION_BATCH_SIZE = 10; // Smaller batch size
-                const completionBatches: string[][] = [];
-                for (let i = 0; i < completedStepIds.length; i += COMPLETION_BATCH_SIZE) {
-                  completionBatches.push(completedStepIds.slice(i, i + COMPLETION_BATCH_SIZE));
-                }
-                
-                const allCompletionDates: any[] = [];
-                for (const batch of completionBatches) {
-                  try {
-                    const timeoutPromise = new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Completion dates query timeout')), 8000)
-                    );
-                    
-                    const queryPromise = supabase
-                      .from('task_step_history')
-                      .select('task_step_id, created_at, new_value')
-                      .in('task_step_id', batch)
-                      .eq('action_type', 'status_change')
-                      .or('new_value.eq.completed,new_value.eq.COMPLETED')
-                      .order('created_at', { ascending: true });
-                    
-                    const result = await Promise.race([queryPromise, timeoutPromise]) as any;
-                    
-                    if (result.data) {
-                      allCompletionDates.push(...result.data);
+                fetchCompletionDates(completedStepIds)
+                  .then(completionDateMap => {
+                    setCompletionDateMap(completionDateMap);
+                    logger.query(`📅 Loaded completion dates in background: ${Object.keys(completionDateMap).length} steps`);
+                  })
+                  .catch(err => {
+                    if (err?.status !== 500) {
+                      console.warn('⚠️ Error loading completion dates (non-critical):', err);
                     }
-                  } catch (err: any) {
-                    // Skip on timeout/error (non-critical)
-                    if (!err?.message?.includes('timeout')) {
-                      console.warn('⚠️ Error fetching completion dates batch (non-critical):', err);
-                    }
-                  }
-                }
-                
-                const newCompletionDateMap: Record<string, string> = {};
-                allCompletionDates.forEach((entry: any) => {
-                  if (entry.task_step_id && !newCompletionDateMap[entry.task_step_id]) {
-                    newCompletionDateMap[entry.task_step_id] = entry.created_at;
-                  }
-                });
-                
-                setCompletionDateMap(newCompletionDateMap);
-                logger.query(`📅 Loaded completion dates in background: ${Object.keys(newCompletionDateMap).length} steps`);
+                  });
               }
               
-              // Fetch step blockers in background with smaller batch size
-              if (allStepIdsFromAssignments.length > 0) {
+              // DISABLED: Step blockers query - causes 500 errors
+              // Query disabled due to database performance issues
+              if (false && allStepIdsFromAssignments.length > 0) {
                 const BLOCKER_BATCH_SIZE = 5; // Much smaller batch size to avoid timeout
                 const batches: string[][] = [];
                 for (let i = 0; i < allStepIdsFromAssignments.length; i += BLOCKER_BATCH_SIZE) {
@@ -638,11 +608,13 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       setTimeout(() => reject(new Error('Blockers query timeout')), 8000)
                     );
                     
-                    const queryPromise = supabase
-                      .from('task_step_history')
-                      .select('*')
-                      .eq('action_type', 'blocker_added')
-                      .in('task_step_id', batch);
+                    // DISABLED: Query causes 500 errors
+                    // const queryPromise = supabase
+                    //   .from('task_step_history')
+                    //   .select('*')
+                    //   .eq('action_type', 'blocker_added')
+                    //   .in('task_step_id', batch);
+                    const queryPromise = Promise.resolve({ data: null, error: null });
                     
                     const result = await Promise.race([queryPromise, timeoutPromise]) as any;
                     
@@ -767,8 +739,9 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           if (subStepIdList.length > 0 || stepIdList.length > 0) {
             (async () => {
               try {
-                // Fetch sub-step blockers in background with smaller batch size
-                if (subStepIdList.length > 0) {
+                // DISABLED: Sub-step blockers query - causes 500 errors
+                // Query disabled due to database performance issues
+                if (false && subStepIdList.length > 0) {
                   const BLOCKER_BATCH_SIZE = 5; // Much smaller batch size
                   const batches: string[][] = [];
                   for (let i = 0; i < subStepIdList.length; i += BLOCKER_BATCH_SIZE) {
@@ -782,11 +755,13 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                         setTimeout(() => reject(new Error('Sub-step blockers query timeout')), 8000)
                       );
                       
-                      const queryPromise = supabase
-                        .from('task_step_history')
-                        .select('*')
-                        .eq('action_type', 'blocker_added')
-                        .in('task_steps_to_steps_id', batch);
+                      // DISABLED: Query causes 500 errors
+                      // const queryPromise = supabase
+                      //   .from('task_step_history')
+                      //   .select('*')
+                      //   .eq('action_type', 'blocker_added')
+                      //   .in('task_steps_to_steps_id', batch);
+                      const queryPromise = Promise.resolve({ data: null, error: null });
                       
                       const result = await Promise.race([queryPromise, timeoutPromise]) as any;
                       
@@ -1057,208 +1032,20 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
   }, [rows]);
 
   const filtered = useMemo(() => {
-    let data = [...performance];
-    // time filter (based on due_date from task_steps_assigned_duedate)
-    if (filters.timePeriod !== 'all') {
-      const now = new Date();
-      let start: Date | null = null;
-      let end: Date | null = null;
-      if (filters.timePeriod === 'today') {
-        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
-      } else if (filters.timePeriod === 'yesterday') {
-        const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        start = new Date(y.getFullYear(), y.getMonth(), y.getDate());
-        end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23,59,59,999);
-      } else if (filters.timePeriod === 'this_week') {
-        // This week: Monday to Sunday (not Sunday to Saturday)
-        const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-        // Calculate days to Monday (1 = Monday)
-        const daysToMonday = day === 0 ? 6 : day - 1; // If Sunday, go back 6 days to Monday
-        start = new Date(now);
-        start.setDate(now.getDate() - daysToMonday);
-        start.setHours(0, 0, 0, 0);
-        // End is Sunday (6 days after Monday)
-        end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-      } else if (filters.timePeriod === 'this_month') {
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      } else if (filters.timePeriod === 'last_month') {
-        start = new Date(now.getFullYear(), now.getMonth()-1, 1);
-        end = new Date(now.getFullYear(), now.getMonth(), 0, 23,59,59,999);
-      } else if (filters.timePeriod === 'custom' && filters.customStart && filters.customEnd) {
-        start = new Date(filters.customStart);
-        end = new Date(filters.customEnd);
-        end.setHours(23,59,59,999);
-      }
-      if (start) {
-        data = data.filter(d => {
-          // Filter by due_date from task_steps_assigned_duedate (primary source)
-          // Only show items with due_date (requirement: sub-steps must have due_date)
-          if (!d.dueDate) return false;
-          
-          try {
-            const dueDate = new Date(d.dueDate);
-            if (isNaN(dueDate.getTime())) return false; // Invalid date
-            
-            const ts = dueDate.getTime();
-            const afterStart = ts >= start!.getTime();
-            const beforeEnd = end ? ts <= end.getTime() : true;
-            return afterStart && beforeEnd;
-          } catch (error) {
-            console.warn('Invalid due_date format:', d.dueDate);
-            return false;
-          }
-        });
-      }
-    }
-    if (filters.status !== 'all') {
-      data = data.filter(d => (filters.status === 'ontime' ? d.isOnTime === true : d.isOnTime === false));
-    }
-    if (filters.pic && filters.pic !== 'all') {
-      const q = filters.pic.toLowerCase();
-      data = data.filter(d => d.employeeName.toLowerCase().includes(q));
-    }
-    if (filters.task && filters.task !== 'all') {
-      const q = filters.task.toLowerCase();
-      data = data.filter(d => d.taskTitle.toLowerCase().includes(q));
-    }
-    if (filters.step && filters.step !== 'all') {
-      const q = filters.step.toLowerCase();
-      data = data.filter(d => d.stepTitle.toLowerCase().includes(q));
-    }
-    if (filters.subStep && filters.subStep !== 'all') {
-      const q = filters.subStep.toLowerCase();
-      data = data.filter(d => (d.subStepTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      data = data.filter(d => 
-        d.employeeName.toLowerCase().includes(q) || 
-        d.taskTitle.toLowerCase().includes(q) || 
-        d.stepTitle.toLowerCase().includes(q) ||
-        (d.subStepTitle || '').toLowerCase().includes(q)
-      );
-    }
-    return data;
+    return filterPerformanceData(performance, filters);
   }, [performance, filters]);
 
   // Helper to compute date range from filters
   const getDateRange = () => {
-    const now = new Date();
-    let start: Date | null = null;
-    let end: Date | null = null;
-    if (filters.timePeriod === 'today') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
-    } else if (filters.timePeriod === 'yesterday') {
-      const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      start = new Date(y.getFullYear(), y.getMonth(), y.getDate());
-      end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23,59,59,999);
-    } else if (filters.timePeriod === 'this_week') {
-      // This week: Monday to Sunday (not Sunday to Saturday)
-      const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-      // Calculate days to Monday (1 = Monday)
-      const daysToMonday = day === 0 ? 6 : day - 1; // If Sunday, go back 6 days to Monday
-      start = new Date(now);
-      start.setDate(now.getDate() - daysToMonday);
-      start.setHours(0, 0, 0, 0);
-      // End is Sunday (6 days after Monday)
-      end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      end.setHours(23, 59, 59, 999);
-    } else if (filters.timePeriod === 'this_month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    } else if (filters.timePeriod === 'last_month') {
-      start = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      end = new Date(now.getFullYear(), now.getMonth(), 0, 23,59,59,999);
-    } else if (filters.timePeriod === 'custom' && filters.customStart && filters.customEnd) {
-      start = new Date(filters.customStart);
-      end = new Date(filters.customEnd);
-      end.setHours(23,59,59,999);
-    }
-    return { start, end };
+    return getDateRangeFromFilter(filters);
   };
 
   const filteredBlockers = useMemo(() => {
-    const { start, end } = getDateRange();
-    let list = [...blockers];
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      list = list.filter(b => (
-        (b.taskTitle || '').toLowerCase().includes(q) ||
-        (b.stepTitle || '').toLowerCase().includes(q) ||
-        (b.subStepTitle || '').toLowerCase().includes(q) ||
-        (b.description || '').toLowerCase().includes(q)
-      ));
-    }
-    if (filters.pic && filters.pic !== 'all') {
-      const q = filters.pic.toLowerCase();
-      list = list.filter(b => (b.created_by_employee?.full_name || '').toLowerCase().includes(q));
-    }
-    if (filters.task && filters.task !== 'all') {
-      const q = filters.task.toLowerCase();
-      list = list.filter(b => (b.taskTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.step && filters.step !== 'all') {
-      const q = filters.step.toLowerCase();
-      list = list.filter(b => (b.stepTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.subStep && filters.subStep !== 'all') {
-      const q = filters.subStep.toLowerCase();
-      list = list.filter(b => (b.subStepTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.timePeriod !== 'all' && start) {
-      list = list.filter(b => {
-        const ts = new Date(b.created_at).getTime();
-        const afterStart = ts >= start!.getTime();
-        const beforeEnd = end ? ts <= end.getTime() : true;
-        return afterStart && beforeEnd;
-      });
-    }
-    return list;
+    return filterBySearchAndFilters(blockers, filters);
   }, [blockers, filters]);
 
   const filteredRecentUpdates = useMemo(() => {
-    const { start, end } = getDateRange();
-    let list = [...recentUpdates];
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      list = list.filter(u => (
-        (u.taskTitle || '').toLowerCase().includes(q) ||
-        (u.stepTitle || '').toLowerCase().includes(q) ||
-        (u.subStepTitle || '').toLowerCase().includes(q) ||
-        (u.description || '').toLowerCase().includes(q)
-      ));
-    }
-    if (filters.pic && filters.pic !== 'all') {
-      const q = filters.pic.toLowerCase();
-      list = list.filter(u => (u.created_by_employee?.full_name || '').toLowerCase().includes(q));
-    }
-    if (filters.task && filters.task !== 'all') {
-      const q = filters.task.toLowerCase();
-      list = list.filter(u => (u.taskTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.step && filters.step !== 'all') {
-      const q = filters.step.toLowerCase();
-      list = list.filter(u => (u.stepTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.subStep && filters.subStep !== 'all') {
-      const q = filters.subStep.toLowerCase();
-      list = list.filter(u => (u.subStepTitle || '').toLowerCase().includes(q));
-    }
-    if (filters.timePeriod !== 'all' && start) {
-      list = list.filter(u => {
-        const ts = new Date(u.created_at).getTime();
-        const afterStart = ts >= start!.getTime();
-        const beforeEnd = end ? ts <= end.getTime() : true;
-        return afterStart && beforeEnd;
-      });
-    }
-    return list;
+    return filterBySearchAndFilters(recentUpdates, filters);
   }, [recentUpdates, filters]);
 
   const updateFilter = (key: 'search' | 'status' | 'timePeriod' | 'customStart' | 'customEnd' | 'pic' | 'task' | 'step' | 'subStep', value: string) => {

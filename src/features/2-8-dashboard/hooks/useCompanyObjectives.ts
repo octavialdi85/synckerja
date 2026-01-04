@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { filterValidCycleIds } from '@/utils/uuidValidation';
 
 export interface CompanyObjective {
   id: string;
@@ -98,9 +99,10 @@ export const useCompanyObjectives = (organizationId?: string, cycleIds?: string[
         .select('*')
         .eq('organization_id', organizationId);
 
-      // Filter by multiple cycle IDs if provided
-      if (cycleIds && cycleIds.length > 0) {
-        query = query.in('cycle_id', cycleIds);
+      // Filter by multiple cycle IDs if provided (only valid UUIDs)
+      const validCycleIds = filterValidCycleIds(cycleIds);
+      if (validCycleIds.length > 0) {
+        query = query.in('cycle_id', validCycleIds);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });

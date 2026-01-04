@@ -41,6 +41,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           // Clear timeout on success
           if (timeoutId) clearTimeout(timeoutId);
 
+          // Don't retry for 500 errors (server errors) - these are database/query issues, not network issues
+          if (response.status === 500) {
+            // Immediately throw error to prevent retry loop
+            // This prevents console spam from retrying failed queries
+            throw new Error(`Server error (500) - database query failed: ${url}`);
+          }
+
           // CRITICAL: Handle 504 Gateway Timeout and 522 Connection Timed Out from auth service
           // 504: Gateway timeout (Supabase service overloaded)
           // 522: Connection timed out (Cloudflare can't reach Supabase origin server)

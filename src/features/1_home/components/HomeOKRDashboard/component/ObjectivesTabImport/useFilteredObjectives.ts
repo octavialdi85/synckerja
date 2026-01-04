@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Objective } from '@/types/okr';
 import { useMemo } from 'react';
+import { filterValidCycleIds } from '@/utils/uuidValidation';
 
 /**
  * Hook for fetching objectives with multiple cycle filtering support
@@ -27,12 +28,13 @@ export const useFilteredObjectives = (
         .select(`*`)
         .eq('organization_id', organizationId);
 
-      // Filter by multiple cycle IDs if provided
-      if (cycleIds && cycleIds.length > 0) {
-        // console.log('🔍 Applying cycle filter:', { cycleIds });
-        query = query.in('cycle_id', cycleIds);
+      // Filter by multiple cycle IDs if provided (only valid UUIDs)
+      const validCycleIds = filterValidCycleIds(cycleIds);
+      if (validCycleIds.length > 0) {
+        // console.log('🔍 Applying cycle filter:', { validCycleIds });
+        query = query.in('cycle_id', validCycleIds);
       } else {
-        // console.log('⚠️ No cycleIds provided - fetching all objectives');
+        // console.log('⚠️ No valid cycleIds provided - fetching all objectives');
       }
 
       // Note: company_objectives table doesn't have level column - all are company level

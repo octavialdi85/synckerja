@@ -48,7 +48,7 @@ const OKRPageContent = () => {
 
   // Get current active cycle ID
   const getActiveCycleId = () => {
-    if (!cycles.length) return 'default-cycle-2025-q4';
+    if (!cycles.length) return undefined; // Return undefined instead of invalid UUID
     const activeCycle = cycles.find(cycle => cycle.is_active);
     if (activeCycle) return activeCycle.id;
     return cycles[0]?.id;

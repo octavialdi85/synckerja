@@ -102,7 +102,7 @@ if (typeof window !== 'undefined') {
 }
 
 export const useDepartmentAccess = () => {
-  const { userRole, employee, userData, isOwner, isAdmin } = useCentralizedUserData();
+  const { userRole, employee, userData, isOwner, isAdmin, organization } = useCentralizedUserData();
   const { configurations, loading: configLoading } = usePermissionConfiguration();
   
   const departmentAccess = useMemo(() => {
@@ -142,6 +142,24 @@ export const useDepartmentAccess = () => {
     
     // Check if user can access a specific page
     const canAccessPage = (pagePath: string): boolean => {
+      // SECURITY: Block access if employee is terminated (except owners)
+      // Owner can access their own organization even if terminated in other organizations
+      if (employee && organization && !isOwner) {
+        const employeeStatus = employee.status || (employee as any).employee_status_name;
+        const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+        
+        if (isTerminated) {
+          if (isDev) {
+            logger.debug('🚫 Access denied: Employee is terminated', {
+              employeeId: employee.id,
+              status: employeeStatus,
+              pagePath
+            });
+          }
+          return false;
+        }
+      }
+      
       // isDev is defined at module level
       // IMPORTANT PRINCIPLE FOR /access-permissions/page-access:
       // Access is determined ONLY by database configuration. If no restrictions are configured,

@@ -5,6 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Building, Plus, Target, ChevronRight, ChevronDown, User, MoreHorizontal, CheckCircle, Calendar, Trash2, Edit } from 'lucide-react';
 import { Progress } from '@/features/ui/progress';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { getEmployeeStatus } from '@/features/2-1-employees/utils/employeeUtils';
 import { useIndividualObjectives, useDeleteIndividualObjective } from '../../modal/useIndividualObjectives';
 import { useObjectives } from './useObjectives';
 import { useDepartmentObjectives } from '../../modal/useDepartmentObjectives';
@@ -55,6 +56,14 @@ export const IndividualObjectivesView = ({
     isLoading: loadingEmployees
   } = useEmployees();
   const queryClient = useQueryClient();
+
+  // Filter out terminated employees
+  const activeEmployees = useMemo(() => {
+    return employees.filter(employee => {
+      const status = getEmployeeStatus(employee);
+      return status.toLowerCase() !== 'terminated';
+    });
+  }, [employees]);
 
   // Get individual objectives with key results from useObjectives hook
   const finalCycleIds = cycleIds && cycleIds.length > 0 ? cycleIds : cycleId ? [cycleId] : undefined;
@@ -283,7 +292,7 @@ export const IndividualObjectivesView = ({
     return department?.name || 'Unknown Department';
   };
   const getEmployeeName = (employeeId: string) => {
-    const employee = employees.find(emp => emp.id === employeeId);
+    const employee = activeEmployees.find(emp => emp.id === employeeId);
     return employee?.full_name || 'Unknown Employee';
   };
   const renderObjectiveCard = (objective: any, departmentId: string, borderColor: string, iconColor: string) => {
@@ -469,7 +478,7 @@ export const IndividualObjectivesView = ({
         <div className="space-y-4 h-full">
           {/* Employee List with Expand/Collapse */}
           <div className="space-y-2">
-            {employees.map(employee => {
+            {activeEmployees.map(employee => {
               const employeeObjectivesMap = objectivesByEmployeeAndStatus.get(employee.id) || new Map();
               const activeObjectives = employeeObjectivesMap.get('active') || [];
               const draftObjectives = employeeObjectivesMap.get('draft') || [];
@@ -623,7 +632,7 @@ export const IndividualObjectivesView = ({
       if (!open) {
         setSelectedEmployee(null);
       }
-    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
+    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
       console.log('✅ Individual objective created successfully');
     }} />}
 

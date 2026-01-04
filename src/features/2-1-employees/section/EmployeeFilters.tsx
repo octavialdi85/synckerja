@@ -1,8 +1,31 @@
 import { Search, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Input } from '@/features/ui/input';
+import type { EmployeeFilters as FilterType } from '../utils/employeeUtils';
 
-export const EmployeeFilters = () => {
+interface EmployeeFiltersProps {
+  filters: FilterType;
+  departments: string[];
+  positions: string[];
+  onFilterChange: (key: keyof FilterType, value: string) => void;
+  onClearFilters: () => void;
+}
+
+export const EmployeeFilters = ({
+  filters,
+  departments,
+  positions,
+  onFilterChange,
+  onClearFilters
+}: EmployeeFiltersProps) => {
+  const hasActiveFilters = 
+    filters.search ||
+    filters.department !== 'all' ||
+    filters.position !== 'all' ||
+    filters.status !== 'all' ||
+    filters.employmentType !== 'all' ||
+    filters.timePeriod !== 'all';
+
   return (
     <div>
       <div className="flex flex-wrap gap-1.5 items-center">
@@ -12,41 +35,53 @@ export const EmployeeFilters = () => {
           <Input
             type="text"
             placeholder="Search employees..."
+            value={filters.search || ''}
+            onChange={(e) => onFilterChange('search', e.target.value)}
             className="w-full pl-4 pr-10 h-9 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           />
         </div>
 
         {/* Department Filter */}
-        <Select>
+        <Select
+          value={filters.department || 'all'}
+          onValueChange={(value) => onFilterChange('department', value)}
+        >
           <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
             <SelectValue placeholder="Department" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Departments</SelectItem>
-            <SelectItem value="hr">Human Resources</SelectItem>
-            <SelectItem value="it">Information Technology</SelectItem>
-            <SelectItem value="finance">Finance</SelectItem>
-            <SelectItem value="marketing">Marketing</SelectItem>
-            <SelectItem value="sales">Sales</SelectItem>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept.toLowerCase().trim()}>
+                {dept}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         {/* Position Filter */}
-        <Select>
+        <Select
+          value={filters.position || 'all'}
+          onValueChange={(value) => onFilterChange('position', value)}
+        >
           <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
             <SelectValue placeholder="Position" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Positions</SelectItem>
-            <SelectItem value="manager">Manager</SelectItem>
-            <SelectItem value="supervisor">Supervisor</SelectItem>
-            <SelectItem value="staff">Staff</SelectItem>
-            <SelectItem value="intern">Intern</SelectItem>
+            {positions.map(pos => (
+              <SelectItem key={pos} value={pos.toLowerCase().trim()}>
+                {pos}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         {/* Status Filter */}
-        <Select>
+        <Select
+          value={filters.status || 'all'}
+          onValueChange={(value) => onFilterChange('status', value)}
+        >
           <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -54,13 +89,17 @@ export const EmployeeFilters = () => {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="pending-removal">Pending Removal</SelectItem>
             <SelectItem value="on-leave">On Leave</SelectItem>
             <SelectItem value="terminated">Terminated</SelectItem>
           </SelectContent>
         </Select>
 
         {/* Employment Type Filter */}
-        <Select>
+        <Select
+          value={filters.employmentType || 'all'}
+          onValueChange={(value) => onFilterChange('employmentType', value)}
+        >
           <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
             <SelectValue placeholder="Employment Type" />
           </SelectTrigger>
@@ -74,7 +113,10 @@ export const EmployeeFilters = () => {
         </Select>
 
         {/* Time Filter */}
-        <Select>
+        <Select
+          value={filters.timePeriod || 'all'}
+          onValueChange={(value) => onFilterChange('timePeriod', value)}
+        >
           <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
             <SelectValue placeholder="Time Period" />
           </SelectTrigger>
@@ -92,7 +134,13 @@ export const EmployeeFilters = () => {
 
         {/* Clear Filters Button */}
         <button
-          className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center"
+          onClick={onClearFilters}
+          disabled={!hasActiveFilters}
+          className={`h-9 px-3 rounded-md transition-colors border border-gray-300 flex items-center justify-center ${
+            hasActiveFilters 
+              ? 'hover:bg-gray-100 cursor-pointer' 
+              : 'opacity-50 cursor-not-allowed'
+          }`}
           title="Clear all filters"
         >
           <RefreshCw className="w-4 h-4 text-gray-500" />

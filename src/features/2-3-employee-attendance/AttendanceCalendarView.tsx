@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatToRupiah } from '@/features/2-1-employees/MyInfo/Attendance/utils/formatCurrency';
 import { useWorkScheduleSettings } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useWorkScheduleSettings';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { getEmployeeStatus } from '@/features/2-1-employees/utils/employeeUtils';
 import { useAttendanceRecords } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useAttendanceRecords';
 import { getCurrentOrganizationId } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOptimizedNationalHolidays } from '@/features/2-1-employees/MyInfo/Attendance/hooks/useOptimizedAttendanceData';
@@ -194,9 +195,17 @@ const AttendanceCalendarView = ({ searchTerm, status: _status, dateRange: _dateR
     setCurrentDate(newDate);
   };
 
+  // Filter out terminated employees first
+  const activeEmployees = useMemo(() => {
+    return employees.filter(employee => {
+      const status = getEmployeeStatus(employee);
+      return status.toLowerCase() !== 'terminated';
+    });
+  }, [employees]);
+
   // Process attendance data for calendar view
   const processedEmployees = useMemo(() => {
-    return employees.map(employee => {
+    return activeEmployees.map(employee => {
       const attendanceData: { [key: number]: string } = {};
       let totalLateMinutes = 0; // Track total late minutes for this employee
       
@@ -261,7 +270,7 @@ const AttendanceCalendarView = ({ searchTerm, status: _status, dateRange: _dateR
         totalLateMinutes // Add this to track total late minutes
       };
     });
-  }, [employees, attendanceRecords, leaveRequests, currentMonth, currentYear]);
+  }, [activeEmployees, attendanceRecords, leaveRequests, currentMonth, currentYear]);
 
   const filteredEmployees = processedEmployees.filter(employee =>
     employee.name.toLowerCase().includes(searchTerm.toLowerCase())

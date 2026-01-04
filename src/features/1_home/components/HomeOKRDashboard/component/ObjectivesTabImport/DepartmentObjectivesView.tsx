@@ -12,6 +12,7 @@ import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartmen
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { CreateIndividualObjectiveModal } from './DepartmentObjectivesViewImport/CreateIndividualObjectiveModal';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { getEmployeeStatus } from '@/features/2-1-employees/utils/employeeUtils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
 import { WeeklyCheckinForm } from './DepartmentObjectivesViewImport/WeeklyCheckinDialog';
@@ -99,9 +100,9 @@ export const DepartmentObjectivesView = ({
   // Filter department objectives by department for each department
   const loadingAllObjectives = loadingObjectives;
 
-  // Helper function to get employee name by ID
+  // Helper function to get employee name by ID (only from active employees)
   const getEmployeeName = (employeeId: string) => {
-    const employee = employees.find(emp => emp.id === employeeId || emp.user_id === employeeId);
+    const employee = activeEmployees.find(emp => emp.id === employeeId || emp.user_id === employeeId);
     return employee?.full_name || 'Unknown Employee';
   };
 
@@ -748,7 +749,7 @@ export const DepartmentObjectivesView = ({
       if (!open) {
         setSelectedEmployee(null);
       }
-    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
+    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
       console.log('Individual objective created successfully');
     }} />}
 

@@ -3,6 +3,7 @@ import { Target, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { filterValidCycleIds } from '@/utils/uuidValidation';
 
 interface OKRSidebarProps {
   activeTab: string;
@@ -65,7 +66,9 @@ export const OKRSidebar = ({
           comments,
           created_at,
           employees!weekly_checkins_employee_id_fkey (
-            full_name
+            full_name,
+            status,
+            employee_status_id
           ),
           key_results!weekly_checkins_key_result_id_fkey (
             title,
@@ -85,7 +88,16 @@ export const OKRSidebar = ({
         return [];
       }
 
-      return data || [];
+      // SECURITY: Filter out check-ins from terminated employees
+      const filteredCheckins = (data || []).filter((checkin: any) => {
+        const employee = checkin.employees;
+        if (!employee) return true; // Keep if no employee data
+        
+        const empStatus = employee.status || employee.employee_status_name;
+        return empStatus?.toLowerCase() !== 'terminated';
+      });
+
+      return filteredCheckins;
     },
     enabled: !!organizationId,
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -104,8 +116,10 @@ export const OKRSidebar = ({
           .select('department_id, progress_percentage, departments!department_objectives_department_id_fkey(name)')
           .eq('organization_id', organizationId);
 
-        if (cycleIds && cycleIds.length > 0) {
-          query = query.in('cycle_id', cycleIds);
+        // Filter by valid cycle IDs only
+        const validCycleIds = filterValidCycleIds(cycleIds);
+        if (validCycleIds.length > 0) {
+          query = query.in('cycle_id', validCycleIds);
         }
 
         const { data: deptObjectives, error } = await query;
@@ -140,11 +154,13 @@ export const OKRSidebar = ({
         // Get top individuals by average progress
         let query = supabase
           .from('individual_objectives')
-          .select('employee_id, progress_percentage, employees!individual_objectives_employee_id_fkey(full_name)')
+          .select('employee_id, progress_percentage, employees!individual_objectives_employee_id_fkey(full_name, status, employee_status_id)')
           .eq('organization_id', organizationId);
 
-        if (cycleIds && cycleIds.length > 0) {
-          query = query.in('cycle_id', cycleIds);
+        // Filter by valid cycle IDs only
+        const validCycleIds = filterValidCycleIds(cycleIds);
+        if (validCycleIds.length > 0) {
+          query = query.in('cycle_id', validCycleIds);
         }
 
         const { data: indivObjectives, error } = await query;
@@ -152,12 +168,21 @@ export const OKRSidebar = ({
         if (error || !indivObjectives) return [];
 
         // Group by employee and calculate average progress
+        // Filter out terminated employees
         const empProgress: Record<string, { name: string; progress: number; count: number }> = {};
         indivObjectives.forEach(obj => {
           const empId = obj.employee_id;
           if (!empId) return;
           
-          const empName = (obj.employees as any)?.full_name || 'Unknown Employee';
+          const employee = obj.employees as any;
+          const empName = employee?.full_name || 'Unknown Employee';
+          
+          // SECURITY: Skip terminated employees
+          const empStatus = employee?.status || employee?.employee_status_name;
+          if (empStatus?.toLowerCase() === 'terminated') {
+            return; // Skip terminated employees
+          }
+          
           if (!empProgress[empId]) {
             empProgress[empId] = { name: empName, progress: 0, count: 0 };
           }

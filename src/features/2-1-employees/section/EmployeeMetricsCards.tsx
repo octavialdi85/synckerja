@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, UserCheck, UserX, UserPlus } from 'lucide-react';
+import { countActiveEmployees, getEmployeeStatusForFilter } from '../utils/employeeUtils';
 
 interface EmployeeMetricsCardsProps {
   employees?: any[];
@@ -9,9 +10,9 @@ interface EmployeeMetricsCardsProps {
 export const EmployeeMetricsCards = ({ 
   employees = []
 }: EmployeeMetricsCardsProps) => {
-  // Calculate real metrics from employees data
+  // Calculate real metrics from employees data using consistent logic
   const totalEmployees = employees.length;
-  const activeEmployees = employees.filter(emp => (emp.employee_status_name || emp.status) === 'active').length;
+  const activeEmployees = countActiveEmployees(employees);
   
   const newHires = employees.filter(emp => {
     if (!emp.join_date) return false;
@@ -21,9 +22,10 @@ export const EmployeeMetricsCards = ({
            joinDate.getFullYear() === thisMonth.getFullYear();
   }).length;
   
-  const terminated = employees.filter(emp => 
-    (emp.employee_status_name || emp.status) === 'terminated'
-  ).length;
+  const terminated = employees.filter(emp => {
+    const status = getEmployeeStatusForFilter(emp);
+    return status === 'terminated';
+  }).length;
 
   const statsCards = [
     {

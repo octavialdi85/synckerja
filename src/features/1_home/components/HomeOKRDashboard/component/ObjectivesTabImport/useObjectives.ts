@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Objective, OkrStatus } from './okr';
 import { useToast } from '@/features/ui/use-toast';
+import { isValidUUID } from '@/utils/uuidValidation';
 
 export const useObjectives = (organizationId?: string, cycleId?: string, level?: string) => {
   const { toast } = useToast();
@@ -138,7 +139,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           `)
           .eq('organization_id', organizationId);
 
-        if (cycleId) {
+        if (cycleId && isValidUUID(cycleId)) {
           query = query.eq('cycle_id', cycleId);
         }
 
@@ -185,7 +186,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           `)
           .eq('organization_id', organizationId);
 
-        if (cycleId) {
+        if (cycleId && isValidUUID(cycleId)) {
           query = query.eq('cycle_id', cycleId);
         }
 
@@ -271,7 +272,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
           .select('*')
           .eq('organization_id', organizationId);
 
-        if (cycleId) {
+        if (cycleId && isValidUUID(cycleId)) {
           // console.log('🔍 Applying cycle filter for individual objectives:', cycleId);
           query = query.eq('cycle_id', cycleId);
         } else {
