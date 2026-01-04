@@ -80,8 +80,8 @@ export const FileRow = ({ file, onViewDetails, onEditFile, onDeleteFile }: FileR
           </div>
         </div>
       </TableCell>
-      <TableCell>{FILE_CATEGORIES[file.file_category]}</TableCell>
-      <TableCell>
+      <TableCell className="whitespace-nowrap">{FILE_CATEGORIES[file.file_category]}</TableCell>
+      <TableCell className="whitespace-nowrap">
         {file.source_type === 'link' ? (
           <span className="text-xs text-gray-400">—</span>
         ) : (
@@ -90,22 +90,22 @@ export const FileRow = ({ file, onViewDetails, onEditFile, onDeleteFile }: FileR
       </TableCell>
       <TableCell>
         {file.source_type === 'link' ? (
-          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 whitespace-nowrap">
             LINK
           </Badge>
         ) : (
-          <Badge variant="secondary" className="text-xs">
+          <Badge variant="secondary" className="text-xs whitespace-nowrap max-w-[100px] truncate" title={getFileExtension(file.file_name)}>
             {getFileExtension(file.file_name)}
           </Badge>
         )}
       </TableCell>
       <TableCell>
-        <Badge className={getVisibilityColor(file.visibility)} variant="secondary">
+        <Badge className={`${getVisibilityColor(file.visibility)} whitespace-nowrap`} variant="secondary">
           {FILE_VISIBILITY[file.visibility]}
         </Badge>
       </TableCell>
-      <TableCell>{file.owner_name}</TableCell>
-      <TableCell>
+      <TableCell className="whitespace-nowrap truncate max-w-[150px]" title={file.owner_name}>{file.owner_name}</TableCell>
+      <TableCell className="whitespace-nowrap">
         {format(new Date(file.created_at), 'dd/MM/yyyy')}
       </TableCell>
       <TableCell>
