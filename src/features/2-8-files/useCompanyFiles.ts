@@ -128,18 +128,22 @@ export const useCompanyFiles = () => {
   // Update file metadata mutation
   const updateFileMutation = useMutation({
     mutationFn: async ({ id, metadata }: { id: string; metadata: any }) => {
-      const { error } = await supabase
+      console.log('Updating file in database:', { id, metadata });
+      const { error, data } = await supabase
         .from('company_files')
         .update({
           ...metadata,
           updated_at: new Date().toISOString()
         })
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
       if (error) throw error;
+      console.log('File updated successfully:', data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['company-files'] });
+      queryClient.invalidateQueries({ queryKey: ['company-files'], exact: false });
+      queryClient.refetchQueries({ queryKey: ['company-files'], exact: false });
       toast({
         title: 'Success',
         description: 'File updated successfully',

@@ -63,7 +63,7 @@ export const FileRow = ({ file, onViewDetails, onEditFile, onDeleteFile }: FileR
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium leading-tight text-gray-900">
-                {file.source_type === 'link' && file.link_title ? file.link_title : file.file_name}
+                {file.file_name}
               </p>
               {file.source_type === 'link' && (
                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">

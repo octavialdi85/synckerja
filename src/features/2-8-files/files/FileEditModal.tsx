@@ -68,8 +68,13 @@ export const FileEditModal = ({
 
   React.useEffect(() => {
     if (file && isOpen) {
+      // For links, use link_title if available, otherwise use file_name
+      const displayName = file.source_type === 'link' && file.link_title 
+        ? file.link_title 
+        : file.file_name;
+      
       reset({
-        file_name: file.file_name,
+        file_name: displayName,
         file_category: file.file_category,
         visibility: file.visibility,
         description: file.description || '',
@@ -159,12 +164,15 @@ export const FileEditModal = ({
 
       // For links, update URL and metadata if changed
       if (file.source_type === 'link') {
+        // Always update link_title to match file_name when Link Name is changed
+        updateData.link_title = data.file_name;
+        
         if (linkUrl.trim() && linkUrl !== file.file_path) {
           updateData.file_path = linkUrl;
           
-          // Update link metadata if available
+          // Update link metadata if available (but keep link_title from form)
           if (linkMetadata) {
-            updateData.link_title = linkMetadata.title;
+            // Don't overwrite link_title - use the value from form (data.file_name)
             updateData.link_description = linkMetadata.description;
             updateData.link_modified_at = linkMetadata.modifiedAt || null;
             updateData.link_owner = linkMetadata.owner || null;
@@ -188,6 +196,7 @@ export const FileEditModal = ({
         updateData.employee_id = null;
       }
 
+      console.log('Updating file with data:', updateData);
       await onUpdate(file.id, updateData);
       onClose();
     } catch (error) {
