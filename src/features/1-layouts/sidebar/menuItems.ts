@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Home, Wrench, Megaphone, CreditCard, Users, Target, Briefcase } from "lucide-react";
+import { Home, Wrench, Megaphone, CreditCard, Users, Target, Briefcase, DollarSign } from "lucide-react";
 
 export const menuItems: MenuItem[] = [
   {
@@ -51,6 +51,22 @@ export const menuItems: MenuItem[] = [
         url: "/access-permissions/page-access",
         description: "Manage user access permissions and page restrictions",
         descriptionKey: "sidebar.humanResources.pageAccess.description",
+      },
+    ],
+  },
+  {
+    title: "Finance",
+    titleKey: "sidebar.finance.title",
+    icon: DollarSign,
+    url: "#",
+    hasSubSidebar: true,
+    subSidebarItems: [
+      {
+        title: "Incomes",
+        titleKey: "sidebar.finance.incomes.title",
+        url: "/incomes/dashboard",
+        description: "Manage and track income transactions",
+        descriptionKey: "sidebar.finance.incomes.description",
       },
     ],
   },

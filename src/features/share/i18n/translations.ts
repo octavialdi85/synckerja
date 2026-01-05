@@ -26,6 +26,9 @@ const idTranslations: TranslationDictionary = {
   "sidebar.operations.customerService.description": "Kelola tiket layanan pelanggan dan dukungan",
   "sidebar.operations.sales.title": "Penjualan",
   "sidebar.operations.sales.description": "Kelola aktivitas penjualan dan transaksi",
+  "sidebar.finance.title": "Keuangan",
+  "sidebar.finance.incomes.title": "Pendapatan",
+  "sidebar.finance.incomes.description": "Kelola dan lacak transaksi pendapatan",
   "sidebar.subscription.title": "Langganan",
 
   "sidebar.tools.passwordManager.title": "Manajemen Kata Sandi",
@@ -1568,6 +1571,9 @@ const enTranslations: TranslationDictionary = {
   "sidebar.operations.customerService.description": "Manage customer service tickets and support",
   "sidebar.operations.sales.title": "Sales",
   "sidebar.operations.sales.description": "Manage sales activities and transactions",
+  "sidebar.finance.title": "Finance",
+  "sidebar.finance.incomes.title": "Incomes",
+  "sidebar.finance.incomes.description": "Manage and track income transactions",
   "sidebar.subscription.title": "Subscription",
 
   "sidebar.tools.passwordManager.title": "Password Manager",

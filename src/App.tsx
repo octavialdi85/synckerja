@@ -89,6 +89,8 @@ import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
+import { IncomeDashboard } from "./features/4-1-dashboard";
+import { IncomeTransactionPage } from "./features/4-1-transaction";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -292,6 +294,23 @@ const App = () => (
               
               {/* ======= UNIVERSAL PROTECTED APPLICATION ROUTES ======= */}
               {/* ALL ROUTES CONTROLLED BY PAGE ACCESS CONFIGURATION DATABASE */}
+              
+              {/* Finance Routes */}
+              <Route path="/incomes/dashboard" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <IncomeDashboard />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/incomes/transaction" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <IncomeTransactionPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              
               <Route path="/password-manager" element={
                 <UniversalProtectedRoute>
                   <PasswordManagerPage />

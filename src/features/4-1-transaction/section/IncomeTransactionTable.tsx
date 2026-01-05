@@ -1,0 +1,346 @@
+import { useState } from 'react';
+import { Plus, MoreHorizontal, Edit, Trash2, Eye, FileDown } from 'lucide-react';
+import { Button } from '@/features/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/features/ui/alert-dialog';
+import { Badge } from '@/features/ui/badge';
+import { useIncomeTransactions } from '@/features/4-1-dashboard/hooks';
+import { IncomeTransactionDialog } from '@/features/4-1-dashboard/IncomeTransactionDialog';
+import { IncomeTransactionViewDialog } from './IncomeTransactionViewDialog';
+import { formatToRupiah } from '@/utils/formatCurrency';
+import { format } from 'date-fns';
+import { AddIncomeForm } from '@/features/4-1-dashboard/AddIncomeForm';
+import { IncomeTransactionWithRelations } from '@/features/4-1-dashboard/types';
+
+interface IncomeTransactionTableProps {
+  transactions: any[];
+  isLoading?: boolean;
+  onRefresh?: () => void;
+}
+
+export const IncomeTransactionTable = ({ 
+  transactions, 
+  isLoading = false,
+  onRefresh 
+}: IncomeTransactionTableProps) => {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<IncomeTransactionWithRelations | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const { deleteIncomeTransaction, isDeleting } = useIncomeTransactions();
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'default';
+      case 'pending':
+        return 'secondary';
+      case 'cancelled':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+  const handleViewDetails = (transaction: IncomeTransactionWithRelations) => {
+    setSelectedTransaction(transaction);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleEdit = (transaction: IncomeTransactionWithRelations) => {
+    setSelectedTransaction(transaction);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (transaction: IncomeTransactionWithRelations) => {
+    setSelectedTransaction(transaction);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!selectedTransaction) return;
+    
+    deleteIncomeTransaction(selectedTransaction.id, {
+      onSuccess: () => {
+        setIsDeleteDialogOpen(false);
+        setSelectedTransaction(null);
+        if (onRefresh) {
+          onRefresh();
+        }
+      }
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-4">
+        <div className="animate-pulse space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-10 bg-gray-200 rounded"></div>
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0">
+        <h2 className="text-sm font-semibold text-gray-900">Income Transactions</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-8 px-3 text-xs">
+              <Plus className="h-3 w-3 mr-1" />
+              Add Income
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Income Transaction</DialogTitle>
+            </DialogHeader>
+            <AddIncomeForm onSuccess={() => setIsAddDialogOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Table Content */}
+      <div className="flex-1 overflow-auto seamless-scroll">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50">
+              <TableHead className="h-8 px-3 text-xs font-medium">Transaction</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Customer</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Service</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Type & Category</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Amount</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Payment Method</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Recurring</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Receipt</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {transactions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={11} className="h-16 text-center text-xs text-gray-500">
+                  No transactions found
+                </TableCell>
+              </TableRow>
+            ) : (
+              transactions.map((transaction) => (
+                <TableRow key={transaction.id} className="hover:bg-gray-50">
+                  <TableCell className="px-3 py-2 text-xs max-w-xs">
+                    <div className="font-medium text-wrap break-words">
+                      {transaction.description || 'Transaction'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs font-medium">
+                    {transaction.customer_name || '-'}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    <div>
+                      {transaction.services?.name || '-'}
+                    </div>
+                    {transaction.sub_services?.name && (
+                      <div className="text-gray-500 text-xs">
+                        {transaction.sub_services.name}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    <div>
+                      {transaction.income_types?.name || 'Unknown'}
+                    </div>
+                    {transaction.income_categories?.name && (
+                      <div className="text-gray-500 text-xs">
+                        {transaction.income_categories.name}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    <div className="font-semibold text-green-600">
+                      {formatToRupiah(transaction.amount)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    {transaction.payment_method || '-'}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    <Badge
+                      variant="outline"
+                      className={transaction.is_recurring ? "text-xs bg-purple-50 text-purple-700 border-purple-200" : "text-xs"}
+                    >
+                      {transaction.is_recurring ? (transaction.recurring_frequency ? `Recurring • ${transaction.recurring_frequency}` : "Recurring") : "One-time"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    {transaction.receipt_file_path ? (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-xs hover:bg-blue-50"
+                        onClick={async () => {
+                          try {
+                            const path = transaction.receipt_file_path as string;
+                            if (path.startsWith('http')) {
+                              window.open(path, '_blank');
+                              return;
+                            }
+                            const { supabase } = await import('@/integrations/supabase/client');
+                            const { data, error } = await supabase.storage
+                              .from('income-receipts')
+                              .download(path);
+                            if (error) {
+                              console.error('Error downloading receipt:', error);
+                              return;
+                            }
+                            const url = URL.createObjectURL(data);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = transaction.receipt_file_name || `receipt-${transaction.id.substring(0, 8)}`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                          } catch (err) {
+                            console.error('Failed to download receipt:', err);
+                          }
+                        }}
+                      >
+                        <FileDown className="h-3 w-3 mr-1" />
+                        Download
+                      </Button>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    <Badge variant={getStatusBadgeVariant(transaction.status)} className="text-xs">
+                      {transaction.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs">
+                    {format(new Date(transaction.transaction_date), 'MMM dd, yyyy')}
+                  </TableCell>
+                  <TableCell className="px-3 py-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-6 w-6 p-0">
+                          <MoreHorizontal className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem 
+                          className="text-xs cursor-pointer"
+                          onClick={() => handleViewDetails(transaction)}
+                        >
+                          <Eye className="mr-2 h-3 w-3" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-xs cursor-pointer"
+                          onClick={() => handleEdit(transaction)}
+                        >
+                          <Edit className="mr-2 h-3 w-3" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-xs text-red-600 cursor-pointer"
+                          onClick={() => handleDelete(transaction)}
+                        >
+                          <Trash2 className="mr-2 h-3 w-3" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* View Details Dialog */}
+      <IncomeTransactionViewDialog
+        transaction={selectedTransaction}
+        open={isViewDialogOpen}
+        onOpenChange={(open) => {
+          setIsViewDialogOpen(open);
+          if (!open) {
+            setSelectedTransaction(null);
+          }
+        }}
+        onEdit={() => {
+          setIsViewDialogOpen(false);
+          setIsEditDialogOpen(true);
+        }}
+      />
+
+      {/* Edit Dialog */}
+      <IncomeTransactionDialog
+        income={selectedTransaction}
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setSelectedTransaction(null);
+            if (onRefresh) {
+              onRefresh();
+            }
+          }
+        }}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Income Transaction</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this income transaction? 
+              {selectedTransaction && (
+                <>
+                  <br />
+                  <span className="font-semibold">
+                    {selectedTransaction.description || selectedTransaction.customer_name || 'Transaction'}
+                  </span>
+                  <br />
+                  Amount: {formatToRupiah(selectedTransaction.amount)}
+                </>
+              )}
+              <br />
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsDeleteDialogOpen(false);
+              setSelectedTransaction(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
