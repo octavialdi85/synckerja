@@ -1,13 +1,63 @@
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Calendar, TrendingUp, DollarSign, Target, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useIncomeMetrics, useIncomeTransactions, useMonthlyIncomeData } from './hooks';
+import { useIncomeMasterData } from './hooks/useIncomeMasterData';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { IncomeVsExpensesChart } from './IncomeVsExpensesChart';
 import { HeaderAndTab } from './HeaderAndTab';
+import { IncomeTransactionWithRelations } from './types';
+
+// Helper function to calculate date range based on selected period
+const getDateRangeForPeriod = (period: string): { startDate: Date; endDate: Date } => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentDate = now.getDate();
+
+  let startDate: Date;
+  let endDate: Date = new Date(currentYear, currentMonth, currentDate + 1); // End of today (exclusive)
+
+  switch (period) {
+    case 'This Month':
+      startDate = new Date(currentYear, currentMonth, 1);
+      break;
+    case 'Last Month':
+      const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      startDate = new Date(lastMonthYear, lastMonth, 1);
+      endDate = new Date(currentYear, currentMonth, 1);
+      break;
+    case 'Last 3 Months':
+      startDate = new Date(currentYear, currentMonth - 3, 1);
+      break;
+    case 'Last 6 Months':
+      startDate = new Date(currentYear, currentMonth - 6, 1);
+      break;
+    case 'This Year':
+      startDate = new Date(currentYear, 0, 1);
+      break;
+    case 'Last Year':
+      startDate = new Date(currentYear - 1, 0, 1);
+      endDate = new Date(currentYear, 0, 1);
+      break;
+    default:
+      startDate = new Date(currentYear, currentMonth, 1);
+  }
+
+  return { startDate, endDate };
+};
+
+// Helper function to format date to YYYY-MM-DD
+const formatDateToString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export function IncomeDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -22,19 +72,68 @@ export function IncomeDashboard() {
   const { data: metrics, isLoading: metricsLoading } = useIncomeMetrics();
   const { incomeTransactions, isLoading: transactionsLoading } = useIncomeTransactions();
   const { data: monthlyData = [], isLoading: monthlyLoading } = useMonthlyIncomeData(selectedYear);
+  const { incomeTypes } = useIncomeMasterData();
 
-  // Calculate additional metrics from transactions
-  const calculateMetrics = () => {
-    if (!incomeTransactions.length) return { highest: 0, latest: 0 };
-    
-    const amounts = incomeTransactions.map(t => t.amount);
+  // Filter transactions based on selected period and type
+  const filteredTransactions = useMemo(() => {
+    if (!incomeTransactions.length) return [];
+
+    const { startDate, endDate } = getDateRangeForPeriod(selectedPeriod);
+    const startDateStr = formatDateToString(startDate);
+    const endDateStr = formatDateToString(endDate);
+
+    return incomeTransactions.filter((transaction) => {
+      // Filter by date range
+      const transactionDate = transaction.transaction_date;
+      const isInDateRange = transactionDate >= startDateStr && transactionDate < endDateStr;
+
+      // Filter by type (All Types means no filter, Other means no type)
+      const transactionType = transaction.income_types?.name || '';
+      let matchesType = true;
+      
+      if (selectedType === 'All Types') {
+        matchesType = true; // Show all types
+      } else if (selectedType === 'Other') {
+        matchesType = !transactionType; // Show only transactions without type
+      } else {
+        matchesType = transactionType === selectedType; // Show only matching type
+      }
+
+      // Only include completed or pending transactions
+      const isValidStatus = transaction.status === 'completed' || transaction.status === 'pending';
+
+      return isInDateRange && matchesType && isValidStatus;
+    });
+  }, [incomeTransactions, selectedPeriod, selectedType]);
+
+  // Calculate metrics from filtered transactions
+  const filteredMetrics = useMemo(() => {
+    if (!filteredTransactions.length) {
+      return {
+        total: 0,
+        highest: 0,
+        latest: 0,
+        count: 0
+      };
+    }
+
+    const amounts = filteredTransactions.map(t => parseFloat(t.amount.toString()));
+    const total = amounts.reduce((sum, amount) => sum + amount, 0);
     const highest = Math.max(...amounts);
-    const latest = incomeTransactions[0]?.amount || 0;
-    
-    return { highest, latest };
-  };
+    const latest = filteredTransactions[0] ? parseFloat(filteredTransactions[0].amount.toString()) : 0;
 
-  const { highest, latest } = calculateMetrics();
+    return {
+      total,
+      highest,
+      latest,
+      count: filteredTransactions.length
+    };
+  }, [filteredTransactions]);
+
+  // Check if we have transactions without type for "Other" option
+  const hasTransactionsWithoutType = useMemo(() => {
+    return incomeTransactions.some(t => !t.income_types?.name);
+  }, [incomeTransactions]);
 
   if (metricsLoading || transactionsLoading || monthlyLoading) {
     return (
@@ -101,14 +200,20 @@ export function IncomeDashboard() {
                   </Select>
 
                   <Select value={selectedType} onValueChange={setSelectedType}>
-                    <SelectTrigger className="w-32 h-9 bg-white border-gray-200 shadow-sm">
+                    <SelectTrigger className="w-36 h-9 bg-white border-gray-200 shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-200 shadow-lg z-50">
+                    <SelectContent className="bg-white border-gray-200 shadow-lg z-50 max-h-[300px]">
                       <SelectItem value="All Types">All Types</SelectItem>
-                      <SelectItem value="Sales">Sales</SelectItem>
-                      <SelectItem value="Service">Service</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {incomeTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.name}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                      {/* Option for transactions without type */}
+                      {hasTransactionsWithoutType && (
+                        <SelectItem value="Other">Other</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -128,10 +233,12 @@ export function IncomeDashboard() {
                   <span className="text-sm font-medium text-gray-600">Total Income</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {formatToRupiah(metrics?.currentMonthTotal || 0)}
+                  {formatToRupiah(filteredMetrics.total)}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  {selectedPeriod === 'This Month' 
+                    ? new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                    : selectedPeriod}
                 </div>
               </div>
             </div>
@@ -153,7 +260,9 @@ export function IncomeDashboard() {
                   {(metrics?.growthPercentage || 0) >= 0 ? '+' : ''}{(metrics?.growthPercentage || 0).toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500">
-                  vs Previous: {formatToRupiah(metrics?.previousMonthTotal || 0)}
+                  {selectedPeriod === 'This Month' 
+                    ? `vs Previous: ${formatToRupiah(metrics?.previousMonthTotal || 0)}`
+                    : `${filteredMetrics.count} transactions`}
                 </div>
               </div>
             </div>
@@ -172,10 +281,10 @@ export function IncomeDashboard() {
                   <span className="text-sm font-medium text-gray-600">Highest</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {formatToRupiah(highest)}
+                  {formatToRupiah(filteredMetrics.highest)}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {highest > 0 ? 'This period' : 'No data'}
+                  {filteredMetrics.highest > 0 ? 'This period' : 'No data'}
                 </div>
               </div>
             </div>
@@ -194,10 +303,10 @@ export function IncomeDashboard() {
                   <span className="text-sm font-medium text-gray-600">Latest</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {formatToRupiah(latest)}
+                  {formatToRupiah(filteredMetrics.latest)}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {latest > 0 ? 'Most recent' : 'No data'}
+                  {filteredMetrics.latest > 0 ? 'Most recent' : 'No data'}
                 </div>
               </div>
             </div>
@@ -215,10 +324,12 @@ export function IncomeDashboard() {
               <div className="text-center">
                 <div className="text-3xl mb-2">📊</div>
                 <p className="text-gray-500 text-sm font-medium">
-                  {incomeTransactions.length > 0 ? 'Chart visualization coming soon' : 'No income data available'}
+                  {filteredTransactions.length > 0 ? 'Chart visualization coming soon' : 'No income data available'}
                 </p>
                 <p className="text-gray-400 text-xs mt-1">
-                  {incomeTransactions.length === 0 ? 'Start adding income records' : `${incomeTransactions.length} transactions recorded`}
+                  {filteredTransactions.length === 0 
+                    ? 'Start adding income records' 
+                    : `${filteredMetrics.count} transactions (${selectedPeriod}${selectedType !== 'All Types' ? `, ${selectedType}` : ''})`}
                 </p>
               </div>
             </div>
