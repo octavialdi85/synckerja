@@ -1474,11 +1474,25 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         return result;
       });
 
+      // Prepare update data with completed_at handling
+      const updateData: any = { ...data };
+      
+      // If is_completed is being updated, ensure completed_at is set correctly
+      if (typeof updateData.is_completed === 'boolean') {
+        if (updateData.is_completed === true) {
+          // If marking as completed, set completed_at to NOW() if not already set
+          updateData.completed_at = updateData.completed_at || new Date().toISOString();
+        } else {
+          // If marking as not completed, set completed_at to NULL
+          updateData.completed_at = null;
+        }
+      }
+
       // Update step - with retry
       const { error } = await retryableQuery(async () => {
         const result = await supabase
           .from('task_steps')
-          .update(data)
+          .update(updateData)
           .eq('id', stepId);
         if (result.error) throw result.error;
         return result;
@@ -1498,12 +1512,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Check if completion status changed (before we update anything)
       // Safely check if before exists and if completion status changed
       const beforeCompleted = before ? (before as any).is_completed : false;
-      const afterCompleted = typeof data.is_completed === 'boolean' ? data.is_completed : beforeCompleted;
-      const completionChanged = typeof data.is_completed === 'boolean' && before && beforeCompleted !== data.is_completed;
-
-      // Note: completed_at is now automatically handled by database trigger
-      // When is_completed = TRUE, trigger sets completed_at = NOW()
-      // When is_completed = FALSE, trigger sets completed_at = NULL
+      const afterCompleted = typeof updateData.is_completed === 'boolean' ? updateData.is_completed : beforeCompleted;
+      const completionChanged = typeof updateData.is_completed === 'boolean' && before && beforeCompleted !== updateData.is_completed;
 
       // Track if we should skip refresh (for mobile auto-reorder)
       let skipRefresh = false;

@@ -13,6 +13,16 @@ import { ModalViewSubSteps } from './ModalViewSubSteps';
 import { ModalAddTaskStep } from './ModalAddTaskStep';
 import UpdateHistoryDialog from '@/features/8-1-meeting-notes/modal/UpdateHistoryDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
@@ -109,6 +119,9 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   const [isUpdateHistoryOpen, setIsUpdateHistoryOpen] = useState(false);
   const [isCheckingMeetingPoint, setIsCheckingMeetingPoint] = useState(false);
   const [updateHistoryCount, setUpdateHistoryCount] = useState<number>(0);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingCompletionState, setPendingCompletionState] = useState<boolean | null>(null);
+  const [currentCompletionState, setCurrentCompletionState] = useState<boolean | null>(null);
 
   // Use optimistic state if available, otherwise use step prop (for immediate UI feedback)
   const isCompleted = optimisticCompleted !== null ? optimisticCompleted : step.is_completed;
@@ -532,24 +545,48 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       }
     }
 
-    // Jika step memiliki sub-step, tidak bisa di-toggle langsung
+    // Jika step memiliki sub-step, cek validasi terlebih dahulu
     if (subStepCount > 0) {
       // Jika step belum completed, cek apakah semua sub-step sudah selesai
       if (!step.is_completed) {
         const allSubStepsCompleted = subStepCompletedCount === subStepCount && subStepCount > 0;
         if (!allSubStepsCompleted) {
           // Tampilkan pesan bahwa semua sub-step harus diselesaikan terlebih dahulu
-          alert(`Please complete all ${subStepCount} sub-step(s) first. Currently ${subStepCompletedCount}/${subStepCount} completed.`);
+          toast({
+            title: 'Lengkapi Semua Sub-Step',
+            description: `Harap lengkapi semua ${subStepCount} sub-step terlebih dahulu. Saat ini ${subStepCompletedCount}/${subStepCount} sudah selesai.`,
+            variant: 'destructive',
+          });
           return;
         }
       } else {
         // Jika step sudah completed dan memiliki sub-step, tidak bisa di-uncheck
-        alert(`Cannot uncheck step with sub-steps. Please manage sub-steps individually.`);
+        // Tampilkan dialog konfirmasi untuk menjelaskan mengapa tidak bisa di-uncheck
+        toast({
+          title: 'Tidak Dapat Membuka Kembali',
+          description: 'Step dengan sub-steps tidak dapat dibuka kembali. Silakan kelola sub-steps secara individual.',
+          variant: 'destructive',
+        });
         return;
       }
     }
 
-    const next = !step.is_completed;
+    // Tampilkan dialog konfirmasi sebelum toggle (untuk check dan uncheck)
+    // Gunakan isCompleted (yang sudah dihitung dari optimistic state atau step.is_completed) untuk menentukan state saat ini
+    const currentCompletedState = isCompleted;
+    const next = !currentCompletedState;
+    setCurrentCompletionState(currentCompletedState); // Simpan state saat ini untuk ditampilkan di dialog
+    setPendingCompletionState(next); // Simpan state yang akan menjadi setelah konfirmasi
+    setShowConfirmDialog(true);
+  };
+
+  const confirmToggleComplete = async () => {
+    if (pendingCompletionState === null) return;
+
+    const next = pendingCompletionState;
+    setShowConfirmDialog(false);
+    setCurrentCompletionState(null);
+    
     const payload: any = { is_completed: next };
     const now = new Date().toISOString();
     if (next) {
@@ -577,6 +614,9 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       // Jika ada sub-step, tunggu validasi terlebih dahulu
       await updateTaskStep(step.id, payload, { autoReorder });
     }
+
+    setPendingCompletionState(null);
+    setCurrentCompletionState(null);
   };
 
   // Reset optimistic state when step prop changes (after update completes)
@@ -815,12 +855,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
           }`}
           title={
             subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted
-              ? `Please complete all ${subStepCount} sub-step(s) first. Currently ${subStepCompletedCount}/${subStepCount} completed.`
+              ? `Harap lengkapi semua ${subStepCount} sub-step terlebih dahulu. Saat ini ${subStepCompletedCount}/${subStepCount} sudah selesai.`
               : subStepCount > 0 && isCompleted
-              ? 'Cannot uncheck step with sub-steps. Please manage sub-steps individually.'
+              ? 'Step dengan sub-steps tidak dapat dibuka kembali. Silakan kelola sub-steps secara individual.'
               : isCompleted
-              ? 'Mark incomplete'
-              : 'Mark complete'
+              ? 'Buka kembali step'
+              : 'Tandai step sebagai selesai'
           }
         >
           {isCompleted ? (
@@ -1161,6 +1201,35 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
         discussionPoint={discussionPoint}
       />
     )}
+
+    {/* Confirmation Dialog for Step Completion Toggle */}
+    <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {currentCompletionState ? 'Konfirmasi Membuka Kembali Step' : 'Konfirmasi Menyelesaikan Step'}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {currentCompletionState
+              ? `Apakah Anda yakin ingin membuka kembali step "${step.title}"?`
+              : `Apakah Anda yakin ingin menandai step "${step.title}" sebagai selesai?`
+            }
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => {
+            setShowConfirmDialog(false);
+            setPendingCompletionState(null);
+            setCurrentCompletionState(null);
+          }}>
+            Batal
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={confirmToggleComplete}>
+            {currentCompletionState ? 'Ya, Buka Kembali' : 'Ya, Selesaikan'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     {/* Edit Step Modal */}
     <ModalAddTaskStep

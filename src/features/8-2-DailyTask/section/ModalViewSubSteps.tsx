@@ -4,6 +4,16 @@ import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import { Plus, Edit, Trash2, History, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -62,6 +72,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
   const [parentPlan, setParentPlan] = useState<ParentPlanInfo | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingSubStepId, setPendingSubStepId] = useState<string | null>(null);
+  const [pendingSubStepCurrent, setPendingSubStepCurrent] = useState<boolean | null>(null);
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -213,6 +226,19 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   };
 
   const toggleCompleted = async (id: string, current: boolean) => {
+    // Tampilkan dialog konfirmasi sebelum toggle
+    setPendingSubStepId(id);
+    setPendingSubStepCurrent(current);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmToggleCompleted = async () => {
+    if (!pendingSubStepId || pendingSubStepCurrent === null) return;
+
+    const id = pendingSubStepId;
+    const current = pendingSubStepCurrent;
+    setShowConfirmDialog(false);
+
     try {
       const willBeCompleted = !current;
       
@@ -242,6 +268,8 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             description: 'Content step requires either a Google Drive link or production approval. Please add the Google Drive link or approve production in the Social Media Plan first.',
             variant: 'destructive'
           });
+          setPendingSubStepId(null);
+          setPendingSubStepCurrent(null);
           return;
         }
       }
@@ -264,6 +292,8 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           description: 'Isi Google Drive link pada halaman Social Media sebelum menuntaskan semua sub-step.',
           variant: 'destructive'
         });
+        setPendingSubStepId(null);
+        setPendingSubStepCurrent(null);
         return; // Prevent completion if Google Drive link is missing
       }
 
@@ -298,9 +328,14 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             created_by: user?.id || null,
           });
       } catch (_) {}
+      
+      setPendingSubStepId(null);
+      setPendingSubStepCurrent(null);
     } catch (err) {
       console.error('Error toggling sub-step:', err);
       toast({ title: 'Error', description: 'Failed to update step', variant: 'destructive' });
+      setPendingSubStepId(null);
+      setPendingSubStepCurrent(null);
     }
   };
 
@@ -747,6 +782,48 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             onClose={() => setAssignDialogSubStep(null)}
           />
         )}
+
+        {/* Confirmation Dialog for Sub-Step Completion Toggle */}
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {pendingSubStepCurrent !== null && !pendingSubStepCurrent 
+                  ? 'Konfirmasi Menyelesaikan Sub-Step' 
+                  : 'Konfirmasi Membuka Kembali Sub-Step'
+                }
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingSubStepId && pendingSubStepCurrent !== null ? (
+                  (() => {
+                    const subStep = subSteps.find(s => s.id === pendingSubStepId);
+                    const subStepTitle = subStep?.title || 'Sub-step ini';
+                    return pendingSubStepCurrent === false
+                      ? `Apakah Anda yakin ingin menandai sub-step "${subStepTitle}" sebagai selesai?`
+                      : `Apakah Anda yakin ingin membuka kembali sub-step "${subStepTitle}"?`;
+                  })()
+                ) : (
+                  'Apakah Anda yakin?'
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setShowConfirmDialog(false);
+                setPendingSubStepId(null);
+                setPendingSubStepCurrent(null);
+              }}>
+                Batal
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmToggleCompleted}>
+                {pendingSubStepCurrent !== null && !pendingSubStepCurrent 
+                  ? 'Ya, Selesaikan' 
+                  : 'Ya, Buka Kembali'
+                }
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
