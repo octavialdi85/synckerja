@@ -289,7 +289,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const { data: assignedTasks } = await supabase
           .from('daily_tasks_assigned')
           .select('daily_task_id')
-          .eq('employee_id', currentEmployee.id);
+          .eq('employee_id', currentEmployee.id)
+          .limit(1000); // Limit to prevent statement timeout
         
         assignedTaskIds = (assignedTasks || []).map((a: any) => a.daily_task_id);
         // Only log if data changed
@@ -312,7 +313,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             task_step_id,
             task_steps!inner(task_id)
           `)
-          .eq('employee_id', currentEmployee.id);
+          .eq('employee_id', currentEmployee.id)
+          .limit(1000); // Limit to prevent statement timeout
         
         if (assignedSteps && assignedSteps.length > 0) {
           stepAssignedTaskIds = [...new Set(
@@ -349,7 +351,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               task_steps!inner(task_id)
             )
           `)
-          .eq('employee_id', currentEmployee.id);
+          .eq('employee_id', currentEmployee.id)
+          .limit(1000); // Limit to prevent statement timeout
         
         if (assignedSubSteps && assignedSubSteps.length > 0) {
           subStepAssignedTaskIds = [...new Set(
@@ -393,8 +396,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       
       // ULTRA-SIMPLIFIED QUERY: No nested joins to prevent timeout (error 57014)
       // Strategy: Fetch basic data only, load related data separately if needed
-      // FILTER: Show ALL tasks in organization (filtering by PIC will be handled by client-side filter)
-      // This allows users to see all tasks assigned to a specific PIC regardless of who created the task
+      // FILTER: Show tasks in organization (filtering by PIC will be handled by client-side filter)
+      // LIMIT: Added limit to prevent statement timeout
       const { data, error } = await supabase
         .from('daily_tasks')
         .select(`
@@ -415,8 +418,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           updated_at
         `)
         .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false });
-        // Removed limit to fetch all tasks
+        .order('created_at', { ascending: false })
+        .limit(1000); // Limit to prevent statement timeout
 
       if (error) {
         console.error('❌ Error fetching tasks:', error);
@@ -704,7 +707,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   .from('task_files')
                   .select('id, task_steps_id, filename, file_url, file_size, created_at')
                   .in('task_steps_id', batch)
-                  .order('created_at', { ascending: false });
+                  .order('created_at', { ascending: false })
+                  .limit(500); // Limit to prevent statement timeout
                 
                 const result = await Promise.race([queryPromise, timeoutPromise]) as any;
                 

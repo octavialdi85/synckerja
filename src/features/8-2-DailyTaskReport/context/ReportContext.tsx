@@ -315,13 +315,15 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
               step:task_steps(id, title, updated_at, completed_at, is_completed, task:daily_tasks(id, title)),
               task_steps_assigned_duedate(due_date, created_at)
             `)
-            .eq('organization_id', organizationId),
+            .eq('organization_id', organizationId)
+            .limit(1000), // Limit to prevent statement timeout
           
           // NEW: Fetch sub-step assignments (simple query, no deep joins to avoid timeout)
           supabase
             .from('task_steps_to_steps_assigned')
             .select('id, task_steps_to_steps_id, assigned_at, employee_id, organization_id')
             .eq('organization_id', organizationId)
+            .limit(1000) // Limit to prevent statement timeout
         ]);
 
         if (stepAssignsResult.error) {
@@ -371,7 +373,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           const { data: allSubStepsData } = await supabase
             .from('task_steps_to_steps')
             .select('id, title, parent_step_id, is_completed, completed_at')
-            .in('parent_step_id', assignedStepIds);
+            .in('parent_step_id', assignedStepIds)
+            .limit(2000); // Limit to prevent statement timeout
 
           allSubSteps = allSubStepsData || [];
           logger.query(`📋 Found ${allSubSteps.length} total sub-steps for ${assignedStepIds.length} assigned steps`);
@@ -388,7 +391,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
               const { data: parentSteps } = await supabase
                 .from('task_steps')
                 .select('id, title, task:daily_tasks(id, title)')
-                .in('id', parentStepIds);
+                .in('id', parentStepIds)
+                .limit(1000); // Limit to prevent statement timeout
 
               if (parentSteps) {
                 parentSteps.forEach((step: any) => {
@@ -412,7 +416,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             .from('task_steps_assigned_duedate')
             .select('task_steps_to_steps_assigned_id, due_date, created_at')
             .in('task_steps_to_steps_assigned_id', subStepAssignmentIds)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(1000); // Limit to prevent statement timeout
 
           if (subStepDueDates) {
             subStepDueDates.forEach((row: any) => {
@@ -564,7 +569,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         const taskIdsResult = await supabase
           .from('daily_tasks')
           .select('id')
-          .eq('organization_id', organizationId);
+          .eq('organization_id', organizationId)
+          .limit(1000); // Limit to prevent statement timeout
 
         const taskIdList = (taskIdsResult.data || []).map(t => t.id);
         
@@ -644,7 +650,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     const { data: stepsData } = await supabase
                       .from('task_steps')
                       .select('id, title, task:daily_tasks(id, title)')
-                      .in('id', blockerStepIds);
+                      .in('id', blockerStepIds)
+                      .limit(1000); // Limit to prevent statement timeout
                     
                     const stepMap: Record<string, any> = {};
                     (stepsData || []).forEach((s: any) => { stepMap[s.id] = s; });
@@ -715,7 +722,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           const stepIdsResult = await supabase
             .from('task_steps')
             .select('id')
-            .in('task_id', taskIdList);
+            .in('task_id', taskIdList)
+            .limit(5000); // Limit to prevent statement timeout
           
           stepIdList = (stepIdsResult.data || []).map(s => s.id);
           logger.query(`📋 Found ${taskIdList.length} tasks, ${stepIdList.length} steps in organization`);
@@ -725,7 +733,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             const subStepsResult = await supabase
               .from('task_steps_to_steps')
               .select('id, parent_step_id')
-              .in('parent_step_id', stepIdList);
+              .in('parent_step_id', stepIdList)
+              .limit(5000); // Limit to prevent statement timeout
             subStepIdList = (subStepsResult.data || []).map(s => s.id);
             logger.query(`📋 Found ${subStepIdList.length} sub-steps in organization`);
           }
@@ -791,7 +800,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       const { data: subStepsData } = await supabase
                         .from('task_steps_to_steps')
                         .select('id, title, parent_step_id')
-                        .in('id', blockerSubStepIds);
+                        .in('id', blockerSubStepIds)
+                        .limit(1000); // Limit to prevent statement timeout
                       
                       const subStepMap: Record<string, any> = {};
                       (subStepsData || []).forEach((s: any) => { subStepMap[s.id] = s; });
@@ -800,7 +810,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       const { data: stepsData } = await supabase
                         .from('task_steps')
                         .select('id, title, task:daily_tasks(id, title)')
-                        .in('id', parentStepIds);
+                        .in('id', parentStepIds)
+                        .limit(1000); // Limit to prevent statement timeout
                       
                       const stepMap: Record<string, any> = {};
                       (stepsData || []).forEach((s: any) => { stepMap[s.id] = s; });
@@ -873,12 +884,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                               .from('task_steps')
                               .select('id, title, task:daily_tasks(id, title)')
                               .in('id', historyStepIds)
+                              .limit(1000) // Limit to prevent statement timeout
                           : Promise.resolve({ data: [], error: null }),
                         historySubStepIds.length > 0
                           ? supabase
                               .from('task_steps_to_steps')
                               .select('id, title, parent_step_id')
                               .in('id', historySubStepIds)
+                              .limit(1000) // Limit to prevent statement timeout
                           : Promise.resolve({ data: [], error: null }),
                         historyStepIds.length > 0
                           ? supabase
@@ -886,6 +899,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                               .select('task_step_id, assigned_at')
                               .in('task_step_id', historyStepIds)
                               .order('assigned_at', { ascending: false })
+                              .limit(1000) // Limit to prevent statement timeout
                           : Promise.resolve({ data: [], error: null })
                       ]);
                       

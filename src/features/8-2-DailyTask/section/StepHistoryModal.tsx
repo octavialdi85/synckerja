@@ -114,7 +114,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
       const base = (supabase as any)
         .from('task_step_history')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500); // Limit to prevent statement timeout
 
       // OPTIMIZATION: Add timeout protection (5 seconds)
       const historyPromise = subStepId
@@ -139,7 +140,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         const { data: employees, error: empError } = await (supabase as any)
           .from('employees')
           .select('user_id, full_name, email')
-          .in('user_id', userIds);
+          .in('user_id', userIds)
+          .limit(100); // Limit to prevent statement timeout
         
         if (empError) {
           console.warn('Failed to fetch employees:', empError);
@@ -160,7 +162,8 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
         const { data: subSteps, error: subStepError } = await (supabase as any)
           .from('task_steps_to_steps')
           .select('id, title')
-          .in('id', subStepIds);
+          .in('id', subStepIds)
+          .limit(200); // Limit to prevent statement timeout
         
         if (subStepError) {
           console.warn('Failed to fetch sub-steps:', subStepError);
