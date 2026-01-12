@@ -216,6 +216,32 @@ export const useExpenses = () => {
     }
   };
 
+  const deleteExpense = async (id: string) => {
+    if (!organizationId) {
+      toast.error('Organization not found');
+      return false;
+    }
+
+    try {
+      // Soft delete by setting status to 'deleted'
+      const { error } = await supabase
+        .from('expenses')
+        .update({ status: 'deleted' })
+        .eq('id', id)
+        .eq('organization_id', organizationId);
+
+      if (error) throw error;
+
+      toast.success('Expense deleted successfully!');
+      await fetchExpenses(); // Refresh the list
+      return true;
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Failed to delete expense');
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchExpenses();
   }, [organizationId]);
@@ -225,6 +251,7 @@ export const useExpenses = () => {
     isLoading,
     isCreating,
     createExpense,
+    deleteExpense,
     refetch: fetchExpenses,
   };
 };

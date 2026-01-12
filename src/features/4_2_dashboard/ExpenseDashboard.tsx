@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Card, CardContent } from '@/features/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Textarea } from '@/features/ui/textarea';
 import { Calendar } from '@/features/ui/calendar';
@@ -16,7 +16,8 @@ import { Checkbox } from '@/features/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories } from './hooks';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories, Expense } from './hooks';
 import { addExpenseSchema, AddExpenseFormData, RECURRING_FREQUENCIES } from './AddExpenseForm';
 import { useDepartmentsCrud } from '@/features/2-1-employees/MyInfo/Employment/hooks/crudMaster/useDepartmentsCrud';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
@@ -32,13 +33,17 @@ export function ExpenseDashboard() {
     setActiveTab(tab);
   };
   const { organizationId } = useCurrentOrg();
-  const { expenses, isLoading, isCreating, createExpense } = useExpenses();
+  const { expenses, isLoading, isCreating, createExpense, deleteExpense } = useExpenses();
   const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
   const { expenseTypes, isLoading: expenseTypesLoading, refetch: refetchExpenseTypes } = useExpenseTypes();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDepartmentCrudOpen, setIsDepartmentCrudOpen] = useState(false);
   const [isExpenseTypeCrudOpen, setIsExpenseTypeCrudOpen] = useState(false);
   const [isExpenseCategoryCrudOpen, setIsExpenseCategoryCrudOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [firstPaymentDate, setFirstPaymentDate] = useState<Date>();
@@ -111,6 +116,26 @@ export function ExpenseDashboard() {
     }
   };
 
+  const handleViewDetails = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleDeleteClick = (expenseId: string) => {
+    setExpenseToDelete(expenseId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (expenseToDelete) {
+      const success = await deleteExpense(expenseToDelete);
+      if (success) {
+        setIsDeleteDialogOpen(false);
+        setExpenseToDelete(null);
+      }
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return `Rp ${amount.toLocaleString('id-ID')}`;
   };
@@ -124,6 +149,29 @@ export function ExpenseDashboard() {
              expenseDate.getFullYear() === currentDate.getFullYear();
     })
     .reduce((sum, expense) => sum + expense.amount, 0);
+
+  // Calculate monthly data for chart
+  const monthlyData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentYear = new Date().getFullYear();
+    
+    // Initialize all months with 0
+    const monthlyTotals = months.map(month => ({
+      month,
+      amount: 0
+    }));
+
+    // Calculate totals for each month
+    expenses.forEach(expense => {
+      const expenseDate = new Date(expense.create_date);
+      if (expenseDate.getFullYear() === currentYear) {
+        const monthIndex = expenseDate.getMonth();
+        monthlyTotals[monthIndex].amount += expense.amount;
+      }
+    });
+
+    return monthlyTotals;
+  }, [expenses]);
 
     const handleExpenseTypeChange = (value: string) => {
       form.setValue('expense_type', value);
@@ -224,8 +272,8 @@ export function ExpenseDashboard() {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
-        <Card>
-        <CardContent className="p-3">
+        <Card className="flex flex-col">
+        <CardContent className="p-3 flex-1 flex flex-col">
             <h3 className="text-lg font-semibold mb-2">Expense Breakdown</h3>
             <p className="text-sm text-gray-600 mb-4">By expense type</p>
             
@@ -290,9 +338,9 @@ export function ExpenseDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex justify-between items-center mb-4">
+        <Card className="flex flex-col">
+          <CardContent className="p-3 flex-1 flex flex-col">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0">
               <div>
                 <h3 className="text-lg font-semibold">Monthly Comparison</h3>
                 <p className="text-sm text-gray-600">Expense trends throughout the year</p>
@@ -300,24 +348,54 @@ export function ExpenseDashboard() {
               <ChevronDown className="h-4 w-4 text-gray-400" />
             </div>
 
-            <div className="h-32 bg-gray-100 rounded mb-4"></div>
-
-            <div className="flex justify-between text-xs text-gray-600">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May</span>
-              <span>Jun</span>
-              <span>Jul</span>
-              <span>Aug</span>
-              <span>Sep</span>
-              <span>Oct</span>
-              <span>Nov</span>
-              <span>Dec</span>
+            <div className="flex-1 min-h-0">
+              {monthlyData.length > 0 && monthlyData.some(d => d.amount > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="month" 
+                      fontSize={10}
+                      stroke="#6b7280"
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      fontSize={10}
+                      stroke="#6b7280"
+                      tickLine={false}
+                      tickFormatter={(value) => {
+                        if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+                        if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+                        return value.toString();
+                      }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`Rp ${value.toLocaleString('id-ID')}`, 'Expenses']}
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '12px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="amount" 
+                      stroke="#3B82F6" 
+                      strokeWidth={2}
+                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full bg-gray-100 rounded flex items-center justify-center">
+                  <span className="text-gray-500 text-sm">No expense data available for this year</span>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center mt-4">
+            <div className="flex items-center mt-4 flex-shrink-0">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
               <span className="text-sm text-gray-600">Expenses</span>
             </div>
@@ -449,11 +527,14 @@ export function ExpenseDashboard() {
                                   View Receipt
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewDetails(expense)}>
                                 <Eye className="h-4 w-4 mr-2 text-gray-600" />
                                 Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={() => handleDeleteClick(expense.id)}
+                              >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete
                               </DropdownMenuItem>
@@ -794,6 +875,136 @@ export function ExpenseDashboard() {
         onClose={() => setIsExpenseCategoryCrudOpen(false)}
         onExpenseCategoryChange={refetchExpenseCategories}
       />
+
+      {/* Expense Detail Modal */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Expense Details</DialogTitle>
+            <DialogDescription>
+              View detailed information about this expense
+            </DialogDescription>
+          </DialogHeader>
+          {selectedExpense && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Expense Name</label>
+                  <p className="text-sm font-semibold mt-1">{selectedExpense.expense_name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Amount</label>
+                  <p className="text-sm font-semibold mt-1">{formatCurrency(selectedExpense.amount)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Type</label>
+                  <p className="text-sm mt-1">{selectedExpense.expense_type}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Category</label>
+                  <p className="text-sm mt-1">{selectedExpense.category}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Department</label>
+                  <p className="text-sm mt-1">{selectedExpense.department || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <div className="mt-1">
+                    <Badge variant={selectedExpense.is_recurring ? 'default' : 'secondary'}>
+                      {selectedExpense.is_recurring ? 'Recurring' : 'One-time'}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Payment Date</label>
+                  <p className="text-sm mt-1">{format(new Date(selectedExpense.create_date), 'dd MMM yyyy')}</p>
+                </div>
+                {selectedExpense.next_payment_date && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Next Payment</label>
+                    <p className="text-sm mt-1">{format(new Date(selectedExpense.next_payment_date), 'dd MMM yyyy')}</p>
+                  </div>
+                )}
+                {selectedExpense.is_recurring && selectedExpense.recurring_frequency && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Recurring Frequency</label>
+                    <p className="text-sm mt-1 capitalize">{selectedExpense.recurring_frequency}</p>
+                  </div>
+                )}
+                {selectedExpense.first_payment_date && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">First Payment Date</label>
+                    <p className="text-sm mt-1">{format(new Date(selectedExpense.first_payment_date), 'dd MMM yyyy')}</p>
+                  </div>
+                )}
+              </div>
+              {selectedExpense.description && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Description</label>
+                  <p className="text-sm mt-1">{selectedExpense.description}</p>
+                </div>
+              )}
+              {selectedExpense.receipt_url && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Receipt</label>
+                  <div className="mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(selectedExpense.receipt_url!, '_blank')}
+                    >
+                      <Receipt className="h-4 w-4 mr-2" />
+                      View Receipt
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Created At</label>
+                  <p className="text-sm mt-1">{format(new Date(selectedExpense.created_at), 'dd MMM yyyy HH:mm')}</p>
+                </div>
+                {selectedExpense.updated_at && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Updated At</label>
+                    <p className="text-sm mt-1">{format(new Date(selectedExpense.updated_at), 'dd MMM yyyy HH:mm')}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Expense</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this expense? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setExpenseToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
             </div>
           </div>
         </div>

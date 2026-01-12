@@ -95,6 +95,10 @@ import { ExpenseDashboard } from "./features/4_2_dashboard";
 import { ApprovalsPage } from "./features/4_2_approvals";
 import { PaymentProcessPage } from "./features/4_2_payment-process/PaymentProcessPage";
 import { ReminderBillsPage } from "./features/4_2_reminder-bills/ReminderBillsPage";
+import Purchase from "./features/9_request-form/pages/Purchase/Purchase";
+import Reimbursement from "./features/9_request-form/pages/Reimbursement/Reimbursement";
+import CashAdvance from "./features/9_request-form/pages/CashAdvance/CashAdvance";
+import Loan from "./features/9_request-form/pages/Loan/Loan";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -340,6 +344,28 @@ const App = () => (
                   <StandardLayout>
                     <ReminderBillsPage />
                   </StandardLayout>
+                </ProtectedRoute>
+              } />
+              
+              {/* Request Form Routes */}
+              <Route path="/request-form/purchase" element={
+                <ProtectedRoute>
+                  <Purchase />
+                </ProtectedRoute>
+              } />
+              <Route path="/request-form/reimbursement" element={
+                <ProtectedRoute>
+                  <Reimbursement />
+                </ProtectedRoute>
+              } />
+              <Route path="/request-form/cash-advance" element={
+                <ProtectedRoute>
+                  <CashAdvance />
+                </ProtectedRoute>
+              } />
+              <Route path="/request-form/loan" element={
+                <ProtectedRoute>
+                  <Loan />
                 </ProtectedRoute>
               } />
               

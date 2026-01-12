@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { Textarea } from '@/features/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/features/ui/form';
+import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Upload, FileText, X, User, Building2, Clipboard, CheckCircle, Receipt } from 'lucide-react';
-import { useCurrentUserEmployee } from '@/hooks/organized/auth';
-import { useCreateReimbursementRequest } from '@/hooks/organized/payroll';
-import { toast } from '@/hooks/organized/utils';
-import { ReimbursementFormData } from '@/types/reimbursement';
+import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCreateReimbursementRequest } from '@/features/4_2_dashboard/hooks/useReimbursementRequests';
+import { toast } from '@/features/ui/use-toast';
+import { ReimbursementFormData } from '@/features/4_2_dashboard/types/reimbursement';
 
 const reimbursementSchema = z.object({
   requestTitle: z.string().min(1, 'Request title is required'),

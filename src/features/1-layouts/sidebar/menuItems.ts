@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Home, Wrench, Megaphone, CreditCard, Users, Target, Briefcase, DollarSign } from "lucide-react";
+import { Home, Wrench, Megaphone, CreditCard, Users, Target, Briefcase, DollarSign, ClipboardList } from "lucide-react";
 
 export const menuItems: MenuItem[] = [
   {
@@ -76,6 +76,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.finance.expenses.description",
       },
     ],
+  },
+  {
+    title: "Request Form",
+    titleKey: "sidebar.requestForm.title",
+    icon: ClipboardList,
+    url: "/request-form/purchase",
+    hasSubSidebar: false,
   },
   {
     title: "Digital Marketing",
