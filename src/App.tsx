@@ -91,6 +91,10 @@ import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDash
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
+import { ExpenseDashboard } from "./features/4_2_dashboard";
+import { ApprovalsPage } from "./features/4_2_approvals";
+import { PaymentProcessPage } from "./features/4_2_payment-process/PaymentProcessPage";
+import { ReminderBillsPage } from "./features/4_2_reminder-bills/ReminderBillsPage";
 
 // Import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -307,6 +311,34 @@ const App = () => (
                 <ProtectedRoute>
                   <StandardLayout>
                     <IncomeTransactionPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses/dashboard" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <ExpenseDashboard />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses/approvals" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <ApprovalsPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses/payment-process" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <PaymentProcessPage />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses/reminder-bills" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <ReminderBillsPage />
                   </StandardLayout>
                 </ProtectedRoute>
               } />

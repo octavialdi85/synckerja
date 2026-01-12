@@ -1,12 +1,12 @@
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { Textarea } from '@/features/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import { Badge } from '@/features/ui/badge';
 import { Plus, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { useExpenseTypes, CreateExpenseTypeData, UpdateExpenseTypeData } from './hooks/useExpenseTypes';
 import { useForm } from 'react-hook-form';

@@ -1,8 +1,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrg } from '@/hooks/organized/utils';
-import { useToast } from '@/hooks/organized/utils';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useToast } from '@/features/ui/use-toast';
 
 export interface ExpenseType {
   id: string;

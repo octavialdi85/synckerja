@@ -1,33 +1,39 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { Card, CardContent } from '@/features/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
+import { Textarea } from '@/features/ui/textarea';
+import { Calendar } from '@/features/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import { Badge } from '@/features/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox } from '@/features/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories } from './hooks';
 import { addExpenseSchema, AddExpenseFormData, RECURRING_FREQUENCIES } from './AddExpenseForm';
-import { useDepartments } from '@/hooks/crudMaster/useDepartments';
-import { useCurrentOrg } from '@/hooks/organized/utils';
+import { useDepartmentsCrud } from '@/features/2-1-employees/MyInfo/Employment/hooks/crudMaster/useDepartmentsCrud';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { DepartmentCrudModal } from './DepartmentCrudModal';
 import { ExpenseTypeCrudModal } from './ExpenseTypeCrudModal';
 import { ExpenseCategoryCrudModal } from './ExpenseCategoryCrudModal';
+import { HeaderAndTab } from './HeaderAndTab';
 
 export function ExpenseDashboard() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
   const { organizationId } = useCurrentOrg();
   const { expenses, isLoading, isCreating, createExpense } = useExpenses();
-  const { departments, isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartments(organizationId);
+  const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
   const { expenseTypes, isLoading: expenseTypesLoading, refetch: refetchExpenseTypes } = useExpenseTypes();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDepartmentCrudOpen, setIsDepartmentCrudOpen] = useState(false);
@@ -127,9 +133,20 @@ export function ExpenseDashboard() {
     };
 
   return (
-    <div className="p-0 min-h-full">
-      
-      {/* Header Card */}
+    <div className="flex flex-1 min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4">
+        <div className="h-full flex flex-col overflow-hidden">
+          {/* Header and Tabs */}
+          <div className="flex-shrink-0 mb-1">
+            <HeaderAndTab 
+              activeTab={activeTab} 
+              onTabChange={handleTabChange} 
+            />
+          </div>
+          
+          <div className="flex-1 min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
+            <div className="p-2 bg-gradient-to-br from-gray-50 to-white">
+              {/* Header Card */}
       <Card className="mb-4 bg-blue-600 text-white border-0">
         <CardContent className="p-3">
           <div className="flex justify-between items-center">
@@ -777,6 +794,10 @@ export function ExpenseDashboard() {
         onClose={() => setIsExpenseCategoryCrudOpen(false)}
         onExpenseCategoryChange={refetchExpenseCategories}
       />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

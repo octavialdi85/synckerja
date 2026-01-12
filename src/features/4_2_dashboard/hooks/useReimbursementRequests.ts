@@ -1,10 +1,10 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrg } from '@/hooks/organized/utils';
-import { useCurrentUser } from '@/hooks/organized/auth';
-import { useCurrentUserEmployee } from '@/hooks/organized/auth';
-import { useToast } from '@/hooks/organized/utils';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useToast } from '@/features/ui/use-toast';
 import { ReimbursementFormData } from '../types';
 
 export const useCreateReimbursementRequest = () => {

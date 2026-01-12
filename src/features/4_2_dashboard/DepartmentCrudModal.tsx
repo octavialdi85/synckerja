@@ -1,12 +1,12 @@
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Button } from '@/features/ui/button';
+import { Input } from '@/features/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Plus, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
-import { useDepartmentsCrud } from '@/hooks/crudMaster/useDepartmentsCrud';
-import { useCurrentOrg } from '@/hooks/organized/utils';
+import { useDepartmentsCrud } from '@/features/2-1-employees/MyInfo/Employment/hooks/crudMaster/useDepartmentsCrud';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 
 interface DepartmentCrudModalProps {

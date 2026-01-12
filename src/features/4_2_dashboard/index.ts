@@ -1,5 +1,6 @@
 // Main Dashboard
 export { ExpenseDashboard } from './ExpenseDashboard';
+export { HeaderAndTab } from './HeaderAndTab';
 
 // Tab Pages
 // PaymentProcessPage moved to 4_2_payment-process module

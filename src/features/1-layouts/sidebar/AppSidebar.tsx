@@ -63,6 +63,18 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
         '/subscription/plans',
         '/subscription/management'
       ],
+      '/incomes': [
+        '/incomes',
+        '/incomes/dashboard',
+        '/incomes/transaction'
+      ],
+      '/expenses': [
+        '/expenses',
+        '/expenses/dashboard',
+        '/expenses/approvals',
+        '/expenses/payment-process',
+        '/expenses/reminder-bills'
+      ],
       '/operations': [
         '/operations',
         '/operations/customer-service',

@@ -68,6 +68,13 @@ export const menuItems: MenuItem[] = [
         description: "Manage and track income transactions",
         descriptionKey: "sidebar.finance.incomes.description",
       },
+      {
+        title: "Expenses",
+        titleKey: "sidebar.finance.expenses.title",
+        url: "/expenses/dashboard",
+        description: "Manage and track expense transactions",
+        descriptionKey: "sidebar.finance.expenses.description",
+      },
     ],
   },
   {

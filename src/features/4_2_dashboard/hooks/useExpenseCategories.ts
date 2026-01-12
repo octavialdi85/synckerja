@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentOrg } from '@/hooks/organized/utils';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 
 export interface ExpenseCategory {
