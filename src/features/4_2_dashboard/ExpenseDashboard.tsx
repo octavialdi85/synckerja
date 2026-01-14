@@ -432,10 +432,10 @@ export function ExpenseDashboard() {
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
       <div className="flex flex-1 min-h-0">
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-          <div className="h-full flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 px-2 sm:px-4 pb-4 min-w-0">
+          <div className="h-full flex flex-col overflow-hidden min-w-0">
             {/* Header and Tabs */}
-            <div className="flex-shrink-0 mb-1">
+            <div className="flex-shrink-0 mb-1 min-w-0">
               <HeaderAndTab 
                 activeTab={activeTab} 
                 onTabChange={handleTabChange} 
@@ -443,75 +443,75 @@ export function ExpenseDashboard() {
             </div>
             
             {/* Content Area - Scrollable */}
-            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
-              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] min-w-0">
+              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col min-w-0">
               {/* Header Card */}
-      <Card className="mb-4 bg-blue-600 text-white border-0 w-full">
-        <CardContent className="p-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-semibold mb-1 text-white">Total Expenses</h1>
-              <p className="text-blue-100 text-sm">{allExpenses.length} total transactions</p>
+      <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0">
+        <CardContent className="p-3 min-w-0">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-semibold mb-1 text-white truncate">Total Expenses</h1>
+              <p className="text-blue-100 text-xs sm:text-sm truncate">{allExpenses.length} total transactions</p>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold">{formatCurrency(totalExpenses)}</div>
+            <div className="text-left sm:text-right min-w-0">
+              <div className="text-2xl sm:text-3xl font-bold truncate">{formatCurrency(totalExpenses)}</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-        <Card>
-        <CardContent className="p-3">
-            <div className="text-sm text-gray-600 mb-1">Current Month Total</div>
-            <div className="text-2xl font-bold mb-1">{formatCurrency(currentMonthTotal)}</div>
-            <div className="text-xs text-gray-500">vs. last month</div>
-            <div className="text-xs text-green-600 mt-1">↑ {currentMonthTotal > 0 ? '100' : '0'}%</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 min-w-0">
+        <Card className="min-w-0">
+        <CardContent className="p-3 min-w-0">
+            <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Current Month Total</div>
+            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">{formatCurrency(currentMonthTotal)}</div>
+            <div className="text-xs text-gray-500 truncate">vs. last month</div>
+            <div className="text-xs text-green-600 mt-1 truncate">↑ {currentMonthTotal > 0 ? '100' : '0'}%</div>
           </CardContent>
         </Card>
 
-        <Card>
-        <CardContent className="p-3">
-            <div className="text-sm text-gray-600 mb-1">Total Expenses YTD</div>
-            <div className="text-2xl font-bold mb-1">{formatCurrency(totalExpenses)}</div>
-            <div className="text-xs text-gray-500">{expenses.length} transactions</div>
+        <Card className="min-w-0">
+        <CardContent className="p-3 min-w-0">
+            <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Total Expenses YTD</div>
+            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">{formatCurrency(totalExpenses)}</div>
+            <div className="text-xs text-gray-500 truncate">{expenses.length} transactions</div>
             <div className="flex items-center mt-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 flex-shrink-0"></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-        <CardContent className="p-3">
-            <div className="text-sm text-gray-600 mb-1">Highest Expense</div>
-            <div className="text-2xl font-bold mb-1">
+        <Card className="min-w-0">
+        <CardContent className="p-3 min-w-0">
+            <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Highest Expense</div>
+            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">
               {allExpenses.length > 0 ? formatCurrency(Math.max(...allExpenses.map(e => e.amount))) : formatCurrency(0)}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 truncate" title={allExpenses.length > 0 ? allExpenses.find(e => e.amount === Math.max(...allExpenses.map(ex => ex.amount)))?.expense_name : 'No expenses yet'}>
               {allExpenses.length > 0 ? allExpenses.find(e => e.amount === Math.max(...allExpenses.map(ex => ex.amount)))?.expense_name : 'No expenses yet'}
             </div>
-            <div className="flex items-center mt-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
-              <span className="text-xs text-gray-500">
+            <div className="flex items-center mt-1 min-w-0">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 flex-shrink-0"></div>
+              <span className="text-xs text-gray-500 truncate">
                 {allExpenses.length > 0 ? format(new Date(allExpenses[0].create_date), 'dd MMM yyyy') : '-'}
               </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-3">
-            <div className="text-sm text-gray-600 mb-1">Latest Transaction</div>
-            <div className="text-2xl font-bold mb-1">
+        <Card className="min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Latest Transaction</div>
+            <div className="text-xl sm:text-2xl font-bold mb-1 truncate">
               {allExpenses.length > 0 ? formatCurrency(allExpenses[0].amount) : formatCurrency(0)}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 truncate" title={allExpenses.length > 0 ? allExpenses[0].expense_name : 'No expenses yet'}>
               {allExpenses.length > 0 ? allExpenses[0].expense_name : 'No expenses yet'}
             </div>
-            <div className="flex items-center mt-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-              <span className="text-xs text-gray-500">
+            <div className="flex items-center mt-1 min-w-0">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 flex-shrink-0"></div>
+              <span className="text-xs text-gray-500 truncate">
                 {allExpenses.length > 0 ? format(new Date(allExpenses[0].created_at), 'dd MMM yyyy') : '-'}
               </span>
             </div>
@@ -522,20 +522,20 @@ export function ExpenseDashboard() {
       
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
-        <Card className="flex flex-col">
-        <CardContent className="p-3 flex-1 flex flex-col">
-            <h3 className="text-lg font-semibold mb-2">Expense Breakdown</h3>
-            <p className="text-sm text-gray-600 mb-4">By expense type</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 min-w-0">
+        <Card className="flex flex-col min-w-0">
+        <CardContent className="p-3 flex-1 flex flex-col min-w-0">
+            <h3 className="text-base sm:text-lg font-semibold mb-2 truncate">Expense Breakdown</h3>
+            <p className="text-xs sm:text-sm text-gray-600 mb-4 truncate">By expense type</p>
             
-            <div className="flex justify-between items-center mb-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold">{new Set(allExpenses.map(e => e.expense_type)).size}</div>
-                <div className="text-sm text-gray-600">Expense Types</div>
+            <div className="flex justify-between items-center mb-4 gap-2 min-w-0">
+              <div className="text-center min-w-0 flex-1">
+                <div className="text-xl sm:text-2xl font-bold truncate">{new Set(allExpenses.map(e => e.expense_type)).size}</div>
+                <div className="text-xs sm:text-sm text-gray-600 truncate">Expense Types</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
-                <div className="text-sm text-gray-600">Total</div>
+              <div className="text-center min-w-0 flex-1">
+                <div className="text-xl sm:text-2xl font-bold truncate">{formatCurrency(totalExpenses)}</div>
+                <div className="text-xs sm:text-sm text-gray-600 truncate">Total</div>
               </div>
             </div>
 
@@ -569,13 +569,13 @@ export function ExpenseDashboard() {
                   })()}
                 </div>
                 
-                <div className="flex justify-between text-xs text-gray-600 mt-2 overflow-x-auto">
+                <div className="flex justify-between text-xs text-gray-600 mt-2 overflow-x-auto gap-1 min-w-0">
                   {Object.keys(allExpenses.reduce((acc, expense) => {
                     const expenseType = expense.expense_type || 'Uncategorized';
                     acc[expenseType] = true;
                     return acc;
                   }, {} as Record<string, boolean>)).map((expenseType) => (
-                    <span key={expenseType} className="flex-1 text-center whitespace-nowrap" title={expenseType}>
+                    <span key={expenseType} className="flex-1 text-center whitespace-nowrap min-w-0 truncate" title={expenseType}>
                       {expenseType}
                     </span>
                   ))}
@@ -589,19 +589,19 @@ export function ExpenseDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col">
-          <CardContent className="p-3 flex-1 flex flex-col">
-            <div className="flex justify-between items-center mb-4 flex-shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold">Monthly Comparison</h3>
-                <p className="text-sm text-gray-600">Expense trends throughout the year</p>
+        <Card className="flex flex-col min-w-0">
+          <CardContent className="p-3 flex-1 flex flex-col min-w-0">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0 min-w-0 gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base sm:text-lg font-semibold truncate">Monthly Comparison</h3>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Expense trends throughout the year</p>
               </div>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
+              <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
             </div>
 
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 min-w-0">
               {monthlyData.length > 0 && monthlyData.some(d => d.amount > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" className="min-w-0">
                   <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
@@ -659,22 +659,22 @@ export function ExpenseDashboard() {
       {/* Table Section */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1">
         {/* Table Header with Search and Filters */}
-        <div className="px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
-          <div className="flex justify-between items-center gap-2 flex-wrap">
-            <div className="flex items-center space-x-4 flex-wrap min-w-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <div className="px-2 sm:px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
+            <div className="flex items-center flex-wrap gap-2 min-w-0 flex-1">
+              <div className="relative min-w-0 flex-1 sm:flex-initial">
+                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   placeholder="Search expenses..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-64"
+                  className="pl-8 sm:pl-10 w-full sm:w-48 md:w-64 min-w-0"
                 />
               </div>
               
               <Select defaultValue="all-dates">
-                <SelectTrigger className="w-32">
-                  <CalendarIcon className="h-4 w-4 mr-2" />
+                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
+                  <CalendarIcon className="h-4 w-4 mr-1 sm:mr-2 flex-shrink-0" />
                   <SelectValue placeholder="All Dates" />
                 </SelectTrigger>
                 <SelectContent>
@@ -685,7 +685,7 @@ export function ExpenseDashboard() {
               </Select>
 
               <Select defaultValue="all-depts">
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
                   <SelectValue placeholder="All Depts" />
                 </SelectTrigger>
                 <SelectContent>
@@ -696,7 +696,7 @@ export function ExpenseDashboard() {
               </Select>
 
               <Select defaultValue="all-types">
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -707,30 +707,31 @@ export function ExpenseDashboard() {
               </Select>
             </div>
 
-            <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto flex-shrink-0">
               <Plus className="h-4 w-4 mr-2" />
-              Add Expense
+              <span className="hidden sm:inline">Add Expense</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </div>
 
         {/* Table */}
         <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[1400px]">
+            <table className="w-full min-w-[1200px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Payment Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Next Payment</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Category</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Department</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Request</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Description</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Request By</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Recurring</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Actions</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Payment Date</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Next Payment</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Type</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Category</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Department</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Amount</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Description</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request By</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Recurring</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Status</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -767,54 +768,54 @@ export function ExpenseDashboard() {
                           : expense.expense_name);
                       return (
                       <tr key={expense.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 whitespace-nowrap">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
-                        <td className="py-3 px-4 whitespace-nowrap">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
-                        <td className="py-3 px-4 max-w-[250px]">
-                          <div className="truncate" title={expense.expense_type}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={expense.expense_type}>
                             {expense.expense_type}
                           </div>
                         </td>
-                        <td className="py-3 px-4 max-w-[250px]">
-                          <div className="truncate" title={expense.category}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={expense.category}>
                             {expense.category}
                           </div>
                         </td>
-                        <td className="py-3 px-4 max-w-[200px]">
-                          <div className="truncate" title={expense.department || 'N/A'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={expense.department || 'N/A'}>
                             {expense.department || 'N/A'}
                           </div>
                         </td>
-                        <td className="py-3 px-4 font-medium whitespace-nowrap">{formatCurrency(expense.amount)}</td>
-                        <td className="py-3 px-4 max-w-[200px]">
-                          <div className="truncate" title={requestTitle || expense.expense_name || '-'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">{formatCurrency(expense.amount)}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={requestTitle || expense.expense_name || '-'}>
                             {requestTitle || expense.expense_name || '-'}
                           </div>
                         </td>
-                        <td className="py-3 px-4 max-w-[250px]">
-                          <div className="truncate" title={expense.description || '-'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={expense.description || '-'}>
                             {expense.description || '-'}
                           </div>
                         </td>
-                        <td className="py-3 px-4 max-w-[150px]">
-                          <div className="truncate" title={requesterName || '-'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[120px] sm:max-w-[150px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={requesterName || '-'}>
                             {requesterName || '-'}
                           </div>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <Badge variant={expense.is_recurring ? 'default' : 'secondary'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
+                          <Badge variant={expense.is_recurring ? 'default' : 'secondary'} className="text-xs">
                             {expense.is_recurring ? 'Recurring' : 'One-time'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <Badge variant={isPaidPurchaseRequest ? 'default' : 'secondary'}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
+                          <Badge variant={isPaidPurchaseRequest ? 'default' : 'secondary'} className="text-xs">
                             {isPaidPurchaseRequest ? 'Berhasil' : (expense.is_recurring ? 'Recurring' : 'One-time')}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
@@ -860,7 +861,7 @@ export function ExpenseDashboard() {
 
       {/* Add Expense Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="w-[600px] h-[600px] max-w-none p-0 overflow-hidden flex flex-col">
+        <DialogContent className="w-[95vw] sm:w-[600px] h-[90vh] sm:h-[600px] max-w-none p-0 overflow-hidden flex flex-col min-w-0">
           <DialogHeader className="flex-shrink-0 p-4 pb-2">
             <DialogTitle className="text-lg font-semibold">Add New Expense</DialogTitle>
             <p className="text-sm text-gray-600">Enter the details for your new expense entry.</p>
@@ -1186,7 +1187,7 @@ export function ExpenseDashboard() {
 
       {/* Expense Detail Modal */}
       <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto min-w-0">
           <DialogHeader>
             <DialogTitle>Expense Details</DialogTitle>
             <DialogDescription>
