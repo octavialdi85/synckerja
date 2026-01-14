@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/features/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Separator } from '@/features/ui/separator';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
 import { PurchaseRequest, useUpdatePurchaseRequestStatus } from '@/features/9_request-form/hooks/usePurchaseRequests';
@@ -16,6 +17,7 @@ import { useExpenseCategories } from '@/features/4_2_dashboard/hooks/useExpenseC
 import { useCurrentUserRole } from '@/features/share/hooks/useCurrentUserRole';
 import { useToast } from '@/features/ui/use-toast';
 import { Calendar, User, Building, DollarSign, FileText, Target, Zap, TrendingUp, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { PurchaseRequestPDFViewer } from './PurchaseRequestPDFViewer';
 
 interface PurchaseRequestDetailsModalProps {
   request: PurchaseRequest | null;
@@ -144,7 +146,7 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Request Details</span>
@@ -152,7 +154,14 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details">Detail</TabsTrigger>
+            <TabsTrigger value="pdf">PDF</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="details" className="flex-1 overflow-y-auto mt-4 seamless-scroll">
+            <div className="space-y-4">
           {/* Basic Information */}
           <Card className="border-slate-200">
             <CardHeader className="px-4 py-3 pb-2">
@@ -541,7 +550,15 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
               </div>
             </>
           )}
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="pdf" className="flex-1 overflow-hidden mt-4">
+            <div className="h-full min-h-[600px]">
+              <PurchaseRequestPDFViewer request={request} />
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

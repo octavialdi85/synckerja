@@ -51,6 +51,9 @@ export interface PurchaseRequest {
   exchange_rate?: string; // Keep as string to match database
   business_purpose?: string;
   advance_request_id?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  bank_name?: string;
   status: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled';
   submitted_at?: string;
   approved_at?: string;

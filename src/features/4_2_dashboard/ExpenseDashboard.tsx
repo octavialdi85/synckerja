@@ -575,8 +575,8 @@ export function ExpenseDashboard() {
                     acc[expenseType] = true;
                     return acc;
                   }, {} as Record<string, boolean>)).map((expenseType) => (
-                    <span key={expenseType} className="truncate flex-1 text-center" title={expenseType}>
-                      {expenseType.length > 10 ? expenseType.substring(0, 10) + '...' : expenseType}
+                    <span key={expenseType} className="flex-1 text-center whitespace-nowrap" title={expenseType}>
+                      {expenseType}
                     </span>
                   ))}
                 </div>
