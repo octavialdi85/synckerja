@@ -88,24 +88,27 @@ export const ApprovalTable = ({
       </div>
 
       {/* Table Content */}
-      <div className="flex-1 overflow-auto seamless-scroll">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="h-8 px-3 text-xs font-medium">Request</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Requester</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Department</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Amount</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Type</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+      <div className="flex-1 overflow-x-auto seamless-scroll" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <Table className="min-w-[1300px]">
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Request</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Requester</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Department</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Amount</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Type</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Status</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Recurring</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Request Date</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Approved Date</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Approved By</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium w-16 whitespace-nowrap">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {requests.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-16 text-center">
+                <TableCell colSpan={11} className="h-16 text-center">
                   <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500 mb-1">No approval requests found</p>
                   <p className="text-xs text-gray-400">Create your first approval request to get started</p>
@@ -146,12 +149,7 @@ export const ApprovalTable = ({
                     </div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-gray-900">{formatToRupiah(request.amount_idr)}</div>
-                      {request.is_recurring && (
-                        <Badge variant="outline" className="text-xs">Recurring</Badge>
-                      )}
-                    </div>
+                    <div className="font-bold text-gray-900">{formatToRupiah(request.amount_idr)}</div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <Badge variant="outline" className="text-xs">
@@ -161,13 +159,37 @@ export const ApprovalTable = ({
                   <TableCell className="px-3 py-2 text-xs">
                     {getStatusBadge(request.status)}
                   </TableCell>
+                  <TableCell className="px-3 py-2 text-xs whitespace-nowrap">
+                    <Badge variant={request.is_recurring ? 'default' : 'secondary'}>
+                      {request.is_recurring ? 'Recurring' : 'One-time'}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="px-3 py-2 text-xs text-gray-600">
                     <div className="flex items-center gap-2">
                       <div className="p-1 rounded-md bg-gray-100">
                         <Calendar className="h-3 w-3 text-gray-600" />
                       </div>
-                      <span>{format(new Date(request.created_at || ''), 'MMM dd, yyyy')}</span>
+                      <span>{format(new Date(request.created_at || request.submitted_at || ''), 'MMM dd, yyyy')}</span>
                     </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-gray-600">
+                    {request.approved_at ? (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-md bg-gray-100">
+                          <Calendar className="h-3 w-3 text-gray-600" />
+                        </div>
+                        <span>{format(new Date(request.approved_at), 'MMM dd, yyyy')}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-gray-600">
+                    {request.approved_by_name ? (
+                      <span className="font-medium">{request.approved_by_name}</span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <ApprovalActionsDropdown

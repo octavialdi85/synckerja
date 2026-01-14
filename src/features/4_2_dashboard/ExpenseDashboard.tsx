@@ -25,6 +25,7 @@ import { DepartmentCrudModal } from './DepartmentCrudModal';
 import { ExpenseTypeCrudModal } from './ExpenseTypeCrudModal';
 import { ExpenseCategoryCrudModal } from './ExpenseCategoryCrudModal';
 import { HeaderAndTab } from './HeaderAndTab';
+import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 
 export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -36,6 +37,131 @@ export function ExpenseDashboard() {
   const { expenses, isLoading, isCreating, createExpense, deleteExpense } = useExpenses();
   const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
   const { expenseTypes, isLoading: expenseTypesLoading, refetch: refetchExpenseTypes } = useExpenseTypes();
+  const { data: purchaseRequests = [], isLoading: isLoadingPurchaseRequests } = usePurchaseRequests();
+  // Fetch all expense categories (without filter) for fallback lookup
+  const { expenseCategories: allExpenseCategories } = useExpenseCategories();
+  
+  // Filter purchase requests that are paid/berhasil
+  const paidPurchaseRequests = purchaseRequests.filter(req => 
+    req.status === 'approved' && 
+    (req.paid_at || req.payment_status === 'paid')
+  );
+  
+  // Helper function to get expense type name
+  const getExpenseTypeName = (pr: PurchaseRequest): string => {
+    // First try to get from joined expense_types (this is the most reliable)
+    if (pr.expense_types?.name) {
+      return pr.expense_types.name;
+    }
+    
+    // If join failed but expense_type_id exists, try to find in expenseTypes array
+    // This is a fallback in case the join query doesn't work properly
+    if (pr.expense_type_id && expenseTypes.length > 0) {
+      const expenseType = expenseTypes.find(et => et.id === pr.expense_type_id);
+      if (expenseType) {
+        console.log('Found expense type from expenseTypes array:', expenseType.name);
+        return expenseType.name;
+      } else {
+        console.warn('Expense type ID exists but not found in expenseTypes array:', {
+          expense_type_id: pr.expense_type_id,
+          available_types: expenseTypes.map(et => ({ id: et.id, name: et.name }))
+        });
+      }
+    }
+    
+    // Log warning if expense_type_id is missing
+    if (!pr.expense_type_id) {
+      console.warn('Purchase request missing expense_type_id:', {
+        id: pr.id,
+        request_title: pr.request_title,
+        expense_types: pr.expense_types
+      });
+    }
+    
+    // Fallback to 'Uncategorized'
+    return 'Uncategorized';
+  };
+  
+  // Helper function to get expense category name
+  const getExpenseCategoryName = (pr: PurchaseRequest): string => {
+    // First try to get from joined expense_categories (this is the most reliable)
+    if (pr.expense_categories?.name) {
+      return pr.expense_categories.name;
+    }
+    
+    // If join failed but expense_category_id exists, try to find in allExpenseCategories array
+    if (pr.expense_category_id && allExpenseCategories.length > 0) {
+      const expenseCategory = allExpenseCategories.find(ec => ec.id === pr.expense_category_id);
+      if (expenseCategory) {
+        console.log('Found expense category from allExpenseCategories array:', expenseCategory.name);
+        return expenseCategory.name;
+      } else {
+        console.warn('Expense category ID exists but not found in allExpenseCategories array:', {
+          expense_category_id: pr.expense_category_id,
+          available_categories: allExpenseCategories.map(ec => ({ id: ec.id, name: ec.name }))
+        });
+      }
+    }
+    
+    // Log warning if expense_category_id is missing
+    if (!pr.expense_category_id) {
+      console.warn('Purchase request missing expense_category_id:', {
+        id: pr.id,
+        request_title: pr.request_title,
+        expense_categories: pr.expense_categories,
+        expense_type_id: pr.expense_type_id
+      });
+    }
+    
+    // Fallback to request_type or 'Purchase'
+    return pr.request_type || 'Purchase';
+  };
+  
+  // Helper function to calculate next payment date for recurring expenses
+  const calculateNextPaymentDate = (
+    lastPaymentDate: string,
+    recurringFrequency: string | undefined | null
+  ): string | undefined => {
+    if (!recurringFrequency) return undefined;
+    
+    // Normalize frequency to lowercase for case-insensitive comparison
+    const normalizedFrequency = recurringFrequency.toLowerCase().trim();
+    
+    const lastPayment = new Date(lastPaymentDate);
+    const nextPayment = new Date(lastPayment);
+    
+    switch (normalizedFrequency) {
+      case 'daily':
+        nextPayment.setDate(nextPayment.getDate() + 1);
+        break;
+      case 'weekly':
+        nextPayment.setDate(nextPayment.getDate() + 7);
+        break;
+      case 'biweekly':
+      case 'bi-weekly':
+        nextPayment.setDate(nextPayment.getDate() + 14);
+        break;
+      case 'monthly':
+        nextPayment.setMonth(nextPayment.getMonth() + 1);
+        break;
+      case 'quarterly':
+        nextPayment.setMonth(nextPayment.getMonth() + 3);
+        break;
+      case 'semiannually':
+      case 'semi-annually':
+        nextPayment.setMonth(nextPayment.getMonth() + 6);
+        break;
+      case 'annually':
+        nextPayment.setFullYear(nextPayment.getFullYear() + 1);
+        break;
+      default:
+        console.warn('Unknown recurring frequency:', recurringFrequency);
+        return undefined;
+    }
+    
+    return nextPayment.toISOString().split('T')[0];
+  };
+  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDepartmentCrudOpen, setIsDepartmentCrudOpen] = useState(false);
   const [isExpenseTypeCrudOpen, setIsExpenseTypeCrudOpen] = useState(false);
@@ -140,8 +266,95 @@ export function ExpenseDashboard() {
     return `Rp ${amount.toLocaleString('id-ID')}`;
   };
 
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const currentMonthTotal = expenses
+  // Combine expenses with paid purchase requests for display
+  const allExpenses = useMemo(() => {
+    // Map regular expenses to include request_title and requester_name fields
+    // Also recalculate next_payment_date for recurring expenses if missing or expired
+    const mappedExpenses = expenses.map(expense => {
+      let nextPaymentDate = expense.next_payment_date;
+      
+      // If expense is recurring but next_payment_date is missing or expired, recalculate it
+      if (expense.is_recurring && expense.recurring_frequency) {
+        if (!nextPaymentDate) {
+          // Calculate from create_date if next_payment_date is missing
+          nextPaymentDate = calculateNextPaymentDate(expense.create_date, expense.recurring_frequency);
+        } else {
+          // Check if next_payment_date has passed, if so, calculate next one
+          const nextPayment = new Date(nextPaymentDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          if (nextPayment < today) {
+            // Calculate next payment date from the last next_payment_date
+            nextPaymentDate = calculateNextPaymentDate(nextPaymentDate, expense.recurring_frequency);
+          }
+        }
+      }
+      
+      return {
+        ...expense,
+        request_title: expense.expense_name, // For regular expenses, use expense_name as request_title
+        requester_name: undefined, // Regular expenses don't have requester_name
+        next_payment_date: nextPaymentDate || expense.next_payment_date,
+      };
+    });
+    
+    const combined = [...mappedExpenses];
+    
+    // Add paid purchase requests as expenses
+    paidPurchaseRequests.forEach(pr => {
+      // Get expense type name - this should be the actual name from expense_types table
+      // like "Operating Expenses", "Fixed Expenses", "Variable Expenses", etc.
+      const expenseTypeName = getExpenseTypeName(pr);
+      
+      // Get expense category name - this should be the actual name from expense_categories table
+      const expenseCategoryName = getExpenseCategoryName(pr);
+      
+      // Calculate next payment date for recurring purchase requests
+      const lastPaymentDate = pr.paid_at || pr.approved_at || pr.created_at;
+      const nextPaymentDate = pr.is_recurring && pr.recurring_frequency
+        ? calculateNextPaymentDate(lastPaymentDate, pr.recurring_frequency)
+        : undefined;
+      
+      combined.push({
+        id: pr.id,
+        organization_id: pr.organization_id,
+        expense_name: pr.request_title,
+        amount: pr.amount_idr,
+        // Use expense type name from expense_types table
+        expense_type: expenseTypeName,
+        expense_type_id: pr.expense_type_id || undefined,
+        // Use expense category name from expense_categories table
+        category: expenseCategoryName,
+        expense_category_id: pr.expense_category_id || undefined,
+        department: pr.department_name || undefined,
+        create_date: lastPaymentDate,
+        is_recurring: pr.is_recurring || false,
+        recurring_frequency: pr.recurring_frequency || undefined,
+        first_payment_date: undefined,
+        next_payment_date: nextPaymentDate,
+        description: pr.description,
+        receipt_url: pr.invoice_file_path || undefined,
+        status: 'active',
+        created_by: pr.created_by,
+        created_at: pr.created_at,
+        updated_at: pr.updated_at,
+        // Add purchase request specific fields
+        request_title: pr.request_title,
+        requester_name: pr.requester_name,
+      } as Expense & { request_title?: string; requester_name?: string });
+    });
+    
+    // Sort by date (newest first)
+    return combined.sort((a, b) => {
+      const dateA = new Date(a.create_date).getTime();
+      const dateB = new Date(b.create_date).getTime();
+      return dateB - dateA;
+    });
+  }, [expenses, paidPurchaseRequests]);
+
+  const totalExpenses = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const currentMonthTotal = allExpenses
     .filter(expense => {
       const expenseDate = new Date(expense.create_date);
       const currentDate = new Date();
@@ -162,7 +375,7 @@ export function ExpenseDashboard() {
     }));
 
     // Calculate totals for each month
-    expenses.forEach(expense => {
+    allExpenses.forEach(expense => {
       const expenseDate = new Date(expense.create_date);
       if (expenseDate.getFullYear() === currentYear) {
         const monthIndex = expenseDate.getMonth();
@@ -171,7 +384,7 @@ export function ExpenseDashboard() {
     });
 
     return monthlyTotals;
-  }, [expenses]);
+  }, [allExpenses]);
 
     const handleExpenseTypeChange = (value: string) => {
       form.setValue('expense_type', value);
@@ -200,7 +413,7 @@ export function ExpenseDashboard() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-semibold mb-1 text-white">Total Expenses</h1>
-              <p className="text-blue-100 text-sm">{expenses.length} total transactions</p>
+              <p className="text-blue-100 text-sm">{allExpenses.length} total transactions</p>
             </div>
             <div className="text-right">
               <div className="text-3xl font-bold">{formatCurrency(totalExpenses)}</div>
@@ -235,15 +448,15 @@ export function ExpenseDashboard() {
         <CardContent className="p-3">
             <div className="text-sm text-gray-600 mb-1">Highest Expense</div>
             <div className="text-2xl font-bold mb-1">
-              {expenses.length > 0 ? formatCurrency(Math.max(...expenses.map(e => e.amount))) : formatCurrency(0)}
+              {allExpenses.length > 0 ? formatCurrency(Math.max(...allExpenses.map(e => e.amount))) : formatCurrency(0)}
             </div>
             <div className="text-xs text-gray-500">
-              {expenses.length > 0 ? expenses.find(e => e.amount === Math.max(...expenses.map(ex => ex.amount)))?.expense_name : 'No expenses yet'}
+              {allExpenses.length > 0 ? allExpenses.find(e => e.amount === Math.max(...allExpenses.map(ex => ex.amount)))?.expense_name : 'No expenses yet'}
             </div>
             <div className="flex items-center mt-1">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
               <span className="text-xs text-gray-500">
-                {expenses.length > 0 ? format(new Date(expenses[0].create_date), 'dd MMM yyyy') : '-'}
+                {allExpenses.length > 0 ? format(new Date(allExpenses[0].create_date), 'dd MMM yyyy') : '-'}
               </span>
             </div>
           </CardContent>
@@ -253,15 +466,15 @@ export function ExpenseDashboard() {
           <CardContent className="p-3">
             <div className="text-sm text-gray-600 mb-1">Latest Transaction</div>
             <div className="text-2xl font-bold mb-1">
-              {expenses.length > 0 ? formatCurrency(expenses[0].amount) : formatCurrency(0)}
+              {allExpenses.length > 0 ? formatCurrency(allExpenses[0].amount) : formatCurrency(0)}
             </div>
             <div className="text-xs text-gray-500">
-              {expenses.length > 0 ? expenses[0].expense_name : 'No expenses yet'}
+              {allExpenses.length > 0 ? allExpenses[0].expense_name : 'No expenses yet'}
             </div>
             <div className="flex items-center mt-1">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
               <span className="text-xs text-gray-500">
-                {expenses.length > 0 ? format(new Date(expenses[0].created_at), 'dd MMM yyyy') : '-'}
+                {allExpenses.length > 0 ? format(new Date(allExpenses[0].created_at), 'dd MMM yyyy') : '-'}
               </span>
             </div>
           </CardContent>
@@ -279,8 +492,8 @@ export function ExpenseDashboard() {
             
             <div className="flex justify-between items-center mb-4">
               <div className="text-center">
-                <div className="text-2xl font-bold">{new Set(expenses.map(e => e.category)).size}</div>
-                <div className="text-sm text-gray-600">Categories</div>
+                <div className="text-2xl font-bold">{new Set(allExpenses.map(e => e.expense_type)).size}</div>
+                <div className="text-sm text-gray-600">Expense Types</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
@@ -288,30 +501,30 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
-            {expenses.length > 0 ? (
+            {allExpenses.length > 0 ? (
               <>
                 <div className="mt-4 h-32 bg-gray-100 rounded flex items-end justify-center gap-1 p-2">
                   {(() => {
-                    // Calculate category totals
-                    const categoryTotals = expenses.reduce((acc, expense) => {
-                      const category = expense.category || 'Uncategorized';
-                      acc[category] = (acc[category] || 0) + expense.amount;
+                    // Calculate expense type totals (by expense_type, not category)
+                    const expenseTypeTotals = allExpenses.reduce((acc, expense) => {
+                      const expenseType = expense.expense_type || 'Uncategorized';
+                      acc[expenseType] = (acc[expenseType] || 0) + expense.amount;
                       return acc;
                     }, {} as Record<string, number>);
 
-                    const maxAmount = Math.max(...Object.values(categoryTotals));
-                    const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400'];
+                    const maxAmount = Math.max(...Object.values(expenseTypeTotals));
+                    const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
                     
-                    return Object.entries(categoryTotals).map(([category, amount], index) => {
+                    return Object.entries(expenseTypeTotals).map(([expenseType, amount], index) => {
                       const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
                       const colorClass = colors[index % colors.length];
                       
                       return (
                         <div
-                          key={category}
+                          key={expenseType}
                           className={`flex-1 ${colorClass} rounded-t`}
                           style={{ height: `${Math.max(heightPercentage, 8)}%` }}
-                          title={`${category}: ${formatCurrency(amount)}`}
+                          title={`${expenseType}: ${formatCurrency(amount)}`}
                         />
                       );
                     });
@@ -319,13 +532,13 @@ export function ExpenseDashboard() {
                 </div>
                 
                 <div className="flex justify-between text-xs text-gray-600 mt-2 overflow-x-auto">
-                  {Object.keys(expenses.reduce((acc, expense) => {
-                    const category = expense.category || 'Uncategorized';
-                    acc[category] = true;
+                  {Object.keys(allExpenses.reduce((acc, expense) => {
+                    const expenseType = expense.expense_type || 'Uncategorized';
+                    acc[expenseType] = true;
                     return acc;
-                  }, {} as Record<string, boolean>)).map((category) => (
-                    <span key={category} className="truncate flex-1 text-center" title={category}>
-                      {category.length > 10 ? category.substring(0, 10) + '...' : category}
+                  }, {} as Record<string, boolean>)).map((expenseType) => (
+                    <span key={expenseType} className="truncate flex-1 text-center" title={expenseType}>
+                      {expenseType.length > 10 ? expenseType.substring(0, 10) + '...' : expenseType}
                     </span>
                   ))}
                 </div>
@@ -465,55 +678,102 @@ export function ExpenseDashboard() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto seamless-scroll" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <table className="w-full min-w-[1400px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Payment Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Next Payment</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Department</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Description</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Payment Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Next Payment</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Type</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Category</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Department</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Amount</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Request</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Description</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Request By</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Recurring</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
+                {(isLoading || isLoadingPurchaseRequests) ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-gray-500">
+                    <td colSpan={12} className="py-8 text-center text-gray-500">
                       Loading expenses...
                     </td>
                   </tr>
-                ) : expenses.length === 0 ? (
+                ) : allExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-gray-500">
+                    <td colSpan={12} className="py-8 text-center text-gray-500">
                       No expenses found. Click "Add Expense" to create your first expense.
                     </td>
                   </tr>
                 ) : (
-                  expenses
+                  allExpenses
                     .filter(expense => 
                       expense.expense_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                       expense.category.toLowerCase().includes(searchQuery.toLowerCase())
                     )
-                    .map((expense) => (
+                    .map((expense) => {
+                      // Check if this is a paid purchase request
+                      const isPaidPurchaseRequest = paidPurchaseRequests.some(pr => pr.id === expense.id);
+                      // Get requester name - from expense object if available, otherwise from purchase request
+                      const requesterName = (expense as any).requester_name || 
+                        (isPaidPurchaseRequest 
+                          ? paidPurchaseRequests.find(pr => pr.id === expense.id)?.requester_name 
+                          : undefined);
+                      // Get request title - from expense object if available, otherwise from purchase request or expense_name
+                      const requestTitle = (expense as any).request_title || 
+                        (isPaidPurchaseRequest 
+                          ? paidPurchaseRequests.find(pr => pr.id === expense.id)?.request_title 
+                          : expense.expense_name);
+                      return (
                       <tr key={expense.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
-                        <td className="py-3 px-4">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
-                        <td className="py-3 px-4">{expense.expense_type}</td>
-                        <td className="py-3 px-4">{expense.category}</td>
-                        <td className="py-3 px-4">{expense.department || 'N/A'}</td>
-                        <td className="py-3 px-4 font-medium">{formatCurrency(expense.amount)}</td>
-                        <td className="py-3 px-4">{expense.description || '-'}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 whitespace-nowrap">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
+                        <td className="py-3 px-4 whitespace-nowrap">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
+                        <td className="py-3 px-4 max-w-[250px]">
+                          <div className="truncate" title={expense.expense_type}>
+                            {expense.expense_type}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 max-w-[250px]">
+                          <div className="truncate" title={expense.category}>
+                            {expense.category}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 max-w-[200px]">
+                          <div className="truncate" title={expense.department || 'N/A'}>
+                            {expense.department || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-medium whitespace-nowrap">{formatCurrency(expense.amount)}</td>
+                        <td className="py-3 px-4 max-w-[200px]">
+                          <div className="truncate" title={requestTitle || expense.expense_name || '-'}>
+                            {requestTitle || expense.expense_name || '-'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 max-w-[250px]">
+                          <div className="truncate" title={expense.description || '-'}>
+                            {expense.description || '-'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 max-w-[150px]">
+                          <div className="truncate" title={requesterName || '-'}>
+                            {requesterName || '-'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
                           <Badge variant={expense.is_recurring ? 'default' : 'secondary'}>
                             {expense.is_recurring ? 'Recurring' : 'One-time'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <Badge variant={isPaidPurchaseRequest ? 'default' : 'secondary'}>
+                            {isPaidPurchaseRequest ? 'Berhasil' : (expense.is_recurring ? 'Recurring' : 'One-time')}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm">
@@ -524,25 +784,28 @@ export function ExpenseDashboard() {
                               {expense.receipt_url && (
                                 <DropdownMenuItem onClick={() => window.open(expense.receipt_url!, '_blank')}>
                                   <Receipt className="h-4 w-4 mr-2 text-gray-600" />
-                                  View Receipt
+                                  {isPaidPurchaseRequest ? 'View Invoice' : 'View Receipt'}
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem onClick={() => handleViewDetails(expense)}>
                                 <Eye className="h-4 w-4 mr-2 text-gray-600" />
                                 Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="text-red-600"
-                                onClick={() => handleDeleteClick(expense.id)}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
+                              {!isPaidPurchaseRequest && (
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteClick(expense.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                 )}
               </tbody>
             </table>

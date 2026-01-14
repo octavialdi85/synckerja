@@ -9,8 +9,8 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/features/ui/dropdown-menu';
-import { MoreHorizontal, Eye, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useUpdatePurchaseRequestStatus, usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
+import { MoreHorizontal, Eye, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
+import { useUpdatePurchaseRequestStatus, useDeletePurchaseRequest, usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { PurchaseRequestDetailsModal } from './PurchaseRequestDetailsModal';
 import { useCurrentUserRole } from '@/features/share/hooks/useCurrentUserRole';
 import { useToast } from '@/features/ui/use-toast';
@@ -24,12 +24,14 @@ export const ApprovalActionsDropdown = ({ requestId, status }: ApprovalActionsDr
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
 
   const { data: requests = [] } = usePurchaseRequests();
   const { data: userRole } = useCurrentUserRole();
   const updateStatus = useUpdatePurchaseRequestStatus();
+  const deleteRequest = useDeletePurchaseRequest();
   const { toast } = useToast();
 
   const request: PurchaseRequest | undefined = requests.find(r => r.id === requestId);
@@ -81,6 +83,15 @@ export const ApprovalActionsDropdown = ({ requestId, status }: ApprovalActionsDr
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      await deleteRequest.mutateAsync(requestId);
+      setShowDeleteDialog(false);
+    } catch (error) {
+      console.error('Delete error:', error);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -107,6 +118,14 @@ export const ApprovalActionsDropdown = ({ requestId, status }: ApprovalActionsDr
               </DropdownMenuItem>
             </>
           )}
+          
+          <DropdownMenuItem 
+            onClick={() => setShowDeleteDialog(true)}
+            className="text-red-600 focus:text-red-700"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -210,6 +229,37 @@ export const ApprovalActionsDropdown = ({ requestId, status }: ApprovalActionsDr
                 {updateStatus.isPending ? 'Rejecting...' : 'Reject Request'}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Request
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this purchase request? This action cannot be undone and will permanently delete the request and all associated documents.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex gap-2 justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteRequest.isPending}
+            >
+              {deleteRequest.isPending ? 'Deleting...' : 'Delete Request'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

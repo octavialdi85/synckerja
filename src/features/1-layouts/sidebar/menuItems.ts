@@ -78,13 +78,6 @@ export const menuItems: MenuItem[] = [
     ],
   },
   {
-    title: "Request Form",
-    titleKey: "sidebar.requestForm.title",
-    icon: ClipboardList,
-    url: "/request-form/purchase",
-    hasSubSidebar: false,
-  },
-  {
     title: "Digital Marketing",
     titleKey: "sidebar.digitalMarketing.title",
     icon: Megaphone,
@@ -173,6 +166,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.tools.pricingTools.description",
       },
     ],
+  },
+  {
+    title: "Request Form",
+    titleKey: "sidebar.requestForm.title",
+    icon: ClipboardList,
+    url: "/request-form/purchase",
+    hasSubSidebar: false,
   },
   {
     title: "Subscription",

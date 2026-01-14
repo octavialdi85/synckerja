@@ -41,7 +41,20 @@ const PurchaseRequestForm = () => {
   const form = useForm<PurchaseRequestFormData>({
     resolver: zodResolver(purchaseRequestSchema),
     defaultValues: {
+      purchaseType: '',
+      requestTitle: '',
+      amountIdr: '',
       isRecurring: false,
+      recurringFrequency: '',
+      description: '',
+      companyBenefit: '',
+      productivityImpact: '',
+      efficiencyImpact: '',
+      expectedOutcome: '',
+      vendorName: '',
+      purchaseLink: '',
+      accountUsername: '',
+      accountPassword: '',
     },
   });
 

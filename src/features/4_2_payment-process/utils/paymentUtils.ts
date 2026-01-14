@@ -5,7 +5,7 @@ export const filterPaymentRequests = (
   requests: PurchaseRequest[],
   filters: PaymentFiltersType
 ): PurchaseRequest[] => {
-  // First filter only approved requests
+  // Filter only approved requests (include both paid and unpaid for history)
   const approvedRequests = requests.filter(req => req.status === 'approved');
   
   return approvedRequests.filter((request) => {
@@ -23,13 +23,13 @@ export const filterPaymentRequests = (
 
     // Status filter
     if (filters.status && filters.status !== 'all') {
-      if (filters.status === 'paid' && !request.paid_at) {
+      if (filters.status === 'paid' && (!request.paid_at && request.payment_status !== 'paid')) {
         return false;
       }
       if (filters.status === 'processing' && request.payment_status !== 'processing') {
         return false;
       }
-      if (filters.status === 'pending' && (request.paid_at || request.payment_status === 'processing')) {
+      if (filters.status === 'pending' && (request.paid_at || request.payment_status === 'paid' || request.payment_status === 'processing')) {
         return false;
       }
     }
