@@ -37,7 +37,7 @@ export const IncomeVsExpensesChart = () => {
       <Card className="bg-white border-0 shadow-sm">
         <CardContent className="p-4">
           <h3 className="text-lg font-semibold text-gray-800 mb-3">Income vs. Expenses</h3>
-          <div className="h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+          <div className="h-80 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
             <div className="text-center">
               <div className="animate-pulse">
                 <div className="h-4 bg-gray-300 rounded w-24 mb-2 mx-auto"></div>
@@ -69,7 +69,7 @@ export const IncomeVsExpensesChart = () => {
               </div>
             </div>
           </div>
-          <div className="h-48 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+          <div className="h-80 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
             <div className="text-center">
               <div className="text-3xl mb-2">📊</div>
               <p className="text-gray-500 text-sm font-medium">No financial data available</p>
@@ -98,7 +98,7 @@ export const IncomeVsExpensesChart = () => {
           </div>
         </div>
         
-        <div className="h-48">
+        <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}

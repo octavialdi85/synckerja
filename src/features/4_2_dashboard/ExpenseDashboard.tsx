@@ -27,6 +27,40 @@ import { ExpenseCategoryCrudModal } from './ExpenseCategoryCrudModal';
 import { HeaderAndTab } from './HeaderAndTab';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { ExpenseTableFooter } from './ExpenseTableFooter';
+import { supabase } from '@/integrations/supabase/client';
+
+// Helper function to handle invoice file viewing (same as payment-process page)
+// Uses createSignedUrl instead of getPublicUrl because the bucket may not be public
+const handleViewInvoice = async (filePath: string | null | undefined) => {
+  if (!filePath) {
+    toast.error('Invoice file path not found');
+    return;
+  }
+  
+  // If already a full URL, open directly
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    window.open(filePath, '_blank');
+    return;
+  }
+  
+  try {
+    // Use purchase-documents bucket (same as PaymentTable.tsx)
+    const { data, error } = await supabase.storage
+      .from('purchase-documents')
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      toast.error('Failed to generate invoice URL. Please try again.');
+      return;
+    }
+
+    window.open(data.signedUrl, '_blank');
+  } catch (error: any) {
+    console.error('Error viewing invoice:', error);
+    toast.error('Failed to open invoice. Please try again.');
+  }
+};
 
 export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -395,21 +429,24 @@ export function ExpenseDashboard() {
     };
 
   return (
-    <div className="flex flex-1 min-h-0">
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4">
-        <div className="h-full flex flex-col overflow-hidden">
-          {/* Header and Tabs */}
-          <div className="flex-shrink-0 mb-1">
-            <HeaderAndTab 
-              activeTab={activeTab} 
-              onTabChange={handleTabChange} 
-            />
-          </div>
-          
-          <div className="flex-1 min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
-            <div className="p-2 bg-gradient-to-br from-gray-50 to-white">
+    <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="flex flex-1 min-h-0">
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* Header and Tabs */}
+            <div className="flex-shrink-0 mb-1">
+              <HeaderAndTab 
+                activeTab={activeTab} 
+                onTabChange={handleTabChange} 
+              />
+            </div>
+            
+            {/* Content Area - Scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
+              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col">
               {/* Header Card */}
-      <Card className="mb-4 bg-blue-600 text-white border-0">
+      <Card className="mb-4 bg-blue-600 text-white border-0 w-full">
         <CardContent className="p-3">
           <div className="flex justify-between items-center">
             <div>
@@ -620,11 +657,11 @@ export function ExpenseDashboard() {
       
 
       {/* Table Section */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1">
         {/* Table Header with Search and Filters */}
-        <div className="px-3 py-2 border-b bg-gray-50 flex-shrink-0">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
+        <div className="px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
+          <div className="flex justify-between items-center gap-2 flex-wrap">
+            <div className="flex items-center space-x-4 flex-wrap min-w-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -678,7 +715,7 @@ export function ExpenseDashboard() {
         </div>
 
         {/* Table */}
-        <div className="flex-1 min-h-0 seamless-scroll overflow-x-auto overflow-y-auto">
+        <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[1400px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
@@ -782,7 +819,7 @@ export function ExpenseDashboard() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
                               {expense.receipt_url && (
-                                <DropdownMenuItem onClick={() => window.open(expense.receipt_url!, '_blank')}>
+                                <DropdownMenuItem onClick={() => handleViewInvoice(expense.receipt_url)}>
                                   <Receipt className="h-4 w-4 mr-2 text-gray-600" />
                                   {isPaidPurchaseRequest ? 'View Invoice' : 'View Receipt'}
                                 </DropdownMenuItem>
@@ -818,6 +855,8 @@ export function ExpenseDashboard() {
           isLoading={isLoading || isLoadingPurchaseRequests}
         />
       </div>
+              </div>
+            </div>
 
       {/* Add Expense Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
@@ -1221,7 +1260,7 @@ export function ExpenseDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(selectedExpense.receipt_url!, '_blank')}
+                      onClick={() => handleViewInvoice(selectedExpense.receipt_url)}
                     >
                       <Receipt className="h-4 w-4 mr-2" />
                       View Receipt
@@ -1274,7 +1313,6 @@ export function ExpenseDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-            </div>
           </div>
         </div>
       </div>

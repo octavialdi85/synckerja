@@ -137,25 +137,29 @@ export function IncomeDashboard() {
 
   if (metricsLoading || transactionsLoading || monthlyLoading) {
     return (
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4">
-          <div className="h-full flex flex-col overflow-hidden">
-            {/* Header and Tabs */}
-            <div className="flex-shrink-0 mb-1">
-              <HeaderAndTab 
-                activeTab={activeTab} 
-                onTabChange={handleTabChange} 
-              />
-            </div>
-            
-            <div className="flex-1 min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
-              <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
-                <div className="animate-pulse">
-                  <div className="h-8 bg-gray-200 rounded mb-4 w-48"></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="bg-white p-4 rounded-lg h-24"></div>
-                    ))}
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="flex flex-1 min-h-0">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Header and Tabs */}
+              <div className="flex-shrink-0 mb-1">
+                <HeaderAndTab 
+                  activeTab={activeTab} 
+                  onTabChange={handleTabChange} 
+                />
+              </div>
+              
+              {/* Content Area - Scrollable */}
+              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
+                <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+                  <div className="animate-pulse">
+                    <div className="h-8 bg-gray-200 rounded mb-4 w-48"></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="bg-white p-4 rounded-lg h-24"></div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -167,19 +171,22 @@ export function IncomeDashboard() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4">
-        <div className="h-full flex flex-col overflow-hidden">
-          {/* Header and Tabs */}
-          <div className="flex-shrink-0 mb-1">
-            <HeaderAndTab 
-              activeTab={activeTab} 
-              onTabChange={handleTabChange} 
-            />
-          </div>
-          
-          <div className="flex-1 min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
-            <div className="p-2 bg-gradient-to-br from-gray-50 to-white">
+    <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="flex flex-1 min-h-0">
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* Header and Tabs */}
+            <div className="flex-shrink-0 mb-1">
+              <HeaderAndTab 
+                activeTab={activeTab} 
+                onTabChange={handleTabChange} 
+              />
+            </div>
+            
+            {/* Content Area - Scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
+              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col">
               {/* Compact Header Controls */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                 <h2 className="text-lg font-bold text-gray-800">Income Analytics</h2>
@@ -415,6 +422,7 @@ export function IncomeDashboard() {
 
               {/* Real Income vs Expenses Chart */}
               <IncomeVsExpensesChart />
+              </div>
             </div>
           </div>
         </div>
