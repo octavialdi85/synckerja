@@ -71,6 +71,8 @@ export interface PurchaseRequest {
   paid_at?: string;
   payment_status?: string;
   invoice_file_path?: string;
+  paid_by_user_id?: string;
+  paid_by_name?: string;
   expense_types?: {
     name: string;
     description?: string;
@@ -343,12 +345,18 @@ export const useUpdatePurchaseRequestStatus = () => {
         // When invoice is uploaded, automatically mark as paid
         updateData.paid_at = new Date().toISOString();
         updateData.payment_status = 'paid';
+        // Save who processed the payment
+        updateData.paid_by_user_id = user.id;
+        updateData.paid_by_name = currentEmployee?.profile_name || user.email || 'Unknown';
       }
 
       // If marking as paid, add paid_at timestamp
       if (markAsPaid || approvalNotes?.includes('Payment processed') || approvalNotes?.includes('Marked as paid')) {
         updateData.paid_at = new Date().toISOString();
         updateData.payment_status = 'paid';
+        // Save who processed the payment
+        updateData.paid_by_user_id = user.id;
+        updateData.paid_by_name = currentEmployee?.profile_name || user.email || 'Unknown';
       }
 
       if (status === 'approved') {

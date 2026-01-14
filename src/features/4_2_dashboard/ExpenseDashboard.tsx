@@ -26,6 +26,7 @@ import { ExpenseTypeCrudModal } from './ExpenseTypeCrudModal';
 import { ExpenseCategoryCrudModal } from './ExpenseCategoryCrudModal';
 import { HeaderAndTab } from './HeaderAndTab';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
+import { ExpenseTableFooter } from './ExpenseTableFooter';
 
 export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -619,66 +620,65 @@ export function ExpenseDashboard() {
       
 
       {/* Table Section */}
-      <Card>
-        <CardContent className="p-0">
-          {/* Table Header with Search and Filters */}
-          <div className="p-3 border-b bg-white">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search expenses..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 w-64"
-                  />
-                </div>
-                
-                <Select defaultValue="all-dates">
-                  <SelectTrigger className="w-32">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Dates" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-dates">All Dates</SelectItem>
-                    <SelectItem value="this-month">This Month</SelectItem>
-                    <SelectItem value="last-month">Last Month</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select defaultValue="all-depts">
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="All Depts" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-depts">All Depts</SelectItem>
-                    <SelectItem value="hr">HR</SelectItem>
-                    <SelectItem value="it">IT</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select defaultValue="all-types">
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-types">All Types</SelectItem>
-                    <SelectItem value="recurring">Recurring</SelectItem>
-                    <SelectItem value="one-time">One-time</SelectItem>
-                  </SelectContent>
-                </Select>
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
+        {/* Table Header with Search and Filters */}
+        <div className="px-3 py-2 border-b bg-gray-50 flex-shrink-0">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search expenses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64"
+                />
               </div>
+              
+              <Select defaultValue="all-dates">
+                <SelectTrigger className="w-32">
+                  <CalendarIcon className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="All Dates" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-dates">All Dates</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
+                  <SelectItem value="last-month">Last Month</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Expense
-              </Button>
+              <Select defaultValue="all-depts">
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="All Depts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-depts">All Depts</SelectItem>
+                  <SelectItem value="hr">HR</SelectItem>
+                  <SelectItem value="it">IT</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select defaultValue="all-types">
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-types">All Types</SelectItem>
+                  <SelectItem value="recurring">Recurring</SelectItem>
+                  <SelectItem value="one-time">One-time</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto seamless-scroll" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Expense
+            </Button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 min-h-0 seamless-scroll overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[1400px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
@@ -810,8 +810,14 @@ export function ExpenseDashboard() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+
+        {/* Footer */}
+        <ExpenseTableFooter 
+          totalExpenses={totalExpenses}
+          totalCount={allExpenses.length}
+          isLoading={isLoading || isLoadingPurchaseRequests}
+        />
+      </div>
 
       {/* Add Expense Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>

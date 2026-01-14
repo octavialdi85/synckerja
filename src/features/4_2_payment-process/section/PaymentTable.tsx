@@ -168,11 +168,32 @@ export const PaymentTable = ({
     }
   };
 
-  const getInvoiceUrl = (filePath: string) => {
-    const { data } = supabase.storage
-      .from('purchase-documents')
-      .getPublicUrl(filePath);
-    return data.publicUrl;
+  const handleViewInvoice = async (e: React.MouseEvent, filePath: string) => {
+    e.preventDefault();
+    try {
+      const { data, error } = await supabase.storage
+        .from('purchase-documents')
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        toast({
+          title: "Error",
+          description: "Failed to generate invoice URL. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      window.open(data.signedUrl, '_blank');
+    } catch (error: any) {
+      console.error('Error viewing invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to open invoice. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {
@@ -199,24 +220,27 @@ export const PaymentTable = ({
       </div>
 
       {/* Table Content */}
-      <div className="flex-1 overflow-auto seamless-scroll">
-        <Table>
+      <div className="flex-1 overflow-x-auto seamless-scroll" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <Table className="min-w-[1400px]">
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="h-8 px-3 text-xs font-medium">Request</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Requester</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Department</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Amount</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Type</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Status</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium">Date</TableHead>
-              <TableHead className="h-8 px-3 text-xs font-medium w-16">Actions</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Request</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Requester</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Department</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Amount</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Type</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Status</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Recurring</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Approval Date</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Paid Date</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Paid By</TableHead>
+              <TableHead className="h-8 px-3 text-xs font-medium w-16 whitespace-nowrap">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paymentRequests.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-16 text-center">
+                <TableCell colSpan={11} className="h-16 text-center">
                   <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500 mb-1">No payment requests found</p>
                   <p className="text-xs text-gray-400">Approved requests will appear here</p>
@@ -257,12 +281,7 @@ export const PaymentTable = ({
                     </div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-gray-900">{formatToRupiah(request.amount_idr)}</div>
-                      {request.is_recurring && (
-                        <Badge variant="outline" className="text-xs">Recurring</Badge>
-                      )}
-                    </div>
+                    <div className="font-bold text-gray-900">{formatToRupiah(request.amount_idr)}</div>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <Badge variant="outline" className="text-xs">
@@ -272,13 +291,41 @@ export const PaymentTable = ({
                   <TableCell className="px-3 py-2 text-xs">
                     {getStatusBadge(request)}
                   </TableCell>
+                  <TableCell className="px-3 py-2 text-xs whitespace-nowrap">
+                    <Badge variant={request.is_recurring ? 'default' : 'secondary'}>
+                      {request.is_recurring ? 'Recurring' : 'One-time'}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="px-3 py-2 text-xs text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded-md bg-gray-100">
-                        <Calendar className="h-3 w-3 text-gray-600" />
+                    {request.approved_at ? (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-md bg-gray-100">
+                          <Calendar className="h-3 w-3 text-gray-600" />
+                        </div>
+                        <span>{format(new Date(request.approved_at), 'MMM dd, yyyy')}</span>
                       </div>
-                      <span>{format(new Date(request.approved_at || request.created_at || ''), 'MMM dd, yyyy')}</span>
-                    </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-gray-600">
+                    {request.paid_at ? (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-md bg-gray-100">
+                          <Calendar className="h-3 w-3 text-gray-600" />
+                        </div>
+                        <span>{format(new Date(request.paid_at), 'MMM dd, yyyy')}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-gray-600">
+                    {request.paid_by_name ? (
+                      <span className="font-medium">{request.paid_by_name}</span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <button
@@ -549,10 +596,9 @@ export const PaymentTable = ({
                       <div>
                         <p className="text-xs text-slate-500 mb-1">Invoice</p>
                         <a
-                          href={getInvoiceUrl(selectedRequest.invoice_file_path)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-700 hover:underline text-sm flex items-center gap-2"
+                          href="#"
+                          onClick={(e) => handleViewInvoice(e, selectedRequest.invoice_file_path!)}
+                          className="text-blue-600 hover:text-blue-700 hover:underline text-sm flex items-center gap-2 cursor-pointer"
                         >
                           <FileText className="h-4 w-4" />
                           View Invoice
