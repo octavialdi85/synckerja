@@ -14,8 +14,6 @@ const parseJobBenefits = (benefits: any): JobBenefit[] => {
   return safeJSONParse(benefits, []);
 };
 
-// Helper constant to return null (to avoid parsing issues)
-const NULL_RESULT: RecruitmentLink | null = null;
 
 // Generate a unique token for recruitment links
 export const generateRecruitmentToken = (): string => {
@@ -78,7 +76,8 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
 
     if (!data) {
       console.warn('No recruitment link found for token:', token);
-      return NULL_RESULT;
+      const emptyResult: RecruitmentLink | null = null;
+      return emptyResult;
     }
 
     console.log('Job data fetched successfully');
@@ -110,51 +109,49 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
     .in('job_openings.status', ['active', 'draft'])
     .maybeSingle();
 
+  let result: RecruitmentLink | null = null;
+
   if (linkError || !linkData) {
     console.error('Error fetching recruitment link:', linkError);
-    return NULL_RESULT;
-  }
-
-  if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
+  } else if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
-    return NULL_RESULT;
-  }
+  } else {
+    const jobData = (linkData as any).job_openings;
+    if (jobData) {
+      // Increment clicks asynchronously - ignore errors for public access
+      void Promise.all([
+        incrementJobClicks(jobData.id).catch(() => console.log('Click increment failed - continuing')),
+        incrementRecruitmentLinkClicks(linkData.id).catch(() => console.log('Link click increment failed - continuing'))
+      ]).catch(() => {
+        console.log('Click tracking failed - continuing with job data');
+      });
 
-  const jobData = (linkData as any).job_openings;
-  if (jobData == null) {
-    console.warn('No active job found');
-    return NULL_RESULT;
-  }
-
-  // Increment clicks asynchronously - ignore errors for public access
-  void Promise.all([
-    incrementJobClicks(jobData.id).catch(() => console.log('Click increment failed - continuing')),
-    incrementRecruitmentLinkClicks(linkData.id).catch(() => console.log('Link click increment failed - continuing'))
-  ]).catch(() => {
-    // Ignore errors in click tracking for public access
-    console.log('Click tracking failed - continuing with job data');
-  });
-
-  // Return the data with proper structure
-  return {
-    ...linkData,
-    status: linkData.status as 'active' | 'inactive',
-    job_openings: {
-      ...jobData,
-      benefits: parseJobBenefits(jobData.benefits),
-      organizations: jobData.organizations || {
-        company_name: 'Company Name',
-        industry: 'Technology',
-        address: '',
-        website: '',
-        description: ''
-      },
-      departments: jobData.departments || { name: 'General' },
-      job_positions: jobData.job_positions || { name: 'Position' },
-      job_levels: jobData.job_levels || { name: 'Level' },
-      employee_statuses: jobData.employee_statuses || { name: 'Full-time' }
+      // Return the data with proper structure
+      result = {
+        ...linkData,
+        status: linkData.status as 'active' | 'inactive',
+        job_openings: {
+          ...jobData,
+          benefits: parseJobBenefits(jobData.benefits),
+          organizations: jobData.organizations || {
+            company_name: 'Company Name',
+            industry: 'Technology',
+            address: '',
+            website: '',
+            description: ''
+          },
+          departments: jobData.departments || { name: 'General' },
+          job_positions: jobData.job_positions || { name: 'Position' },
+          job_levels: jobData.job_levels || { name: 'Level' },
+          employee_statuses: jobData.employee_statuses || { name: 'Full-time' }
+        }
+      };
+    } else {
+      console.warn('No active job found');
     }
-  };
+  }
+
+  return result;
 }
 
 export const incrementRecruitmentLinkClicks = async (linkId: string): Promise<void> => {
