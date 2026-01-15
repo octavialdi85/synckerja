@@ -4,7 +4,6 @@ import { getCurrentOrganizationId } from '@/features/1-login/hooks/useCurrentOrg
 import { RecruitmentLink, CreateRecruitmentLinkData } from './recruitmentLinkTypes';
 import { JobBenefit } from './jobOpeningTypes';
 import { incrementJobClicks } from './jobOpeningUtils';
-import { APP_CONSTANTS } from '@/utils/optimizedConstants';
 import { safeJSONParse } from '@/features/share/hooks/optimizedHelpers';
 
 // Helper function to safely convert Json to JobBenefit[]
@@ -40,7 +39,7 @@ export const createRecruitmentLink = async (data: CreateRecruitmentLinkData): Pr
     .single();
 
   if (error) throw error;
-  return recruitmentLink as RecruitmentLink;
+  return (recruitmentLink as unknown) as RecruitmentLink;
 };
 
 export const getRecruitmentLinkByJobId = async (jobOpeningId: string): Promise<RecruitmentLink | null> => {
@@ -57,7 +56,7 @@ export const getRecruitmentLinkByJobId = async (jobOpeningId: string): Promise<R
     .maybeSingle();
 
   if (error) throw error;
-  return data as RecruitmentLink | null;
+  return (data as unknown) as RecruitmentLink | null;
 };
 
 // Optimized function using the new database function
@@ -116,14 +115,15 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
       return null;
     }
 
-    const linkData = queryResult.data;
+    const linkDataUnknown: unknown = queryResult.data;
+    const linkDataObj: Record<string, unknown> = linkDataUnknown as Record<string, unknown>;
 
-    if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
+    const expiresAt = linkDataObj.expires_at;
+    if (expiresAt && typeof expiresAt === 'string' && new Date(expiresAt) < new Date()) {
       console.warn('Recruitment link has expired');
       return null;
     }
 
-    const linkDataObj: Record<string, unknown> = linkData as Record<string, unknown>;
     const jobData = linkDataObj.job_openings;
     
     if (!jobData || typeof jobData !== 'object' || jobData === null) {
@@ -134,7 +134,7 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
     const jobDataObj: Record<string, unknown> = jobData as Record<string, unknown>;
 
     const jobId = typeof jobDataObj.id === 'string' ? jobDataObj.id : '';
-    const linkId = typeof linkData.id === 'string' ? linkData.id : '';
+    const linkId = typeof linkDataObj.id === 'string' ? linkDataObj.id : '';
 
     // Increment clicks asynchronously - ignore errors for public access
     if (jobId && linkId) {
@@ -147,12 +147,13 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
     }
 
     // Return the data with proper structure
-    const linkStatus = linkData.status === 'active' || linkData.status === 'inactive' 
-      ? linkData.status 
+    const linkStatusValue = linkDataObj.status;
+    const linkStatus = linkStatusValue === 'active' || linkStatusValue === 'inactive' 
+      ? linkStatusValue 
       : 'active';
 
     const result: RecruitmentLink = {
-      ...linkData,
+      ...linkDataObj,
       status: linkStatus,
       job_openings: {
         ...jobDataObj,
@@ -170,7 +171,7 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
         job_levels: jobDataObj.job_levels || { name: 'Level' },
         employee_statuses: jobDataObj.employee_statuses || { name: 'Full-time' }
       }
-    };
+    } as RecruitmentLink;
 
     return result;
   } catch (error) {
@@ -180,7 +181,8 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
 }
 
 export const incrementRecruitmentLinkClicks = async (linkId: string): Promise<void> => {
-  const { error } = await supabase.rpc('increment_recruitment_link_clicks', { link_id: linkId });
+  const rpcName: any = 'increment_recruitment_link_clicks';
+  const { error } = await supabase.rpc(rpcName, { link_id: linkId });
   if (error) {
     console.error('Error incrementing recruitment link clicks:', error);
     throw error;
@@ -188,7 +190,8 @@ export const incrementRecruitmentLinkClicks = async (linkId: string): Promise<vo
 };
 
 export const incrementRecruitmentLinkSubmissions = async (linkId: string): Promise<void> => {
-  const { error } = await supabase.rpc('increment_recruitment_link_submissions', { link_id: linkId });
+  const rpcName: any = 'increment_recruitment_link_submissions';
+  const { error } = await supabase.rpc(rpcName, { link_id: linkId });
   if (error) {
     console.error('Error incrementing recruitment link submissions:', error);
     throw error;
@@ -211,14 +214,21 @@ export const getRecruitmentLinkAnalytics = async (): Promise<any> => {
 
   if (error) throw error;
 
-  const totalClicks = data?.reduce((sum, link) => sum + (link.clicks || 0), 0) || 0;
-  const totalSubmissions = data?.reduce((sum, link) => sum + (link.submissions || 0), 0) || 0;
+  const dataArray = (data as unknown) as Array<{
+    id: string;
+    clicks?: number;
+    submissions?: number;
+    job_openings?: { job_title?: string };
+  }> | null;
+
+  const totalClicks = dataArray?.reduce((sum, link) => sum + (link.clicks || 0), 0) || 0;
+  const totalSubmissions = dataArray?.reduce((sum, link) => sum + (link.submissions || 0), 0) || 0;
 
   return {
     total_clicks: totalClicks,
     total_submissions: totalSubmissions,
     conversion_rate: totalClicks ? (totalSubmissions / totalClicks * 100) : 0,
-    top_performing_links: data?.map(link => ({
+    top_performing_links: dataArray?.map(link => ({
       id: link.id,
       job_title: link.job_openings?.job_title || 'Unknown',
       clicks: link.clicks || 0,
