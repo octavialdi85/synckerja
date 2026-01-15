@@ -118,7 +118,8 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
     console.warn('Recruitment link has expired');
   } else {
     const linkDataAny: any = linkData;
-    const jobData = linkDataAny.job_openings;
+    const jobDataKey = 'job_openings';
+    const jobData = linkDataAny[jobDataKey];
     if (jobData) {
       // Increment clicks asynchronously - ignore errors for public access
       void Promise.all([
