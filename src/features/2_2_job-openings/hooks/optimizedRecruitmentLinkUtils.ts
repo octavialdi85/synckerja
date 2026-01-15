@@ -133,17 +133,18 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
 
     const jobDataObj: Record<string, unknown> = jobData as Record<string, unknown>;
 
-    const jobId = typeof jobDataObj.id === 'string' ? jobDataObj.id : '';
-    const linkId = typeof linkDataObj.id === 'string' ? linkDataObj.id : '';
-
     // Increment clicks asynchronously - ignore errors for public access
-    if (jobId && linkId) {
-      void Promise.all([
-        incrementJobClicks(jobId).catch(() => console.log('Click increment failed - continuing')),
-        incrementRecruitmentLinkClicks(linkId).catch(() => console.log('Link click increment failed - continuing'))
-      ]).catch(() => {
-        console.log('Click tracking failed - continuing with job data');
-      });
+    try {
+      const jobIdValue = jobDataObj.id;
+      const linkIdValue = linkDataObj.id;
+      if (typeof jobIdValue === 'string' && typeof linkIdValue === 'string') {
+        void Promise.all([
+          incrementJobClicks(jobIdValue).catch(() => {}),
+          incrementRecruitmentLinkClicks(linkIdValue).catch(() => {})
+        ]).catch(() => {});
+      }
+    } catch {
+      // Ignore click tracking errors
     }
 
     // Return the data with proper structure
@@ -152,12 +153,14 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
       ? linkStatusValue 
       : 'active';
 
+    const jobIdFinal = typeof jobDataObj.id === 'string' ? jobDataObj.id : '';
+
     const result: RecruitmentLink = {
       ...linkDataObj,
       status: linkStatus,
       job_openings: {
         ...jobDataObj,
-        id: jobId,
+        id: jobIdFinal,
         benefits: parseJobBenefits(jobDataObj.benefits),
         organizations: jobDataObj.organizations || {
           company_name: 'Company Name',
