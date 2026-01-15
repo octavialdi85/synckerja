@@ -129,12 +129,12 @@ const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | n
 
   const jobData = linkData.job_openings;
   if (!jobData) {
-    console.warn('⚠️ No active job found');
+    console.warn('No active job found');
     return null;
   }
 
   // Increment clicks asynchronously - ignore errors for public access
-  Promise.all([
+  void Promise.all([
     incrementJobClicks(jobData.id).catch(() => console.log('Click increment failed - continuing')),
     incrementRecruitmentLinkClicks(linkData.id).catch(() => console.log('Link click increment failed - continuing'))
   ]).catch(() => {
