@@ -14,6 +14,11 @@ const parseJobBenefits = (benefits: any): JobBenefit[] => {
   return safeJSONParse(benefits, []);
 };
 
+// Helper function to return null (to avoid parsing issues)
+const returnNull = (): RecruitmentLink | null => {
+  return null;
+};
+
 // Generate a unique token for recruitment links
 export const generateRecruitmentToken = (): string => {
   const timestamp = Date.now().toString(36);
@@ -109,18 +114,18 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
 
   if (linkError || !linkData) {
     console.error('Error fetching recruitment link:', linkError);
-    return null;
+    return returnNull();
   }
 
   if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
-    return null;
+    return returnNull();
   }
 
   const jobData = (linkData as any).job_openings;
   if (jobData == null) {
     console.warn('No active job found');
-    return null;
+    return returnNull();
   }
 
   // Increment clicks asynchronously - ignore errors for public access
