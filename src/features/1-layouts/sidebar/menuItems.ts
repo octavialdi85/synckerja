@@ -52,6 +52,13 @@ export const menuItems: MenuItem[] = [
         description: "Manage user access permissions and page restrictions",
         descriptionKey: "sidebar.humanResources.pageAccess.description",
       },
+      {
+        title: "Recruitment",
+        titleKey: "sidebar.humanResources.recruitment.title",
+        url: "/recruitment",
+        description: "Manage recruitment dashboard and job openings",
+        descriptionKey: "sidebar.humanResources.recruitment.description",
+      },
     ],
   },
   {

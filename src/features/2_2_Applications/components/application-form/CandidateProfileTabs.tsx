@@ -1,0 +1,718 @@
+
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
+import { PersonalDetailsTab } from './PersonalDetailsTab';
+import { AddressApplicationTab } from './AddressApplicationTab';
+import { DocumentsTabNew } from './DocumentsTabNew';
+import { EducationTab } from './EducationTab';
+import { InformalEducationTab } from './InformalEducationTab';
+import { WorkExperienceTab } from './WorkExperienceTab';
+import { FamilyMembersTab } from './FamilyMembersTab';
+import { CandidateReviewsTab } from './CandidateReviewsTab';
+import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/features/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/features/ui/use-toast';
+
+// Layout constants - COMPACT VERSION
+const LAYOUT_CONSTANTS = {
+  padding: {
+    md: 'p-3'
+  }
+};
+
+// Professional colors
+const PROFESSIONAL_COLORS = {
+  background: {
+    primary: 'bg-white',
+    secondary: 'bg-gray-50'
+  },
+  text: {
+    heading: 'text-gray-900',
+    secondary: 'text-gray-600'
+  },
+  border: {
+    default: 'border-gray-200',
+    muted: 'border-gray-100'
+  },
+  shadow: {
+    sm: 'shadow-sm'
+  }
+};
+
+interface CandidateProfileTabsProps {
+  candidate: any;
+  onUpdate: (data: any) => void;
+  isReadOnly?: boolean;
+  hideReviews?: boolean;
+  onStepValidation?: (stepId: string, isValid: boolean) => void;
+  onFinalSubmit?: () => void;
+  isHRView?: boolean; // For HR/admin view - hide submit button
+}
+
+export const CandidateProfileTabs = ({ 
+  candidate, 
+  onUpdate, 
+  isReadOnly = false,
+  hideReviews = false,
+  onStepValidation,
+  onFinalSubmit,
+  isHRView = false
+}: CandidateProfileTabsProps) => {
+  const [activeTab, setActiveTab] = useState('personal');
+  const [stepValidations, setStepValidations] = useState<Record<string, boolean>>({});
+  const { toast } = useToast();
+  
+  // Use ref to store onStepValidation callback to prevent infinite loops
+  const onStepValidationRef = useRef(onStepValidation);
+  useEffect(() => {
+    onStepValidationRef.current = onStepValidation;
+  }, [onStepValidation]);
+
+  // Memoize tabs array to prevent recreation on every render
+  const tabs = useMemo(() => {
+    const baseTabs = [
+      {
+        id: 'personal',
+        label: 'Personal Info',
+        icon: User,
+        component: PersonalDetailsTab,
+        stepNumber: 1,
+        requiredFields: ['full_name', 'email', 'mobile_phone', 'birth_date', 'birth_place', 'gender', 'nik', 'religion', 'marital_status', 'nationality', 'blood_type']
+      },
+      {
+        id: 'address',
+        label: 'Address',
+        icon: MapPin,
+        component: AddressApplicationTab,
+        stepNumber: 2,
+        requiredFields: ['address', 'citizen_address', 'postal_code']
+      },
+      {
+        id: 'documents',
+        label: 'Documents',
+        icon: FileText,
+        component: DocumentsTabNew,
+        stepNumber: 3,
+        requiredFields: ['cv_file_path'] // At least CV should be uploaded
+      },
+      {
+        id: 'education',
+        label: 'Education',
+        icon: GraduationCap,
+        component: EducationTab,
+        stepNumber: 4,
+        requiredFields: [] // At least one education entry
+      },
+      {
+        id: 'informal-education',
+        label: 'Informal Education',
+        icon: Award,
+        component: InformalEducationTab,
+        stepNumber: 5,
+        requiredFields: [] // Optional
+      },
+      {
+        id: 'experience',
+        label: 'Experience',
+        icon: Briefcase,
+        component: WorkExperienceTab,
+        stepNumber: 6,
+        requiredFields: [] // At least one work experience entry
+      },
+      {
+        id: 'family',
+        label: 'Family',
+        icon: Users,
+        component: FamilyMembersTab,
+        stepNumber: 7,
+        requiredFields: [] // Optional but recommended
+      }
+    ];
+
+    // Reviews tab is for HRD only - shown when hideReviews is false (HR view)
+    if (!hideReviews) {
+      baseTabs.push({
+        id: 'reviews',
+        label: 'Reviews',
+        icon: Star,
+        component: CandidateReviewsTab,
+        stepNumber: 8,
+        requiredFields: []
+      });
+    }
+
+    return baseTabs;
+  }, [hideReviews]);
+
+  // State for education, experience, and family validation
+  const [hasEducation, setHasEducation] = useState(false);
+  const [hasExperience, setHasExperience] = useState(false);
+  const [requiredDocumentsUploaded, setRequiredDocumentsUploaded] = useState(false);
+  const [hasFamilyMember, setHasFamilyMember] = useState(false);
+
+  // Check education, experience, and required documents
+  useEffect(() => {
+    if (!candidate?.id) return;
+
+    const checkData = async () => {
+      try {
+        const [eduResult, expResult, docsResult, familyResult] = await Promise.all([
+          supabase
+            .from('candidate_educations')
+            .select('id')
+            .eq('candidate_profile_id', candidate.id)
+            .limit(1),
+          supabase
+            .from('candidate_work_experiences')
+            .select('id')
+            .eq('candidate_profile_id', candidate.id)
+            .limit(1),
+          supabase
+            .from('candidate_documents')
+            .select('document_type')
+            .eq('candidate_profile_id', candidate.id),
+          supabase
+            .from('candidate_family_members')
+            .select('id')
+            .eq('candidate_profile_id', candidate.id)
+            .limit(1)
+        ]);
+
+        setHasEducation((eduResult.data?.length || 0) > 0);
+        setHasExperience((expResult.data?.length || 0) > 0);
+        setHasFamilyMember((familyResult.data?.length || 0) > 0);
+        
+        // Check if all required documents are uploaded (CV, KTP, Ijazah)
+        const requiredDocTypes = ['cv', 'ktp', 'ijazah'];
+        const uploadedDocTypes = (docsResult.data || []).map((doc: any) => doc.document_type || '');
+        const allRequiredUploaded = requiredDocTypes.every(type => uploadedDocTypes.includes(type));
+        setRequiredDocumentsUploaded(allRequiredUploaded);
+      } catch (error) {
+        console.error('Error checking data:', error);
+      }
+    };
+
+    checkData();
+  }, [candidate?.id]);
+
+  // Validate step based on candidate data
+  const validateStep = useCallback((stepId: string, requiredFields: string[]) => {
+    if (!candidate) return false;
+    
+    if (stepId === 'personal') {
+      return requiredFields.every(field => {
+        const value = candidate[field];
+        return value && value.toString().trim() !== '';
+      });
+    }
+    
+    if (stepId === 'address') {
+      return requiredFields.every(field => {
+        const value = candidate[field];
+        return value && value.toString().trim() !== '';
+      });
+    }
+    
+    if (stepId === 'documents') {
+      // Check if all required documents are uploaded (CV, KTP, Ijazah)
+      return requiredDocumentsUploaded;
+    }
+    
+    if (stepId === 'education') {
+      // Check if at least one education entry exists
+      return hasEducation;
+    }
+    
+    if (stepId === 'experience') {
+      // Check if at least one work experience entry exists
+      return hasExperience;
+    }
+    
+    if (stepId === 'family') {
+      // Check if at least one family member exists
+      return hasFamilyMember;
+    }
+    
+    // Other steps are optional
+    return true;
+  }, [candidate, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember]);
+
+  // Check if current step is valid
+  const currentStepIndex = tabs.findIndex(tab => tab.id === activeTab);
+  const currentTab = tabs[currentStepIndex];
+  const isCurrentStepValid = currentTab ? validateStep(currentTab.id, currentTab.requiredFields || []) : false;
+  const isLastStep = currentStepIndex === tabs.length - 1;
+  
+  // Debug logging removed to prevent infinite loop
+
+  // Handle next step
+  const handleNext = useCallback(() => {
+    if (currentStepIndex < tabs.length - 1) {
+      const nextTab = tabs[currentStepIndex + 1];
+      setActiveTab(nextTab.id);
+    }
+  }, [currentStepIndex, tabs]);
+
+  // Handle final submit
+  const handleSubmit = useCallback(async () => {
+    if (!candidate?.id) return;
+    
+    try {
+      const { error } = await supabase.from('candidate_profiles').update({
+        profile_completed: true,
+        submitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq('id', candidate.id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Profile Berhasil Disubmit!",
+        description: "Terima kasih telah melengkapi profile. Profile Anda telah berhasil disubmit. Tim HR akan menghubungi Anda segera.",
+        duration: 5000
+      });
+      
+      // Update local candidate state
+      onUpdate({
+        ...candidate,
+        profile_completed: true,
+        submitted_at: new Date().toISOString()
+      });
+      
+      // Don't redirect - candidate should stay on the same page
+      // The profile is now read-only and shows success message
+      
+      if (onFinalSubmit) {
+        onFinalSubmit();
+      }
+    } catch (error) {
+      console.error('Error submitting profile:', error);
+      toast({
+        title: "Error",
+        description: "Gagal submit profile. Silakan coba lagi.",
+        variant: "destructive"
+      });
+    }
+  }, [candidate, toast, onFinalSubmit, onUpdate]);
+
+  // Update step validation when candidate data changes
+  useEffect(() => {
+    // Only validate if candidate exists
+    if (!candidate?.id) return;
+    
+    // Validate all tabs
+    const newValidations: Record<string, boolean> = {};
+    tabs.forEach(tab => {
+      const isValid = validateStep(tab.id, tab.requiredFields || []);
+      newValidations[tab.id] = isValid;
+    });
+    
+    // Update all validations at once to avoid multiple re-renders
+    setStepValidations(newValidations);
+    
+    // Call onStepValidation callback after state update (using ref to prevent infinite loop)
+    if (onStepValidationRef.current) {
+      tabs.forEach(tab => {
+        onStepValidationRef.current?.(tab.id, newValidations[tab.id] || false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidate?.id, validateStep, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember]);
+
+  // Simplified tab change handler - only allow if previous steps are valid
+  const handleTabChange = useCallback((tabId: string) => {
+    const targetIndex = tabs.findIndex(tab => tab.id === tabId);
+    const currentIndex = tabs.findIndex(tab => tab.id === activeTab);
+    
+    // Allow going back or to current step
+    if (targetIndex <= currentIndex) {
+      setActiveTab(tabId);
+      return;
+    }
+    
+    // Check if all previous steps are valid before allowing forward navigation
+    let canNavigate = true;
+    for (let i = 0; i < targetIndex; i++) {
+      const tab = tabs[i];
+      // Validate step using validateStep function which handles all cases including experience and family
+      const isValid = validateStep(tab.id, tab.requiredFields || []);
+      if (!isValid) {
+        canNavigate = false;
+        break;
+      }
+    }
+    
+    if (canNavigate) {
+      setActiveTab(tabId);
+    } else {
+      // Find which step is blocking navigation
+      const blockingStep = tabs.find((tab, index) => {
+        if (index < targetIndex) {
+          return !validateStep(tab.id, tab.requiredFields || []);
+        }
+        return false;
+      });
+      
+      let errorMessage = "Silakan lengkapi semua field yang wajib diisi pada step sebelumnya.";
+      if (blockingStep) {
+        if (blockingStep.id === 'experience') {
+          errorMessage = "Silakan tambahkan minimal 1 pengalaman kerja sebelum melanjutkan ke step berikutnya.";
+        } else if (blockingStep.id === 'family') {
+          errorMessage = "Silakan tambahkan minimal 1 anggota keluarga sebelum submit.";
+        } else if (blockingStep.id === 'documents') {
+          errorMessage = "Silakan upload semua dokumen wajib (CV, KTP, Ijazah) sebelum melanjutkan.";
+        } else if (blockingStep.id === 'education') {
+          errorMessage = "Silakan tambahkan minimal 1 pendidikan sebelum melanjutkan ke step berikutnya.";
+        } else if (blockingStep.id === 'personal') {
+          errorMessage = "Silakan lengkapi semua informasi personal yang wajib diisi.";
+        } else if (blockingStep.id === 'address') {
+          errorMessage = "Silakan lengkapi semua informasi alamat yang wajib diisi.";
+        }
+      }
+      
+      toast({
+        title: "Lengkapi step sebelumnya",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  }, [activeTab, tabs, validateStep, toast]);
+
+  return (
+    <div className="w-full h-full">
+      <Tabs 
+        value={activeTab} 
+        onValueChange={handleTabChange} 
+        className="w-full h-full flex flex-col"
+        onKeyDown={(e) => {
+          // Prevent keyboard navigation on Tabs component
+          if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
+        {/* Compact Tab Navigation */}
+        <div className={cn(
+          PROFESSIONAL_COLORS.background.secondary,
+          PROFESSIONAL_COLORS.border.default,
+          "border-b px-4 py-3 flex-shrink-0"
+        )}>
+          <TabsList className={cn(
+            "flex w-full gap-1 h-auto p-1 rounded-md flex-shrink-0 overflow-x-auto",
+            PROFESSIONAL_COLORS.background.primary,
+            PROFESSIONAL_COLORS.border.muted,
+            "border"
+          )}>
+            {tabs.map((tab, index) => {
+              const IconComponent = tab.icon;
+              const isCompleted = stepValidations[tab.id] || false;
+              const isActive = tab.id === activeTab;
+              
+              // Check if this tab can be accessed (all previous steps must be valid)
+              const tabIndex = tabs.findIndex(t => t.id === tab.id);
+              // Reviews tab is always accessible for HR view (no validation needed)
+              const isReviewsTab = tab.id === 'reviews';
+              // Allow access if:
+              // 1. It's the Reviews tab (always accessible for HR)
+              // 2. Tab is before or equal to current step (can go back)
+              // 3. All previous tabs are valid (can go forward)
+              const canAccessTab = isReviewsTab || tabIndex <= currentStepIndex || 
+                tabs.slice(0, tabIndex).every(t => {
+                  const isValid = validateStep(t.id, t.requiredFields || []);
+                  return isValid;
+                });
+              
+              return (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  tabIndex={-1}
+                  disabled={!canAccessTab}
+                  onClick={(e) => {
+                    // Reviews tab is always accessible - skip validation
+                    if (isReviewsTab) {
+                      return;
+                    }
+                    // Prevent click if tab is not accessible
+                    if (!canAccessTab) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Find which step is blocking
+                      const blockingStep = tabs.find((t, idx) => {
+                        if (idx < tabIndex) {
+                          return !validateStep(t.id, t.requiredFields || []);
+                        }
+                        return false;
+                      });
+                      
+                      let errorMessage = "Silakan lengkapi semua field yang wajib diisi pada step sebelumnya.";
+                      if (blockingStep) {
+                        if (blockingStep.id === 'experience') {
+                          errorMessage = "Silakan tambahkan minimal 1 pengalaman kerja sebelum melanjutkan ke step berikutnya.";
+                        } else if (blockingStep.id === 'documents') {
+                          errorMessage = "Silakan upload semua dokumen wajib (CV, KTP, Ijazah) sebelum melanjutkan.";
+                        } else if (blockingStep.id === 'education') {
+                          errorMessage = "Silakan tambahkan minimal 1 pendidikan sebelum melanjutkan ke step berikutnya.";
+                        } else if (blockingStep.id === 'personal') {
+                          errorMessage = "Silakan lengkapi semua informasi personal yang wajib diisi.";
+                        } else if (blockingStep.id === 'address') {
+                          errorMessage = "Silakan lengkapi semua informasi alamat yang wajib diisi.";
+                        }
+                      }
+                      
+                      toast({
+                        title: "Lengkapi step sebelumnya",
+                        description: errorMessage,
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Prevent keyboard navigation (Arrow keys, Enter, Space, Tab)
+                    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', ' ', 'Tab'].includes(e.key)) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 rounded transition-all relative",
+                    "text-sm min-w-0 flex-shrink-0 whitespace-nowrap",
+                    "data-[state=active]:bg-card data-[state=active]:text-card-foreground",
+                    "data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground",
+                    "hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-0", // Remove focus ring
+                    !canAccessTab && !isReviewsTab && "opacity-50 cursor-not-allowed pointer-events-none" // Disable styling for inaccessible tabs (except Reviews)
+                  )}
+                >
+                  <IconComponent className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden sm:block truncate font-medium">{tab.label}</span>
+                  {/* Step indicator badge on tab - show checkmark if completed */}
+                  {isCompleted && !isActive && (
+                    <CheckCircle2 className="h-4 w-4 text-green-500 ml-1 flex-shrink-0" />
+                  )}
+                  {/* Active tab indicator */}
+                  {isActive && (
+                    <div className="absolute -bottom-1 left-0 right-0 h-1 bg-blue-600 rounded-t" />
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
+
+        {/* Compact Tab Content */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {tabs.map((tab) => {
+            const TabComponent = tab.component;
+            return (
+              <TabsContent 
+                key={tab.id} 
+                value={tab.id} 
+                className="h-full overflow-hidden data-[state=active]:flex data-[state=active]:flex-col m-0 flex-1"
+              >
+                <div className={cn(
+                  "flex-1 overflow-auto flex flex-col",
+                  LAYOUT_CONSTANTS.padding.md
+                )}>
+                  <TabComponent
+                    {...(tab.id === 'education' && {
+                      onEducationChange: async () => {
+                        // Re-check education when education changes
+                        if (candidate?.id) {
+                          try {
+                            const { data: eduData } = await supabase
+                              .from('candidate_educations')
+                              .select('id')
+                              .eq('candidate_profile_id', candidate.id)
+                              .limit(1);
+                            const hasEdu = (eduData?.length || 0) > 0;
+                            setHasEducation(hasEdu);
+                          } catch (error) {
+                            console.error('Error re-checking education:', error);
+                          }
+                        }
+                      }
+                    })}
+                    {...(tab.id === 'documents' && {
+                      onDocumentsChange: async () => {
+                        // Re-check required documents when documents change
+                        if (candidate?.id) {
+                          try {
+                            const { data: docsData } = await supabase
+                              .from('candidate_documents')
+                              .select('document_type')
+                              .eq('candidate_profile_id', candidate.id);
+                            const requiredDocTypes = ['cv', 'ktp', 'ijazah'];
+                            const uploadedDocTypes = (docsData || []).map((doc: any) => doc.document_type || '');
+                            const allRequiredUploaded = requiredDocTypes.every(type => uploadedDocTypes.includes(type));
+                            setRequiredDocumentsUploaded(allRequiredUploaded);
+                          } catch (error) {
+                            console.error('Error re-checking documents:', error);
+                          }
+                        }
+                      }
+                    })}
+                    {...(tab.id === 'family' && {
+                      onFamilyMembersChange: async () => {
+                        // Re-check family members when family members change
+                        if (candidate?.id) {
+                          try {
+                            const { data: familyData } = await supabase
+                              .from('candidate_family_members')
+                              .select('id')
+                              .eq('candidate_profile_id', candidate.id)
+                              .limit(1);
+                            const hasFamily = (familyData?.length || 0) > 0;
+                            setHasFamilyMember(hasFamily);
+                          } catch (error) {
+                            console.error('Error re-checking family members:', error);
+                          }
+                        }
+                      }
+                    })}
+                    {...(tab.id === 'experience' && {
+                      onWorkExperienceChange: async () => {
+                        // Re-check work experiences when work experiences change
+                        if (candidate?.id) {
+                          try {
+                            const { data: expData } = await supabase
+                              .from('candidate_work_experiences')
+                              .select('id')
+                              .eq('candidate_profile_id', candidate.id)
+                              .limit(1);
+                            const hasExp = (expData?.length || 0) > 0;
+                            setHasExperience(hasExp);
+                          } catch (error) {
+                            console.error('Error re-checking work experience:', error);
+                          }
+                        }
+                      }
+                    })}
+                    candidate={candidate}
+                    onUpdate={(data) => {
+                      onUpdate(data);
+                      // Trigger re-validation after update
+                      setTimeout(() => {
+                        if (candidate?.id) {
+                          const checkData = async () => {
+                            try {
+                              if (tab.id === 'education') {
+                                const { data: eduData } = await supabase
+                                  .from('candidate_educations')
+                                  .select('id')
+                                  .eq('candidate_profile_id', candidate.id)
+                                  .limit(1);
+                                setHasEducation((eduData?.length || 0) > 0);
+                              } else if (tab.id === 'experience') {
+                                const { data: expData } = await supabase
+                                  .from('candidate_work_experiences')
+                                  .select('id')
+                                  .eq('candidate_profile_id', candidate.id)
+                                  .limit(1);
+                                setHasExperience((expData?.length || 0) > 0);
+                              } else if (tab.id === 'documents') {
+                                // Re-check required documents
+                                const { data: docsData } = await supabase
+                                  .from('candidate_documents')
+                                  .select('document_type')
+                                  .eq('candidate_profile_id', candidate.id);
+                                const requiredDocTypes = ['cv', 'ktp', 'ijazah'];
+                                const uploadedDocTypes = (docsData || []).map((doc: any) => doc.document_type);
+                                const allRequiredUploaded = requiredDocTypes.every(type => uploadedDocTypes.includes(type));
+                                setRequiredDocumentsUploaded(allRequiredUploaded);
+                              } else if (tab.id === 'family') {
+                                // Re-check family members
+                                const { data: familyData } = await supabase
+                                  .from('candidate_family_members')
+                                  .select('id')
+                                  .eq('candidate_profile_id', candidate.id)
+                                  .limit(1);
+                                setHasFamilyMember((familyData?.length || 0) > 0);
+                              }
+                            } catch (error) {
+                              console.error('Error re-checking data:', error);
+                            }
+                          };
+                          checkData();
+                        }
+                      }, 500);
+                    }}
+                    isReadOnly={isReadOnly}
+                    candidateProfileId={candidate?.id}
+                  />
+                  
+                  {/* Navigation Buttons - Submit only on Family tab (and only if not HR view) */}
+                  {!isHRView && (
+                    <>
+                      {tab.id === 'family' ? (
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
+                          <div className="flex items-center gap-2">
+                            {currentStepIndex > 0 && (
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  const prevTab = tabs[currentStepIndex - 1];
+                                  setActiveTab(prevTab.id);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                Previous
+                              </Button>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={handleSubmit}
+                              disabled={!isCurrentStepValid}
+                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Submit Profile
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
+                          <div className="flex items-center gap-2">
+                            {currentStepIndex > 0 && (
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  const prevTab = tabs[currentStepIndex - 1];
+                                  setActiveTab(prevTab.id);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                Previous
+                              </Button>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={handleNext}
+                              disabled={!isCurrentStepValid}
+                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+            );
+          })}
+        </div>
+      </Tabs>
+    </div>
+  );
+};

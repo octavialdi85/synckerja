@@ -74,7 +74,7 @@ export const ProtectedRoute = ({
   // SECURITY: Check if employee is terminated (except owners)
   // Owner can access their own organization even if terminated in other organizations
   if (requiresAuth && user && employee && organization) {
-    const employeeStatus = employee.status || (employee as any).employee_status_name;
+    const employeeStatus = (employee as any).status || (employee as any).employee_status_name;
     const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
     
     if (isTerminated && !isOwner) {
@@ -218,6 +218,14 @@ export const PublicRoute = ({ children }: { children: ReactNode }) => {
         </div>
       </div>
     );
+  }
+
+  // Allow candidate application pages to be accessed by anyone (authenticated or not)
+  const isCandidateApplyPage = location.pathname === '/candidate/apply';
+  const isApplyPreviewPage = location.pathname.startsWith('/apply/preview/');
+  const isCandidateProfilePage = location.pathname.startsWith('/candidate/profile');
+  if (isCandidateApplyPage || isApplyPreviewPage || isCandidateProfilePage) {
+    return <>{children}</>;
   }
 
   // If user is authenticated, redirect to home EXCEPT for login page with emailJustVerified flag

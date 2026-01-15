@@ -50,20 +50,48 @@ export const deleteJobPosition = async (id: string): Promise<void> => {
 export const fetchJobPositions = async (departmentId?: string): Promise<JobPosition[]> => {
   const { organizationId } = await getCurrentOrganizationId();
   
+  console.log('🔍 fetchJobPositions called:', { organizationId, departmentId });
+  
+  // Build query step by step
   let query = supabase
     .from('job_positions')
-    .select('*')
-    .or(`organization_id.eq.${organizationId},organization_id.is.null`)
-    .eq('is_active', true);
+    .select('*');
+  
+  // Filter by organization: include organization's positions OR global positions (null)
+  query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+    
+  // Filter by is_active: include both active (true) and null (for backward compatibility)
+  // Note: We need to chain filters properly - use separate filter calls
+  query = query.or('is_active.is.null,is_active.eq.true');
     
   // If department is provided, filter by department
   if (departmentId) {
     query = query.eq('department_id', departmentId);
+    console.log('🔍 Added department filter:', departmentId);
+  } else {
+    console.log('🔍 No department filter - fetching all positions');
   }
   
   const { data: jobPositions, error } = await query.order('name');
 
-  if (error) throw error;
+  if (error) {
+    console.error('❌ Error fetching job positions:', error);
+    throw error;
+  }
+  
+  console.log('✅ Job positions fetched:', { 
+    count: jobPositions?.length || 0, 
+    departmentId,
+    organizationId,
+    jobPositions: jobPositions?.slice(0, 5).map(p => ({ 
+      id: p.id, 
+      name: p.name, 
+      department_id: p.department_id, 
+      organization_id: p.organization_id,
+      is_active: p.is_active 
+    }))
+  });
+  
   return jobPositions || [];
 };
 

@@ -63,6 +63,14 @@ import { PageAccessTab } from "./features/2-9-PageAccess/PageAccessTab";
 import { AccessPermissionsConfig } from "./features/2-9-PageAccess/component/AccessPermissionsPage";
 import AttendancePage from "./features/2-3-attendance/AttendancePage";
 import { CompanyDashboardPage } from "./features/2-8-dashboard";
+import DashboardOverview from "./features/2_2_dashboard/DashboardOverview";
+import { JobOpeningsPage } from "./features/2_2_dashboard/JobOpeningsPage";
+import { ApplicationsPageWrapper } from "./features/2_2_dashboard/ApplicationsPageWrapper";
+import { IntervieweesPage } from "./features/2_2_Interviewees/IntervieweesPage";
+import JobApplication from "./features/2_2_Applications/JobApplication";
+import JobPreview from "./features/2_2_Applications/JobPreview";
+import CandidateProfile from "./features/2_2_Applications/CandidateProfile";
+import CandidateProfileInterviewees from "./features/2_2_Interviewees/CandidateProfile";
 import { CompanyCompanyAssetsPage } from "@/features/2-8-company-assets";
 import { CompanyFilesPage } from "@/features/2-8-files";
 import { CompanyOrganizationPage } from "@/features/2-8-organization";
@@ -299,6 +307,25 @@ const App = () => (
               
               {/* Public Terms Page */}
               <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+              
+              {/* Public Candidate Application Route */}
+              <Route path="/candidate/apply" element={
+                <PublicRoute>
+                  <JobApplication />
+                </PublicRoute>
+              } />
+              {/* Public Candidate Application Preview Route */}
+              <Route path="/apply/preview/:token" element={
+                <PublicRoute>
+                  <JobPreview />
+                </PublicRoute>
+              } />
+              {/* Public Candidate Profile Route */}
+              <Route path="/candidate/profile" element={
+                <PublicRoute>
+                  <CandidateProfile />
+                </PublicRoute>
+              } />
               
               {/* ======= UNIVERSAL PROTECTED APPLICATION ROUTES ======= */}
               {/* ALL ROUTES CONTROLLED BY PAGE ACCESS CONFIGURATION DATABASE */}
@@ -698,20 +725,27 @@ const App = () => (
               {/* Recruitment Routes - PROTECTED */}
               <Route path="/recruitment" element={
                 <ProtectedRoute>
-                  <PlaceholderPage 
-                    title="Recruitment" 
-                    description="Sistem rekrutmen akan segera tersedia"
-                    icon={<Briefcase className="h-8 w-8 tet-gray-5" />}
-                  />
+                  <DashboardOverview />
+                </ProtectedRoute>
+              } />
+              <Route path="/recruitment/job-openings" element={
+                <ProtectedRoute>
+                  <JobOpeningsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/recruitment/applications" element={
+                <ProtectedRoute>
+                  <ApplicationsPageWrapper />
                 </ProtectedRoute>
               } />
               <Route path="/recruitment/interviewees" element={
                 <ProtectedRoute>
-                  <PlaceholderPage 
-                    title="Interviewees" 
-                    description="Manajemen kandidat interview akan segera tersedia"
-                    icon={<Users className="h-8 w-8 tet-gray-5" />}
-                  />
+                  <IntervieweesPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/recruitment/candidates/:id" element={
+                <ProtectedRoute>
+                  <CandidateProfileInterviewees />
                 </ProtectedRoute>
               } />
               
