@@ -94,7 +94,7 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
 };
 
 // Simplified fallback method - make it public access
-const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | null> => {
+async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | null> {
   console.log('Using fallback query for token:', token);
 
   // First try to get recruitment link data without auth requirements
@@ -118,13 +118,13 @@ const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | n
 
   if (linkError || !linkData) {
     console.error('Error fetching recruitment link:', linkError);
-    return null as null;
+    return null;
   }
 
   // Check expiration
   if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
-    return null as null;
+    return null;
   }
 
   // Extract job data with type assertion
@@ -163,7 +163,7 @@ const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | n
       employee_statuses: jobData.employee_statuses || { name: 'Full-time' }
     }
   };
-};
+}
 
 export const incrementRecruitmentLinkClicks = async (linkId: string): Promise<void> => {
   const { error } = await supabase.rpc('increment_recruitment_link_clicks', { link_id: linkId });
