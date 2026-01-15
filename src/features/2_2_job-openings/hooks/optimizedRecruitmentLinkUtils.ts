@@ -65,7 +65,8 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
     console.log('Fetching job data for token:', token);
   
   try {
-    const { data, error } = await supabase.rpc('get_job_by_recruitment_token' as any, {
+    const rpcName: any = 'get_job_by_recruitment_token';
+    const { data, error } = await supabase.rpc(rpcName, {
       token_param: token
     });
 
@@ -116,7 +117,8 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
   } else if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
   } else {
-    const jobData = (linkData as any).job_openings;
+    const linkDataAny: any = linkData;
+    const jobData = linkDataAny.job_openings;
     if (jobData) {
       // Increment clicks asynchronously - ignore errors for public access
       void Promise.all([
@@ -127,9 +129,10 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
       });
 
       // Return the data with proper structure
+      const linkStatus: 'active' | 'inactive' = linkData.status as 'active' | 'inactive';
       result = {
         ...linkData,
-        status: linkData.status as 'active' | 'inactive',
+        status: linkStatus,
         job_openings: {
           ...jobData,
           benefits: parseJobBenefits(jobData.benefits),
