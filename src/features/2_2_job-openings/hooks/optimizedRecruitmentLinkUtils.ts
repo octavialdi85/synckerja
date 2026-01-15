@@ -100,62 +100,83 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
 async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | null> {
   console.log('Using fallback query for token:', token);
 
-  const selectQuery = '*,job_openings!inner(*,organizations(company_name,industry,address,website,description),departments(name),job_positions(name),job_levels(name),employee_statuses(name))';
+  try {
+    const selectQuery = '*,job_openings!inner(*,organizations(company_name,industry,address,website,description),departments(name),job_positions(name),job_levels(name),employee_statuses(name))';
 
-  const { data: linkData, error: linkError } = await supabase
-    .from('recruitment_links')
-    .select(selectQuery)
-    .eq('token', token)
-    .eq('status', 'active')
-    .in('job_openings.status', ['active', 'draft'])
-    .maybeSingle();
+    const queryResult = await supabase
+      .from('recruitment_links')
+      .select(selectQuery)
+      .eq('token', token)
+      .eq('status', 'active')
+      .in('job_openings.status', ['active', 'draft'])
+      .maybeSingle();
 
-  let result: RecruitmentLink | null = null;
+    if (queryResult.error || !queryResult.data) {
+      console.error('Error fetching recruitment link:', queryResult.error);
+      return null;
+    }
 
-  if (linkError || !linkData) {
-    console.error('Error fetching recruitment link:', linkError);
-  } else if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
-    console.warn('Recruitment link has expired');
-  } else {
-    const linkDataAny: any = linkData;
-    const jobDataKey = 'job_openings';
-    const jobData = linkDataAny[jobDataKey];
-    if (jobData) {
-      // Increment clicks asynchronously - ignore errors for public access
+    const linkData = queryResult.data;
+
+    if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
+      console.warn('Recruitment link has expired');
+      return null;
+    }
+
+    const linkDataObj: Record<string, unknown> = linkData as Record<string, unknown>;
+    const jobData = linkDataObj.job_openings;
+    
+    if (!jobData || typeof jobData !== 'object' || jobData === null) {
+      console.warn('No active job found');
+      return null;
+    }
+
+    const jobDataObj: Record<string, unknown> = jobData as Record<string, unknown>;
+
+    const jobId = typeof jobDataObj.id === 'string' ? jobDataObj.id : '';
+    const linkId = typeof linkData.id === 'string' ? linkData.id : '';
+
+    // Increment clicks asynchronously - ignore errors for public access
+    if (jobId && linkId) {
       void Promise.all([
-        incrementJobClicks(jobData.id).catch(() => console.log('Click increment failed - continuing')),
-        incrementRecruitmentLinkClicks(linkData.id).catch(() => console.log('Link click increment failed - continuing'))
+        incrementJobClicks(jobId).catch(() => console.log('Click increment failed - continuing')),
+        incrementRecruitmentLinkClicks(linkId).catch(() => console.log('Link click increment failed - continuing'))
       ]).catch(() => {
         console.log('Click tracking failed - continuing with job data');
       });
-
-      // Return the data with proper structure
-      const linkStatus: 'active' | 'inactive' = linkData.status as 'active' | 'inactive';
-      result = {
-        ...linkData,
-        status: linkStatus,
-        job_openings: {
-          ...jobData,
-          benefits: parseJobBenefits(jobData.benefits),
-          organizations: jobData.organizations || {
-            company_name: 'Company Name',
-            industry: 'Technology',
-            address: '',
-            website: '',
-            description: ''
-          },
-          departments: jobData.departments || { name: 'General' },
-          job_positions: jobData.job_positions || { name: 'Position' },
-          job_levels: jobData.job_levels || { name: 'Level' },
-          employee_statuses: jobData.employee_statuses || { name: 'Full-time' }
-        }
-      };
-    } else {
-      console.warn('No active job found');
     }
-  }
 
-  return result;
+    // Return the data with proper structure
+    const linkStatus = linkData.status === 'active' || linkData.status === 'inactive' 
+      ? linkData.status 
+      : 'active';
+
+    const result: RecruitmentLink = {
+      ...linkData,
+      status: linkStatus,
+      job_openings: {
+        ...jobDataObj,
+        id: jobId,
+        benefits: parseJobBenefits(jobDataObj.benefits),
+        organizations: jobDataObj.organizations || {
+          company_name: 'Company Name',
+          industry: 'Technology',
+          address: '',
+          website: '',
+          description: ''
+        },
+        departments: jobDataObj.departments || { name: 'General' },
+        job_positions: jobDataObj.job_positions || { name: 'Position' },
+        job_levels: jobDataObj.job_levels || { name: 'Level' },
+        employee_statuses: jobDataObj.employee_statuses || { name: 'Full-time' }
+      }
+    };
+
+    return result;
+  } catch (error) {
+    console.error('Error in fallback method:', error);
+    return null;
+  }
 }
 
 export const incrementRecruitmentLinkClicks = async (linkId: string): Promise<void> => {
