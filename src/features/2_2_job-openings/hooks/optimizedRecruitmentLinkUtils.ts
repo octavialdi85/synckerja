@@ -97,15 +97,8 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
 async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | null> {
   console.log('Using fallback query for token:', token);
 
-  const selectQuery = '*,' +
-    'job_openings!inner(*,' +
-    'organizations(company_name,industry,address,website,description),' +
-    'departments(name),' +
-    'job_positions(name),' +
-    'job_levels(name),' +
-    'employee_statuses(name))';
+  const selectQuery = '*,job_openings!inner(*,organizations(company_name,industry,address,website,description),departments(name),job_positions(name),job_levels(name),employee_statuses(name))';
 
-  // First try to get recruitment link data without auth requirements
   const { data: linkData, error: linkError } = await supabase
     .from('recruitment_links')
     .select(selectQuery)
@@ -119,19 +112,15 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
     return null;
   }
 
-  // Check expiration
   if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
     return null;
   }
 
-  // Extract job data with type assertion
   const jobData = (linkData as any).job_openings;
-  
-  // Early return if no job data
-  if (!jobData) {
+  if (jobData == null) {
     console.warn('No active job found');
-    return null as RecruitmentLink | null;
+    return null;
   }
 
   // Increment clicks asynchronously - ignore errors for public access
