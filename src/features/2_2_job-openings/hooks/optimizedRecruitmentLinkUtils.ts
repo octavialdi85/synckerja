@@ -14,10 +14,8 @@ const parseJobBenefits = (benefits: any): JobBenefit[] => {
   return safeJSONParse(benefits, []);
 };
 
-// Helper function to return null (to avoid parsing issues)
-const returnNull = (): RecruitmentLink | null => {
-  return null;
-};
+// Helper constant to return null (to avoid parsing issues)
+const NULL_RESULT: RecruitmentLink | null = null;
 
 // Generate a unique token for recruitment links
 export const generateRecruitmentToken = (): string => {
@@ -80,7 +78,7 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
 
     if (!data) {
       console.warn('No recruitment link found for token:', token);
-      return null;
+      return NULL_RESULT;
     }
 
     console.log('Job data fetched successfully');
@@ -114,18 +112,18 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
 
   if (linkError || !linkData) {
     console.error('Error fetching recruitment link:', linkError);
-    return returnNull();
+    return NULL_RESULT;
   }
 
   if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
     console.warn('Recruitment link has expired');
-    return returnNull();
+    return NULL_RESULT;
   }
 
   const jobData = (linkData as any).job_openings;
   if (jobData == null) {
     console.warn('No active job found');
-    return returnNull();
+    return NULL_RESULT;
   }
 
   // Increment clicks asynchronously - ignore errors for public access
