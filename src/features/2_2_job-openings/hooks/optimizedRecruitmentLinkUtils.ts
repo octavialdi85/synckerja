@@ -61,7 +61,7 @@ export const getRecruitmentLinkByJobId = async (jobOpeningId: string): Promise<R
 
 // Optimized function using the new database function
 export const getJobByToken = async (token: string): Promise<RecruitmentLink | null> => {
-  console.log('🔍 Fetching job data for token:', token);
+    console.log('Fetching job data for token:', token);
   
   try {
     const { data, error } = await supabase.rpc('get_job_by_recruitment_token' as any, {
@@ -69,16 +69,16 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
     });
 
     if (error) {
-      console.error('❌ Database function error:', error);
+      console.error('Database function error:', error);
       throw new Error(`Database error: ${error.message}`);
     }
 
     if (!data) {
-      console.warn('⚠️ No recruitment link found for token:', token);
+      console.warn('No recruitment link found for token:', token);
       return null;
     }
 
-    console.log('✅ Job data fetched successfully');
+    console.log('Job data fetched successfully');
     
     // Parse benefits from the job_openings data
     if (data.job_openings?.benefits) {
@@ -88,14 +88,14 @@ export const getJobByToken = async (token: string): Promise<RecruitmentLink | nu
     return data as RecruitmentLink;
 
   } catch (error) {
-    console.error('💥 Error in getJobByToken:', error);
+    console.error('Error in getJobByToken:', error);
     return await getJobByTokenFallback(token);
   }
 };
 
 // Simplified fallback method - make it public access
 const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | null> => {
-  console.log('🔄 Using fallback query for token:', token);
+  console.log('Using fallback query for token:', token);
 
   // First try to get recruitment link data without auth requirements
   const { data: linkData, error: linkError } = await supabase
@@ -117,18 +117,19 @@ const getJobByTokenFallback = async (token: string): Promise<RecruitmentLink | n
     .maybeSingle();
 
   if (linkError || !linkData) {
-    console.error('❌ Error fetching recruitment link:', linkError);
-    return null;
+    console.error('Error fetching recruitment link:', linkError);
+    return null as null;
   }
 
   // Check expiration
   if (linkData.expires_at && new Date(linkData.expires_at) < new Date()) {
-    console.warn('⏰ Recruitment link has expired');
-    return null;
+    console.warn('Recruitment link has expired');
+    return null as null;
   }
 
-  const jobData = linkData.job_openings;
-  if (!jobData) {
+  // Extract job data with type assertion
+  const jobData = (linkData as any).job_openings;
+  if (jobData === null || jobData === undefined) {
     console.warn('No active job found');
     return null;
   }
