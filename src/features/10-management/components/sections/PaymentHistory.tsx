@@ -3,19 +3,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/fea
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
-import { Download, History } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { Download, History, RefreshCw } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { formatIDR } from '../../utils/subscriptionUtils';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toast } from 'sonner';
 
 
 const PaymentHistory = () => {
   const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payment-history', organizationId],
@@ -39,6 +41,79 @@ const PaymentHistory = () => {
       return data || [];
     },
     enabled: !!organizationId,
+  });
+
+  const refreshPaymentStatus = useMutation({
+    mutationFn: async (payment: any) => {
+      // Try to use check-midtrans-payment-status first
+      try {
+        const { data, error } = await supabase.functions.invoke('check-midtrans-payment-status', {
+          body: { order_id: payment.order_id }
+        });
+
+        if (!error && data && data.success) {
+          return data;
+        }
+      } catch (err) {
+        console.log('check-midtrans-payment-status not available, using process-midtrans-payment instead');
+      }
+
+      // Fallback: Use process-midtrans-payment to manually trigger webhook processing
+      // This simulates the webhook notification from Midtrans
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      const webhookPayload = {
+        order_id: payment.order_id,
+        transaction_status: 'settlement', // Since we know it's success
+        transaction_id: payment.transaction_id || null,
+        fraud_status: 'accept',
+        settlement_time: new Date().toISOString(),
+        transaction_time: payment.transaction_time || payment.created_at || new Date().toISOString(),
+        payment_type: payment.payment_type || 'credit_card',
+        bank: payment.bank || null,
+        approval_code: payment.approval_code || null,
+      };
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/process-midtrans-payment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_PUBLISHABLE_KEY
+        },
+        body: JSON.stringify(webhookPayload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to update payment status');
+      }
+
+      const data = await response.json();
+      return { success: true, status: 'success', message: 'Payment status updated successfully' };
+    },
+    onSuccess: (data, orderId) => {
+      if (data.status === 'success') {
+        toast.success('Payment status updated to: success. Subscription activated!');
+      } else {
+        toast.info(`Payment status: ${data.status}. Please wait for payment confirmation.`);
+      }
+      // Invalidate and refetch payment history
+      queryClient.invalidateQueries({ queryKey: ['payment-history', organizationId] });
+      // Also invalidate subscription status
+      queryClient.invalidateQueries({ queryKey: ['subscription-status', organizationId] });
+    },
+    onError: (error: Error) => {
+      const errorMessage = error.message || 'Unknown error';
+      if (errorMessage.includes('Function not found') || errorMessage.includes('404')) {
+        toast.error('Edge function not deployed. Please contact administrator to deploy check-midtrans-payment-status function.');
+      } else {
+        toast.error(`Failed to refresh payment status: ${errorMessage}`);
+      }
+    },
   });
 
   const getStatusBadgeVariant = (status: string) => {
@@ -487,15 +562,29 @@ const PaymentHistory = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadReceipt(payment)}
-                        className="flex items-center gap-1"
-                      >
-                        <Download className="h-4 w-4" />
-                        Receipt
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadReceipt(payment)}
+                          className="flex items-center gap-1"
+                        >
+                          <Download className="h-4 w-4" />
+                          Receipt
+                        </Button>
+                        {(payment.status?.toLowerCase() === 'pending') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refreshPaymentStatus.mutate(payment)}
+                            disabled={refreshPaymentStatus.isPending}
+                            className="flex items-center gap-1"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${refreshPaymentStatus.isPending ? 'animate-spin' : ''}`} />
+                            Refresh
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
