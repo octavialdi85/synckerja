@@ -297,9 +297,22 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         return; // Prevent completion if Google Drive link is missing
       }
 
+      // Prepare update data with completed_at handling
+      const updateData: any = { is_completed: !current };
+      
+      // If is_completed is being updated, ensure completed_at is set correctly
+      // This matches the check constraint: (is_completed = TRUE AND completed_at IS NOT NULL) OR (is_completed = FALSE AND completed_at IS NULL)
+      if (willBeCompleted) {
+        // If marking as completed, set completed_at to NOW()
+        updateData.completed_at = new Date().toISOString();
+      } else {
+        // If marking as not completed, set completed_at to NULL
+        updateData.completed_at = null;
+      }
+
       const { error } = await supabase
         .from('task_steps_to_steps')
-        .update({ is_completed: !current })
+        .update(updateData)
         .eq('id', id)
         .eq('parent_step_id', parentStepId)
         .eq('organization_id', organizationId);
