@@ -51,9 +51,11 @@ export const useProfile = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      logger.userData('🔍 useProfile - Basic profile data:', profileData);
-      logger.userData('🔍 useProfile - Extended profile data:', detailsData);
-      logger.userData('🔍 useProfile - Employee photo data:', employeeData);
+      if (import.meta.env?.DEV) {
+        logger.userData('🔍 useProfile - Basic profile data:', profileData);
+        logger.userData('🔍 useProfile - Extended profile data:', detailsData);
+        logger.userData('🔍 useProfile - Employee photo data:', employeeData);
+      }
 
       // Use employee photo if user_profile_details doesn't have one
       const photoUrl = detailsData?.profile_photo_url || employeeData?.profile_photo_url || null;
@@ -69,7 +71,9 @@ export const useProfile = () => {
         profile_photo_url: photoUrl,
       };
 
-      logger.userData('🔍 useProfile - Final combined data:', combinedData);
+      if (import.meta.env?.DEV) {
+        logger.userData('🔍 useProfile - Final combined data:', combinedData);
+      }
       return combinedData as Profile;
     },
     enabled: true,

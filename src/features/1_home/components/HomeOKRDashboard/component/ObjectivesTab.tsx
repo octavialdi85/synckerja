@@ -12,7 +12,7 @@ import { useOkrCycles } from './ObjectivesTabImport/useOkrCycles';
 import { useObjectives } from './ObjectivesTabImport/useObjectives';
 import { useFilteredObjectives } from './ObjectivesTabImport/useFilteredObjectives';
 import { getDefaultCycleForCurrentPeriod } from './ObjectivesTabImport/okrUtils';
-import { useProfile } from './ObjectivesTabImport/useProfile';
+import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useCurrentOrg } from '../hooks/useCurrentOrg';
 import { HomeCycleSelector } from './ObjectivesTabImport/HomeCycleSelector';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
@@ -54,7 +54,8 @@ export const ObjectivesTab = ({
   onYearQuarterChange = () => {},
   availableYears,
 }: ObjectivesTabProps) => {
-  const { data: profile } = useProfile();
+  const { data: unifiedData } = useUnifiedProfile();
+  const profile = unifiedData ? { ...unifiedData.profile, ...unifiedData.profileDetails } : null;
   const { organizationId } = useCurrentOrg();
 
   const [selectedCycleId, setSelectedCycleId] = React.useState<string>('');

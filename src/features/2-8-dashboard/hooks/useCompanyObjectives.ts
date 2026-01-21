@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
+import { globalCompanyObjectivesManager } from './globalCompanyObjectivesManager';
 
 export interface CompanyObjective {
   id: string;
@@ -37,51 +38,15 @@ interface CreateCompanyObjectiveData {
 export const useCompanyObjectives = (organizationId?: string, cycleIds?: string[]) => {
   const queryClient = useQueryClient();
 
-  // Real-time subscription for company objectives
+  // 🌐 GLOBAL SUBSCRIPTION: Use singleton manager instead of creating duplicate subscriptions
   useEffect(() => {
     if (!organizationId) return;
 
-    console.log('🔄 Setting up real-time subscription for company objectives with org:', organizationId);
+    // Subscribe through global manager
+    const unsubscribe = globalCompanyObjectivesManager.subscribe(organizationId, queryClient);
 
-    const channel = supabase
-      .channel(`company_objectives_realtime_${organizationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'company_objectives',
-          filter: `organization_id=eq.${organizationId}`
-        },
-        (payload) => {
-          console.log('📡 REAL-TIME UPDATE for company objectives:', {
-            event: payload.eventType,
-            table: payload.table,
-            new: payload.new,
-            old: payload.old
-          });
-          
-          // Force immediate invalidation
-          queryClient.invalidateQueries({ 
-            queryKey: ['company-objectives'],
-            exact: false 
-          });
-          
-          // Also invalidate specific org queries
-          queryClient.invalidateQueries({ 
-            queryKey: ['company-objectives', organizationId],
-            exact: false 
-          });
-        }
-      )
-      .subscribe((status) => {
-        console.log('📊 Company objectives subscription status:', status);
-      });
-
-    return () => {
-      console.log('🔄 Cleaning up company objectives subscription');
-      supabase.removeChannel(channel);
-    };
+    // Return cleanup function
+    return unsubscribe;
   }, [organizationId, queryClient]);
 
   return useQuery({

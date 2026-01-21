@@ -8,7 +8,7 @@ import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Calendar, CheckCircle, Target, Lock, Save, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
-import { useProfile } from '../useProfile';
+import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useCurrentUserEmployee } from '@/features/1_home/components/HomeOKRDashboard/component/SectionGreetingsImport/useCurrentUserEmployee';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/features/ui/scroll-area';
@@ -49,9 +49,8 @@ export const ObjectiveCheckinForm = ({
   onSuccess,
   disableActivitiesTab = false
 }: ObjectiveCheckinFormProps) => {
-  const {
-    data: profile
-  } = useProfile();
+  const { data: unifiedData } = useUnifiedProfile();
+  const profile = unifiedData ? { ...unifiedData.profile, ...unifiedData.profileDetails } : null;
   const {
     data: employee
   } = useCurrentUserEmployee();

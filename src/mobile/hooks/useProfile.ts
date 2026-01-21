@@ -31,7 +31,9 @@ export const useProfile = () => {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError) {
-        console.error('Auth error:', userError);
+        if (import.meta.env?.DEV) {
+          console.error('Auth error:', userError);
+        }
         // Clean up invalid auth state
         await cleanupAuthState();
         throw new Error('Authentication failed');
@@ -58,7 +60,9 @@ export const useProfile = () => {
         return;
       }
 
-      console.log('Active organization ID:', profile.active_organization_id);
+      if (import.meta.env?.DEV) {
+        console.log('Active organization ID:', profile.active_organization_id);
+      }
 
       // Fetch employee data for the active organization only
       const { data: employeeData, error: employeeError } = await supabase
@@ -82,10 +86,14 @@ export const useProfile = () => {
         .eq('organization_id', profile.active_organization_id)
         .maybeSingle();
 
-      console.log('Employee data query result:', { employeeData, employeeError });
+      if (import.meta.env?.DEV) {
+        console.log('Employee data query result:', { employeeData, employeeError });
+      }
 
       if (employeeError && employeeError.code !== 'PGRST116') {
-        console.error('Error fetching employee data:', employeeError);
+        if (import.meta.env?.DEV) {
+          console.error('Error fetching employee data:', employeeError);
+        }
         throw employeeError;
       }
 
@@ -107,7 +115,9 @@ export const useProfile = () => {
             photo_url: employeeData.photo_url,
           });
         } else {
-          console.warn('Employee organization mismatch');
+          if (import.meta.env?.DEV) {
+            console.warn('Employee organization mismatch');
+          }
           // Fallback to basic user data
           setProfile({
             id: user.id,
@@ -116,7 +126,9 @@ export const useProfile = () => {
           });
         }
       } else {
-        console.log('No employee data found for active organization');
+        if (import.meta.env?.DEV) {
+          console.log('No employee data found for active organization');
+        }
         // Fallback to auth user data if no employee record found
         setProfile({
           id: user.id,
@@ -125,7 +137,9 @@ export const useProfile = () => {
         });
       }
     } catch (err) {
-      console.error('Error fetching profile:', err);
+      if (import.meta.env?.DEV) {
+        console.error('Error fetching profile:', err);
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch profile');
       
       // If it's an auth error, redirect to login
@@ -149,7 +163,9 @@ export const useProfile = () => {
       // Sign out
       await supabase.auth.signOut({ scope: 'global' });
     } catch (error) {
-      console.error('Error cleaning up auth state:', error);
+      if (import.meta.env?.DEV) {
+        console.error('Error cleaning up auth state:', error);
+      }
     }
   };
 
@@ -160,7 +176,9 @@ export const useProfile = () => {
       // Clear profile data
       setProfile(null);
     } catch (err) {
-      console.error('Error logging out:', err);
+      if (import.meta.env?.DEV) {
+        console.error('Error logging out:', err);
+      }
       throw err;
     }
   };
@@ -193,7 +211,9 @@ export const useProfile = () => {
           filter: 'active_organization_id=neq.null'
         },
         (payload) => {
-          console.log('Profile organization updated:', payload);
+          if (import.meta.env?.DEV) {
+            console.log('Profile organization updated:', payload);
+          }
           setTimeout(() => {
             fetchProfile();
           }, 150);
@@ -206,7 +226,9 @@ export const useProfile = () => {
         supabase.removeChannel(channel);
       } catch (e) {
         // Avoid noisy errors when socket already closed
-        console.warn('Cleanup channel skipped:', e);
+        if (import.meta.env?.DEV) {
+          console.warn('Cleanup channel skipped:', e);
+        }
       }
     };
   }, []);

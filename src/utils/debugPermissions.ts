@@ -267,32 +267,14 @@ export const debugPermissions = {
   verifyPermissionSetup
 };
 
-// Make available globally in development
-if (typeof window !== 'undefined' && (import.meta.env?.DEV || process.env.NODE_ENV === 'development')) {
+// Make available globally in development ONLY
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
   window.debugPermissions = debugPermissions;
 
-  (async () => {
-    try {
-      const { logger } = await import('@/config/logger');
-      logger.once('dev-utils:debugPermissions', () => {
-        console.log('🐛 Debug utilities available at window.debugPermissions');
-        console.log('Available functions:');
-        console.log('- checkUserRole(userEmail?)');
-        console.log('- listPermissionConfigs(organizationId?)'); 
-        console.log('- testPageAccess(pagePath, userRole, organizationId)');
-        console.log('- clearPermissionCache()');
-        console.log('- inspectCache()');
-        console.log('- verifyPermissionSetup()');
-      });
-    } catch {
-      console.log('🐛 Debug utilities available at window.debugPermissions');
-      console.log('Available functions:');
-      console.log('- checkUserRole(userEmail?)');
-      console.log('- listPermissionConfigs(organizationId?)'); 
-      console.log('- testPageAccess(pagePath, userRole, organizationId)');
-      console.log('- clearPermissionCache()');
-      console.log('- inspectCache()');
-      console.log('- verifyPermissionSetup()');
-    }
-  })();
+  // Only log once on initial load
+  if (!sessionStorage.getItem('debugPermissions_logged')) {
+    sessionStorage.setItem('debugPermissions_logged', 'true');
+    console.log('🐛 Debug utilities available at window.debugPermissions');
+    console.log('Available functions: checkUserRole(), listPermissionConfigs(), testPageAccess(), clearPermissionCache(), inspectCache(), verifyPermissionSetup()');
+  }
 }

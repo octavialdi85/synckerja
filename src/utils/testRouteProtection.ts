@@ -281,29 +281,18 @@ export const testSpecificRoute = (routePath: string) => {
   };
 };
 
-// Make available globally in development
-if (typeof window !== 'undefined' && (import.meta.env?.DEV || process.env.NODE_ENV === 'development')) {
+// Make available globally in development ONLY
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
   (window as any).testRouteProtection = {
     displayReport: displayRouteProtectionReport,
     testRoute: testSpecificRoute,
     getCoverage: testRouteProtectionCoverage
   };
 
-  try {
-    const { logger } = await import('@/config/logger');
-    logger.once('dev-utils:testRouteProtection', () => {
-      console.log('🧪 Route protection testing utilities available at window.testRouteProtection');
-      console.log('Available functions:');
-      console.log('- displayReport() - Show full coverage report');
-      console.log('- testRoute(path) - Test specific route protection');
-      console.log('- getCoverage() - Get coverage data');
-    });
-  } catch {
-    // Fallback: keep original single-shot console logs if logger not available
+  // Only log once on initial load
+  if (!sessionStorage.getItem('testRouteProtection_logged')) {
+    sessionStorage.setItem('testRouteProtection_logged', 'true');
     console.log('🧪 Route protection testing utilities available at window.testRouteProtection');
-    console.log('Available functions:');
-    console.log('- displayReport() - Show full coverage report');
-    console.log('- testRoute(path) - Test specific route protection');
-    console.log('- getCoverage() - Get coverage data');
+    console.log('Available functions: displayReport(), testRoute(path), getCoverage()');
   }
 }

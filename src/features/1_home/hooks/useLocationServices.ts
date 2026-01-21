@@ -204,12 +204,14 @@ export const useLocationServices = () => {
     };
   };
 
-  // Auto-fetch location on mount
-  useEffect(() => {
-    getCurrentLocation().catch(() => {
-      // Silently handle error on auto-fetch
-    });
-  }, []);
+  // REMOVED: Auto-fetch location on mount
+  // This was causing unnecessary geolocation errors on every page load
+  // Location will only be fetched when explicitly needed (e.g., attendance check-in)
+  // useEffect(() => {
+  //   getCurrentLocation().catch(() => {
+  //     // Silently handle error on auto-fetch
+  //   });
+  // }, []);
 
   return {
     currentLocation,

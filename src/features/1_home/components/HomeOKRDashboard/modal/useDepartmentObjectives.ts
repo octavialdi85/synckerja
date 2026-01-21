@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { logger } from '@/config/logger';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
+import { globalDepartmentObjectivesCache } from './globalDepartmentObjectivesCache';
 
 export interface DepartmentObjective {
   id: string;
@@ -132,117 +133,17 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         return [];
       }
       
-      logger.query('🔍 Fetching department objectives:', { organizationId, cycleIds, includeIndividualObjectives });
-      
-      // Build base query
-      let selectQuery = `
-        *,
-        departments!inner(name),
-        company_objectives!inner(title),
-        okr_cycles!inner(name, year, quarter)
-      `;
-
-      // Add individual objectives if requested
-      if (includeIndividualObjectives) {
-        selectQuery += `,
-          individual_objectives(
-            id,
-            title,
-            description,
-            progress_percentage,
-            status,
-            employees!inner(full_name)
-          )`;
-      }
-
-      let query = supabase
-        .from('department_objectives')
-        .select(selectQuery)
-        .eq('organization_id', organizationId);
-
-      // Filter by multiple cycle IDs if provided (only valid UUIDs)
-      const validCycleIds = filterValidCycleIds(cycleIds);
-      if (validCycleIds.length > 0) {
-        query = query.in('cycle_id', validCycleIds);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('❌ Error fetching department objectives:', error);
-        throw error;
-      }
-
-      // Fetch key_results for all department objectives
-      // Only get key results that are specifically for department objectives (not for company objectives)
-      const deptIds = data?.map((obj: any) => obj.id) || [];
-      let keyResultsData: any[] = [];
-      if (deptIds.length > 0) {
-        const { data: krData } = await supabase
-          .from('key_results')
-          .select('id, title, target_value, current_value, unit, metric_type, progress_percentage, weight, department_objective_id, company_objective_id')
-          .in('department_objective_id', deptIds)
-          .is('company_objective_id', null); // Only get key results that are NOT for company objectives
-        keyResultsData = krData || [];
-      }
-
-      // Group key results by department_objective_id
-      const keyResultsByDeptId = new Map<string, any[]>();
-      keyResultsData.forEach(kr => {
-        if (kr.department_objective_id) {
-          const existing = keyResultsByDeptId.get(kr.department_objective_id) || [];
-          existing.push(kr);
-          keyResultsByDeptId.set(kr.department_objective_id, existing);
-        }
-      });
-
-      // Add key_results to each department objective
-      // Key results are already filtered to exclude those with company_objective_id
-      // Also filter out key results that have the same title as the department objective
-      // (these are duplicates created for company objectives)
-      const dataWithKeyResults = (data || []).map((obj: any) => {
-        const allKeyResults = keyResultsByDeptId.get(obj.id) || [];
-        // Filter out key results that have the same title as the department objective
-        // These are typically duplicates created for company objectives
-        const actualKeyResults = allKeyResults.filter((kr: any) => {
-          // Exclude if title matches exactly (case-insensitive)
-          const titleMatches = kr.title?.toLowerCase().trim() === obj.title?.toLowerCase().trim();
-          // Also exclude if it has company_objective_id (should already be filtered, but double-check)
-          const hasCompanyObjectiveId = kr.company_objective_id !== null && kr.company_objective_id !== undefined;
-          return !titleMatches && !hasCompanyObjectiveId;
-        });
-        return {
-          ...obj,
-          key_results: actualKeyResults
-        };
-      });
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Department objectives fetched:', dataWithKeyResults);
-        
-        // Check specifically for "te" objective
-        const teObjective = dataWithKeyResults?.find((obj: any) => obj.title === 'te');
-        if (teObjective) {
-          console.log('🚨 FOUND "te" OBJECTIVE in database query:', {
-            id: teObjective.id,
-            title: teObjective.title,
-            status: teObjective.status,
-            cycle_id: teObjective.cycle_id,
-            organization_id: teObjective.organization_id,
-            created_at: teObjective.created_at,
-            updated_at: teObjective.updated_at,
-            key_results_count: teObjective.key_results?.length || 0
-          });
-        } else {
-          console.log('✅ No "te" objective found in database query');
-        }
-      }
-      return dataWithKeyResults;
+      // 🌐 GLOBAL CACHE: Use singleton cache for deduplication
+      return globalDepartmentObjectivesCache.getDepartmentObjectives(
+        organizationId, 
+        cycleIds, 
+        includeIndividualObjectives
+      );
     },
     enabled: !!organizationId,
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    staleTime: 30 * 1000, // 30 seconds - let React Query handle caching too
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch on window focus (global cache handles this)
   });
 };
 
@@ -252,7 +153,9 @@ export const useCreateDepartmentObjective = () => {
 
   return useMutation({
     mutationFn: async (objectiveData: CreateDepartmentObjectiveWithKeyResults) => {
-      console.log('🚀 Creating department objective:', objectiveData);
+      if (import.meta.env?.DEV) {
+        console.log('🚀 Creating department objective:', objectiveData);
+      }
 
       // Extract key_results from objective data
       const { key_results, ...departmentObjectiveData } = objectiveData;
@@ -265,14 +168,17 @@ export const useCreateDepartmentObjective = () => {
         .single();
 
       if (objectiveError) {
-        console.error('❌ Error creating department objective:', objectiveError);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Error creating department objective:', objectiveError);
+        }
         throw objectiveError;
       }
 
-      console.log('✅ Department objective created successfully:', departmentObjective);
-
-      // Automatically create a key result in the parent company objective
-      console.log('🔑 Creating key result in company objective for department objective:', departmentObjective.id);
+      if (import.meta.env?.DEV) {
+        console.log('✅ Department objective created successfully:', departmentObjective);
+        // Automatically create a key result in the parent company objective
+        console.log('🔑 Creating key result in company objective for department objective:', departmentObjective.id);
+      }
       
       const companyKeyResultData = {
         organization_id: departmentObjectiveData.organization_id,
@@ -301,14 +207,20 @@ export const useCreateDepartmentObjective = () => {
         .single();
 
       if (companyKRError) {
-        console.error('❌ Error creating key result in company objective:', companyKRError);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Error creating key result in company objective:', companyKRError);
+        }
       } else {
-        console.log('✅ Key result created in company objective:', companyKeyResult);
+        if (import.meta.env?.DEV) {
+          console.log('✅ Key result created in company objective:', companyKeyResult);
+        }
       }
 
       // If key_results are provided, create them separately for the department objective
       if (key_results && key_results.length > 0) {
-        console.log('🔑 Creating key results for department objective:', departmentObjective.id);
+        if (import.meta.env?.DEV) {
+          console.log('🔑 Creating key results for department objective:', departmentObjective.id);
+        }
         
         const keyResultsData = key_results.map(kr => ({
           organization_id: departmentObjectiveData.organization_id,
@@ -335,11 +247,15 @@ export const useCreateDepartmentObjective = () => {
           .select();
 
         if (keyResultsError) {
-          console.error('❌ Error creating key results:', keyResultsError);
-          // Don't throw here, just log the error as the main objective was created
-          console.warn('Department objective created but key results failed');
+          if (import.meta.env?.DEV) {
+            console.error('❌ Error creating key results:', keyResultsError);
+            // Don't throw here, just log the error as the main objective was created
+            console.warn('Department objective created but key results failed');
+          }
         } else {
-          console.log('✅ Key results created successfully:', keyResults);
+          if (import.meta.env?.DEV) {
+            console.log('✅ Key results created successfully:', keyResults);
+          }
         }
       }
 
@@ -376,7 +292,9 @@ export const useUpdateDepartmentObjective = () => {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<DepartmentObjective> }) => {
-      console.log('🔄 Updating department objective:', { id, updates });
+      if (import.meta.env?.DEV) {
+        console.log('🔄 Updating department objective:', { id, updates });
+      }
 
       const { data, error } = await supabase
         .from('department_objectives')
@@ -386,15 +304,21 @@ export const useUpdateDepartmentObjective = () => {
         .single();
 
       if (error) {
-        console.error('❌ Error updating department objective:', error);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Error updating department objective:', error);
+        }
         throw error;
       }
 
-      console.log('✅ Department objective updated successfully:', data);
+      if (import.meta.env?.DEV) {
+        console.log('✅ Department objective updated successfully:', data);
+      }
 
       // If progress_percentage was updated, sync it to the corresponding key result
       if (updates.progress_percentage !== undefined) {
-        console.log('🔄 Syncing progress to company objective key result');
+        if (import.meta.env?.DEV) {
+          console.log('🔄 Syncing progress to company objective key result');
+        }
         
         const { data: keyResult, error: keyResultError } = await supabase
           .from('key_results')
@@ -408,9 +332,13 @@ export const useUpdateDepartmentObjective = () => {
           .single();
 
         if (keyResultError) {
-          console.error('❌ Error syncing progress to key result:', keyResultError);
+          if (import.meta.env?.DEV) {
+            console.error('❌ Error syncing progress to key result:', keyResultError);
+          }
         } else {
-          console.log('✅ Progress synced to key result:', keyResult);
+          if (import.meta.env?.DEV) {
+            console.log('✅ Progress synced to key result:', keyResult);
+          }
         }
       }
 
@@ -485,9 +413,13 @@ export const useDeleteDepartmentObjective = () => {
           throw error;
         }
 
-        console.log('✅ Department objective deleted successfully');
+        if (import.meta.env?.DEV) {
+          console.log('✅ Department objective deleted successfully');
+        }
       } catch (error) {
-        console.error('❌ Error in delete process:', error);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Error in delete process:', error);
+        }
         throw error;
       }
     },

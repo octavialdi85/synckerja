@@ -62,7 +62,7 @@ export const useUserData = (): UserData => {
   const fetchUserData = useCallback(async (userId: string) => {
     // Prevent duplicate fetches for the same user
     if (fetchingRef.current) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env?.DEV) {
         console.log('🚫 Preventing duplicate fetch for user:', userId);
       }
       return;
@@ -70,7 +70,7 @@ export const useUserData = (): UserData => {
 
     // Check if we already have this user in progress and have data
     if (lastFetchRef.current === userId && profile !== null) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env?.DEV) {
         console.log('📋 Using existing fetch for user:', userId);
       }
       return;
@@ -80,7 +80,7 @@ export const useUserData = (): UserData => {
     const cacheKey = `user-${userId}`;
     const cached = userDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env?.DEV) {
         console.log('📋 Using cached user data for:', userId);
       }
       setProfile(cached.data.profile);
@@ -95,7 +95,7 @@ export const useUserData = (): UserData => {
       lastFetchRef.current = userId;
       setLoading(true);
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env?.DEV) {
         console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
       }
       
@@ -112,7 +112,9 @@ export const useUserData = (): UserData => {
       let profileData = profileResult.data;
       
       if (profileResult.error) {
-        console.error("❌ useUserData: Profile error:", profileResult.error);
+        if (import.meta.env?.DEV) {
+          console.error("❌ useUserData: Profile error:", profileResult.error);
+        }
         // Create fallback profile from auth data with all required fields
         profileData = {
           id: userId,
@@ -125,7 +127,7 @@ export const useUserData = (): UserData => {
           // email_verified field moved to email_verification_tokens table
           organization_created: false
         };
-      } else if (process.env.NODE_ENV === 'development') {
+      } else if (import.meta.env?.DEV) {
         console.log("✅ useUserData: Profile fetched:", profileData);
       }
 
@@ -134,8 +136,10 @@ export const useUserData = (): UserData => {
       // Get role data
       const roleData = roleResult.error ? null : roleResult.data as UserRole;
       if (roleResult.error) {
-        console.error("❌ useUserData: Role fetch error:", roleResult.error);
-      } else if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env?.DEV) {
+          console.error("❌ useUserData: Role fetch error:", roleResult.error);
+        }
+      } else if (import.meta.env?.DEV) {
         console.log("✅ useUserData: Role in active org:", roleData);
       }
       setUserRole(roleData);
@@ -150,8 +154,10 @@ export const useUserData = (): UserData => {
           .single();
 
         if (orgError) {
-          console.error("❌ useUserData: Organization error:", orgError);
-        } else if (process.env.NODE_ENV === 'development') {
+          if (import.meta.env?.DEV) {
+            console.error("❌ useUserData: Organization error:", orgError);
+          }
+        } else if (import.meta.env?.DEV) {
           console.log("✅ useUserData: Organization fetched:", organizationData);
         }
         orgData = organizationData;
@@ -173,7 +179,9 @@ export const useUserData = (): UserData => {
       cleanupCache();
 
     } catch (error) {
-      console.error("❌ useUserData: Unexpected error:", error);
+      if (import.meta.env?.DEV) {
+        console.error("❌ useUserData: Unexpected error:", error);
+      }
       
       // Even on error, create a basic profile from auth data with all required fields
       const fallbackProfile = {
@@ -209,7 +217,7 @@ export const useUserData = (): UserData => {
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env?.DEV) {
         console.log('🔄 Manual refresh of user data triggered');
       }
       lastFetchRef.current = ''; // Reset to allow refetch

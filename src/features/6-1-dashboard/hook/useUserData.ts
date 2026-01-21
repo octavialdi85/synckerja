@@ -68,8 +68,6 @@ export const useUserData = (): UserData => {
       lastFetchRef.current = userId;
       setLoading(true);
       
-      // Starting fetch for user data
-      
       // Parallel fetch of profile and role data
       const [profileResult, roleResult] = await Promise.all([
         supabase
@@ -172,7 +170,6 @@ export const useUserData = (): UserData => {
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
-      // Manual refresh of user data triggered
       lastFetchRef.current = ''; // Reset to allow refetch
       userDataCache.delete(`user-${user.id}`); // Clear cache
       fetchingRef.current = false; // Reset fetching flag

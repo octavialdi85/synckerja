@@ -5,7 +5,7 @@ import { Button } from '@/features/ui/button';
 import { Clock, Settings, CheckCircle } from 'lucide-react';
 import { useCurrentUserEmployee } from './SectionGreetingsImport/useCurrentUserEmployee';
 import { useAttendanceStatus } from './AttendanceStatusProvider';
-import { useUserData } from './SectionGreetingsImport/useUserData';
+import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
 import { format } from 'date-fns';
@@ -20,7 +20,8 @@ export const SectionGreetings = ({ currentTime, greeting }: SectionGreetingsProp
   const { t, dateLocale } = useAppTranslation();
   const { data: employeeData, isLoading } = useCurrentUserEmployee();
   const { hasCheckedIn, hasCheckedOut, todayRecord } = useAttendanceStatus();
-  const { profile } = useUserData();
+  const { data: unifiedData } = useUnifiedProfile();
+  const profile = unifiedData?.profile;
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const formatTime = (date: Date) => {

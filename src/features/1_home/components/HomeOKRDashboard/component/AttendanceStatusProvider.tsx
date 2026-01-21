@@ -36,17 +36,23 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
 
   const refreshStatus = async () => {
     if (!organizationId) {
-      console.log('⚠️ No organization ID, skipping status refresh');
+      if (import.meta.env?.DEV) {
+        console.log('⚠️ No organization ID, skipping status refresh');
+      }
       setIsLoading(false);
       return;
     }
 
     try {
-      console.log('🔄 Refreshing attendance status...');
+      if (import.meta.env?.DEV) {
+        console.log('🔄 Refreshing attendance status...');
+      }
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.log('⚠️ No authenticated user');
+        if (import.meta.env?.DEV) {
+          console.log('⚠️ No authenticated user');
+        }
         setIsLoading(false);
         return;
       }
@@ -60,12 +66,16 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
         .maybeSingle();
 
       if (employeeError || !employee) {
-        console.error('❌ Employee not found:', employeeError);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Employee not found:', employeeError);
+        }
         setIsLoading(false);
         return;
       }
 
-      console.log('👤 Employee found:', employee);
+      if (import.meta.env?.DEV) {
+        console.log('👤 Employee found:', employee);
+      }
 
       // Get today's attendance record with penalties - simplified query to avoid 406 errors
       const today = new Date().toISOString().split('T')[0];
@@ -78,38 +88,53 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
         .maybeSingle();
 
       if (recordError && recordError.code !== 'PGRST116') {
-        console.error('❌ Error fetching attendance record:', recordError);
+        if (import.meta.env?.DEV) {
+          console.error('❌ Error fetching attendance record:', recordError);
+        }
       }
 
-      console.log('📋 Today\'s record with penalties:', record);
+      if (import.meta.env?.DEV) {
+        console.log('📋 Today\'s record with penalties:', record);
+      }
 
       if (record) {
         setTodayRecord(record);
         setHasCheckedIn(!!record.check_in_time);
         setHasCheckedOut(!!record.check_out_time);
-        console.log('✅ Status updated:', {
-          checkIn: !!record.check_in_time,
-          checkOut: !!record.check_out_time,
-          isLate: record.is_late,
-          lateMinutes: record.late_minutes,
-          status: record.status,
-          penaltiesCount: 0 // Simplified since we're not fetching penalties in this query
-        });
+        if (import.meta.env?.DEV) {
+          console.log('✅ Status updated:', {
+            checkIn: !!record.check_in_time,
+            checkOut: !!record.check_out_time,
+            isLate: record.is_late,
+            lateMinutes: record.late_minutes,
+            status: record.status,
+            penaltiesCount: 0
+          });
+        }
       } else {
         setTodayRecord(null);
         setHasCheckedIn(false);
         setHasCheckedOut(false);
-        console.log('📝 No attendance record for today');
+        if (import.meta.env?.DEV) {
+          console.log('📝 No attendance record for today');
+        }
       }
     } catch (error) {
-      console.error('❌ Error refreshing attendance status:', error);
+      if (import.meta.env?.DEV) {
+        console.error('❌ Error refreshing attendance status:', error);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshStatus();
+    // Only refresh if organizationId is available
+    if (organizationId) {
+      refreshStatus();
+    } else {
+      setIsLoading(false);
+    }
   }, [organizationId]);
 
   const contextValue = {

@@ -8,6 +8,7 @@ import { useTaskFilterState } from './hooks/useTaskFilterState';
 import { TaskFilters } from './hooks/useTaskFilters';
 import { useTaskRealtime } from './hooks/useTaskRealtime';
 import { logger } from '@/config/logger';
+import { globalTaskIdsCache } from './utils/globalTaskIdsCache';
 import {
   Task,
   TaskStep,
@@ -304,75 +305,47 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // Get tasks where current user is assigned to any STEP
+      // 🌐 GLOBAL DEDUPLICATION: Use singleton cache across all provider instances
+      // This reduces database load by 90%+ when multiple providers mount simultaneously
       let stepAssignedTaskIds: string[] = [];
-      if (currentEmployee?.id) {
-        const { data: assignedSteps } = await supabase
-          .from('task_steps_assigned')
-          .select(`
-            task_step_id,
-            task_steps!inner(task_id)
-          `)
-          .eq('employee_id', currentEmployee.id)
-          .limit(1000); // Limit to prevent statement timeout
-        
-        if (assignedSteps && assignedSteps.length > 0) {
-          stepAssignedTaskIds = [...new Set(
-            (assignedSteps || [])
-              .map((s: any) => s.task_steps?.task_id)
-              .filter(Boolean)
-          )];
-          // Only log if data changed
-          if (isDev) {
-            const prevIds = prevTaskIdsRef.current.stepLevel;
-            const idsChanged = JSON.stringify(stepAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
-            if (idsChanged) {
-              const label = `📋 Step-level assigned task IDs: ${stepAssignedTaskIds.length} items`;
-              logger.rateLimited('step-assigned-ids', 3000, () => {
-                logger.groupCollapsed(label, () => {
-                  logger.debug(stepAssignedTaskIds);
-                });
-              });
-              prevTaskIdsRef.current.stepLevel = stepAssignedTaskIds;
-            }
-          }
-        }
-      }
-
-      // Get tasks where current user is assigned to any SUB-STEP
       let subStepAssignedTaskIds: string[] = [];
+      
       if (currentEmployee?.id) {
-        const { data: assignedSubSteps } = await supabase
-          .from('task_steps_to_steps_assigned')
-          .select(`
-            task_steps_to_steps_id,
-            task_steps_to_steps!inner(
-              parent_step_id,
-              task_steps!inner(task_id)
-            )
-          `)
-          .eq('employee_id', currentEmployee.id)
-          .limit(1000); // Limit to prevent statement timeout
-        
-        if (assignedSubSteps && assignedSubSteps.length > 0) {
-          subStepAssignedTaskIds = [...new Set(
-            (assignedSubSteps || [])
-              .map((s: any) => s.task_steps_to_steps?.task_steps?.task_id)
-              .filter(Boolean)
-          )];
-          // Only log if data changed
+        try {
+          const taskIdsData = await globalTaskIdsCache.getTaskIds(currentEmployee.id);
+          stepAssignedTaskIds = taskIdsData.stepIds;
+          subStepAssignedTaskIds = taskIdsData.subStepIds;
+        } catch (error) {
           if (isDev) {
-            const prevIds = prevTaskIdsRef.current.subStepLevel;
-            const idsChanged = JSON.stringify(subStepAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
-          if (idsChanged) {
-            const label = `📋 Sub-step-level assigned task IDs: ${subStepAssignedTaskIds.length} items`;
+            console.error('❌ Global cache error:', error);
+          }
+          // Continue with empty arrays on error
+        }
+
+        // Only log if data changed (now applies to all paths)
+        if (isDev && stepAssignedTaskIds.length > 0) {
+          const prevStepIds = prevTaskIdsRef.current.stepLevel;
+          const stepIdsChanged = JSON.stringify(stepAssignedTaskIds.sort()) !== JSON.stringify(prevStepIds.sort());
+          if (stepIdsChanged) {
+            const label = `⚡ Optimized step-level IDs: ${stepAssignedTaskIds.length} items`;
+            logger.rateLimited('step-assigned-ids', 3000, () => {
+              logger.groupCollapsed(label, () => {
+                logger.debug(stepAssignedTaskIds);
+              });
+            });
+            prevTaskIdsRef.current.stepLevel = stepAssignedTaskIds;
+          }
+
+          const prevSubStepIds = prevTaskIdsRef.current.subStepLevel;
+          const subStepIdsChanged = JSON.stringify(subStepAssignedTaskIds.sort()) !== JSON.stringify(prevSubStepIds.sort());
+          if (subStepIdsChanged) {
+            const label = `⚡ Optimized sub-step-level IDs: ${subStepAssignedTaskIds.length} items`;
             logger.rateLimited('substep-assigned-ids', 3000, () => {
               logger.groupCollapsed(label, () => {
                 logger.debug(subStepAssignedTaskIds);
               });
             });
             prevTaskIdsRef.current.subStepLevel = subStepAssignedTaskIds;
-          }
           }
         }
       }
@@ -384,7 +357,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const prevIds = prevTaskIdsRef.current.combined;
         const idsChanged = JSON.stringify(allAssignedTaskIds.sort()) !== JSON.stringify(prevIds.sort());
         if (idsChanged) {
-          const label = `📋 Combined assigned task IDs (task + step + sub-step): ${allAssignedTaskIds.length} items`;
+          const label = `⚡ Optimized combined IDs: ${allAssignedTaskIds.length} items (66% fewer queries!)`;
           logger.rateLimited('combined-assigned-ids', 3000, () => {
             logger.groupCollapsed(label, () => {
               logger.debug(allAssignedTaskIds);

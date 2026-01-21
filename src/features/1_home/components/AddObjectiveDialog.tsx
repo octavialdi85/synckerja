@@ -9,7 +9,7 @@ import { Plus, CalendarDays, Calendar } from 'lucide-react';
 import { useOkrCycles } from './HomeOKRDashboard/hooks/useOkrCycles';
 import { useCreateObjective } from './HomeOKRDashboard/component/ObjectivesTabImport/useObjectives';
 import { useUpdateCompanyObjective } from './HomeOKRDashboard/hooks/useUpdateCompanyObjective';
-import { useProfile } from '@/features/2-1-employees/MyInfo/Documents/hooks/useProfile';
+import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useCreateOkrCycle } from './HomeOKRDashboard/hooks/useCreateOkrCycle';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,9 +29,8 @@ export const AddObjectiveDialog = ({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange
 }: AddObjectiveDialogProps) => {
-  const {
-    data: profile
-  } = useProfile();
+  const { data: unifiedData } = useUnifiedProfile();
+  const profile = unifiedData?.profile;
   const organizationId = profile?.active_organization_id;
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
