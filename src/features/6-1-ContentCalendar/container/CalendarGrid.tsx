@@ -48,6 +48,36 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     }
   };
 
+  // Helper function to get PIC name based on status
+  const getPicName = (plan: any): string => {
+    const approved = plan?.approved === true;
+    const productionApproved = plan?.production_approved === true;
+    const done = plan?.done === true;
+
+    // Case 1: approved=false, production_approved=false, done=false → pic_id
+    if (!approved && !productionApproved && !done) {
+      return plan?.pic?.full_name || 'Unassigned';
+    }
+
+    // Case 2: approved=true, production_approved=false, done=false → pic_production_id
+    if (approved && !productionApproved && !done) {
+      return plan?.pic_production?.full_name || 'Unassigned';
+    }
+
+    // Case 3: approved=true, production_approved=true, done=false → pic_production_id
+    if (approved && productionApproved && !done) {
+      return plan?.pic_production?.full_name || 'Unassigned';
+    }
+
+    // Case 4: approved=true, production_approved=true, done=true → post_link_created_by
+    if (approved && productionApproved && done) {
+      return plan?.post_link_creator?.full_name || 'Unassigned';
+    }
+
+    // Fallback to pic_id
+    return plan?.pic?.full_name || 'Unassigned';
+  };
+
   return (
     <div className="relative">
       {/* Days of week header - Fixed positioning */}
@@ -76,6 +106,13 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 hover:shadow-md hover:scale-105 transition-all duration-200
               `}
             >
+              {/* Content count badge - shown when more than 1 content */}
+              {dayInfo.count > 1 && (
+                <div className="absolute top-1.5 right-0.5 z-10 bg-red-600 text-white text-[11px] font-bold rounded-md min-w-[20px] h-[20px] flex items-center justify-center px-1.5 shadow-lg ring-2 ring-red-400/30 transform hover:scale-110 transition-transform">
+                  <span className="drop-shadow-sm">{dayInfo.count}</span>
+                </div>
+              )}
+              
               <div className="font-medium text-sm mb-1">
                 {date.getDate()}
               </div>
@@ -177,7 +214,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           'text-blue-600'
                         }`}>
                           {[
-                            plan?.pic?.full_name || 'Unassigned',
+                            getPicName(plan),
                             plan?.content_type?.name,
                             plan?.content_pillar?.name
                           ].filter(Boolean).join(' • ')}
