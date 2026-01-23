@@ -141,9 +141,10 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
       );
     },
     enabled: !!organizationId,
-    staleTime: 30 * 1000, // 30 seconds - let React Query handle caching too
+    staleTime: 120 * 1000, // 120 seconds - increased cache time to reduce refetch frequency
     refetchOnMount: false, // Don't refetch on mount if data is fresh
     refetchOnWindowFocus: false, // Don't refetch on window focus (global cache handles this)
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
   });
 };
 

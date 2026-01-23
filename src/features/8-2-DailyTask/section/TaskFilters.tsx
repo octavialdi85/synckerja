@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, FilterX, CalendarIcon, Plus } from 'lucide-react';
+import { Search, FilterX, CalendarIcon, Plus, Building2 } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
 import {
@@ -21,6 +21,10 @@ import { id as idLocale } from 'date-fns/locale';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { CreateTaskDialog } from './CreateTaskDialog';
 import { MonthPicker } from '@/features/share/calendar';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 interface TaskFiltersProps {
   onAddTask?: () => void;
@@ -29,11 +33,46 @@ interface TaskFiltersProps {
 
 export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
   const { filters, setFilters, tasks } = useDailyTask();
+  const { organizationId } = useCurrentOrg();
+  const { data: currentEmployee } = useCurrentEmployee();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
   const { isOwner } = useCentralizedUserData();
   const planDateSelectTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Fetch departments
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organizationId,
+  });
+
+  // Set default department from current employee if not set (only once)
+  useEffect(() => {
+    if (currentEmployee?.department_id) {
+      setFilters(prev => {
+        // Only set default if department is not already set
+        if (!prev.department) {
+          return {
+            ...prev,
+            department: currentEmployee.department_id
+          };
+        }
+        return prev;
+      });
+    }
+  }, [currentEmployee?.department_id, setFilters]); // Remove filters.department from dependency to avoid loop
 
   // Get unique employees from all task steps for PIC filter
   const availableEmployees = useMemo(() => {
@@ -67,15 +106,31 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     setFilters(prev => ({ ...prev, priority: value }));
   };
 
+  const handleDepartmentChange = (value: string) => {
+    setFilters(prev => ({ ...prev, department: value === "all" ? undefined : value }));
+  };
+
   const handleTaskViewChange = (value: string) => {
     if (value === 'my_task') {
-      setFilters(prev => ({ ...prev, myTask: 'my_task', pic: '' }));
+      setFilters(prev => ({ ...prev, myTask: 'my_task', pic: '', picLevel: undefined }));
     } else if (value === 'all_pic') {
-      setFilters(prev => ({ ...prev, myTask: 'all', pic: '' }));
+      setFilters(prev => ({ ...prev, myTask: 'all', pic: '', picLevel: undefined }));
     } else {
-      // Individual PIC selected
-      setFilters(prev => ({ ...prev, myTask: 'all', pic: value }));
+      // Individual PIC selected - set default level to 'task' if not set
+      setFilters(prev => ({ 
+        ...prev, 
+        myTask: 'all', 
+        pic: value,
+        picLevel: prev.picLevel || 'task' // Keep existing level or default to 'task'
+      }));
     }
+  };
+
+  const handlePicLevelChange = (value: string) => {
+    setFilters(prev => ({ 
+      ...prev, 
+      picLevel: value as 'task' | 'step' | 'sub_step'
+    }));
   };
 
   // Get current selected value for combined dropdown
@@ -185,7 +240,9 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       planDateRange: undefined,
       customPlanMonth: undefined,
       pic: '',
-      myTask: filters.myTask || 'my_task' // Preserve myTask preference (from localStorage)
+      picLevel: undefined,
+      myTask: filters.myTask || 'my_task', // Preserve myTask preference (from localStorage)
+      department: currentEmployee?.department_id || undefined // Reset to current employee's department
     });
   };
 
@@ -212,16 +269,48 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     <div className="w-full">
       <div className="p-2 bg-white border border-gray-200 rounded-md">
         <div className="flex flex-wrap gap-1 items-center">
-      {/* Search Input */}
-      <div className="relative flex-1 min-w-[200px]">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          placeholder="Search tasks and steps..."
-          value={filters.search}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="pl-8 pr-3 h-9 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-        />
-      </div>
+      {/* Search Input - Hidden when PIC filter is active */}
+      {!filters.pic && (
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search tasks and steps..."
+            value={filters.search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-8 pr-3 h-9 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          />
+        </div>
+      )}
+
+      {/* Department Filter */}
+      <Select value={filters.department || "all"} onValueChange={handleDepartmentChange}>
+        <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
+          <SelectValue placeholder="All Departments">
+            {filters.department ? (
+              <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+                <Building2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <span className="truncate">{departments.find(d => d.id === filters.department)?.name || 'All Departments'}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+                <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="truncate">All Departments</span>
+              </div>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Departments</SelectItem>
+          {departments.map((department) => (
+            <SelectItem key={department.id} value={department.id}>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-blue-600" />
+                {department.name}
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {/* Combined My Task / All PIC Filter */}
       <Select value={getCurrentTaskViewValue()} onValueChange={handleTaskViewChange}>
@@ -242,6 +331,23 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           )}
         </SelectContent>
       </Select>
+
+      {/* PIC Level Filter - Only show when PIC is selected */}
+      {filters.pic && (
+        <Select 
+          value={filters.picLevel || 'task'} 
+          onValueChange={handlePicLevelChange}
+        >
+          <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+            <SelectValue placeholder="Level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="task">Task</SelectItem>
+            <SelectItem value="step">Step</SelectItem>
+            <SelectItem value="sub_step">Sub Step</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Status Filter */}
       <Select value={filters.status || "all"} onValueChange={(value) => handleStatusChange(value === "all" ? "" : value)}>
@@ -362,7 +468,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       </div>
 
       {/* Clear Filters Button */}
-      {(filters.search || filters.status || filters.priority || filters.pic || filters.dateRange || filters.planDateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
+      {(filters.search || filters.status || filters.priority || filters.pic || filters.picLevel || filters.department || filters.dateRange || filters.planDateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
         <button
           onClick={clearFilters}
           className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center ml-auto"

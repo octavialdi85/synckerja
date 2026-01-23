@@ -22,6 +22,7 @@ import { StepHistoryModal } from './StepHistoryModal';
 import { AssignSubStepDialog } from './AssignSubStepDialog';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { logger } from '@/config/logger';
 
 interface SubStep {
   id: string;
@@ -80,10 +81,15 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const isTaskCreator = taskCreatedBy === user?.id;
 
   const fetchSubSteps = async () => {
-    console.log('🔍 Fetching sub-steps:', { organizationId, parentStepId });
+    const isDev = import.meta.env?.DEV;
+    if (isDev) {
+      logger.debug('🔍 Fetching sub-steps:', { organizationId, parentStepId });
+    }
     
     if (!organizationId || !parentStepId) {
-      console.warn('⚠️ Missing organizationId or parentStepId');
+      if (isDev) {
+        logger.warn('⚠️ Missing organizationId or parentStepId');
+      }
       return;
     }
     
@@ -99,11 +105,15 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         .order('order', { ascending: true })
         .order('created_at', { ascending: true });
       
-      console.log('📊 Sub-steps query result (with org filter):', { data, error, count: data?.length });
+      if (isDev) {
+        logger.debug('📊 Sub-steps query result (with org filter):', { data, error, count: data?.length });
+      }
       
       // If no data found with organization_id, try without it (fallback)
       if (!error && (!data || data.length === 0)) {
-        console.log('🔄 No data with org filter, trying without org filter...');
+        if (isDev) {
+          logger.debug('🔄 No data with org filter, trying without org filter...');
+        }
         const fallbackResult = await supabase
           .from('task_steps_to_steps')
           .select('*')
@@ -111,11 +121,13 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           .order('order', { ascending: true })
           .order('created_at', { ascending: true });
         
-        console.log('📊 Sub-steps fallback query result:', { 
-          data: fallbackResult.data, 
-          error: fallbackResult.error, 
-          count: fallbackResult.data?.length 
-        });
+        if (isDev) {
+          logger.debug('📊 Sub-steps fallback query result:', { 
+            data: fallbackResult.data, 
+            error: fallbackResult.error, 
+            count: fallbackResult.data?.length 
+          });
+        }
         
         if (!fallbackResult.error && fallbackResult.data) {
           data = fallbackResult.data;
@@ -163,7 +175,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       }
       
       setSubSteps(subStepsWithAssignment);
-      console.log('✅ Sub-steps set to state:', subStepsWithAssignment.length || 0, 'items');
+      if (isDev) {
+        logger.debug('✅ Sub-steps set to state:', subStepsWithAssignment.length || 0, 'items');
+      }
       
       await syncParentCompletion(subStepsWithAssignment);
 
@@ -192,7 +206,10 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           }
         })
         .catch((err) => {
-          console.warn('History count fetch failed (non-critical):', err);
+          // Only log in development mode - this is non-critical
+          if (import.meta.env.DEV) {
+            logger.debug('History count fetch failed (non-critical):', err);
+          }
           setHistoryCounts({}); // Show sub-steps without counts - graceful degradation
         });
       } else {
@@ -436,8 +453,11 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 	};
 
   const handleAssignSubStep = async (subStepId: string, employeeId: string | null, dueDateIso?: string | null) => {
+    const isDev = import.meta.env?.DEV;
     try {
-      console.log('🎯 Assigning sub-step:', { subStepId, employeeId, dueDateIso });
+      if (isDev) {
+        logger.debug('🎯 Assigning sub-step:', { subStepId, employeeId, dueDateIso });
+      }
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
@@ -497,11 +517,13 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             description: 'Sub-step assigned but due date not saved',
             variant: 'destructive'
           });
-        } else {
-          console.log('✅ Sub-step due_date saved successfully');
+        } else if (isDev) {
+          logger.debug('✅ Sub-step due_date saved successfully');
         }
 
-        console.log('✅ Sub-step assigned successfully');
+        if (isDev) {
+          logger.debug('✅ Sub-step assigned successfully');
+        }
       } else {
         // Unassign
         const { error } = await supabase
@@ -510,7 +532,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
           .eq('task_steps_to_steps_id', subStepId);
 
         if (error) throw error;
-        console.log('✅ Sub-step unassigned successfully');
+        if (isDev) {
+          logger.debug('✅ Sub-step unassigned successfully');
+        }
       }
 
       toast({

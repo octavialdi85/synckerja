@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
 import { globalCompanyObjectivesManager } from './globalCompanyObjectivesManager';
+import { logger } from '@/config/logger';
 
 export interface CompanyObjective {
   id: string;
@@ -49,38 +50,54 @@ export const useCompanyObjectives = (organizationId?: string, cycleIds?: string[
     return unsubscribe;
   }, [organizationId, queryClient]);
 
+  // ⚡ OPTIMIZED: Always fetch ALL company objectives for the organization
+  // Filter by cycleIds will be done client-side to avoid double fetch
+  // This ensures we only have ONE query per organization, regardless of cycleIds
   return useQuery({
-    queryKey: ['company-objectives', organizationId, cycleIds],
+    queryKey: ['company-objectives', organizationId], // Remove cycleIds from query key to prevent double fetch
     queryFn: async () => {
       if (!organizationId) {
-        console.log('❌ No organizationId provided');
+        const isDev = import.meta.env?.DEV;
+        if (isDev) {
+          console.log('❌ No organizationId provided');
+        }
         return [];
       }
       
-      console.log('🔍 Fetching company objectives:', { organizationId, cycleIds });
-      
-      let query = supabase
-        .from('company_objectives')
-        .select('*')
-        .eq('organization_id', organizationId);
-
-      // Filter by multiple cycle IDs if provided (only valid UUIDs)
-      const validCycleIds = filterValidCycleIds(cycleIds);
-      if (validCycleIds.length > 0) {
-        query = query.in('cycle_id', validCycleIds);
+      const isDev = import.meta.env?.DEV;
+      if (isDev) {
+        console.log('🔍 Fetching company objectives:', { organizationId, cycleIds: 'ALL' });
       }
+      
+      // Always fetch ALL company objectives for the organization
+      // OPTIMIZATION: Select only necessary fields to reduce payload size
+      const startTime = performance.now();
+      const { data, error } = await supabase
+        .from('company_objectives')
+        .select('id, organization_id, cycle_id, title, why_important, status, progress_percentage, weight, start_date, end_date, owner_id, created_by, created_at, updated_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+      const duration = performance.now() - startTime;
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // Performance monitoring - increased threshold to 1500ms for complex queries
+      // Company objectives query involves joins and can be slower
+      logger.performance(`Company Objectives Fetch (${organizationId})`, duration, 1500);
 
       if (error) {
         console.error('❌ Error fetching company objectives:', error);
         throw error;
       }
 
-      console.log('✅ Company objectives fetched:', data);
+      if (isDev) {
+        console.log('✅ Company objectives fetched:', data);
+      }
       return data || [];
     },
     enabled: !!organizationId,
+    staleTime: 120 * 1000, // 120 seconds - increased cache time to reduce refetch frequency
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
   });
 };
 

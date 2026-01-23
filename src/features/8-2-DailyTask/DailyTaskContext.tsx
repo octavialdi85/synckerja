@@ -27,7 +27,7 @@ import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './servi
 // Optimized batch size to balance between speed and stability
 const BATCH_SIZE = 10; // Balanced batch size - small enough to prevent 500 errors, large enough for speed
 const MAX_RETRIES = 1; // Reduced retries for faster failure detection (was 2)
-const QUERY_TIMEOUT = 10000; // Reduced to 10 seconds timeout per query for faster failure (was 15s)
+const QUERY_TIMEOUT = 20000; // Increased to 20 seconds timeout per query to handle slow database queries
 
 const batchQuery = async <T,>(
   ids: string[],
@@ -251,9 +251,30 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       trackQuery('fetch_tasks');
       
       // Get current user to filter personal tasks only
-      const { data: { user } } = await supabase.auth.getUser();
+      // OPTIMIZATION: Add timeout to prevent blocking on slow auth.getUser()
+      // Increased timeout to 8 seconds to handle slow auth responses
+      const getUserPromise = supabase.auth.getUser();
+      const getUserTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('getUser timeout')), 8000)
+      );
+      
+      let user: any = null;
+      try {
+        const result = await Promise.race([getUserPromise, getUserTimeout]);
+        user = (result as any)?.data?.user;
+      } catch (error) {
+        // If getUser times out, try to continue with cached user ID or return empty
+        if (import.meta.env.DEV) {
+          logger.debug('getUser timeout in fetchTasks, returning empty tasks');
+        }
+        setTasks([]);
+        return;
+      }
+      
       if (!user) {
-        console.warn('⚠️ No authenticated user found');
+        if (import.meta.env.DEV) {
+          logger.debug('⚠️ No authenticated user found');
+        }
         setTasks([]);
         return;
       }
@@ -2433,8 +2454,25 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       setIsLoading(true);
       
       try {
-        // Try to load cached data first for instant display
-        const { data: { user } } = await supabase.auth.getUser();
+        // OPTIMIZATION: Try to load cached data first for instant display
+        // Use Promise.race with timeout to avoid blocking on slow auth.getUser()
+        // Increased timeout to 5 seconds to handle slow auth responses
+        const getUserPromise = supabase.auth.getUser();
+        const getUserTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getUser timeout')), 5000)
+        );
+        
+        let user: any = null;
+        try {
+          const result = await Promise.race([getUserPromise, getUserTimeout]);
+          user = (result as any)?.data?.user;
+        } catch (error) {
+          // If getUser times out or fails, try to get user from session storage or continue without cache
+          if (import.meta.env.DEV) {
+            logger.debug('getUser timeout/failed, continuing without cache check');
+          }
+        }
+        
         if (user) {
           const cacheKey = `tasks_${organizationId}_${user.id}`;
           const cached = getCached<any[]>(cacheKey, 60000);
@@ -2444,30 +2482,48 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             setIsLoading(false);
             
             // Fetch fresh data in background (non-blocking)
-            fetchTasks(true).catch(err => console.error('Background refresh failed:', err));
-            fetchRecentStepUpdates().catch(err => console.error('Background recent updates failed:', err));
+            fetchTasks(true).catch(err => {
+              if (import.meta.env.DEV) {
+                logger.debug('Background refresh failed:', err);
+              }
+            });
+            fetchRecentStepUpdates().catch(err => {
+              if (import.meta.env.DEV) {
+                logger.debug('Background recent updates failed:', err);
+              }
+            });
             return;
           }
         }
       } catch (cacheError) {
         // If cache check fails, continue with normal fetch
-        console.warn('Cache check failed, proceeding with normal fetch:', cacheError);
+        if (import.meta.env.DEV) {
+          logger.debug('Cache check failed, proceeding with normal fetch:', cacheError);
+        }
       }
       
-      // No cache available - fetch data normally
+      // OPTIMIZATION: Set loading to false early with empty array to allow UI to render
+      // This prevents blocking on slow queries
+      setTasks([]);
+      setIsLoading(false);
+      
+      // No cache available - fetch data normally in background
       // Load tasks first (critical) - don't wait for recent updates
       const tasksPromise = fetchTasks();
       
-      // Set loading to false as soon as tasks are loaded (don't wait for recent updates)
-      tasksPromise.then(() => {
-        setIsLoading(false);
-      }).catch((err) => {
-        console.error('Error fetching tasks:', err);
-        setIsLoading(false);
+      // Update tasks when loaded (non-blocking)
+      tasksPromise.catch((err) => {
+        if (import.meta.env.DEV) {
+          logger.debug('Error fetching tasks:', err);
+        }
       });
       
       // Load recent updates in background (non-blocking, non-critical)
-      fetchRecentStepUpdates().catch(err => console.error('Background recent updates failed:', err));
+      fetchRecentStepUpdates().catch(err => {
+        if (import.meta.env.DEV) {
+          logger.debug('Background recent updates failed:', err);
+        }
+      });
     };
 
     loadData();

@@ -29,9 +29,20 @@ const DailyTaskContent = () => {
   const { tasks, filters, isLoading } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
+  const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
 
-  // Show loading state while initial data is being fetched
-  if (isLoading) {
+  // OPTIMIZATION: Show skeleton UI after 500ms even if still loading
+  // This prevents blank screen during slow queries
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoadTimeout(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show loading state only on initial load (before timeout)
+  // After timeout, show skeleton UI instead of full loading screen
+  if (isLoading && !initialLoadTimeout) {
     return (
       <StandardLayout>
         <div className="min-h-screen flex items-center justify-center bg-gray-50">

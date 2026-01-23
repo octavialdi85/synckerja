@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Flag, User, Calendar } from 'lucide-react';
+import { X, Flag, User, Calendar, Building2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -27,6 +27,9 @@ import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmploy
 import { MonthPicker } from '@/features/share/calendar';
 import { format, startOfMonth } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 
 interface EditTaskDialogProps {
   isOpen: boolean;
@@ -37,6 +40,7 @@ interface EditTaskDialogProps {
 export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose, taskId }) => {
   const { tasks, updateTask } = useDailyTask();
   const { data: employees = [] } = useAvailableEmployees();
+  const { organizationId } = useCurrentOrg();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -45,8 +49,26 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
   const [planDate, setPlanDate] = useState<Date | null>(null);
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Fetch departments
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organizationId,
+  });
 
   // Load task data when dialog opens
   useEffect(() => {
@@ -65,9 +87,58 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         } else {
           setPlanDate(null);
         }
+        
+        // Load department_id from daily_tasks_assigned
+        const loadDepartment = async () => {
+          const { data: assignment } = await supabase
+            .from('daily_tasks_assigned')
+            .select('department_id')
+            .eq('daily_task_id', taskId)
+            .maybeSingle();
+          
+          if (assignment?.department_id) {
+            setDepartmentId(assignment.department_id);
+          } else if (task.assigned_to) {
+            // If no department in assignment but employee is assigned, get from employee
+            const { data: employee } = await supabase
+              .from('employees')
+              .select('department_id')
+              .eq('id', task.assigned_to)
+              .maybeSingle();
+            
+            if (employee?.department_id) {
+              setDepartmentId(employee.department_id);
+            }
+          }
+        };
+        
+        loadDepartment();
       }
     }
   }, [isOpen, taskId, tasks]);
+
+  // Auto-select department when employee is selected
+  useEffect(() => {
+    const loadEmployeeDepartment = async () => {
+      if (assignedTo) {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('department_id')
+          .eq('id', assignedTo)
+          .maybeSingle();
+        
+        if (employee?.department_id) {
+          setDepartmentId(employee.department_id);
+        } else {
+          setDepartmentId('');
+        }
+      } else {
+        setDepartmentId('');
+      }
+    };
+    
+    loadEmployeeDepartment();
+  }, [assignedTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +159,22 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         plan_date: planDateFormatted,
         assigned_to: assignedTo || null,
       });
+
+      // Update department_id in daily_tasks_assigned
+      if (assignedTo && departmentId) {
+        const { data: existingAssignment } = await supabase
+          .from('daily_tasks_assigned')
+          .select('id')
+          .eq('daily_task_id', taskId)
+          .maybeSingle();
+
+        if (existingAssignment) {
+          await supabase
+            .from('daily_tasks_assigned')
+            .update({ department_id: departmentId })
+            .eq('id', existingAssignment.id);
+        }
+      }
 
       onClose();
     } catch (error) {
@@ -315,6 +402,46 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-blue-600" />
                         {employee.full_name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Department */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Department
+              </label>
+              <Select
+                value={departmentId || ''}
+                onValueChange={setDepartmentId}
+                disabled={isSubmitting || !assignedTo}
+              >
+                <SelectTrigger className="border border-gray-200 rounded-lg">
+                  <SelectValue placeholder="Select department...">
+                    {departmentId ? (
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm">
+                          {departments.find((d) => d.id === departmentId)?.name || 'Select...'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-gray-400" />
+                        <span className="text-gray-500 text-sm">Select department...</span>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((department) => (
+                    <SelectItem key={department.id} value={department.id}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        {department.name}
                       </div>
                     </SelectItem>
                   ))}

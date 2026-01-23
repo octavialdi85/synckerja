@@ -14,7 +14,9 @@ export interface TaskFilters {
   planDateRange?: 'this_month_plan' | 'next_month_plan' | 'last_month_plan' | 'custom_month_plan';
   customPlanMonth?: string; // Format: YYYY-MM-01
   pic: string;
+  picLevel?: 'task' | 'step' | 'sub_step' | 'all'; // Level filter untuk PIC: task, step, sub_step, atau semua
   myTask?: 'all' | 'my_task';
+  department?: string;
 }
 
 interface UseTaskFiltersProps {
@@ -22,6 +24,8 @@ interface UseTaskFiltersProps {
   filters: TaskFilters;
   currentUserId?: string;
   currentEmployeeId?: string;
+  departmentMap?: Record<string, { id: string; name: string }>; // Map task ID to department
+  isOwner?: boolean; // Whether current user is Owner role
 }
 
 /**
@@ -33,6 +37,8 @@ export const useTaskFilters = ({
   filters,
   currentUserId,
   currentEmployeeId,
+  departmentMap = {},
+  isOwner = false,
 }: UseTaskFiltersProps) => {
   /**
    * Check if task should be shown in "My Task" filter
@@ -67,11 +73,24 @@ export const useTaskFilters = ({
 
   /**
    * Check if task has step assigned to specific PIC
+   * Also checks sub-steps
    */
   const hasStepAssignedToPic = useCallback(
     (task: Task, picId: string): boolean => {
       return (
-        task.steps?.some((step) => step.assigned_employee?.id === picId) || false
+        task.steps?.some((step) => {
+          // Check if step is assigned to PIC
+          const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+          if (stepAssignedEmployeeId && String(stepAssignedEmployeeId) === String(picId)) {
+            return true;
+          }
+          
+          // Check if any sub-step is assigned to PIC
+          return step.sub_steps?.some((subStep) => {
+            const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+            return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(picId);
+          }) || false;
+        }) || false
       );
     },
     []
@@ -334,10 +353,57 @@ export const useTaskFilters = ({
         return false;
       }
 
-      // Early exit 5: PIC filter
-      // Hanya apply jika pic diisi, jika kosong maka skip filter ini
-      if (filters.pic && !hasStepAssignedToPic(task, filters.pic)) {
-        return false;
+      // Early exit 5: PIC filter dengan level filter
+      // Jika filter PIC aktif, filter berdasarkan level yang dipilih (task, step, atau sub_step)
+      if (filters.pic) {
+        const picLevel = filters.picLevel || 'task'; // Default ke 'task' jika tidak ditentukan
+        
+        // Check if task is assigned directly to the PIC at task level
+        const taskAssignedToPic = task.assigned_to && String(task.assigned_to) === String(filters.pic);
+        
+        // Check if task has any step assigned to the PIC
+        const hasStepAssignedToPicValue = task.steps?.some((step) => {
+          const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+          return stepAssignedEmployeeId && String(stepAssignedEmployeeId) === String(filters.pic);
+        }) || false;
+        
+        // Check if task has any sub-step assigned to the PIC
+        const hasSubStepAssignedToPic = task.steps?.some((step) => 
+          step.sub_steps?.some((subStep) => {
+            const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+            return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+          })
+        ) || false;
+        
+        // Filter berdasarkan level yang dipilih
+        let shouldShowTask = false;
+        
+        switch (picLevel) {
+          case 'task':
+            // Hanya tampilkan jika task di-assign ke PIC (tidak peduli step/sub-step)
+            shouldShowTask = taskAssignedToPic;
+            break;
+          case 'step':
+            // Tampilkan jika ada step yang di-assign ke PIC (tidak peduli task atau sub-step)
+            shouldShowTask = hasStepAssignedToPicValue;
+            break;
+          case 'sub_step':
+            // Tampilkan jika ada sub-step yang di-assign ke PIC (tidak peduli task atau step)
+            shouldShowTask = hasSubStepAssignedToPic;
+            break;
+          case 'all':
+            // Backward compatibility: convert 'all' to 'task' behavior
+            shouldShowTask = taskAssignedToPic || hasStepAssignedToPicValue || hasSubStepAssignedToPic;
+            break;
+          default:
+            // Default to 'task' behavior
+            shouldShowTask = taskAssignedToPic;
+            break;
+        }
+        
+        if (!shouldShowTask) {
+          return false;
+        }
       }
 
       // Early exit 6: Date range filter (Due date)
@@ -350,6 +416,15 @@ export const useTaskFilters = ({
       // Apply filter jika planDateRange diisi (AND logic dengan dateRange)
       if (filters.planDateRange && !matchesPlanDateRange(task)) {
         return false;
+      }
+
+      // Early exit 8: Department filter
+      // Hanya apply jika department diisi, jika kosong maka skip filter ini
+      if (filters.department) {
+        const taskDepartment = departmentMap?.[task.id];
+        if (!taskDepartment || taskDepartment.id !== filters.department) {
+          return false;
+        }
       }
 
       return true;
@@ -417,6 +492,7 @@ export const useTaskFilters = ({
     getStatusPriority,
     getTaskProgress,
     getCompletedDate,
+    departmentMap,
   ]);
 
   /**
@@ -485,37 +561,212 @@ export const useTaskFilters = ({
       const isTaskAssignedToUser = task.assigned_to === currentEmployeeId;
       const shouldShowAllSteps = isTaskCreator || isTaskAssignedToUser;
 
-      // Priority 1: Individual PIC filter
-      // Skip PIC filter if user is task creator or task is assigned at task level
+      // Priority 1: Individual PIC filter dengan level filter
+      // PIC filter harus diutamakan - jika PIC filter aktif, filter berdasarkan level yang dipilih
+      // KECUALI untuk Owner: Owner selalu melihat semua steps dan sub-steps
       let steps = task.steps;
-      if (filters.pic && !shouldShowAllSteps) {
-        steps = steps.filter(
-          (step) => step.assigned_employee?.id === filters.pic
-        );
+      const picLevel = filters.picLevel || 'task'; // Default ke 'task' jika tidak ditentukan
+      
+      // Jika filter PIC aktif dan user bukan Owner, filter steps berdasarkan PIC dan level
+      // Filter PIC HARUS diutamakan - tidak peduli apakah user adalah task creator atau tidak
+      if (filters.pic && !isOwner) {
+        // Filter PIC berlaku untuk semua user KECUALI Owner
+        // Filter berdasarkan level yang dipilih
+        if (picLevel === 'task') {
+          // Jika level adalah 'task', tampilkan semua step (tidak filter step berdasarkan PIC)
+          // Karena task sudah difilter di level task
+          steps = steps;
+        } else if (picLevel === 'step') {
+          // Jika level adalah 'step', hanya tampilkan step yang assigned kepada PIC
+          steps = steps
+            .map((step) => {
+              const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+              if (!stepAssignedEmployeeId) {
+                return null;
+              }
+              const stepMatchesPic = String(stepAssignedEmployeeId) === String(filters.pic);
+              if (stepMatchesPic) {
+                // Tampilkan semua sub-steps dari step yang di-assign ke PIC
+                return step;
+              }
+              return null;
+            })
+            .filter((step): step is TaskStep => step !== null);
+        } else if (picLevel === 'sub_step') {
+          // Jika level adalah 'sub_step', hanya tampilkan step yang memiliki sub-step assigned kepada PIC
+          steps = steps
+            .map((step) => {
+              if (step.sub_steps && step.sub_steps.length > 0) {
+                const filteredSubSteps = step.sub_steps.filter(
+                  (subStep) => {
+                    const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                    return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                  }
+                );
+                if (filteredSubSteps.length > 0) {
+                  return {
+                    ...step,
+                    sub_steps: filteredSubSteps,
+                  };
+                }
+              }
+              return null;
+            })
+            .filter((step): step is TaskStep => step !== null);
+        } else if (picLevel === 'all') {
+          // Backward compatibility: 'all' behavior - filter step dan sub-step berdasarkan PIC
+          steps = steps
+            .map((step) => {
+              const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+              
+              if (!stepAssignedEmployeeId) {
+                // Jika step tidak memiliki assignment, cek apakah ada sub-step yang assigned kepada PIC
+                if (step.sub_steps && step.sub_steps.length > 0) {
+                  const filteredSubSteps = step.sub_steps.filter(
+                    (subStep) => {
+                      const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                      return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                    }
+                  );
+                  if (filteredSubSteps.length > 0) {
+                    return {
+                      ...step,
+                      sub_steps: filteredSubSteps,
+                    };
+                  }
+                }
+                return null;
+              }
+              
+              const stepMatchesPic = String(stepAssignedEmployeeId) === String(filters.pic);
+              
+              if (!stepMatchesPic && step.sub_steps && step.sub_steps.length > 0) {
+                const filteredSubSteps = step.sub_steps.filter(
+                  (subStep) => {
+                    const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                    return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                  }
+                );
+                if (filteredSubSteps.length > 0) {
+                  return {
+                    ...step,
+                    sub_steps: filteredSubSteps,
+                  };
+                }
+                return null;
+              }
+              
+              if (stepMatchesPic) {
+                const filteredSubSteps = step.sub_steps?.filter(
+                  (subStep) => {
+                    const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                    return !subStepAssignedEmployeeId || String(subStepAssignedEmployeeId) === String(filters.pic);
+                  }
+                ) || step.sub_steps;
+                return {
+                  ...step,
+                  sub_steps: filteredSubSteps,
+                };
+              }
+              
+              return null;
+            })
+            .filter((step): step is TaskStep => step !== null);
+        } else {
+          // Default to 'task' behavior if unknown level
+          steps = steps;
+        }
+      } else if (filters.pic && isOwner) {
+        // Untuk Owner: tampilkan semua steps, tapi tetap filter berdasarkan level yang dipilih
+        if (picLevel === 'task') {
+          // Jika level adalah 'task', tampilkan semua step dan sub-step
+          steps = steps;
+        } else if (picLevel === 'step') {
+          // Jika level adalah 'step', filter step berdasarkan PIC
+          steps = steps.filter((step) => {
+            const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+            return stepAssignedEmployeeId && String(stepAssignedEmployeeId) === String(filters.pic);
+          });
+        } else if (picLevel === 'sub_step') {
+          // Jika level adalah 'sub_step', hanya tampilkan step yang memiliki sub-step assigned kepada PIC
+          // Step yang tidak memiliki sub-step atau tidak ada sub-step yang di-assign ke PIC tidak ditampilkan
+          steps = steps
+            .map((step) => {
+              // Step harus memiliki sub-step
+              if (!step.sub_steps || step.sub_steps.length === 0) {
+                return null;
+              }
+              
+              // Filter sub-step berdasarkan PIC
+              const filteredSubSteps = step.sub_steps.filter(
+                (subStep) => {
+                  const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                  return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                }
+              );
+              
+              // Hanya tampilkan step jika ada setidaknya satu sub-step yang di-assign ke PIC
+              if (filteredSubSteps.length > 0) {
+                return {
+                  ...step,
+                  sub_steps: filteredSubSteps,
+                };
+              }
+              
+              // Step tidak ditampilkan jika tidak ada sub-step yang di-assign ke PIC
+              return null;
+            })
+            .filter((step): step is TaskStep => step !== null);
+        } else if (picLevel === 'all') {
+          // Backward compatibility: Level 'all' - filter sub-steps berdasarkan PIC
+          steps = steps.map((step) => {
+            if (step.sub_steps && step.sub_steps.length > 0) {
+              const filteredSubSteps = step.sub_steps.filter(
+                (subStep) => {
+                  const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                  return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                }
+              );
+              return {
+                ...step,
+                sub_steps: filteredSubSteps,
+              };
+            }
+            return step;
+          });
+        } else {
+          // Default to 'task' behavior if unknown level
+          steps = steps;
+        }
       }
 
-      // Priority 2: All PIC mode - keep current filtered list
+      // Priority 2: All PIC mode - keep current filtered list (no PIC filter)
 
       // Priority 3: My Task mode
-      // If task is assigned at task level to current employee, show ALL steps
-      // OR if task is created by current user (task creator), show ALL steps
-      if (shouldShowAllSteps) {
-        // keep steps as-is (already filtered by PIC if needed)
-      } else {
-        // Otherwise, show only steps assigned to current employee or created by user or has assigned substeps
-        steps = steps.filter(
-          (step) =>
-            step.assigned_to === currentEmployeeId ||
-            step.created_by === currentUserId ||
-            step.has_assigned_substeps
-        );
+      // Hanya apply jika PIC filter TIDAK aktif
+      // Jika filter PIC aktif, skip filter "My Task" karena sudah difilter berdasarkan PIC
+      if (!filters.pic) {
+        // If task is assigned at task level to current employee, show ALL steps
+        // OR if task is created by current user (task creator), show ALL steps
+        // Owner selalu melihat semua steps
+        if (shouldShowAllSteps || isOwner) {
+          // keep steps as-is (show all steps for task creator, task assigned at task level, atau Owner)
+        } else {
+          // Otherwise, show only steps assigned to current employee or created by user or has assigned substeps
+          steps = steps.filter(
+            (step) =>
+              step.assigned_to === currentEmployeeId ||
+              step.created_by === currentUserId ||
+              step.has_assigned_substeps
+          );
+        }
       }
 
       // Apply date range filter at step level:
       // When a date filter is active, show steps whose assigned_due_date falls in range
       // OR steps that are overdue (assigned_due_date in past) and not completed
-      // Skip date range filter if user is task creator or task is assigned at task level
-      if (filters.dateRange && filters.dateRange !== 'all' && !shouldShowAllSteps) {
+      // Skip date range filter if user is task creator, task is assigned at task level, atau Owner
+      if (filters.dateRange && filters.dateRange !== 'all' && !shouldShowAllSteps && !isOwner) {
         const now = new Date();
         const isOverdue = (step: TaskStep): boolean => {
           if (!step.assigned_due_date) return false;
@@ -530,7 +781,7 @@ export const useTaskFilters = ({
       }
 
       // Apply search filter at step level:
-      // - Exact match with task title => show all steps
+      // - Exact match with task title => show all steps (but still respect PIC filter if active)
       // - Exact match with step title => show only matching steps
       // - Partial match => keep previous behavior (step titles containing keyword)
       if (filters.search) {
@@ -553,11 +804,81 @@ export const useTaskFilters = ({
             });
           }
         }
+        // Note: If isExactTaskMatch is true, we keep all steps (but PIC filter will still apply in final check)
+      }
+
+      // CRITICAL: Final check - Jika filter PIC aktif dan user bukan Owner, pastikan step sesuai dengan level filter
+      // Ini HARUS diterapkan setelah semua filter lain untuk memastikan tidak ada kondisi yang melewati filter PIC
+      if (filters.pic && !isOwner) {
+        if (picLevel === 'task') {
+          // Jika level adalah 'task', tampilkan semua step (tidak perlu filter lagi)
+          // Task sudah difilter di level task
+        } else if (picLevel === 'step') {
+          // Jika level adalah 'step', hanya tampilkan step yang assigned kepada PIC
+          steps = steps.filter((step) => {
+            const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+            return stepAssignedEmployeeId && String(stepAssignedEmployeeId) === String(filters.pic);
+          });
+        } else if (picLevel === 'sub_step') {
+          // Jika level adalah 'sub_step', hanya tampilkan step yang memiliki sub-step assigned kepada PIC
+          // Step yang tidak memiliki sub-step atau tidak ada sub-step yang di-assign ke PIC tidak ditampilkan
+          steps = steps
+            .map((step) => {
+              // Step harus memiliki sub-step
+              if (!step.sub_steps || step.sub_steps.length === 0) {
+                return null;
+              }
+              
+              // Filter sub-step berdasarkan PIC
+              const filteredSubSteps = step.sub_steps.filter(
+                (subStep) => {
+                  const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                  return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                }
+              );
+              
+              // Hanya tampilkan step jika ada setidaknya satu sub-step yang di-assign ke PIC
+              if (filteredSubSteps.length > 0) {
+                return {
+                  ...step,
+                  sub_steps: filteredSubSteps,
+                };
+              }
+              
+              // Step tidak ditampilkan jika tidak ada sub-step yang di-assign ke PIC
+              return null;
+            })
+            .filter((step): step is TaskStep => step !== null);
+        } else if (picLevel === 'all') {
+          // Backward compatibility: Level 'all' - filter step dan sub-step berdasarkan PIC
+          steps = steps.filter((step) => {
+            const stepAssignedEmployeeId = step.assigned_employee?.id || step.assigned_to;
+            if (!stepAssignedEmployeeId) {
+              return step.sub_steps?.some(
+                (subStep) => {
+                  const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                  return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+                }
+              ) || false;
+            }
+            const stepMatchesPic = String(stepAssignedEmployeeId) === String(filters.pic);
+            const hasSubStepAssignedToPic = step.sub_steps?.some(
+              (subStep) => {
+                const subStepAssignedEmployeeId = subStep.assigned_employee?.id || subStep.assigned_to;
+                return subStepAssignedEmployeeId && String(subStepAssignedEmployeeId) === String(filters.pic);
+              }
+            ) || false;
+            return stepMatchesPic || hasSubStepAssignedToPic;
+          });
+        } else {
+          // Default to 'task' behavior if unknown level - show all steps
+          steps = steps;
+        }
       }
 
       return steps;
     },
-    [filters, currentEmployeeId, currentUserId]
+    [filters, currentEmployeeId, currentUserId, isOwner]
   );
 
   return {

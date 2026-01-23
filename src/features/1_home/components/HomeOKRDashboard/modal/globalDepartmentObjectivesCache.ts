@@ -29,8 +29,8 @@ interface PendingRequest {
 class GlobalDepartmentObjectivesCache {
   private cache: Map<string, DepartmentObjectivesData> = new Map();
   private pendingRequests: Map<string, PendingRequest> = new Map();
-  private readonly CACHE_TTL = 30 * 1000; // 30 seconds
-  private readonly PENDING_TIMEOUT = 10 * 1000; // 10 seconds
+  private readonly CACHE_TTL = 120 * 1000; // 120 seconds - increased to reduce refetch frequency
+  private readonly PENDING_TIMEOUT = 20 * 1000; // 20 seconds - increased to handle slow queries
   private requestCount: Map<string, number> = new Map();
 
   /**
@@ -170,11 +170,18 @@ class GlobalDepartmentObjectivesCache {
       query = query.in('cycle_id', validCycleIds);
     }
 
+    const startTime = performance.now();
     const { data, error } = await query.order('created_at', { ascending: false });
+    const duration = performance.now() - startTime;
 
     if (isDev) {
       console.timeEnd(timerId);
     }
+
+    // Performance monitoring - increased threshold to 2000ms for complex queries
+    // Department objectives query involves multiple joins (departments, company_objectives, okr_cycles, individual_objectives)
+    // and can be slower, especially with includeIndividualObjectives=true
+    logger.performance(`Department Objectives Fetch (${organizationId})`, duration, 2000);
 
     if (error) {
       console.error('❌ Error fetching department objectives:', error);
@@ -218,23 +225,24 @@ class GlobalDepartmentObjectivesCache {
     });
 
     if (isDev) {
-      console.log('✅ Department objectives fetched:', dataWithKeyResults);
+      logger.debug('✅ Department objectives fetched:', dataWithKeyResults);
       
-      // Check specifically for "te" objective
-      const teObjective = dataWithKeyResults?.find((obj: any) => obj.title === 'te');
-      if (teObjective) {
-        console.log('🚨 FOUND "te" OBJECTIVE in database query:', {
-          id: teObjective.id,
-          title: teObjective.title,
-          status: teObjective.status,
-          cycle_id: teObjective.cycle_id,
-          organization_id: teObjective.organization_id,
-          created_at: teObjective.created_at,
-          updated_at: teObjective.updated_at,
-          key_results_count: teObjective.key_results?.length || 0
-        });
-      } else {
-        console.log('✅ No "te" objective found in database query');
+      // Only check for "te" objective if verbose logging is enabled (reduces unnecessary work)
+      const isVerbose = import.meta.env.VITE_VERBOSE_LOGGING === 'true';
+      if (isVerbose) {
+        const teObjective = dataWithKeyResults?.find((obj: any) => obj.title === 'te');
+        if (teObjective) {
+          logger.debug('🚨 FOUND "te" OBJECTIVE in database query:', {
+            id: teObjective.id,
+            title: teObjective.title,
+            status: teObjective.status,
+            cycle_id: teObjective.cycle_id,
+            organization_id: teObjective.organization_id,
+            created_at: teObjective.created_at,
+            updated_at: teObjective.updated_at,
+            key_results_count: teObjective.key_results?.length || 0
+          });
+        }
       }
     }
 

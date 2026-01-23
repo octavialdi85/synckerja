@@ -81,26 +81,48 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   const [expandedCompany, setExpandedCompany] = useState<string | undefined>(undefined);
   const [expandedDepartments, setExpandedDepartments] = useState<Record<string, string | undefined>>({});
 
-  // Fetch Company Objectives - use useCompanyObjectives which supports multiple cycle IDs
-  const { data: companyObjectivesRaw = [], isLoading: isLoadingCompany } = useCompanyObjectives(
+  // ⚡ OPTIMIZED: Fetch ALL company objectives once, then filter client-side by cycleIds
+  // This eliminates double fetch (one with undefined cycleIds, one with array)
+  const { data: allCompanyObjectivesRaw = [], isLoading: isLoadingCompany } = useCompanyObjectives(
     organizationId,
-    cycleIds.length > 0 ? cycleIds : undefined
+    undefined // Always fetch all, filter client-side
   );
 
-  // Fetch Department Objectives - use useDepartmentObjectives which supports multiple cycle IDs
-  const { data: departmentObjectivesRaw = [] } = useDepartmentObjectives(
-    organizationId,
-    cycleIds.length > 0 ? cycleIds : undefined,
-    false // Don't include individual objectives
-  );
+  // Filter company objectives by cycleIds client-side if needed
+  const companyObjectivesRaw = React.useMemo(() => {
+    if (!allCompanyObjectivesRaw || allCompanyObjectivesRaw.length === 0) return [];
+    if (cycleIds.length === 0) return allCompanyObjectivesRaw;
+    
+    // Filter by cycleIds if provided
+    const validCycleIds = cycleIds.filter(id => id && typeof id === 'string');
+    if (validCycleIds.length === 0) return allCompanyObjectivesRaw;
+    
+    return allCompanyObjectivesRaw.filter((co: any) => 
+      co.cycle_id && validCycleIds.includes(co.cycle_id)
+    );
+  }, [allCompanyObjectivesRaw, cycleIds]);
 
-  // Also fetch ALL department objectives to find ones linked to company objectives (even if cycle_id differs)
-  // This ensures we show department objectives that are logically connected to company objectives
+  // ⚡ OPTIMIZED: Fetch ALL department objectives once, then filter client-side
+  // This eliminates double fetch (one with cycleIds, one without)
   const { data: allDepartmentObjectivesRaw = [] } = useDepartmentObjectives(
     organizationId,
     undefined, // Fetch all department objectives
-    false
+    false // Don't include individual objectives
   );
+
+  // Filter department objectives by cycleIds client-side if needed
+  const departmentObjectivesRaw = React.useMemo(() => {
+    if (!allDepartmentObjectivesRaw || allDepartmentObjectivesRaw.length === 0) return [];
+    if (cycleIds.length === 0) return allDepartmentObjectivesRaw;
+    
+    // Filter by cycleIds if provided
+    const validCycleIds = cycleIds.filter(id => id && typeof id === 'string');
+    if (validCycleIds.length === 0) return allDepartmentObjectivesRaw;
+    
+    return allDepartmentObjectivesRaw.filter((dept: any) => 
+      dept.cycle_id && validCycleIds.includes(dept.cycle_id)
+    );
+  }, [allDepartmentObjectivesRaw, cycleIds]);
 
   // Transform company objectives to include their department objectives
   const companyObjectives = React.useMemo(() => {
@@ -110,8 +132,10 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
     const companyObjectiveIds = new Set(companyObjectivesRaw.map((co: any) => co.id));
     
     // Group department objectives by company_objective_id
-    // First, use filtered department objectives (same cycle)
+    // Use filtered department objectives (same cycle) first, then fallback to all if needed
     const deptByCompany = new Map<string, any[]>();
+    
+    // First, try filtered department objectives (same cycle)
     departmentObjectivesRaw.forEach((dept: any) => {
       if (dept.company_objective_id && companyObjectiveIds.has(dept.company_objective_id)) {
         if (!deptByCompany.has(dept.company_objective_id)) {

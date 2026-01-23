@@ -73,6 +73,16 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
   // Prevent multiple simultaneous fetches
   const fetchingRef = useRef(false);
   const lastUserIdRef = useRef<string>('');
+  
+  // Cache for user data to avoid repeated queries
+  const userDataCacheRef = useRef<{
+    data: UserData | null;
+    organization: Organization | null;
+    userRole: UserRole;
+    employee: Employee | null;
+    timestamp: number;
+  } | null>(null);
+  const CACHE_DURATION = 30 * 1000; // 30 seconds cache
 
   // Fetch user data - focus only on 5 core tables
   const refreshUserData = useCallback(async () => {
@@ -121,6 +131,22 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       lastUserIdRef.current = '';
     }
 
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && !emailVerifiedFlag && userDataCacheRef.current) {
+      const cacheAge = Date.now() - userDataCacheRef.current.timestamp;
+      if (cacheAge < CACHE_DURATION && userDataCacheRef.current.data?.user_id === user.id) {
+        if (import.meta.env.DEV) {
+          logger.userData(`CentralizedUserDataContext: Using cached data (age: ${Math.floor(cacheAge / 1000)}s)`);
+        }
+        setUserData(userDataCacheRef.current.data);
+        setOrganization(userDataCacheRef.current.organization);
+        setUserRole(userDataCacheRef.current.userRole);
+        setEmployee(userDataCacheRef.current.employee);
+        setLoading(false);
+        return;
+      }
+    }
+
     // Skip if already fetched for this user, unless force refresh or email verified flag
     if (lastUserIdRef.current === user.id && !forceRefresh && !emailVerifiedFlag) {
       if (import.meta.env.DEV) {
@@ -137,6 +163,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       }
       lastUserIdRef.current = '';
       fetchingRef.current = false;
+      userDataCacheRef.current = null; // Clear cache on force refresh
     }
 
     try {
@@ -146,14 +173,17 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setError(null);
       
       // Run profile and email verification queries in parallel with timeout
-      const QUERY_TIMEOUT = 10000; // 10 seconds timeout - reduced for faster failure detection
+      // Increased timeout to 20 seconds to handle database overload situations
+      // Database logs show frequent statement timeouts, so we need more tolerance
+      const QUERY_TIMEOUT = 20000; // 20 seconds timeout - increased to handle slow database queries
       
-      // Optimize queries - use single() instead of maybeSingle() for faster response
+      // Optimize queries - use maybeSingle() to avoid PGRST116 error if profile doesn't exist
+      const startTime = performance.now();
       const profilePromise = supabase
         .from('profiles')
         .select('user_id, full_name, email, active_organization_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
         
       // Email verification can be optional - wrap in promise to handle errors gracefully
       const verificationPromise = (async () => {
@@ -215,33 +245,59 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       
       const verificationStatus = verificationToken?.email_verified === true;
 
+      // Handle profile error - PGRST116 means no rows found, which is acceptable
       if (profileError && profileError.code !== 'PGRST116') {
         throw profileError;
       }
 
       let organizationId = profileData?.active_organization_id;
       
-      // If no organization in profile, check user_organizations table
+      // If no organization in profile, check user_organizations table (with timeout protection)
       if (!organizationId) {
-        const { data: userOrgData } = await supabase
-          .from('user_organizations')
-          .select('organization_id')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .order('joined_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        try {
+          const orgQueryPromise = supabase
+            .from('user_organizations')
+            .select('organization_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .order('joined_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        organizationId = userOrgData?.organization_id;
-        
-        // If we found an organization, update the profile
-        if (organizationId && profileData) {
-          await supabase
-            .from('profiles')
-            .update({ active_organization_id: organizationId })
-            .eq('user_id', user.id);
+          // Increased timeout for organization query to handle database overload
+          const orgTimeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Organization query timeout')), 15000)
+          );
+
+          const { data: userOrgData } = await Promise.race([
+            orgQueryPromise,
+            orgTimeoutPromise
+          ]) as any;
+
+          organizationId = userOrgData?.organization_id;
+          
+          // If we found an organization, update the profile (non-blocking)
+          if (organizationId && profileData) {
+            // Don't await - let it update in background
+            supabase
+              .from('profiles')
+              .update({ active_organization_id: organizationId })
+              .eq('user_id', user.id)
+              .catch(() => {
+                // Silently fail - non-critical update
+              });
+          }
+        } catch (orgError: any) {
+          // Silently handle timeout or error - organization lookup is optional
+          if (import.meta.env.DEV) {
+            logger.debug('Organization lookup failed (non-critical):', orgError.message);
+          }
         }
       }
+      
+      // Performance monitoring
+      const duration = performance.now() - startTime;
+      logger.performance(`User Data Fetch (${user.id.slice(0, 8)}...)`, duration, 500);
 
 // Set user data
       const userData: UserData = {
@@ -254,6 +310,15 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       };
       
       setUserData(userData);
+      
+      // Update cache with initial user data (will be updated later with employee data)
+      userDataCacheRef.current = {
+        data: userData,
+        organization: null,
+        userRole: null,
+        employee: null,
+        timestamp: Date.now()
+      };
 
       // Get employee record, role, and organization if organization exists (with timeout)
       if (organizationId) {
@@ -361,11 +426,32 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
             if (employeeData?.department_id) {
               const updatedUserData = { ...userData, department_id: employeeData.department_id };
               setUserData(updatedUserData);
+              
+              // Update cache
+              userDataCacheRef.current = {
+                data: updatedUserData,
+                organization: orgData,
+                userRole: roleData?.role || null,
+                employee: enrichedEmployeeData,
+                timestamp: Date.now()
+              };
+            } else {
+              // Update cache even if no department_id
+              userDataCacheRef.current = {
+                data: userData,
+                organization: orgData,
+                userRole: roleData?.role || null,
+                employee: enrichedEmployeeData,
+                timestamp: Date.now()
+              };
             }
           }
         } catch (orgError: any) {
           if (orgError.message === 'Organization data query timeout') {
-            console.warn('CentralizedUserDataContext: Organization data timeout - using fallback data');
+            // Timeout is handled gracefully with fallback, only log in dev mode
+            if (import.meta.env.DEV) {
+              logger.debug('CentralizedUserDataContext: Organization data timeout - using fallback data');
+            }
             // Set userData anyway but with fallback organization data
             setEmployee(null);
             setOrganization(null);
@@ -381,6 +467,18 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
               setUserRole('employee'); // Default fallback
               logger.userData('CentralizedUserDataContext: Set default employee role as fallback');
             }
+            
+            // Update cache with fallback organization data
+            const fallbackRole = user.email?.includes('owner') || user.email?.includes('admin')
+              ? 'owner'
+              : (user.user_metadata?.role as UserRole || 'employee');
+            userDataCacheRef.current = {
+              data: userData,
+              organization: null,
+              userRole: fallbackRole,
+              employee: null,
+              timestamp: Date.now()
+            };
           } else {
             throw orgError;
           }
@@ -390,14 +488,29 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         setEmployee(null);
         setOrganization(null);
         setUserRole(null);
+        
+        // Update cache with partial data (no organization)
+        userDataCacheRef.current = {
+          data: userData,
+          organization: null,
+          userRole: null,
+          employee: null,
+          timestamp: Date.now()
+        };
       }
 
     } catch (err: any) {
-      console.error('❌ Error fetching user data:', err);
+      // Only log errors in development mode to reduce console noise
+      if (import.meta.env.DEV) {
+        logger.error('❌ Error fetching user data:', err);
+      }
       
       // Handle timeout gracefully - create fallback user data from auth info
       if (err.message === 'User data query timeout') {
-        console.warn('CentralizedUserDataContext: Query timeout - creating fallback user data from auth');
+        // Timeout is handled gracefully with fallback, only log in dev mode
+        if (import.meta.env.DEV) {
+          logger.debug('CentralizedUserDataContext: Query timeout - creating fallback user data from auth');
+        }
         
         // Create fallback user data from auth user info
         const fallbackUserData: UserData = {
@@ -412,17 +525,23 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         setUserData(fallbackUserData);
         
         // Try to set owner role if email suggests it
-        if (user.email?.includes('owner') || user.email?.includes('admin')) {
-          setUserRole('owner');
-        } else if (user.user_metadata?.role) {
-          setUserRole(user.user_metadata.role as UserRole);
-        } else {
-          setUserRole('employee'); // Default fallback
-        }
+        const fallbackRole = user.email?.includes('owner') || user.email?.includes('admin') 
+          ? 'owner' 
+          : (user.user_metadata?.role as UserRole || 'employee');
+        setUserRole(fallbackRole);
+        
+        // Update cache with fallback data
+        userDataCacheRef.current = {
+          data: fallbackUserData,
+          organization: null,
+          userRole: fallbackRole,
+          employee: null,
+          timestamp: Date.now()
+        };
         
         logger.userData('CentralizedUserDataContext: Fallback data created:', {
           userData: fallbackUserData,
-          userRole: user.email?.includes('owner') ? 'owner' : 'employee'
+          userRole: fallbackRole
         });
         
         // Don't set error state for timeout, just finish loading

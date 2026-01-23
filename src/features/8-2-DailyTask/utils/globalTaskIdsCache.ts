@@ -113,14 +113,20 @@ class GlobalTaskIdsCache {
       });
     }
 
+    const startTime = performance.now();
     const { data: taskAssignments, error: rpcError } = await supabase
       .rpc('get_employee_task_ids', {
         p_employee_id: employeeId
       });
+    const duration = performance.now() - startTime;
 
     if (isDev) {
       console.timeEnd(timerId);
     }
+
+    // Performance monitoring - increased threshold to 2000ms for RPC calls
+    // RPC calls can be slower due to database processing, especially with many task IDs
+    logger.performance(`Global Task IDs Fetch (${employeeId.slice(0, 8)}...)`, duration, 2000);
 
     if (rpcError) {
       if (isDev) {

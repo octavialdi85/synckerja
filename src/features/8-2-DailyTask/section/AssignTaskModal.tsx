@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { User, Calendar, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Calendar, X, Building2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { DueDatePicker } from './DueDatePicker';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 
 interface AssignTaskModalProps {
   open: boolean;
@@ -20,18 +23,61 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
   currentAssignment
 }) => {
   const { data: employees = [] } = useAvailableEmployees();
+  const { organizationId } = useCurrentOrg();
   const [selectedEmployee, setSelectedEmployee] = useState<string>(
     currentAssignment?.employeeId || 'unassigned'
   );
   const [deadline, setDeadline] = useState<string>(currentAssignment?.deadline || '');
+  const [departmentId, setDepartmentId] = useState<string>('');
+
+  // Fetch departments
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organizationId,
+  });
 
   // Reset state when modal opens with new current assignment
   React.useEffect(() => {
     if (open) {
       setSelectedEmployee(currentAssignment?.employeeId || 'unassigned');
       setDeadline(currentAssignment?.deadline || '');
+      setDepartmentId('');
     }
   }, [open, currentAssignment]);
+
+  // Auto-select department when employee is selected
+  useEffect(() => {
+    const loadEmployeeDepartment = async () => {
+      if (selectedEmployee && selectedEmployee !== 'unassigned') {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('department_id')
+          .eq('id', selectedEmployee)
+          .maybeSingle();
+        
+        if (employee?.department_id) {
+          setDepartmentId(employee.department_id);
+        } else {
+          setDepartmentId('');
+        }
+      } else {
+        setDepartmentId('');
+      }
+    };
+    
+    loadEmployeeDepartment();
+  }, [selectedEmployee]);
 
   const handleSubmit = () => {
     onAssign({
@@ -44,6 +90,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
   const handleClear = () => {
     setSelectedEmployee('unassigned');
     setDeadline('');
+    setDepartmentId('');
   };
 
   const hasChanges = selectedEmployee !== 'unassigned' || deadline !== '';
@@ -65,7 +112,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
           {/* Employee Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Assign To
+              Assign To <span className="text-red-500">*</span>
             </label>
             <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
               <SelectTrigger className="border border-gray-200 rounded-lg">
@@ -97,6 +144,46 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-blue-600" />
                       {employee.full_name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Department Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Department
+            </label>
+            <Select
+              value={departmentId || ''}
+              onValueChange={setDepartmentId}
+              disabled={!selectedEmployee || selectedEmployee === 'unassigned'}
+            >
+              <SelectTrigger className="border border-gray-200 rounded-lg">
+                <SelectValue placeholder="Select department...">
+                  {departmentId ? (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm">
+                        {departments.find((d) => d.id === departmentId)?.name || 'Select...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-500 text-sm">Select department...</span>
+                    </div>
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((department) => (
+                  <SelectItem key={department.id} value={department.id}>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      {department.name}
                     </div>
                   </SelectItem>
                 ))}

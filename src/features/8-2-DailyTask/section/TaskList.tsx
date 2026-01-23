@@ -17,7 +17,8 @@ import {
   Clock3,
   Paperclip,
   Target,
-  Bell
+  Bell,
+  Building2
 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -93,14 +94,17 @@ import { CSS } from '@dnd-kit/utilities';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 export const TaskList = () => {
   const context = useDailyTask();
   const { tasks, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps, expandedTasks, setExpandedTasks, highlightedTask } = context;
+  const [departmentMap, setDepartmentMap] = useState<Record<string, { id: string; name: string }>>({});
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
   const { toast } = useToast();
+  const { isOwner } = useCentralizedUserData();
   
   // Use custom hook for filtering logic
   const { filteredTasks, getVisibleSteps } = useTaskFilters({
@@ -108,6 +112,8 @@ export const TaskList = () => {
     filters,
     currentUserId: user?.id,
     currentEmployeeId: currentEmployee?.id,
+    departmentMap,
+    isOwner,
   });
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
@@ -121,6 +127,8 @@ export const TaskList = () => {
   const [blockerCountByTask, setBlockerCountByTask] = useState<Record<string, number>>({});
   const [blockerModalOpen, setBlockerModalOpen] = useState(false);
   const [blockerModalItems, setBlockerModalItems] = useState<any[]>([]);
+  const blockerErrorCountRef = useRef(0); // Track consecutive errors for circuit breaker
+  const blockerLastErrorRef = useRef<number>(0); // Track last error time
 
   // Auto-scroll to highlighted task
   useEffect(() => {
@@ -154,6 +162,90 @@ export const TaskList = () => {
       }
     }
   }, [highlightedTask]);
+
+  // Fetch departments for tasks from daily_tasks_assigned
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      if (tasks.length === 0) return;
+
+      const taskIds = tasks.map(t => t.id);
+      
+      try {
+        // Fetch department_id from daily_tasks_assigned with employee join for fallback
+        const { data: assignments, error: assignmentError } = await supabase
+          .from('daily_tasks_assigned')
+          .select(`
+            daily_task_id, 
+            department_id,
+            employee_id,
+            employee:employees!employee_id(department_id)
+          `)
+          .in('daily_task_id', taskIds);
+
+        if (assignmentError) {
+          console.error('Error fetching assignments:', assignmentError);
+          return;
+        }
+
+        // Collect all department IDs (from daily_tasks_assigned or from employee)
+        const departmentIds = new Set<string>();
+        const taskDeptMapping: Array<{ taskId: string; deptId: string }> = [];
+
+        (assignments || []).forEach(assignment => {
+          // Priority: department_id from daily_tasks_assigned, then from employee
+          let deptId = assignment.department_id;
+          
+          if (!deptId && assignment.employee_id && (assignment.employee as any)?.department_id) {
+            deptId = (assignment.employee as any).department_id;
+          }
+
+          if (deptId) {
+            departmentIds.add(deptId);
+            taskDeptMapping.push({
+              taskId: assignment.daily_task_id,
+              deptId: deptId
+            });
+          }
+        });
+
+        if (departmentIds.size === 0) {
+          setDepartmentMap({});
+          return;
+        }
+
+        // Fetch department names
+        const { data: departments, error: deptError } = await supabase
+          .from('departments')
+          .select('id, name')
+          .in('id', Array.from(departmentIds));
+
+        if (deptError) {
+          console.error('Error fetching departments:', deptError);
+          return;
+        }
+
+        // Create department map
+        const deptMap: Record<string, { id: string; name: string }> = {};
+        (departments || []).forEach(dept => {
+          deptMap[dept.id] = { id: dept.id, name: dept.name };
+        });
+
+        // Map departments to tasks
+        const taskDeptMap: Record<string, { id: string; name: string }> = {};
+        taskDeptMapping.forEach(({ taskId, deptId }) => {
+          if (deptMap[deptId]) {
+            taskDeptMap[taskId] = deptMap[deptId];
+          }
+        });
+
+        setDepartmentMap(taskDeptMap);
+      } catch (error) {
+        console.error('Error in fetchDepartments:', error);
+      }
+    };
+
+    fetchDepartments();
+  }, [tasks]);
   
   // getVisibleSteps now comes from useTaskFilters hook
 
@@ -306,7 +398,30 @@ export const TaskList = () => {
     // Prevent running if no tasks
     if (!blockerCalculationKey) {
       setBlockerCountByTask({});
+      blockerErrorCountRef.current = 0; // Reset error count when no tasks
       return;
+    }
+
+    // Circuit breaker: Skip if too many consecutive errors (avoid spam)
+    const now = Date.now();
+    const timeSinceLastError = now - blockerLastErrorRef.current;
+    const CIRCUIT_BREAKER_THRESHOLD = 3; // Max consecutive errors
+    const CIRCUIT_BREAKER_COOLDOWN = 30000; // 30 seconds cooldown
+
+    if (blockerErrorCountRef.current >= CIRCUIT_BREAKER_THRESHOLD) {
+      if (timeSinceLastError < CIRCUIT_BREAKER_COOLDOWN) {
+        // Still in cooldown period, skip this fetch
+        if (import.meta.env.DEV) {
+          logger.debug(`⏭️ Blocker counts: Circuit breaker active (${Math.floor((CIRCUIT_BREAKER_COOLDOWN - timeSinceLastError) / 1000)}s remaining), skipping fetch`);
+        }
+        return;
+      } else {
+        // Cooldown expired, reset error count
+        if (import.meta.env.DEV) {
+          logger.debug('✅ Blocker counts: Circuit breaker cooldown expired, resetting');
+        }
+        blockerErrorCountRef.current = 0;
+      }
     }
 
     let cancelled = false;
@@ -340,20 +455,81 @@ export const TaskList = () => {
 
         const counts: Record<string, number> = {};
         const taskIdChunks = chunkArray(allTaskIds, 25);
+        let hasError = false;
 
         for (let i = 0; i < taskIdChunks.length; i++) {
           const chunk = taskIdChunks[i];
           if (chunk.length === 0) continue;
 
           try {
-            const { data, error } = await supabase
-              .rpc('get_unresolved_blocker_counts', { task_ids: chunk });
+            // Add timeout to prevent hanging requests
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Request timeout')), 5000)
+            );
+
+            const rpcPromise = supabase.rpc('get_unresolved_blocker_counts', { task_ids: chunk });
+
+            let result: any;
+            try {
+              result = await Promise.race([rpcPromise, timeoutPromise]);
+            } catch (raceError: any) {
+              // Handle timeout or other race errors
+              if (raceError?.message === 'Request timeout') {
+                hasError = true;
+                blockerErrorCountRef.current++;
+                blockerLastErrorRef.current = Date.now();
+                if (import.meta.env.DEV) {
+                  logger.debug(`Blocker counts timeout (chunk ${i + 1}/${taskIdChunks.length})`);
+                }
+                continue;
+              }
+              throw raceError;
+            }
 
             if (cancelled) return;
 
+            const { data, error } = result || {};
+
             if (error) {
-              console.warn(`Failed to fetch blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, error);
+              hasError = true;
+              blockerErrorCountRef.current++;
+              blockerLastErrorRef.current = Date.now();
+              
+              // CRITICAL: Detect 500 errors from multiple sources
+              // Supabase client may wrap errors differently, so check multiple properties
+              const errorMessage = error.message || error.toString() || '';
+              const errorCode = error.code || error.status || '';
+              const isServerError = 
+                errorCode === '500' || 
+                errorCode === 500 ||
+                error.status === 500 ||
+                errorMessage.includes('500') ||
+                errorMessage.includes('Server error (500)') ||
+                errorMessage.includes('Internal Server Error') ||
+                errorMessage.includes('database query failed');
+              
+              if (isServerError) {
+                if (import.meta.env.DEV) {
+                  logger.debug(`Blocker counts RPC returned 500 - activating circuit breaker immediately`);
+                }
+                // Set error count to threshold to activate circuit breaker
+                blockerErrorCountRef.current = CIRCUIT_BREAKER_THRESHOLD;
+                blockerLastErrorRef.current = Date.now();
+                break; // Stop processing remaining chunks
+              }
+              
+              // Only log in dev mode to reduce console noise
+              if (import.meta.env.DEV) {
+                logger.debug(`Failed to fetch blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, error);
+              }
+              
+              // Skip this chunk and continue with others (for non-500 errors)
               continue;
+            }
+
+            // Reset error count on success (reset on first successful chunk)
+            if (i === 0 || blockerErrorCountRef.current > 0) {
+              blockerErrorCountRef.current = 0;
             }
 
             if (Array.isArray(data)) {
@@ -363,19 +539,49 @@ export const TaskList = () => {
                 }
               });
             }
-          } catch (err) {
-            console.warn(`Error fetching blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, err);
+          } catch (err: any) {
+            hasError = true;
+            blockerErrorCountRef.current++;
+            blockerLastErrorRef.current = Date.now();
+            
+            // CRITICAL: Detect 500 errors from multiple sources
+            const errorMessage = err?.message || err?.toString() || '';
+            const errorCode = err?.code || err?.status || '';
+            const isServerError = 
+              errorCode === '500' || 
+              errorCode === 500 ||
+              err?.status === 500 ||
+              errorMessage.includes('500') ||
+              errorMessage.includes('Server error (500)') ||
+              errorMessage.includes('Internal Server Error') ||
+              errorMessage.includes('database query failed');
+            
+            if (isServerError) {
+              if (import.meta.env.DEV) {
+                logger.debug(`Blocker counts chunk error 500 - activating circuit breaker immediately`);
+              }
+              blockerErrorCountRef.current = CIRCUIT_BREAKER_THRESHOLD;
+              blockerLastErrorRef.current = Date.now();
+              break; // Stop processing remaining chunks
+            }
+            
+            if (import.meta.env.DEV) {
+              logger.debug(`Error fetching blocker counts via RPC (chunk ${i + 1}/${taskIdChunks.length}):`, err);
+            }
+            
             if (cancelled) return;
+            // Continue with next chunk only for non-server errors
           }
         }
 
+        // Set default count of 0 for all tasks
         tasksToProcess.forEach(task => {
           if (counts[task.id] === undefined) {
             counts[task.id] = 0;
           }
         });
         
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && !hasError) {
           logger.debug('🛠️ Blocker debug (RPC)', {
             totalTasks: tasksToProcess.length,
             counts,
@@ -386,15 +592,38 @@ export const TaskList = () => {
         if (!cancelled) {
           setBlockerCountByTask(counts);
         }
-      } catch (e) {
-        console.warn('Error loading blocker counts:', e);
+      } catch (e: any) {
+        blockerErrorCountRef.current++;
+        blockerLastErrorRef.current = Date.now();
+        
+        // CRITICAL: Detect 500 errors from multiple sources
+        const errorMessage = e?.message || e?.toString() || '';
+        const errorCode = e?.code || e?.status || '';
+        const isServerError = 
+          errorCode === '500' || 
+          errorCode === 500 ||
+          e?.status === 500 ||
+          errorMessage.includes('500') ||
+          errorMessage.includes('Server error (500)') ||
+          errorMessage.includes('Internal Server Error') ||
+          errorMessage.includes('database query failed');
+        
+        if (isServerError) {
+          blockerErrorCountRef.current = CIRCUIT_BREAKER_THRESHOLD;
+          if (import.meta.env.DEV) {
+            logger.debug('Blocker counts outer error 500 - activating circuit breaker');
+          }
+        } else if (import.meta.env.DEV) {
+          logger.debug('Error loading blocker counts:', e);
+        }
+        
         // Graceful degradation: Show tasks without blocker counts
         setBlockerCountByTask({});
       }
     };
     
-    // Debounce the loading to reduce query spam
-    const timeoutId = setTimeout(loadCounts, 300);
+    // Increased debounce to reduce query spam (from 300ms to 500ms)
+    const timeoutId = setTimeout(loadCounts, 500);
     
     // Cleanup function to cancel if component unmounts or dependencies change
     return () => {
@@ -674,6 +903,9 @@ export const TaskList = () => {
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
                   Task Title
                 </TableHead>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '150px', minWidth: '150px', maxWidth: '150px' }}>
+                  Department
+                </TableHead>
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                   PIC
                 </TableHead>
@@ -706,7 +938,7 @@ export const TaskList = () => {
             <TableBody>
               {filteredTasks.length === 0 ? (
                 <TableRow className="w-full">
-                  <TableCell colSpan={12} className="text-center py-8 text-gray-500 w-full" style={{ width: '100%' }}>
+                  <TableCell colSpan={13} className="text-center py-8 text-gray-500 w-full" style={{ width: '100%' }}>
                     <div className="flex flex-col items-center w-full">
                       <CheckSquare className="w-8 h-8 mb-2 text-gray-300" />
                       <p>No tasks found</p>
@@ -829,6 +1061,24 @@ export const TaskList = () => {
                       </div>
                     )}
                   </div>
+                        </TableCell>
+
+                        {/* Department */}
+                        <TableCell className="px-2 py-3 text-left" style={{ width: '150px', minWidth: '150px', maxWidth: '150px' }}>
+                          <div className="flex items-center">
+                            {departmentMap[task.id] ? (
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-blue-600" />
+                                <span className="text-sm text-gray-900 font-medium">
+                                  {departmentMap[task.id].name}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400 italic">
+                                No Department
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
 
                         {/* PIC (Person In Charge) */}
@@ -1151,7 +1401,7 @@ export const TaskList = () => {
                       {/* Expanded Content Row */}
             {isExpanded && (
                         <TableRow className="w-full">
-                          <TableCell colSpan={12} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
+                          <TableCell colSpan={13} className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
                             isHighlighted 
                               ? 'bg-blue-100 border-l-4 border-l-blue-500' 
                               : 'bg-blue-50'

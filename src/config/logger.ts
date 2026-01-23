@@ -73,6 +73,17 @@ export const logger = {
     }
   },
 
+  // Performance monitoring - logs slow operations even in production
+  performance: (label: string, duration: number, threshold: number = 500) => {
+    if (duration > threshold) {
+      // Always log slow operations, even in production
+      console.warn(`⚠️ SLOW OPERATION: ${label} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
+    } else if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug)) {
+      // Only log fast operations in development
+      console.debug(`⚡ ${label}: ${duration.toFixed(2)}ms`);
+    }
+  },
+
   // Helpers
   rateLimited: (key: string, minIntervalMs: number, cb: () => void) => {
     if (shouldLogRateLimited(key, minIntervalMs)) cb();

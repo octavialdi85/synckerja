@@ -23,9 +23,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       const MAX_RETRIES = 2; // Increased retries for auth requests
       
       // Use longer timeout for auth requests (30 seconds)
-      // Regular requests use shorter timeout (15 seconds)
+      // Regular requests use longer timeout (20 seconds) to handle slow database queries
       const isAuthRequest = url.includes('/auth/v1/');
-      const TIMEOUT_MS = isAuthRequest ? 30000 : 15000; // 30s for auth, 15s for others
+      const TIMEOUT_MS = isAuthRequest ? 30000 : 20000; // 30s for auth, 20s for others
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         // Create abort controller for timeout if not already provided
@@ -53,17 +53,23 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           // 522: Connection timed out (Cloudflare can't reach Supabase origin server)
           if ((response.status === 504 || response.status === 522) && url.includes('/auth/v1/user')) {
             const errorType = response.status === 504 ? 'Gateway Timeout' : 'Connection Timed Out';
-            console.warn(`⚠️ Auth service timeout (${response.status} - ${errorType}) - infrastructure overloaded or server down`);
+            // Only log in development mode
+            if (import.meta.env.DEV) {
+              console.warn(`⚠️ Auth service timeout (${response.status} - ${errorType}) - infrastructure overloaded or server down`);
+            }
             
             // If this is not the last retry, continue to retry
             if (attempt < MAX_RETRIES) {
               const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
-              console.log(`Retrying auth check after ${response.status} (attempt ${attempt + 1}/${MAX_RETRIES + 1}), waiting ${delay}ms...`);
+              if (import.meta.env.DEV) {
+                console.log(`Retrying auth check after ${response.status} (attempt ${attempt + 1}/${MAX_RETRIES + 1}), waiting ${delay}ms...`);
+              }
               await new Promise(resolve => setTimeout(resolve, delay));
               continue; // Retry
             }
             
             // Last attempt failed - dispatch event for auth cleanup
+            // Always log critical auth failures
             console.error(`❌ Auth service ${response.status} on final attempt, triggering session cleanup`);
             window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
               detail: { status: response.status, message: `${errorType} - Supabase server may be down or overloaded`, url }
@@ -93,7 +99,10 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           
           // Wait before retrying (exponential backoff)
           const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
-          console.log(`Supabase request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms...`);
+          // Only log retries in development mode to reduce console noise
+          if (import.meta.env.DEV) {
+            console.log(`Supabase request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms...`);
+          }
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
