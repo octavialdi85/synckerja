@@ -8,16 +8,18 @@ interface GoogleDriveLinkCellProps {
   googleDriveLink: string | null;
   isDisabled: boolean;
   onClick: () => void;
+  isSelected?: boolean;
 }
 
 export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
   googleDriveLink,
   isDisabled,
-  onClick
+  onClick,
+  isSelected = false
 }) => {
   if (isDisabled) {
     return (
-      <div className="h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center text-gray-500 cursor-not-allowed">
+      <div className={`h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center cursor-not-allowed ${isSelected ? 'text-white' : 'text-gray-500'}`}>
         Approve first to add link
       </div>
     );
@@ -30,14 +32,14 @@ export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
   return (
     <Button
       variant="ghost"
-      className="h-8 w-full justify-center text-xs px-2 border border-gray-200 hover:bg-gray-50"
+      className={`h-8 w-full justify-center text-xs px-2 border border-gray-200 ${isSelected ? 'hover:bg-blue-600 text-white' : 'hover:bg-gray-50'}`}
       onClick={onClick}
     >
-      <span className="truncate">
+      <span className={`truncate ${isSelected ? 'text-white' : ''}`}>
         {hasLink ? 'Google Drive Link Added' : 'Click to add Google Drive link...'}
       </span>
       {hasLink && (
-        <ExternalLink className="h-3 w-3 ml-1 flex-shrink-0" />
+        <ExternalLink className={`h-3 w-3 ml-1 flex-shrink-0 ${isSelected ? 'text-white' : ''}`} />
       )}
     </Button>
   );
@@ -47,12 +49,16 @@ interface PostLinkCellProps {
   planId: string;
   isDisabled: boolean;
   onSocialLinksClick: () => void;
+  isSelected?: boolean;
+  productionApproved?: boolean;
 }
 
 export const PostLinkCell: React.FC<PostLinkCellProps> = ({
   planId,
   isDisabled,
-  onSocialLinksClick
+  onSocialLinksClick,
+  isSelected = false,
+  productionApproved = false
 }) => {
   const { links } = useSocialMediaLinks(planId);
 
@@ -67,9 +73,12 @@ export const PostLinkCell: React.FC<PostLinkCellProps> = ({
     return `${links.length} social media links added`;
   };
 
+  // Text color: white if production approved, otherwise default (black)
+  const textColorClass = productionApproved ? 'text-white' : '';
+
   if (isDisabled) {
     return (
-      <div className="h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center text-gray-500 cursor-not-allowed">
+      <div className="h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center cursor-not-allowed text-gray-500">
         Production approval required
       </div>
     );
@@ -78,10 +87,10 @@ export const PostLinkCell: React.FC<PostLinkCellProps> = ({
   return (
     <Button
       variant="ghost"
-      className="h-8 w-full justify-start text-xs px-2 border border-gray-200 hover:bg-gray-50"
+      className={`h-8 w-full justify-start text-xs px-2 border border-gray-200 ${isSelected ? 'hover:bg-blue-600' : 'hover:bg-gray-50'} ${productionApproved ? 'text-white' : ''}`}
       onClick={onSocialLinksClick}
     >
-      <span className="truncate">
+      <span className={`truncate ${textColorClass}`}>
         {getPostLinksDisplayText()}
       </span>
     </Button>

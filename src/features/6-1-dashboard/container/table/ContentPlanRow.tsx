@@ -741,15 +741,17 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       });
     });
   }
+  const isSelected = selectedItems.includes(plan.id);
+  
   return <>
-      <tr className="hover:bg-gray-50">
+      <tr className={`${isSelected ? 'bg-blue-500 hover:bg-blue-600 border-l-4 border-l-blue-800 shadow-lg ring-2 ring-blue-300' : 'hover:bg-gray-50'}`}>
         {/* Checkbox */}
         <td style={{
         width: '48px',
         minWidth: '48px',
         maxWidth: '48px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <Checkbox checked={selectedItems.includes(plan.id)} onCheckedChange={handleCheckboxChange} />
+          <Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
         </td>
 
         {/* POINT 4: Post Date - No longer locked when approved */}
@@ -763,9 +765,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
         {/* PIC */}
         <td style={{
-        width: '160px',
-        minWidth: '160px',
-        maxWidth: '160px'
+        width: '180px',
+        minWidth: '180px',
+        maxWidth: '180px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
           <PICCell picId={plan.pic_id} isPICLocked={isPICLocked} employees={picEmployees} selectedPIC={selectedPIC} onPICChange={value => onFieldChange(plan.id, 'pic_id', value)} />
         </td>
@@ -843,8 +845,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '280px',
         maxWidth: '280px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <Button variant="ghost" className="h-8 w-full justify-start text-xs px-2 border border-gray-200 hover:bg-gray-50" onClick={() => onOpenTitleDialog(plan.id, plan.title, plan.approved)}>
-              <span className="truncate block w-full text-left">
+          <Button variant="ghost" className={`h-8 w-full justify-start text-xs px-2 border border-gray-200 ${isSelected ? 'hover:bg-blue-600 text-white' : 'hover:bg-gray-50'}`} onClick={() => onOpenTitleDialog(plan.id, plan.title, plan.approved)}>
+              <span className={`truncate block w-full text-left ${isSelected ? 'text-white' : ''}`}>
                 {plan.title || 'Click to add title...'}
               </span>
             </Button>
@@ -878,7 +880,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '160px',
         maxWidth: '160px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <BriefPreview brief={plan.brief} onClick={handleBriefClick} />
+          <BriefPreview brief={plan.brief} onClick={handleBriefClick} isSelected={isSelected} />
         </td>
 
         {/* POINT 4: Status - No longer locked when approved */}
@@ -914,7 +916,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '96px',
         maxWidth: '96px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <RevisionCounter count={plan.revision_count || 0} onReset={() => onResetRevision(plan.id, 'revision_count')} showResetButton={configLoaded && revisionConfigActive} />
+          <RevisionCounter count={plan.revision_count || 0} onReset={() => onResetRevision(plan.id, 'revision_count')} showResetButton={configLoaded && revisionConfigActive} isSelected={isSelected} />
         </td>
 
         {/* POINT 2: Approved - Check approval access configuration */}
@@ -928,13 +930,15 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
         {/* Completion Date - Center aligned */}
         <td style={{
-        width: '160px',
-        minWidth: '160px',
-        maxWidth: '160px'
+        width: '180px',
+        minWidth: '180px',
+        maxWidth: '180px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className="text-xs text-gray-600">
-            {plan.completion_date ? formatDateTime(plan.completion_date) : '-'}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              {plan.completion_date ? formatDateTime(plan.completion_date) : '-'}
+            </span>
+          </div>
         </td>
 
         {/* PIC Production - Auto-populated only (no dropdown) */}
@@ -962,7 +966,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           <GoogleDriveLinkCell googleDriveLink={plan.google_drive_link} isDisabled={isGoogleDriveLinkDisabled} onClick={() => {
           if (!plan.approved) return; // Don't open if not approved
           setIsGoogleDriveDialogOpen(true);
-        }} />
+        }} isSelected={isSelected} />
         </td>
 
         {/* POINT 3: Production Status - No longer locked when production approved */}
@@ -999,7 +1003,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '96px',
         maxWidth: '96px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <RevisionCounter count={plan.production_revision_count || 0} onReset={() => onResetRevision(plan.id, 'production_revision_count')} showResetButton={configLoaded && productionRevisionConfigActive} />
+          <RevisionCounter count={plan.production_revision_count || 0} onReset={() => onResetRevision(plan.id, 'production_revision_count')} showResetButton={configLoaded && productionRevisionConfigActive} isSelected={isSelected} />
         </td>
 
         {/* POINT 3: Production Approved - Check approval access configuration */}
@@ -1018,24 +1022,28 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
         {/* Production Completion Date - Center aligned */}
         <td style={{
-        width: '160px',
-        minWidth: '160px',
-        maxWidth: '160px'
+        width: '180px',
+        minWidth: '180px',
+        maxWidth: '180px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className="text-xs text-gray-600">
-            {plan.production_completion_date ? formatDateTime(plan.production_completion_date) : '-'}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              {plan.production_completion_date ? formatDateTime(plan.production_completion_date) : '-'}
+            </span>
+          </div>
         </td>
 
         {/* POINT 1: Production Approved Date - Center aligned, shows real-time data, FIXED clearing logic */}
         <td style={{
-        width: '160px',
-        minWidth: '160px',
-        maxWidth: '160px'
+        width: '180px',
+        minWidth: '180px',
+        maxWidth: '180px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className="text-xs text-gray-600">
-            {plan.production_approved_date ? formatDateTime(plan.production_approved_date) : '-'}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              {plan.production_approved_date ? formatDateTime(plan.production_approved_date) : '-'}
+            </span>
+          </div>
         </td>
 
         {/* Post Link - Social media links dialog using table data */}
@@ -1047,7 +1055,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           <PostLinkCell planId={plan.id} isDisabled={isPostLinkDisabled} onSocialLinksClick={() => {
           if (!plan.production_approved) return; // Don't open if production not approved
           setIsSocialLinksDialogOpen(true);
-        }} />
+        }} isSelected={isSelected} productionApproved={plan.production_approved || false} />
         </td>
 
         {/* PIC POST - Show employee who added first link */}
@@ -1056,9 +1064,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '180px',
         maxWidth: '180px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className="text-xs text-gray-600">
-            {plan.post_link_creator?.full_name || '-'}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              {plan.post_link_creator?.full_name || '-'}
+            </span>
+          </div>
         </td>
 
         {/* Done - Auto-controlled by Social Media Links */}
@@ -1077,9 +1087,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '160px',
         maxWidth: '160px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className="text-xs text-gray-600">
-            {displayActualPostDate()}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+              {displayActualPostDate()}
+            </span>
+          </div>
         </td>
 
         {/* On Time Status - FIXED: Calculate and display real-time status */}
@@ -1088,9 +1100,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         minWidth: '160px',
         maxWidth: '160px'
       }} className="px-2 py-1 text-center border-r border-gray-200 border-b border-gray-200">
-          <span className={`text-xs font-medium ${displayOnTimeStatus().includes('Late') ? 'text-red-600' : displayOnTimeStatus() === 'Ontime' ? 'text-green-600' : 'text-gray-600'}`}>
-            {displayOnTimeStatus() || '-'}
-          </span>
+          <div className={`h-8 px-2 border border-gray-200 flex items-center justify-center ${isSelected ? 'bg-blue-500' : ''}`}>
+            <span className={`text-xs font-medium ${isSelected ? 'text-white' : displayOnTimeStatus().includes('Late') ? 'text-red-600' : displayOnTimeStatus() === 'Ontime' ? 'text-green-600' : 'text-gray-600'}`}>
+              {displayOnTimeStatus() || '-'}
+            </span>
+          </div>
         </td>
 
         {/* Status Content - Now with dropdown */}

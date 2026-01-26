@@ -16,7 +16,7 @@ export const TableHeader: React.FC = () => {
         </th>
 
         {/* PIC */}
-        <th style={{ width: '160px', minWidth: '160px', maxWidth: '160px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
+        <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
           PIC
         </th>
 
@@ -66,7 +66,7 @@ export const TableHeader: React.FC = () => {
         </th>
 
         {/* Completion Date */}
-        <th style={{ width: '128px', minWidth: '128px', maxWidth: '128px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
+        <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
           Completion Date
         </th>
 
@@ -96,12 +96,12 @@ export const TableHeader: React.FC = () => {
         </th>
 
         {/* Production Completion Date */}
-        <th style={{ width: '128px', minWidth: '128px', maxWidth: '128px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
+        <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
           Prod Completion
         </th>
 
         {/* Production Approved Date */}
-        <th style={{ width: '128px', minWidth: '128px', maxWidth: '128px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
+        <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 bg-gray-50 border-b-2 border-gray-300">
           Prod Approved Date
         </th>
 
