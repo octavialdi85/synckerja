@@ -4,6 +4,7 @@ import { Plus, Edit, Trash2, ChevronLeft, ChevronRight, Target } from 'lucide-re
 import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Progress } from '@/features/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,16 +30,20 @@ import { HabitTargetCountModal } from './HabitTargetCountModal';
 import { LoadingDots } from '@/components/LoadingDots';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday } from 'date-fns';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const HabitSpreadsheetView = () => {
-  const { filteredHabits, entries, loading, addEntry, deleteEntry, deleteHabit } = useHabitTracker();
+  const { filteredHabits, entries, loading, addEntry, deleteEntry, deleteHabit, updateHabit } = useHabitTracker();
   const { toast } = useToast();
+  const { t, dateLocale } = useAppTranslation();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<{ id: string; name: string } | null>(null);
   const [targetCountModal, setTargetCountModal] = useState<{ habitId: string; date: Date } | null>(null);
+  const [monthlyHabitConfirmModal, setMonthlyHabitConfirmModal] = useState<{ habitId: string; date: Date; newDate: number; oldDate: number | null } | null>(null);
+  const [selectedOldDate, setSelectedOldDate] = useState<number | null>(null);
   
   // Single ref for unified scroll container
   const unifiedScrollRef = useRef<HTMLDivElement>(null);
@@ -125,15 +130,102 @@ export const HabitSpreadsheetView = () => {
     return { goal, actual, progress };
   };
 
+  // Helper function to check if a habit is active on a specific day
+  const isHabitActiveOnDay = React.useCallback((habit: any, day: Date): boolean => {
+    // First check if habit is globally active
+    if (!habit.is_active) return false;
+    
+    if (habit.frequency === 'weekly') {
+      if (habit.weekly_days && Array.isArray(habit.weekly_days) && habit.weekly_days.length > 0) {
+        const dayOfWeek = day.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+        // Ensure weekly_days contains numbers
+        const weeklyDaysNumbers = habit.weekly_days.map((d: any) => Number(d));
+        return weeklyDaysNumbers.includes(dayOfWeek);
+      }
+      return true; // If no weekly_days specified, assume active all days
+    }
+    
+    if (habit.frequency === 'monthly') {
+      // For monthly habits, only active on dates specified in monthly_dates
+      if (habit.monthly_dates && Array.isArray(habit.monthly_dates) && habit.monthly_dates.length > 0) {
+        const dayOfMonth = parseInt(format(day, 'd'));
+        // Ensure monthly_dates contains numbers and check if dayOfMonth is included
+        const monthlyDatesNumbers = habit.monthly_dates.map((d: any) => Number(d));
+        const isIncluded = monthlyDatesNumbers.includes(dayOfMonth);
+        
+        // Debug logging for monthly habits
+        const dateStr = format(day, 'yyyy-MM-dd');
+        if (dateStr === '2026-01-28' && habit.name === 'Main kerumah ibu') {
+          console.log(`[isHabitActiveOnDay Debug] Monthly habit "${habit.name}" (${dateStr}):`, {
+            dayOfMonth,
+            monthly_dates: habit.monthly_dates,
+            monthlyDatesNumbers,
+            isIncluded,
+            result: isIncluded,
+          });
+        }
+        
+        return isIncluded;
+      }
+      // If no monthly_dates specified, assume not active (monthly habits need specific dates)
+      return false;
+    }
+    
+    // Daily habits are active every day
+    return true;
+  }, []);
+
+  // Helper function to check if a habit is completed on a specific day
+  const isHabitCompletedOnDay = React.useCallback((habit: any, day: Date, entriesList: any[]): boolean => {
+    // If habit is not active, it cannot be completed
+    if (!habit.is_active) return false;
+    
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const dayEntries = entriesList.filter((e) => e.habit_id === habit.id && e.entry_date === dateStr);
+    
+    // For monthly habits: target_count is for the whole month, not per day
+    // If there's at least one entry on this date, the habit is completed for this day
+    if (habit.frequency === 'monthly') {
+      return dayEntries.length > 0;
+    }
+    
+    // For weekly habits: target_count is for the whole week, not per day
+    // If there's at least one entry on this date, the habit is completed for this day
+    if (habit.frequency === 'weekly') {
+      return dayEntries.length > 0;
+    }
+    
+    // For daily habits with target_count > 1: 
+    // Must reach target_count entries on this specific day
+    if (habit.target_count > 1) {
+      return dayEntries.length >= habit.target_count;
+    }
+    
+    // For daily habits with target_count = 1, check if there's at least one entry
+    return dayEntries.length > 0;
+  }, []);
+
   // Calculate daily progress for a specific date
   const getDailyProgress = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const dayEntries = entries.filter((e) => e.entry_date === dateStr);
-    const totalHabits = filteredHabits.length;
-    const completedHabits = dayEntries.length;
+    // Count only habits that are active on this day (exclude inactive habits)
+    const activeHabits = filteredHabits.filter(habit => {
+      // First check if habit is active
+      if (!habit.is_active) return false;
+      
+      // Then check if habit is active on this specific day
+      return isHabitActiveOnDay(habit, date);
+    });
+    
+    const totalHabits = activeHabits.length;
     
     if (totalHabits === 0) return 0;
-    return (completedHabits / totalHabits) * 100;
+    
+    // Count habits that are completed (not entries)
+    // For habits with target_count > 1, only count as completed if entries count >= target_count
+    const completedHabits = activeHabits.filter(habit => isHabitCompletedOnDay(habit, date, entries));
+    const done = completedHabits.length;
+    
+    return (done / totalHabits) * 100;
   };
 
   // Calculate total monthly goal for Daily Stats (sum of all habits' monthly goals)
@@ -197,10 +289,55 @@ export const HabitSpreadsheetView = () => {
   const chartData = useMemo(() => {
     return monthDays.map((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
-      const dayEntries = entries.filter((e) => e.entry_date === dateStr);
-      const totalHabits = filteredHabits.length;
-      const done = dayEntries.length;
+      
+      // Count only habits that are active on this day (exclude inactive habits)
+      const activeHabits = filteredHabits.filter(habit => {
+        // First check if habit is active
+        if (!habit.is_active) return false;
+        
+        // Then check if habit is active on this specific day
+        const isActiveOnThisDay = isHabitActiveOnDay(habit, day);
+        
+        // Debug logging for specific dates
+        if (dateStr === '2026-01-11' || dateStr === '2026-01-28') {
+          const dayEntries = entries.filter((e) => e.habit_id === habit.id && e.entry_date === dateStr);
+          console.log(`[Daily Stats Debug] Habit "${habit.name}" (${dateStr}):`, {
+            habitIsActive: habit.is_active,
+            isActiveOnThisDay,
+            frequency: habit.frequency,
+            target_count: habit.target_count,
+            entriesCount: dayEntries.length,
+            weekly_days: habit.weekly_days,
+            monthly_dates: habit.monthly_dates,
+            dayOfMonth: parseInt(format(day, 'd')),
+          });
+        }
+        
+        return isActiveOnThisDay;
+      });
+      
+      const totalHabits = activeHabits.length;
+      
+      // Count habits that are completed (not entries) - pass entries directly to ensure latest data
+      // For habits with target_count > 1, only count as completed if entries count >= target_count
+      const completedHabits = activeHabits.filter(habit => {
+        const isCompleted = isHabitCompletedOnDay(habit, day, entries);
+        return isCompleted;
+      });
+      
+      const done = completedHabits.length;
       const left = Math.max(0, totalHabits - done);
+      
+      // Debug logging for specific dates
+      if (dateStr === '2026-01-11' || dateStr === '2026-01-28') {
+        console.log(`[Daily Stats Debug] Date ${dateStr}:`, {
+          totalHabits,
+          done,
+          percentage: totalHabits > 0 ? Math.round((done / totalHabits) * 100) : 0,
+          activeHabitNames: activeHabits.map(h => h.name),
+          completedHabitNames: completedHabits.map(h => h.name),
+        });
+      }
       
       return {
         date: format(day, 'd'),
@@ -210,8 +347,74 @@ export const HabitSpreadsheetView = () => {
         total: totalHabits,
       };
     });
-  }, [monthDays, entries, filteredHabits]);
+  }, [monthDays, entries, filteredHabits, isHabitActiveOnDay, isHabitCompletedOnDay]);
 
+
+  // Handle click on monthly habit checkbox that is not in monthly_dates
+  const handleMonthlyHabitDateChange = (habitId: string, date: Date) => {
+    const habit = filteredHabits.find((h) => h.id === habitId);
+    if (!habit || habit.frequency !== 'monthly') return;
+
+    const dayOfMonth = parseInt(format(date, 'd'));
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    
+    // Count existing entries in this month
+    const monthEntries = entries.filter((e) => {
+      if (e.habit_id !== habit.id) return false;
+      const entryDate = new Date(e.entry_date);
+      return entryDate >= monthStart && entryDate <= monthEnd;
+    });
+    
+    const currentEntriesCount = monthEntries.length;
+    
+    // If already reached target_count, cannot change
+    if (currentEntriesCount >= habit.target_count) {
+      toast({
+        title: t('habitTracker.monthlyHabit.limitReached', 'Limit Tercapai'),
+        description: t('habitTracker.monthlyHabit.limitReachedDescription', 'Anda sudah menyelesaikan {count} entry bulan ini. Silakan hapus entry yang ada terlebih dahulu.', {
+          count: habit.target_count.toString()
+        }),
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Determine default old date to replace
+    // Only select from dates that are not checked (no entry exists) and not the newDate
+    let defaultOldDate: number | null = null;
+    
+    if (habit.monthly_dates && habit.monthly_dates.length > 0) {
+      // Get dates that are already checked (have entries)
+      const checkedDates = monthEntries.map(e => {
+        const entryDate = new Date(e.entry_date);
+        return parseInt(format(entryDate, 'd'));
+      });
+      
+      // Find first date from monthly_dates that:
+      // 1. Is not the newDate
+      // 2. Is not already checked (no entry exists)
+      const availableOldDate = habit.monthly_dates.find((date: number) => {
+        const dateNum = Number(date);
+        return dateNum !== dayOfMonth && !checkedDates.includes(dateNum);
+      });
+      
+      if (availableOldDate) {
+        defaultOldDate = Number(availableOldDate);
+      }
+    }
+    
+    // Set default selected old date
+    setSelectedOldDate(defaultOldDate);
+    
+    // Show confirmation modal
+    setMonthlyHabitConfirmModal({
+      habitId,
+      date,
+      newDate: dayOfMonth,
+      oldDate: defaultOldDate,
+    });
+  };
 
   // Handle checkbox toggle
   const handleCheckboxToggle = async (habitId: string, date: Date, checked: boolean) => {
@@ -375,6 +578,8 @@ export const HabitSpreadsheetView = () => {
                   // Calculate percentage: (done / total) * 100
                   const percentage = dayData.total > 0 ? Math.round((dayData.done / dayData.total) * 100) : 0;
                   
+                  const isComplete = percentage === 100;
+                  
                   return (
                     <td
                       key={`stats-${day.toISOString()}`}
@@ -384,7 +589,13 @@ export const HabitSpreadsheetView = () => {
                       style={{ width: '45px', minWidth: '45px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                     >
                       <div className="flex flex-col items-center gap-0.5">
-                        <div className="text-[10px] font-bold text-gray-700">
+                        <div 
+                          className={`text-[10px] font-bold ${
+                            isComplete 
+                              ? 'bg-green-600 text-white px-1.5 py-0.5 rounded' 
+                              : 'text-gray-700'
+                          }`}
+                        >
                           {percentage}%
                         </div>
                       </div>
@@ -566,7 +777,11 @@ export const HabitSpreadsheetView = () => {
                           <td
                             key={`${habit.id}-${day.toISOString()}`}
                             className={`border-r border-gray-300 border-b border-gray-300 px-1 text-center transition-colors ${
-                              isDayAllowed ? 'cursor-pointer hover:bg-gray-100' : 'cursor-not-allowed opacity-50'
+                              isDayAllowed 
+                                ? 'cursor-pointer hover:bg-gray-100' 
+                                : isMonthlyHabit 
+                                  ? 'cursor-pointer opacity-50 hover:opacity-70' 
+                                  : 'cursor-not-allowed opacity-50'
                             } ${
                               isCurrentDay ? 'bg-blue-50' : 'bg-white'
                             } ${
@@ -575,6 +790,11 @@ export const HabitSpreadsheetView = () => {
                             style={{ width: '45px', minWidth: '45px', height: '45px', maxHeight: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px', overflow: 'hidden', lineHeight: '1' }}
                             onClick={(e) => {
                               e.stopPropagation();
+                              // For monthly habits with disabled dates, show confirmation modal
+                              if (!isDayAllowed && isMonthlyHabit) {
+                                handleMonthlyHabitDateChange(habit.id, day);
+                                return;
+                              }
                               if (!isDayAllowed) return; // Don't allow clicking if day is not allowed
                               // For partial state, clicking should still open modal
                               handleCheckboxToggle(habit.id, day, !isFull);
@@ -584,7 +804,7 @@ export const HabitSpreadsheetView = () => {
                                 ? isWeeklyHabit 
                                   ? 'Hari ini tidak dipilih untuk habit ini'
                                   : isMonthlyHabit
-                                  ? 'Tanggal ini tidak dipilih untuk habit ini'
+                                  ? 'Klik untuk mengubah tanggal habit ini'
                                   : 'Hari ini tidak dipilih untuk habit ini'
                                 : isMultiEntry && entriesCount > 0 
                                   ? `${entriesCount}/${habit.target_count} completed` 
@@ -600,17 +820,27 @@ export const HabitSpreadsheetView = () => {
                                     <Checkbox
                                       checked={checkboxState}
                                       onCheckedChange={(checked) => {
+                                        if (!isDayAllowed && isMonthlyHabit) {
+                                          handleMonthlyHabitDateChange(habit.id, day);
+                                          return;
+                                        }
                                         if (!isDayAllowed) return;
                                         handleCheckboxToggle(habit.id, day, !!checked);
                                       }}
-                                      disabled={!isDayAllowed}
+                                      disabled={!isDayAllowed && !isMonthlyHabit}
                                       className={`h-4 w-4 ${
-                                        isDayAllowed ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                                        isDayAllowed || (isMonthlyHabit && !isDayAllowed)
+                                          ? 'cursor-pointer' 
+                                          : 'cursor-not-allowed opacity-50'
                                       } ${
                                         checkboxState === true ? 'checkbox-full-green' : ''
                                       }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        if (!isDayAllowed && isMonthlyHabit) {
+                                          handleMonthlyHabitDateChange(habit.id, day);
+                                          return;
+                                        }
                                         if (!isDayAllowed) e.preventDefault();
                                       }}
                                     />
@@ -632,17 +862,27 @@ export const HabitSpreadsheetView = () => {
                                   <Checkbox
                                     checked={checkboxState}
                                     onCheckedChange={(checked) => {
+                                      if (!isDayAllowed && isMonthlyHabit) {
+                                        handleMonthlyHabitDateChange(habit.id, day);
+                                        return;
+                                      }
                                       if (!isDayAllowed) return;
                                       handleCheckboxToggle(habit.id, day, !!checked);
                                     }}
-                                    disabled={!isDayAllowed}
+                                    disabled={!isDayAllowed && !isMonthlyHabit}
                                     className={`h-4 w-4 ${
-                                      isDayAllowed ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                                      isDayAllowed || (isMonthlyHabit && !isDayAllowed)
+                                        ? 'cursor-pointer' 
+                                        : 'cursor-not-allowed opacity-50'
                                     } ${
                                       checkboxState === true ? 'checkbox-full-green' : ''
                                     }`}
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      if (!isDayAllowed && isMonthlyHabit) {
+                                        handleMonthlyHabitDateChange(habit.id, day);
+                                        return;
+                                      }
                                       if (!isDayAllowed) e.preventDefault();
                                     }}
                                   />
@@ -866,6 +1106,215 @@ export const HabitSpreadsheetView = () => {
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Habit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Monthly Habit Date Change Confirmation Dialog */}
+      <AlertDialog open={!!monthlyHabitConfirmModal} onOpenChange={(open) => {
+        if (!open) {
+          setMonthlyHabitConfirmModal(null);
+          setSelectedOldDate(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Edit className="w-5 h-5 text-blue-600" />
+              {t('habitTracker.monthlyHabit.changeDateTitle', 'Ubah Tanggal Habit Bulanan')}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {monthlyHabitConfirmModal && (() => {
+                  const habit = filteredHabits.find((h) => h.id === monthlyHabitConfirmModal.habitId);
+                  const availableDates = habit?.monthly_dates || [];
+                  
+                  // Get entries for this month to check which dates are already checked
+                  const monthStart = startOfMonth(currentMonth);
+                  const monthEnd = endOfMonth(currentMonth);
+                  const monthEntries = entries.filter((e) => {
+                    if (!habit || e.habit_id !== habit.id) return false;
+                    const entryDate = new Date(e.entry_date);
+                    return entryDate >= monthStart && entryDate <= monthEnd;
+                  });
+                  
+                  // Get dates that are already checked (have entries)
+                  const checkedDates = monthEntries.map(e => {
+                    const entryDate = new Date(e.entry_date);
+                    return parseInt(format(entryDate, 'd'));
+                  });
+                  
+                  // Filter: only show dates that are:
+                  // 1. Not the newDate
+                  // 2. Not already checked (no entry exists for that date)
+                  const selectableDates = availableDates.filter((date: number) => {
+                    const dateNum = Number(date);
+                    return dateNum !== monthlyHabitConfirmModal.newDate && !checkedDates.includes(dateNum);
+                  });
+                  
+                  // Format date for display
+                  const formatDateForDisplay = (dayOfMonth: number) => {
+                    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dayOfMonth);
+                    return format(date, 'd MMMM yyyy', { locale: dateLocale });
+                  };
+                  
+                  return (
+                    <>
+                      <div className="text-sm text-gray-600">
+                        {t('habitTracker.monthlyHabit.changeDateQuestion', 'Apakah Anda ingin mengubah tanggal habit bulanan ini ke tanggal {date}?', {
+                          date: formatDateForDisplay(monthlyHabitConfirmModal.newDate)
+                        })}
+                      </div>
+                      {habit && (
+                        <div className="font-semibold text-gray-900 bg-gray-50 p-2 rounded border border-gray-200 text-sm">
+                          "{habit.name}"
+                        </div>
+                      )}
+                      {selectableDates.length > 0 ? (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            {t('habitTracker.monthlyHabit.selectOldDate', 'Pilih tanggal yang akan diganti:')}
+                          </label>
+                          <Select
+                            value={selectedOldDate?.toString() || ''}
+                            onValueChange={(value) => {
+                              setSelectedOldDate(parseInt(value));
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={t('habitTracker.monthlyHabit.selectOldDatePlaceholder', 'Pilih tanggal')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectableDates.map((date: number) => {
+                                const dateNum = Number(date);
+                                return (
+                                  <SelectItem key={date} value={date.toString()}>
+                                    {formatDateForDisplay(dateNum)}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                          {t('habitTracker.monthlyHabit.noDateToReplace', 'Tidak ada tanggal yang bisa diganti')}
+                        </div>
+                      )}
+                      {selectedOldDate && (
+                        <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded border border-blue-200">
+                          {t('habitTracker.monthlyHabit.dateChangeInfo', 'Tanggal {oldDate} akan dinonaktifkan dan diganti dengan tanggal {newDate}', {
+                            oldDate: formatDateForDisplay(selectedOldDate),
+                            newDate: formatDateForDisplay(monthlyHabitConfirmModal.newDate)
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setMonthlyHabitConfirmModal(null);
+              setSelectedOldDate(null);
+            }}>
+              {t('common.cancel', 'Batal')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!selectedOldDate}
+              onClick={async () => {
+                if (!monthlyHabitConfirmModal) return;
+                
+                // Validate that old date is selected
+                if (!selectedOldDate) {
+                  toast({
+                    title: t('common.error', 'Error'),
+                    description: t('habitTracker.monthlyHabit.selectOldDateRequired', 'Silakan pilih tanggal yang akan diganti'),
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                
+                try {
+                  const habit = filteredHabits.find((h) => h.id === monthlyHabitConfirmModal.habitId);
+                  if (!habit) return;
+
+                  const monthStart = startOfMonth(currentMonth);
+                  const monthEnd = endOfMonth(currentMonth);
+                  
+                  // Get existing entries in this month
+                  const monthEntries = entries.filter((e) => {
+                    if (e.habit_id !== habit.id) return false;
+                    const entryDate = new Date(e.entry_date);
+                    return entryDate >= monthStart && entryDate <= monthEnd;
+                  });
+                  
+                  // Get current monthly_dates
+                  const currentMonthlyDates = habit.monthly_dates || [];
+                  
+                  // Calculate new monthly_dates
+                  // Remove selectedOldDate and add newDate
+                  const newMonthlyDates = currentMonthlyDates
+                    .filter((d: number) => Number(d) !== selectedOldDate)
+                    .concat([monthlyHabitConfirmModal.newDate])
+                    .sort((a, b) => a - b);
+                  
+                  // Update habit with new monthly_dates
+                  await updateHabit(habit.id, {
+                    monthly_dates: newMonthlyDates,
+                  });
+                  
+                  // Move entries from old date to new date
+                  const newDateStr = format(monthlyHabitConfirmModal.date, 'yyyy-MM-dd');
+                  
+                  // Find entries on the old date
+                  const oldDateEntries = monthEntries.filter(e => {
+                    const entryDate = new Date(e.entry_date);
+                    const entryDayOfMonth = parseInt(format(entryDate, 'd'));
+                    return entryDayOfMonth === selectedOldDate;
+                  });
+                  
+                  // Delete old entries
+                  for (const entry of oldDateEntries) {
+                    await deleteEntry(entry.id);
+                  }
+                  
+                  // Create new entry on the new date if there was an entry on old date
+                  if (oldDateEntries.length > 0) {
+                    await addEntry(habit.id, newDateStr, 1);
+                  }
+                  
+                  // Format dates for toast message
+                  const formatDateForToast = (dayOfMonth: number) => {
+                    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dayOfMonth);
+                    return format(date, 'd MMMM yyyy', { locale: dateLocale });
+                  };
+                  
+                  setMonthlyHabitConfirmModal(null);
+                  setSelectedOldDate(null);
+                  toast({
+                    title: t('habitTracker.monthlyHabit.dateChanged', 'Tanggal diubah'),
+                    description: t('habitTracker.monthlyHabit.dateChangedDescriptionWithOld', 'Tanggal habit bulanan telah diubah dari tanggal {oldDate} ke tanggal {newDate}', {
+                      oldDate: formatDateForToast(selectedOldDate),
+                      newDate: formatDateForToast(monthlyHabitConfirmModal.newDate)
+                    }),
+                  });
+                } catch (error) {
+                  console.error('Error updating monthly habit date:', error);
+                  toast({
+                    title: t('common.error', 'Error'),
+                    description: t('habitTracker.monthlyHabit.changeDateError', 'Gagal mengubah tanggal habit'),
+                    variant: 'destructive',
+                  });
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              {t('habitTracker.monthlyHabit.changeDateButton', 'Ubah Tanggal')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
