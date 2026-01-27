@@ -60,7 +60,75 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setHabits(data || []);
+      // Supabase JSONB is automatically parsed as array/object, but ensure it's an array
+      const parsedHabits = (data || []).map(habit => {
+        let checklistNames = undefined;
+        if (habit.checklist_names) {
+          if (Array.isArray(habit.checklist_names)) {
+            checklistNames = habit.checklist_names;
+          } else if (typeof habit.checklist_names === 'string') {
+            try {
+              const parsed = JSON.parse(habit.checklist_names);
+              checklistNames = Array.isArray(parsed) ? parsed : undefined;
+            } catch (e) {
+              console.error('Error parsing checklist_names:', e);
+              checklistNames = undefined;
+            }
+          }
+        }
+        
+        let weeklyDays = undefined;
+        if (habit.weekly_days) {
+          if (Array.isArray(habit.weekly_days)) {
+            weeklyDays = habit.weekly_days.filter((day: any) => typeof day === 'number' && day >= 0 && day <= 6);
+          } else if (typeof habit.weekly_days === 'string') {
+            try {
+              const parsed = JSON.parse(habit.weekly_days);
+              if (Array.isArray(parsed)) {
+                weeklyDays = parsed.filter((day: any) => typeof day === 'number' && day >= 0 && day <= 6);
+              }
+            } catch (e) {
+              console.error('Error parsing weekly_days:', e);
+              weeklyDays = undefined;
+            }
+          }
+        }
+        
+        let monthlyDates = undefined;
+        if (habit.monthly_dates) {
+          if (Array.isArray(habit.monthly_dates)) {
+            monthlyDates = habit.monthly_dates.filter((date: any) => typeof date === 'number' && date >= 1 && date <= 31);
+          } else if (typeof habit.monthly_dates === 'string') {
+            try {
+              const parsed = JSON.parse(habit.monthly_dates);
+              if (Array.isArray(parsed)) {
+                monthlyDates = parsed.filter((date: any) => typeof date === 'number' && date >= 1 && date <= 31);
+              }
+            } catch (e) {
+              console.error('Error parsing monthly_dates:', e);
+              monthlyDates = undefined;
+            }
+          }
+        }
+        
+        // Debug: Log parsed data for habits with checklist_names, weekly_days, or monthly_dates
+        if ((checklistNames && checklistNames.length > 0) || (weeklyDays && weeklyDays.length > 0) || (monthlyDates && monthlyDates.length > 0)) {
+          console.log(`[HabitTrackerContext] Parsed habit "${habit.name}":`, {
+            id: habit.id,
+            checklist_names: checklistNames,
+            weekly_days: weeklyDays,
+            monthly_dates: monthlyDates,
+          });
+        }
+        
+        return {
+          ...habit,
+          checklist_names: checklistNames,
+          weekly_days: weeklyDays,
+          monthly_dates: monthlyDates,
+        };
+      });
+      setHabits(parsedHabits);
     } catch (error) {
       console.error('Error fetching habits:', error);
     }
@@ -182,6 +250,9 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
         .from('habits')
         .insert({
           ...habitData,
+          checklist_names: habitData.checklist_names && habitData.checklist_names.length > 0 ? habitData.checklist_names : null,
+          weekly_days: habitData.weekly_days && habitData.weekly_days.length > 0 ? habitData.weekly_days : null,
+          monthly_dates: habitData.monthly_dates && habitData.monthly_dates.length > 0 ? habitData.monthly_dates : null,
           organization_id: organizationId,
           employee_id: employee.id,
           created_by: profile?.id || null, // profiles.id, not user.id
@@ -199,12 +270,27 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
 
   const updateHabit = useCallback(async (id: string, updates: Partial<Habit>) => {
     try {
+      const updateData: any = {
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Supabase JSONB accepts arrays directly
+      if (updates.checklist_names !== undefined) {
+        updateData.checklist_names = updates.checklist_names && updates.checklist_names.length > 0 ? updates.checklist_names : null;
+      }
+      
+      if (updates.weekly_days !== undefined) {
+        updateData.weekly_days = updates.weekly_days && updates.weekly_days.length > 0 ? updates.weekly_days : null;
+      }
+      
+      if (updates.monthly_dates !== undefined) {
+        updateData.monthly_dates = updates.monthly_dates && updates.monthly_dates.length > 0 ? updates.monthly_dates : null;
+      }
+      
       const { error } = await supabase
         .from('habits')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;

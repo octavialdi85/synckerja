@@ -10,6 +10,9 @@ export interface Habit {
   icon?: string;
   frequency: 'daily' | 'weekly' | 'monthly';
   target_count: number; // Target per frequency period
+  checklist_names?: string[]; // Array of names for each checklist (e.g., ["Solat Subuh", "Solat Zuhur", ...])
+  weekly_days?: number[]; // Array of day numbers (0=Sunday, 1=Monday, ..., 6=Saturday) for weekly habits
+  monthly_dates?: number[]; // Array of dates (1-31) for monthly habits
   created_at: string;
   updated_at: string;
   is_active: boolean;

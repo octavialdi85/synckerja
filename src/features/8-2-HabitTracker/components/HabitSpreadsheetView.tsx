@@ -25,6 +25,7 @@ import {
   Legend,
 } from 'recharts';
 import { HabitFormModal } from './HabitFormModal';
+import { HabitTargetCountModal } from './HabitTargetCountModal';
 import { LoadingDots } from '@/components/LoadingDots';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday } from 'date-fns';
 import { useToast } from '@/features/ui/use-toast';
@@ -37,9 +38,28 @@ export const HabitSpreadsheetView = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [targetCountModal, setTargetCountModal] = useState<{ habitId: string; date: Date } | null>(null);
   
   // Single ref for unified scroll container
   const unifiedScrollRef = useRef<HTMLDivElement>(null);
+
+  // Add CSS for green checkbox when full
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .checkbox-full-green[data-state="checked"] {
+        background-color: #16a34a !important;
+        border-color: #16a34a !important;
+      }
+      .checkbox-full-green[data-state="checked"] svg {
+        color: white !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   // Get all days of current month
   const monthDays = useMemo(() => {
@@ -55,6 +75,14 @@ export const HabitSpreadsheetView = () => {
     return entries.find(
       (e) => e.habit_id === habitId && e.entry_date === dateStr
     );
+  };
+
+  // Get all entries count for a specific habit and date (for habits with target_count > 1)
+  const getEntriesCountForDate = (habitId: string, date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return entries.filter(
+      (e) => e.habit_id === habitId && e.entry_date === dateStr
+    ).length;
   };
 
   // Calculate goal, actual, and progress for a habit
@@ -187,6 +215,15 @@ export const HabitSpreadsheetView = () => {
 
   // Handle checkbox toggle
   const handleCheckboxToggle = async (habitId: string, date: Date, checked: boolean) => {
+    const habit = filteredHabits.find((h) => h.id === habitId);
+    
+    // If frequency is daily and target_count > 1, show modal instead
+    if (habit && habit.frequency === 'daily' && habit.target_count > 1) {
+      setTargetCountModal({ habitId, date });
+      return;
+    }
+
+    // Otherwise, use the original behavior
     const dateStr = format(date, 'yyyy-MM-dd');
     const existingEntry = getEntryForDate(habitId, date);
 
@@ -280,11 +317,11 @@ export const HabitSpreadsheetView = () => {
             <table className="border-collapse bg-white" style={{ width: '100%', minWidth: `calc(250px + ${monthDays.length * 45}px + 280px)` }}>
             {/* Header Row - Dates */}
             <thead className="bg-gray-50 sticky top-0 z-20 border-b border-gray-300" style={{ boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' }}>
-              <tr>
+              <tr style={{ height: '45px' }}>
                 {/* Habit Name Column - Sticky */}
                 <th
-                  className="sticky left-0 z-30 bg-gray-50 border-r border-gray-300 px-4 py-2 text-left font-semibold text-sm text-gray-700 shadow-[2px_0_4px_rgba(0,0,0,0.1)]"
-                  style={{ width: '250px', minWidth: '250px' }}
+                  className="sticky left-0 z-30 bg-gray-50 border-r border-gray-300 px-4 text-left font-semibold text-sm text-gray-700 shadow-[2px_0_4px_rgba(0,0,0,0.1)]"
+                  style={{ width: '250px', minWidth: '250px', height: '45px', verticalAlign: 'middle', paddingTop: '8px', paddingBottom: '8px' }}
                 >
                   Habit Name
                 </th>
@@ -294,10 +331,10 @@ export const HabitSpreadsheetView = () => {
                   return (
                     <th
                       key={day.toISOString()}
-                      className={`border-r border-gray-300 px-1 py-2 text-center text-xs font-medium text-gray-700 bg-gray-50 ${
+                      className={`border-r border-gray-300 px-1 text-center text-xs font-medium text-gray-700 bg-gray-50 ${
                         isCurrentDay ? 'bg-blue-100' : ''
                       }`}
-                      style={{ width: '45px', minWidth: '45px' }}
+                      style={{ width: '45px', minWidth: '45px', height: '45px', verticalAlign: 'middle', paddingTop: '8px', paddingBottom: '8px' }}
                     >
                       <div className="flex flex-col items-center gap-0.5">
                         <span className="text-[10px] text-gray-500 uppercase">
@@ -311,21 +348,21 @@ export const HabitSpreadsheetView = () => {
                   );
                 })}
                 {/* Analysis Columns */}
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '80px', minWidth: '80px' }}>
+                <th className="border-r border-gray-300 px-3 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '8px', paddingBottom: '8px' }}>
                   Goal
                 </th>
-                <th className="border-r border-gray-300 px-3 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '80px', minWidth: '80px' }}>
+                <th className="border-r border-gray-300 px-3 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '8px', paddingBottom: '8px' }}>
                   Actual
                 </th>
-                <th className="border-r-0 px-3 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '120px', minWidth: '120px' }}>
+                <th className="border-r-0 px-3 text-center text-xs font-semibold text-gray-700 bg-gray-100" style={{ width: '120px', minWidth: '120px', height: '45px', verticalAlign: 'middle', paddingTop: '8px', paddingBottom: '8px' }}>
                   Progress
                 </th>
               </tr>
               
               {/* Daily Stats Row - Right below date headers */}
-              <tr className="bg-gray-50 border-t border-b border-gray-300">
+              <tr className="bg-gray-50 border-t border-b border-gray-300" style={{ height: '45px' }}>
                 {/* Spacer for Habit Name column (250px) - Sticky */}
-                <td className="sticky left-0 z-10 px-4 py-3 border-r border-gray-300 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ width: '250px', minWidth: '250px' }}>
+                <td className="sticky left-0 z-10 px-4 border-r border-gray-300 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ width: '250px', minWidth: '250px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   <span className="text-xs font-semibold text-gray-700">Daily Stats</span>
                 </td>
                 
@@ -341,10 +378,10 @@ export const HabitSpreadsheetView = () => {
                   return (
                     <td
                       key={`stats-${day.toISOString()}`}
-                      className={`border-r border-gray-300 px-1 py-3 text-center ${
+                      className={`border-r border-gray-300 px-1 text-center ${
                         isCurrentDay ? 'bg-blue-100' : ''
                       }`}
-                      style={{ width: '45px', minWidth: '45px' }}
+                      style={{ width: '45px', minWidth: '45px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                     >
                       <div className="flex flex-col items-center gap-0.5">
                         <div className="text-[10px] font-bold text-gray-700">
@@ -356,7 +393,7 @@ export const HabitSpreadsheetView = () => {
                 })}
                 
                 {/* Goal Column for Daily Stats */}
-                <td className="border-r border-gray-300 px-2 py-3 text-center bg-gray-50" style={{ width: '80px', minWidth: '80px' }}>
+                <td className="border-r border-gray-300 px-2 text-center bg-gray-50" style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   <div className="flex items-center justify-center gap-1">
                     <Target className="h-3 w-3 text-gray-500" />
                     <span className="text-xs font-semibold text-gray-900">
@@ -366,7 +403,7 @@ export const HabitSpreadsheetView = () => {
                 </td>
                 
                 {/* Actual Column for Daily Stats */}
-                <td className="border-r border-gray-300 px-2 py-3 text-center bg-gray-50" style={{ width: '80px', minWidth: '80px' }}>
+                <td className="border-r border-gray-300 px-2 text-center bg-gray-50" style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   {(() => {
                     const totalGoal = getTotalMonthlyGoal();
                     const totalActual = chartData.reduce((sum, dayData, index) => sum + getDailyStatsAnalysis(monthDays[index]).actual, 0);
@@ -385,7 +422,7 @@ export const HabitSpreadsheetView = () => {
                 </td>
                 
                 {/* Progress Column for Daily Stats */}
-                <td className="border-r-0 px-2 py-3 bg-gray-50" style={{ width: '120px', minWidth: '120px' }}>
+                <td className="border-r-0 px-2 bg-gray-50" style={{ width: '120px', minWidth: '120px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   {(() => {
                     const totalGoal = getTotalMonthlyGoal();
                     const totalActual = chartData.reduce((sum, dayData, index) => sum + getDailyStatsAnalysis(monthDays[index]).actual, 0);
@@ -438,13 +475,14 @@ export const HabitSpreadsheetView = () => {
                         isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                       }`}
                       onClick={() => setSelectedHabit(habit.id)}
+                      style={{ height: '45px' }}
                     >
                       {/* Habit Name Cell - Sticky */}
                       <td
-                        className={`sticky left-0 z-10 border-r border-gray-300 border-b border-gray-300 px-4 py-3 shadow-[2px_0_4px_rgba(0,0,0,0.1)] transition-colors ${
+                        className={`sticky left-0 z-10 border-r border-gray-300 border-b border-gray-300 px-4 shadow-[2px_0_4px_rgba(0,0,0,0.1)] transition-colors ${
                           isSelected ? 'bg-blue-50' : 'bg-white'
                         } group-hover:bg-gray-50`}
-                        style={{ width: '250px', minWidth: '250px' }}
+                        style={{ width: '250px', minWidth: '250px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                       >
                         <div className="flex items-center gap-2">
                           <div
@@ -484,32 +522,132 @@ export const HabitSpreadsheetView = () => {
                       {/* Checkbox Cells */}
                       {monthDays.map((day, dayIndex) => {
                         const entry = getEntryForDate(habit.id, day);
-                        const isChecked = !!entry;
+                        const entriesCount = getEntriesCountForDate(habit.id, day);
                         const isCurrentDay = isToday(day);
+                        const isMultiEntry = habit.frequency === 'daily' && habit.target_count > 1;
+                        const isWeeklyHabit = habit.frequency === 'weekly';
+                        const isMonthlyHabit = habit.frequency === 'monthly';
+                        const isFull = entriesCount === habit.target_count;
+                        const isPartial = entriesCount > 0 && entriesCount < habit.target_count;
+                        const isEmpty = entriesCount === 0;
+                        
+                        // Check if day is allowed for weekly habits
+                        let isDayAllowed = true;
+                        if (isWeeklyHabit && habit.weekly_days && habit.weekly_days.length > 0) {
+                          // Get day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+                          const dayOfWeek = day.getDay();
+                          isDayAllowed = habit.weekly_days.includes(dayOfWeek);
+                        }
+                        
+                        // Check if date is allowed for monthly habits
+                        if (isMonthlyHabit && habit.monthly_dates && habit.monthly_dates.length > 0) {
+                          // Get day of month (1-31)
+                          const dayOfMonth = parseInt(format(day, 'd'));
+                          isDayAllowed = habit.monthly_dates.includes(dayOfMonth);
+                        }
+                        
+                        // Determine checkbox state
+                        // For multi-entry habits: indeterminate if partial, checked if full, unchecked if empty
+                        // For regular habits: checked if has entries, unchecked if empty
+                        let checkboxState: boolean | "indeterminate";
+                        if (isMultiEntry) {
+                          if (isPartial) {
+                            checkboxState = "indeterminate";
+                          } else if (isFull) {
+                            checkboxState = true;
+                          } else {
+                            checkboxState = false;
+                          }
+                        } else {
+                          checkboxState = entriesCount > 0;
+                        }
 
                         return (
                           <td
                             key={`${habit.id}-${day.toISOString()}`}
-                            className={`border-r border-gray-300 border-b border-gray-300 px-1 py-2 text-center transition-colors cursor-pointer ${
+                            className={`border-r border-gray-300 border-b border-gray-300 px-1 text-center transition-colors ${
+                              isDayAllowed ? 'cursor-pointer hover:bg-gray-100' : 'cursor-not-allowed opacity-50'
+                            } ${
                               isCurrentDay ? 'bg-blue-50' : 'bg-white'
-                            } hover:bg-gray-100 ${
-                              isSelected ? 'group-hover:bg-blue-100' : ''
+                            } ${
+                              isSelected && isDayAllowed ? 'group-hover:bg-blue-100' : ''
                             }`}
-                            style={{ width: '45px', minWidth: '45px' }}
+                            style={{ width: '45px', minWidth: '45px', height: '45px', maxHeight: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px', overflow: 'hidden', lineHeight: '1' }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCheckboxToggle(habit.id, day, !isChecked);
+                              if (!isDayAllowed) return; // Don't allow clicking if day is not allowed
+                              // For partial state, clicking should still open modal
+                              handleCheckboxToggle(habit.id, day, !isFull);
                             }}
+                            title={
+                              !isDayAllowed 
+                                ? isWeeklyHabit 
+                                  ? 'Hari ini tidak dipilih untuk habit ini'
+                                  : isMonthlyHabit
+                                  ? 'Tanggal ini tidak dipilih untuk habit ini'
+                                  : 'Hari ini tidak dipilih untuk habit ini'
+                                : isMultiEntry && entriesCount > 0 
+                                  ? `${entriesCount}/${habit.target_count} completed` 
+                                  : undefined
+                            }
                           >
-                            <div className="flex items-center justify-center">
-                              <Checkbox
-                                checked={isChecked}
-                                onCheckedChange={(checked) => {
-                                  handleCheckboxToggle(habit.id, day, !!checked);
-                                }}
-                                className="h-4 w-4 cursor-pointer"
-                                onClick={(e) => e.stopPropagation()}
-                              />
+                            <div className="flex flex-col items-center justify-center" style={{ height: '33px', maxHeight: '33px', overflow: 'hidden' }}>
+                              {isMultiEntry ? (
+                                <>
+                                  {/* Spacer di atas untuk checkbox dengan counter agar sejajar dengan yang tanpa counter */}
+                                  <div style={{ height: '8px', flexShrink: 0, minHeight: '8px', maxHeight: '8px' }}></div>
+                                  <div className="flex items-center justify-center flex-shrink-0" style={{ height: '16px', minHeight: '16px', maxHeight: '16px' }}>
+                                    <Checkbox
+                                      checked={checkboxState}
+                                      onCheckedChange={(checked) => {
+                                        if (!isDayAllowed) return;
+                                        handleCheckboxToggle(habit.id, day, !!checked);
+                                      }}
+                                      disabled={!isDayAllowed}
+                                      className={`h-4 w-4 ${
+                                        isDayAllowed ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                                      } ${
+                                        checkboxState === true ? 'checkbox-full-green' : ''
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isDayAllowed) e.preventDefault();
+                                      }}
+                                    />
+                                  </div>
+                                  {entriesCount > 0 ? (
+                                    <div className="flex items-center justify-center flex-shrink-0" style={{ height: '9px', minHeight: '9px', maxHeight: '9px', marginTop: '0px' }}>
+                                      <span className={`text-[8px] font-semibold leading-none ${
+                                        isFull ? 'text-green-600' : 'text-orange-600'
+                                      }`}>
+                                        {entriesCount}/{habit.target_count}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div style={{ height: '9px', flexShrink: 0, minHeight: '9px', maxHeight: '9px' }}></div>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="flex items-center justify-center" style={{ height: '100%' }}>
+                                  <Checkbox
+                                    checked={checkboxState}
+                                    onCheckedChange={(checked) => {
+                                      if (!isDayAllowed) return;
+                                      handleCheckboxToggle(habit.id, day, !!checked);
+                                    }}
+                                    disabled={!isDayAllowed}
+                                    className={`h-4 w-4 ${
+                                      isDayAllowed ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                                    } ${
+                                      checkboxState === true ? 'checkbox-full-green' : ''
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!isDayAllowed) e.preventDefault();
+                                    }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </td>
                         );
@@ -524,10 +662,10 @@ export const HabitSpreadsheetView = () => {
                           <>
                             {/* Goal Cell */}
                             <td
-                              className={`border-r border-gray-300 border-b border-gray-300 px-2 py-3 text-center bg-white ${
+                              className={`border-r border-gray-300 border-b border-gray-300 px-2 text-center bg-white ${
                                 isSelected ? 'bg-blue-50' : ''
                               } group-hover:bg-gray-50`}
-                              style={{ width: '80px', minWidth: '80px' }}
+                              style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                             >
                               <div className="flex items-center justify-center gap-1">
                                 <Target className="h-3 w-3 text-gray-500" />
@@ -537,10 +675,10 @@ export const HabitSpreadsheetView = () => {
                             
                             {/* Actual Cell */}
                             <td
-                              className={`border-r border-gray-300 border-b border-gray-300 px-2 py-3 text-center bg-white ${
+                              className={`border-r border-gray-300 border-b border-gray-300 px-2 text-center bg-white ${
                                 isSelected ? 'bg-blue-50' : ''
                               } group-hover:bg-gray-50`}
-                              style={{ width: '80px', minWidth: '80px' }}
+                              style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                             >
                               <span className={`text-sm font-semibold ${
                                 actual >= goal ? 'text-green-600' : actual >= goal * 0.5 ? 'text-blue-600' : 'text-gray-900'
@@ -551,10 +689,10 @@ export const HabitSpreadsheetView = () => {
                             
                             {/* Progress Bar Cell */}
                             <td
-                              className={`border-r-0 border-b border-gray-300 px-2 py-3 bg-white ${
+                              className={`border-r-0 border-b border-gray-300 px-2 bg-white ${
                                 isSelected ? 'bg-blue-50' : ''
                               } group-hover:bg-gray-50`}
-                              style={{ width: '120px', minWidth: '120px' }}
+                              style={{ width: '120px', minWidth: '120px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
                             >
                               <div className="flex items-center gap-2">
                                 <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -667,6 +805,14 @@ export const HabitSpreadsheetView = () => {
           isOpen={!!editingHabit}
           onClose={() => setEditingHabit(null)}
           habitId={editingHabit}
+        />
+      )}
+      {targetCountModal && (
+        <HabitTargetCountModal
+          isOpen={!!targetCountModal}
+          onClose={() => setTargetCountModal(null)}
+          habitId={targetCountModal.habitId}
+          date={targetCountModal.date}
         />
       )}
 
