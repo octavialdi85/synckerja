@@ -465,6 +465,30 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     permissionPath: '/digital-marketing',
     description: 'Digital marketing settings - role-based access',
     notes: 'Maps to /digital-marketing permission configuration'
+  },
+  {
+    path: '/kol-management',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/digital-marketing',
+    description: 'KOL Management - role-based access',
+    notes: 'Maps to /digital-marketing permission configuration'
+  },
+  {
+    path: '/kol-management/dashboard',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/digital-marketing',
+    description: 'KOL Management dashboard - role-based access',
+    notes: 'Maps to /digital-marketing permission configuration'
+  },
+  {
+    path: '/kol-management/:tab',
+    requiresAuth: true,
+    requiresPermissions: true,
+    permissionPath: '/digital-marketing',
+    description: 'KOL Management tabs - role-based access',
+    notes: 'Maps to /digital-marketing permission configuration'
   }
 ];
 

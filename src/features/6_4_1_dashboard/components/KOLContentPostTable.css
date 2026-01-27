@@ -1,0 +1,32 @@
+/* Custom CSS for KOLContentPostTable */
+.kol-content-post-table {
+  position: relative;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1000px;
+}
+
+.kol-content-post-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f9fafb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.kol-content-post-table thead th {
+  background: #f9fafb !important;
+  border: none !important;
+  white-space: nowrap !important;
+}
+
+.kol-content-post-table th,
+.kol-content-post-table td {
+  border: none !important;
+}
+
+.kol-content-post-table thead tr,
+.kol-content-post-table tbody tr {
+  border: none !important;
+}

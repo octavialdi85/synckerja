@@ -36,6 +36,7 @@ import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarP
 import ProductKnowledgePage from "./features/6-1-ProductKnowledge/ProductKnowledgePage";
 import ScriptGeneratorPage from "./features/6-1-ScriptGenerator/ScriptGeneratorPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
+import { KOLDashboardPage } from "./features/6_4_1_dashboard";
 import UserSettingsPage from "./features/Settings/SettingsPage";
 import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
 import OverviewTabPageDesktop from "./features/10-overview/OverviewTabPage";
@@ -491,6 +492,21 @@ const App = () => (
               <Route path="/digital-marketing/social-media/settings" element={
                 <ProtectedRoute>
                   <SettingsPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* KOL Management Routes - PROTECTED */}
+              <Route path="/kol-management" element={
+                <Navigate to="/kol-management/dashboard" replace />
+              } />
+              <Route path="/kol-management/dashboard" element={
+                <ProtectedRoute>
+                  <KOLDashboardPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/kol-management/:tab" element={
+                <ProtectedRoute>
+                  <KOLDashboardPage />
                 </ProtectedRoute>
               } />
               

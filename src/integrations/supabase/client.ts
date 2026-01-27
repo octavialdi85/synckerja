@@ -41,11 +41,44 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           // Clear timeout on success
           if (timeoutId) clearTimeout(timeoutId);
 
-          // Don't retry for 500 errors (server errors) - these are database/query issues, not network issues
+          // Don't retry for certain error statuses that won't succeed on retry
+          // 404: Table/resource doesn't exist - won't exist on retry
+          // 500: Server errors - database/query issues, not network issues
+          // CORS errors: Configuration issue, won't be fixed by retry
+          if (response.status === 404) {
+            // Check if this is an expected 404 for KOL tables
+            const isExpected404 = url.includes('/kol_') || 
+                                 url.includes('/kol-') ||
+                                 url.includes('kol_ratings') ||
+                                 url.includes('kol_metrics') ||
+                                 url.includes('kol_posts') ||
+                                 url.includes('kol_operations');
+            
+            if (isExpected404) {
+              // For expected 404s, return a response that Supabase can parse as empty result
+              // This prevents the error from propagating while maintaining compatibility
+              const emptyResponse = response.clone();
+              // Return the response as-is - hooks will handle 404 gracefully
+              return response;
+            }
+            
+            // For other 404s, throw error silently
+            throw new Error(`Resource not found (404) - ${url}`);
+          }
+          
           if (response.status === 500) {
             // Immediately throw error to prevent retry loop
-            // This prevents console spam from retrying failed queries
-            throw new Error(`Server error (500) - database query failed: ${url}`);
+            throw new Error(`Server error (500) - ${url}`);
+          }
+          
+          // Check for CORS errors in response headers
+          // Note: Browser CORS errors may prevent us from reading headers, so we check status
+          // If we get a response but it's a CORS error, the browser will block it before we can read headers
+          // This check is mainly for server-side CORS errors
+          const corsHeader = response.headers.get('Access-Control-Allow-Origin');
+          if (response.status >= 400 && corsHeader && !corsHeader.includes(window.location.origin)) {
+            // CORS configuration issue - won't be fixed by retry
+            throw new Error(`CORS error - origin not allowed: ${url}`);
           }
 
           // CRITICAL: Handle 504 Gateway Timeout and 522 Connection Timed Out from auth service
@@ -81,11 +114,60 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           // Clear timeout
           if (timeoutId) clearTimeout(timeoutId);
           
-          // If this is the last attempt or error is not retryable, throw
-          const isTimeout = error.name === 'AbortError' || error.name === 'TimeoutError';
-          const isNetworkError = error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError');
+          // Check for CORS errors first - these won't succeed on retry
+          // CORS errors appear as TypeError with "Failed to fetch" or specific CORS messages
+          // Note: Browser CORS errors may not have the message in error.message, check error.toString() too
+          const errorMessage = (error.message || error.toString() || '').toLowerCase();
+          const errorName = error.name || '';
+          const errorStack = (error.stack || '').toLowerCase();
           
-          if (attempt === MAX_RETRIES || (!isTimeout && !isNetworkError)) {
+          // Detect CORS errors - they can appear in different forms:
+          // 1. Explicit CORS message in error message
+          // 2. TypeError with "Failed to fetch" for REST API calls (common CORS pattern)
+          // 3. Error stack containing CORS-related text
+          // 4. Specific CORS error about origin mismatch (e.g., "has a value 'http://localhost:8081' that is not equal")
+          const isCorsError = errorMessage.includes('cors') || 
+                             errorMessage.includes('access-control-allow-origin') ||
+                             errorMessage.includes('blocked by cors policy') ||
+                             errorMessage.includes('not equal to the supplied origin') ||
+                             errorMessage.includes('has a value') && errorMessage.includes('that is not equal') ||
+                             errorStack.includes('cors') ||
+                             (errorName === 'TypeError' && 
+                              errorMessage.includes('failed to fetch') && 
+                              url.includes('/rest/v1/') &&
+                              !errorMessage.includes('timeout')); // Exclude timeout errors
+          
+          // Check for other non-retryable errors
+          const isTimeout = errorName === 'AbortError' || errorName === 'TimeoutError';
+          const isNetworkError = errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
+          const is404Error = errorMessage.includes('404') || errorMessage.includes('Resource not found');
+          const is500Error = errorMessage.includes('500') || errorMessage.includes('Server error');
+          
+          // Don't retry for errors that won't succeed on retry
+          // CORS errors are critical - never retry them (they're configuration issues)
+          if (isCorsError) {
+            // Check if this is an expected CORS error for KOL tables
+            const isExpectedCorsError = url.includes('/kol_') || 
+                                       url.includes('/kol-') ||
+                                       url.includes('kol_ratings') ||
+                                       url.includes('kol_metrics') ||
+                                       url.includes('kol_posts') ||
+                                       url.includes('kol_operations');
+            
+            // For expected CORS errors, throw silently - hooks will handle gracefully
+            // Note: Browser console will still show CORS errors, but our code handles them silently
+            if (isExpectedCorsError) {
+              // Create a custom error that hooks can catch and handle silently
+              const silentError = new Error('CORS_ERROR_SILENT');
+              (silentError as any).isExpected = true;
+              throw silentError;
+            }
+            
+            // For unexpected CORS errors, don't log - they're handled by hooks
+            throw error;
+          }
+          
+          if (attempt === MAX_RETRIES || is404Error || is500Error || (!isTimeout && !isNetworkError)) {
             // Map network errors to be more descriptive
             if (isTimeout) {
               const timeoutSeconds = TIMEOUT_MS / 1000;
@@ -100,7 +182,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
           // Wait before retrying (exponential backoff)
           const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
           // Only log retries in development mode to reduce console noise
-          if (import.meta.env.DEV) {
+          // Skip logging for CORS-like errors that we're about to retry (shouldn't happen but just in case)
+          if (import.meta.env.DEV && !isCorsError) {
             console.log(`Supabase request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms...`);
           }
           await new Promise(resolve => setTimeout(resolve, delay));

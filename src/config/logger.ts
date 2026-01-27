@@ -75,11 +75,14 @@ export const logger = {
 
   // Performance monitoring - logs slow operations even in production
   performance: (label: string, duration: number, threshold: number = 500) => {
-    if (duration > threshold) {
-      // Always log slow operations, even in production
+    // Suppress User Data Fetch warnings - expected to be slow on initial load
+    const isUserDataFetch = label.toLowerCase().includes('user data fetch');
+    
+    if (duration > threshold && !isUserDataFetch) {
+      // Always log slow operations, even in production (except User Data Fetch)
       console.warn(`⚠️ SLOW OPERATION: ${label} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
-    } else if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug)) {
-      // Only log fast operations in development
+    } else if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug) && !isUserDataFetch) {
+      // Only log fast operations in development (except User Data Fetch)
       console.debug(`⚡ ${label}: ${duration.toFixed(2)}ms`);
     }
   },

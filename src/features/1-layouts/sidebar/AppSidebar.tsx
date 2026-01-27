@@ -55,7 +55,13 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
       ],
       '/digital-marketing': [
         '/digital-marketing',
-        '/digital-marketing/social-media'
+        '/digital-marketing/social-media',
+        '/kol-management/dashboard',
+        '/kol-management/kol-management',
+        '/kol-management/campaigns',
+        '/kol-management/content-post',
+        '/kol-management/payment-terms',
+        '/kol-management/analytics'
       ],
       '/subscription': [
         '/subscription',
