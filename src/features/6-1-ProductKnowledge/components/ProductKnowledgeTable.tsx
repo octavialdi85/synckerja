@@ -16,6 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/features/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/features/ui/dialog';
+import { Textarea } from '@/features/ui/textarea';
+import { Button } from '@/features/ui/button';
 import { ProductKnowledge } from '../hooks/useProductKnowledge';
 import { LoadingDots } from '@/components/LoadingDots';
 import { Service } from '../hooks/useServices';
@@ -202,9 +211,116 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   const [isEditingFalseBeliefImpact, setIsEditingFalseBeliefImpact] = useState(false);
   const [isEditingWhatMakesThemStop, setIsEditingWhatMakesThemStop] = useState(false);
   const [isEditingCompetitiveAdvantage, setIsEditingCompetitiveAdvantage] = useState(false);
+  
+  // Popup state untuk view dan edit konten lengkap
+  const [popupState, setPopupState] = useState<{
+    isOpen: boolean;
+    field: string | null;
+    title: string;
+    content: string;
+    editedContent: string;
+  }>({
+    isOpen: false,
+    field: null,
+    title: '',
+    content: '',
+    editedContent: '',
+  });
 
   const handleCheckboxChange = (checked: boolean) => {
     onSelectItem(item.id, checked);
+  };
+
+  // Helper function untuk membuka popup view/edit
+  const openViewPopup = (field: string, title: string, content: string) => {
+    // Format content berdasarkan field type
+    let formattedContent = '';
+    
+    if (field === 'problems') {
+      formattedContent = formatProblems(item.problems_solved);
+    } else if (field === 'competitiveAdvantage') {
+      formattedContent = formatCompetitiveAdvantage(item.competitive_advantage);
+    } else if (field === 'targetMarket') {
+      formattedContent = formatTargetMarket(item.target_audience);
+    } else {
+      formattedContent = content || '';
+    }
+    
+    setPopupState({
+      isOpen: true,
+      field,
+      title,
+      content: formattedContent,
+      editedContent: formattedContent,
+    });
+  };
+
+  // Format content untuk display di popup dengan paragraf
+  const formatContentForPopup = (content: string): string => {
+    if (!content || content.trim() === '') return '';
+    // Jika content mengandung double newline, split menjadi paragraf
+    if (content.includes('\n\n')) {
+      return content.split(/\n\n+/).filter(Boolean).join('\n\n');
+    }
+    return content;
+  };
+
+  // Handler untuk save dari popup
+  const handlePopupSave = () => {
+    if (!popupState.field) return;
+
+    const field = popupState.field;
+    const newValue = popupState.editedContent.trim();
+
+    // Panggil handler yang sesuai berdasarkan field
+    switch (field) {
+      case 'targetMarket':
+        handleTargetMarketBlur(newValue);
+        break;
+      case 'problems':
+        handleProblemsBlur(newValue);
+        break;
+      case 'impact':
+        handleImpactBlur(newValue);
+        break;
+      case 'wants':
+        handleWantsBlur(newValue);
+        break;
+      case 'needs':
+        handleNeedsBlur(newValue);
+        break;
+      case 'hiddenNeeds':
+        handleHiddenNeedsBlur(newValue);
+        break;
+      case 'falseBelief':
+        handleFalseBeliefBlur(newValue);
+        break;
+      case 'falseBeliefImpact':
+        handleFalseBeliefImpactBlur(newValue);
+        break;
+      case 'whatMakesThemStop':
+        handleWhatMakesThemStopBlur(newValue);
+        break;
+      case 'solution':
+        handleSolutionBlur(newValue);
+        break;
+      case 'feature':
+        handleFeatureNameBlur(newValue);
+        break;
+      case 'featureDescription':
+        handleFeatureDescriptionBlur(newValue);
+        break;
+      case 'competitiveAdvantage':
+        handleCompetitiveAdvantageBlur(newValue);
+        break;
+    }
+
+    setPopupState({ ...popupState, isOpen: false });
+  };
+
+  // Handler untuk cancel dari popup
+  const handlePopupCancel = () => {
+    setPopupState({ ...popupState, isOpen: false, editedContent: popupState.content });
   };
 
   const handleFeatureNameBlur = (value: string) => {
@@ -525,8 +641,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingTargetMarket(true)}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('targetMarket', t('productKnowledge.table.headers.targetMarket', 'Target Market'), formatTargetMarket(item.target_audience))}
+            onDoubleClick={() => setIsEditingTargetMarket(true)}
+            title={formatTargetMarket(item.target_audience) || '-'}
           >
             {formatTargetMarket(item.target_audience) || '-'}
           </div>
@@ -551,22 +669,14 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingProblems(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('problems', t('productKnowledge.table.headers.problem', 'Problem'), formatProblems(item.problems_solved))}
+            onDoubleClick={() => setIsEditingProblems(true)}
+            title={formatProblems(item.problems_solved) || '-'}
           >
             {formatProblems(item.problems_solved) || '-'}
             {item.problem_tags && item.problem_tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {item.problem_tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              <span className="ml-1 text-xs text-blue-600">({item.problem_tags.length} tags)</span>
             )}
           </div>
         )}
@@ -590,9 +700,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingImpact(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('impact', t('productKnowledge.table.headers.impact', 'Impact'), item.impact || '')}
+            onDoubleClick={() => setIsEditingImpact(true)}
+            title={item.impact || '-'}
           >
             {item.impact || '-'}
           </div>
@@ -616,8 +727,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingWants(true)}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('wants', t('productKnowledge.table.headers.wants', 'Wants'), item.wants || '')}
+            onDoubleClick={() => setIsEditingWants(true)}
+            title={item.wants || '-'}
           >
             {item.wants || '-'}
           </div>
@@ -641,8 +754,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingNeeds(true)}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('needs', t('productKnowledge.table.headers.needs', 'Needs'), item.needs || '')}
+            onDoubleClick={() => setIsEditingNeeds(true)}
+            title={item.needs || '-'}
           >
             {item.needs || '-'}
           </div>
@@ -667,9 +782,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingHiddenNeeds(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('hiddenNeeds', t('productKnowledge.table.headers.hiddenNeeds', 'Hidden Needs'), item.hidden_needs || '')}
+            onDoubleClick={() => setIsEditingHiddenNeeds(true)}
+            title={item.hidden_needs || '-'}
           >
             {item.hidden_needs || '-'}
           </div>
@@ -694,9 +810,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingFalseBelief(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('falseBelief', t('productKnowledge.table.headers.falseBelief', 'False Belief'), item.false_belief || '')}
+            onDoubleClick={() => setIsEditingFalseBelief(true)}
+            title={item.false_belief || '-'}
           >
             {item.false_belief || '-'}
           </div>
@@ -721,9 +838,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingFalseBeliefImpact(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('falseBeliefImpact', t('productKnowledge.table.headers.falseBeliefImpact', 'False Belief Impact'), item.false_belief_impact || '')}
+            onDoubleClick={() => setIsEditingFalseBeliefImpact(true)}
+            title={item.false_belief_impact || '-'}
           >
             {item.false_belief_impact || '-'}
           </div>
@@ -748,9 +866,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingWhatMakesThemStop(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('whatMakesThemStop', t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?'), item.what_makes_them_stop || '')}
+            onDoubleClick={() => setIsEditingWhatMakesThemStop(true)}
+            title={item.what_makes_them_stop || '-'}
           >
             {item.what_makes_them_stop || '-'}
           </div>
@@ -775,9 +894,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingSolution(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '')}
+            onDoubleClick={() => setIsEditingSolution(true)}
+            title={item.solusi || '-'}
           >
             {item.solusi || '-'}
           </div>
@@ -802,8 +922,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingFeatureName(true)}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('feature', t('productKnowledge.table.headers.feature', 'Feature'), item.feature_name || '')}
+            onDoubleClick={() => setIsEditingFeatureName(true)}
+            title={item.feature_name || '-'}
           >
             {item.feature_name || '-'}
           </div>
@@ -827,8 +949,10 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px]"
-            onClick={() => setIsEditingFeatureDescription(true)}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '')}
+            onDoubleClick={() => setIsEditingFeatureDescription(true)}
+            title={item.feature_description || '-'}
           >
             {item.feature_description || '-'}
           </div>
@@ -853,14 +977,51 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
           />
         ) : (
           <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] whitespace-pre-wrap"
-            onClick={() => setIsEditingCompetitiveAdvantage(true)}
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('competitiveAdvantage', t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'), formatCompetitiveAdvantage(item.competitive_advantage))}
+            onDoubleClick={() => setIsEditingCompetitiveAdvantage(true)}
+            title={formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
           >
             {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
           </div>
         )}
       </td>
+
+      {/* View/Edit Popup Dialog */}
+      <Dialog open={popupState.isOpen} onOpenChange={(open) => {
+        if (!open) {
+          handlePopupCancel();
+        } else {
+          setPopupState({ ...popupState, isOpen: open });
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{popupState.title}</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 flex-1 overflow-y-auto">
+            <Textarea
+              value={popupState.editedContent}
+              onChange={(e) => setPopupState({ ...popupState, editedContent: e.target.value })}
+              className="min-h-[300px] text-sm whitespace-pre-wrap font-mono"
+              placeholder="Enter content here..."
+            />
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={handlePopupCancel}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePopupSave}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </tr>
   );
 };

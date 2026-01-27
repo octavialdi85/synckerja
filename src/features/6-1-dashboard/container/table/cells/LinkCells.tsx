@@ -73,24 +73,73 @@ export const PostLinkCell: React.FC<PostLinkCellProps> = ({
     return `${links.length} social media links added`;
   };
 
-  // Text color: white if production approved, otherwise default (black)
-  const textColorClass = productionApproved ? 'text-white' : '';
+  // Determine if done is false (no links exist)
+  const isDone = links && links.length > 0;
+
+  // Text color logic:
+  // - If checkbox is checked AND PROD APPROVED = FALSE AND DONE = FALSE: use dark gray (not too black)
+  // - If checkbox is checked (but other conditions not met): use white
+  // - If NOT checked AND PROD APPROVED = TRUE AND DONE = TRUE: use dark gray/black for visibility
+  // - Otherwise: default (black/gray)
+  const getTextColorClass = (): string => {
+    if (isSelected && !productionApproved && !isDone) {
+      return 'text-gray-700'; // Dark gray, not too black
+    }
+    if (isSelected) {
+      return 'text-white';
+    }
+    // When not selected but PROD APPROVED = TRUE and DONE = TRUE, ensure text is visible
+    if (!isSelected && productionApproved && isDone) {
+      return 'text-gray-900'; // Dark color for good visibility on white/light background
+    }
+    return 'text-gray-900'; // Default to dark color for visibility
+  };
+
+  const textColorClass = getTextColorClass();
 
   if (isDisabled) {
+    // Apply same color logic for disabled state
+    const disabledTextColor = isSelected && !productionApproved && !isDone 
+      ? 'text-gray-700' 
+      : isSelected 
+        ? 'text-white' 
+        : 'text-gray-500';
+    
+    // Change background when special condition is met to make dark gray text more visible
+    const disabledBgColor = isSelected && !productionApproved && !isDone
+      ? 'bg-white' // White background for better contrast with dark gray text
+      : isSelected
+        ? 'bg-blue-500' // Blue background when selected (normal case)
+        : 'bg-gray-100'; // Default gray background
+    
     return (
-      <div className="h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center cursor-not-allowed text-gray-500">
+      <div className={`h-8 px-3 ${disabledBgColor} border border-gray-200 rounded text-xs flex items-center justify-center cursor-not-allowed ${disabledTextColor}`}>
         Production approval required
       </div>
     );
   }
 
+  // Determine button background color based on selection and conditions
+  const getButtonClassName = (): string => {
+    const baseClass = 'h-8 w-full justify-center text-xs px-2 border border-gray-200';
+    if (isSelected && !productionApproved && !isDone) {
+      // When checkbox checked but PROD APPROVED = FALSE and DONE = FALSE, keep normal background
+      return `${baseClass} hover:bg-gray-50`;
+    }
+    if (isSelected) {
+      // Only add text-white to button if not in special condition (text color handled by span)
+      return `${baseClass} hover:bg-blue-600`;
+    }
+    return `${baseClass} hover:bg-gray-50`;
+  };
+
   return (
     <Button
       variant="ghost"
-      className={`h-8 w-full justify-start text-xs px-2 border border-gray-200 ${isSelected ? 'hover:bg-blue-600' : 'hover:bg-gray-50'} ${productionApproved ? 'text-white' : ''}`}
+      className={getButtonClassName()}
       onClick={onSocialLinksClick}
     >
-      <span className={`truncate ${textColorClass}`}>
+      <span className={`truncate text-center ${textColorClass}`}>
         {getPostLinksDisplayText()}
       </span>
     </Button>
