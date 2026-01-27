@@ -7,7 +7,7 @@ import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/features/ui/dialog';
-import { Star, Plus, MessageSquare, Award, ThumbsUp, UserPlus, Lock, CheckCircle, AlertTriangle, Loader2, MoreVertical, Edit, Trash2, FileText, ExternalLink, Download, Minus, Maximize2, RotateCw } from 'lucide-react';
+import { Star, Plus, MessageSquare, Award, ThumbsUp, UserPlus, Lock, CheckCircle, AlertTriangle, Loader2, MoreVertical, Edit, Trash2, FileText, ExternalLink, Download, Minus, Maximize2, RotateCw, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentUserRole } from '@/features/share/hooks/useCurrentUserRole';
@@ -1165,32 +1165,7 @@ export const CandidateReviewsTab = ({
                 </div>
               </div>
             ) : (
-              <div className="flex h-full min-h-0">
-                {/* Document List Sidebar */}
-                <div className="w-48 border-r bg-gray-50 overflow-y-auto flex-shrink-0">
-                  <div className="p-2 space-y-1">
-                    {documents.map((doc) => (
-                      <button
-                        key={doc.id}
-                        onClick={() => handleDocumentSelect(doc)}
-                        className={`w-full text-left p-2 rounded text-sm transition-colors ${
-                          selectedDocument?.id === doc.id
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                            : 'hover:bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{doc.file_name || 'Untitled'}</p>
-                            <p className="text-xs text-gray-500 truncate">{doc.document_type}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
+              <div className="flex flex-col h-full min-h-0">
                 {/* Document Preview Area */}
                 <div className="flex-1 flex flex-col min-h-0">
                   {isLoadingDocument ? (
@@ -1212,6 +1187,62 @@ export const CandidateReviewsTab = ({
                       {/* Document Controls */}
                       <div className="flex items-center justify-between p-3 bg-gray-50 border-b flex-shrink-0">
                         <div className="flex items-center gap-2">
+                          {/* Document List Dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2"
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                <span className="text-xs">
+                                  {selectedDocument?.file_name ? (
+                                    <>
+                                      {selectedDocument.file_name.length > 20 
+                                        ? `${selectedDocument.file_name.substring(0, 20)}...` 
+                                        : selectedDocument.file_name}
+                                      <span className="text-gray-500 ml-1">({selectedDocument.document_type})</span>
+                                    </>
+                                  ) : (
+                                    'Select Document'
+                                  )}
+                                </span>
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-64 max-h-96 overflow-y-auto">
+                              {documents.map((doc) => (
+                                <DropdownMenuItem
+                                  key={doc.id}
+                                  onClick={() => handleDocumentSelect(doc)}
+                                  className={`flex items-start gap-2 p-2 cursor-pointer ${
+                                    selectedDocument?.id === doc.id
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : ''
+                                  }`}
+                                >
+                                  <FileText className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
+                                    selectedDocument?.id === doc.id ? 'text-blue-600' : 'text-gray-400'
+                                  }`} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`font-medium text-sm ${
+                                      selectedDocument?.id === doc.id ? 'text-blue-700' : 'text-gray-900'
+                                    }`}>
+                                      {doc.file_name || 'Untitled'}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5 capitalize">
+                                      {doc.document_type}
+                                    </p>
+                                  </div>
+                                  {selectedDocument?.id === doc.id && (
+                                    <CheckCircle className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                  )}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          
                           <span className="text-xs text-gray-500">
                             {documents.findIndex(d => d.id === selectedDocument.id) + 1} / {documents.length}
                           </span>
@@ -1264,12 +1295,12 @@ export const CandidateReviewsTab = ({
                         </div>
                       </div>
                       {/* Document Viewer */}
-                      <div className="flex-1 overflow-auto bg-gray-100 p-4 min-h-0">
-                        <div className="bg-white shadow-lg mx-auto" style={{ width: `${zoomLevel}%`, transition: 'width 0.2s' }}>
+                      <div className="flex-1 overflow-auto bg-gray-100 p-4 min-h-0 seamless-scroll" style={{ position: 'relative' }}>
+                        <div className="bg-white shadow-lg mx-auto absolute inset-4" style={{ width: `${Math.max(zoomLevel, 100)}%`, transition: 'width 0.2s' }}>
                           <iframe
                             src={previewUrl}
                             className="w-full border-0"
-                            style={{ minHeight: '600px', height: '100%' }}
+                            style={{ minHeight: '600px', height: '100%', width: '100%', display: 'block' }}
                             title="Document Preview"
                           />
                         </div>
