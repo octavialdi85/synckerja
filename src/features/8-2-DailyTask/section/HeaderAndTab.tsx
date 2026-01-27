@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, FileText, Lock } from 'lucide-react';
+import { CheckSquare, FileText, Lock, Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
 
@@ -26,6 +26,13 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       icon: FileText,
       description: 'Analyze completed tasks, on-time performance, and delays',
       path: '/tools/daily-task-report'
+    },
+    {
+      id: 'habits-tracker',
+      label: 'Habits Tracker',
+      icon: Target,
+      description: 'Track your habits and build better routines',
+      path: '/tools/habits-tracker'
     },
     { 
       id: 'meeting-notes', 

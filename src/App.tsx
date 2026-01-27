@@ -85,6 +85,7 @@ import TransferOwnership from "./features/1-layouts/TransferOwnership/page/Trans
 import { Settings, Users, UserCheck, FileTet, Briefcase } from "lucide-react";
 import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
+import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import { CalculatorServicesPage } from "./features/8-3-calculator/services";
@@ -199,6 +200,10 @@ const DailyTaskRouteElement = () => {
   }
   
   return isMobile ? <MobileDailyTaskPage /> : <DesktopDailyTaskPage />;
+};
+
+const HabitTrackerRouteElement = () => {
+  return <HabitTrackerPage />;
 };
 
 const DailyTaskReportRouteElement = () => {
@@ -420,6 +425,11 @@ const App = () => (
               <Route path="/tools/daily-task-report" element={
                 <UniversalProtectedRoute>
                   <DailyTaskReportRouteElement />
+                </UniversalProtectedRoute>
+              } />
+              <Route path="/tools/habits-tracker" element={
+                <UniversalProtectedRoute>
+                  <HabitTrackerRouteElement />
                 </UniversalProtectedRoute>
               } />
               <Route 
