@@ -16,14 +16,12 @@ export { default as KOLCampaignsFilters } from './KOLCampaignsFilters';
 export { default as KOLCampaignsMetricsCards } from './KOLCampaignsMetricsCards';
 export { KOLCampaignsTable } from './KOLCampaignsTable';
 export { default as KOLCampaignsOverview } from './KOLCampaignsOverview';
-export { KOLCampaignsOverview } from './KOLCampaignsOverview';
 
 // Content Post Components
 export { KOLContentPostFilters } from './KOLContentPostFilters';
 export { KOLContentPostMetricsCards } from './KOLContentPostMetricsCards';
 export { KOLContentPostTable } from './KOLContentPostTable';
 export { KOLContentPostOverview } from './KOLContentPostOverview';
-export { default as EnhancedKOLContentPostTab } from './EnhancedKOLContentPostTab';
 
 // Management Components
 export { KOLManagementFilters } from './KOLManagementFilters';
