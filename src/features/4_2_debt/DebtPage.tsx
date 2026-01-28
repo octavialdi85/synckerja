@@ -175,7 +175,7 @@ export const DebtPage = () => {
                 </div>
 
                 {/* Table Section */}
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 flex flex-col">
                   <DebtTable
                     debts={debts}
                     isLoading={isLoading}

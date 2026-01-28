@@ -100,7 +100,7 @@ export const DebtTable = ({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1 h-full">
       {/* Table Header with Search and Filters */}
       <div className="px-2 sm:px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
