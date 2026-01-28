@@ -14,6 +14,8 @@ export interface Expense {
   category: string;
   expense_category_id?: string;
   department?: string;
+  withdrawal_from_balance?: string; // Debt ID
+  withdrawal_from_balance_debt?: { id: string; debt_name: string }; // Joined debt data
   create_date: string;
   is_recurring: boolean;
   recurring_frequency?: string;
@@ -33,6 +35,7 @@ export interface CreateExpenseData {
   expense_type: string;
   category: string;
   department?: string;
+  withdrawal_from_balance?: string; // Debt ID for withdrawal from balance
   create_date: string;
   is_recurring: boolean;
   recurring_frequency?: string;
@@ -67,10 +70,31 @@ export const useExpenses = () => {
 
       if (error) throw error;
       
-      // Transform data to include expense type name
-      const transformedData = data?.map(expense => ({
+      // Fetch debts separately for expenses that have withdrawal_from_balance
+      const debtIds = data?.filter(exp => exp.withdrawal_from_balance).map(exp => exp.withdrawal_from_balance) || [];
+      let debtsMap: Record<string, { id: string; debt_name: string }> = {};
+      
+      if (debtIds.length > 0) {
+        const { data: debtsData, error: debtsError } = await supabase
+          .from('debts')
+          .select('id, debt_name')
+          .in('id', debtIds);
+        
+        if (!debtsError && debtsData) {
+          debtsMap = debtsData.reduce((acc, debt) => {
+            acc[debt.id] = debt;
+            return acc;
+          }, {} as Record<string, { id: string; debt_name: string }>);
+        }
+      }
+      
+      // Transform data to include expense type name and debt name
+      const transformedData = data?.map((expense: any) => ({
         ...expense,
-        expense_type: expense.expense_types?.name || expense.expense_type || 'Unknown'
+        expense_type: expense.expense_types?.name || expense.expense_type || 'Unknown',
+        withdrawal_from_balance_debt: expense.withdrawal_from_balance && debtsMap[expense.withdrawal_from_balance]
+          ? debtsMap[expense.withdrawal_from_balance]
+          : null
       }));
       
       setExpenses(transformedData || []);
@@ -179,6 +203,12 @@ export const useExpenses = () => {
         nextPaymentDate = nextPayment.toISOString().split('T')[0];
       }
 
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('User not authenticated');
+        return false;
+      }
+
       const { data, error } = await supabase
         .from('expenses')
         .insert({
@@ -190,6 +220,7 @@ export const useExpenses = () => {
           category: expenseData.category,
           expense_category_id: expenseCategories?.id || null,
           department: expenseData.department || null,
+          withdrawal_from_balance: expenseData.withdrawal_from_balance || null,
           create_date: expenseData.create_date,
           is_recurring: expenseData.is_recurring,
           recurring_frequency: expenseData.recurring_frequency || null,
@@ -197,7 +228,7 @@ export const useExpenses = () => {
           next_payment_date: nextPaymentDate,
           description: expenseData.description || null,
           receipt_url: receiptUrl,
-          created_by: (await supabase.auth.getUser()).data.user?.id,
+          created_by: userData.user.id,
         })
         .select()
         .single();
@@ -207,9 +238,24 @@ export const useExpenses = () => {
       toast.success('Expense created successfully!');
       await fetchExpenses(); // Refresh the list
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating expense:', error);
-      toast.error('Failed to create expense');
+      
+      // Handle specific error messages from trigger
+      if (error?.message) {
+        if (error.message.includes('Insufficient available limit')) {
+          toast.error(error.message);
+        } else if (error.message.includes('Cannot use debt with status')) {
+          toast.error(error.message);
+        } else if (error.message.includes('not found')) {
+          toast.error('Selected debt not found. Please refresh and try again.');
+        } else {
+          toast.error(error.message || 'Failed to create expense');
+        }
+      } else {
+        toast.error('Failed to create expense');
+      }
+      
       return false;
     } finally {
       setIsCreating(false);
@@ -235,9 +281,9 @@ export const useExpenses = () => {
       toast.success('Expense deleted successfully!');
       await fetchExpenses(); // Refresh the list
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting expense:', error);
-      toast.error('Failed to delete expense');
+      toast.error(error?.message || 'Failed to delete expense');
       return false;
     }
   };

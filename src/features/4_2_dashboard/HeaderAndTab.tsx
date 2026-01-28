@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, FileCheck, CreditCard, Bell } from 'lucide-react';
+import { BarChart3, FileCheck, CreditCard, Bell, Receipt } from 'lucide-react';
 
 interface HeaderAndTabProps {
   activeTab: string;
@@ -18,6 +18,13 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
       icon: BarChart3,
       description: 'View expense analytics, metrics, and trends',
       route: '/expenses/dashboard'
+    },
+    {
+      id: 'debt',
+      label: 'Debt',
+      icon: Receipt,
+      description: 'Manage debt records and tracking',
+      route: '/expenses/debt'
     },
     {
       id: 'approvals',
@@ -59,6 +66,9 @@ export const HeaderAndTab = ({ activeTab, onTabChange }: HeaderAndTabProps) => {
     }
     if (location.pathname === '/expenses/approvals') {
       return 'approvals';
+    }
+    if (location.pathname === '/expenses/debt') {
+      return 'debt';
     }
     if (location.pathname === '/expenses/dashboard') {
       return 'dashboard';

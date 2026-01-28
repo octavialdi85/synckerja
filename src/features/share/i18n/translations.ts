@@ -35,6 +35,9 @@ const idTranslations: TranslationDictionary = {
   "sidebar.finance.incomes.description": "Kelola dan lacak transaksi pendapatan",
   "sidebar.finance.expenses.title": "Pengeluaran",
   "sidebar.finance.expenses.description": "Kelola dan lacak transaksi pengeluaran",
+  "debt.title": "Manajemen Hutang",
+  "debt.description": "Kelola dan lacak catatan hutang",
+  "debt.comingSoon": "Fitur manajemen hutang akan segera hadir",
   "sidebar.requestForm.title": "Formulir Permintaan",
   "sidebar.subscription.title": "Langganan",
 
@@ -1690,6 +1693,9 @@ const enTranslations: TranslationDictionary = {
   "sidebar.finance.incomes.description": "Manage and track income transactions",
   "sidebar.finance.expenses.title": "Expenses",
   "sidebar.finance.expenses.description": "Manage and track expense transactions",
+  "debt.title": "Debt Management",
+  "debt.description": "Manage and track debt records",
+  "debt.comingSoon": "Debt management features coming soon",
   "sidebar.requestForm.title": "Request Form",
   "sidebar.subscription.title": "Subscription",
 

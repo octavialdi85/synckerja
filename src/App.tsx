@@ -102,6 +102,7 @@ import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
 import { ExpenseDashboard } from "./features/4_2_dashboard";
+import { DebtPage } from "./features/4_2_debt";
 import { ApprovalsPage } from "./features/4_2_approvals";
 import { PaymentProcessPage } from "./features/4_2_payment-process/PaymentProcessPage";
 import { ReminderBillsPage } from "./features/4_2_reminder-bills/ReminderBillsPage";
@@ -355,6 +356,13 @@ const App = () => (
                 <ProtectedRoute>
                   <StandardLayout>
                     <ExpenseDashboard />
+                  </StandardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses/debt" element={
+                <ProtectedRoute>
+                  <StandardLayout>
+                    <DebtPage />
                   </StandardLayout>
                 </ProtectedRoute>
               } />

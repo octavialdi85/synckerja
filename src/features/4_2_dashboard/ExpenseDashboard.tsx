@@ -17,7 +17,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories, Expense } from './hooks';
+import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories, Expense, useDebtsForExpense } from './hooks';
 import { addExpenseSchema, AddExpenseFormData, RECURRING_FREQUENCIES } from './AddExpenseForm';
 import { useDepartmentsCrud } from '@/features/2-1-employees/MyInfo/Employment/hooks/crudMaster/useDepartmentsCrud';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
@@ -75,6 +75,8 @@ export function ExpenseDashboard() {
   const { data: purchaseRequests = [], isLoading: isLoadingPurchaseRequests } = usePurchaseRequests();
   // Fetch all expense categories (without filter) for fallback lookup
   const { expenseCategories: allExpenseCategories } = useExpenseCategories();
+  // Fetch debts for withdrawal from balance dropdown
+  const { debts: debtsForExpense, isLoading: debtsLoading, refetch: refetchDebts } = useDebtsForExpense();
   
   // Filter purchase requests that are paid/berhasil
   const paidPurchaseRequests = purchaseRequests.filter(req => 
@@ -220,6 +222,7 @@ export function ExpenseDashboard() {
       expense_type: '',
       category: '',
       department: '',
+      withdrawal_from_balance: undefined,
       create_date: format(new Date(), 'yyyy-MM-dd'),
       is_recurring: false,
       recurring_frequency: '',
@@ -231,6 +234,18 @@ export function ExpenseDashboard() {
   const isRecurring = form.watch('is_recurring');
 
   const handleSubmit = async (data: AddExpenseFormData) => {
+    // Validate available_limit if withdrawal_from_balance is selected
+    if (data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none') {
+      const selectedDebt = debtsForExpense.find(d => d.id === data.withdrawal_from_balance);
+      if (selectedDebt) {
+        const availableLimit = selectedDebt.available_limit ?? 0;
+        if (availableLimit < data.amount) {
+          toast.error(`Insufficient available limit. Available: Rp ${availableLimit.toLocaleString('id-ID')}, Required: Rp ${data.amount.toLocaleString('id-ID')}`);
+          return;
+        }
+      }
+    }
+
     // Find the selected expense type to get its ID
     const selectedExpenseType = expenseTypes.find(type => type.name === data.expense_type);
     
@@ -246,6 +261,9 @@ export function ExpenseDashboard() {
       first_payment_date: data.first_payment_date,
       description: data.description,
       receipt_file: receiptFile || undefined,
+      withdrawal_from_balance: data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none' 
+        ? data.withdrawal_from_balance 
+        : undefined,
     };
 
     const success = await createExpense(expenseData);
@@ -255,6 +273,11 @@ export function ExpenseDashboard() {
       setReceiptFile(null);
       setSelectedDate(undefined);
       setFirstPaymentDate(undefined);
+      form.setValue('withdrawal_from_balance', undefined);
+      // Refresh debts to update available_limit
+      if (expenseData.withdrawal_from_balance) {
+        refetchDebts();
+      }
     }
   };
 
@@ -289,10 +312,18 @@ export function ExpenseDashboard() {
 
   const handleConfirmDelete = async () => {
     if (expenseToDelete) {
+      // Check if expense has withdrawal_from_balance before deleting
+      const expenseToDeleteObj = allExpenses.find(e => e.id === expenseToDelete);
+      const hasWithdrawalFromBalance = expenseToDeleteObj?.withdrawal_from_balance;
+      
       const success = await deleteExpense(expenseToDelete);
       if (success) {
         setIsDeleteDialogOpen(false);
         setExpenseToDelete(null);
+        // Refresh debts to update available_limit
+        if (hasWithdrawalFromBalance) {
+          refetchDebts();
+        }
       }
     }
   };
@@ -717,7 +748,7 @@ export function ExpenseDashboard() {
 
         {/* Table */}
         <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[1200px]">
+            <table className="w-full min-w-[1400px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Payment Date</th>
@@ -726,6 +757,7 @@ export function ExpenseDashboard() {
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Category</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Department</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Amount</th>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Withdrawal From Balance</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Description</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request By</th>
@@ -737,13 +769,13 @@ export function ExpenseDashboard() {
               <tbody>
                 {(isLoading || isLoadingPurchaseRequests) ? (
                   <tr>
-                    <td colSpan={12} className="py-8 text-center text-gray-500">
+                    <td colSpan={13} className="py-8 text-center text-gray-500">
                       Loading expenses...
                     </td>
                   </tr>
                 ) : allExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-8 text-center text-gray-500">
+                    <td colSpan={13} className="py-8 text-center text-gray-500">
                       No expenses found. Click "Add Expense" to create your first expense.
                     </td>
                   </tr>
@@ -786,6 +818,11 @@ export function ExpenseDashboard() {
                           </div>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">{formatCurrency(expense.amount)}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={(expense as any).withdrawal_from_balance_debt?.debt_name || '-'}>
+                            {(expense as any).withdrawal_from_balance_debt?.debt_name || '-'}
+                          </div>
+                        </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
                           <div className="truncate text-xs sm:text-sm" title={requestTitle || expense.expense_name || '-'}>
                             {requestTitle || expense.expense_name || '-'}
@@ -861,14 +898,14 @@ export function ExpenseDashboard() {
 
       {/* Add Expense Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="w-[95vw] sm:w-[600px] h-[90vh] sm:h-[600px] max-w-none p-0 overflow-hidden flex flex-col min-w-0">
-          <DialogHeader className="flex-shrink-0 p-4 pb-2">
+        <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
+          <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
             <DialogTitle className="text-lg font-semibold">Add New Expense</DialogTitle>
             <p className="text-sm text-gray-600">Enter the details for your new expense entry.</p>
           </DialogHeader>
 
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col min-h-0">
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll px-4 pb-4 space-y-4">
               
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -1050,6 +1087,60 @@ export function ExpenseDashboard() {
                 </Popover>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Withdrawal From Balance
+                </label>
+                <Select 
+                  onValueChange={(value) => {
+                    if (value === 'none') {
+                      form.setValue('withdrawal_from_balance', undefined);
+                    } else {
+                      form.setValue('withdrawal_from_balance', value);
+                    }
+                  }}
+                  disabled={debtsLoading}
+                  value={form.watch('withdrawal_from_balance') || 'none'}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={debtsLoading ? "Loading debts..." : "Select debt (optional)"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {debtsForExpense.map(debt => {
+                      const availableLimit = debt.available_limit ?? 0;
+                      const formattedLimit = `Rp ${availableLimit.toLocaleString('id-ID')}`;
+                      return (
+                        <SelectItem key={debt.id} value={debt.id}>
+                          {debt.debt_name} ({formattedLimit} available)
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {form.watch('withdrawal_from_balance') && form.watch('withdrawal_from_balance') !== 'none' && (
+                  (() => {
+                    const selectedDebt = debtsForExpense.find(d => d.id === form.watch('withdrawal_from_balance'));
+                    const availableLimit = selectedDebt?.available_limit ?? 0;
+                    const expenseAmount = form.watch('amount') || 0;
+                    const isInsufficient = availableLimit < expenseAmount;
+                    return (
+                      <div className="mt-2">
+                        {isInsufficient ? (
+                          <p className="text-sm text-red-600">
+                            Insufficient limit. Available: Rp {availableLimit.toLocaleString('id-ID')}, Required: Rp {expenseAmount.toLocaleString('id-ID')}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-600">
+                            Available limit: Rp {availableLimit.toLocaleString('id-ID')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="recurring"
@@ -1143,7 +1234,7 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 p-4 pt-2 border-t flex-shrink-0 bg-white">
+            <div className="flex justify-end space-x-3 p-4 border-t flex-shrink-0 bg-white">
               <Button 
                 type="button"
                 variant="outline" 
