@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Badge } from '@/features/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
-import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -84,6 +84,18 @@ export function ExpenseDashboard() {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
+
+  const handleRefreshFilters = () => {
+    setDateFilter('this-month');
+    setCustomStartDate(undefined);
+    setCustomEndDate(undefined);
+    setExpenseTypeFilter('all-types');
+    setDepartmentFilter('all-depts');
+    setCategoryFilter('all-categories');
+    setCategoryFilterOpen(false);
+    setSearchQuery('');
+  };
+
   const { organizationId } = useCurrentOrg();
   const { expenses, isLoading, isCreating, createExpense, deleteExpense } = useExpenses();
   const { data: departments = [], isLoading: departmentsLoading, refetch: refetchDepartments } = useDepartmentsCrud(organizationId);
@@ -1143,6 +1155,17 @@ export function ExpenseDashboard() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleRefreshFilters}
+                className="h-9 w-9 shrink-0 rounded-md border-gray-300 bg-white"
+                title={t('expenses.refreshFilters', 'Reset filters to default')}
+              >
+                <FilterX className="h-4 w-4 text-gray-600" />
+              </Button>
             </div>
 
             <Button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto flex-shrink-0">
