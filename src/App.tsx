@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { LanguageProvider } from "@/features/share/i18n/LanguageProvider";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
 import { HomeAccessGuard } from "@/components/HomeAccessGuard";
@@ -241,39 +242,40 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <CentralizedUserDataProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true
-            }}
-          >
-            <SecurityWrapper>
-              <SubscriptionExpiryGuard>
-                <Routes>
-                {/* ======= PROTECTED ROUTES ======= */}
-                {/* PROTECTION SYSTEM */}
-                <Route 
-                  path="/" 
-                  element={
-                    <ProtectedRoute>
-                      <HomeAccessGuard>
-                        <HomeRouteElement />
-                      </HomeAccessGuard>
-                    </ProtectedRoute>
-                  }
-                />
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <HomeAccessGuard>
-                    <HomeRouteElement />
-                  </HomeAccessGuard>
-                </ProtectedRoute>
-              } />
-              
-              {/* Public Routes - Only accessible when NOT logged in */}
-              <Route path="/login" element={
+          <LanguageProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+              }}
+            >
+              <SecurityWrapper>
+                <SubscriptionExpiryGuard>
+                  <Routes>
+                    {/* ======= PROTECTED ROUTES ======= */}
+                    {/* PROTECTION SYSTEM */}
+                    <Route 
+                      path="/" 
+                      element={
+                        <ProtectedRoute>
+                          <HomeAccessGuard>
+                            <HomeRouteElement />
+                          </HomeAccessGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute>
+                        <HomeAccessGuard>
+                          <HomeRouteElement />
+                        </HomeAccessGuard>
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Public Routes - Only accessible when NOT logged in */}
+                    <Route path="/login" element={
                 <PublicRoute>
                   <LoginRouteElement />
                 </PublicRoute>
@@ -893,10 +895,11 @@ const App = () => (
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
-                </Routes>
-              </SubscriptionExpiryGuard>
-            </SecurityWrapper>
-          </BrowserRouter>
+                  </Routes>
+                </SubscriptionExpiryGuard>
+              </SecurityWrapper>
+            </BrowserRouter>
+          </LanguageProvider>
         </CentralizedUserDataProvider>
       </AuthProvider>
     </TooltipProvider>

@@ -8,6 +8,7 @@ export const addExpenseSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   department: z.string().optional(),
   withdrawal_from_balance: z.union([z.string(), z.literal('none')]).optional(), // Debt ID for withdrawal from balance
+  bank_account_id: z.string().optional(), // Bank account ID for withdrawal from balance
   create_date: z.string().min(1, 'Create date is required'),
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),

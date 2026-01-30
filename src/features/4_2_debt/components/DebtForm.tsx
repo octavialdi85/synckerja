@@ -15,38 +15,26 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Debt, CreateDebtData, DEBT_TYPES } from '../types';
 import { formatInputNumber, parseInputNumber } from '../utils/numberFormat';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
-const debtSchema = z.object({
-  debt_name: z.string().min(1, 'Nama hutang harus diisi'),
-  debt_type: z.string().min(1, 'Tipe hutang harus dipilih'),
-  bank_name: z.string().optional(),
-  limit_amount: z.number().min(0, 'Limit harus lebih dari 0'),
-  available_limit: z.number().min(0).optional(),
-  used_amount: z.number().min(0, 'Jumlah terpakai harus lebih dari 0'),
-  debt_amount: z.number().min(0, 'Hutang harus lebih dari 0'),
-  interest_rate: z.number().min(0).max(100).optional(),
-  due_date: z.string().optional(),
-  minimum_payment: z.number().min(0).optional(),
-  description: z.string().optional(),
-  status: z.enum(['active', 'paid_off', 'closed']).optional(),
-}).refine((data) => {
-  // Validate that used_amount doesn't exceed limit_amount
-  return data.used_amount <= data.limit_amount;
-}, {
-  message: 'Jumlah terpakai tidak boleh melebihi limit',
-  path: ['used_amount'],
-}).refine((data) => {
-  // Validate that available_limit doesn't exceed limit_amount
-  if (data.available_limit !== undefined && data.available_limit !== null) {
-    return data.available_limit <= data.limit_amount;
-  }
-  return true;
-}, {
-  message: 'Limit tersedia tidak boleh melebihi limit platform',
-  path: ['available_limit'],
-});
-
-type DebtFormData = z.infer<typeof debtSchema>;
+// Schema will be created dynamically inside component to use translation
+type DebtFormData = {
+  debt_name: string;
+  debt_type: string;
+  bank_name?: string;
+  limit_amount: number;
+  available_limit?: number;
+  amountReceived?: number; // Hanya untuk Pinjaman Online (Jumlah Diterima)
+  debt_amount: number;
+  paid_amount?: number;
+  loan_duration?: number;
+  monthly_payment?: number;
+  interest_rate?: number;
+  due_date?: string;
+  minimum_payment?: number;
+  description?: string;
+  status?: 'active' | 'paid_off' | 'closed';
+};
 
 interface DebtFormProps {
   isOpen: boolean;
@@ -63,15 +51,54 @@ export const DebtForm = ({
   initialData,
   isLoading = false 
 }: DebtFormProps) => {
+  const { t } = useAppTranslation();
   const isEditMode = !!initialData;
+  
+  // Create schema dynamically to use translation
+  const debtSchema = z.object({
+    debt_name: z.string().min(1, t('debt.form.debtName', 'Debt Name') + ' is required'),
+    debt_type: z.string().min(1, t('debt.form.debtType', 'Debt Type') + ' must be selected'),
+    bank_name: z.string().optional(),
+    limit_amount: z.number().min(0, t('debt.form.limitPlafon', 'Limit/Plafon') + ' must be greater than 0'),
+    available_limit: z.number().min(0).optional(),
+    amountReceived: z.number().min(0).optional(), // Pinjaman Online: Jumlah Diterima
+    debt_amount: z.number().min(0, t('debt.form.actualDebt', 'Actual Debt') + ' must be greater than 0'),
+    paid_amount: z.number().min(0).optional(),
+    loan_duration: z.number().min(1).optional(),
+    monthly_payment: z.number().min(0).optional(),
+    interest_rate: z.number().min(0).max(100).optional(),
+    due_date: z.string().optional(),
+    minimum_payment: z.number().min(0).optional(),
+    description: z.string().optional(),
+    status: z.enum(['active', 'paid_off', 'closed']).optional(),
+  }).refine((data) => {
+    if (data.debt_type === 'Pinjaman Online') {
+      return (data.limit_amount ?? 0) > 0;
+    }
+    return true;
+  }, {
+    message: t('debt.form.totalLimit', 'Total Limit') + ' is required for Online Loan',
+    path: ['limit_amount'],
+  }).refine((data) => {
+    if (data.debt_type === 'Pinjaman Online') return true;
+    if (data.available_limit !== undefined && data.available_limit !== null) {
+      return data.available_limit <= data.limit_amount;
+    }
+    return true;
+  }, {
+    message: t('debt.form.availableLimit', 'Available Limit') + ' cannot exceed ' + t('debt.form.limitPlafon', 'Limit/Plafon'),
+    path: ['available_limit'],
+  });
   
   // State for formatted display values
   const [limitAmountDisplay, setLimitAmountDisplay] = useState('');
   const [availableLimitDisplay, setAvailableLimitDisplay] = useState('');
-  const [usedAmountDisplay, setUsedAmountDisplay] = useState('');
+  const [amountReceivedDisplay, setAmountReceivedDisplay] = useState(''); // Pinjaman Online only
   const [debtAmountDisplay, setDebtAmountDisplay] = useState('');
   const [interestRateDisplay, setInterestRateDisplay] = useState('');
   const [minimumPaymentDisplay, setMinimumPaymentDisplay] = useState('');
+  const [loanDurationDisplay, setLoanDurationDisplay] = useState('');
+  const [monthlyPaymentDisplay, setMonthlyPaymentDisplay] = useState('');
   
   const form = useForm<DebtFormData>({
     resolver: zodResolver(debtSchema),
@@ -81,8 +108,11 @@ export const DebtForm = ({
       bank_name: '',
       limit_amount: 0,
       available_limit: undefined,
-      used_amount: 0,
+      amountReceived: undefined,
       debt_amount: 0,
+      paid_amount: undefined,
+      loan_duration: undefined,
+      monthly_payment: undefined,
       interest_rate: undefined,
       due_date: undefined,
       minimum_payment: undefined,
@@ -93,27 +123,33 @@ export const DebtForm = ({
 
   useEffect(() => {
     if (initialData) {
+      // Pinjaman Online: limit_amount = Total Limit, debt_amount = total used for expense, available_limit = sisa plafon
+      const isOnline = initialData.debt_type === 'Pinjaman Online';
       form.reset({
         debt_name: initialData.debt_name,
         debt_type: initialData.debt_type,
         bank_name: initialData.bank_name || '',
         limit_amount: initialData.limit_amount,
         available_limit: initialData.available_limit || undefined,
-        used_amount: initialData.used_amount,
+        amountReceived: isOnline ? initialData.limit_amount : undefined,
         debt_amount: initialData.debt_amount,
+        paid_amount: initialData.paid_amount || undefined,
+        loan_duration: initialData.loan_duration || undefined,
+        monthly_payment: initialData.monthly_payment || undefined,
         interest_rate: initialData.interest_rate || undefined,
         due_date: initialData.due_date || undefined,
         minimum_payment: initialData.minimum_payment || undefined,
         description: initialData.description || '',
         status: initialData.status,
       });
-      // Set display values
       setLimitAmountDisplay(formatInputNumber(initialData.limit_amount));
       setAvailableLimitDisplay(formatInputNumber(initialData.available_limit || ''));
-      setUsedAmountDisplay(formatInputNumber(initialData.used_amount));
+      setAmountReceivedDisplay(formatInputNumber(isOnline ? initialData.limit_amount : ''));
       setDebtAmountDisplay(formatInputNumber(initialData.debt_amount));
       setInterestRateDisplay(initialData.interest_rate ? initialData.interest_rate.toString() : '');
       setMinimumPaymentDisplay(formatInputNumber(initialData.minimum_payment || ''));
+      setLoanDurationDisplay(initialData.loan_duration ? initialData.loan_duration.toString() : '');
+      setMonthlyPaymentDisplay(formatInputNumber(initialData.monthly_payment || ''));
     } else {
       form.reset({
         debt_name: '',
@@ -121,40 +157,52 @@ export const DebtForm = ({
         bank_name: '',
         limit_amount: 0,
         available_limit: undefined,
-        used_amount: 0,
+        amountReceived: undefined,
         debt_amount: 0,
+        paid_amount: undefined,
+        loan_duration: undefined,
+        monthly_payment: undefined,
         interest_rate: undefined,
         due_date: undefined,
         minimum_payment: undefined,
         description: '',
         status: 'active',
       });
-      // Reset display values
       setLimitAmountDisplay('');
       setAvailableLimitDisplay('');
-      setUsedAmountDisplay('');
+      setAmountReceivedDisplay('');
       setDebtAmountDisplay('');
       setInterestRateDisplay('');
       setMinimumPaymentDisplay('');
+      setLoanDurationDisplay('');
+      setMonthlyPaymentDisplay('');
     }
   }, [initialData, isOpen]);
 
   const limitAmount = form.watch('limit_amount');
   const availableLimit = form.watch('available_limit');
-  const usedAmount = form.watch('used_amount');
+  const amountReceived = form.watch('amountReceived');
   const debtAmount = form.watch('debt_amount');
   const interestRate = form.watch('interest_rate');
   const minimumPayment = form.watch('minimum_payment');
+  const loanDuration = form.watch('loan_duration');
+  const monthlyPayment = form.watch('monthly_payment');
+  const debtType = form.watch('debt_type');
+  const isOnlineLoan = debtType === 'Pinjaman Online';
 
   // Update display values when form values change
+  // Only update if value is greater than 0 to avoid showing "0" in empty fields
   useEffect(() => {
-    if (limitAmount !== undefined && limitAmount !== null) {
+    if (limitAmount !== undefined && limitAmount !== null && limitAmount > 0) {
       setLimitAmountDisplay(formatInputNumber(limitAmount));
+    } else if (limitAmount === 0) {
+      // Keep empty string if value is 0 (default or cleared)
+      setLimitAmountDisplay('');
     }
   }, [limitAmount]);
 
   useEffect(() => {
-    if (availableLimit !== undefined && availableLimit !== null) {
+    if (availableLimit !== undefined && availableLimit !== null && availableLimit > 0) {
       setAvailableLimitDisplay(formatInputNumber(availableLimit));
     } else {
       setAvailableLimitDisplay('');
@@ -162,19 +210,24 @@ export const DebtForm = ({
   }, [availableLimit]);
 
   useEffect(() => {
-    if (usedAmount !== undefined && usedAmount !== null) {
-      setUsedAmountDisplay(formatInputNumber(usedAmount));
+    if (amountReceived !== undefined && amountReceived !== null && amountReceived > 0) {
+      setAmountReceivedDisplay(formatInputNumber(amountReceived));
+    } else {
+      setAmountReceivedDisplay('');
     }
-  }, [usedAmount]);
+  }, [amountReceived]);
 
   useEffect(() => {
-    if (debtAmount !== undefined && debtAmount !== null) {
+    if (debtAmount !== undefined && debtAmount !== null && debtAmount > 0) {
       setDebtAmountDisplay(formatInputNumber(debtAmount));
+    } else if (debtAmount === 0) {
+      // Keep empty string if value is 0 (default or cleared)
+      setDebtAmountDisplay('');
     }
   }, [debtAmount]);
 
   useEffect(() => {
-    if (interestRate !== undefined && interestRate !== null) {
+    if (interestRate !== undefined && interestRate !== null && interestRate > 0) {
       setInterestRateDisplay(interestRate.toString());
     } else {
       setInterestRateDisplay('');
@@ -182,58 +235,86 @@ export const DebtForm = ({
   }, [interestRate]);
 
   useEffect(() => {
-    if (minimumPayment !== undefined && minimumPayment !== null) {
+    if (minimumPayment !== undefined && minimumPayment !== null && minimumPayment > 0) {
       setMinimumPaymentDisplay(formatInputNumber(minimumPayment));
     } else {
       setMinimumPaymentDisplay('');
     }
   }, [minimumPayment]);
 
-  // Auto-calculate used_amount when available_limit is provided
+  // Auto-calculate monthly_payment when loan_duration and limit_amount are filled for Pinjaman Online
   useEffect(() => {
-    const limit = limitAmount || 0;
-    const available = availableLimit;
-    
-    if (available !== undefined && available !== null && available > 0 && limit > 0) {
-      // If available_limit is provided, calculate used_amount
-      const calculatedUsed = limit - available;
-      if (calculatedUsed >= 0) {
-        form.setValue('used_amount', calculatedUsed, { shouldValidate: true });
+    if (isOnlineLoan && loanDuration && loanDuration > 0 && limitAmount && limitAmount > 0) {
+      const calculatedMonthly = limitAmount / loanDuration;
+      // Only update if monthly_payment is not manually set or is empty
+      if (!monthlyPayment || monthlyPayment === 0) {
+        form.setValue('monthly_payment', calculatedMonthly, { shouldValidate: true });
+        setMonthlyPaymentDisplay(formatInputNumber(calculatedMonthly));
       }
     }
-  }, [limitAmount, availableLimit, form]);
+  }, [loanDuration, limitAmount, isOnlineLoan, monthlyPayment, form]);
 
-  // Auto-calculate debt_amount when used_amount changes
-  // Hutang = Jumlah Terpakai (bukan limit - terpakai)
+  // Auto-calculate debt_amount and available_limit when limit_amount changes (non-Pinjaman Online)
+  // Pinjaman Online: debt_amount dan available_limit dari DB/trigger, tidak di-set dari form saat add (create pakai 0 dan limit_amount)
   useEffect(() => {
-    const used = usedAmount || 0;
-    if (used >= 0) {
-      form.setValue('debt_amount', used, { shouldValidate: true });
+    if (isOnlineLoan) {
+      // Saat add new: available_limit = limit_amount (sama), debt_amount = 0 (useDebts create akan set)
+      if (!initialData && limitAmount && limitAmount > 0) {
+        form.setValue('available_limit', limitAmount, { shouldValidate: true });
+        setAvailableLimitDisplay(formatInputNumber(limitAmount));
+        form.setValue('debt_amount', 0, { shouldValidate: true });
+        setDebtAmountDisplay('0');
+      }
+    } else {
+      // For other debt types: auto-fill available_limit dengan limit_amount jika belum ada pemakaian
+      const limit = limitAmount || 0;
+      if (limit > 0) {
+        const currentAvailableLimit = availableLimit;
+        // Auto-fill available_limit dengan limit_amount jika belum diisi (belum ada pemakaian)
+        if (currentAvailableLimit === undefined || currentAvailableLimit === null || currentAvailableLimit === 0) {
+          form.setValue('available_limit', limit, { shouldValidate: true });
+          setAvailableLimitDisplay(formatInputNumber(limit));
+        }
+        // Calculate debt_amount dari available_limit
+        const available = currentAvailableLimit ?? limit;
+        const terpakai = Math.max(0, limit - available);
+        form.setValue('debt_amount', terpakai, { shouldValidate: true });
+      }
     }
-  }, [usedAmount, form]);
+  }, [limitAmount, isOnlineLoan, debtAmount, availableLimit, form]);
 
   const handleSubmit = async (data: DebtFormData) => {
-    // Calculate used_amount if available_limit is provided
-    let finalUsedAmount = data.used_amount;
     let finalAvailableLimit = data.available_limit;
+    let finalDebtAmount = data.debt_amount;
+    let finalPaidAmount: number | undefined = undefined;
     
-    if (data.available_limit !== undefined && data.available_limit !== null) {
-      finalUsedAmount = data.limit_amount - data.available_limit;
-      finalAvailableLimit = data.available_limit;
+    if (data.debt_type === 'Pinjaman Online') {
+      // Create: limit_amount = Total Limit, available_limit = limit_amount, debt_amount = 0 (useDebts will set)
+      // Edit: limit_amount bisa diubah; debt_amount/paid_amount/available_limit dari DB (useDebts update keeps them)
+      finalDebtAmount = initialData?.debt_amount ?? 0;
+      finalAvailableLimit = initialData ? (data.available_limit ?? initialData.available_limit) : data.limit_amount;
+      finalPaidAmount = initialData?.paid_amount ?? 0;
     } else {
-      // If available_limit not provided, calculate it from used_amount
-      finalAvailableLimit = data.limit_amount - data.used_amount;
+      if (data.available_limit !== undefined && data.available_limit !== null) {
+        finalAvailableLimit = data.available_limit;
+        finalDebtAmount = data.limit_amount - data.available_limit;
+      } else {
+        finalAvailableLimit = data.limit_amount; // full limit available
+        finalDebtAmount = 0;
+      }
+      finalPaidAmount = data.paid_amount;
     }
     
-    // Hutang = Jumlah Terpakai (bukan limit - terpakai)
-    const finalDebtAmount = finalUsedAmount;
-    
+    const payloadLimitAmount = data.limit_amount; // Total Limit untuk Pinjaman Online, limit/plafon untuk lainnya
     const success = await onSubmit({
       ...data,
-      used_amount: finalUsedAmount,
+      limit_amount: payloadLimitAmount,
       available_limit: finalAvailableLimit,
       debt_amount: finalDebtAmount,
-    });
+      paid_amount: finalPaidAmount,
+      loan_duration: data.loan_duration,
+      monthly_payment: data.monthly_payment,
+    } as CreateDebtData);
     
     if (success) {
       form.reset();
@@ -250,12 +331,12 @@ export const DebtForm = ({
       <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
         <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
           <DialogTitle className="text-lg font-semibold">
-            {isEditMode ? 'Edit Hutang' : 'Tambah Hutang Baru'}
+            {isEditMode ? t('debt.form.editTitle', 'Edit Debt') : t('debt.form.addTitle', 'Add New Debt')}
           </DialogTitle>
           <DialogDescription>
             {isEditMode 
-              ? 'Perbarui informasi hutang Anda' 
-              : 'Masukkan detail hutang yang ingin ditambahkan'}
+              ? t('debt.form.editDescription', 'Update your debt information')
+              : t('debt.form.addDescription', 'Enter debt details to be added')}
           </DialogDescription>
         </DialogHeader>
 
@@ -263,12 +344,12 @@ export const DebtForm = ({
           <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll px-4 py-4 space-y-4">
             <div>
               <Label htmlFor="debt_name">
-                Nama Hutang <span className="text-red-500">*</span>
+                {t('debt.form.debtName', 'Debt Name')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="debt_name"
                 {...form.register('debt_name')}
-                placeholder="Contoh: Kartu Kredit Jenius"
+                placeholder={t('debt.form.debtNamePlaceholder', 'Example: Credit Card Jenius')}
                 className="mt-1"
               />
               {form.formState.errors.debt_name && (
@@ -280,19 +361,41 @@ export const DebtForm = ({
 
             <div>
               <Label htmlFor="debt_type">
-                Tipe Hutang <span className="text-red-500">*</span>
+                {t('debt.form.debtType', 'Debt Type')} <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={form.watch('debt_type')}
-                onValueChange={(value) => form.setValue('debt_type', value)}
+                onValueChange={(value) => {
+                  form.setValue('debt_type', value);
+                  // Auto-fill available_limit saat memilih tipe debt jika limit_amount sudah diisi
+                  const currentLimitAmount = form.getValues('limit_amount');
+                  if (currentLimitAmount > 0) {
+                    if (value === 'Pinjaman Online') {
+                      // Pinjaman Online: available_limit = limit_amount (sama ketika belum dipakai)
+                      form.setValue('available_limit', currentLimitAmount);
+                      form.setValue('debt_amount', 0);
+                      setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                      setDebtAmountDisplay('0');
+                    } else {
+                      // Non-online: available_limit = limit_amount (full limit) jika belum ada pemakaian
+                      form.setValue('available_limit', currentLimitAmount);
+                      setAvailableLimitDisplay(formatInputNumber(currentLimitAmount));
+                    }
+                  }
+                }}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih tipe hutang" />
+                  <SelectValue placeholder={t('debt.form.selectDebtType', 'Select debt type')} />
                 </SelectTrigger>
                 <SelectContent>
                   {DEBT_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
-                      {type}
+                      {type === 'Kartu Kredit' ? t('debt.type.creditCard', 'Credit Card') :
+                       type === 'Pinjaman Bank' ? t('debt.type.bankLoan', 'Bank Loan') :
+                       type === 'Hutang Supplier' ? t('debt.type.supplierDebt', 'Supplier Debt') :
+                       type === 'Pinjaman Online' ? t('debt.type.onlineLoan', 'Online Loan') :
+                       type === 'Hutang Pribadi' ? t('debt.type.personalDebt', 'Personal Debt') :
+                       t('debt.type.other', 'Other')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -305,118 +408,207 @@ export const DebtForm = ({
             </div>
 
             <div>
-              <Label htmlFor="bank_name">Bank/Institusi</Label>
+              <Label htmlFor="bank_name">{t('debt.form.bankInstitution', 'Bank/Institution')}</Label>
               <Input
                 id="bank_name"
                 {...form.register('bank_name')}
-                placeholder="Contoh: Jenius, BCA, Mandiri"
+                placeholder={t('debt.form.bankPlaceholder', 'Example: Jenius, BCA, Mandiri')}
                 className="mt-1"
               />
             </div>
+
+            {isOnlineLoan ? (
+              // Fields for Pinjaman Online: Total Limit = Available Limit ketika belum dipakai; Debt/Paid terisi otomatis dari expense dan Pay Debt
+              <>
+                <div>
+                  <Label htmlFor="limit_amount">
+                    {t('debt.form.totalLimit', 'Total Limit (Rp)')} <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="limit_amount"
+                    type="text"
+                    value={limitAmountDisplay}
+                    onChange={(e) => {
+                      const formatted = formatInputNumber(e.target.value);
+                      setLimitAmountDisplay(formatted);
+                      const parsed = parseInputNumber(formatted);
+                      form.setValue('limit_amount', parsed ?? 0, { shouldValidate: true });
+                    }}
+                    placeholder=""
+                    className="mt-1"
+                  />
+                  {form.formState.errors.limit_amount && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {form.formState.errors.limit_amount.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('debt.form.totalLimitDesc', 'When not used, Available Limit equals Total Limit. Debt and Paid fill automatically from expenses and Pay Debt.')}
+                  </p>
+                </div>
+
+                {isEditMode && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-500">{t('debt.table.availableLimit', 'Available Limit')}</Label>
+                      <p className="mt-1 text-sm font-medium">{availableLimitDisplay || '0'}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('debt.form.availableLimitDesc', 'Remaining credit (read-only)')}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">{t('debt.table.debt', 'Debt')}</Label>
+                      <p className="mt-1 text-sm font-medium text-red-600">{debtAmountDisplay || '0'}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('debt.form.debtFromExpense', 'From expenses (read-only)')}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">{t('debt.table.paid', 'Paid')}</Label>
+                      <p className="mt-1 text-sm font-medium text-blue-600">{formatInputNumber(initialData?.paid_amount ?? 0) || '0'}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('debt.form.paidFromModal', 'From Pay Debt (read-only)')}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="loan_duration">
+                      {t('debt.form.loanDuration', 'Loan Duration (Months)')}
+                    </Label>
+                    <Input
+                      id="loan_duration"
+                      type="number"
+                      value={loanDurationDisplay}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setLoanDurationDisplay(value);
+                        const parsed = value ? parseInt(value, 10) : undefined;
+                        form.setValue('loan_duration', parsed, { shouldValidate: true });
+                        
+                        // Auto-calculate monthly payment if both loan_duration and limit_amount are filled
+                        if (parsed && parsed > 0 && limitAmount > 0) {
+                          const calculatedMonthly = limitAmount / parsed;
+                          form.setValue('monthly_payment', calculatedMonthly);
+                          setMonthlyPaymentDisplay(formatInputNumber(calculatedMonthly));
+                        }
+                      }}
+                      placeholder=""
+                      className="mt-1"
+                      min="1"
+                    />
+                    {form.formState.errors.loan_duration && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {form.formState.errors.loan_duration.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('debt.form.loanDurationDesc', 'Loan duration in months')}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="monthly_payment">
+                      {t('debt.form.monthlyPayment', 'Monthly Payment (Rp)')}
+                    </Label>
+                    <Input
+                      id="monthly_payment"
+                      type="text"
+                      value={monthlyPaymentDisplay}
+                      onChange={(e) => {
+                        const formatted = formatInputNumber(e.target.value);
+                        setMonthlyPaymentDisplay(formatted);
+                        const parsed = parseInputNumber(formatted);
+                        form.setValue('monthly_payment', parsed || undefined, { shouldValidate: true });
+                      }}
+                      placeholder=""
+                      className="mt-1"
+                    />
+                    {form.formState.errors.monthly_payment && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {form.formState.errors.monthly_payment.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('debt.form.monthlyPaymentDesc', 'Amount of monthly payment (automatically calculated if loan duration is filled)')}
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Fields for other debt types
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="limit_amount">
+                      {t('debt.form.limitPlafon', 'Limit/Plafon (Rp)')} <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="limit_amount"
+                      type="text"
+                      value={limitAmountDisplay}
+                      onChange={(e) => {
+                        const formatted = formatInputNumber(e.target.value);
+                        setLimitAmountDisplay(formatted);
+                        const parsed = parseInputNumber(formatted);
+                        form.setValue('limit_amount', parsed, { shouldValidate: true });
+                      }}
+                      placeholder=""
+                      className="mt-1"
+                    />
+                    {form.formState.errors.limit_amount && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {form.formState.errors.limit_amount.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="available_limit">
+                      {t('debt.form.availableLimit', 'Available Limit (Rp)')}
+                    </Label>
+                    <Input
+                      id="available_limit"
+                      type="text"
+                      value={availableLimitDisplay}
+                      onChange={(e) => {
+                        const formatted = formatInputNumber(e.target.value);
+                        setAvailableLimitDisplay(formatted);
+                        const parsed = parseInputNumber(formatted);
+                        form.setValue('available_limit', parsed || undefined, { shouldValidate: true });
+                      }}
+                      placeholder=""
+                      className="mt-1"
+                    />
+                    {form.formState.errors.available_limit && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {form.formState.errors.available_limit.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('debt.form.availableLimitDesc', 'If filled, Used Amount will be calculated automatically')}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="debt_amount">
+                    {t('debt.form.actualDebt', 'Actual Debt (Rp)')} <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="debt_amount"
+                    type="text"
+                    value={debtAmountDisplay}
+                    placeholder="0"
+                    className="mt-1"
+                    readOnly
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('debt.form.actualDebtDesc', 'Terpakai = Limit - Available Limit (read-only)')}
+                  </p>
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="limit_amount">
-                  Limit/Plafon (Rp) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="limit_amount"
-                  type="text"
-                  value={limitAmountDisplay}
-                  onChange={(e) => {
-                    const formatted = formatInputNumber(e.target.value);
-                    setLimitAmountDisplay(formatted);
-                    const parsed = parseInputNumber(formatted);
-                    form.setValue('limit_amount', parsed, { shouldValidate: true });
-                  }}
-                  placeholder="0"
-                  className="mt-1"
-                />
-                {form.formState.errors.limit_amount && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {form.formState.errors.limit_amount.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="available_limit">
-                  Limit Tersedia (Rp)
-                </Label>
-                <Input
-                  id="available_limit"
-                  type="text"
-                  value={availableLimitDisplay}
-                  onChange={(e) => {
-                    const formatted = formatInputNumber(e.target.value);
-                    setAvailableLimitDisplay(formatted);
-                    const parsed = parseInputNumber(formatted);
-                    form.setValue('available_limit', parsed || undefined, { shouldValidate: true });
-                  }}
-                  placeholder="0"
-                  className="mt-1"
-                />
-                {form.formState.errors.available_limit && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {form.formState.errors.available_limit.message}
-                  </p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  Jika diisi, Jumlah Terpakai akan dihitung otomatis
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="used_amount">
-                Jumlah Terpakai (Rp) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="used_amount"
-                type="text"
-                value={usedAmountDisplay}
-                onChange={(e) => {
-                  const formatted = formatInputNumber(e.target.value);
-                  setUsedAmountDisplay(formatted);
-                  const parsed = parseInputNumber(formatted);
-                  form.setValue('used_amount', parsed, { shouldValidate: true });
-                }}
-                placeholder="0"
-                className="mt-1"
-                readOnly={!!availableLimit && availableLimit !== null && availableLimit !== undefined}
-              />
-              {form.formState.errors.used_amount && (
-                <p className="text-sm text-red-500 mt-1">
-                  {form.formState.errors.used_amount.message}
-                </p>
-              )}
-              {availableLimit !== undefined && availableLimit !== null && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Otomatis dihitung: Limit - Limit Tersedia
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="debt_amount">
-                Hutang Aktual (Rp) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="debt_amount"
-                type="text"
-                value={debtAmountDisplay}
-                placeholder="0"
-                className="mt-1"
-                readOnly
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Otomatis dihitung: Sama dengan Jumlah Terpakai
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="interest_rate">Bunga per Tahun (%)</Label>
+                <Label htmlFor="interest_rate">{t('debt.form.interestRate', 'Interest per Year (%)')}</Label>
                 <Input
                   id="interest_rate"
                   type="text"
@@ -433,7 +625,7 @@ export const DebtForm = ({
               </div>
 
               <div>
-                <Label htmlFor="minimum_payment">Minimum Payment (Rp)</Label>
+                <Label htmlFor="minimum_payment">{t('debt.form.minimumPayment', 'Minimum Payment (Rp)')}</Label>
                 <Input
                   id="minimum_payment"
                   type="text"
@@ -450,38 +642,104 @@ export const DebtForm = ({
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="due_date">Jatuh Tempo</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1",
-                      !selectedDueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDueDate ? format(selectedDueDate, "dd/MM/yyyy") : "Pilih tanggal"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDueDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        form.setValue('due_date', format(date, 'yyyy-MM-dd'));
-                      }
-                    }}
-                    initialFocus
+            {isOnlineLoan ? (
+              // Fields for Pinjaman Online: Tanggal Mulai Pembayaran dan Tanggal Jatuh Tempo Akhir
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="due_date">{t('debt.form.paymentStartDate', 'Payment Start Date')}</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal mt-1",
+                          !selectedDueDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDueDate ? format(selectedDueDate, "dd/MM/yyyy") : t('debt.form.selectDate', 'Select date')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDueDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            form.setValue('due_date', format(date, 'yyyy-MM-dd'));
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('debt.form.paymentStartDateDesc', 'First payment date (monthly)')}
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="due_date_end">{t('debt.form.dueDateEnd', 'End Due Date')}</Label>
+                  <Input
+                    id="due_date_end"
+                    type="text"
+                    value={
+                      selectedDueDate && loanDuration && loanDuration > 0
+                        ? (() => {
+                            const startDate = new Date(selectedDueDate);
+                            const endDate = new Date(startDate);
+                            // Tanggal jatuh tempo akhir = tanggal mulai + (lama pinjaman - 1) bulan
+                            // Karena tanggal mulai sudah termasuk bulan pertama
+                            endDate.setMonth(endDate.getMonth() + (loanDuration - 1));
+                            return format(endDate, "dd/MM/yyyy");
+                          })()
+                        : "-"
+                    }
+                    readOnly
+                    className="mt-1 bg-gray-50"
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {loanDuration && loanDuration > 0
+                      ? t('debt.form.dueDateEndDesc', `Automatically calculated: final payment month {duration}`, { duration: loanDuration.toString() })
+                      : t('debt.form.dueDateEndDescEmpty', 'Fill start date and loan duration')}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Field for other debt types: Jatuh Tempo biasa
+              <div>
+                <Label htmlFor="due_date">{t('debt.form.dueDate', 'Due Date')}</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal mt-1",
+                        !selectedDueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDueDate ? format(selectedDueDate, "dd/MM/yyyy") : t('debt.form.selectDate', 'Select date')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDueDate}
+                      onSelect={(date) => {
+                        if (date) {
+                          form.setValue('due_date', format(date, 'yyyy-MM-dd'));
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
 
             <div>
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="status">{t('debt.form.status', 'Status')}</Label>
               <Select
                 value={form.watch('status')}
                 onValueChange={(value: 'active' | 'paid_off' | 'closed') => 
@@ -489,22 +747,22 @@ export const DebtForm = ({
                 }
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih status" />
+                  <SelectValue placeholder={t('debt.form.selectStatus', 'Select status')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Aktif</SelectItem>
-                  <SelectItem value="paid_off">Lunas</SelectItem>
-                  <SelectItem value="closed">Ditutup</SelectItem>
+                  <SelectItem value="active">{t('debt.status.active', 'Active')}</SelectItem>
+                  <SelectItem value="paid_off">{t('debt.status.paidOff', 'Paid Off')}</SelectItem>
+                  <SelectItem value="closed">{t('debt.status.closed', 'Closed')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="description">Deskripsi</Label>
+              <Label htmlFor="description">{t('debt.form.description', 'Description')}</Label>
               <Textarea
                 id="description"
                 {...form.register('description')}
-                placeholder="Catatan tambahan tentang hutang ini..."
+                placeholder={t('debt.form.descriptionPlaceholder', 'Additional notes about this debt...')}
                 className="mt-1 min-h-[80px] resize-none"
               />
             </div>
@@ -517,14 +775,14 @@ export const DebtForm = ({
               onClick={onClose}
               disabled={isLoading}
             >
-              Batal
+              {t('debt.form.cancel', 'Cancel')}
             </Button>
             <Button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={isLoading}
             >
-              {isLoading ? 'Menyimpan...' : isEditMode ? 'Perbarui' : 'Simpan'}
+              {isLoading ? t('debt.form.saving', 'Saving...') : isEditMode ? t('debt.form.update', 'Update') : t('debt.form.save', 'Save')}
             </Button>
           </DialogFooter>
         </form>

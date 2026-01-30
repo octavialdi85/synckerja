@@ -6,4 +6,5 @@ export { IncomeTransactionTableFooter } from './IncomeTransactionTableFooter';
 export { IncomeTransactionOverview } from './IncomeTransactionOverview';
 export { IncomeTransactionSidebarFooter } from './IncomeTransactionSidebarFooter';
 export { IncomeTransactionViewDialog } from './IncomeTransactionViewDialog';
+export { BankAccountManagement } from './BankAccountManagement';
 

@@ -1,13 +1,16 @@
-import { DollarSign, Calendar, Receipt } from 'lucide-react';
+import { useState } from 'react';
+import { DollarSign, Calendar, Receipt, Building2 } from 'lucide-react';
 import { useIncomeTransactions } from '@/features/4-1-dashboard/hooks';
 import { useIncomeMetrics } from '@/features/4-1-dashboard/hooks';
 import { formatToRupiah } from '@/utils/formatCurrency';
+import { BankAccountManagement } from './BankAccountManagement';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 
 interface IncomeTransactionOverviewProps {
   transactions?: any[];
 }
 
-export const IncomeTransactionOverview = ({ transactions = [] }: IncomeTransactionOverviewProps) => {
+const OverviewContent = ({ transactions = [] }: { transactions?: any[] }) => {
   const { incomeTransactions } = useIncomeTransactions();
   const { data: metrics } = useIncomeMetrics();
 
@@ -107,3 +110,30 @@ export const IncomeTransactionOverview = ({ transactions = [] }: IncomeTransacti
   );
 };
 
+export const IncomeTransactionOverview = ({ transactions = [] }: IncomeTransactionOverviewProps) => {
+  const [activeTab, setActiveTab] = useState('overview');  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col h-full">
+      <TabsList className="grid w-full grid-cols-2 h-9 mb-4 bg-gray-100">
+        <TabsTrigger 
+          value="overview" 
+          className="text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+        >
+          Overview
+        </TabsTrigger>
+        <TabsTrigger 
+          value="bank-accounts" 
+          className="text-xs font-medium flex items-center justify-center gap-1.5 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+        >
+          <Building2 className="h-3.5 w-3.5" />
+          Bank Accounts
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="overview" className="mt-0 flex-1 min-h-0 overflow-y-auto seamless-scroll">
+        <OverviewContent transactions={transactions} />
+      </TabsContent>
+      <TabsContent value="bank-accounts" className="mt-0 flex-1 min-h-0 overflow-y-auto seamless-scroll">
+        <BankAccountManagement />
+      </TabsContent>
+    </Tabs>
+  );
+};

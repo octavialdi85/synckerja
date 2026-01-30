@@ -3,9 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import { Debt, CreateDebtData, UpdateDebtData } from '../types';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const useDebts = () => {
+  const { t } = useAppTranslation();
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [totalInterestYtd, setTotalInterestYtd] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -23,11 +26,44 @@ export const useDebts = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      setDebts(data || []);
+
+      const debtList = data || [];
+      const debtIds = debtList.map((d: { id: string }) => d.id);
+
+      const totalInterestByDebt: Record<string, number> = {};
+      const lastPaymentByDebt: Record<string, string> = {};
+      const startOfYear = `${new Date().getFullYear()}-01-01`;
+      let ytdInterest = 0;
+      if (debtIds.length > 0) {
+        const { data: payments } = await supabase
+          .from('debt_payments')
+          .select('debt_id, interest_amount, payment_date')
+          .eq('organization_id', organizationId)
+          .in('debt_id', debtIds);
+        (payments || []).forEach((p: { debt_id: string; interest_amount: number | null; payment_date: string }) => {
+          const amt = p.interest_amount ?? 0;
+          totalInterestByDebt[p.debt_id] = (totalInterestByDebt[p.debt_id] ?? 0) + amt;
+          const d = p.payment_date;
+          if (d && (!lastPaymentByDebt[p.debt_id] || d > lastPaymentByDebt[p.debt_id])) {
+            lastPaymentByDebt[p.debt_id] = d;
+          }
+          if (d && d >= startOfYear) {
+            ytdInterest += amt;
+          }
+        });
+      }
+      setTotalInterestYtd(ytdInterest);
+
+      const merged = debtList.map((d: Debt) => ({
+        ...d,
+        total_interest: totalInterestByDebt[d.id] ?? 0,
+        last_payment_date: lastPaymentByDebt[d.id] ?? null,
+      }));
+
+      setDebts(merged);
     } catch (error: any) {
       console.error('Error fetching debts:', error);
-      toast.error('Gagal memuat data hutang');
+      toast.error(t('debt.error.loadFailed', 'Failed to load debt data'));
     } finally {
       setIsLoading(false);
     }
@@ -39,7 +75,7 @@ export const useDebts = () => {
 
   const createDebt = async (debtData: CreateDebtData): Promise<boolean> => {
     if (!organizationId) {
-      toast.error('Organization tidak ditemukan');
+      toast.error(t('debt.error.orgNotFound', 'Organization not found'));
       return false;
     }
 
@@ -47,17 +83,35 @@ export const useDebts = () => {
       setIsCreating(true);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        toast.error('User tidak terautentikasi');
+        toast.error(t('debt.error.userNotAuth', 'User not authenticated'));
         return false;
       }
 
-      // Hutang = Jumlah Terpakai (bukan limit - used)
-      const calculatedDebtAmount = debtData.debt_amount || debtData.used_amount;
+      const isOnlineLoan = debtData.debt_type === 'Pinjaman Online';
       
-      // Calculate available_limit if not provided (limit - used)
-      const calculatedAvailableLimit = debtData.available_limit !== undefined 
-        ? debtData.available_limit 
-        : (debtData.limit_amount - debtData.used_amount);
+      let calculatedDebtAmount: number;
+      let calculatedAvailableLimit: number | null;
+      let calculatedPaidAmount: number | null;
+      
+      if (isOnlineLoan) {
+        // For Pinjaman Online (belum dipakai): Total Limit = Available Limit (sama).
+        // limit_amount = Total Limit (plafon), available_limit = limit_amount, debt_amount = 0.
+        // Debt dan Paid terisi otomatis oleh expense dan Pay Debt modal.
+        const totalLimit = debtData.limit_amount;
+        calculatedDebtAmount = 0;
+        calculatedAvailableLimit = totalLimit; // sama dengan Total Limit ketika baru
+        calculatedPaidAmount = 0;
+      } else {
+        // For other debt types: terpakai = limit - available; debt_amount = terpakai
+        calculatedDebtAmount = debtData.debt_amount ?? 0;
+        // Pastikan available_limit tidak pernah 0 atau null - gunakan limit_amount sebagai default
+        if (debtData.available_limit != null && debtData.available_limit > 0) {
+          calculatedAvailableLimit = debtData.available_limit;
+        } else {
+          calculatedAvailableLimit = debtData.limit_amount; // Full limit (belum ada pemakaian)
+        }
+        calculatedPaidAmount = debtData.paid_amount || null;
+      }
 
       const { data, error } = await supabase
         .from('debts')
@@ -68,9 +122,11 @@ export const useDebts = () => {
           debt_type: debtData.debt_type,
           bank_name: debtData.bank_name || null,
           limit_amount: debtData.limit_amount,
-          available_limit: calculatedAvailableLimit || null,
-          used_amount: debtData.used_amount,
+          available_limit: calculatedAvailableLimit, // Selalu ada nilai, tidak pernah null
           debt_amount: calculatedDebtAmount,
+          paid_amount: calculatedPaidAmount,
+          loan_duration: debtData.loan_duration || null,
+          monthly_payment: debtData.monthly_payment || null,
           interest_rate: debtData.interest_rate || null,
           due_date: debtData.due_date || null,
           minimum_payment: debtData.minimum_payment || null,
@@ -83,11 +139,11 @@ export const useDebts = () => {
       if (error) throw error;
 
       setDebts(prev => [data, ...prev]);
-      toast.success('Hutang berhasil ditambahkan');
+      toast.success(t('debt.success.added', 'Debt added successfully'));
       return true;
     } catch (error: any) {
       console.error('Error creating debt:', error);
-      toast.error(error.message || 'Gagal menambahkan hutang');
+      toast.error(error.message || t('debt.error.addFailed', 'Failed to add debt'));
       return false;
     } finally {
       setIsCreating(false);
@@ -96,7 +152,7 @@ export const useDebts = () => {
 
   const updateDebt = async (debtData: UpdateDebtData): Promise<boolean> => {
     if (!organizationId) {
-      toast.error('Organization tidak ditemukan');
+      toast.error(t('debt.error.orgNotFound', 'Organization not found'));
       return false;
     }
 
@@ -104,22 +160,32 @@ export const useDebts = () => {
       setIsUpdating(true);
       const { id, ...updateData } = debtData;
 
-      // Recalculate debt_amount and available_limit if limit_amount or used_amount changed
-      if (updateData.limit_amount !== undefined || updateData.used_amount !== undefined || updateData.available_limit !== undefined) {
-        const currentDebt = debts.find(d => d.id === id);
+      // Recalculate debt_amount, available_limit, and paid_amount if needed
+      const currentDebt = debts.find(d => d.id === id);
+      const debtType = updateData.debt_type ?? currentDebt?.debt_type;
+      const isOnlineLoan = debtType === 'Pinjaman Online';
+      
+      if (updateData.limit_amount !== undefined || updateData.available_limit !== undefined || updateData.debt_amount !== undefined || isOnlineLoan) {
         const newLimit = updateData.limit_amount ?? currentDebt?.limit_amount ?? 0;
-        const newUsed = updateData.used_amount ?? currentDebt?.used_amount ?? 0;
         const newAvailable = updateData.available_limit ?? currentDebt?.available_limit;
+        const newDebtAmount = updateData.debt_amount ?? currentDebt?.debt_amount ?? 0;
         
-        // If available_limit is provided, recalculate used_amount
-        if (newAvailable !== undefined && newAvailable !== null) {
-          updateData.used_amount = newLimit - newAvailable;
-          // Hutang = Jumlah Terpakai
-          updateData.debt_amount = newLimit - newAvailable;
+        if (isOnlineLoan) {
+          // Pinjaman Online: debt_amount dan paid_amount dari trigger/DB, jangan timpa dari form.
+          // Hanya update limit_amount; available_limit = limit_amount - debt_amount (sisa plafon).
+          const currentDebtAmount = currentDebt?.debt_amount ?? 0;
+          updateData.debt_amount = currentDebtAmount; // keep from DB (dari expense)
+          updateData.paid_amount = currentDebt?.paid_amount ?? 0; // keep from DB (dari Pay Debt)
+          updateData.available_limit = Math.max(0, newLimit - currentDebtAmount);
         } else {
-          // Hutang = Jumlah Terpakai (bukan limit - terpakai)
-          updateData.debt_amount = newUsed;
-          updateData.available_limit = newLimit - newUsed;
+          // Pastikan available_limit tidak pernah 0 atau null
+          if (newAvailable != null && newAvailable > 0) {
+            updateData.available_limit = newAvailable;
+            updateData.debt_amount = newLimit - newAvailable; // terpakai
+          } else {
+            updateData.available_limit = newLimit; // full limit (belum ada pemakaian)
+            updateData.debt_amount = 0;
+          }
         }
       }
 
@@ -137,11 +203,11 @@ export const useDebts = () => {
       if (error) throw error;
 
       setDebts(prev => prev.map(d => d.id === id ? data : d));
-      toast.success('Hutang berhasil diperbarui');
+      toast.success(t('debt.success.updated', 'Debt updated successfully'));
       return true;
     } catch (error: any) {
       console.error('Error updating debt:', error);
-      toast.error(error.message || 'Gagal memperbarui hutang');
+      toast.error(error.message || t('debt.error.updateFailed', 'Failed to update debt'));
       return false;
     } finally {
       setIsUpdating(false);
@@ -150,7 +216,7 @@ export const useDebts = () => {
 
   const deleteDebt = async (debtId: string): Promise<boolean> => {
     if (!organizationId) {
-      toast.error('Organization tidak ditemukan');
+      toast.error(t('debt.error.orgNotFound', 'Organization not found'));
       return false;
     }
 
@@ -164,17 +230,18 @@ export const useDebts = () => {
       if (error) throw error;
 
       setDebts(prev => prev.filter(d => d.id !== debtId));
-      toast.success('Hutang berhasil dihapus');
+      toast.success(t('debt.success.deleted', 'Debt deleted successfully'));
       return true;
     } catch (error: any) {
       console.error('Error deleting debt:', error);
-      toast.error(error.message || 'Gagal menghapus hutang');
+      toast.error(error.message || t('debt.error.deleteFailed', 'Failed to delete debt'));
       return false;
     }
   };
 
   return {
     debts,
+    totalInterestYtd,
     isLoading,
     isCreating,
     isUpdating,

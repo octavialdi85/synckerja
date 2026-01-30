@@ -7,6 +7,7 @@ export interface IncomeTransaction {
   amount: number;
   customer_name?: string;
   payment_method?: string;
+  bank_account_id?: string;
   income_type_id?: string;
   category_id?: string;
   service_id?: string;
@@ -44,6 +45,7 @@ export interface CreateIncomeTransactionData {
   amount: number;
   customer_name?: string;
   payment_method?: string;
+  bank_account_id?: string;
   income_type_id?: string;
   category_id?: string;
   service_id?: string;

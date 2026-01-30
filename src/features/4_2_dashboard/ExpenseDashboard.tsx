@@ -7,17 +7,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/features/ui/textarea';
 import { Calendar } from '@/features/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/features/ui/command';
 import { Badge } from '@/features/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
 import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Checkbox } from '@/features/ui/checkbox';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useExpenses, CreateExpenseData, useExpenseTypes, useExpenseCategories, Expense, useDebtsForExpense } from './hooks';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { addExpenseSchema, AddExpenseFormData, RECURRING_FREQUENCIES } from './AddExpenseForm';
 import { useDepartmentsCrud } from '@/features/2-1-employees/MyInfo/Employment/hooks/crudMaster/useDepartmentsCrud';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
@@ -28,6 +33,7 @@ import { HeaderAndTab } from './HeaderAndTab';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { ExpenseTableFooter } from './ExpenseTableFooter';
 import { supabase } from '@/integrations/supabase/client';
+import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 
 // Helper function to handle invoice file viewing (same as payment-process page)
 // Uses createSignedUrl instead of getPublicUrl because the bucket may not be public
@@ -64,6 +70,16 @@ const handleViewInvoice = async (filePath: string | null | undefined) => {
 
 export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [breakdownTab, setBreakdownTab] = useState<'overview' | 'category'>('overview');
+  const [dateFilter, setDateFilter] = useState<string>('this-month');
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>();
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState<string>('all-types');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all-depts');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all-categories');
+  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+  const { t } = useAppTranslation();
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -77,6 +93,9 @@ export function ExpenseDashboard() {
   const { expenseCategories: allExpenseCategories } = useExpenseCategories();
   // Fetch debts for withdrawal from balance dropdown
   const { debts: debtsForExpense, isLoading: debtsLoading, refetch: refetchDebts } = useDebtsForExpense();
+  // Fetch bank accounts for withdrawal from balance dropdown
+  const { bankAccounts, loading: bankAccountsLoading, refetch: refetchBankAccounts } = useBankAccounts();
+  const { balances: bankAccountBalances, loading: balancesLoading, refetch: refetchBalances } = useBankAccountBalances();
   
   // Filter purchase requests that are paid/berhasil
   const paidPurchaseRequests = purchaseRequests.filter(req => 
@@ -154,6 +173,75 @@ export function ExpenseDashboard() {
     return pr.request_type || 'Purchase';
   };
   
+  // Get date range based on filter selection
+  const getDateRange = useMemo(() => {
+    const now = new Date();
+    
+    switch (dateFilter) {
+      case 'today':
+        return {
+          start: startOfDay(now),
+          end: endOfDay(now)
+        };
+      case 'yesterday':
+        const yesterday = subDays(now, 1);
+        return {
+          start: startOfDay(yesterday),
+          end: endOfDay(yesterday)
+        };
+      case 'this-week':
+        return {
+          start: startOfWeek(now, { weekStartsOn: 1 }),
+          end: endOfWeek(now, { weekStartsOn: 1 })
+        };
+      case 'this-month':
+        return {
+          start: startOfMonth(now),
+          end: endOfMonth(now)
+        };
+      case 'last-month':
+        const lastMonth = subMonths(now, 1);
+        return {
+          start: startOfMonth(lastMonth),
+          end: endOfMonth(lastMonth)
+        };
+      case '3-months-ago':
+        const threeMonthsAgo = subMonths(now, 3);
+        return {
+          start: startOfMonth(threeMonthsAgo),
+          end: endOfMonth(threeMonthsAgo)
+        };
+      case '6-months-ago':
+        const sixMonthsAgo = subMonths(now, 6);
+        return {
+          start: startOfMonth(sixMonthsAgo),
+          end: endOfMonth(sixMonthsAgo)
+        };
+      case 'this-year':
+        return {
+          start: startOfYear(now),
+          end: endOfYear(now)
+        };
+      case 'last-year':
+        const lastYear = subYears(now, 1);
+        return {
+          start: startOfYear(lastYear),
+          end: endOfYear(lastYear)
+        };
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          return {
+            start: startOfDay(customStartDate),
+            end: endOfDay(customEndDate)
+          };
+        }
+        return null;
+      case 'all-dates':
+      default:
+        return null; // No filter, show all
+    }
+  }, [dateFilter, customStartDate, customEndDate]);
+
   // Helper function to calculate next payment date for recurring expenses
   const calculateNextPaymentDate = (
     lastPaymentDate: string,
@@ -212,17 +300,21 @@ export function ExpenseDashboard() {
   const [firstPaymentDate, setFirstPaymentDate] = useState<Date>();
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [selectedExpenseTypeId, setSelectedExpenseTypeId] = useState<string>('');
+  const [amountDisplay, setAmountDisplay] = useState<string>('');
+  const [isCreateDatePickerOpen, setIsCreateDatePickerOpen] = useState(false);
+  const [isFirstPaymentDatePickerOpen, setIsFirstPaymentDatePickerOpen] = useState(false);
   const { expenseCategories, refetch: refetchExpenseCategories } = useExpenseCategories(selectedExpenseTypeId);
 
   const form = useForm<AddExpenseFormData>({
     resolver: zodResolver(addExpenseSchema),
     defaultValues: {
       expense_name: '',
-      amount: 0,
+      amount: undefined as any,
       expense_type: '',
       category: '',
       department: '',
       withdrawal_from_balance: undefined,
+      bank_account_id: undefined,
       create_date: format(new Date(), 'yyyy-MM-dd'),
       is_recurring: false,
       recurring_frequency: '',
@@ -238,11 +330,22 @@ export function ExpenseDashboard() {
     if (data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none') {
       const selectedDebt = debtsForExpense.find(d => d.id === data.withdrawal_from_balance);
       if (selectedDebt) {
+        // Hook sudah menghitung available_limit dengan benar (termasuk fallback untuk Pinjaman Online)
         const availableLimit = selectedDebt.available_limit ?? 0;
         if (availableLimit < data.amount) {
           toast.error(`Insufficient available limit. Available: Rp ${availableLimit.toLocaleString('id-ID')}, Required: Rp ${data.amount.toLocaleString('id-ID')}`);
           return;
         }
+      }
+    }
+    
+    // Validate bank account balance if bank_account_id is selected
+    if (data.bank_account_id) {
+      const balance = bankAccountBalances.find(b => b.bank_account_id === data.bank_account_id);
+      const availableBalance = balance?.balance ?? 0;
+      if (availableBalance < data.amount) {
+        toast.error(`Insufficient balance. Available: Rp ${availableBalance.toLocaleString('id-ID')}, Required: Rp ${data.amount.toLocaleString('id-ID')}`);
+        return;
       }
     }
 
@@ -264,15 +367,34 @@ export function ExpenseDashboard() {
       withdrawal_from_balance: data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none' 
         ? data.withdrawal_from_balance 
         : undefined,
+      bank_account_id: data.bank_account_id || undefined,
     };
 
     const success = await createExpense(expenseData);
     if (success) {
+      // Refresh bank account balances after expense creation
+      refetchBalances();
       setIsAddModalOpen(false);
-      form.reset();
+      form.reset({
+        expense_name: '',
+        amount: undefined as any,
+        expense_type: '',
+        category: '',
+        department: '',
+        withdrawal_from_balance: undefined,
+        bank_account_id: undefined,
+        create_date: format(new Date(), 'yyyy-MM-dd'),
+        is_recurring: false,
+        recurring_frequency: '',
+        first_payment_date: '',
+        description: '',
+      });
+      setAmountDisplay('');
       setReceiptFile(null);
       setSelectedDate(undefined);
       setFirstPaymentDate(undefined);
+      setIsCreateDatePickerOpen(false);
+      setIsFirstPaymentDatePickerOpen(false);
       form.setValue('withdrawal_from_balance', undefined);
       // Refresh debts to update available_limit
       if (expenseData.withdrawal_from_balance) {
@@ -330,6 +452,24 @@ export function ExpenseDashboard() {
 
   const formatCurrency = (amount: number) => {
     return `Rp ${amount.toLocaleString('id-ID')}`;
+  };
+
+  // Format amount with thousands separator (dot)
+  const formatAmount = (value: string): string => {
+    // Remove all non-numeric characters
+    const numericValue = value.replace(/\D/g, '');
+    
+    if (!numericValue) return '';
+    
+    // Format with thousand separator (.)
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // Parse formatted amount back to number
+  const parseAmount = (value: string): number => {
+    // Remove all non-numeric characters (including thousand separators)
+    const numericValue = parseFloat(value.replace(/\D/g, '')) || 0;
+    return numericValue;
   };
 
   // Combine expenses with paid purchase requests for display
@@ -412,12 +552,129 @@ export function ExpenseDashboard() {
     });
     
     // Sort by date (newest first)
-    return combined.sort((a, b) => {
+    const sorted = combined.sort((a, b) => {
       const dateA = new Date(a.create_date).getTime();
       const dateB = new Date(b.create_date).getTime();
       return dateB - dateA;
     });
-  }, [expenses, paidPurchaseRequests]);
+
+    // Apply date filter if selected
+    let filtered = sorted;
+    if (getDateRange) {
+      filtered = filtered.filter(expense => {
+        const expenseDate = new Date(expense.create_date);
+        const expenseTimestamp = expenseDate.getTime();
+        const startTimestamp = getDateRange.start.getTime();
+        const endTimestamp = getDateRange.end.getTime();
+        return expenseTimestamp >= startTimestamp && expenseTimestamp <= endTimestamp;
+      });
+    }
+
+    // Apply expense type filter if selected
+    if (expenseTypeFilter && expenseTypeFilter !== 'all-types') {
+      filtered = filtered.filter(expense => {
+        return expense.expense_type === expenseTypeFilter;
+      });
+    }
+
+    // Apply department filter if selected
+    if (departmentFilter && departmentFilter !== 'all-depts') {
+      filtered = filtered.filter(expense => {
+        return expense.department === departmentFilter;
+      });
+    }
+
+    // Apply expense category filter if selected
+    if (categoryFilter && categoryFilter !== 'all-categories') {
+      filtered = filtered.filter(expense => {
+        return expense.expense_category_id === categoryFilter;
+      });
+    }
+
+    return filtered;
+  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, categoryFilter]);
+
+  // Data untuk tab "Expense Category" saja: filter date/type/dept, TANPA filter kategori.
+  // Tab Expense Category tidak merespon filter kategori agar breakdown per kategori tetap tampil penuh.
+  const allExpensesForCategoryBreakdown = useMemo(() => {
+    const mappedExpenses = expenses.map(expense => {
+      let nextPaymentDate = expense.next_payment_date;
+      if (expense.is_recurring && expense.recurring_frequency) {
+        if (!nextPaymentDate) {
+          nextPaymentDate = calculateNextPaymentDate(expense.create_date, expense.recurring_frequency);
+        } else {
+          const nextPayment = new Date(nextPaymentDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (nextPayment < today) {
+            nextPaymentDate = calculateNextPaymentDate(nextPaymentDate, expense.recurring_frequency);
+          }
+        }
+      }
+      return {
+        ...expense,
+        request_title: expense.expense_name,
+        requester_name: undefined,
+        next_payment_date: nextPaymentDate || expense.next_payment_date,
+      };
+    });
+    const combined = [...mappedExpenses];
+    paidPurchaseRequests.forEach(pr => {
+      const expenseTypeName = getExpenseTypeName(pr);
+      const expenseCategoryName = getExpenseCategoryName(pr);
+      const lastPaymentDate = pr.paid_at || pr.approved_at || pr.created_at;
+      const nextPaymentDate = pr.is_recurring && pr.recurring_frequency
+        ? calculateNextPaymentDate(lastPaymentDate, pr.recurring_frequency)
+        : undefined;
+      combined.push({
+        id: pr.id,
+        organization_id: pr.organization_id,
+        expense_name: pr.request_title,
+        amount: pr.amount_idr,
+        expense_type: expenseTypeName,
+        expense_type_id: pr.expense_type_id || undefined,
+        category: expenseCategoryName,
+        expense_category_id: pr.expense_category_id || undefined,
+        department: pr.department_name || undefined,
+        create_date: lastPaymentDate,
+        is_recurring: pr.is_recurring || false,
+        recurring_frequency: pr.recurring_frequency || undefined,
+        first_payment_date: undefined,
+        next_payment_date: nextPaymentDate,
+        description: pr.description,
+        receipt_url: pr.invoice_file_path || undefined,
+        status: 'active',
+        created_by: pr.created_by,
+        created_at: pr.created_at,
+        updated_at: pr.updated_at,
+        request_title: pr.request_title,
+        requester_name: pr.requester_name,
+      } as Expense & { request_title?: string; requester_name?: string });
+    });
+    const sorted = combined.sort((a, b) => {
+      const dateA = new Date(a.create_date).getTime();
+      const dateB = new Date(b.create_date).getTime();
+      return dateB - dateA;
+    });
+    let filtered = sorted;
+    if (getDateRange) {
+      filtered = filtered.filter(expense => {
+        const expenseDate = new Date(expense.create_date);
+        const expenseTimestamp = expenseDate.getTime();
+        const startTimestamp = getDateRange.start.getTime();
+        const endTimestamp = getDateRange.end.getTime();
+        return expenseTimestamp >= startTimestamp && expenseTimestamp <= endTimestamp;
+      });
+    }
+    if (expenseTypeFilter && expenseTypeFilter !== 'all-types') {
+      filtered = filtered.filter(expense => expense.expense_type === expenseTypeFilter);
+    }
+    if (departmentFilter && departmentFilter !== 'all-depts') {
+      filtered = filtered.filter(expense => expense.department === departmentFilter);
+    }
+    // Sengaja TIDAK menerapkan categoryFilter agar tab Expense Category selalu menampilkan breakdown semua kategori
+    return filtered;
+  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter]);
 
   const totalExpenses = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const currentMonthTotal = allExpenses
@@ -473,11 +730,11 @@ export function ExpenseDashboard() {
               />
             </div>
             
-            {/* Content Area - Scrollable */}
-            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] min-w-0">
-              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col min-w-0">
+            {/* Content Area - max-h + flex; table section scrolls internally */}
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] min-w-0">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-2 bg-gradient-to-br from-gray-50 to-white min-w-0">
               {/* Header Card */}
-      <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0">
+      <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
         <CardContent className="p-3 min-w-0">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 min-w-0">
             <div className="min-w-0 flex-1">
@@ -492,7 +749,7 @@ export function ExpenseDashboard() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 min-w-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 min-w-0 flex-shrink-0">
         <Card className="min-w-0">
         <CardContent className="p-3 min-w-0">
             <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Current Month Total</div>
@@ -553,75 +810,121 @@ export function ExpenseDashboard() {
       
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 min-w-0 flex-shrink-0">
         <Card className="flex flex-col min-w-0">
-        <CardContent className="p-3 flex-1 flex flex-col min-w-0">
-            <h3 className="text-base sm:text-lg font-semibold mb-2 truncate">Expense Breakdown</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mb-4 truncate">By expense type</p>
-            
+        <CardContent className="pt-3 px-3 pb-2 flex-1 flex flex-col min-w-0">
             <div className="flex justify-between items-center mb-4 gap-2 min-w-0">
-              <div className="text-center min-w-0 flex-1">
-                <div className="text-xl sm:text-2xl font-bold truncate">{new Set(allExpenses.map(e => e.expense_type)).size}</div>
-                <div className="text-xs sm:text-sm text-gray-600 truncate">Expense Types</div>
-              </div>
-              <div className="text-center min-w-0 flex-1">
-                <div className="text-xl sm:text-2xl font-bold truncate">{formatCurrency(totalExpenses)}</div>
-                <div className="text-xs sm:text-sm text-gray-600 truncate">Total</div>
+              <h3 className="text-base sm:text-lg font-semibold truncate">Expense Breakdown</h3>
+              <div className="text-right min-w-0">
+                <div className="text-base sm:text-lg font-semibold truncate">{formatCurrency(totalExpenses)}</div>
               </div>
             </div>
 
-            {allExpenses.length > 0 ? (
-              <>
-                <div className="mt-4 h-32 bg-gray-100 rounded flex items-end justify-center gap-1 p-2">
-                  {(() => {
-                    // Calculate expense type totals (by expense_type, not category)
-                    const expenseTypeTotals = allExpenses.reduce((acc, expense) => {
-                      const expenseType = expense.expense_type || 'Uncategorized';
-                      acc[expenseType] = (acc[expenseType] || 0) + expense.amount;
-                      return acc;
-                    }, {} as Record<string, number>);
+            <Tabs value={breakdownTab} onValueChange={(value) => setBreakdownTab(value as 'overview' | 'category')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+                <TabsTrigger value="category" className="text-xs sm:text-sm">Expense Category</TabsTrigger>
+              </TabsList>
 
-                    const maxAmount = Math.max(...Object.values(expenseTypeTotals));
-                    const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
-                    
-                    return Object.entries(expenseTypeTotals).map(([expenseType, amount], index) => {
-                      const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
-                      const colorClass = colors[index % colors.length];
-                      
-                      return (
-                        <div
-                          key={expenseType}
-                          className={`flex-1 ${colorClass} rounded-t`}
-                          style={{ height: `${Math.max(heightPercentage, 8)}%` }}
-                          title={`${expenseType}: ${formatCurrency(amount)}`}
-                        />
-                      );
-                    });
-                  })()}
-                </div>
-                
-                <div className="flex justify-between text-xs text-gray-600 mt-2 overflow-x-auto gap-1 min-w-0">
-                  {Object.keys(allExpenses.reduce((acc, expense) => {
-                    const expenseType = expense.expense_type || 'Uncategorized';
-                    acc[expenseType] = true;
-                    return acc;
-                  }, {} as Record<string, boolean>)).map((expenseType) => (
-                    <span key={expenseType} className="flex-1 text-center whitespace-nowrap min-w-0 truncate" title={expenseType}>
-                      {expenseType}
-                    </span>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="mt-4 h-32 bg-gray-100 rounded flex items-center justify-center">
-                <span className="text-gray-500 text-sm">No expense data available</span>
-              </div>
-            )}
+              <TabsContent value="overview" className="mt-0">
+                {allExpenses.length > 0 ? (
+                  <>
+                    <div className="flex items-end justify-center gap-1 pt-2 px-2 pb-0 min-w-0">
+                      {(() => {
+                        // Calculate expense type totals (by expense_type, not category)
+                        const expenseTypeTotals = allExpenses.reduce((acc, expense) => {
+                          const expenseType = expense.expense_type || 'Uncategorized';
+                          acc[expenseType] = (acc[expenseType] || 0) + expense.amount;
+                          return acc;
+                        }, {} as Record<string, number>);
+
+                        const maxAmount = Math.max(...Object.values(expenseTypeTotals));
+                        const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
+                        
+                        return Object.entries(expenseTypeTotals).map(([expenseType, amount], index) => {
+                          const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
+                          const colorClass = colors[index % colors.length];
+                          
+                          return (
+                            <div key={expenseType} className="flex-1 flex flex-col items-center min-w-0 gap-0.5 pb-0">
+                              <div className="w-full bg-gray-100 rounded flex flex-col justify-end h-48 p-1">
+                                <div
+                                  className={`w-full ${colorClass} rounded-t min-h-[4px]`}
+                                  style={{ height: `${Math.max(heightPercentage, 8)}%` }}
+                                  title={`${expenseType}: ${formatCurrency(amount)}`}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center whitespace-nowrap truncate w-full mb-0" title={expenseType}>
+                                {expenseType}
+                              </span>
+                              <span className="text-xs font-medium text-gray-800 text-center truncate w-full mb-0" title={formatCurrency(amount)}>
+                                {formatCurrency(amount)}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 h-32 bg-gray-100 rounded flex items-center justify-center">
+                    <span className="text-gray-500 text-sm">No expense data available</span>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="category" className="mt-0">
+                {allExpensesForCategoryBreakdown.length > 0 ? (
+                  <>
+                    <div className="flex items-end justify-center gap-1 pt-2 px-2 pb-0 min-w-0">
+                      {(() => {
+                        // Tab Expense Category tidak ikut filter kategori: pakai allExpensesForCategoryBreakdown
+                        const categoryTotals = allExpensesForCategoryBreakdown.reduce((acc, expense) => {
+                          const category = expense.category || 'Uncategorized';
+                          acc[category] = (acc[category] || 0) + expense.amount;
+                          return acc;
+                        }, {} as Record<string, number>);
+
+                        const maxAmount = Math.max(...Object.values(categoryTotals));
+                        const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
+                        
+                        return Object.entries(categoryTotals).map(([category, amount], index) => {
+                          const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
+                          const colorClass = colors[index % colors.length];
+                          
+                          return (
+                            <div key={category} className="flex-1 flex flex-col items-center min-w-0 gap-0.5 pb-0">
+                              <div className="w-full bg-gray-100 rounded flex flex-col justify-end h-48 p-1">
+                                <div
+                                  className={`w-full ${colorClass} rounded-t min-h-[4px]`}
+                                  style={{ height: `${Math.max(heightPercentage, 8)}%` }}
+                                  title={`${category}: ${formatCurrency(amount)}`}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center whitespace-nowrap truncate w-full mb-0" title={category}>
+                                {category}
+                              </span>
+                              <span className="text-xs font-medium text-gray-800 text-center truncate w-full mb-0" title={formatCurrency(amount)}>
+                                {formatCurrency(amount)}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 h-32 bg-gray-100 rounded flex items-center justify-center">
+                    <span className="text-gray-500 text-sm">No expense data available</span>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
         <Card className="flex flex-col min-w-0">
-          <CardContent className="p-3 flex-1 flex flex-col min-w-0">
+          <CardContent className="pt-3 px-3 pb-1 flex-1 flex flex-col min-w-0">
             <div className="flex justify-between items-center mb-4 flex-shrink-0 min-w-0 gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base sm:text-lg font-semibold truncate">Monthly Comparison</h3>
@@ -633,7 +936,7 @@ export function ExpenseDashboard() {
             <div className="flex-1 min-h-0 min-w-0">
               {monthlyData.length > 0 && monthlyData.some(d => d.amount > 0) ? (
                 <ResponsiveContainer width="100%" height="100%" className="min-w-0">
-                  <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       dataKey="month" 
@@ -645,10 +948,13 @@ export function ExpenseDashboard() {
                       fontSize={10}
                       stroke="#6b7280"
                       tickLine={false}
+                      width={58}
+                      tick={{ style: { whiteSpace: 'nowrap' } }}
                       tickFormatter={(value) => {
-                        if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-                        if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-                        return value.toString();
+                        const nbsp = '\u00A0';
+                        if (value >= 1000000) return `Rp${nbsp}${(value / 1000000).toFixed(1)}jt`;
+                        if (value >= 1000) return `Rp${nbsp}${(value / 1000).toFixed(0)}rb`;
+                        return `Rp${nbsp}${value.toLocaleString('id-ID')}`;
                       }}
                     />
                     <Tooltip 
@@ -677,7 +983,7 @@ export function ExpenseDashboard() {
               )}
             </div>
 
-            <div className="flex items-center mt-4 flex-shrink-0">
+            <div className="flex items-center mt-1 flex-shrink-0">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
               <span className="text-sm text-gray-600">Expenses</span>
             </div>
@@ -687,8 +993,8 @@ export function ExpenseDashboard() {
 
       
 
-      {/* Table Section */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1">
+      {/* Table Section - scrolls internally via seamless-scroll */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col min-w-0 flex-1 min-h-0">
         {/* Table Header with Search and Filters */}
         <div className="px-2 sm:px-3 py-2 border-b bg-gray-50 flex-shrink-0 min-w-0">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
@@ -703,37 +1009,138 @@ export function ExpenseDashboard() {
                 />
               </div>
               
-              <Select defaultValue="all-dates">
-                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
+              <Select 
+                value={dateFilter} 
+                onValueChange={(value) => {
+                  if (value === 'custom') {
+                    setIsCustomDatePickerOpen(true);
+                  } else {
+                    setDateFilter(value);
+                    setCustomStartDate(undefined);
+                    setCustomEndDate(undefined);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-36 md:w-40 min-w-0">
                   <CalendarIcon className="h-4 w-4 mr-1 sm:mr-2 flex-shrink-0" />
-                  <SelectValue placeholder="All Dates" />
+                  <SelectValue placeholder={t('expenses.dateFilter.allDates', 'All Dates')}>
+                    {dateFilter === 'custom' && customStartDate && customEndDate
+                      ? `${format(customStartDate, 'MMM dd')} - ${format(customEndDate, 'MMM dd')}`
+                      : dateFilter === 'all-dates'
+                      ? t('expenses.dateFilter.allDates', 'All Dates')
+                      : dateFilter === 'today'
+                      ? t('expenses.dateFilter.today', 'Today')
+                      : dateFilter === 'yesterday'
+                      ? t('expenses.dateFilter.yesterday', 'Yesterday')
+                      : dateFilter === 'this-week'
+                      ? t('expenses.dateFilter.thisWeek', 'This Week')
+                      : dateFilter === 'this-month'
+                      ? t('expenses.dateFilter.thisMonth', 'This Month')
+                      : dateFilter === 'last-month'
+                      ? t('expenses.dateFilter.lastMonth', 'Last Month')
+                      : dateFilter === '3-months-ago'
+                      ? t('expenses.dateFilter.3MonthsAgo', '3 Months Ago')
+                      : dateFilter === '6-months-ago'
+                      ? t('expenses.dateFilter.6MonthsAgo', '6 Months Ago')
+                      : dateFilter === 'this-year'
+                      ? t('expenses.dateFilter.thisYear', 'This Year')
+                      : dateFilter === 'last-year'
+                      ? t('expenses.dateFilter.lastYear', 'Last Year')
+                      : t('expenses.dateFilter.allDates', 'All Dates')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all-dates">All Dates</SelectItem>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
+                  <SelectItem value="all-dates">{t('expenses.dateFilter.allDates', 'All Dates')}</SelectItem>
+                  <SelectItem value="today">{t('expenses.dateFilter.today', 'Today')}</SelectItem>
+                  <SelectItem value="yesterday">{t('expenses.dateFilter.yesterday', 'Yesterday')}</SelectItem>
+                  <SelectItem value="this-week">{t('expenses.dateFilter.thisWeek', 'This Week')}</SelectItem>
+                  <SelectItem value="this-month">{t('expenses.dateFilter.thisMonth', 'This Month')}</SelectItem>
+                  <SelectItem value="last-month">{t('expenses.dateFilter.lastMonth', 'Last Month')}</SelectItem>
+                  <SelectItem value="3-months-ago">{t('expenses.dateFilter.3MonthsAgo', '3 Months Ago')}</SelectItem>
+                  <SelectItem value="6-months-ago">{t('expenses.dateFilter.6MonthsAgo', '6 Months Ago')}</SelectItem>
+                  <SelectItem value="this-year">{t('expenses.dateFilter.thisYear', 'This Year')}</SelectItem>
+                  <SelectItem value="last-year">{t('expenses.dateFilter.lastYear', 'Last Year')}</SelectItem>
+                  <SelectItem value="custom">{t('expenses.dateFilter.customRange', 'Custom Range')}</SelectItem>
                 </SelectContent>
               </Select>
 
-              <Select defaultValue="all-depts">
-                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
-                  <SelectValue placeholder="All Depts" />
+              <Select value={expenseTypeFilter} onValueChange={setExpenseTypeFilter}>
+                <SelectTrigger className="w-full sm:w-36 md:w-40 min-w-0">
+                  <SelectValue placeholder={t('expenses.expenseTypeFilter.allTypes', 'All Types')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all-depts">All Depts</SelectItem>
-                  <SelectItem value="hr">HR</SelectItem>
-                  <SelectItem value="it">IT</SelectItem>
+                  <SelectItem value="all-types">{t('expenses.expenseTypeFilter.allTypes', 'All Types')}</SelectItem>
+                  {expenseTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.name}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
-              <Select defaultValue="all-types">
-                <SelectTrigger className="w-full sm:w-28 md:w-32 min-w-0">
-                  <SelectValue placeholder="All Types" />
+              <Popover open={categoryFilterOpen} onOpenChange={setCategoryFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={categoryFilterOpen}
+                    className="w-full sm:w-36 md:w-40 min-w-0 justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {categoryFilter === 'all-categories'
+                        ? t('expenses.categoryFilter.allCategories', 'All Categories')
+                        : allExpenseCategories.find((c) => c.id === categoryFilter)?.name ?? t('expenses.categoryFilter.allCategories', 'All Categories')}
+                    </span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder={t('expenses.categoryFilter.searchPlaceholder', 'Cari kategori...')}
+                      className="h-9"
+                    />
+                    <CommandList>
+                      <CommandEmpty>{t('expenses.categoryFilter.noResults', 'Tidak ada kategori.')}</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value={t('expenses.categoryFilter.allCategories', 'All Categories')}
+                          onSelect={() => {
+                            setCategoryFilter('all-categories');
+                            setCategoryFilterOpen(false);
+                          }}
+                        >
+                          {t('expenses.categoryFilter.allCategories', 'All Categories')}
+                        </CommandItem>
+                        {allExpenseCategories.map((cat) => (
+                          <CommandItem
+                            key={cat.id}
+                            value={cat.name}
+                            onSelect={() => {
+                              setCategoryFilter(cat.id);
+                              setCategoryFilterOpen(false);
+                            }}
+                          >
+                            {cat.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter} disabled={departmentsLoading}>
+                <SelectTrigger className="w-full sm:w-36 md:w-40 min-w-0">
+                  <SelectValue placeholder={departmentsLoading ? t('expenses.departmentFilter.loading', 'Loading...') : t('expenses.departmentFilter.allDepts', 'All Depts')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all-types">All Types</SelectItem>
-                  <SelectItem value="recurring">Recurring</SelectItem>
-                  <SelectItem value="one-time">One-time</SelectItem>
+                  <SelectItem value="all-depts">{t('expenses.departmentFilter.allDepts', 'All Depts')}</SelectItem>
+                  {departments.map((department) => (
+                    <SelectItem key={department.id} value={department.name}>
+                      {department.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -746,11 +1153,12 @@ export function ExpenseDashboard() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table - seamless vertical scroll when many rows */}
         <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[1400px]">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-50 border-b sticky top-0 z-10 shadow-sm">
                 <tr>
+                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Expense</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Payment Date</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Next Payment</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Type</th>
@@ -758,7 +1166,6 @@ export function ExpenseDashboard() {
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Department</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Amount</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Withdrawal From Balance</th>
-                  <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Description</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Request By</th>
                   <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Recurring</th>
@@ -800,6 +1207,11 @@ export function ExpenseDashboard() {
                           : expense.expense_name);
                       return (
                       <tr key={expense.id} className="border-b hover:bg-gray-50">
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
+                          <div className="truncate text-xs sm:text-sm" title={requestTitle || expense.expense_name || '-'}>
+                            {requestTitle || expense.expense_name || '-'}
+                          </div>
+                        </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{format(new Date(expense.create_date), 'dd MMM yyyy')}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">{expense.next_payment_date ? format(new Date(expense.next_payment_date), 'dd MMM yyyy') : '-'}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
@@ -819,13 +1231,14 @@ export function ExpenseDashboard() {
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">{formatCurrency(expense.amount)}</td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
-                          <div className="truncate text-xs sm:text-sm" title={(expense as any).withdrawal_from_balance_debt?.debt_name || '-'}>
-                            {(expense as any).withdrawal_from_balance_debt?.debt_name || '-'}
-                          </div>
-                        </td>
-                        <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[150px] sm:max-w-[200px] min-w-0">
-                          <div className="truncate text-xs sm:text-sm" title={requestTitle || expense.expense_name || '-'}>
-                            {requestTitle || expense.expense_name || '-'}
+                          <div className="truncate text-xs sm:text-sm" title={
+                            (expense as any).withdrawal_from_balance_bank_account?.name 
+                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
+                              || '-'
+                          }>
+                            {(expense as any).withdrawal_from_balance_bank_account?.name 
+                              || (expense as any).withdrawal_from_balance_debt?.debt_name 
+                              || '-'}
                           </div>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] sm:max-w-[250px] min-w-0">
@@ -897,7 +1310,15 @@ export function ExpenseDashboard() {
             </div>
 
       {/* Add Expense Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+      <Dialog open={isAddModalOpen} onOpenChange={(open) => {
+        setIsAddModalOpen(open);
+        if (!open) {
+          // Reset amount display and date pickers when modal closes
+          setAmountDisplay('');
+          setIsCreateDatePickerOpen(false);
+          setIsFirstPaymentDatePickerOpen(false);
+        }
+      }}>
         <DialogContent className="w-[95vw] sm:w-[600px] sm:h-[600px] max-w-[600px] max-h-[90vh] p-0 overflow-hidden flex flex-col min-w-0">
           <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b">
             <DialogTitle className="text-lg font-semibold">Add New Expense</DialogTitle>
@@ -926,10 +1347,15 @@ export function ExpenseDashboard() {
                   Amount <span className="text-red-500">*</span>
                 </label>
                 <Input 
-                  {...form.register('amount', { valueAsNumber: true })}
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
+                  type="text"
+                  placeholder="Enter amount"
+                  value={amountDisplay}
+                  onChange={(e) => {
+                    const formatted = formatAmount(e.target.value);
+                    setAmountDisplay(formatted);
+                    const parsed = parseAmount(formatted);
+                    form.setValue('amount', parsed > 0 ? parsed : undefined as any, { shouldValidate: true });
+                  }}
                   className="w-full"
                 />
                 {form.formState.errors.amount && (
@@ -1057,7 +1483,7 @@ export function ExpenseDashboard() {
                 <label className="block text-sm font-medium mb-2">
                   Create Date <span className="text-red-500">*</span>
                 </label>
-                <Popover>
+                <Popover open={isCreateDatePickerOpen} onOpenChange={setIsCreateDatePickerOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -1078,6 +1504,7 @@ export function ExpenseDashboard() {
                         setSelectedDate(date);
                         if (date) {
                           form.setValue('create_date', format(date, 'yyyy-MM-dd'));
+                          setIsCreateDatePickerOpen(false); // Close popover after date selection
                         }
                       }}
                       initialFocus
@@ -1095,44 +1522,133 @@ export function ExpenseDashboard() {
                   onValueChange={(value) => {
                     if (value === 'none') {
                       form.setValue('withdrawal_from_balance', undefined);
-                    } else {
-                      form.setValue('withdrawal_from_balance', value);
+                      form.setValue('bank_account_id', undefined);
+                    } else if (value.startsWith('debt_')) {
+                      // Debt selection
+                      const debtId = value.replace('debt_', '');
+                      form.setValue('withdrawal_from_balance', debtId);
+                      form.setValue('bank_account_id', undefined);
+                    } else if (value.startsWith('bank_')) {
+                      // Bank account selection
+                      const bankId = value.replace('bank_', '');
+                      form.setValue('bank_account_id', bankId);
+                      form.setValue('withdrawal_from_balance', undefined);
                     }
                   }}
-                  disabled={debtsLoading}
-                  value={form.watch('withdrawal_from_balance') || 'none'}
+                  disabled={debtsLoading || bankAccountsLoading || balancesLoading}
+                  value={
+                    form.watch('withdrawal_from_balance') 
+                      ? `debt_${form.watch('withdrawal_from_balance')}`
+                      : form.watch('bank_account_id')
+                        ? `bank_${form.watch('bank_account_id')}`
+                        : 'none'
+                  }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={debtsLoading ? "Loading debts..." : "Select debt (optional)"} />
+                    <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? "Loading..." : "Select source (optional)"}>
+                      {(() => {
+                        const selectedDebtId = form.watch('withdrawal_from_balance');
+                        const selectedBankId = form.watch('bank_account_id');
+                        
+                        if (selectedDebtId) {
+                          const selectedDebt = debtsForExpense.find(d => d.id === selectedDebtId);
+                          if (selectedDebt) {
+                            // Hook sudah menghitung available_limit dengan benar
+                            const availableLimit = selectedDebt.available_limit ?? 0;
+                            const formattedLimit = `Rp ${availableLimit.toLocaleString('id-ID')}`;
+                            return `${selectedDebt.debt_name} (${formattedLimit} available)`;
+                          }
+                        } else if (selectedBankId) {
+                          const selectedBank = bankAccounts.find(b => b.id === selectedBankId);
+                          if (selectedBank) {
+                            const balance = bankAccountBalances.find(b => b.bank_account_id === selectedBank.id);
+                            const availableBalance = balance?.balance ?? 0;
+                            const formattedBalance = `Rp ${availableBalance.toLocaleString('id-ID')}`;
+                            return selectedBank.account_number
+                              ? `${selectedBank.name} - ${selectedBank.account_number} (${formattedBalance} available)`
+                              : `${selectedBank.name} (${formattedBalance} available)`;
+                          }
+                        }
+                        return '';
+                      })()}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {debtsForExpense.map(debt => {
-                      const availableLimit = debt.available_limit ?? 0;
-                      const formattedLimit = `Rp ${availableLimit.toLocaleString('id-ID')}`;
-                      return (
-                        <SelectItem key={debt.id} value={debt.id}>
-                          {debt.debt_name} ({formattedLimit} available)
-                        </SelectItem>
-                      );
-                    })}
+                    
+                    {/* Bank Accounts Section */}
+                    {bankAccounts.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Bank Accounts</div>
+                        {bankAccounts.map(bankAccount => {
+                          // Get or create balance if it doesn't exist
+                          const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
+                          // If balance doesn't exist, it will be created automatically when first transaction happens
+                          // For display purposes, show 0 if balance record doesn't exist yet
+                          const availableBalance = balance?.balance ?? 0;
+                          const formattedBalance = `Rp ${availableBalance.toLocaleString('id-ID')}`;
+                          // Format: "Bank Name - Account Number (Balance: Rp X available)"
+                          const displayText = bankAccount.account_number
+                            ? `${bankAccount.name} - ${bankAccount.account_number} (${formattedBalance} available)`
+                            : `${bankAccount.name} (${formattedBalance} available)`;
+                          return (
+                            <SelectItem key={`bank_${bankAccount.id}`} value={`bank_${bankAccount.id}`}>
+                              {displayText}
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
+                    
+                    {/* Debts Section */}
+                    {debtsForExpense.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Debts</div>
+                        {debtsForExpense.map(debt => {
+                          // Hook sudah menghitung available_limit dengan benar (termasuk fallback untuk Pinjaman Online)
+                          const availableLimit = debt.available_limit ?? 0;
+                          const formattedLimit = `Rp ${availableLimit.toLocaleString('id-ID')}`;
+                          return (
+                            <SelectItem key={`debt_${debt.id}`} value={`debt_${debt.id}`}>
+                              {debt.debt_name} ({formattedLimit} available)
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
-                {form.watch('withdrawal_from_balance') && form.watch('withdrawal_from_balance') !== 'none' && (
+                {(form.watch('withdrawal_from_balance') || form.watch('bank_account_id')) && (
                   (() => {
-                    const selectedDebt = debtsForExpense.find(d => d.id === form.watch('withdrawal_from_balance'));
-                    const availableLimit = selectedDebt?.available_limit ?? 0;
+                    const selectedDebt = form.watch('withdrawal_from_balance') 
+                      ? debtsForExpense.find(d => d.id === form.watch('withdrawal_from_balance'))
+                      : null;
+                    const selectedBankAccount = form.watch('bank_account_id')
+                      ? bankAccounts.find(b => b.id === form.watch('bank_account_id'))
+                      : null;
+                    const balance = selectedBankAccount 
+                      ? bankAccountBalances.find(b => b.bank_account_id === selectedBankAccount.id)
+                      : null;
+                    
+                    // Hook sudah menghitung available_limit dengan benar (termasuk fallback untuk Pinjaman Online)
+                    const availableAmount = selectedDebt 
+                      ? (selectedDebt.available_limit ?? 0)
+                      : (balance?.balance ?? 0);
                     const expenseAmount = form.watch('amount') || 0;
-                    const isInsufficient = availableLimit < expenseAmount;
+                    const isInsufficient = availableAmount < expenseAmount;
+                    const sourceName = selectedDebt 
+                      ? selectedDebt.debt_name 
+                      : selectedBankAccount?.name || '';
+                    
                     return (
                       <div className="mt-2">
                         {isInsufficient ? (
                           <p className="text-sm text-red-600">
-                            Insufficient limit. Available: Rp {availableLimit.toLocaleString('id-ID')}, Required: Rp {expenseAmount.toLocaleString('id-ID')}
+                            Insufficient balance. Available: Rp {availableAmount.toLocaleString('id-ID')}, Required: Rp {expenseAmount.toLocaleString('id-ID')}
                           </p>
                         ) : (
                           <p className="text-sm text-gray-600">
-                            Available limit: Rp {availableLimit.toLocaleString('id-ID')}
+                            Available balance: Rp {availableAmount.toLocaleString('id-ID')}
                           </p>
                         )}
                       </div>
@@ -1172,7 +1688,7 @@ export function ExpenseDashboard() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">First Payment Date</label>
-                    <Popover>
+                    <Popover open={isFirstPaymentDatePickerOpen} onOpenChange={setIsFirstPaymentDatePickerOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -1193,6 +1709,7 @@ export function ExpenseDashboard() {
                             setFirstPaymentDate(date);
                             if (date) {
                               form.setValue('first_payment_date', format(date, 'yyyy-MM-dd'));
+                              setIsFirstPaymentDatePickerOpen(false); // Close popover after date selection
                             }
                           }}
                           initialFocus
@@ -1405,6 +1922,20 @@ export function ExpenseDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Custom Date Picker Dialog */}
+      <CustomDatePicker
+        isOpen={isCustomDatePickerOpen}
+        onClose={() => setIsCustomDatePickerOpen(false)}
+        onDateRangeSelect={(startDate, endDate) => {
+          setCustomStartDate(startDate);
+          setCustomEndDate(endDate);
+          setDateFilter('custom');
+          setIsCustomDatePickerOpen(false);
+        }}
+        initialStartDate={customStartDate}
+        initialEndDate={customEndDate}
+      />
           </div>
         </div>
       </div>

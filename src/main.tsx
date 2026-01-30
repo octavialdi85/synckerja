@@ -1,7 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { LanguageProvider } from "@/features/share/i18n/LanguageProvider";
 
 // Suppress expected browser errors (CORS/404 for KOL tables)
 if (typeof window !== 'undefined') {
@@ -209,7 +208,5 @@ if (typeof window !== 'undefined') {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <LanguageProvider>
-    <App />
-  </LanguageProvider>,
+  <App />
 );

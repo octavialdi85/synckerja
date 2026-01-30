@@ -1,23 +1,33 @@
 import { useState, useCallback, useMemo } from 'react';
 import { HeaderAndTab } from '../4_2_dashboard/HeaderAndTab';
 import { Card, CardContent } from '@/features/ui/card';
-import { Button } from '@/features/ui/button';
-import { Plus } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useDebts } from './hooks';
-import { DebtTable, DebtForm } from './components';
+import { DebtTable, DebtForm, DebtPaymentHistoryModal } from './components';
+import { DebtPaymentModal } from './components/DebtPaymentModal';
 import { Debt, CreateDebtData, UpdateDebtData } from './types';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 
 export const DebtPage = () => {
   const [activeTab, setActiveTab] = useState('debt');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentHistoryDebt, setPaymentHistoryDebt] = useState<Debt | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const { t } = useAppTranslation();
-  const { debts, isLoading, isCreating, isUpdating, createDebt, updateDebt, deleteDebt } = useDebts();
+  const { debts, totalInterestYtd, isLoading, isCreating, isUpdating, createDebt, updateDebt, deleteDebt, refetch: refetchDebts } = useDebts();
+  const { updateBalance } = useBankAccountBalances();
+  const queryClient = useQueryClient();
+  const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
@@ -34,7 +44,7 @@ export const DebtPage = () => {
   };
 
   const handleDeleteClick = async (debtId: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus hutang ini?')) {
+    if (confirm(t('debt.deleteConfirm', 'Are you sure you want to delete this debt?'))) {
       await deleteDebt(debtId);
     }
   };
@@ -42,6 +52,89 @@ export const DebtPage = () => {
   const handleViewDetails = (debt: Debt) => {
     setSelectedDebt(debt);
     setIsDetailModalOpen(true);
+  };
+
+  const handlePayDebt = () => {
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async (paymentData: {
+    debtId: string;
+    paymentAmount: number;
+    paymentDate: string;
+    paymentMethod?: string;
+    notes?: string;
+  }): Promise<boolean> => {
+    const debt = debts.find(d => d.id === paymentData.debtId);
+    if (!debt) return false;
+
+    if (!organizationId || !user?.id) {
+      console.error('Missing organizationId or user.id');
+      return false;
+    }
+
+    // Insert payment record into debt_payments table
+    // The trigger will automatically update paid_amount and available_limit in debts table
+    try {
+      const { error: paymentError } = await supabase
+        .from('debt_payments')
+        .insert({
+          organization_id: organizationId,
+          debt_id: paymentData.debtId,
+          created_by: user.id,
+          payment_amount: paymentData.paymentAmount,
+          payment_date: paymentData.paymentDate,
+          payment_method: paymentData.paymentMethod || null,
+          notes: paymentData.notes || null,
+        });
+
+      if (paymentError) {
+        console.error('Error inserting debt payment:', paymentError);
+        return false;
+      }
+
+      // Trigger will automatically update paid_amount and available_limit in debts table
+      // No need to manually update debt
+      const success = true;
+
+      // Refetch debts to ensure UI shows updated paid_amount
+      if (success) {
+        await refetchDebts();
+      }
+
+      // Update bank account balance if payment method is a bank account
+      if (success && paymentData.paymentMethod) {
+        try {
+        // Check if paymentMethod is a valid UUID (bank account ID)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(paymentData.paymentMethod)) {
+          // This is a bank account ID, reduce the balance
+          await updateBalance(
+            paymentData.paymentMethod,
+            -paymentData.paymentAmount, // Negative because we're paying from the account
+            'expense', // Debt payment is treated as an expense from the bank account
+            paymentData.debtId,
+            `Debt Payment: ${debt.debt_name}`
+          );
+          
+          // Invalidate bank account balances query to refresh the UI
+          queryClient.invalidateQueries({ queryKey: ['bank-account-balances'] });
+        }
+        } catch (balanceError) {
+          console.error('Error updating bank account balance:', balanceError);
+          // Don't fail the payment if balance update fails, but log the error
+        }
+      }
+
+      return success;
+    } catch (insertError) {
+      console.error('Error inserting debt payment:', insertError);
+      return false;
+    }
+  };
+
+  const handlePaymentClose = () => {
+    setIsPaymentModalOpen(false);
   };
 
   const handleFormSubmit = async (data: CreateDebtData): Promise<boolean> => {
@@ -61,17 +154,16 @@ export const DebtPage = () => {
     setEditingDebt(null);
   };
 
-  // Calculate totals
+  // Calculate totals: ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
   const totalDebt = useMemo(() => {
-    return debts.reduce((sum, debt) => sum + debt.debt_amount, 0);
+    return debts.reduce((sum, debt) => {
+      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
+      return sum + remaining;
+    }, 0);
   }, [debts]);
 
   const totalLimit = useMemo(() => {
     return debts.reduce((sum, debt) => sum + debt.limit_amount, 0);
-  }, [debts]);
-
-  const totalUsed = useMemo(() => {
-    return debts.reduce((sum, debt) => sum + debt.used_amount, 0);
   }, [debts]);
 
   const activeDebts = useMemo(() => {
@@ -79,7 +171,10 @@ export const DebtPage = () => {
   }, [debts]);
 
   const activeDebtTotal = useMemo(() => {
-    return activeDebts.reduce((sum, debt) => sum + debt.debt_amount, 0);
+    return activeDebts.reduce((sum, debt) => {
+      const remaining = debt.remaining_debt ?? Math.max(0, debt.debt_amount - (debt.paid_amount ?? 0));
+      return sum + remaining;
+    }, 0);
   }, [activeDebts]);
 
   return (
@@ -102,23 +197,13 @@ export const DebtPage = () => {
                 {/* Header Card */}
                 <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0">
                   <CardContent className="p-3 min-w-0">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 min-w-0">
-                      <div className="min-w-0 flex-1">
-                        <h1 className="text-xl sm:text-2xl font-semibold mb-1 text-white truncate">
-                          {t('debt.title', 'Manajemen Hutang')}
-                        </h1>
-                        <p className="text-blue-100 text-xs sm:text-sm truncate">
-                          {t('debt.description', 'Kelola dan lacak catatan hutang')}
-                        </p>
-                      </div>
-                      <Button 
-                        onClick={handleAddClick}
-                        className="bg-white text-blue-600 hover:bg-blue-50 flex-shrink-0"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        <span className="hidden sm:inline">Tambah Hutang</span>
-                        <span className="sm:hidden">Tambah</span>
-                      </Button>
+                    <div className="min-w-0 flex-1">
+                      <h1 className="text-xl sm:text-2xl font-semibold mb-1 text-white truncate">
+                        {t('debt.title', 'Manajemen Hutang')}
+                      </h1>
+                      <p className="text-blue-100 text-xs sm:text-sm truncate">
+                        {t('debt.description', 'Kelola dan lacak catatan hutang')}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -127,48 +212,48 @@ export const DebtPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 min-w-0">
                   <Card className="min-w-0">
                     <CardContent className="p-3 min-w-0">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Total Hutang</div>
+                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{t('debt.totalDebt', 'Total Debt')}</div>
                       <div className="text-xl sm:text-2xl font-bold mb-1 truncate text-red-600">
                         {formatToRupiah(totalDebt)}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {debts.length} hutang
+                        {debts.length} {t('debt.debts', 'debts')}
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card className="min-w-0">
                     <CardContent className="p-3 min-w-0">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Total Limit</div>
+                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{t('debt.totalLimit', 'Total Limit')}</div>
                       <div className="text-xl sm:text-2xl font-bold mb-1 truncate">
                         {formatToRupiah(totalLimit)}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        Total plafon
+                        {t('debt.totalPlafon', 'Total limit')}
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card className="min-w-0">
                     <CardContent className="p-3 min-w-0">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Total Terpakai</div>
-                      <div className="text-xl sm:text-2xl font-bold mb-1 truncate text-orange-600">
-                        {formatToRupiah(totalUsed)}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {totalLimit > 0 ? Math.round((totalUsed / totalLimit) * 100) : 0}% dari limit
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="min-w-0">
-                    <CardContent className="p-3 min-w-0">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">Hutang Aktif</div>
+                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{t('debt.activeDebt', 'Active Debt')}</div>
                       <div className="text-xl sm:text-2xl font-bold mb-1 truncate text-red-600">
                         {formatToRupiah(activeDebtTotal)}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {activeDebts.length} hutang aktif
+                        {activeDebts.length} {t('debt.activeDebts', 'active debts')}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="min-w-0">
+                    <CardContent className="p-3 min-w-0">
+                      <div className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{t('debt.totalInterestYtd', 'Total Interest YTD')}</div>
+                      <div className="text-xl sm:text-2xl font-bold mb-1 truncate text-amber-600">
+                        {formatToRupiah(totalInterestYtd)}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {new Date().getFullYear()}
                       </div>
                     </CardContent>
                   </Card>
@@ -179,9 +264,12 @@ export const DebtPage = () => {
                   <DebtTable
                     debts={debts}
                     isLoading={isLoading}
+                    onAdd={handleAddClick}
+                    onPayDebt={handlePayDebt}
                     onEdit={handleEditClick}
                     onDelete={handleDeleteClick}
                     onViewDetails={handleViewDetails}
+                    onPaidClick={setPaymentHistoryDebt}
                   />
                 </div>
               </div>
@@ -199,68 +287,82 @@ export const DebtPage = () => {
         isLoading={isCreating || isUpdating}
       />
 
+      {/* Payment Modal */}
+      <DebtPaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={handlePaymentClose}
+        onSubmit={handlePaymentSubmit}
+        debts={debts}
+        isLoading={isUpdating}
+      />
+
+      {/* Payment History Modal */}
+      <DebtPaymentHistoryModal
+        debt={paymentHistoryDebt}
+        isOpen={!!paymentHistoryDebt}
+        onClose={() => setPaymentHistoryDebt(null)}
+      />
+
       {/* Detail Modal */}
       <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto min-w-0">
           <DialogHeader>
-            <DialogTitle>Detail Hutang</DialogTitle>
+            <DialogTitle>{t('debt.detail.title', 'Debt Details')}</DialogTitle>
             <DialogDescription>
-              Informasi lengkap tentang hutang ini
+              {t('debt.detail.description', 'Complete information about this debt')}
             </DialogDescription>
           </DialogHeader>
           {selectedDebt && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Nama Hutang</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.debtName', 'Debt Name')}</label>
                   <p className="text-sm font-semibold mt-1">{selectedDebt.debt_name}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Tipe</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.type', 'Type')}</label>
                   <p className="text-sm mt-1">{selectedDebt.debt_type}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Bank/Institusi</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.bankInstitution', 'Bank/Institution')}</label>
                   <p className="text-sm mt-1">{selectedDebt.bank_name || '-'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.status', 'Status')}</label>
                   <p className="text-sm mt-1">
-                    {selectedDebt.status === 'active' ? 'Aktif' : 
-                     selectedDebt.status === 'paid_off' ? 'Lunas' : 'Ditutup'}
+                    {selectedDebt.status === 'active' ? t('debt.status.active', 'Active') : 
+                     selectedDebt.status === 'paid_off' ? t('debt.status.paidOff', 'Paid Off') : t('debt.status.closed', 'Closed')}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Limit</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.totalLimit', 'Total Limit')}</label>
                   <p className="text-sm font-semibold mt-1">{formatToRupiah(selectedDebt.limit_amount)}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Terpakai</label>
-                  <p className="text-sm font-semibold mt-1 text-orange-600">
-                    {formatToRupiah(selectedDebt.used_amount)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Hutang</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.debt', 'Debt')}</label>
                   <p className="text-sm font-bold mt-1 text-red-600">
-                    {formatToRupiah(selectedDebt.debt_amount)}
+                    {formatToRupiah(
+                      selectedDebt.remaining_debt ?? Math.max(0, selectedDebt.debt_amount - (selectedDebt.paid_amount ?? 0))
+                    )}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Utilization</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.table.utilization', 'Utilization')}</label>
                   <p className="text-sm mt-1">
-                    {Math.round((selectedDebt.used_amount / selectedDebt.limit_amount) * 100)}%
+                    {selectedDebt.limit_amount > 0
+                      ? Math.round((selectedDebt.debt_amount / selectedDebt.limit_amount) * 100)
+                      : 0}%
                   </p>
                 </div>
                 {selectedDebt.interest_rate && (
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Bunga</label>
-                    <p className="text-sm mt-1">{selectedDebt.interest_rate}% per tahun</p>
+                    <label className="text-sm font-medium text-gray-500">{t('debt.detail.interest', 'Interest')}</label>
+                    <p className="text-sm mt-1">{selectedDebt.interest_rate} {t('debt.detail.interestPerYear', '% per year')}</p>
                   </div>
                 )}
                 {selectedDebt.due_date && (
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Jatuh Tempo</label>
+                    <label className="text-sm font-medium text-gray-500">{t('debt.table.dueDate', 'Due Date')}</label>
                     <p className="text-sm mt-1">
                       {new Date(selectedDebt.due_date).toLocaleDateString('id-ID')}
                     </p>
@@ -268,26 +370,26 @@ export const DebtPage = () => {
                 )}
                 {selectedDebt.minimum_payment && (
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Minimum Payment</label>
+                    <label className="text-sm font-medium text-gray-500">{t('debt.form.minimumPayment', 'Minimum Payment (Rp)')}</label>
                     <p className="text-sm mt-1">{formatToRupiah(selectedDebt.minimum_payment)}</p>
                   </div>
                 )}
               </div>
               {selectedDebt.description && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Deskripsi</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.form.description', 'Description')}</label>
                   <p className="text-sm mt-1">{selectedDebt.description}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Dibuat</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.detail.created', 'Created')}</label>
                   <p className="text-sm mt-1">
                     {new Date(selectedDebt.created_at).toLocaleDateString('id-ID')}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Diperbarui</label>
+                  <label className="text-sm font-medium text-gray-500">{t('debt.detail.updated', 'Updated')}</label>
                   <p className="text-sm mt-1">
                     {new Date(selectedDebt.updated_at).toLocaleDateString('id-ID')}
                   </p>

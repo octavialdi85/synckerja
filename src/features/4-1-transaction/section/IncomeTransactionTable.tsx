@@ -3,7 +3,7 @@ import { Plus, MoreHorizontal, Edit, Trash2, Eye, FileDown } from 'lucide-react'
 import { Button } from '@/features/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/features/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/features/ui/alert-dialog';
 import { Badge } from '@/features/ui/badge';
 import { useIncomeTransactions } from '@/features/4-1-dashboard/hooks';
@@ -105,6 +105,9 @@ export const IncomeTransactionTable = ({
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add New Income Transaction</DialogTitle>
+              <DialogDescription>
+                Create a new income transaction record
+              </DialogDescription>
             </DialogHeader>
             <AddIncomeForm onSuccess={() => setIsAddDialogOpen(false)} />
           </DialogContent>

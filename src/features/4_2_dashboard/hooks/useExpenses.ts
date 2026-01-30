@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { toast } from 'sonner';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 
 export interface Expense {
   id: string;
@@ -15,7 +17,9 @@ export interface Expense {
   expense_category_id?: string;
   department?: string;
   withdrawal_from_balance?: string; // Debt ID
+  bank_account_id?: string; // Bank account ID
   withdrawal_from_balance_debt?: { id: string; debt_name: string }; // Joined debt data
+  withdrawal_from_balance_bank_account?: { id: string; name: string }; // Joined bank account data
   create_date: string;
   is_recurring: boolean;
   recurring_frequency?: string;
@@ -36,6 +40,7 @@ export interface CreateExpenseData {
   category: string;
   department?: string;
   withdrawal_from_balance?: string; // Debt ID for withdrawal from balance
+  bank_account_id?: string; // Bank account ID for withdrawal from balance
   create_date: string;
   is_recurring: boolean;
   recurring_frequency?: string;
@@ -47,8 +52,10 @@ export interface CreateExpenseData {
 export const useExpenses = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { updateBalance } = useBankAccountBalances();
   const [isCreating, setIsCreating] = useState(false);
   const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
 
   const fetchExpenses = async () => {
     if (!organizationId) return;
@@ -88,12 +95,33 @@ export const useExpenses = () => {
         }
       }
       
-      // Transform data to include expense type name and debt name
+      // Fetch bank accounts separately for expenses that have bank_account_id
+      const bankAccountIds = data?.filter(exp => exp.bank_account_id).map(exp => exp.bank_account_id) || [];
+      let bankAccountsMap: Record<string, { id: string; name: string }> = {};
+      
+      if (bankAccountIds.length > 0) {
+        const { data: bankAccountsData, error: bankAccountsError } = await supabase
+          .from('bank_accounts')
+          .select('id, name')
+          .in('id', bankAccountIds);
+        
+        if (!bankAccountsError && bankAccountsData) {
+          bankAccountsMap = bankAccountsData.reduce((acc, bankAccount) => {
+            acc[bankAccount.id] = bankAccount;
+            return acc;
+          }, {} as Record<string, { id: string; name: string }>);
+        }
+      }
+      
+      // Transform data to include expense type name, debt name, and bank account name
       const transformedData = data?.map((expense: any) => ({
         ...expense,
         expense_type: expense.expense_types?.name || expense.expense_type || 'Unknown',
         withdrawal_from_balance_debt: expense.withdrawal_from_balance && debtsMap[expense.withdrawal_from_balance]
           ? debtsMap[expense.withdrawal_from_balance]
+          : null,
+        withdrawal_from_balance_bank_account: expense.bank_account_id && bankAccountsMap[expense.bank_account_id]
+          ? bankAccountsMap[expense.bank_account_id]
           : null
       }));
       
@@ -221,6 +249,7 @@ export const useExpenses = () => {
           expense_category_id: expenseCategories?.id || null,
           department: expenseData.department || null,
           withdrawal_from_balance: expenseData.withdrawal_from_balance || null,
+          bank_account_id: expenseData.bank_account_id || null,
           create_date: expenseData.create_date,
           is_recurring: expenseData.is_recurring,
           recurring_frequency: expenseData.recurring_frequency || null,
@@ -235,7 +264,28 @@ export const useExpenses = () => {
 
       if (error) throw error;
 
+      // Update bank account balance if bank_account_id is set
+      if (expenseData.bank_account_id && data?.id) {
+        try {
+          // Ensure balance exists first, then update
+          await updateBalance(
+            expenseData.bank_account_id,
+            -expenseData.amount, // Negative for expense
+            'expense',
+            data.id,
+            `Expense: ${expenseData.expense_name}`
+          );
+        } catch (balanceError) {
+          console.error('Error updating bank account balance:', balanceError);
+          // Don't fail the expense creation if balance update fails
+        }
+      }
+
       toast.success('Expense created successfully!');
+      
+      // Invalidate bank account balances to refresh the balance display
+      queryClient.invalidateQueries({ queryKey: ['bank-account-balances', organizationId] });
+      
       await fetchExpenses(); // Refresh the list
       return true;
     } catch (error: any) {

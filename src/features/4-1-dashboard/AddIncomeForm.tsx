@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/features/ui/button';
@@ -11,12 +11,36 @@ import { Checkbox } from '@/features/ui/checkbox';
 import { useIncomeTransactions } from './hooks';
 import { useIncomeMasterData } from './hooks';
 import { CreateIncomeTransactionData } from './types';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+import { BankAccountManagementDialog } from './components/BankAccountManagementDialog';
+import { formatInputNumber, parseInputNumber } from '@/features/8_2_pricing-tools/utils/pricingUtils';
 
 const formSchema = z.object({
   transaction_date: z.string().min(1, 'Transaction date is required'),
-  amount: z.number().min(0.01, 'Amount must be greater than 0'),
+  amount: z.preprocess(
+    (val) => {
+      if (val === '' || val === null || val === undefined) return undefined;
+      // If it's already a number, use it
+      if (typeof val === 'number') {
+        return isNaN(val) ? undefined : val;
+      }
+      // If it's a string, parse it (remove dots and convert to number)
+      if (typeof val === 'string') {
+        const numericValue = val.replace(/[^\d]/g, '');
+        if (!numericValue) return undefined;
+        const num = Number(numericValue);
+        return isNaN(num) ? undefined : num;
+      }
+      return undefined;
+    },
+    z.number().min(0.01, 'Amount must be greater than 0')
+  ).refine((val) => val !== undefined, {
+    message: 'Amount is required',
+  }),
   customer_name: z.string().optional(),
   payment_method: z.string().optional(),
+  bank_account_id: z.string().optional(),
   income_type_id: z.string().optional(),
   category_id: z.string().optional(),
   service_id: z.string().optional(),
@@ -35,13 +59,16 @@ interface AddIncomeFormProps {
 export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
   const { createIncomeTransaction, isCreating } = useIncomeTransactions();
   const { incomeTypes, incomeCategories, services, subServices } = useIncomeMasterData();
+  const { bankAccounts, refetch: refetchBankAccounts } = useBankAccounts();
+  const { refetch: refetchBalances } = useBankAccountBalances();
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isBankAccountDialogOpen, setIsBankAccountDialogOpen] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       transaction_date: new Date().toISOString().split('T')[0],
-      amount: 0,
+      amount: '' as any,
       is_recurring: false,
     },
   });
@@ -60,28 +87,45 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
 
   const onSubmit = (data: FormData) => {
     // Ensure transaction_date is always provided and properly typed
+    // Convert amount to number if it's a string (should already be number from parseInputNumber)
+    const amountValue = typeof data.amount === 'string' && data.amount !== '' 
+      ? parseInputNumber(data.amount)
+      : (typeof data.amount === 'number' ? data.amount : 0);
+    
+    // Helper function to convert empty strings to undefined for UUID fields
+    const toUndefinedIfEmpty = (value: string | undefined | null): string | undefined => {
+      return value === '' || value === null ? undefined : value;
+    };
+    
     const transactionData: CreateIncomeTransactionData = {
       transaction_date: data.transaction_date, // This is guaranteed to be a string due to form validation
-      amount: data.amount,
-      customer_name: data.customer_name,
-      payment_method: data.payment_method,
-      income_type_id: data.income_type_id,
-      category_id: data.category_id,
-      service_id: data.service_id,
-      sub_service_id: data.sub_service_id,
+      amount: amountValue,
+      customer_name: data.customer_name || undefined,
+      payment_method: data.payment_method || undefined,
+      bank_account_id: toUndefinedIfEmpty(data.bank_account_id),
+      income_type_id: toUndefinedIfEmpty(data.income_type_id),
+      category_id: toUndefinedIfEmpty(data.category_id),
+      service_id: toUndefinedIfEmpty(data.service_id),
+      sub_service_id: toUndefinedIfEmpty(data.sub_service_id),
       is_recurring: data.is_recurring,
-      recurring_frequency: data.recurring_frequency,
-      description: data.description,
+      recurring_frequency: data.recurring_frequency || undefined,
+      description: data.description || undefined,
       receipt_file: receiptFile || undefined,
     };
 
     createIncomeTransaction(transactionData, {
       onSuccess: () => {
+        // Refresh bank account balances after income creation
+        refetchBalances();
         form.reset();
         setReceiptFile(null);
         onSuccess();
       }
     });
+  };
+
+  const handleBankAccountAdded = () => {
+    refetchBankAccounts();
   };
 
   return (
@@ -103,13 +147,33 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
 
         <div className="space-y-2">
           <Label htmlFor="amount">Amount</Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            {...form.register('amount', { valueAsNumber: true })}
-            className="text-sm"
-            placeholder="0.00"
+          <Controller
+            name="amount"
+            control={form.control}
+            render={({ field }) => (
+              <Input
+                id="amount"
+                type="text"
+                value={field.value === undefined || field.value === null || field.value === '' 
+                  ? '' 
+                  : formatInputNumber(field.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') {
+                    field.onChange('');
+                  } else {
+                    // Parse the formatted value to get the numeric value
+                    const numericValue = parseInputNumber(value);
+                    field.onChange(numericValue);
+                  }
+                }}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+                className="text-sm"
+                placeholder="0"
+              />
+            )}
           />
           {form.formState.errors.amount && (
             <p className="text-sm text-red-600">{form.formState.errors.amount.message}</p>
@@ -145,12 +209,33 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="bank_account_id">Bank Account</Label>
+        <div className="flex gap-2">
+          <Select 
+            onValueChange={(value) => form.setValue('bank_account_id', value)}
+            value={form.watch('bank_account_id') || undefined}
+          >
+            <SelectTrigger className="text-sm flex-1">
+              <SelectValue placeholder="Select bank account" />
+            </SelectTrigger>
+            <SelectContent>
+              {bankAccounts.map((bankAccount) => (
+                <SelectItem key={bankAccount.id} value={bankAccount.id}>
+                  {bankAccount.name} {bankAccount.account_number ? `(${bankAccount.account_number})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="income_type_id">Income Type</Label>
           <Select onValueChange={(value) => {
             form.setValue('income_type_id', value);
-            form.setValue('category_id', ''); // Reset category when income type changes
+            form.setValue('category_id', undefined); // Reset category when income type changes
           }}>
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select income type" />
@@ -190,7 +275,7 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
           <Label htmlFor="service_id">Service</Label>
           <Select onValueChange={(value) => {
             form.setValue('service_id', value);
-            form.setValue('sub_service_id', ''); // Reset sub-service when service changes
+            form.setValue('sub_service_id', undefined); // Reset sub-service when service changes
           }}>
             <SelectTrigger className="text-sm">
               <SelectValue placeholder="Select service" />
@@ -284,6 +369,16 @@ export function AddIncomeForm({ onSuccess }: AddIncomeFormProps) {
           {isCreating ? 'Creating...' : 'Create Transaction'}
         </Button>
       </div>
+
+      <BankAccountManagementDialog
+        open={isBankAccountDialogOpen}
+        onClose={() => setIsBankAccountDialogOpen(false)}
+        onBankAccountAdded={handleBankAccountAdded}
+        onBankAccountSelect={(bankAccountId) => {
+          form.setValue('bank_account_id', bankAccountId);
+          setIsBankAccountDialogOpen(false);
+        }}
+      />
     </form>
   );
 }

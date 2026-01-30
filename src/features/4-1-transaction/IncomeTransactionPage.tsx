@@ -135,7 +135,7 @@ export const IncomeTransactionPage = () => {
 
                   {/* Scrollable Sidebar Content */}
                   <div className="flex-1 min-h-0 overflow-hidden">
-                    <div className="h-full p-4">
+                    <div className="h-full p-4 overflow-y-auto seamless-scroll flex flex-col">
                       <IncomeTransactionOverview transactions={filteredTransactions} />
                     </div>
                   </div>

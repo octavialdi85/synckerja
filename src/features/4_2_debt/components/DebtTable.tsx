@@ -7,24 +7,32 @@ import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Search, MoreHorizontal, Eye, Edit, Trash2, CreditCard, Building, Calendar } from 'lucide-react';
+import { Search, MoreHorizontal, Eye, Edit, Trash2, CreditCard, Building, Calendar, Plus } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface DebtTableProps {
   debts: Debt[];
   isLoading?: boolean;
+  onAdd?: () => void;
+  onPayDebt?: () => void;
   onEdit?: (debt: Debt) => void;
   onDelete?: (debtId: string) => void;
   onViewDetails?: (debt: Debt) => void;
+  onPaidClick?: (debt: Debt) => void;
 }
 
 export const DebtTable = ({ 
   debts, 
   isLoading = false,
+  onAdd,
+  onPayDebt,
   onEdit,
   onDelete,
-  onViewDetails
+  onViewDetails,
+  onPaidClick,
 }: DebtTableProps) => {
+  const { t } = useAppTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -48,19 +56,19 @@ export const DebtTable = ({
       case 'active':
         return (
           <Badge className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
-            Aktif
+            {t('debt.status.active', 'Active')}
           </Badge>
         );
       case 'paid_off':
         return (
           <Badge className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
-            Lunas
+            {t('debt.status.paidOff', 'Paid Off')}
           </Badge>
         );
       case 'closed':
         return (
           <Badge variant="secondary" className="text-xs font-medium px-2 py-0.5 rounded-full">
-            Ditutup
+            {t('debt.status.closed', 'Closed')}
           </Badge>
         );
       default:
@@ -108,7 +116,7 @@ export const DebtTable = ({
             <div className="relative min-w-0 flex-1 sm:flex-initial">
               <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Cari hutang..."
+                placeholder={t('debt.searchPlaceholder', 'Search debt...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8 sm:pl-10 w-full sm:w-48 md:w-64 min-w-0"
@@ -117,30 +125,68 @@ export const DebtTable = ({
             
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-full sm:w-40 md:w-48 min-w-0">
-                <SelectValue placeholder="Semua Tipe" />
+                <SelectValue placeholder={t('debt.allTypes', 'All Types')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Tipe</SelectItem>
-                <SelectItem value="Kartu Kredit">Kartu Kredit</SelectItem>
-                <SelectItem value="Pinjaman Bank">Pinjaman Bank</SelectItem>
-                <SelectItem value="Hutang Supplier">Hutang Supplier</SelectItem>
-                <SelectItem value="Pinjaman Online">Pinjaman Online</SelectItem>
-                <SelectItem value="Hutang Pribadi">Hutang Pribadi</SelectItem>
-                <SelectItem value="Lainnya">Lainnya</SelectItem>
+                <SelectItem value="all">{t('debt.allTypes', 'All Types')}</SelectItem>
+                <SelectItem value="Kartu Kredit">{t('debt.type.creditCard', 'Credit Card')}</SelectItem>
+                <SelectItem value="Pinjaman Bank">{t('debt.type.bankLoan', 'Bank Loan')}</SelectItem>
+                <SelectItem value="Hutang Supplier">{t('debt.type.supplierDebt', 'Supplier Debt')}</SelectItem>
+                <SelectItem value="Pinjaman Online">{t('debt.type.onlineLoan', 'Online Loan')}</SelectItem>
+                <SelectItem value="Hutang Pribadi">{t('debt.type.personalDebt', 'Personal Debt')}</SelectItem>
+                <SelectItem value="Lainnya">{t('debt.type.other', 'Other')}</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full sm:w-32 md:w-40 min-w-0">
-                <SelectValue placeholder="Semua Status" />
+                <SelectValue placeholder={t('debt.allStatus', 'All Status')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="active">Aktif</SelectItem>
-                <SelectItem value="paid_off">Lunas</SelectItem>
-                <SelectItem value="closed">Ditutup</SelectItem>
+                <SelectItem value="all">{t('debt.allStatus', 'All Status')}</SelectItem>
+                <SelectItem value="active">{t('debt.status.active', 'Active')}</SelectItem>
+                <SelectItem value="paid_off">{t('debt.status.paidOff', 'Paid Off')}</SelectItem>
+                <SelectItem value="closed">{t('debt.status.closed', 'Closed')}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {onPayDebt && (
+              <Button 
+                onClick={() => {
+                  // Show payment modal for first active debt that has remaining balance
+                  const activeDebt = debts.find(d => {
+                    if (d.status !== 'active') return false;
+                    // Ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
+                    const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
+                    return remaining > 0;
+                  });
+                  if (activeDebt) {
+                    onPayDebt(activeDebt);
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
+                disabled={!debts.some(d => {
+                  if (d.status !== 'active') return false;
+                  const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
+                  return remaining > 0;
+                })}
+              >
+                <span className="hidden sm:inline">{t('debt.payment.button', 'Pay Debt')}</span>
+                <span className="sm:hidden">{t('debt.payment.buttonShort', 'Pay')}</span>
+              </Button>
+            )}
+            {onAdd && (
+              <Button 
+                onClick={onAdd}
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">{t('debt.addDebt', 'Add Debt')}</span>
+                <span className="sm:hidden">{t('debt.add', 'Add')}</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -150,32 +196,77 @@ export const DebtTable = ({
         <table className="w-full min-w-[1600px]">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Nama Hutang</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Tipe</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Bank/Institusi</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Total Limit</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Limit Tersedia</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Terpakai</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Hutang</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Utilization</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Bunga (%)</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Jatuh Tempo</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Status</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">Actions</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.debtName', 'Debt Name')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.type', 'Type')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.bankInstitution', 'Bank/Institution')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.totalLimit', 'Total Limit')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.availableLimit', 'Available Limit')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.debt', 'Debt')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.paid', 'Paid')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.interest', 'Interest (Rp)')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.utilization', 'Utilization')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.dueDate', 'Due Date')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.lastPaymentDate', 'Last Payment')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.status', 'Status')}</th>
+              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-medium text-gray-700 whitespace-nowrap text-xs sm:text-sm">{t('debt.table.actions', 'Actions')}</th>
             </tr>
           </thead>
           <tbody>
             {filteredDebts.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-8 text-center text-gray-500">
+                <td colSpan={13} className="py-8 text-center text-gray-500">
                   <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500 mb-1">Tidak ada data hutang</p>
-                  <p className="text-xs text-gray-400">Tambahkan hutang pertama Anda untuk memulai</p>
+                  <p className="text-sm text-gray-500 mb-1">{t('debt.table.noData', 'No debt data')}</p>
+                  <p className="text-xs text-gray-400">{t('debt.table.addFirst', 'Add your first debt to get started')}</p>
                 </td>
               </tr>
             ) : (
               filteredDebts.map((debt) => {
-                const utilization = calculateUtilization(debt.limit_amount, debt.used_amount);
+                const isOnlineLoan = debt.debt_type === 'Pinjaman Online';
+                
+                let displayLimitAmount: number;
+                let displayAvailableLimit: number;
+                let displayDebtAmount: number;
+                let displayPaidAmount: number | null = null;
+                let displayInterest: number | null = null;
+                let utilization: number;
+                
+                if (isOnlineLoan) {
+                  // Pinjaman Online: Total Limit = limit_amount.
+                  // remaining = sisa hutang = debt_amount - paid_amount. Berkurang saat bayar.
+                  // Debt (kolom) = remaining. Available = limit - remaining. Saat lunas → Debt = 0, Available = limit.
+                  // Paid = paid_amount. Interest = SUM(interest_amount).
+                  const remaining = debt.remaining_debt ?? Math.max(0, (debt.debt_amount ?? 0) - (debt.paid_amount ?? 0));
+                  displayLimitAmount = debt.limit_amount;
+                  displayAvailableLimit = Math.max(0, (debt.limit_amount ?? 0) - remaining);
+                  displayDebtAmount = remaining;
+                  displayPaidAmount = (debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0)
+                    ? debt.paid_amount
+                    : null;
+                  displayInterest = (debt.total_interest != null && debt.total_interest > 0) ? debt.total_interest : null;
+                  utilization = (debt.limit_amount ?? 0) > 0
+                    ? Math.min(100, Math.round((remaining / (debt.limit_amount ?? 1)) * 100))
+                    : 0;
+                } else {
+                  displayLimitAmount = debt.limit_amount;
+                  const hasAvailableLimit = debt.available_limit != null && debt.available_limit > 0;
+                  displayAvailableLimit = hasAvailableLimit ? debt.available_limit : debt.limit_amount;
+                  
+                  displayPaidAmount = debt.paid_amount ?? null;
+                  
+                  // Debt column = remaining_debt dari database (fallback ke hitungan jika null/undefined)
+                  if (debt.remaining_debt !== undefined && debt.remaining_debt !== null) {
+                    displayDebtAmount = debt.remaining_debt;
+                  } else {
+                    const hasPayment = debt.paid_amount !== undefined && debt.paid_amount !== null && debt.paid_amount > 0;
+                    displayDebtAmount = !hasPayment ? debt.debt_amount : Math.max(0, debt.debt_amount - (displayPaidAmount ?? 0));
+                  }
+                  
+                  displayInterest = null;
+                  const terpakai = debt.limit_amount - displayAvailableLimit;
+                  utilization = calculateUtilization(debt.limit_amount, terpakai);
+                }
+                
                 return (
                   <tr key={debt.id} className="border-b hover:bg-gray-50">
                     <td className="py-2 sm:py-3 px-2 sm:px-4 max-w-[200px] min-w-0">
@@ -211,16 +302,31 @@ export const DebtTable = ({
                       </div>
                     </td>
                     <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">
-                      {formatToRupiah(debt.limit_amount)}
+                      {formatToRupiah(displayLimitAmount)}
                     </td>
                     <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm text-green-600">
-                      {formatToRupiah(debt.available_limit ?? (debt.limit_amount - debt.used_amount))}
-                    </td>
-                    <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm text-orange-600">
-                      {formatToRupiah(debt.used_amount)}
+                      {formatToRupiah(displayAvailableLimit)}
                     </td>
                     <td className="py-2 sm:py-3 px-2 sm:px-4 font-bold whitespace-nowrap text-xs sm:text-sm text-red-600">
-                      {formatToRupiah(debt.debt_amount)}
+                      {formatToRupiah(displayDebtAmount)}
+                    </td>
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm text-blue-600">
+                      {displayPaidAmount != null && displayPaidAmount > 0 && onPaidClick ? (
+                        <button
+                          type="button"
+                          onClick={() => onPaidClick(debt)}
+                          className="cursor-pointer underline decoration-blue-600/60 underline-offset-2 hover:decoration-blue-600 focus:outline-none focus:ring-0"
+                        >
+                          {formatToRupiah(displayPaidAmount)}
+                        </button>
+                      ) : (
+                        formatToRupiah(displayPaidAmount ?? 0)
+                      )}
+                    </td>
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium whitespace-nowrap text-xs sm:text-sm">
+                      {displayInterest !== null && displayInterest > 0 
+                        ? formatToRupiah(displayInterest) 
+                        : '-'}
                     </td>
                     <td className="py-2 sm:py-3 px-2 sm:px-4 min-w-[100px]">
                       <div className="flex items-center gap-2">
@@ -236,13 +342,18 @@ export const DebtTable = ({
                       </div>
                     </td>
                     <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">
-                      {debt.interest_rate ? `${debt.interest_rate}%` : '-'}
-                    </td>
-                    <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">
                       {debt.due_date ? (
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 text-gray-400" />
                           {format(new Date(debt.due_date), 'dd MMM yyyy')}
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap text-xs sm:text-sm">
+                      {debt.last_payment_date ? (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-gray-400" />
+                          {format(new Date(debt.last_payment_date), 'dd MMM yyyy')}
                         </div>
                       ) : '-'}
                     </td>
@@ -260,13 +371,13 @@ export const DebtTable = ({
                           {onViewDetails && (
                             <DropdownMenuItem onClick={() => onViewDetails(debt)}>
                               <Eye className="h-4 w-4 mr-2 text-gray-600" />
-                              Detail
+                              {t('debt.detail.title', 'Debt Details')}
                             </DropdownMenuItem>
                           )}
                           {onEdit && (
                             <DropdownMenuItem onClick={() => onEdit(debt)}>
                               <Edit className="h-4 w-4 mr-2 text-gray-600" />
-                              Edit
+                              {t('debt.form.editTitle', 'Edit Debt')}
                             </DropdownMenuItem>
                           )}
                           {onDelete && (
@@ -275,7 +386,7 @@ export const DebtTable = ({
                               onClick={() => onDelete(debt.id)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Hapus
+                              {t('debt.form.delete', 'Delete')}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -293,12 +404,16 @@ export const DebtTable = ({
       <div className="px-2 sm:px-3 py-2 border-t bg-gray-50 flex-shrink-0">
         <div className="flex items-center justify-between text-xs text-gray-600">
           <span>
-            Menampilkan {filteredDebts.length} dari {debts.length} hutang
+            {t('debt.table.showing', 'Showing')} {filteredDebts.length} {t('debt.table.of', 'of')} {debts.length} {t('debt.debts', 'debts')}
           </span>
           <div className="flex items-center gap-4">
             <span>
-              Total Hutang: <span className="font-bold text-red-600">
-                {formatToRupiah(filteredDebts.reduce((sum, d) => sum + d.debt_amount, 0))}
+              {t('debt.totalDebt', 'Total Debt')}: <span className="font-bold text-red-600">
+                {formatToRupiah(filteredDebts.reduce((sum, d) => {
+                  // Ambil dari kolom remaining_debt di table debts, fallback ke debt_amount - paid_amount
+                  const remaining = d.remaining_debt ?? Math.max(0, d.debt_amount - (d.paid_amount ?? 0));
+                  return sum + remaining;
+                }, 0))}
               </span>
             </span>
           </div>

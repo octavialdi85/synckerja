@@ -87,16 +87,22 @@ export const CustomDatePicker = ({
         <div className="space-y-4">
           <div className="text-center space-y-2">
             <div className="flex justify-center gap-4 text-sm">
-              <div className={cn(
-                "px-3 py-2 rounded-lg border",
-                selectingStart ? "bg-primary text-primary-foreground" : "bg-muted"
-              )}>
+              <div 
+                className={cn(
+                  "px-3 py-2 rounded-lg border cursor-pointer transition-colors",
+                  selectingStart ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                )}
+                onClick={() => setSelectingStart(true)}
+              >
                 {t('datePicker.from', 'From:')} {startDate ? format(startDate, "dd MMM yyyy") : t('datePicker.selectDate', 'Select date')}
               </div>
-              <div className={cn(
-                "px-3 py-2 rounded-lg border",
-                !selectingStart ? "bg-primary text-primary-foreground" : "bg-muted"
-              )}>
+              <div 
+                className={cn(
+                  "px-3 py-2 rounded-lg border cursor-pointer transition-colors",
+                  !selectingStart ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                )}
+                onClick={() => setSelectingStart(false)}
+              >
                 {t('datePicker.to', 'To:')} {endDate ? format(endDate, "dd MMM yyyy") : t('datePicker.selectDate', 'Select date')}
               </div>
             </div>
