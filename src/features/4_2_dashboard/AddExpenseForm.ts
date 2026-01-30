@@ -14,7 +14,14 @@ export const addExpenseSchema = z.object({
   recurring_frequency: z.string().optional(),
   first_payment_date: z.string().optional(),
   description: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    const hasDebt = data.withdrawal_from_balance && data.withdrawal_from_balance !== 'none';
+    const hasBank = !!data.bank_account_id;
+    return hasDebt || hasBank;
+  },
+  { message: 'Withdrawal From Balance is required. Please select a Bank Account or Debt.', path: ['withdrawal_from_balance'] }
+);
 
 export type AddExpenseFormData = z.infer<typeof addExpenseSchema>;
 

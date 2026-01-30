@@ -512,18 +512,25 @@ export function ExpenseDashboard() {
         }
       }
       
+      // For expenses created from payment-process, get requester from linked purchase request
+      const linkedRequest = expense.purchase_request_id
+        ? paidPurchaseRequests.find(pr => pr.id === expense.purchase_request_id)
+        : undefined;
+      
       return {
         ...expense,
         request_title: expense.expense_name, // For regular expenses, use expense_name as request_title
-        requester_name: undefined, // Regular expenses don't have requester_name
+        requester_name: linkedRequest?.requester_name ?? undefined,
         next_payment_date: nextPaymentDate || expense.next_payment_date,
       };
     });
     
     const combined = [...mappedExpenses];
     
-    // Add paid purchase requests as expenses
+    // Add paid purchase requests that do NOT already have an expense (avoid duplicate rows)
     paidPurchaseRequests.forEach(pr => {
+      const hasExpenseForRequest = expenses.some(e => e.purchase_request_id === pr.id);
+      if (hasExpenseForRequest) return; // Skip: already shown as expense row
       // Get expense type name - this should be the actual name from expense_types table
       // like "Operating Expenses", "Fixed Expenses", "Variable Expenses", etc.
       const expenseTypeName = getExpenseTypeName(pr);
@@ -639,15 +646,20 @@ export function ExpenseDashboard() {
           }
         }
       }
+      const linkedRequest = expense.purchase_request_id
+        ? paidPurchaseRequests.find(pr => pr.id === expense.purchase_request_id)
+        : undefined;
       return {
         ...expense,
         request_title: expense.expense_name,
-        requester_name: undefined,
+        requester_name: linkedRequest?.requester_name ?? undefined,
         next_payment_date: nextPaymentDate || expense.next_payment_date,
       };
     });
     const combined = [...mappedExpenses];
     paidPurchaseRequests.forEach(pr => {
+      const hasExpenseForRequest = expenses.some(e => e.purchase_request_id === pr.id);
+      if (hasExpenseForRequest) return;
       const expenseTypeName = getExpenseTypeName(pr);
       const expenseCategoryName = getExpenseCategoryName(pr);
       const lastPaymentDate = pr.paid_at || pr.approved_at || pr.created_at;
@@ -1359,8 +1371,8 @@ export function ExpenseDashboard() {
                           </Badge>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
-                          <Badge variant={isPaidPurchaseRequest ? 'default' : 'secondary'} className="text-xs">
-                            {isPaidPurchaseRequest ? 'Berhasil' : (expense.is_recurring ? 'Recurring' : 'One-time')}
+                          <Badge variant="default" className="text-xs">
+                            Berhasil
                           </Badge>
                         </td>
                         <td className="py-2 sm:py-3 px-2 sm:px-4 whitespace-nowrap">
@@ -1618,7 +1630,7 @@ export function ExpenseDashboard() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Withdrawal From Balance
+                  Withdrawal From Balance <span className="text-red-500">*</span>
                 </label>
                 <Select 
                   onValueChange={(value) => {
@@ -1647,7 +1659,7 @@ export function ExpenseDashboard() {
                   }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? "Loading..." : "Select source (optional)"}>
+                    <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? "Loading..." : "Select source (required)"}>
                       {(() => {
                         const selectedDebtId = form.watch('withdrawal_from_balance');
                         const selectedBankId = form.watch('bank_account_id');
@@ -1865,7 +1877,10 @@ export function ExpenseDashboard() {
               <Button 
                 type="submit"
                 className="bg-gray-900 hover:bg-gray-800 text-white"
-                disabled={isCreating}
+                disabled={
+                  isCreating ||
+                  (!form.watch('withdrawal_from_balance') && !form.watch('bank_account_id'))
+                }
               >
                 {isCreating ? 'Creating...' : 'Add Expense'}
               </Button>

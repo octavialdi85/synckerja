@@ -10,6 +10,7 @@ import {
 import { EmployeeSidebarFooter } from './section/EmployeeSidebarFooter';
 import { useEmployees } from './hooks/useEmployees';
 import { useCurrentUser } from './hooks/useCurrentUser';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Plus } from 'lucide-react';
@@ -28,6 +29,7 @@ export const EmployeePage = () => {
   
   const { data: employees = [], isLoading, refetch } = useEmployees();
   const { user } = useCurrentUser();
+  const { userRole } = useCentralizedUserData();
   const navigate = useNavigate();
 
   const handleTabChange = useCallback((tab: string) => {
@@ -119,6 +121,7 @@ export const EmployeePage = () => {
                         <EmployeeTable 
                           employees={filteredEmployees}
                           currentUserEmail={user?.email}
+                          userRole={userRole ?? undefined}
                           onRefresh={handleRefresh}
                           onViewEmployee={handleViewEmployee}
                           isLoading={isLoading}

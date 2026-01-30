@@ -67,15 +67,16 @@ export const UniversalProtectedRoute = ({
         return;
       }
 
-      // Step 1.5: SECURITY - Check if employee is terminated (except owners)
+      // Step 1.5: SECURITY - Check if employee is terminated or inactive/resigned (except owners)
       // Owner can access their own organization even if terminated in other organizations
       if (requiresAuth && user && employee && organization && !isOwner) {
         const employeeStatus = employee.status || (employee as any).employee_status_name;
-        const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+        const statusLower = employeeStatus?.toLowerCase();
+        const isTerminatedOrInactive = statusLower === 'terminated' || statusLower === 'inactive';
         
-        if (isTerminated) {
+        if (isTerminatedOrInactive) {
           if (isDev) {
-            logger.debug('🚫 ACCESS DENIED: Employee is terminated', {
+            logger.debug('🚫 ACCESS DENIED: Employee is terminated/inactive', {
               employeeId: employee.id,
               status: employeeStatus,
               currentPath
@@ -83,7 +84,7 @@ export const UniversalProtectedRoute = ({
           }
           
           setAccessDenied(true);
-          setDeniedReason('Status karyawan Anda adalah Terminated. Anda tidak memiliki akses ke organisasi ini.');
+          setDeniedReason('Status karyawan Anda adalah Terminated/Inactive. Anda tidak memiliki akses ke organisasi ini.');
           setIsValidating(false);
           return;
         }

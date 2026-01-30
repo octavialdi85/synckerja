@@ -142,15 +142,16 @@ export const useDepartmentAccess = () => {
     
     // Check if user can access a specific page
     const canAccessPage = (pagePath: string): boolean => {
-      // SECURITY: Block access if employee is terminated (except owners)
+      // SECURITY: Block access if employee is terminated or inactive/resigned (except owners)
       // Owner can access their own organization even if terminated in other organizations
       if (employee && organization && !isOwner) {
         const employeeStatus = employee.status || (employee as any).employee_status_name;
-        const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+        const statusLower = employeeStatus?.toLowerCase();
+        const isTerminatedOrInactive = statusLower === 'terminated' || statusLower === 'inactive';
         
-        if (isTerminated) {
+        if (isTerminatedOrInactive) {
           if (isDev) {
-            logger.debug('🚫 Access denied: Employee is terminated', {
+            logger.debug('🚫 Access denied: Employee is terminated/inactive', {
               employeeId: employee.id,
               status: employeeStatus,
               pagePath

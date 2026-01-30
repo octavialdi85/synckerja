@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { usePurchaseRequests, PurchaseRequest, useUpdatePurchaseRequestStatus } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Badge } from '@/features/ui/badge';
@@ -11,10 +11,16 @@ import { Separator } from '@/features/ui/separator';
 import { Button } from '@/features/ui/button';
 import { Label } from '@/features/ui/label';
 import { Input } from '@/features/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
+import { useExpenses } from '@/features/4_2_dashboard/hooks/useExpenses';
+import { useDebtsForExpense } from '@/features/4_2_dashboard/hooks/useDebtsForExpense';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 
 interface PaymentTableProps {
   requests: PurchaseRequest[];
@@ -31,11 +37,26 @@ export const PaymentTable = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [isUploadingInvoice, setIsUploadingInvoice] = useState(false);
+  const [processWithdrawalFromBalance, setProcessWithdrawalFromBalance] = useState<string | undefined>(undefined);
+  const [processBankAccountId, setProcessBankAccountId] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
+  const { t } = useAppTranslation();
   const { toast } = useToast();
   const updateStatus = useUpdatePurchaseRequestStatus();
+  const { createExpense, isCreating: isCreatingExpense } = useExpenses();
+  const { debts: debtsForExpense, isLoading: debtsLoading } = useDebtsForExpense();
+  const { bankAccounts, loading: bankAccountsLoading } = useBankAccounts();
+  const { balances: bankAccountBalances, loading: balancesLoading } = useBankAccountBalances();
+
+  // Sync withdrawal source from request when modal opens or request changes
+  useEffect(() => {
+    if (selectedRequest) {
+      setProcessWithdrawalFromBalance(selectedRequest.withdrawal_from_balance);
+      setProcessBankAccountId(selectedRequest.bank_account_id);
+    }
+  }, [selectedRequest?.id, selectedRequest?.withdrawal_from_balance, selectedRequest?.bank_account_id]);
 
   // Filter only approved requests (include both paid and unpaid for history)
   const paymentRequests = requests.filter(req => req.status === 'approved');
@@ -73,6 +94,8 @@ export const PaymentTable = ({
     setSelectedRequest(request);
     setIsModalOpen(true);
     setInvoiceFile(null);
+    setProcessWithdrawalFromBalance(request.withdrawal_from_balance);
+    setProcessBankAccountId(request.bank_account_id);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,43 +128,142 @@ export const PaymentTable = ({
   };
 
   const handleUploadInvoice = async () => {
-    if (!selectedRequest || !invoiceFile || !organizationId || !user) {
+    if (!selectedRequest || !organizationId || !user) {
+      return;
+    }
+
+    // Need either a new invoice file or an existing invoice path (retry after partial failure)
+    const hasInvoice = !!invoiceFile || !!selectedRequest.invoice_file_path;
+    if (!selectedRequest.paid_at && !hasInvoice) {
+      toast({
+        title: "Invoice required",
+        description: "Please select an invoice file to upload.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Required: must select funding source before Process (for unpaid requests)
+    if (!selectedRequest.paid_at && !processWithdrawalFromBalance && !processBankAccountId) {
+      toast({
+        title: t('expenses.withdrawalFromBalanceRequired'),
+        description: t('expenses.withdrawalRequiredToast'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const expenseTypeName = selectedRequest.expense_types?.name ?? '';
+    const expenseCategoryName = selectedRequest.expense_categories?.name ?? '';
+    if (!expenseTypeName || !expenseCategoryName) {
+      toast({
+        title: "Error",
+        description: "Request is missing expense type or category. Please ensure the request was approved with type and category.",
+        variant: "destructive",
+      });
       return;
     }
 
     setIsUploadingInvoice(true);
     try {
-      // Generate unique file path
-      const timestamp = Date.now();
-      const fileExt = invoiceFile.name.split('.').pop();
-      const fileName = `invoices/${organizationId}/${selectedRequest.id}/${timestamp}-${invoiceFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
-      // Upload to purchase-documents bucket
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('purchase-documents')
-        .upload(fileName, invoiceFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      let fileName: string;
 
-      if (uploadError) {
-        throw uploadError;
+      if (selectedRequest.invoice_file_path) {
+        // Retry: invoice already saved from previous attempt; reuse path
+        fileName = selectedRequest.invoice_file_path;
+      } else if (invoiceFile) {
+        // Step 1: Upload invoice first (no DB change yet)
+        const timestamp = Date.now();
+        fileName = `invoices/${organizationId}/${selectedRequest.id}/${timestamp}-${invoiceFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('purchase-documents')
+          .upload(fileName, invoiceFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+      } else {
+        setIsUploadingInvoice(false);
+        return;
       }
 
-      // Update purchase request with invoice file path and mark as paid
+      // Step 2: Update request with invoice path and funding source (do NOT mark as paid yet)
       await updateStatus.mutateAsync({
         id: selectedRequest.id,
         status: selectedRequest.status,
-        invoiceFilePath: fileName, // Store the path, not the full URL
+        invoiceFilePath: fileName,
+        withdrawalFromBalance: processWithdrawalFromBalance,
+        bankAccountId: processBankAccountId,
+        markAsPaid: false,
       });
+
+      // Step 3: Avoid double expense – check if expense already exists for this request
+      const { data: existingExpense } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('purchase_request_id', selectedRequest.id)
+        .maybeSingle();
+
+      if (!existingExpense) {
+        // Step 4: Create expense (balance deducted via triggers / updateBalance)
+        const expenseCreated = await createExpense({
+          expense_name: selectedRequest.request_title,
+          amount: selectedRequest.amount_idr,
+          expense_type: expenseTypeName,
+          category: expenseCategoryName,
+          department: selectedRequest.department_name ?? undefined,
+          create_date: format(new Date(), 'yyyy-MM-dd'),
+          is_recurring: false,
+          description: selectedRequest.description ?? undefined,
+          withdrawal_from_balance: processWithdrawalFromBalance,
+          bank_account_id: processBankAccountId,
+          purchase_request_id: selectedRequest.id,
+        });
+
+        if (!expenseCreated) {
+          toast({
+            title: "Expense creation failed",
+            description: "Invoice was saved. You can retry processing; expense will not be created twice.",
+            variant: "destructive",
+          });
+          if (onRefresh) onRefresh();
+          setIsUploadingInvoice(false);
+          return;
+        }
+      }
+
+      // Step 5: Mark request as paid (idempotent; safe if step 4 was skipped due to existing expense)
+      try {
+        await updateStatus.mutateAsync({
+          id: selectedRequest.id,
+          status: selectedRequest.status,
+          markAsPaid: true,
+        });
+      } catch (markPaidError: any) {
+        // Expense already created and balance deducted; only marking paid failed
+        console.error('Failed to mark request as paid:', markPaidError);
+        toast({
+          title: "Partially complete",
+          description: "Expense and balance were updated, but failed to mark request as paid. Please refresh the page.",
+          variant: "destructive",
+        });
+        if (onRefresh) onRefresh();
+        setIsUploadingInvoice(false);
+        return;
+      }
 
       toast({
         title: "Success",
-        description: "Invoice uploaded successfully and payment status updated to paid.",
+        description: "Payment processed. Invoice saved, expense recorded, and balance updated.",
       });
 
-      // Reset state
       setInvoiceFile(null);
+      setProcessWithdrawalFromBalance(undefined);
+      setProcessBankAccountId(undefined);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -150,12 +272,13 @@ export const PaymentTable = ({
         onRefresh();
       }
     } catch (error: any) {
-      console.error('Error uploading invoice:', error);
+      console.error('Error processing payment:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to upload invoice. Please try again.",
+        description: error.message || "Failed to process payment. You can retry; duplicate expense will not be created.",
         variant: "destructive",
       });
+      if (onRefresh) onRefresh();
     } finally {
       setIsUploadingInvoice(false);
     }
@@ -613,6 +736,107 @@ export const PaymentTable = ({
               {!selectedRequest.paid_at && (
                 <>
                   <Separator className="my-4" />
+
+                  {/* Withdrawal From Balance (required before Process) */}
+                  <Card className="border-slate-200">
+                    <CardHeader className="px-4 py-3 pb-2">
+                      <CardTitle className="text-base font-semibold text-slate-900">
+                        {t('expenses.withdrawalFromBalanceRequired')} <span className="text-red-500">*</span>
+                      </CardTitle>
+                      <p className="text-xs text-slate-500 font-normal mt-1">
+                        {t('expenses.paymentProcessWithdrawalHint')}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="px-4 py-3 space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="process-withdrawal" className="text-sm font-medium">
+                          {t('expenses.fundingSource')} <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                          value={
+                            processWithdrawalFromBalance
+                              ? `debt_${processWithdrawalFromBalance}`
+                              : processBankAccountId
+                                ? `bank_${processBankAccountId}`
+                                : 'none'
+                          }
+                          onValueChange={(value) => {
+                            if (value === 'none') {
+                              setProcessWithdrawalFromBalance(undefined);
+                              setProcessBankAccountId(undefined);
+                            } else if (value.startsWith('debt_')) {
+                              setProcessWithdrawalFromBalance(value.replace('debt_', ''));
+                              setProcessBankAccountId(undefined);
+                            } else if (value.startsWith('bank_')) {
+                              setProcessBankAccountId(value.replace('bank_', ''));
+                              setProcessWithdrawalFromBalance(undefined);
+                            }
+                          }}
+                          disabled={debtsLoading || bankAccountsLoading || balancesLoading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? t('expenses.loading') : t('expenses.selectSourceRequired')}>
+                              {processWithdrawalFromBalance
+                                ? (() => {
+                                    const debt = debtsForExpense.find(d => d.id === processWithdrawalFromBalance);
+                                    if (debt) {
+                                      const availableLimit = debt.available_limit ?? 0;
+                                      return `${debt.debt_name} (Rp ${availableLimit.toLocaleString('id-ID')} available)`;
+                                    }
+                                    return '';
+                                  })()
+                                : processBankAccountId
+                                  ? (() => {
+                                      const bank = bankAccounts.find(b => b.id === processBankAccountId);
+                                      if (bank) {
+                                        const balance = bankAccountBalances.find(b => b.bank_account_id === bank.id);
+                                        const availableBalance = balance?.balance ?? 0;
+                                        return bank.account_number
+                                          ? `${bank.name} - ${bank.account_number} (Rp ${availableBalance.toLocaleString('id-ID')} available)`
+                                          : `${bank.name} (Rp ${availableBalance.toLocaleString('id-ID')} available)`;
+                                      }
+                                      return '';
+                                    })()
+                                  : ''}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">{t('expenses.none')}</SelectItem>
+                            {bankAccounts.length > 0 && (
+                              <>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.bankAccounts')}</div>
+                                {bankAccounts.map((bankAccount) => {
+                                  const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
+                                  const availableBalance = balance?.balance ?? 0;
+                                  const displayText = bankAccount.account_number
+                                    ? `${bankAccount.name} - ${bankAccount.account_number} (Rp ${availableBalance.toLocaleString('id-ID')} available)`
+                                    : `${bankAccount.name} (Rp ${availableBalance.toLocaleString('id-ID')} available)`;
+                                  return (
+                                    <SelectItem key={`bank_${bankAccount.id}`} value={`bank_${bankAccount.id}`}>
+                                      {displayText}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </>
+                            )}
+                            {debtsForExpense.length > 0 && (
+                              <>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.debts')}</div>
+                                {debtsForExpense.map((debt) => {
+                                  const availableLimit = debt.available_limit ?? 0;
+                                  return (
+                                    <SelectItem key={`debt_${debt.id}`} value={`debt_${debt.id}`}>
+                                      {debt.debt_name} (Rp {availableLimit.toLocaleString('id-ID')} available)
+                                    </SelectItem>
+                                  );
+                                })}
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
                   
                   <Card className="border-slate-200">
                     <CardHeader className="px-4 py-3 pb-2">
@@ -662,13 +886,19 @@ export const PaymentTable = ({
                       <Button
                         type="button"
                         onClick={handleUploadInvoice}
-                        disabled={!invoiceFile || isUploadingInvoice || updateStatus.isPending}
+                        disabled={
+                          (!invoiceFile && !selectedRequest?.invoice_file_path) ||
+                          isUploadingInvoice ||
+                          updateStatus.isPending ||
+                          isCreatingExpense ||
+                          (!processWithdrawalFromBalance && !processBankAccountId)
+                        }
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                       >
-                        {isUploadingInvoice || updateStatus.isPending ? (
+                        {isUploadingInvoice || updateStatus.isPending || isCreatingExpense ? (
                           <>
                             <Upload className="mr-2 h-4 w-4 animate-pulse" />
-                            Uploading...
+                            Processing...
                           </>
                         ) : (
                           <>

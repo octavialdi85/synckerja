@@ -76,6 +76,8 @@ export interface PurchaseRequest {
   invoice_file_path?: string;
   paid_by_user_id?: string;
   paid_by_name?: string;
+  withdrawal_from_balance?: string;
+  bank_account_id?: string;
   expense_types?: {
     name: string;
     description?: string;
@@ -314,7 +316,9 @@ export const useUpdatePurchaseRequestStatus = () => {
       markAsPaid = false,
       invoiceFilePath,
       expenseTypeId,
-      expenseCategoryId
+      expenseCategoryId,
+      withdrawalFromBalance,
+      bankAccountId
     }: { 
       id: string; 
       status: PurchaseRequest['status'];
@@ -324,6 +328,8 @@ export const useUpdatePurchaseRequestStatus = () => {
       invoiceFilePath?: string;
       expenseTypeId?: string;
       expenseCategoryId?: string;
+      withdrawalFromBalance?: string;
+      bankAccountId?: string;
     }) => {
       if (!user) {
         throw new Error('User not authenticated');
@@ -341,19 +347,19 @@ export const useUpdatePurchaseRequestStatus = () => {
       if (expenseCategoryId) {
         updateData.expense_category_id = expenseCategoryId;
       }
-
-      // If invoice file path is provided, update it
-      if (invoiceFilePath) {
-        updateData.invoice_file_path = invoiceFilePath;
-        // When invoice is uploaded, automatically mark as paid
-        updateData.paid_at = new Date().toISOString();
-        updateData.payment_status = 'paid';
-        // Save who processed the payment
-        updateData.paid_by_user_id = user.id;
-        updateData.paid_by_name = currentEmployee?.profile_name || user.email || 'Unknown';
+      if (withdrawalFromBalance !== undefined) {
+        updateData.withdrawal_from_balance = withdrawalFromBalance || null;
+      }
+      if (bankAccountId !== undefined) {
+        updateData.bank_account_id = bankAccountId || null;
       }
 
-      // If marking as paid, add paid_at timestamp
+      // If invoice file path is provided, save it (do not auto-mark as paid; use markAsPaid for that)
+      if (invoiceFilePath) {
+        updateData.invoice_file_path = invoiceFilePath;
+      }
+
+      // Mark as paid only when explicitly requested (e.g. after expense is created)
       if (markAsPaid || approvalNotes?.includes('Payment processed') || approvalNotes?.includes('Marked as paid')) {
         updateData.paid_at = new Date().toISOString();
         updateData.payment_status = 'paid';

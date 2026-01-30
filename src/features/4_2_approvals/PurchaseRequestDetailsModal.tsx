@@ -14,7 +14,11 @@ import { format } from 'date-fns';
 import { PurchaseRequest, useUpdatePurchaseRequestStatus } from '@/features/9_request-form/hooks/usePurchaseRequests';
 import { useExpenseTypes } from '@/features/4_2_dashboard/hooks/useExpenseTypes';
 import { useExpenseCategories } from '@/features/4_2_dashboard/hooks/useExpenseCategories';
+import { useDebtsForExpense } from '@/features/4_2_dashboard/hooks/useDebtsForExpense';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
+import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
 import { useCurrentUserRole } from '@/features/share/hooks/useCurrentUserRole';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useToast } from '@/features/ui/use-toast';
 import { Calendar, User, Building, DollarSign, FileText, Target, Zap, TrendingUp, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { PurchaseRequestPDFViewer } from './PurchaseRequestPDFViewer';
@@ -28,13 +32,19 @@ interface PurchaseRequestDetailsModalProps {
 export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: PurchaseRequestDetailsModalProps) => {
   const [selectedExpenseTypeId, setSelectedExpenseTypeId] = useState<string>(request?.expense_type_id || '');
   const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState<string>(request?.expense_category_id || '');
+  const [selectedWithdrawalFromBalance, setSelectedWithdrawalFromBalance] = useState<string | undefined>(request?.withdrawal_from_balance);
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<string | undefined>(request?.bank_account_id);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectionTextarea, setShowRejectionTextarea] = useState(false);
 
   const { expenseTypes } = useExpenseTypes();
   const { expenseCategories } = useExpenseCategories(selectedExpenseTypeId);
+  const { debts: debtsForExpense, isLoading: debtsLoading } = useDebtsForExpense();
+  const { bankAccounts, loading: bankAccountsLoading } = useBankAccounts();
+  const { balances: bankAccountBalances, loading: balancesLoading } = useBankAccountBalances();
   const { data: userRole } = useCurrentUserRole();
+  const { t } = useAppTranslation();
   const updateStatus = useUpdatePurchaseRequestStatus();
   const { toast } = useToast();
 
@@ -45,7 +55,9 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
     if (request?.expense_category_id) {
       setSelectedExpenseCategoryId(request.expense_category_id);
     }
-  }, [request?.expense_type_id, request?.expense_category_id]);
+    setSelectedWithdrawalFromBalance(request?.withdrawal_from_balance);
+    setSelectedBankAccountId(request?.bank_account_id);
+  }, [request?.expense_type_id, request?.expense_category_id, request?.withdrawal_from_balance, request?.bank_account_id]);
 
   // Reset category when expense type changes
   useEffect(() => {
@@ -96,7 +108,9 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
         status: 'approved',
         approvalNotes: approvalNotes,
         expenseTypeId: selectedExpenseTypeId,
-        expenseCategoryId: selectedExpenseCategoryId
+        expenseCategoryId: selectedExpenseCategoryId,
+        withdrawalFromBalance: selectedWithdrawalFromBalance,
+        bankAccountId: selectedBankAccountId,
       });
       toast({
         title: "Request Approved",
@@ -106,6 +120,8 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
       setApprovalNotes('');
       setSelectedExpenseTypeId('');
       setSelectedExpenseCategoryId('');
+      setSelectedWithdrawalFromBalance(undefined);
+      setSelectedBankAccountId(undefined);
     } catch (error) {
       console.error('Approval error:', error);
       toast({
@@ -456,6 +472,95 @@ export const PurchaseRequestDetailsModal = ({ request, isOpen, onClose }: Purcha
                         </Select>
                       </div>
                     )}
+                  </div>
+
+                  {/* Withdrawal From Balance (optional at approval) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="withdrawal-from-balance" className="text-sm font-medium">
+                      {t('expenses.withdrawalFromBalanceOptional')}
+                    </Label>
+                    <Select
+                      value={
+                        selectedWithdrawalFromBalance
+                          ? `debt_${selectedWithdrawalFromBalance}`
+                          : selectedBankAccountId
+                            ? `bank_${selectedBankAccountId}`
+                            : 'none'
+                      }
+                      onValueChange={(value) => {
+                        if (value === 'none') {
+                          setSelectedWithdrawalFromBalance(undefined);
+                          setSelectedBankAccountId(undefined);
+                        } else if (value.startsWith('debt_')) {
+                          setSelectedWithdrawalFromBalance(value.replace('debt_', ''));
+                          setSelectedBankAccountId(undefined);
+                        } else if (value.startsWith('bank_')) {
+                          setSelectedBankAccountId(value.replace('bank_', ''));
+                          setSelectedWithdrawalFromBalance(undefined);
+                        }
+                      }}
+                      disabled={debtsLoading || bankAccountsLoading || balancesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={(debtsLoading || bankAccountsLoading) ? t('expenses.loading') : t('expenses.selectSourceOptional')}>
+                          {selectedWithdrawalFromBalance
+                            ? (() => {
+                                const debt = debtsForExpense.find(d => d.id === selectedWithdrawalFromBalance);
+                                if (debt) {
+                                  const availableLimit = debt.available_limit ?? 0;
+                                  return `${debt.debt_name} (Rp ${availableLimit.toLocaleString('id-ID')} available)`;
+                                }
+                                return '';
+                              })()
+                            : selectedBankAccountId
+                              ? (() => {
+                                  const bank = bankAccounts.find(b => b.id === selectedBankAccountId);
+                                  if (bank) {
+                                    const balance = bankAccountBalances.find(b => b.bank_account_id === bank.id);
+                                    const availableBalance = balance?.balance ?? 0;
+                                    return bank.account_number
+                                      ? `${bank.name} - ${bank.account_number} (Rp ${availableBalance.toLocaleString('id-ID')} available)`
+                                      : `${bank.name} (Rp ${availableBalance.toLocaleString('id-ID')} available)`;
+                                  }
+                                  return '';
+                                })()
+                              : ''}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('expenses.none')}</SelectItem>
+                        {bankAccounts.length > 0 && (
+                          <>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.bankAccounts')}</div>
+                            {bankAccounts.map((bankAccount) => {
+                              const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
+                              const availableBalance = balance?.balance ?? 0;
+                              const displayText = bankAccount.account_number
+                                ? `${bankAccount.name} - ${bankAccount.account_number} (Rp ${availableBalance.toLocaleString('id-ID')} available)`
+                                : `${bankAccount.name} (Rp ${availableBalance.toLocaleString('id-ID')} available)`;
+                              return (
+                                <SelectItem key={`bank_${bankAccount.id}`} value={`bank_${bankAccount.id}`}>
+                                  {displayText}
+                                </SelectItem>
+                              );
+                            })}
+                          </>
+                        )}
+                        {debtsForExpense.length > 0 && (
+                          <>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">{t('expenses.debts')}</div>
+                            {debtsForExpense.map((debt) => {
+                              const availableLimit = debt.available_limit ?? 0;
+                              return (
+                                <SelectItem key={`debt_${debt.id}`} value={`debt_${debt.id}`}>
+                                  {debt.debt_name} (Rp {availableLimit.toLocaleString('id-ID')} available)
+                                </SelectItem>
+                              );
+                            })}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>

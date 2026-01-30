@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
-import { MoreHorizontal, Eye, Edit, UserX, Trash2, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { MoreHorizontal, Eye, UserX, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import {
   DropdownMenu,
@@ -33,7 +32,6 @@ export const EmployeeActionsDropdown = ({
   onRefresh,
   onViewDetails
 }: EmployeeActionsDropdownProps) => {
-  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const { toast } = useToast();
@@ -60,22 +58,6 @@ export const EmployeeActionsDropdown = ({
   const handleViewDetails = useCallback(() => {
     onViewDetails?.();
   }, [onViewDetails]);
-
-  const handleEdit = useCallback(() => {
-    if (!permissions.canEdit) {
-      toast({
-        title: "Permission Denied",
-        description: permissions.reasons.cannotEdit || "You don't have permission to edit this employee",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Navigate to edit employee page
-    navigate(`/employees/${employee.id}/edit`);
-    
-    logger.info('Navigating to edit employee:', employee.id);
-  }, [permissions, employee.id, navigate, toast]);
 
   const handleResignConfirm = useCallback(async () => {
     setIsLoading(true);
@@ -265,13 +247,6 @@ export const EmployeeActionsDropdown = ({
             <Eye className="h-4 w-4 mr-2" />
             View Details
           </DropdownMenuItem>
-          
-          {permissions.canEdit && (
-            <DropdownMenuItem onClick={handleEdit} className="cursor-pointer">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-          )}
           
           {permissions.canResign && (
             <DropdownMenuItem 

@@ -71,13 +71,14 @@ export const ProtectedRoute = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  // SECURITY: Check if employee is terminated (except owners)
+  // SECURITY: Check if employee is terminated or inactive/resigned (except owners)
   // Owner can access their own organization even if terminated in other organizations
   if (requiresAuth && user && employee && organization) {
     const employeeStatus = (employee as any).status || (employee as any).employee_status_name;
-    const isTerminated = employeeStatus?.toLowerCase() === 'terminated';
+    const statusLower = employeeStatus?.toLowerCase();
+    const isTerminatedOrInactive = statusLower === 'terminated' || statusLower === 'inactive';
     
-    if (isTerminated && !isOwner) {
+    if (isTerminatedOrInactive && !isOwner) {
       // Employee is terminated and not owner - block access
       return (
         <StandardLayout>

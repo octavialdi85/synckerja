@@ -31,6 +31,7 @@ export interface Expense {
   created_by: string;
   created_at: string;
   updated_at: string;
+  purchase_request_id?: string; // When expense was created from payment-process
 }
 
 export interface CreateExpenseData {
@@ -47,6 +48,7 @@ export interface CreateExpenseData {
   first_payment_date?: string;
   description?: string;
   receipt_file?: File;
+  purchase_request_id?: string; // Link to purchase request when created from payment-process
 }
 
 export const useExpenses = () => {
@@ -258,6 +260,7 @@ export const useExpenses = () => {
           description: expenseData.description || null,
           receipt_url: receiptUrl,
           created_by: userData.user.id,
+          purchase_request_id: expenseData.purchase_request_id || null,
         })
         .select()
         .single();

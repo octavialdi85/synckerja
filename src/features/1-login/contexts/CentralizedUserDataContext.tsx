@@ -251,8 +251,25 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       }
 
       let organizationId = profileData?.active_organization_id;
-      
-      // If no organization in profile, check user_organizations table (with timeout protection)
+
+      // SECURITY: If profile has an org, verify user still has active access (e.g. not resigned/terminated)
+      if (organizationId) {
+        try {
+          const { data: uo } = await supabase
+            .from('user_organizations')
+            .select('is_active')
+            .eq('user_id', user.id)
+            .eq('organization_id', organizationId)
+            .maybeSingle();
+          if (!uo || uo.is_active !== true) {
+            organizationId = null;
+          }
+        } catch {
+          organizationId = null;
+        }
+      }
+
+      // If no organization in profile or access was revoked, check user_organizations table (with timeout protection)
       if (!organizationId) {
         try {
           const orgQueryPromise = supabase
@@ -351,13 +368,12 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           .eq('user_id', user.id)
           .eq('organization_id', organizationId);
         
-        // SECURITY: Filter out terminated employees UNLESS they are the organization owner
+        // SECURITY: Filter out terminated and inactive (resigned) employees UNLESS they are the organization owner
         // Owner can access their own organization even if terminated in other organizations
         if (!isOrgOwner) {
-          // For non-owners, exclude terminated employees
-          // Allow null status (new employees) but exclude 'terminated'
-          // Use or() to allow null or non-terminated status
-          employeeQuery = employeeQuery.or('status.is.null,status.neq.terminated');
+          // For non-owners, exclude terminated and inactive (resigned) employees
+          // Allow null status (new employees) but exclude 'terminated' and 'inactive'
+          employeeQuery = employeeQuery.or('status.is.null,status.neq.terminated').neq('status', 'inactive');
         }
         // If isOrgOwner, allow access regardless of status (they own this org)
         
@@ -395,11 +411,12 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           // Calculate is_organization_owner (not a database field)
           const calculatedIsOwner = employeeData && orgData && employeeData.user_id === (orgData as any).user_id;
           
-          // SECURITY CHECK: If employee is terminated and not owner, block access
+          // SECURITY CHECK: If employee is terminated or inactive (resigned) and not owner, block access
           // This is a double-check in case query filter didn't work
-          if (employeeData && employeeData.status === 'terminated' && !isOrgOwner && !calculatedIsOwner) {
+          const isTerminatedOrInactive = employeeData?.status === 'terminated' || employeeData?.status === 'inactive';
+          if (employeeData && isTerminatedOrInactive && !isOrgOwner && !calculatedIsOwner) {
             if (import.meta.env.DEV) {
-              console.warn('🚫 Access denied: Employee is terminated and not organization owner', {
+              console.warn('🚫 Access denied: Employee is terminated/inactive and not organization owner', {
                 employeeId: employeeData.id,
                 status: employeeData.status,
                 isOrgOwner,

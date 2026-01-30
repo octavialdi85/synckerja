@@ -14,6 +14,7 @@ import './EmployeeTable.css';
 interface EmployeeTableProps {
   employees: Employee[];
   currentUserEmail?: string;
+  userRole?: string;
   onRefresh: () => void;
   onViewEmployee: (id: string) => void;
   isLoading?: boolean;
@@ -24,11 +25,13 @@ interface EmployeeTableProps {
 const EmployeeRow = memo(({ 
   employee, 
   currentUserEmail, 
+  userRole,
   onRefresh, 
   onViewEmployee 
 }: {
   employee: Employee;
   currentUserEmail?: string;
+  userRole?: string;
   onRefresh: () => void;
   onViewEmployee: (id: string) => void;
 }) => {
@@ -152,6 +155,7 @@ const EmployeeRow = memo(({
       <TableCell className="w-20 px-3">
         <EmployeeActionsDropdown
           employee={employee}
+          userRole={userRole}
           currentUserEmail={currentUserEmail}
           onRefresh={onRefresh}
           onViewDetails={handleViewEmployee}
@@ -166,6 +170,7 @@ EmployeeRow.displayName = 'EmployeeRow';
 export const EmployeeTable = memo(({ 
   employees = [], 
   currentUserEmail, 
+  userRole,
   onRefresh, 
   onViewEmployee,
   isLoading = false
@@ -192,11 +197,12 @@ export const EmployeeTable = memo(({
         key={employee.id}
         employee={employee}
         currentUserEmail={currentUserEmail}
+        userRole={userRole}
         onRefresh={onRefresh}
         onViewEmployee={onViewEmployee}
       />
     ))
-  ), [employees, currentUserEmail, onRefresh, onViewEmployee]);
+  ), [employees, currentUserEmail, userRole, onRefresh, onViewEmployee]);
 
   return (
     <div className="h-full flex flex-col">
