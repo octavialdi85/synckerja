@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Badge } from '@/features/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
-import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, ChevronDown, MoreHorizontal, Receipt, Eye, Trash2, Upload, FilterX, DollarSign } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -34,6 +34,7 @@ import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/
 import { ExpenseTableFooter } from './ExpenseTableFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
+import { Link } from 'react-router-dom';
 
 // Helper function to handle invoice file viewing (same as payment-process page)
 // Uses createSignedUrl instead of getPublicUrl because the bucket may not be public
@@ -79,6 +80,7 @@ export function ExpenseDashboard() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all-depts');
   const [categoryFilter, setCategoryFilter] = useState<string>('all-categories');
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+  const [withdrawalFilter, setWithdrawalFilter] = useState<string>('all-withdrawal');
   const { t } = useAppTranslation();
 
   const handleTabChange = (tab: string) => {
@@ -93,6 +95,7 @@ export function ExpenseDashboard() {
     setDepartmentFilter('all-depts');
     setCategoryFilter('all-categories');
     setCategoryFilterOpen(false);
+    setWithdrawalFilter('all-withdrawal');
     setSearchQuery('');
   };
 
@@ -603,8 +606,21 @@ export function ExpenseDashboard() {
       });
     }
 
+    // Apply withdrawal from balance filter if selected
+    if (withdrawalFilter && withdrawalFilter !== 'all-withdrawal') {
+      if (withdrawalFilter === 'none') {
+        filtered = filtered.filter(expense => !expense.withdrawal_from_balance && !expense.bank_account_id);
+      } else if (withdrawalFilter.startsWith('debt_')) {
+        const debtId = withdrawalFilter.replace('debt_', '');
+        filtered = filtered.filter(expense => expense.withdrawal_from_balance === debtId);
+      } else if (withdrawalFilter.startsWith('bank_')) {
+        const bankId = withdrawalFilter.replace('bank_', '');
+        filtered = filtered.filter(expense => expense.bank_account_id === bankId);
+      }
+    }
+
     return filtered;
-  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, categoryFilter]);
+  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, categoryFilter, withdrawalFilter]);
 
   // Data untuk tab "Expense Category" saja: filter date/type/dept, TANPA filter kategori.
   // Tab Expense Category tidak merespon filter kategori agar breakdown per kategori tetap tampil penuh.
@@ -684,9 +700,21 @@ export function ExpenseDashboard() {
     if (departmentFilter && departmentFilter !== 'all-depts') {
       filtered = filtered.filter(expense => expense.department === departmentFilter);
     }
+    // Apply withdrawal from balance filter so all sections respond
+    if (withdrawalFilter && withdrawalFilter !== 'all-withdrawal') {
+      if (withdrawalFilter === 'none') {
+        filtered = filtered.filter(expense => !expense.withdrawal_from_balance && !expense.bank_account_id);
+      } else if (withdrawalFilter.startsWith('debt_')) {
+        const debtId = withdrawalFilter.replace('debt_', '');
+        filtered = filtered.filter(expense => expense.withdrawal_from_balance === debtId);
+      } else if (withdrawalFilter.startsWith('bank_')) {
+        const bankId = withdrawalFilter.replace('bank_', '');
+        filtered = filtered.filter(expense => expense.bank_account_id === bankId);
+      }
+    }
     // Sengaja TIDAK menerapkan categoryFilter agar tab Expense Category selalu menampilkan breakdown semua kategori
     return filtered;
-  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter]);
+  }, [expenses, paidPurchaseRequests, getDateRange, expenseTypeFilter, departmentFilter, withdrawalFilter]);
 
   const totalExpenses = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const currentMonthTotal = allExpenses
@@ -745,16 +773,39 @@ export function ExpenseDashboard() {
             {/* Content Area - max-h + flex; table section scrolls internally */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] min-w-0">
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-2 bg-gradient-to-br from-gray-50 to-white min-w-0">
-              {/* Header Card */}
+              {/* Quick View Total Current Balance - not affected by table filters; updates instantly when expense uses bank balance */}
       <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
         <CardContent className="p-3 min-w-0">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 min-w-0">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 min-w-0">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-semibold mb-1 text-white truncate">Total Expenses</h1>
-              <p className="text-blue-100 text-xs sm:text-sm truncate">{allExpenses.length} total transactions</p>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-white/20 rounded-lg flex-shrink-0">
+                  <DollarSign className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-medium text-blue-100 truncate">{t('expenses.quickViewTotalBalance', 'Quick View Total Current Balance')}</span>
+              </div>
+              <Link
+                to="/incomes/dashboard"
+                className="inline-block flex-shrink-0"
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-white text-blue-600 hover:bg-blue-50 border-0 font-medium whitespace-nowrap"
+                >
+                  {t('expenses.goToIncomeDashboard', 'Lihat Income')}
+                </Button>
+              </Link>
             </div>
-            <div className="text-left sm:text-right min-w-0">
-              <div className="text-2xl sm:text-3xl font-bold truncate">{formatCurrency(totalExpenses)}</div>
+            <div className="text-left sm:text-right min-w-0 flex-shrink-0">
+              <div className="text-2xl sm:text-3xl font-bold text-white truncate">
+                {balancesLoading ? (t('expenses.loading', 'Loading...')) : formatCurrency(
+                  bankAccountBalances.reduce((total, b) => total + (b.balance ?? 0), 0)
+                )}
+              </div>
+              <div className="text-xs text-blue-100 truncate mt-1">
+                {bankAccounts.length} bank account{bankAccounts.length !== 1 ? 's' : ''} registered
+              </div>
             </div>
           </div>
         </CardContent>
@@ -1141,6 +1192,34 @@ export function ExpenseDashboard() {
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              <Select value={withdrawalFilter} onValueChange={setWithdrawalFilter} disabled={debtsLoading || bankAccountsLoading}>
+                <SelectTrigger className="w-full sm:w-40 md:w-44 min-w-0">
+                  <SelectValue placeholder={debtsLoading || bankAccountsLoading ? t('expenses.withdrawalFilter.loading', 'Loading...') : t('expenses.withdrawalFilter.allWithdrawal', 'Withdrawal From Balance')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-withdrawal">{t('expenses.withdrawalFilter.allWithdrawal', 'All')}</SelectItem>
+                  <SelectItem value="none">{t('expenses.withdrawalFilter.none', 'None')}</SelectItem>
+                  {debtsForExpense.length > 0 && (
+                    <>
+                      {debtsForExpense.map((debt) => (
+                        <SelectItem key={debt.id} value={`debt_${debt.id}`}>
+                          {debt.debt_name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {bankAccounts.length > 0 && (
+                    <>
+                      {bankAccounts.map((bank) => (
+                        <SelectItem key={bank.id} value={`bank_${bank.id}`}>
+                          {bank.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
 
               <Select value={departmentFilter} onValueChange={setDepartmentFilter} disabled={departmentsLoading}>
                 <SelectTrigger className="w-full sm:w-36 md:w-40 min-w-0">

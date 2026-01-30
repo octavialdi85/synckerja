@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { DollarSign } from 'lucide-react';
 import { HeaderAndTab } from '../4_2_dashboard/HeaderAndTab';
 import { Card, CardContent } from '@/features/ui/card';
+import { Button } from '@/features/ui/button';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useDebts } from './hooks';
 import { DebtTable, DebtForm, DebtPaymentHistoryModal } from './components';
@@ -9,6 +12,7 @@ import { Debt, CreateDebtData, UpdateDebtData } from './types';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
+import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
@@ -24,7 +28,8 @@ export const DebtPage = () => {
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const { t } = useAppTranslation();
   const { debts, totalInterestYtd, isLoading, isCreating, isUpdating, createDebt, updateDebt, deleteDebt, refetch: refetchDebts } = useDebts();
-  const { updateBalance } = useBankAccountBalances();
+  const { balances: bankAccountBalances, loading: balancesLoading, updateBalance } = useBankAccountBalances();
+  const { bankAccounts } = useBankAccounts();
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
@@ -194,16 +199,40 @@ export const DebtPage = () => {
             {/* Content Area - Scrollable */}
             <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] min-w-0">
               <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col min-w-0">
-                {/* Header Card */}
-                <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0">
+                {/* Quick View Total Current Balance - not affected by filters; updates when balance changes (e.g. debt payment from bank) */}
+                <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
                   <CardContent className="p-3 min-w-0">
-                    <div className="min-w-0 flex-1">
-                      <h1 className="text-xl sm:text-2xl font-semibold mb-1 text-white truncate">
-                        {t('debt.title', 'Manajemen Hutang')}
-                      </h1>
-                      <p className="text-blue-100 text-xs sm:text-sm truncate">
-                        {t('debt.description', 'Kelola dan lacak catatan hutang')}
-                      </p>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 min-w-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="p-2 bg-white/20 rounded-lg flex-shrink-0">
+                            <DollarSign className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="text-sm font-medium text-blue-100 truncate">{t('expenses.quickViewTotalBalance', 'Quick View Total Current Balance')}</span>
+                        </div>
+                        <Link
+                          to="/incomes/dashboard"
+                          className="inline-block flex-shrink-0"
+                        >
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="bg-white text-blue-600 hover:bg-blue-50 border-0 font-medium whitespace-nowrap"
+                          >
+                            {t('expenses.goToIncomeDashboard', 'Lihat Income')}
+                          </Button>
+                        </Link>
+                      </div>
+                      <div className="text-left sm:text-right min-w-0 flex-shrink-0">
+                        <div className="text-2xl sm:text-3xl font-bold text-white truncate">
+                          {balancesLoading ? t('expenses.loading', 'Loading...') : formatToRupiah(
+                            bankAccountBalances.reduce((total, b) => total + (b.balance ?? 0), 0)
+                          )}
+                        </div>
+                        <div className="text-xs text-blue-100 truncate mt-1">
+                          {bankAccounts.length} bank account{bankAccounts.length !== 1 ? 's' : ''} registered
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

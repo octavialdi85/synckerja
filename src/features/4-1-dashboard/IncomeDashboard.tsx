@@ -1,9 +1,11 @@
-
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
+import { Button } from '@/features/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/features/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
-import { Calendar, TrendingUp, DollarSign, Target, Clock, History } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { Calendar, TrendingUp, DollarSign, Target, Clock, History, ChevronDown } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { useIncomeMetrics, useIncomeTransactions, useMonthlyIncomeData } from './hooks';
 import { useIncomeMasterData } from './hooks/useIncomeMasterData';
 import { formatToRupiah } from '@/utils/formatCurrency';
@@ -71,6 +73,7 @@ export function IncomeDashboard() {
   const [selectedType, setSelectedType] = useState('All Types');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedBankAccount, setSelectedBankAccount] = useState<string>('all');
+  const [incomeDistributionTab, setIncomeDistributionTab] = useState<'overview' | 'service'>('overview');
   const [isBalanceHistoryOpen, setIsBalanceHistoryOpen] = useState(false);
   const [selectedBankAccountForHistory, setSelectedBankAccountForHistory] = useState<string | null>(null);
   const [balanceHistory, setBalanceHistory] = useState<any[]>([]);
@@ -337,26 +340,40 @@ export function IncomeDashboard() {
                 </div>
               </div>
 
-              {/* Total Balance Card - Show when "All Bank Accounts" is selected */}
+              {/* Total Balance Card - Show when "All Bank Accounts" is selected; blue layout with button to expenses dashboard */}
               {selectedBankAccount === 'all' && bankAccounts.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-1 gap-2 mb-2">
-                  <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
+                  <Card className="bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
+                    <CardContent className="p-3 min-w-0">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 bg-purple-50 rounded-lg">
-                              <DollarSign className="h-4 w-4 text-purple-600" />
+                            <div className="p-2 bg-white/20 rounded-lg flex-shrink-0">
+                              <DollarSign className="h-4 w-4 text-white" />
                             </div>
-                            <span className="text-sm font-medium text-gray-600">Total Current Balance</span>
+                            <span className="text-sm font-medium text-blue-100 truncate">Total Current Balance</span>
                           </div>
-                          <div className="text-2xl font-bold text-gray-900 mb-1">
+                          <Link
+                            to="/expenses/dashboard"
+                            className="inline-block flex-shrink-0"
+                          >
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="bg-white text-blue-600 hover:bg-blue-50 border-0 font-medium whitespace-nowrap"
+                            >
+                              Lihat Expense
+                            </Button>
+                          </Link>
+                        </div>
+                        <div className="text-left sm:text-right min-w-0 flex-shrink-0">
+                          <div className="text-2xl sm:text-3xl font-bold text-white truncate">
                             {formatToRupiah(
                               bankAccountBalances.reduce((total, balance) => total + (balance.balance || 0), 0)
                             )}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {bankAccounts.length} bank account{bankAccounts.length > 1 ? 's' : ''} registered
+                          <div className="text-xs text-blue-100 truncate mt-1">
+                            {bankAccounts.length} bank account{bankAccounts.length !== 1 ? 's' : ''} registered
                           </div>
                         </div>
                       </div>
@@ -365,7 +382,7 @@ export function IncomeDashboard() {
                 </div>
               )}
 
-              {/* Bank Account Summary Cards */}
+              {/* Bank Account Summary - biru sama seperti Total Current Balance (filter bank lain) */}
               {selectedBankAccount !== 'all' && bankAccounts.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-1 gap-2 mb-2">
                   {(() => {
@@ -376,7 +393,7 @@ export function IncomeDashboard() {
                     
                     return (
                       <Card 
-                        className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+                        className="bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0 cursor-pointer hover:bg-blue-700 transition-colors"
                         onClick={async () => {
                           setSelectedBankAccountForHistory(selectedBankAccount);
                           setIsBalanceHistoryOpen(true);
@@ -392,19 +409,19 @@ export function IncomeDashboard() {
                           }
                         }}
                       >
-                        <CardContent className="p-3">
+                        <CardContent className="p-3 min-w-0">
                           <div className="flex items-center justify-between">
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-purple-50 rounded-lg">
-                                  <DollarSign className="h-4 w-4 text-purple-600" />
+                                <div className="p-2 bg-white/20 rounded-lg flex-shrink-0">
+                                  <DollarSign className="h-4 w-4 text-white" />
                                 </div>
-                                <span className="text-sm font-medium text-gray-600">Current Balance</span>
+                                <span className="text-sm font-medium text-blue-100 truncate">Current Balance</span>
                               </div>
-                              <div className="text-2xl font-bold text-gray-900 mb-1">
+                              <div className="text-2xl font-bold text-white mb-1 truncate">
                                 {balance ? formatToRupiah(balance.balance) : 'Rp 0'}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-blue-100 truncate">
                                 {selectedBank.name}
                               </div>
                             </div>
@@ -416,11 +433,11 @@ export function IncomeDashboard() {
                 </div>
               )}
 
-              {/* Compact Metrics Cards */}
+              {/* Compact Metrics Cards - border sama seperti Income Distribution */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
                 {/* Total Income Card */}
-        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200">
-          <CardContent className="p-3">
+        <Card className="flex flex-col min-w-0">
+          <CardContent className="p-3 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -443,8 +460,8 @@ export function IncomeDashboard() {
         </Card>
 
         {/* Period Change Card */}
-        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200">
-          <CardContent className="p-3">
+        <Card className="flex flex-col min-w-0">
+          <CardContent className="p-3 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -467,8 +484,8 @@ export function IncomeDashboard() {
         </Card>
 
         {/* Highest Income Card */}
-        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200">
-          <CardContent className="p-3">
+        <Card className="flex flex-col min-w-0">
+          <CardContent className="p-3 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -489,8 +506,8 @@ export function IncomeDashboard() {
         </Card>
 
         {/* Latest Income Card */}
-        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200">
-          <CardContent className="p-3">
+        <Card className="flex flex-col min-w-0">
+          <CardContent className="p-3 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -511,159 +528,273 @@ export function IncomeDashboard() {
         </Card>
               </div>
 
-              {/* Compact Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
-                {/* Income Types Chart */}
-        <Card className="bg-white border-0 shadow-sm">
-          <CardContent className="p-3">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Income Distribution</h3>
-            <div className="h-48 flex items-center justify-center bg-gray-50 rounded-lg">
-              <div className="text-center">
-                <div className="text-3xl mb-2">📊</div>
-                <p className="text-gray-500 text-sm font-medium">
-                  {filteredTransactions.length > 0 ? 'Chart visualization coming soon' : 'No income data available'}
-                </p>
-                <p className="text-gray-400 text-xs mt-1">
-                  {filteredTransactions.length === 0 
-                    ? 'Start adding income records' 
-                    : `${filteredMetrics.count} transactions (${selectedPeriod}${selectedType !== 'All Types' ? `, ${selectedType}` : ''})`}
-                </p>
+              {/* Compact Charts Section - kedua card sama tinggi, mengisi area grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 min-w-0 flex-shrink-0">
+                {/* Income Distribution - ukuran & jarak sama persis seperti Expense Breakdown */}
+        <Card className="flex flex-col min-w-0 h-full">
+        <CardContent className="pt-3 px-3 pb-2 flex flex-col min-w-0 h-full">
+            <div className="flex justify-between items-center mb-4 gap-2 min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold truncate">Income Distribution</h3>
+              <div className="text-right min-w-0">
+                <div className="text-base sm:text-lg font-semibold truncate">
+                  {formatToRupiah(
+                    filteredTransactions.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0)
+                  )}
+                </div>
               </div>
             </div>
+
+            <Tabs value={incomeDistributionTab} onValueChange={(v) => setIncomeDistributionTab(v as 'overview' | 'service')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+                <TabsTrigger value="service" className="text-xs sm:text-sm">Service</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="mt-0">
+                {filteredTransactions.length > 0 ? (
+                  <>
+                    <div className="flex items-end justify-center gap-1 pt-2 px-2 pb-0 min-w-0">
+                      {(() => {
+                        const incomeTypeTotals = filteredTransactions.reduce((acc, transaction) => {
+                          const typeName = transaction.income_types?.name || 'Uncategorized';
+                          const amount = parseFloat(transaction.amount.toString());
+                          acc[typeName] = (acc[typeName] || 0) + amount;
+                          return acc;
+                        }, {} as Record<string, number>);
+
+                        const maxAmount = Math.max(...Object.values(incomeTypeTotals), 0);
+                        const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
+
+                        return Object.entries(incomeTypeTotals).map(([typeName, amount], index) => {
+                          const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
+                          const colorClass = colors[index % colors.length];
+                          return (
+                            <div key={typeName} className="flex-1 flex flex-col items-center min-w-0 gap-0.5 pb-0">
+                              <div className="w-full bg-gray-100 rounded flex flex-col justify-end h-48 p-1">
+                                <div
+                                  className={`w-full ${colorClass} rounded-t min-h-[4px]`}
+                                  style={{ height: `${Math.max(heightPercentage, 8)}%` }}
+                                  title={`${typeName}: ${formatToRupiah(amount)}`}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center whitespace-nowrap truncate w-full mb-0" title={typeName}>
+                                {typeName}
+                              </span>
+                              <span className="text-xs font-medium text-gray-800 text-center truncate w-full mb-0" title={formatToRupiah(amount)}>
+                                {formatToRupiah(amount)}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 h-32 bg-gray-100 rounded flex items-center justify-center">
+                    <span className="text-gray-500 text-sm">No income data available</span>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="service" className="mt-0">
+                {filteredTransactions.length > 0 ? (
+                  <>
+                    <div className="flex items-end justify-center gap-1 pt-2 px-2 pb-0 min-w-0">
+                      {(() => {
+                        const serviceTotals = filteredTransactions.reduce((acc, transaction) => {
+                          const serviceName = transaction.services?.name || 'Uncategorized';
+                          const amount = parseFloat(transaction.amount.toString());
+                          acc[serviceName] = (acc[serviceName] || 0) + amount;
+                          return acc;
+                        }, {} as Record<string, number>);
+
+                        const entries = Object.entries(serviceTotals);
+                        const maxAmount = entries.length > 0 ? Math.max(...entries.map(([, v]) => v)) : 0;
+                        const colors = ['bg-green-500', 'bg-green-400', 'bg-blue-500', 'bg-blue-400', 'bg-purple-500', 'bg-purple-400', 'bg-orange-500', 'bg-orange-400'];
+
+                        return entries.map(([serviceName, amount], index) => {
+                          const heightPercentage = maxAmount > 0 ? (amount / maxAmount) * 80 : 0;
+                          const colorClass = colors[index % colors.length];
+                          return (
+                            <div key={serviceName} className="flex-1 flex flex-col items-center min-w-0 gap-0.5 pb-0">
+                              <div className="w-full bg-gray-100 rounded flex flex-col justify-end h-48 p-1">
+                                <div
+                                  className={`w-full ${colorClass} rounded-t min-h-[4px]`}
+                                  style={{ height: `${Math.max(heightPercentage, 8)}%` }}
+                                  title={`${serviceName}: ${formatToRupiah(amount)}`}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 text-center whitespace-nowrap truncate w-full mb-0" title={serviceName}>
+                                {serviceName}
+                              </span>
+                              <span className="text-xs font-medium text-gray-800 text-center truncate w-full mb-0" title={formatToRupiah(amount)}>
+                                {formatToRupiah(amount)}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 h-32 bg-gray-100 rounded flex items-center justify-center">
+                    <span className="text-gray-500 text-sm">No income data available</span>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
-        {/* Monthly Income Trends Chart */}
-        <Card className="bg-white border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-semibold">Trend Pendapatan Bulanan Tahun {selectedYear}</CardTitle>
-                <div className="text-xs text-muted-foreground">Satuan: Rupiah | Jan - Des {selectedYear}</div>
+        {/* Trend Pendapatan Bulanan - mengisi area yang sama dengan Income Distribution (card sama tinggi) */}
+        <Card className="flex flex-col min-w-0 h-full">
+          <CardContent className="pt-3 px-3 pb-2 flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0 min-w-0 gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base sm:text-lg font-semibold truncate">Trend Pendapatan Bulanan Tahun {selectedYear}</h3>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Satuan: Rupiah | Jan - Des {selectedYear}</p>
               </div>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-20 h-8 text-sm border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white z-50">
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-20 h-9 text-sm border-gray-200 bg-gray-50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white z-50">
+                    <SelectItem value="2026">2026</SelectItem>
+                    <SelectItem value="2025">2025</SelectItem>
+                    <SelectItem value="2024">2024</SelectItem>
+                    <SelectItem value="2023">2023</SelectItem>
+                  </SelectContent>
+                </Select>
+                <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-2">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart 
-                data={monthlyData} 
-                margin={{
-                  top: 10,
-                  right: 5,
-                  left: 25,
-                  bottom: 0
-                }} 
-                barCategoryGap="2%"
-              >
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 9 }} 
-                  height={40} 
-                  tickFormatter={value => value.split(' ')[0]} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 8 }} 
-                  width={35} 
-                  tickFormatter={value => `${(value / 1000000).toFixed(0)}M`} 
-                />
-                <Tooltip 
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-white p-2 border rounded shadow-sm text-xs">
-                          <p className="font-medium">{label}</p>
-                          <p className="text-primary">
-                            {formatToRupiah(payload[0].value as number)}
-                          </p>
-                          <p className="text-muted-foreground">
-                            {payload[0].payload.count} transaksi
-                          </p>
+
+            <div className="flex-1 min-h-0 min-w-0">
+              {monthlyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%" className="min-w-0">
+                  <LineChart data={monthlyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => value.split(' ')[0]}
+                      fontSize={10}
+                      stroke="#6b7280"
+                      tickLine={false}
+                    />
+                    <YAxis
+                      fontSize={10}
+                      stroke="#6b7280"
+                      tickLine={false}
+                      width={58}
+                      tick={{ style: { whiteSpace: 'nowrap' } }}
+                      tickFormatter={(value) => {
+                        const nbsp = '\u00A0';
+                        if (value >= 1000000) return `Rp${nbsp}${(value / 1000000).toFixed(1)}jt`;
+                        if (value >= 1000) return `Rp${nbsp}${(value / 1000).toFixed(0)}rb`;
+                        return `Rp${nbsp}${value.toLocaleString('id-ID')}`;
+                      }}
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [`Rp ${Number(value).toLocaleString('id-ID')}`, 'Income']}
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#3B82F6"
+                      strokeWidth={2}
+                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full min-h-[120px] bg-gray-100 rounded flex items-center justify-center">
+                  <span className="text-gray-500 text-sm">No income data available for this year</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center mt-1 flex-shrink-0">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+              <span className="text-sm text-gray-600">Income</span>
+            </div>
+          </CardContent>
+        </Card>
+              </div>
+
+              {/* Section kiri & kanan saja: Income vs. Expenses (kiri) | Net Income per Bank Account (kanan) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 min-w-0">
+                {/* Kiri: Income vs. Expenses */}
+                <div className="min-w-0">
+                  <IncomeVsExpensesChart />
+                </div>
+                {/* Kanan: Net Income per Bank Account - tinggi mengikuti kiri, daftar scroll agar tidak panjang ke bawah */}
+                <div className="min-w-0">
+                  <Card className="flex flex-col min-w-0 h-full">
+                    <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
+                      <CardTitle className="text-base sm:text-lg font-semibold">Net Income per Bank Account</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 pt-0 pb-2 flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden">
+                      {selectedBankAccount === 'all' && bankAccounts.length > 0 ? (
+                        <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll space-y-2 max-h-[180px] pb-0">
+                          {bankAccounts.map(bankAccount => {
+                            const netData = bankAccountNet[bankAccount.id];
+                            const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
+                            
+                            if (!netData && !balance) return null;
+                            
+                            const income = netData?.income || 0;
+                            const expense = netData?.expense || 0;
+                            const net = income - expense;
+                            const currentBalance = balance?.balance || 0;
+                            const totalWithBalance = income + currentBalance;
+                            
+                            return (
+                              <div key={bankAccount.id} className="flex items-center justify-between p-2 bg-gray-200 rounded-lg">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm text-gray-900 truncate">{bankAccount.name}</div>
+                                  {bankAccount.account_number ? (
+                                    <div className="text-xs text-gray-700 truncate">No. Rek: {bankAccount.account_number}</div>
+                                  ) : null}
+                                  <div className="text-xs text-gray-700">
+                                    Income: {formatToRupiah(income)} | Expense: {formatToRupiah(expense)}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0 ml-2">
+                                  <div className={`text-sm font-semibold ${net >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                                    Net: {formatToRupiah(net)}
+                                  </div>
+                                  <div className="text-xs text-gray-800 font-medium">
+                                    Balance: {formatToRupiah(currentBalance)}
+                                  </div>
+                                  <div className="text-xs font-semibold text-blue-800">
+                                    Total: {formatToRupiah(totalWithBalance)}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Bar 
-                  dataKey="value" 
-                  fill="hsl(var(--primary))" 
-                  radius={[2, 2, 0, 0]} 
-                  maxBarSize={60} 
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-              </div>
-
-              {/* Real Income vs Expenses Chart */}
-              <IncomeVsExpensesChart />
-
-              {/* Bank Account Net Summary Table */}
-              {selectedBankAccount === 'all' && bankAccounts.length > 0 && (
-                <Card className="bg-white border-0 shadow-sm mt-2">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold">Net Income per Bank Account</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3">
-                    <div className="space-y-2">
-                      {bankAccounts.map(bankAccount => {
-                        const netData = bankAccountNet[bankAccount.id];
-                        const balance = bankAccountBalances.find(b => b.bank_account_id === bankAccount.id);
-                        
-                        if (!netData && !balance) return null;
-                        
-                        const income = netData?.income || 0;
-                        const expense = netData?.expense || 0;
-                        const net = income - expense;
-                        const currentBalance = balance?.balance || 0;
-                        const totalWithBalance = income + currentBalance;
-                        
-                        return (
-                          <div key={bankAccount.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                            <div className="flex-1">
-                              <div className="font-medium text-sm text-gray-900">{bankAccount.name}</div>
-                              <div className="text-xs text-gray-500">
-                                Income: {formatToRupiah(income)} | Expense: {formatToRupiah(expense)}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className={`text-sm font-semibold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                Net: {formatToRupiah(net)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                Balance: {formatToRupiah(currentBalance)}
-                              </div>
-                              <div className="text-xs font-medium text-blue-600">
-                                Total: {formatToRupiah(totalWithBalance)}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {bankAccounts.length === 0 && (
-                        <div className="text-center py-4 text-gray-500 text-sm">
-                          No bank accounts found
+                      ) : bankAccounts.length === 0 ? (
+                        <div className="flex-1 min-h-[120px] bg-gray-50 rounded-lg flex items-center justify-center">
+                          <span className="text-gray-500 text-sm">No bank accounts</span>
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-[120px] bg-gray-50 rounded-lg flex items-center justify-center">
+                          <span className="text-gray-500 text-sm text-center px-2">Select &quot;All Banks&quot; to see net income per bank account</span>
                         </div>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
               </div>
             </div>
           </div>
