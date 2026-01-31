@@ -13,6 +13,8 @@ import { ArrowRightLeft, FileText, X } from 'lucide-react';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+/** Sentinel value for "Return to company" - Radix Select does not allow empty string for SelectItem */
+const RETURN_TO_COMPANY_VALUE = '__return_to_company__';
 
 interface Asset {
   id: string;
@@ -55,8 +57,9 @@ export const HandoverAssetModal = ({ isOpen, onClose, asset, onSuccess }: Handov
 
   const handleSubmit = async () => {
     if (!asset?.id) return;
-    const isResignationReturn = handoverType === 'resignation' && !newEmployeeId;
-    if (!isResignationReturn && !newEmployeeId) {
+    const noRecipient = !newEmployeeId || newEmployeeId === RETURN_TO_COMPANY_VALUE;
+    const isResignationReturn = handoverType === 'resignation' && noRecipient;
+    if (!isResignationReturn && noRecipient) {
       showToast({ title: t('common.error', 'Error'), description: t('companyAssets.selectEmployee', 'Select employee'), variant: 'destructive' });
       return;
     }
@@ -67,7 +70,7 @@ export const HandoverAssetModal = ({ isOpen, onClose, asset, onSuccess }: Handov
     try {
       await handoverMutation.mutateAsync({
         assetId: asset.id,
-        newEmployeeId: isResignationReturn ? null : newEmployeeId,
+        newEmployeeId: noRecipient ? null : newEmployeeId,
         handoverType,
         file,
         notes,
@@ -133,7 +136,7 @@ export const HandoverAssetModal = ({ isOpen, onClose, asset, onSuccess }: Handov
                 <SelectValue placeholder={employeesLoading ? t('common.loading', 'Loading...') : t('companyAssets.selectEmployee', 'Select employee')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">{t('companyAssets.returnToCompanyNoRecipient', 'Return to company (no recipient)')}</SelectItem>
+                <SelectItem value={RETURN_TO_COMPANY_VALUE}>{t('companyAssets.returnToCompanyNoRecipient', 'Return to company (no recipient)')}</SelectItem>
                 {filteredEmployees.map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
                     {emp.full_name} {emp.department_name ? `(${emp.department_name})` : ''}
@@ -171,7 +174,7 @@ export const HandoverAssetModal = ({ isOpen, onClose, asset, onSuccess }: Handov
               disabled={
                 handoverMutation.isPending ||
                 !file ||
-                (handoverType === 'transfer' && !newEmployeeId)
+                (handoverType === 'transfer' && (!newEmployeeId || newEmployeeId === RETURN_TO_COMPANY_VALUE))
               }
             >
               {handoverMutation.isPending ? t('common.loading', 'Loading...') : t('companyAssets.handoverButton', 'Handover')}
