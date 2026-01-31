@@ -9,6 +9,7 @@ export interface PurchaseRequestFormData {
   purchaseType?: string;
   requestTitle?: string;
   amountIdr?: string;
+  quantity?: number | string;
   isRecurring?: boolean;
   recurringFrequency?: string;
   description?: string;
@@ -33,6 +34,7 @@ export interface PurchaseRequest {
   reimbursement_type?: string;
   request_title: string;
   amount_idr: number;
+  quantity?: number;
   is_recurring?: boolean;
   recurring_frequency?: string;
   expense_date?: string;
@@ -216,6 +218,7 @@ export const useCreatePurchaseRequest = () => {
         purchase_type: formData.purchaseType,
         request_title: formData.requestTitle,
         amount_idr: parseFloat(formData.amountIdr || '0'),
+        quantity: Math.max(1, parseInt(String(formData.quantity || 1), 10) || 1),
         is_recurring: formData.isRecurring,
         recurring_frequency: formData.recurringFrequency || null,
         description: formData.description,

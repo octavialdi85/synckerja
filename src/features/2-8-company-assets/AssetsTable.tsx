@@ -5,8 +5,13 @@ import {
 } from '@/features/ui/table';
 import { ViewAssetModal } from './ViewAssetModal';
 import { EditAssetModal } from './EditAssetModal';
+import { AssignAssetModal } from './AssignAssetModal';
+import { HandoverAssetModal } from './HandoverAssetModal';
+import { ReturnAssetModal } from './ReturnAssetModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useCurrentUserRole } from '@/features/share/hooks/useCurrentUserRole';
 import { AssetRow } from './assets-table/AssetRow';
 import { AssetsTableHeader } from './assets-table/AssetsTableHeader';
 import { AssetsEmptyState } from './assets-table/AssetsEmptyState';
@@ -29,6 +34,14 @@ interface Asset {
   notes: string;
   image_url: string;
   created_at: string;
+  purchase_request_id?: string | null;
+  receipt_confirmed_at?: string | null;
+  requester_name?: string | null;
+  department_name?: string | null;
+  assigned_to_employee_id?: string | null;
+  assigned_at?: string | null;
+  assigned_employee_name?: string | null;
+  assigned_department_name?: string | null;
 }
 
 interface AssetsTableProps {
@@ -37,6 +50,7 @@ interface AssetsTableProps {
   selectedCategory: string;
   selectedStatus: string;
   selectedCondition: string;
+  selectedReceiptFilter?: string;
   isLoading?: boolean;
   onRefresh: () => void;
 }
@@ -47,22 +61,30 @@ export const AssetsTable = ({
   selectedCategory, 
   selectedStatus, 
   selectedCondition,
+  selectedReceiptFilter = 'all',
   isLoading = false,
   onRefresh
 }: AssetsTableProps) => {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [handoverModalOpen, setHandoverModalOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { t } = useAppTranslation();
   const showToast = useShowToast();
+  const { data: userRole } = useCurrentUserRole();
+  const canManageAssignments = !!userRole && ['admin', 'hr', 'owner'].includes(userRole);
 
   const { filteredAssets } = useAssetFilters({
     assets,
     searchTerm,
     selectedCategory,
     selectedStatus,
-    selectedCondition
+    selectedCondition,
+    selectedReceiptFilter,
   });
 
   const handleViewDetails = useCallback((asset: Asset) => {
@@ -81,6 +103,21 @@ export const AssetsTable = ({
     console.log('Opening delete dialog for asset:', asset.id);
     setSelectedAsset(asset);
     setDeleteDialogOpen(true);
+  }, []);
+
+  const handleAssign = useCallback((asset: Asset) => {
+    setSelectedAsset(asset);
+    setAssignModalOpen(true);
+  }, []);
+
+  const handleHandover = useCallback((asset: Asset) => {
+    setSelectedAsset(asset);
+    setHandoverModalOpen(true);
+  }, []);
+
+  const handleReturn = useCallback((asset: Asset) => {
+    setSelectedAsset(asset);
+    setReturnModalOpen(true);
   }, []);
 
   const handleCloseViewModal = useCallback(() => {
@@ -110,8 +147,8 @@ export const AssetsTable = ({
       }
 
       showToast({
-        title: 'Success',
-        description: 'Asset deleted successfully',
+        title: t('common.success', 'Success'),
+        description: t('companyAssets.deleteSuccess', 'Asset deleted successfully.'),
         variant: 'default'
       });
 
@@ -121,8 +158,8 @@ export const AssetsTable = ({
 
     } catch (error: any) {
       showToast({
-        title: 'Error',
-        description: error.message || 'Failed to delete asset',
+        title: t('common.error', 'Error'),
+        description: error.message || t('companyAssets.deleteFailed', 'Failed to delete asset'),
         variant: 'destructive'
       });
     } finally {
@@ -155,6 +192,10 @@ export const AssetsTable = ({
                     onViewDetails={handleViewDetails}
                     onEditAsset={handleEditAsset}
                     onDeleteAsset={handleDeleteAsset}
+                    onAssign={handleAssign}
+                    onHandover={handleHandover}
+                    onReturn={handleReturn}
+                    canManageAssignments={canManageAssignments}
                   />
                 ))}
               </TableBody>
@@ -174,6 +215,7 @@ export const AssetsTable = ({
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
         asset={selectedAsset}
+        onRefresh={onRefresh}
       />
 
       <EditAssetModal
@@ -192,6 +234,25 @@ export const AssetsTable = ({
         onConfirm={confirmDeleteAsset}
         isDeleting={isDeleting}
         asset={selectedAsset}
+      />
+
+      <AssignAssetModal
+        isOpen={assignModalOpen}
+        onClose={() => { setAssignModalOpen(false); setSelectedAsset(null); }}
+        asset={selectedAsset}
+        onSuccess={onRefresh}
+      />
+      <HandoverAssetModal
+        isOpen={handoverModalOpen}
+        onClose={() => { setHandoverModalOpen(false); setSelectedAsset(null); }}
+        asset={selectedAsset}
+        onSuccess={onRefresh}
+      />
+      <ReturnAssetModal
+        isOpen={returnModalOpen}
+        onClose={() => { setReturnModalOpen(false); setSelectedAsset(null); }}
+        asset={selectedAsset}
+        onSuccess={onRefresh}
       />
     </>
   );

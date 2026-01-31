@@ -18,6 +18,7 @@ const purchaseRequestSchema = z.object({
   purchaseType: z.string().min(1, 'Purchase type is required'),
   requestTitle: z.string().min(1, 'Request title is required'),
   amountIdr: z.string().min(1, 'Amount is required'),
+  quantity: z.union([z.number().int().min(1), z.string()]).optional().transform((v) => (v === '' || v == null ? 1 : Math.max(1, typeof v === 'string' ? parseInt(v, 10) || 1 : v))),
   isRecurring: z.boolean().default(false),
   recurringFrequency: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
@@ -44,6 +45,7 @@ const PurchaseRequestForm = () => {
       purchaseType: '',
       requestTitle: '',
       amountIdr: '',
+      quantity: 1,
       isRecurring: false,
       recurringFrequency: '',
       description: '',
@@ -71,8 +73,9 @@ const PurchaseRequestForm = () => {
 
   const onSubmit = async (data: PurchaseRequestFormData) => {
     try {
+      const quantity = data.purchaseType === 'Physical Item' ? (Number(data.quantity) || 1) : 1;
       await createPurchaseRequest.mutateAsync({
-        formData: data,
+        formData: { ...data, quantity },
         files: uploadedFiles,
         isDraft: false,
       });
@@ -217,7 +220,7 @@ const PurchaseRequestForm = () => {
                 />
               </div>
 
-              {/* Amount and Recurring Row */}
+              {/* Amount, Quantity (Physical Item), Recurring Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <FormField
                   control={form.control}
@@ -239,6 +242,32 @@ const PurchaseRequestForm = () => {
                     </FormItem>
                   )}
                 />
+
+                {form.watch('purchaseType') === 'Physical Item' && (
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium text-gray-700">
+                          Quantity *
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="1"
+                            type="number"
+                            min={1}
+                            className="h-9"
+                            {...field}
+                            value={field.value ?? 1}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : 1)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}

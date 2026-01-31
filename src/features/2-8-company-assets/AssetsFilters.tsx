@@ -2,11 +2,14 @@ import { Search, RefreshCw, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface AssetsFiltersProps {
   selectedCategory: string;
   selectedStatus: string;
   selectedCondition: string;
+  selectedReceiptFilter?: string;
+  onReceiptFilterChange?: (value: string) => void;
   onCategoryChange: (category: string) => void;
   onStatusChange: (status: string) => void;
   onConditionChange: (condition: string) => void;
@@ -20,6 +23,8 @@ export const AssetsFilters = ({
   selectedCategory,
   selectedStatus,
   selectedCondition,
+  selectedReceiptFilter = 'all',
+  onReceiptFilterChange,
   onCategoryChange,
   onStatusChange,
   onConditionChange,
@@ -28,10 +33,12 @@ export const AssetsFilters = ({
   onRefresh,
   onAddAsset,
 }: AssetsFiltersProps) => {
+  const { t } = useAppTranslation();
   const handleClearFilters = () => {
     onCategoryChange('All Types');
     onStatusChange('All Statuses');
     onConditionChange('All Conditions');
+    if (onReceiptFilterChange) onReceiptFilterChange('all');
     if (onSearchChange) {
       onSearchChange('');
     }
@@ -107,6 +114,20 @@ export const AssetsFilters = ({
             <SelectItem value="Lainnya">Lainnya</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Receipt status filter (from purchase request flow) */}
+        {onReceiptFilterChange && (
+          <Select value={selectedReceiptFilter} onValueChange={onReceiptFilterChange}>
+            <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 placeholder:text-gray-700 text-left">
+              <SelectValue placeholder={t('companyAssets.filter.all', 'All')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('companyAssets.filter.all', 'All')}</SelectItem>
+              <SelectItem value="pending">{t('companyAssets.filter.pendingReceipt', 'Pending receipt')}</SelectItem>
+              <SelectItem value="received">{t('companyAssets.filter.received', 'Received')}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Clear Filters Button */}
         {(onRefresh || handleClearFilters) && (

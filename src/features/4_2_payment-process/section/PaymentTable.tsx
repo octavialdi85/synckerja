@@ -208,9 +208,10 @@ export const PaymentTable = ({
         .eq('purchase_request_id', selectedRequest.id)
         .maybeSingle();
 
+      let expenseCreated: { id: string } | null = null;
       if (!existingExpense) {
         // Step 4: Create expense (balance deducted via triggers / updateBalance)
-        const expenseCreated = await createExpense({
+        const created = await createExpense({
           expense_name: selectedRequest.request_title,
           amount: selectedRequest.amount_idr,
           expense_type: expenseTypeName,
@@ -224,7 +225,7 @@ export const PaymentTable = ({
           purchase_request_id: selectedRequest.id,
         });
 
-        if (!expenseCreated) {
+        if (!created) {
           toast({
             title: "Expense creation failed",
             description: "Invoice was saved. You can retry processing; expense will not be created twice.",
@@ -233,6 +234,46 @@ export const PaymentTable = ({
           if (onRefresh) onRefresh();
           setIsUploadingInvoice(false);
           return;
+        }
+        expenseCreated = created;
+      }
+
+      const expenseId = expenseCreated?.id ?? existingExpense?.id;
+      // Step 4b: For Physical Item, create one company_assets row per unit (no quantity column)
+      if (
+        selectedRequest.purchase_type === 'Physical Item' &&
+        expenseId &&
+        organizationId
+      ) {
+        const { data: existingAssets } = await supabase
+          .from('company_assets')
+          .select('id')
+          .eq('purchase_request_id', selectedRequest.id);
+        if (!existingAssets?.length) {
+          const qty = Math.max(1, selectedRequest.quantity ?? 1);
+          const pricePerUnit = selectedRequest.amount_idr / qty;
+          const createDate = format(new Date(), 'yyyy-MM-dd');
+          const rows = Array.from({ length: qty }, (_, i) => ({
+            organization_id: organizationId,
+            name: `${selectedRequest.request_title} – ${i + 1}`,
+            type: 'other',
+            status: 'available',
+            purchase_request_id: selectedRequest.id,
+            expense_id: expenseId,
+            receipt_confirmed_at: null,
+            purchase_date: createDate,
+            purchase_price: pricePerUnit,
+            created_by: user?.id ?? null,
+          }));
+          const { error: assetsError } = await supabase.from('company_assets').insert(rows);
+          if (assetsError) {
+            console.error('Failed to create company assets:', assetsError);
+            toast({
+              title: "Assets creation warning",
+              description: "Expense and payment recorded, but company assets could not be created. You can add them manually.",
+              variant: "destructive",
+            });
+          }
         }
       }
 

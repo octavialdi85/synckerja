@@ -3,6 +3,7 @@ import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { Badge } from '@/features/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import { CreditCard, User, Building, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { ApprovalActionsDropdown } from '../ApprovalActionsDropdown';
@@ -92,7 +93,7 @@ export const ApprovalTable = ({
         <Table className="min-w-[1300px]">
             <TableHeader>
               <TableRow className="bg-gray-50">
-                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Request</TableHead>
+                <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap w-[280px] max-w-[280px]">Request</TableHead>
                 <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Requester</TableHead>
                 <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Department</TableHead>
                 <TableHead className="h-8 px-3 text-xs font-medium whitespace-nowrap">Amount</TableHead>
@@ -117,20 +118,32 @@ export const ApprovalTable = ({
             ) : (
               requests.map((request) => (
                 <TableRow key={request.id} className="hover:bg-gray-50">
-                  <TableCell className="px-3 py-2 text-xs">
-                    <div className="flex items-start gap-2">
-                      <div className="p-1.5 rounded-md bg-blue-50 flex-shrink-0">
-                        <CreditCard className="h-3.5 w-3.5 text-blue-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-gray-900 truncate">
-                          {request.request_title}
+                  <TableCell className="px-3 py-2 text-xs max-w-[280px] w-[280px]">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-start gap-2 min-w-0 cursor-default">
+                          <div className="p-1.5 rounded-md bg-blue-50 flex-shrink-0">
+                            <CreditCard className="h-3.5 w-3.5 text-blue-600" />
+                          </div>
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <div className="font-medium text-gray-900 truncate">
+                              {request.request_title}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate mt-0.5 line-clamp-2">
+                              {request.description || 'No description'}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500 truncate mt-0.5">
-                          {request.description || 'No description'}
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-sm">
+                        <div className="space-y-1">
+                          <p className="font-medium">{request.request_title}</p>
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                            {request.description || 'No description'}
+                          </p>
                         </div>
-                      </div>
-                    </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell className="px-3 py-2 text-xs">
                     <div className="flex items-center gap-2">

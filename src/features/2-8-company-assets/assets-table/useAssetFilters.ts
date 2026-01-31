@@ -14,6 +14,10 @@ interface Asset {
   notes: string;
   image_url: string;
   created_at: string;
+  purchase_request_id?: string | null;
+  receipt_confirmed_at?: string | null;
+  requester_name?: string | null;
+  department_name?: string | null;
 }
 
 interface UseAssetFiltersProps {
@@ -22,6 +26,7 @@ interface UseAssetFiltersProps {
   selectedCategory: string;
   selectedStatus: string;
   selectedCondition: string;
+  selectedReceiptFilter?: string;
 }
 
 export const useAssetFilters = ({ 
@@ -29,14 +34,17 @@ export const useAssetFilters = ({
   searchTerm, 
   selectedCategory, 
   selectedStatus, 
-  selectedCondition 
+  selectedCondition,
+  selectedReceiptFilter = 'all',
 }: UseAssetFiltersProps) => {
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = searchTerm === '' || 
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.serial_number?.toLowerCase().includes(searchTerm.toLowerCase());
+      asset.serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (asset as Asset).requester_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (asset as Asset).department_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory = selectedCategory === 'All Types' || 
       asset.type?.toLowerCase() === selectedCategory.toLowerCase() ||
@@ -50,7 +58,14 @@ export const useAssetFilters = ({
       asset.condition?.toLowerCase() === selectedCondition.toLowerCase() ||
       (selectedCondition === 'Lainnya' && asset.condition?.toLowerCase() === 'other');
 
-    return matchesSearch && matchesCategory && matchesStatus && matchesCondition;
+    const fromPurchaseRequest = !!asset.purchase_request_id;
+    const receiptConfirmed = !!asset.receipt_confirmed_at;
+    const matchesReceipt =
+      selectedReceiptFilter === 'all' ||
+      (selectedReceiptFilter === 'pending' && fromPurchaseRequest && !receiptConfirmed) ||
+      (selectedReceiptFilter === 'received' && fromPurchaseRequest && receiptConfirmed);
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesCondition && matchesReceipt;
   });
 
   return { filteredAssets };

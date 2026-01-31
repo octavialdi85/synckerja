@@ -290,7 +290,7 @@ export const useExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['bank-account-balances', organizationId] });
       
       await fetchExpenses(); // Refresh the list
-      return true;
+      return data;
     } catch (error: any) {
       console.error('Error creating expense:', error);
       

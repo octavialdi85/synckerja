@@ -9,6 +9,7 @@ import { CompanyAssetsOverviewFooter } from './CompanyAssetsOverviewFooter';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const CompanyCompanyAssetsPage = () => {
   const [activeTab, setActiveTab] = useState('company-assets');
@@ -17,39 +18,111 @@ export const CompanyCompanyAssetsPage = () => {
   const [selectedCategory, setSelectedCategory] = useState('All Types');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [selectedCondition, setSelectedCondition] = useState('All Conditions');
+  const [selectedReceiptFilter, setSelectedReceiptFilter] = useState<string>('all');
   const [assets, setAssets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
+  const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
   const showToast = useShowToast();
 
   const fetchAssets = useCallback(async () => {
     if (!organizationId) return;
-    
+
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('company_assets')
-        .select('*')
+        .select(`
+          *,
+          purchase_requests(requester_name, department_name),
+          employees!assigned_to_employee_id(full_name, department_id)
+        `)
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+
+      const employeeIds = (rawData || [])
+        .map((r: any) => (Array.isArray(r.employees) ? r.employees[0]?.department_id : r.employees?.department_id))
+        .filter(Boolean);
+      const uniqueDeptIds = [...new Set(employeeIds)] as string[];
+      let deptMap: Record<string, string> = {};
+      if (uniqueDeptIds.length > 0) {
+        const { data: depts } = await supabase.from('departments').select('id, name').in('id', uniqueDeptIds);
+        deptMap = (depts || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
       }
 
-      setAssets(data || []);
-    } catch (error: any) {
-      console.error('Error fetching assets:', error);
-      showToast({
-        title: 'Error',
-        description: error.message || 'Failed to fetch assets',
-        variant: 'destructive'
+      const data = (rawData || []).map((row: any) => {
+        const pr = row.purchase_requests;
+        const requester_name = Array.isArray(pr) ? pr[0]?.requester_name : pr?.requester_name;
+        const department_name = Array.isArray(pr) ? pr[0]?.department_name : pr?.department_name;
+        const emp = row.employees;
+        const assigned_employee_name = Array.isArray(emp) ? emp[0]?.full_name : emp?.full_name;
+        const assigned_department_id = Array.isArray(emp) ? emp[0]?.department_id : emp?.department_id;
+        const assigned_department_name = assigned_department_id ? deptMap[assigned_department_id] ?? null : null;
+        const { purchase_requests: _pr, employees: _emp, ...rest } = row;
+        return {
+          ...rest,
+          requester_name: requester_name ?? null,
+          department_name: department_name ?? null,
+          assigned_employee_name: assigned_employee_name ?? null,
+          assigned_department_name: assigned_department_name ?? null,
+        };
       });
+      setAssets(data);
+    } catch (primaryError: any) {
+      console.warn('Primary assets fetch failed, trying fallback without employees join:', primaryError?.message);
+      try {
+        const { data: rawData, error } = await supabase
+          .from('company_assets')
+          .select('*, purchase_requests(requester_name, department_name)')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        const assignedIds = [...new Set((rawData || []).map((r: any) => r.assigned_to_employee_id).filter(Boolean))] as string[];
+        let empMap: Record<string, { full_name: string; department_id: string | null }> = {};
+        let deptMap: Record<string, string> = {};
+        if (assignedIds.length > 0) {
+          const { data: emps } = await supabase.from('employees').select('id, full_name, department_id').in('id', assignedIds);
+          empMap = (emps || []).reduce((acc, e) => ({ ...acc, [e.id]: { full_name: e.full_name, department_id: e.department_id ?? null } }), {});
+          const deptIds = [...new Set((emps || []).map((e) => e.department_id).filter(Boolean))] as string[];
+          if (deptIds.length > 0) {
+            const { data: depts } = await supabase.from('departments').select('id, name').in('id', deptIds);
+            deptMap = (depts || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
+          }
+        }
+
+        const data = (rawData || []).map((row: any) => {
+          const pr = row.purchase_requests;
+          const requester_name = Array.isArray(pr) ? pr[0]?.requester_name : pr?.requester_name;
+          const department_name = Array.isArray(pr) ? pr[0]?.department_name : pr?.department_name;
+          const emp = row.assigned_to_employee_id ? empMap[row.assigned_to_employee_id] : null;
+          const assigned_employee_name = emp?.full_name ?? null;
+          const assigned_department_name = emp?.department_id ? (deptMap[emp.department_id] ?? null) : null;
+          const { purchase_requests: _pr, ...rest } = row;
+          return {
+            ...rest,
+            requester_name: requester_name ?? null,
+            department_name: department_name ?? null,
+            assigned_employee_name: assigned_employee_name ?? null,
+            assigned_department_name: assigned_department_name ?? null,
+          };
+        });
+        setAssets(data);
+      } catch (fallbackError: any) {
+        console.error('Error fetching assets:', fallbackError);
+        showToast({
+          title: t('common.error', 'Error'),
+          description: fallbackError?.message || t('companyAssets.fetchFailed', 'Failed to fetch assets'),
+          variant: 'destructive'
+        });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [organizationId, showToast]);
+  }, [organizationId, showToast, t]);
 
   useEffect(() => {
     fetchAssets();
@@ -101,6 +174,8 @@ export const CompanyCompanyAssetsPage = () => {
                           selectedCategory={selectedCategory}
                           selectedStatus={selectedStatus}
                           selectedCondition={selectedCondition}
+                          selectedReceiptFilter={selectedReceiptFilter}
+                          onReceiptFilterChange={setSelectedReceiptFilter}
                           onCategoryChange={setSelectedCategory}
                           onStatusChange={setSelectedStatus}
                           onConditionChange={setSelectedCondition}
@@ -126,6 +201,7 @@ export const CompanyCompanyAssetsPage = () => {
                           selectedCategory={selectedCategory}
                           selectedStatus={selectedStatus}
                           selectedCondition={selectedCondition}
+                          selectedReceiptFilter={selectedReceiptFilter}
                           isLoading={isLoading}
                           onRefresh={fetchAssets}
                         />

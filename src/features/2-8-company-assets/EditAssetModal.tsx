@@ -7,6 +7,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { CustomDatePicker } from '@/features/share/calendar';
 import { useShowToast } from '@/features/share/hooks/useShowToast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/features/ui/separator';
 import { Package, Tag, Calendar, Image as ImageIcon, AlertCircle, Upload, X } from 'lucide-react';
@@ -58,6 +59,7 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
   const showToast = useShowToast();
 
@@ -239,8 +241,8 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
 
     if (!organizationId || !asset) {
       showToast({
-        title: 'Error',
-        description: 'Organization or asset not found',
+        title: t('common.error', 'Error'),
+        description: t('companyAssets.editAssetFailed', 'Failed to update asset'),
         variant: 'destructive'
       });
       return;
@@ -249,32 +251,55 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
     setIsSaving(true);
     try {
       const priceValue = parsePrice(purchasePrice);
-      
+      const wasInUse = asset.status === 'in-use';
+      const changingToNonCustody = (status === 'maintenance' || status === 'disposed');
+
+      const updatePayload: Record<string, unknown> = {
+        name: name.trim(),
+        type: type.trim(),
+        serial_number: serialNumber.trim() || null,
+        asset_tag: assetTag.trim() || null,
+        brand: brand.trim() || null,
+        model: model.trim() || null,
+        status: status,
+        condition: condition,
+        purchase_date: purchaseDate || null,
+        purchase_price: priceValue || null,
+        notes: notes.trim() || null,
+        image_url: imageUrl.trim() || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (wasInUse && changingToNonCustody) {
+        updatePayload.assigned_to_employee_id = null;
+        updatePayload.assigned_at = null;
+      }
+
       const { error } = await supabase
         .from('company_assets')
-        .update({
-          name: name.trim(),
-          type: type.trim(),
-          serial_number: serialNumber.trim() || null,
-          asset_tag: assetTag.trim() || null,
-          brand: brand.trim() || null,
-          model: model.trim() || null,
-          status: status,
-          condition: condition,
-          purchase_date: purchaseDate || null,
-          purchase_price: priceValue || null,
-          notes: notes.trim() || null,
-          image_url: imageUrl.trim() || null,
-        })
+        .update(updatePayload)
         .eq('id', asset.id);
 
       if (error) {
         throw error;
       }
 
+      if (wasInUse && changingToNonCustody) {
+        const { data: currentRows } = await supabase
+          .from('asset_assignments')
+          .select('id')
+          .eq('asset_id', asset.id)
+          .is('ended_at', null);
+        if (currentRows?.length) {
+          await supabase
+            .from('asset_assignments')
+            .update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .in('id', currentRows.map((r) => r.id));
+        }
+      }
+
       showToast({
-        title: 'Success',
-        description: 'Asset updated successfully',
+        title: t('common.success', 'Success'),
+        description: t('companyAssets.editAssetSuccess', 'Asset updated successfully.'),
         variant: 'default'
       });
 
@@ -282,8 +307,8 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
       onClose();
     } catch (error: any) {
       showToast({
-        title: 'Error',
-        description: error.message || 'Failed to update asset',
+        title: t('common.error', 'Error'),
+        description: error.message || t('companyAssets.editAssetFailed', 'Failed to update asset'),
         variant: 'destructive'
       });
     } finally {
@@ -300,9 +325,9 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
               <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-semibold">Edit Asset</DialogTitle>
+              <DialogTitle className="text-xl font-semibold">{t('companyAssets.editAssetTitle', 'Edit asset')}</DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground mt-1">
-                Update asset details in your inventory
+                {t('companyAssets.editAssetDescription', 'Update asset details in your inventory')}
               </DialogDescription>
             </div>
           </div>
@@ -458,8 +483,13 @@ export const EditAssetModal = ({ isOpen, onClose, onSave, asset }: EditAssetModa
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="available">Available</SelectItem>
-                      <SelectItem value="in-use">In Use</SelectItem>
+                      {status !== 'in-use' && <SelectItem value="available">Available</SelectItem>}
+                      {status === 'in-use' && <SelectItem value="in-use">In Use</SelectItem>}
+                      {status !== 'in-use' && (
+                        <SelectItem value="in-use" disabled className="opacity-60">
+                          {t('companyAssets.inUseUseAssignAction', 'In Use (use Assign action)')}
+                        </SelectItem>
+                      )}
                       <SelectItem value="maintenance">Maintenance</SelectItem>
                       <SelectItem value="disposed">Disposed</SelectItem>
                     </SelectContent>
