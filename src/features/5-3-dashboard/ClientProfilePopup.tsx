@@ -6,7 +6,7 @@ import { Label } from "@/features/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/features/ui/select";
 import { useToast } from "@/features/1-login/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Edit, Save, X } from 'lucide-react';
+import { Loader2, Edit, Save, X, User, Phone, Mail, Hash, Briefcase, MapPin } from 'lucide-react';
 
 interface ClientProfile {
   id?: string;
@@ -17,6 +17,8 @@ interface ClientProfile {
   age: number | '';
   occupation: string;
   location: string;
+  phone_number: string;
+  email: string;
 }
 
 interface ClientProfilePopupProps {
@@ -25,6 +27,8 @@ interface ClientProfilePopupProps {
   leadId: string;
   clientName: string;
   organizationId: string;
+  /** Untuk lead WhatsApp: nomor WA (customer_wa_id) dipakai auto-isi Nomor Telepon */
+  initialPhoneNumber?: string;
   onSave?: () => void;
 }
 
@@ -34,6 +38,7 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
   leadId,
   clientName,
   organizationId,
+  initialPhoneNumber = '',
   onSave
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -48,8 +53,13 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
     gender: '' as ClientProfile['gender'],
     age: '',
     occupation: '',
-    location: ''
+    location: '',
+    phone_number: initialPhoneNumber,
+    email: ''
   });
+
+  const isWhatsApp = leadId.startsWith('wa-');
+  const conversationId = isWhatsApp ? leadId.replace(/^wa-/, '') : null;
 
   // Load existing profile when popup opens
   useEffect(() => {
@@ -61,36 +71,73 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
   const loadClientProfile = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('lead_client_profiles')
-        .select('*')
-        .eq('lead_id', leadId)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setProfile({
-          id: data.id,
-          lead_id: data.lead_id,
-          name: data.name,
-          code: (data as any).code || '',
-          gender: (data.gender || '') as ClientProfile['gender'],
-          age: data.age || '',
-          occupation: data.occupation || '',
-          location: data.location || ''
-        });
+      if (isWhatsApp && conversationId) {
+        const { data, error } = await supabase
+          .from('whatsapp_conversation_client_profiles')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          const savedPhone = (data as any).phone_number || '';
+          setProfile({
+            id: data.id,
+            lead_id: leadId,
+            name: data.name,
+            code: (data as any).code || '',
+            gender: (data.gender || '') as ClientProfile['gender'],
+            age: data.age ?? '',
+            occupation: data.occupation || '',
+            location: data.location || '',
+            phone_number: savedPhone || initialPhoneNumber,
+            email: (data as any).email || ''
+          });
+        } else {
+          setProfile({
+            lead_id: leadId,
+            name: clientName,
+            code: '',
+            gender: '' as ClientProfile['gender'],
+            age: '',
+            occupation: '',
+            location: '',
+            phone_number: initialPhoneNumber,
+            email: ''
+          });
+        }
       } else {
-        // Reset to default if no profile exists
-        setProfile({
-          lead_id: leadId,
-          name: clientName,
-          code: '',
-          gender: '' as ClientProfile['gender'],
-          age: '',
-          occupation: '',
-          location: ''
-        });
+        const { data, error } = await supabase
+          .from('lead_client_profiles')
+          .select('*')
+          .eq('lead_id', leadId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          setProfile({
+            id: data.id,
+            lead_id: data.lead_id,
+            name: data.name,
+            code: (data as any).code || '',
+            gender: (data.gender || '') as ClientProfile['gender'],
+            age: data.age || '',
+            occupation: data.occupation || '',
+            location: data.location || '',
+            phone_number: (data as any).phone_number || '',
+            email: (data as any).email || ''
+          });
+        } else {
+          setProfile({
+            lead_id: leadId,
+            name: clientName,
+            code: '',
+            gender: '' as ClientProfile['gender'],
+            age: '',
+            occupation: '',
+            location: '',
+            phone_number: '',
+            email: ''
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading client profile:', error);
@@ -125,35 +172,52 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
 
     setSaving(true);
     try {
-      const profileData = {
-        lead_id: leadId,
+      const baseData = {
         name: profile.name.trim(),
         code: profile.code.trim() || null,
         gender: profile.gender || null,
         age: profile.age ? Number(profile.age) : null,
         occupation: profile.occupation.trim() || null,
         location: profile.location.trim() || null,
+        phone_number: profile.phone_number.trim() || null,
+        email: profile.email.trim() || null,
         organization_id: organizationId
       };
 
-      if (profile.id) {
-        // Update existing profile
-        const { error } = await supabase
-          .from('lead_client_profiles')
-          .update(profileData)
-          .eq('id', profile.id);
-
-        if (error) throw error;
+      if (isWhatsApp && conversationId) {
+        const payload = { ...baseData, conversation_id: conversationId, updated_at: new Date().toISOString() };
+        if (profile.id) {
+          const { error } = await supabase
+            .from('whatsapp_conversation_client_profiles')
+            .update(payload)
+            .eq('id', profile.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('whatsapp_conversation_client_profiles')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          setProfile(prev => ({ ...prev, id: data.id }));
+        }
       } else {
-        // Create new profile
-        const { data, error } = await supabase
-          .from('lead_client_profiles')
-          .insert(profileData)
-          .select()
-          .single();
-
-        if (error) throw error;
-        setProfile(prev => ({ ...prev, id: data.id }));
+        const profileData = { ...baseData, lead_id: leadId };
+        if (profile.id) {
+          const { error } = await supabase
+            .from('lead_client_profiles')
+            .update(profileData)
+            .eq('id', profile.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('lead_client_profiles')
+            .insert(profileData)
+            .select()
+            .single();
+          if (error) throw error;
+          setProfile(prev => ({ ...prev, id: data.id }));
+        }
       }
 
       toast({
@@ -187,184 +251,167 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
     onClose();
   };
 
+  // Spacing: satu ukuran konsisten (4 = 1rem / 16px) untuk padding & margin
+  const spacing = "p-4";
+  const spaceBetween = "space-y-4";
+  const fieldViewClass = "flex items-center gap-3 px-4 py-3 rounded-xl min-h-[44px] text-sm border border-sky-100/80 bg-sky-50/40 text-slate-800";
+  const labelClass = "text-xs font-medium text-sky-700/90 uppercase tracking-wider";
+  const iconSoft = "h-4 w-4 text-sky-500/80 flex-shrink-0";
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Client Profile</span>
+      <DialogContent hideCloseButton className="w-[min(92vw,540px,88vh)] h-[min(92vw,540px,88vh)] max-w-[92vw] max-h-[88vh] grid grid-rows-[auto_1fr_auto] gap-0 p-0 overflow-hidden rounded-2xl border border-sky-100 shadow-2xl bg-gradient-to-b from-white via-sky-50/20 to-violet-50/20">
+        {/* Header */}
+        <div className={`flex-shrink-0 ${spacing} border-b border-sky-100/80 bg-gradient-to-r from-sky-50/80 to-violet-50/50 rounded-t-2xl`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-sky-200/80 flex items-center justify-center text-sky-600 shadow-sm">
+                <User className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-xl font-semibold text-slate-800 truncate">Client Profile</DialogTitle>
+                <p className="text-sm text-sky-600/80 mt-1">View and edit client information</p>
+              </div>
+            </div>
             {!isEditing && !loading && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsEditing(true)}
-                className="ml-2"
+                className="flex-shrink-0 border-sky-200 text-sky-700 bg-white/80 hover:bg-sky-50 hover:border-sky-300"
               >
-                <Edit className="h-4 w-4 mr-1" />
+                <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
             )}
-          </DialogTitle>
-        </DialogHeader>
+          </div>
+        </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Loading profile...</span>
+          <div className={`flex flex-col items-center justify-center ${spaceBetween} ${spacing} flex-1 min-h-0`}>
+            <div className="w-12 h-12 rounded-full border-2 border-sky-100 border-t-sky-500 animate-spin flex items-center justify-center" />
+            <span className="text-sm text-sky-600/80">Loading profile...</span>
           </div>
         ) : (
-          <div className="space-y-4 py-4">
-            {/* Name Field */}
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              {isEditing ? (
-                <Input
-                  id="name"
-                  value={profile.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Enter client name"
-                />
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.name || 'Not specified'}
+          <div className={`${spaceBetween} ${spacing} min-h-0 overflow-y-auto seamless-scroll flex-1`}>
+            {/* Section: Contact */}
+            <section className={spaceBetween}>
+              <h3 className={labelClass}>Contact</h3>
+              <div className={`rounded-xl border border-sky-100/80 bg-white/90 shadow-sm ${spacing} ${spaceBetween}`}>
+                <div className={spaceBetween}>
+                  <Label htmlFor="name" className="text-slate-600 text-sm font-medium">Name *</Label>
+                  {isEditing ? (
+                    <Input id="name" value={profile.name} onChange={(e) => handleInputChange('name', e.target.value)} placeholder="Enter client name" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><User className={iconSoft} />{profile.name || '—'}</div>
+                  )}
                 </div>
-              )}
-            </div>
+                <div className={spaceBetween}>
+                  <Label htmlFor="phone_number" className="text-slate-600 text-sm font-medium">Nomor Telepon</Label>
+                  {isEditing ? (
+                    <Input id="phone_number" type="tel" value={profile.phone_number} onChange={(e) => handleInputChange('phone_number', e.target.value)} placeholder="Enter phone number" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><Phone className={iconSoft} />{profile.phone_number || '—'}</div>
+                  )}
+                </div>
+                <div className={spaceBetween}>
+                  <Label htmlFor="email" className="text-slate-600 text-sm font-medium">Email</Label>
+                  {isEditing ? (
+                    <Input id="email" type="email" value={profile.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="Enter email" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><Mail className={iconSoft} />{profile.email || '—'}</div>
+                  )}
+                </div>
+              </div>
+            </section>
 
-            {/* Code Field */}
-            <div className="space-y-2">
-              <Label htmlFor="code">Code</Label>
-              {isEditing ? (
-                <Input
-                  id="code"
-                  value={profile.code}
-                  onChange={(e) => handleInputChange('code', e.target.value)}
-                  placeholder="Enter client code"
-                />
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.code || 'Not specified'}
+            {/* Section: Profile details */}
+            <section className={spaceBetween}>
+              <h3 className={labelClass}>Profile details</h3>
+              <div className={`rounded-xl border border-violet-100/80 bg-white/90 shadow-sm ${spacing} ${spaceBetween}`}>
+                <div className={spaceBetween}>
+                  <Label htmlFor="code" className="text-slate-600 text-sm font-medium">Code</Label>
+                  {isEditing ? (
+                    <Input id="code" value={profile.code} onChange={(e) => handleInputChange('code', e.target.value)} placeholder="Client code" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><Hash className={iconSoft} />{profile.code || '—'}</div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Gender Field */}
-            <div className="space-y-2">
-              <Label htmlFor="gender">Gender</Label>
-              {isEditing ? (
-                <Select 
-                  value={profile.gender} 
-                  onValueChange={(value) => handleInputChange('gender', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.gender || 'Not specified'}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className={spaceBetween}>
+                    <Label htmlFor="gender" className="text-slate-600 text-sm font-medium">Gender</Label>
+                    {isEditing ? (
+                      <Select value={profile.gender} onValueChange={(value) => handleInputChange('gender', value)}>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className={fieldViewClass}>{profile.gender || '—'}</div>
+                    )}
+                  </div>
+                  <div className={spaceBetween}>
+                    <Label htmlFor="age" className="text-slate-600 text-sm font-medium">Age</Label>
+                    {isEditing ? (
+                      <Input id="age" type="number" value={profile.age} onChange={(e) => handleInputChange('age', e.target.value)} placeholder="Age" min="1" max="149" className="h-10" />
+                    ) : (
+                      <div className={fieldViewClass}>{profile.age || '—'}</div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* Age Field */}
-            <div className="space-y-2">
-              <Label htmlFor="age">Age</Label>
-              {isEditing ? (
-                <Input
-                  id="age"
-                  type="number"
-                  value={profile.age}
-                  onChange={(e) => handleInputChange('age', e.target.value)}
-                  placeholder="Enter age"
-                  min="1"
-                  max="149"
-                />
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.age || 'Not specified'}
+                <div className={spaceBetween}>
+                  <Label htmlFor="occupation" className="text-slate-600 text-sm font-medium">Occupation</Label>
+                  {isEditing ? (
+                    <Input id="occupation" value={profile.occupation} onChange={(e) => handleInputChange('occupation', e.target.value)} placeholder="Occupation" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><Briefcase className={iconSoft} />{profile.occupation || '—'}</div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Occupation Field */}
-            <div className="space-y-2">
-              <Label htmlFor="occupation">Occupation</Label>
-              {isEditing ? (
-                <Input
-                  id="occupation"
-                  value={profile.occupation}
-                  onChange={(e) => handleInputChange('occupation', e.target.value)}
-                  placeholder="Enter occupation"
-                />
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.occupation || 'Not specified'}
+                <div className={spaceBetween}>
+                  <Label htmlFor="location" className="text-slate-600 text-sm font-medium">Location</Label>
+                  {isEditing ? (
+                    <Input id="location" value={profile.location} onChange={(e) => handleInputChange('location', e.target.value)} placeholder="Location" className="h-10" />
+                  ) : (
+                    <div className={fieldViewClass}><MapPin className={iconSoft} />{profile.location || '—'}</div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Location Field */}
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              {isEditing ? (
-                <Input
-                  id="location"
-                  value={profile.location}
-                  onChange={(e) => handleInputChange('location', e.target.value)}
-                  placeholder="Enter location"
-                />
-              ) : (
-                <div className="p-2 bg-gray-50 rounded border min-h-[40px] flex items-center">
-                  {profile.location || 'Not specified'}
-                </div>
-              )}
-            </div>
+              </div>
+            </section>
           </div>
         )}
 
-        <DialogFooter>
-          {isEditing ? (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsEditing(false);
-                  loadClientProfile(); // Reset changes
-                }}
-                disabled={saving}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
+        {/* Footer - padding sama dengan header & body */}
+        <div className={`flex-shrink-0 border-t border-sky-100/80 bg-gradient-to-r from-sky-50/50 to-violet-50/30 rounded-b-2xl ${spacing}`}>
+          <DialogFooter className="flex gap-4">
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => { setIsEditing(false); loadClientProfile(); }}
+                  disabled={saving}
+                  className="border-sky-200 text-sky-700 hover:bg-sky-50"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={saving} className="bg-sky-500 hover:bg-sky-600 text-white shadow-sm">
+                  {saving ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                  ) : (
+                    <><Save className="h-4 w-4 mr-2" /> Save</>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={handleClose} className="border-sky-200 text-sky-700 hover:bg-sky-50 w-full sm:w-auto">
+                Close
               </Button>
-              <Button 
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-1" />
-                    Save
-                  </>
-                )}
-              </Button>
-            </div>
-          ) : (
-            <Button variant="outline" onClick={handleClose}>
-              Close
-            </Button>
-          )}
-        </DialogFooter>
+            )}
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

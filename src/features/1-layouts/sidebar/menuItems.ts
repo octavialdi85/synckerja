@@ -135,6 +135,20 @@ export const menuItems: MenuItem[] = [
         description: "Manage CRM leads and consultant activities",
         descriptionKey: "sidebar.operations.crm.description",
       },
+      {
+        title: "Account Connect",
+        titleKey: "sidebar.operations.whatsappConnect.title",
+        url: "/operations/consultant/whatsapp/connect",
+        description: "Configure WhatsApp Business API",
+        descriptionKey: "sidebar.operations.whatsappConnect.description",
+      },
+      {
+        title: "Livechat",
+        titleKey: "sidebar.operations.livechat.title",
+        url: "/operations/consultant/all/livechat",
+        description: "WhatsApp inbox and conversations",
+        descriptionKey: "sidebar.operations.livechat.description",
+      },
     ],
   },
   {

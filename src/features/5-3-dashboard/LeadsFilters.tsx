@@ -6,7 +6,7 @@ import { Input } from '@/features/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { StatusManagement } from './StatusManagement';
 import { DateRangeFilter } from './DateRangeFilter';
-import { EmployeeDropdown } from '@/features/ui/employee-dropdown';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
@@ -56,6 +56,7 @@ interface LeadsFiltersProps {
 }
 
 export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = [], filters: externalFilters }: LeadsFiltersProps) => {
+  const { data: employees = [] } = useAvailableEmployees();
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
   const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
@@ -237,16 +238,24 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
           </SelectContent>
         </Select>
 
-        {/* Assignee Filter */}
+        {/* Assignee Filter - from employees table */}
         <div className="min-w-[120px]">
-          <EmployeeDropdown
+          <Select
             value={filters.assignee}
             onValueChange={(value) => updateFilters('assignee', value)}
-            placeholder="Assignee"
-            triggerClassName="h-9 text-sm text-gray-700"
-            allOptionLabel="All Assignees"
-            includeAllOption={true}
-          />
+          >
+            <SelectTrigger className="h-9 text-sm text-gray-700">
+              <SelectValue placeholder="Assignee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignees</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={emp.full_name || emp.email}>
+                  {emp.full_name || emp.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* FU Priority Filter */}

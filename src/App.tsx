@@ -20,6 +20,7 @@ import MobileCreateOrganization from "./mobile/login/CreateOrganization";
 import CreatePlan from "./features/1-login/pages/CreatePlan";
 import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
+import { TermsOfServicePage, PrivacyPolicyPage } from "./features/policy";
 import NotFound from "./features/1-login/pages/NotFound";
 import { useIsMobile } from "./mobile/hooks/use-mobile";
 import ModernHomePage from "./features/1_home/pages/ModernHomePage";
@@ -100,6 +101,7 @@ import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
+import { WhatsAppConnectPage, WhatsAppInboxPage } from "./features/5-3-whatsapp";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
 import { ExpenseDashboard } from "./features/4_2_dashboard";
@@ -316,6 +318,8 @@ const App = () => (
               
               {/* Public Terms Page */}
               <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+              <Route path="/policy/terms" element={<TermsOfServicePage />} />
+              <Route path="/policy/privacy" element={<PrivacyPolicyPage />} />
               
               {/* Public Candidate Application Route */}
               <Route path="/candidate/apply" element={
@@ -574,6 +578,17 @@ const App = () => (
                   <ConsultantDashboardPage />
                 </ProtectedRoute>
               } />
+              <Route path="/operations/consultant/whatsapp/connect" element={
+                <ProtectedRoute>
+                  <WhatsAppConnectPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/all/livechat" element={
+                <ProtectedRoute>
+                  <WhatsAppInboxPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/sales-consultant" element={<Navigate to="/operations/consultant/leads-management" replace />} />
               
               {/* Subscription Routes - BASIC PROTECTION (Reduce Emergency Bypass) */}
               <Route path="/subscription" element={

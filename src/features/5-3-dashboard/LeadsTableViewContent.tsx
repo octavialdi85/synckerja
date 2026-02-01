@@ -6,7 +6,8 @@ import LeadsTableNew from './LeadsTableNew';
 import { LeadsInsights } from './LeadsInsights';
 import { NewLeadForm } from './NewLeadForm';
 import { ScrollArea } from "@/features/ui/scroll-area";
-import { useLeads } from '@/hooks/organized/sales';
+import { Button } from "@/features/ui/button";
+import { useLeads, LeadsScope } from '@/hooks/organized/sales';
 import { NewLead } from '@/types/leads';
 import { useClientProfileStatus } from '@/hooks/organized/sales';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +19,7 @@ interface LeadsTableViewContentProps {
 export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scope, setScope] = useState<LeadsScope>('mine');
   const [filters, setFilters] = useState<LeadsFiltersType>({
     dataCompleteness: 'all',
     services: 'all',
@@ -28,7 +30,7 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
     source: 'all',
     dateRange: null
   });
-  const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads();
+  const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads({ scope });
   console.log('🔍 LeadsTableViewContent - leads:', leads.length, 'loading:', loading);
 
   const handleNewLeadClick = () => {
@@ -48,30 +50,39 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
   const [clientStatuses, setClientStatuses] = useState<Record<string, 'full' | 'partial' | 'empty'>>({});
   const [clientProfiles, setClientProfiles] = useState<Record<string, any>>({});
 
-  // Fetch client profile statuses
+  // Fetch client profile statuses (leads + WhatsApp conversations)
   useEffect(() => {
     const fetchStatuses = async () => {
       if (leads.length === 0) return;
-      
+
       const statusMap: Record<string, 'full' | 'partial' | 'empty'> = {};
       const profileMap: Record<string, any> = {};
-      
+
       for (const lead of leads) {
         try {
-          const { data } = await supabase
-            .from('lead_client_profiles')
-            .select('*')
-            .eq('lead_id', lead.id)
-            .maybeSingle();
+          const isWhatsApp = String(lead.id).startsWith('wa-');
+          const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
+
+          const { data } = isWhatsApp && conversationId
+            ? await supabase
+                .from('whatsapp_conversation_client_profiles')
+                .select('*')
+                .eq('conversation_id', conversationId)
+                .maybeSingle()
+            : await supabase
+                .from('lead_client_profiles')
+                .select('*')
+                .eq('lead_id', lead.id)
+                .maybeSingle();
 
           if (!data) {
             statusMap[lead.id] = 'empty';
             profileMap[lead.id] = null;
           } else {
             profileMap[lead.id] = data;
-            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location];
+            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location, (data as any).phone_number, (data as any).email];
             const filledFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
-            
+
             if (filledFields === 0) {
               statusMap[lead.id] = 'empty';
             } else if (filledFields === fields.length) {
@@ -80,12 +91,12 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
               statusMap[lead.id] = 'partial';
             }
           }
-        } catch (error) {
+        } catch {
           statusMap[lead.id] = 'empty';
           profileMap[lead.id] = null;
         }
       }
-      
+
       setClientStatuses(statusMap);
       setClientProfiles(profileMap);
     };
@@ -179,6 +190,21 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
       <div className="p-2 flex flex-col xl:flex-row gap-2 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 min-h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] overflow-hidden">
         {/* Main Content - Responsive layout */}
         <div className="flex-1 min-w-0" style={{ flex: '1.8' }}>
+          {/* Scope: My Room = only my assigned leads; Unassigned = pool to assign; All = all leads */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-slate-600">Room:</span>
+            <div className="flex rounded-md border border-slate-200 bg-white p-0.5">
+              <Button type="button" variant={scope === 'mine' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-3" onClick={() => setScope('mine')}>
+                My Room
+              </Button>
+              <Button type="button" variant={scope === 'unassigned' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-3" onClick={() => setScope('unassigned')}>
+                Unassigned
+              </Button>
+              <Button type="button" variant={scope === 'all' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-3" onClick={() => setScope('all')}>
+                All
+              </Button>
+            </div>
+          </div>
           {/* Compact Filter Section */}
           <LeadsFilters onNewLeadClick={handleNewLeadClick} onFiltersChange={setFilters} filteredLeads={filteredLeads} />
           

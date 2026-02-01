@@ -39,13 +39,14 @@ export const LeadFollowUpForm = ({
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
 
+  const isWhatsAppLead = leadId.startsWith('wa-');
+  const conversationId = isWhatsAppLead ? leadId.replace(/^wa-/, '') : null;
+
   // Fetch updates and sync count when dialog opens
   useEffect(() => {
     if (open && leadId) {
       const initializeData = async () => {
         await fetchUpdates();
-        // Sync follow up count to ensure it matches actual number of updates
-        // Don't call onUpdateAdded() here as it closes the dialog - just sync silently
         await syncFollowUpCountAndPriority();
       };
       initializeData();
@@ -53,14 +54,24 @@ export const LeadFollowUpForm = ({
   }, [open, leadId]);
   const fetchUpdates = async () => {
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('lead_follow_up_updates').select('*').eq('lead_id', leadId).order('created_at', {
-        ascending: false
-      });
-      if (error) throw error;
-      setUpdates(data || []);
+      if (isWhatsAppLead && conversationId) {
+        const { data, error } = await supabase
+          .from('whatsapp_conversation_follow_up_updates')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        const rows = (data || []) as any[];
+        setUpdates(rows.map((r) => ({ ...r, lead_id: leadId })));
+      } else {
+        const { data, error } = await supabase
+          .from('lead_follow_up_updates')
+          .select('*')
+          .eq('lead_id', leadId)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setUpdates(data || []);
+      }
     } catch (error) {
       console.error('Error fetching updates:', error);
     }
@@ -69,13 +80,10 @@ export const LeadFollowUpForm = ({
   // Helper function to sync follow up count and FU Priority with actual updates
   const syncFollowUpCountAndPriority = async () => {
     try {
-      console.log('🔄 Starting sync for lead:', leadId);
-      
-      // Fetch all updates for this lead
-      const { data: allUpdates, error: fetchError } = await supabase
-        .from('lead_follow_up_updates')
-        .select('status')
-        .eq('lead_id', leadId);
+      const query = isWhatsAppLead && conversationId
+        ? supabase.from('whatsapp_conversation_follow_up_updates').select('status').eq('conversation_id', conversationId)
+        : supabase.from('lead_follow_up_updates').select('status').eq('lead_id', leadId);
+      const { data: allUpdates, error: fetchError } = await query;
 
       if (fetchError) {
         console.error('❌ Error fetching updates for sync:', fetchError);
@@ -83,78 +91,47 @@ export const LeadFollowUpForm = ({
       }
 
       const actualFollowupCount = allUpdates?.length || 0;
-      console.log('📊 Actual follow up updates count:', actualFollowupCount, 'updates:', allUpdates);
-
-      // Calculate FU Priority based on prospect status counts
-      const statusCounts = {
-        'Hot Prospect': 0,
-        'Warm Prospect': 0,
-        'Cold Prospect': 0
-      };
-
-      allUpdates?.forEach(update => {
+      const statusCounts = { 'Hot Prospect': 0, 'Warm Prospect': 0, 'Cold Prospect': 0 };
+      allUpdates?.forEach((update: { status?: string }) => {
         if (update.status && update.status in statusCounts) {
           statusCounts[update.status as keyof typeof statusCounts]++;
         }
       });
 
-      // Determine FU Priority: Hot → High, Warm → Medium, Cold → Low
       let calculatedPriority: string | null = null;
-      
       if (actualFollowupCount > 0) {
         const hotCount = statusCounts['Hot Prospect'];
         const warmCount = statusCounts['Warm Prospect'];
         const coldCount = statusCounts['Cold Prospect'];
-        
         const maxCount = Math.max(hotCount, warmCount, coldCount);
-        
-        if (hotCount === maxCount && maxCount > 0) {
-          calculatedPriority = 'High';
-        } else if (warmCount === maxCount && maxCount > 0) {
-          calculatedPriority = 'Medium';
-        } else if (coldCount === maxCount && maxCount > 0) {
-          calculatedPriority = 'Low';
-        }
+        if (hotCount === maxCount && maxCount > 0) calculatedPriority = 'High';
+        else if (warmCount === maxCount && maxCount > 0) calculatedPriority = 'Medium';
+        else if (coldCount === maxCount && maxCount > 0) calculatedPriority = 'Low';
       }
 
-      // Update lead with actual count and calculated priority
       const updateData: any = {
         followup: actualFollowupCount,
-        updated_at: new Date().toISOString()
+        fu_priority: calculatedPriority ?? null,
+        updated_at: new Date().toISOString(),
       };
 
-      // Only update fu_priority if we calculated one, or set to null if no updates
-      if (calculatedPriority) {
-        updateData.fu_priority = calculatedPriority;
-      } else if (actualFollowupCount === 0) {
-        updateData.fu_priority = null; // Reset if no updates
-      }
-
-      console.log('📝 Updating lead with:', updateData);
-      
-      const { error: updateError, data: updatedLead } = await supabase
-        .from('leads')
-        .update(updateData)
-        .eq('id', leadId)
-        .select('followup, fu_priority')
-        .single();
-
-      if (updateError) {
-        console.error('❌ Error syncing follow up count and priority:', updateError);
-      } else {
-        console.log('✅ Successfully synced follow up count and priority:', {
-          leadId,
-          old_followup: 'unknown',
-          new_followup: actualFollowupCount,
-          fu_priority: calculatedPriority,
-          statusCounts,
-          updated_lead: updatedLead
-        });
-        
-        // Invalidate leads query cache to force refresh
-        if (organizationId) {
+      if (isWhatsAppLead && conversationId) {
+        const { error: updateError } = await supabase
+          .from('whatsapp_conversations')
+          .update(updateData)
+          .eq('id', conversationId);
+        if (!updateError && organizationId) {
           queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
-          console.log('🔄 Invalidated leads query cache for organization:', organizationId);
+        }
+      } else {
+        const { error: updateError } = await supabase
+          .from('leads')
+          .update(updateData)
+          .eq('id', leadId)
+          .select('followup, fu_priority')
+          .single();
+        if (!updateError && organizationId) {
+          queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
         }
       }
     } catch (error) {
@@ -179,17 +156,29 @@ export const LeadFollowUpForm = ({
       if (!profile?.active_organization_id) {
         throw new Error('No active organization found');
       }
-      // Insert the follow-up update
-      const {
-        error: insertError
-      } = await supabase.from('lead_follow_up_updates').insert({
-        lead_id: leadId,
-        update_details: updateDetails,
-        status: status || null,
-        created_by: user.id,
-        created_by_name: profile.full_name || user.email || 'Unknown',
-        organization_id: profile.active_organization_id
-      });
+      if (isWhatsAppLead && conversationId) {
+        const { error: insertError } = await supabase
+          .from('whatsapp_conversation_follow_up_updates')
+          .insert({
+            conversation_id: conversationId,
+            update_details: updateDetails,
+            status: status || null,
+            created_by: user.id,
+            created_by_name: profile.full_name || user.email || 'Unknown',
+            organization_id: profile.active_organization_id,
+          });
+        if (insertError) throw insertError;
+      } else {
+        const { error: insertError } = await supabase.from('lead_follow_up_updates').insert({
+          lead_id: leadId,
+          update_details: updateDetails,
+          status: status || null,
+          created_by: user.id,
+          created_by_name: profile.full_name || user.email || 'Unknown',
+          organization_id: profile.active_organization_id,
+        });
+        if (insertError) throw insertError;
+      }
       if (insertError) throw insertError;
 
       // Sync follow up count and FU Priority with actual updates
@@ -226,11 +215,11 @@ export const LeadFollowUpForm = ({
   const handleSaveEdit = async (updateId: string) => {
     if (!editUpdateDetails.trim()) return;
     try {
-      const {
-        error
-      } = await supabase.from('lead_follow_up_updates').update({
-        update_details: editUpdateDetails
-      }).eq('id', updateId);
+      const table = isWhatsAppLead ? 'whatsapp_conversation_follow_up_updates' : 'lead_follow_up_updates';
+      const { error } = await supabase
+        .from(table as 'lead_follow_up_updates')
+        .update({ update_details: editUpdateDetails })
+        .eq('id', updateId);
       if (error) throw error;
       
       // Sync to ensure count is accurate (though status didn't change, count should still be verified)
@@ -256,9 +245,8 @@ export const LeadFollowUpForm = ({
   const handleDeleteUpdate = async (updateId: string) => {
     if (!confirm('Are you sure you want to delete this update?')) return;
     try {
-      const {
-        error
-      } = await supabase.from('lead_follow_up_updates').delete().eq('id', updateId);
+      const table = isWhatsAppLead ? 'whatsapp_conversation_follow_up_updates' : 'lead_follow_up_updates';
+      const { error } = await supabase.from(table as 'lead_follow_up_updates').delete().eq('id', updateId);
       if (error) throw error;
       
       // Sync follow up count and FU Priority after deletion

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { X } from "lucide-react";
 import { NewLead } from '@/types/leads';
 import { supabase } from '@/integrations/supabase/client';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface LeadStatus {
   id: string;
@@ -30,6 +31,7 @@ export const EditLeadDialog = ({
   const [formData, setFormData] = useState<Partial<NewLead>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
+  const { data: employees = [] } = useAvailableEmployees();
 
   // Fetch lead statuses from database
   useEffect(() => {
@@ -186,11 +188,11 @@ export const EditLeadDialog = ({
                 <SelectValue placeholder="Select assignee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ADEL">ADEL</SelectItem>
-                <SelectItem value="INDRI">INDRI</SelectItem>
-                <SelectItem value="NADA">NADA</SelectItem>
-                <SelectItem value="RYAN">RYAN</SelectItem>
-                <SelectItem value="SINTA">SINTA</SelectItem>
+                {employees.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.full_name || emp.email}>
+                    {emp.full_name || emp.email}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

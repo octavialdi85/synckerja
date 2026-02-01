@@ -7,6 +7,7 @@ import { Label } from "@/features/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/features/ui/select";
 import { Textarea } from "@/features/ui/textarea";
 import { Lead } from '@/pages/operations/Consultant';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface LeadFormProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface LeadFormProps {
 }
 
 export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
+  const { data: employees = [] } = useAvailableEmployees();
   const [formData, setFormData] = useState({
     ticketId: lead?.ticketId || '',
     client: lead?.client || lead?.namaPasien || '',
@@ -27,7 +29,7 @@ export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
     title: lead?.title || lead?.diagnosa || '',
     feedbackComplaint: lead?.feedbackComplaint || lead?.keluhan || '',
     category: lead?.category || lead?.kategoriPasien || '',
-    assignee: lead?.assignee || lead?.konsultan || 'ADEL',
+    assignee: lead?.assignee || lead?.konsultan || '',
     followup: lead?.followup || 0,
     fuPriority: lead?.fuPriority || 'Medium',
     status: lead?.status || 'Open',
@@ -39,7 +41,7 @@ export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
     // Legacy fields for compatibility
     tanggal: lead?.tanggal || new Date().toISOString().split('T')[0],
     sumberLead: (lead?.sumberLead as any) || 'Website',
-    konsultan: (lead?.konsultan as any) || 'ADEL',
+    konsultan: (lead?.konsultan as any) || '',
     namaAdmin: lead?.namaAdmin || 'System',
     namaPasien: lead?.namaPasien || '',
     jenisKelamin: (lead?.jenisKelamin as any) || 'L',
@@ -123,16 +125,16 @@ export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
             
             <div>
               <Label htmlFor="assignee">Assignee</Label>
-              <Select value={formData.assignee} onValueChange={(value) => handleInputChange('assignee', value)}>
+              <Select value={formData.assignee || ''} onValueChange={(value) => handleInputChange('assignee', value)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select assignee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADEL">ADEL</SelectItem>
-                  <SelectItem value="INDRI">INDRI</SelectItem>
-                  <SelectItem value="NADA">NADA</SelectItem>
-                  <SelectItem value="RYAN">RYAN</SelectItem>
-                  <SelectItem value="SINTA">SINTA</SelectItem>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.full_name || emp.email}>
+                      {emp.full_name || emp.email}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

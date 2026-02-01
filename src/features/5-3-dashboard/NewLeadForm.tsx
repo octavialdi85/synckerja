@@ -9,6 +9,7 @@ import { SourceManagementDialog } from './SourceManagementDialog';
 import { ServicesManagementDialog } from './ServicesManagementDialog';
 import { CategoriesManagementDialog } from './CategoriesManagementDialog';
 import { useLeadSources } from '@/hooks/organized/salesources';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { MoreVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -42,7 +43,7 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
     title: '',
     services: '',
     category: '',
-    assignee: 'ADEL',
+    assignee: '',
     fu_priority: 'Please Follow Up',
     status_id: '', // Initialize as empty string instead of undefined
     source: 'Website',
@@ -56,6 +57,7 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const { sources, refetch } = useLeadSources();
+  const { data: employees = [] } = useAvailableEmployees();
 
   const fetchServices = async () => {
     try {
@@ -147,7 +149,7 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
         title: '',
         services: '',
         category: '',
-        assignee: 'ADEL',
+        assignee: '',
         fu_priority: 'Please Follow Up',
         status_id: defaultStatus?.id || '',
         source: 'Website',
@@ -253,19 +255,19 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
             </Select>
           </div>
 
-          {/* Assignee */}
+          {/* Assignee - from employees table */}
           <div className="space-y-1.5">
             <Label htmlFor="assignee" className="text-sm font-medium">Assignee *</Label>
-            <Select value={formData.assignee} onValueChange={(value) => handleInputChange('assignee', value)}>
+            <Select value={formData.assignee || ''} onValueChange={(value) => handleInputChange('assignee', value)}>
               <SelectTrigger className="h-9">
-                <SelectValue />
+                <SelectValue placeholder="Select assignee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ADEL">ADEL</SelectItem>
-                <SelectItem value="INDRI">INDRI</SelectItem>
-                <SelectItem value="NADA">NADA</SelectItem>
-                <SelectItem value="RYAN">RYAN</SelectItem>
-                <SelectItem value="SINTA">SINTA</SelectItem>
+                {employees.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.full_name || emp.email}>
+                    {emp.full_name || emp.email}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

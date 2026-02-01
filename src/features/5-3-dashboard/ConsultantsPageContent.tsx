@@ -49,30 +49,39 @@ export const ConsultantsPageContent = () => {
   const [clientStatuses, setClientStatuses] = useState<Record<string, 'full' | 'partial' | 'empty'>>({});
   const [clientProfiles, setClientProfiles] = useState<Record<string, any>>({});
 
-  // Fetch client profile statuses
+  // Fetch client profile statuses (leads + WhatsApp conversations)
   useEffect(() => {
     const fetchStatuses = async () => {
       if (leads.length === 0) return;
-      
+
       const statusMap: Record<string, 'full' | 'partial' | 'empty'> = {};
       const profileMap: Record<string, any> = {};
-      
+
       for (const lead of leads) {
         try {
-          const { data } = await supabase
-            .from('lead_client_profiles')
-            .select('*')
-            .eq('lead_id', lead.id)
-            .maybeSingle();
+          const isWhatsApp = String(lead.id).startsWith('wa-');
+          const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
+
+          const { data } = isWhatsApp && conversationId
+            ? await supabase
+                .from('whatsapp_conversation_client_profiles')
+                .select('*')
+                .eq('conversation_id', conversationId)
+                .maybeSingle()
+            : await supabase
+                .from('lead_client_profiles')
+                .select('*')
+                .eq('lead_id', lead.id)
+                .maybeSingle();
 
           if (!data) {
             statusMap[lead.id] = 'empty';
             profileMap[lead.id] = null;
           } else {
             profileMap[lead.id] = data;
-            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location];
+            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location, (data as any).phone_number, (data as any).email];
             const filledFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
-            
+
             if (filledFields === 0) {
               statusMap[lead.id] = 'empty';
             } else if (filledFields === fields.length) {
@@ -81,12 +90,12 @@ export const ConsultantsPageContent = () => {
               statusMap[lead.id] = 'partial';
             }
           }
-        } catch (error) {
+        } catch {
           statusMap[lead.id] = 'empty';
           profileMap[lead.id] = null;
         }
       }
-      
+
       setClientStatuses(statusMap);
       setClientProfiles(profileMap);
     };

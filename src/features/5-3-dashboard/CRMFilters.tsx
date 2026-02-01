@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Search, Filter, X, Download } from 'lucide-react';
 import { CRMFilters as CRMFiltersType } from '@/pages/operations/Consultant';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface CRMFiltersProps {
   filters: CRMFiltersType;
@@ -20,11 +21,12 @@ export const CRMFilters: React.FC<CRMFiltersProps> = ({
   totalLeads 
 }) => {
   const [showFilters, setShowFilters] = React.useState(false);
+  const { data: employees = [] } = useAvailableEmployees();
+  const konsultanOptions = employees.map((e) => e.full_name || e.email).filter(Boolean);
 
   const sumberLeadOptions = ['Google Ads', 'Sosmed.Ads', 'TICKETCODE', 'Referral', 'Website', 'WhatsApp'];
   const diagnosaOptions = ['Kulit', 'Gigi', 'PMS', 'Mata', 'THT', 'Umum'];
   const statusFollowUpOptions = ['F1', 'F2', 'F3', 'Selesai', 'Tidak Respon', 'Datang'];
-  const konsultanOptions = ['ADEL', 'INDRI', 'NADA', 'RYAN', 'SINTA'];
   const kategoriPasienOptions = ['Efektif', 'Tidak Efektif', 'Diluar Layanan'];
 
   const handleFilterChange = (filterType: keyof CRMFiltersType, value: any) => {

@@ -5,6 +5,7 @@ import { useSidebarState } from "./useSidebarState";
 import { useSmartNavigation } from "./useSmartNavigation";
 import { useDepartmentAccess } from "./useDepartmentAccess";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { useWhatsAppUnreadCount } from "@/features/5-3-whatsapp/hooks/useWhatsAppUnreadCount";
 import { Building2, ChevronRight, X, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
@@ -14,9 +15,10 @@ interface SubSidebarProps {
   isOpen: boolean;
   title: string;
   titleKey?: string;
+  whatsAppUnreadCount?: number;
 }
 
-function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps) {
+function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCount = 0 }: SubSidebarProps) {
   const location = useLocation();
   const { smartNavigate } = useSmartNavigation();
   const { canAccessPage, configLoading } = useDepartmentAccess();
@@ -89,7 +91,9 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
         '/operations/sales',
         '/operations/consultant',
         '/operations/consultant/dashboard',
-        '/operations/consultant/leads-management'
+        '/operations/consultant/leads-management',
+        '/operations/consultant/whatsapp/connect',
+        '/operations/consultant/all/livechat'
       ],
       '/admin': [
         '/admin',
@@ -260,6 +264,13 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
                   <span className="truncate flex-1">
                     {t(item.titleKey, item.title)}
                   </span>
+
+                  {/* WhatsApp / Livechat badge: new messages count */}
+                  {item.url === '/operations/consultant/all/livechat' && whatsAppUnreadCount > 0 && (
+                    <span className="flex-shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-medium flex items-center justify-center">
+                      {whatsAppUnreadCount > 99 ? '99+' : whatsAppUnreadCount}
+                    </span>
+                  )}
                   
                   {/* Loading indicator */}
                   {configLoading && (
@@ -288,6 +299,7 @@ function SubSidebarInternal({ items, isOpen, title, titleKey }: SubSidebarProps)
 export function AppSidebar() {
   const location = useLocation();
   const menuItems = useDepartmentFilteredMenu();
+  const { data: whatsAppUnreadCount = 0 } = useWhatsAppUnreadCount();
   const { smartNavigate } = useSmartNavigation();
   const {
     activeSubSidebar,
@@ -339,6 +351,7 @@ export function AppSidebar() {
               <div className="space-y-1 px-1">
                 {menuItems.map((item, index) => {
                   const localizedTitle = t(item.titleKey, item.title);
+                  const showWhatsAppBadge = item.title === 'Operations' && whatsAppUnreadCount > 0;
                   return <div key={item.title}>
                     <div onMouseEnter={() => handleMenuItemHover(item.title, item.hasSubSidebar || false)} className="relative group/item">
                       {item.url && item.url !== "#" ? <button
@@ -362,6 +375,11 @@ export function AppSidebar() {
                             {localizedTitle}
                           </span>
                         </div>
+                        {showWhatsAppBadge && (
+                          <span className="flex-shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-medium flex items-center justify-center mr-2 group-data-[collapsible=icon]:hidden">
+                            {whatsAppUnreadCount > 99 ? '99+' : whatsAppUnreadCount}
+                          </span>
+                        )}
                         {item.hasSubSidebar && <ChevronRight className={cn("h-3 w-3 ml-auto opacity-60 transition-all duration-150 flex-shrink-0", "group-hover:opacity-100 group-hover:translate-x-1", "group-data-[collapsible=icon]:hidden")} />}
                       </div>}
                     </div>
@@ -383,6 +401,7 @@ export function AppSidebar() {
                 isOpen={true}
                 title={item.title}
                 titleKey={item.titleKey}
+                whatsAppUnreadCount={item.title === 'Operations' ? whatsAppUnreadCount : 0}
               />
             ) : null,
           )}

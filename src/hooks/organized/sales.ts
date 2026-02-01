@@ -5,6 +5,8 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 // Types
 export interface SalesActivity {
@@ -713,6 +715,47 @@ export const useLeadStatusHistory = () => {
     }
 
     try {
+      // WhatsApp conversation: fetch from whatsapp_conversation_status_history
+      if (String(leadId).startsWith('wa-')) {
+        const conversationId = String(leadId).replace(/^wa-/, '');
+        const { data, error } = await supabase
+          .from('whatsapp_conversation_status_history')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .eq('organization_id', organizationId)
+          .order('changed_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching WhatsApp conversation status history:', error);
+          throw error;
+        }
+
+        const rows = (data || []) as Array<{
+          id: string;
+          conversation_id: string;
+          old_status: string | null;
+          new_status: string;
+          changed_at: string;
+          changed_by: string | null;
+          changed_by_name: string | null;
+          notes: string | null;
+          organization_id: string;
+          created_at: string;
+        }>;
+        return rows.map((row) => ({
+          id: row.id,
+          lead_id: leadId,
+          old_status: row.old_status,
+          new_status: row.new_status,
+          changed_at: row.changed_at,
+          changed_by: row.changed_by,
+          changed_by_name: row.changed_by_name,
+          notes: row.notes,
+          organization_id: row.organization_id,
+          created_at: row.created_at,
+        }));
+      }
+
       const { data, error } = await supabase
         .from('lead_status_history')
         .select('*')
@@ -741,11 +784,26 @@ export const useLeadStatusHistory = () => {
 // Hook: useClientProfileStatus
 export const useClientProfileStatus = (leadId: string) => {
   const { organizationId } = useCurrentOrg();
+  const isWhatsApp = leadId.startsWith('wa-');
+  const conversationId = isWhatsApp ? leadId.replace(/^wa-/, '') : null;
 
   const { data: profile, isLoading: loading } = useQuery({
     queryKey: ['client-profile-status', leadId, organizationId],
     queryFn: async () => {
       if (!leadId || !organizationId) return null;
+
+      if (isWhatsApp && conversationId) {
+        const { data, error } = await supabase
+          .from('whatsapp_conversation_client_profiles')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .maybeSingle();
+        if (error) {
+          console.error('Error fetching WhatsApp client profile:', error);
+          return null;
+        }
+        return data;
+      }
 
       const { data, error } = await supabase
         .from('lead_client_profiles')
@@ -763,7 +821,7 @@ export const useClientProfileStatus = (leadId: string) => {
     enabled: !!leadId && !!organizationId,
   });
 
-  // Calculate status based on profile data
+  // Calculate status based on profile data (termasuk phone_number dan email)
   const status: 'full' | 'partial' | 'empty' = (() => {
     if (!profile) return 'empty';
 
@@ -773,7 +831,9 @@ export const useClientProfileStatus = (leadId: string) => {
       profile.gender,
       profile.age,
       profile.occupation,
-      profile.location
+      profile.location,
+      (profile as any).phone_number,
+      (profile as any).email
     ];
     
     const filledFields = fields.filter(
@@ -796,18 +856,41 @@ export const useClientProfileStatus = (leadId: string) => {
   };
 };
 
+// Scope: 'mine' = only leads/chats assigned to current agent; 'unassigned' = only not assigned; 'all' = no filter
+export type LeadsScope = 'all' | 'mine' | 'unassigned';
+
+function filterLeadsByScope(
+  list: Array<{ assignee_id?: string | null; id?: string }>,
+  scope: LeadsScope,
+  currentEmployeeId: string | null
+): typeof list {
+  if (scope === 'all') return list;
+  if (scope === 'mine') {
+    if (!currentEmployeeId) return [];
+    return list.filter((item) => (item.assignee_id ?? null) === currentEmployeeId);
+  }
+  // unassigned
+  return list.filter((item) => (item.assignee_id ?? null) == null);
+}
+
 // Hook: useLeads
-export const useLeads = () => {
+export const useLeads = (options?: { scope?: LeadsScope }) => {
+  const scope = options?.scope ?? 'mine';
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
+  const { data: currentEmployee } = useCurrentUserEmployee();
+  const currentEmployeeId = currentEmployee?.id ?? null;
+  const { isOwner } = useCentralizedUserData();
+  // Owner always sees all leads regardless of scope
+  const effectiveScope: LeadsScope = isOwner ? 'all' : scope;
 
-  // Fetch leads with join to lead_statuses
-  const { data: leads = [], isLoading: loading, refetch } = useQuery({
-    queryKey: ['leads', organizationId],
+  // Fetch leads with join to lead_statuses; filter by scope (assignee_id)
+  const { data: rawLeadsList = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ['leads', organizationId, effectiveScope, currentEmployeeId, isOwner],
     queryFn: async () => {
       if (!organizationId) return [];
 
-      // First, fetch all leads
+      // 1) Fetch all leads from "leads" table
       const { data: leadsData, error: leadsError } = await supabase
         .from('leads')
         .select('*')
@@ -819,28 +902,17 @@ export const useLeads = () => {
         throw leadsError;
       }
 
-      if (!leadsData || leadsData.length === 0) {
-        return [];
-      }
+      const rawLeads = leadsData ?? [];
 
-      // Fetch all lead statuses for this organization (both active and inactive for complete mapping)
-      console.log('🔍 Fetching lead statuses for organization:', organizationId);
+      // Fetch all lead statuses for this organization (for both leads and WhatsApp conversations)
+      let statusMap = new Map<string, { id: string; name: string; color: string }>();
       const { data: statusesData, error: statusesError } = await supabase
         .from('lead_statuses')
         .select('id, name, color, is_active')
         .eq('organization_id', organizationId);
 
-      if (statusesError) {
-        console.error('❌ Error fetching lead statuses:', statusesError);
-      } else {
-        console.log('✅ Fetched lead statuses:', statusesData?.length || 0, 'statuses');
-        console.log('📋 Status IDs:', statusesData?.map(s => ({ id: s.id, name: s.name })));
-      }
-
-      // Create a map of status_id to status object
-      const statusMap = new Map();
-      if (statusesData) {
-        statusesData.forEach(status => {
+      if (!statusesError && statusesData) {
+        statusesData.forEach((status: any) => {
           statusMap.set(status.id, {
             id: status.id,
             name: status.name,
@@ -848,59 +920,83 @@ export const useLeads = () => {
           });
         });
       }
-
-      // Collect all unique status_ids from leads that are not in the map
       const missingStatusIds = [...new Set(
-        leadsData
-          .map(lead => lead.status_id)
-          .filter(statusId => statusId && !statusMap.has(statusId))
+        rawLeads
+          .map((lead: any) => lead.status_id)
+          .filter((statusId: string) => statusId && !statusMap.has(statusId))
       )];
-
-      // Fetch missing statuses directly by ID (in case they're in a different organization or inactive)
       if (missingStatusIds.length > 0) {
-        console.log('🔍 Fetching missing statuses:', missingStatusIds);
         const { data: missingStatuses, error: missingError } = await supabase
           .from('lead_statuses')
           .select('id, name, color, is_active')
           .in('id', missingStatusIds);
-
         if (!missingError && missingStatuses) {
-          missingStatuses.forEach(status => {
+          missingStatuses.forEach((status: any) => {
             statusMap.set(status.id, {
               id: status.id,
               name: status.name,
               color: status.color,
             });
           });
-          console.log('✅ Found missing statuses:', missingStatuses.map(s => s.name));
-        } else if (missingError) {
-          console.warn('⚠️ Error fetching missing statuses:', missingError);
         }
       }
 
       // Merge leads with their status information
-      const leadsWithStatus = leadsData.map(lead => {
+      const leadsWithStatus = rawLeads.map((lead: any) => {
         const status = statusMap.get(lead.status_id);
-        
-        // Log warning if status_id exists but status still not found after fallback fetch
-        if (lead.status_id && !status) {
-          console.warn(`⚠️ Status not found for lead ${lead.id}:`, {
-            lead_id: lead.id,
-            status_id: lead.status_id,
-            available_status_ids: Array.from(statusMap.keys()),
-          });
-        }
-        
         return {
           ...lead,
           lead_status: status || null,
         };
       });
 
-      return leadsWithStatus;
+      // 2) Fetch leads from whatsapp_conversations (same org) and map to lead-like rows (with lead_status_id, assignee_id)
+      const { data: whatsappConvs, error: whatsappError } = await supabase
+        .from('whatsapp_conversations')
+        .select('id, organization_id, customer_wa_id, customer_name, last_message_at, last_message_body, last_opened_at, lead_status_id, followup, fu_priority, assignee_id, created_at, updated_at, ticket_id')
+        .eq('organization_id', organizationId)
+        .order('last_message_at', { ascending: false, nullsFirst: false });
+
+      if (!whatsappError && whatsappConvs && whatsappConvs.length > 0) {
+        const whatsappAsLeads = whatsappConvs.map((c: any) => {
+          const statusId = c.lead_status_id ?? '';
+          const leadStatus = statusId ? statusMap.get(statusId) ?? null : null;
+          // Ticket ID dari DB (kolom generated); fallback ke hitungan dari id jika belum ada
+          const waTicketId = c.ticket_id ?? ('WA-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          return {
+            id: 'wa-' + c.id,
+            client: c.customer_name || c.customer_wa_id || 'WhatsApp',
+            title: (c.last_message_body || 'WhatsApp').slice(0, 100),
+            services: null,
+            category: '-',
+            assignee: null as string | null,
+            assignee_id: c.assignee_id ?? null,
+            fu_priority: c.fu_priority ?? null,
+            status_id: statusId,
+            source: 'WhatsApp',
+            followup: c.followup ?? 0,
+            converted_at: null,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+            created_by: '',
+            created_by_name: '',
+            organization_id: c.organization_id,
+            ticket_id: waTicketId,
+            lead_status: leadStatus,
+          _fromWhatsApp: true as const,
+          _chatOpenedAt: c.last_opened_at ?? null,
+          _customerWaId: (c.customer_wa_id ?? '') as string,
+        };
+        });
+        return filterLeadsByScope([...leadsWithStatus, ...whatsappAsLeads], effectiveScope, currentEmployeeId);
+      }
+
+      return filterLeadsByScope(leadsWithStatus, effectiveScope, currentEmployeeId);
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && (effectiveScope === 'all' || !!currentEmployeeId || effectiveScope === 'unassigned'),
   });
+
+  const leads = rawLeadsList;
 
   // Create lead mutation
   const createLeadMutation = useMutation({
@@ -921,6 +1017,7 @@ export const useLeads = () => {
           services: leadData.services || null,
           category: leadData.category || null,
           assignee: leadData.assignee,
+          assignee_id: (leadData as { assignee_id?: string | null }).assignee_id ?? null,
           fu_priority: leadData.fu_priority || null,
           status_id: leadData.status_id,
           source: leadData.source || null,
@@ -947,15 +1044,60 @@ export const useLeads = () => {
   // Update lead mutation
   const updateLeadMutation = useMutation({
     mutationFn: async (lead: any) => {
+      // WhatsApp conversation: update lead_status_id and record status history
+      if (lead?.id && String(lead.id).startsWith('wa-')) {
+        const convId = String(lead.id).replace(/^wa-/, '');
+        const oldStatusName = lead.lead_status?.name ?? null;
+
+        const { error: updateError } = await supabase
+          .from('whatsapp_conversations')
+          .update({
+            lead_status_id: lead.status_id || null,
+            assignee_id: lead.assignee_id ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', convId);
+        if (updateError) {
+          console.error('Error updating WhatsApp conversation status:', updateError);
+          throw updateError;
+        }
+
+        // Resolve new status name and insert into whatsapp_conversation_status_history
+        let newStatusName = '';
+        if (lead.status_id) {
+          const { data: statusRow } = await supabase
+            .from('lead_statuses')
+            .select('name')
+            .eq('id', lead.status_id)
+            .maybeSingle();
+          newStatusName = (statusRow?.name as string) ?? '';
+        }
+        if (oldStatusName !== null || newStatusName !== '') {
+          const { data: userData } = await supabase.auth.getUser();
+          const userId = userData?.user?.id ?? null;
+          const userName = userData?.user?.user_metadata?.full_name || userData?.user?.email || null;
+          await supabase.from('whatsapp_conversation_status_history').insert({
+            conversation_id: convId,
+            old_status: oldStatusName,
+            new_status: newStatusName || 'Open',
+            changed_at: new Date().toISOString(),
+            changed_by: userId,
+            changed_by_name: userName,
+            organization_id: lead.organization_id,
+          });
+        }
+        return lead;
+      }
       const { id, lead_status, ...updateData } = lead;
       
       // Only update valid database columns (exclude joined/computed fields like lead_status)
-      const validFields = {
+      const validFields: Record<string, unknown> = {
         client: updateData.client,
         title: updateData.title,
         services: updateData.services,
         category: updateData.category,
         assignee: updateData.assignee,
+        assignee_id: updateData.assignee_id ?? null,
         fu_priority: updateData.fu_priority,
         status_id: updateData.status_id,
         source: updateData.source,
@@ -994,6 +1136,7 @@ export const useLeads = () => {
   // Delete lead mutation - includes deleting related data (Client Profile, Follow Up Updates, Status History)
   const deleteLeadMutation = useMutation({
     mutationFn: async (leadId: string) => {
+      if (leadId.startsWith('wa-')) return;
       console.log('🗑️ Starting deletion process for lead:', leadId);
 
       // Step 1: Delete Client Profile (lead_client_profiles)

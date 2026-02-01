@@ -366,6 +366,117 @@ export interface Database {
           updated_at?: string
         }
       }
+      organization_whatsapp_config: {
+        Row: {
+          id: string
+          organization_id: string
+          whatsapp_business_account_id: string
+          whatsapp_access_token: string
+          verify_token: string
+          phone_number_id: string | null
+          display_phone_number: string | null
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          whatsapp_business_account_id: string
+          whatsapp_access_token: string
+          verify_token: string
+          phone_number_id?: string | null
+          display_phone_number?: string | null
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          whatsapp_business_account_id?: string
+          whatsapp_access_token?: string
+          verify_token?: string
+          phone_number_id?: string | null
+          display_phone_number?: string | null
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_conversations: {
+        Row: {
+          id: string
+          organization_id: string
+          customer_wa_id: string
+          customer_name: string | null
+          last_message_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          customer_wa_id: string
+          customer_name?: string | null
+          last_message_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          customer_wa_id?: string
+          customer_name?: string | null
+          last_message_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          direction: string
+          wa_message_id: string | null
+          body: string | null
+          message_type: string
+          raw_metadata: Json | null
+          created_at: string
+          status: string | null
+          status_updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          direction: string
+          wa_message_id?: string | null
+          body?: string | null
+          message_type?: string
+          raw_metadata?: Json | null
+          created_at?: string
+          status?: string | null
+          status_updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          direction?: string
+          wa_message_id?: string | null
+          body?: string | null
+          message_type?: string
+          raw_metadata?: Json | null
+          created_at?: string
+          status?: string | null
+          status_updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_organizations: {
         Row: {
           id: string

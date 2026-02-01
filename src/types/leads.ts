@@ -7,6 +7,7 @@ export interface NewLead {
   services: string | null;
   category: string;
   assignee: string;
+  assignee_id?: string | null;
   fu_priority: string | null;
   status_id: string;
   source: string | null;

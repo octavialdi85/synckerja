@@ -32,6 +32,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Lead, FollowUpHistory } from '@/pages/operations/Consultant';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface LeadDetailProps {
   lead: Lead;
@@ -44,6 +45,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({
   onClose, 
   onUpdate 
 }) => {
+  const { data: employees = [] } = useAvailableEmployees();
   const [editedLead, setEditedLead] = useState<Lead>({ ...lead });
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
   const [newFollowUp, setNewFollowUp] = useState<Partial<FollowUpHistory>>({
@@ -233,11 +235,11 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ADEL">ADEL</SelectItem>
-                      <SelectItem value="INDRI">INDRI</SelectItem>
-                      <SelectItem value="NADA">NADA</SelectItem>
-                      <SelectItem value="RYAN">RYAN</SelectItem>
-                      <SelectItem value="SINTA">SINTA</SelectItem>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.full_name || emp.email}>
+                          {emp.full_name || emp.email}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

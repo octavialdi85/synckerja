@@ -229,12 +229,6 @@ export const LeadsInsights = ({
     unknown: leads.filter(lead => getGenderFromProfile(lead.id) === 'Unknown').length
   };
 
-  // Debug: Log first few profiles to check data format (only once per render)
-  React.useEffect(() => {
-    console.log('Sample client profiles:', Object.entries(clientProfiles).slice(0, 3));
-    console.log('Gender analysis:', genderAnalysis);
-  }, [Object.keys(clientProfiles).length, genderAnalysis.male, genderAnalysis.female, genderAnalysis.unknown]);
-
   // Enhanced location analysis with percentages
   const enhancedLocationAnalysis = [...new Set(leads.map(lead => getLocationFromProfile(lead.id)))].map(location => {
     const locationLeads = leads.filter(lead => getLocationFromProfile(lead.id) === location);
@@ -244,11 +238,6 @@ export const LeadsInsights = ({
       percentage: totalLeads > 0 ? Math.round(locationLeads.length / totalLeads * 100) : 0
     };
   }).sort((a, b) => b.count - a.count);
-
-  // Debug: Log location analysis (only once per render)
-  React.useEffect(() => {
-    console.log('Location analysis:', enhancedLocationAnalysis);
-  }, [enhancedLocationAnalysis.length]);
 
   // Status analysis - handle cases where lead_status might not be available
   const statusAnalysis = (() => {

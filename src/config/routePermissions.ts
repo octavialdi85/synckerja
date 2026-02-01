@@ -383,6 +383,20 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     defaultRoles: ['owner', 'admin', 'employee']
   },
   {
+    path: '/operations/consultant/whatsapp/connect',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'WhatsApp Business API - connect account and webhook',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
+    path: '/operations/consultant/all/livechat',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'WhatsApp Live Chat - inbox and conversations',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
     path: '/recruitment',
     requiresAuth: true,
     requiresPermissions: true,

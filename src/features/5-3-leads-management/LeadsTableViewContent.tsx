@@ -69,7 +69,7 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
             profileMap[lead.id] = null;
           } else {
             profileMap[lead.id] = data;
-            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location];
+            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location, (data as any).phone_number, (data as any).email];
             const filledFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
             
             if (filledFields === 0) {

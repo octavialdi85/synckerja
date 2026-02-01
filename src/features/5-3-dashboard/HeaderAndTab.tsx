@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, User } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Inbox } from "lucide-react";
 
 const tabs = [
   {
@@ -16,10 +16,16 @@ const tabs = [
     icon: Users,
   },
   {
-    key: "sales-consultant",
-    path: "/operations/consultant/sales-consultant",
-    title: "Sales Consultant",
-    icon: User,
+    key: "whatsapp-connect",
+    path: "/operations/consultant/whatsapp/connect",
+    title: "Account Connect",
+    icon: MessageCircle,
+  },
+  {
+    key: "livechat",
+    path: "/operations/consultant/all/livechat",
+    title: "Live Chat",
+    icon: Inbox,
   },
 ];
 
@@ -28,10 +34,9 @@ export const HeaderAndTab = () => {
   const navigate = useNavigate();
 
   const activeKey = useMemo(() => {
-    // Check for exact match first, then check if pathname starts with tab path
-    if (location.pathname === "/operations/consultant/leads-management") {
-      return "leads-management";
-    }
+    if (location.pathname === "/operations/consultant/leads-management") return "leads-management";
+    if (location.pathname.startsWith("/operations/consultant/whatsapp/connect")) return "whatsapp-connect";
+    if (location.pathname.startsWith("/operations/consultant/all/livechat")) return "livechat";
     const match = tabs.find((tab) => location.pathname.startsWith(tab.path));
     return match?.key ?? "leads-management";
   }, [location.pathname]);

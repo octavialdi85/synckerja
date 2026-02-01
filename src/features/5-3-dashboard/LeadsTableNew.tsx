@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { History, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { NewLead } from '@/types/leads';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { LeadActionsDropdown } from './LeadActionsDropdown';
 import { LeadFollowUpForm } from './LeadFollowUpForm';
 import { EditLeadDialog } from './EditLeadDialog';
@@ -16,6 +17,7 @@ import { LeadStatusHistoryDialog } from './LeadStatusHistoryDialog';
 import { useClientProfileStatus } from '@/hooks/organized/sales';
 import { LoadingDots } from '@/components/LoadingDots';
 import { supabase } from "@/integrations/supabase/client";
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 
 interface LeadStatus {
   id: string;
@@ -32,16 +34,8 @@ interface LeadsTableNewProps {
 }
 
 export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRefreshLeads, loading = false }: LeadsTableNewProps) {
-  console.log('🔢 LeadsTableNew received leads:', leads.length, leads);
-  // Debug status data
-  leads.forEach(lead => {
-    console.log(`📊 Lead ${lead.id}:`, {
-      status_id: lead.status_id,
-      lead_status: lead.lead_status,
-      lead_status_name: lead.lead_status?.name
-    });
-  });
-  
+  const { t } = useAppTranslation();
+
   const [selectedLead, setSelectedLead] = useState<NewLead | null>(null);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -54,6 +48,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
   const [isStatusHistoryOpen, setIsStatusHistoryOpen] = useState(false);
   const [statusHistoryLead, setStatusHistoryLead] = useState<NewLead | null>(null);
+
+  const { data: employees = [] } = useAvailableEmployees();
 
   // Fetch lead statuses from database
   useEffect(() => {
@@ -74,28 +70,28 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
 
   const handleFieldUpdate = (leadId: string, field: string, value: string) => {
     const lead = leads.find(l => l.id === leadId);
-    if (lead) {
-      let updatedLead: NewLead;
-      
-      // Special handling for status updates to use status_id
-      if (field === 'status_id') {
-        const selectedStatus = leadStatuses.find(s => s.id === value);
-        updatedLead = { 
-          ...lead, 
-          status_id: value,
-          // Update the joined data if it exists
-          lead_status: selectedStatus ? {
-            id: selectedStatus.id,
-            name: selectedStatus.name,
-            color: selectedStatus.color
-          } : lead.lead_status
-        };
-      } else {
-        updatedLead = { ...lead, [field]: value };
-      }
-      
-      onUpdateLead(updatedLead);
+    if (!lead) return;
+    let updatedLead: NewLead & { assignee_id?: string | null };
+
+    if (field === 'status_id') {
+      const selectedStatus = leadStatuses.find(s => s.id === value);
+      updatedLead = {
+        ...lead,
+        status_id: value,
+        lead_status: selectedStatus ? { id: selectedStatus.id, name: selectedStatus.name, color: selectedStatus.color } : lead.lead_status,
+      };
+    } else if (field === 'assignee_id') {
+      const emp = employees.find((e) => e.id === value);
+      updatedLead = {
+        ...lead,
+        assignee_id: value || null,
+        assignee: emp ? (emp.full_name || emp.email) : (lead.assignee ?? ''),
+      };
+    } else {
+      updatedLead = { ...lead, [field]: value };
     }
+
+    onUpdateLead(updatedLead as NewLead);
   };
 
   const handleFollowUpClick = (lead: NewLead) => {
@@ -144,7 +140,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
         console.error('Error getting organization ID:', error);
       }
     }
-    
+
     setSelectedClientLead(lead);
     setIsClientProfileOpen(true);
   };
@@ -167,6 +163,15 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     };
     return colors[priority as keyof typeof colors] || colors.Medium;
   };
+
+  // Status names that are "final" — once set, lead cannot go back to Open
+  const TERMINAL_STATUS_NAMES = ['Lost', 'Closed', 'Converted'];
+  const getCurrentLeadStatusName = (lead: NewLead) =>
+    (lead.lead_status?.name ?? leadStatuses.find(s => s.id === lead.status_id)?.name ?? '').trim();
+  const isOpenDisabledForLead = (lead: NewLead) =>
+    TERMINAL_STATUS_NAMES.some(
+      (name) => getCurrentLeadStatusName(lead).toLowerCase() === name.toLowerCase()
+    );
 
   // Get Status with soft colors - rectangular style
   const getStatusColor = (lead: NewLead) => {
@@ -302,22 +307,26 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Select
-                      value={lead.assignee}
-                      onValueChange={(value) => handleFieldUpdate(lead.id, 'assignee', value)}
+                      value={(lead as NewLead & { assignee_id?: string | null }).assignee_id ?? (employees.find((e) => (e.full_name || e.email) === lead.assignee)?.id) ?? ''}
+                      onValueChange={(value) => handleFieldUpdate(lead.id, 'assignee_id', value)}
                     >
                       <SelectTrigger className="w-full h-8 text-xs">
-                        <SelectValue />
+                        <SelectValue placeholder="Select assignee" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="ADEL">ADEL</SelectItem>
-                        <SelectItem value="INDRI">INDRI</SelectItem>
-                        <SelectItem value="NADA">NADA</SelectItem>
-                        <SelectItem value="RYAN">RYAN</SelectItem>
-                        <SelectItem value="SINTA">SINTA</SelectItem>
+                        {employees.length === 0 ? (
+                          <SelectItem value="no-employees" disabled>No employees</SelectItem>
+                        ) : (
+                          employees.map((emp) => (
+                            <SelectItem key={emp.id} value={emp.id}>
+                              {emp.full_name || emp.email}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  {/* Follow Up Column with History Icon and Number */}
+                  {/* Follow Up Column with History Icon and Number (same for regular + WhatsApp) */}
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <Button
@@ -328,13 +337,12 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                       >
                         <History className="h-4 w-4 text-gray-600" />
                       </Button>
-                      <span className="text-sm font-medium">{lead.followup || 0}</span>
+                      <span className="text-sm font-medium">{lead.followup ?? 0}</span>
                     </div>
                   </TableCell>
-                  {/* FU Priority Column - Fixed width rectangular style */}
+                  {/* FU Priority Column (same for regular + WhatsApp) */}
                   <TableCell className="whitespace-nowrap">
                     {(() => {
-                      // Determine priority display: if followup is 0 or null, show "Please Follow Up", otherwise show fu_priority
                       const followupCount = lead.followup ?? 0;
                       const displayPriority = followupCount === 0 ? 'Please Follow Up' : (lead.fu_priority || 'Medium');
                       return (
@@ -344,26 +352,36 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                       );
                     })()}
                   </TableCell>
-                  {/* Status Column - Fixed width dropdown with history button */}
+                  {/* Status Column - Same dropdown for all leads (regular + WhatsApp); optional chat-opened hint for WhatsApp */}
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <Select
-                        value={lead.status_id || (lead.lead_status?.id ? lead.lead_status.id : (leadStatuses.length > 0 ? leadStatuses[0].id : ''))}
+                        value={lead.status_id || (lead.lead_status?.id ?? (leadStatuses.length > 0 ? leadStatuses[0].id : ''))}
                         onValueChange={(value) => handleFieldUpdate(lead.id, 'status_id', value)}
                       >
                         <SelectTrigger className={`w-28 h-7 text-xs border ${getStatusColor(lead)} rounded-sm font-medium justify-between px-2`}>
                           <span className="text-left">
-                            {lead.lead_status?.name || 
-                             (leadStatuses.find(s => s.id === lead.status_id)?.name) || 
+                            {lead.lead_status?.name ||
+                             (leadStatuses.find(s => s.id === lead.status_id)?.name) ||
                              (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          {leadStatuses.map((status) => (
-                            <SelectItem key={status.id} value={status.id}>
-                              {status.name}
-                            </SelectItem>
-                          ))}
+                          {leadStatuses.map((status) => {
+                            const isOpenOption = status.name?.toLowerCase() === 'open';
+                            const disableOpen = isOpenOption && isOpenDisabledForLead(lead);
+                            return (
+                              <SelectItem
+                                key={status.id}
+                                value={status.id}
+                                disabled={disableOpen}
+                                className={disableOpen ? 'opacity-60 cursor-not-allowed' : undefined}
+                                title={disableOpen ? t('leadsManagement.openDisabledForTerminalStatus', 'Status Lost/Closed/Converted tidak dapat dikembalikan ke Open') : undefined}
+                              >
+                                {status.name}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <Button
@@ -371,7 +389,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         size="sm"
                         className="h-7 w-7 p-0 hover:bg-muted"
                         onClick={() => handleStatusHistoryClick(lead)}
-                        title="View status history"
+                        title={t('leadsManagement.viewStatusHistory', 'Lihat riwayat status')}
                       >
                         <Clock className="h-3 w-3 text-gray-600" />
                       </Button>
@@ -447,6 +465,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
           leadId={selectedClientLead.id}
           clientName={selectedClientLead.client}
           organizationId={organizationId}
+          initialPhoneNumber={(selectedClientLead as { _customerWaId?: string })._customerWaId ?? ''}
           onSave={() => {
             // Optional: refresh data if needed
             if (onRefreshLeads) {
