@@ -1,12 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { SUPABASE_URL } from '@/integrations/supabase/client';
+import type { WhatsAppMessage } from '../types';
 
 export interface SendWhatsAppMessageParams {
   to: string;
-  text: string;
+  /** Required for text; optional when sending media (caption can be used instead). */
+  text?: string;
   conversation_id?: string | null;
+  media_type?: 'image' | 'video' | 'document';
+  media_link?: string;
+  caption?: string;
+  /** WhatsApp message ID yang dibalas (context.reply_to). */
+  reply_to_wa_message_id?: string | null;
+  /** Body pesan yang dibalas (ditampilkan di bubble agar jelas). */
+  reply_to_body?: string | null;
+  /** Tipe pesan yang dibalas (text, image, video, document, audio). */
+  reply_to_message_type?: string | null;
+  /** Nama pengirim pesan yang dibalas (untuk tampilan reply seperti WhatsApp). */
+  reply_to_sender?: string | null;
 }
 
 export function useSendWhatsAppMessage() {
@@ -25,16 +37,23 @@ export function useSendWhatsAppMessage() {
         },
         body: JSON.stringify({
           to: params.to,
-          text: params.text,
+          text: params.text ?? '',
           conversation_id: params.conversation_id ?? null,
+          media_type: params.media_type ?? null,
+          media_link: params.media_link ?? null,
+          caption: params.caption ?? null,
+          reply_to_wa_message_id: params.reply_to_wa_message_id ?? null,
+          reply_to_body: params.reply_to_body ?? null,
+          reply_to_message_type: params.reply_to_message_type ?? null,
+          reply_to_sender: params.reply_to_sender ?? null,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const serverMsg = typeof json?.error === 'string' ? json.error : null;
         const metaMsg = json?.details?.error?.message ?? json?.details?.error_message;
-        const rawMsg = metaMsg || json?.error || 'Failed to send';
+        const rawMsg = serverMsg || metaMsg || (typeof json?.error === 'string' ? json.error : null) || 'Failed to send';
         const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
-        // (#10) = Meta/WhatsApp: app does not have permission – show friendlier message
         const isPermissionError = json?.code === 10 || msg.includes('(#10)');
         const friendlyMsg = isPermissionError
           ? 'WhatsApp: Aplikasi tidak memiliki izin untuk mengirim pesan. Periksa konfigurasi WhatsApp Business dan izin di Meta Developer.'
@@ -43,15 +62,25 @@ export function useSendWhatsAppMessage() {
       }
       return json;
     },
-    onSuccess: (_, variables) => {
-      if (variables.conversation_id) {
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', variables.conversation_id] });
+    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null }, variables) => {
+      const conversationId = variables.conversation_id;
+      if (conversationId && data?.message) {
+        queryClient.setQueryData<WhatsAppMessage[]>(
+          ['whatsapp-messages', conversationId],
+          (prev = []) => {
+            if (prev.some((m) => m.id === data.message!.id)) return prev;
+            return [...prev, data.message!].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+          }
+        );
+      }
+      if (conversationId) {
+        if (!data?.message) {
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
+        }
         queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
       }
-      toast.success('Message sent');
-    },
-    onError: (err: Error) => {
-      toast.error(err.message ?? 'Failed to send message');
     },
   });
 

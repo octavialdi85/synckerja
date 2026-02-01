@@ -7,6 +7,97 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+const META_GRAPH_BASE = "https://graph.facebook.com/v18.0";
+/** Same bucket as outbound sends (ChatThread) – satu bucket untuk kirim & terima media */
+const WHATSAPP_MEDIA_BUCKET = "whatsapp-media";
+
+function getMediaIdAndType(msg: Record<string, unknown>): { id: string; type: string; mime?: string; filename?: string } | null {
+  const img = msg.image as { id?: string; mime_type?: string } | undefined;
+  if (img?.id) return { id: img.id, type: "image", mime: img.mime_type };
+  const vid = msg.video as { id?: string; mime_type?: string } | undefined;
+  if (vid?.id) return { id: vid.id, type: "video", mime: vid.mime_type };
+  const doc = msg.document as { id?: string; mime_type?: string; filename?: string } | undefined;
+  if (doc?.id) return { id: doc.id, type: "document", mime: doc.mime_type, filename: doc.filename };
+  const aud = msg.audio as { id?: string; mime_type?: string } | undefined;
+  if (aud?.id) return { id: aud.id, type: "audio", mime: aud.mime_type };
+  return null;
+}
+
+/** Caption dari pesan masuk (penerima kirim gambar/video/dokumen + caption). Meta bisa kirim di objek media atau top-level. */
+function getInboundMediaCaption(msg: Record<string, unknown>): string | null {
+  const trimCaption = (raw: unknown): string | null => {
+    if (raw == null) return null;
+    const s = String(raw).trim();
+    return s !== "" ? s : null;
+  };
+  // Top-level caption (beberapa versi payload)
+  const top = trimCaption(msg.caption);
+  if (top) return top;
+  // Di dalam objek media: image.caption, video.caption, document.caption
+  for (const key of ["image", "video", "document"] as const) {
+    const obj = msg[key];
+    if (obj && typeof obj === "object" && obj !== null && "caption" in obj) {
+      const c = trimCaption((obj as { caption?: unknown }).caption);
+      if (c) return c;
+    }
+  }
+  return null;
+}
+
+function extensionFromMimeOrFilename(mime?: string, filename?: string): string {
+  if (filename && filename.includes(".")) return filename.replace(/^.*\./, "").toLowerCase().slice(0, 8);
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp",
+    "video/mp4": "mp4", "video/3gpp": "3gp",
+    "application/pdf": "pdf",
+    "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/amr": "amr",
+  };
+  if (mime) return map[mime.toLowerCase()] ?? mime.split("/")[1]?.slice(0, 8) ?? "bin";
+  return "bin";
+}
+
+async function resolveInboundMediaUrl(
+  mediaId: string,
+  accessToken: string,
+  supabase: ReturnType<typeof createClient>,
+  conversationId: string,
+  waMessageId: string,
+  type: string,
+  mime?: string,
+  filename?: string
+): Promise<string | null> {
+  try {
+    const metaRes = await fetch(`${META_GRAPH_BASE}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) return null;
+    const metaJson = await metaRes.json().catch(() => ({}));
+    const downloadUrl = metaJson.url;
+    if (!downloadUrl || typeof downloadUrl !== "string") return null;
+
+    const fileRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!fileRes.ok) return null;
+    const blob = await fileRes.blob();
+    const ext = extensionFromMimeOrFilename(mime, filename);
+    const safeId = waMessageId.replace(/\W/g, "_");
+    const path = `inbound/${conversationId}/${safeId}.${ext}`;
+
+    const { error: uploadErr } = await supabase.storage.from(WHATSAPP_MEDIA_BUCKET).upload(path, blob, {
+      contentType: blob.type || undefined,
+      upsert: true,
+    });
+    if (uploadErr) {
+      console.error("Webhook storage upload error:", uploadErr);
+      return null;
+    }
+    const { data: urlData } = supabase.storage.from(WHATSAPP_MEDIA_BUCKET).getPublicUrl(path);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("resolveInboundMediaUrl error:", e);
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -78,7 +169,7 @@ Deno.serve(async (req: Request) => {
 
               const { data: config, error: configError } = await supabase
                 .from("organization_whatsapp_config")
-                .select("organization_id")
+                .select("organization_id, whatsapp_access_token")
                 .eq("phone_number_id", phoneNumberId)
                 .eq("is_active", true)
                 .maybeSingle();
@@ -89,6 +180,7 @@ Deno.serve(async (req: Request) => {
               }
 
               const orgId = config.organization_id;
+              const accessToken = config.whatsapp_access_token ?? "";
 
               // Backfill display_phone_number from webhook metadata (works in dev & live; Meta sends it in every message)
               const rawDisplayNumber = value.metadata?.display_phone_number;
@@ -114,8 +206,13 @@ Deno.serve(async (req: Request) => {
               );
 
               for (const msg of sortedMessages) {
+                if (msg.type === "unsupported") {
+                  continue;
+                }
                 const customerWaId = String(msg.from ?? "");
-                const bodyText = msg.text?.body ?? (msg.type === "text" ? "" : `[${msg.type}]`);
+                const mediaCaption = getInboundMediaCaption(msg as Record<string, unknown>);
+                const bodyText =
+                  msg.text?.body ?? mediaCaption ?? (msg.type === "text" ? "" : `[${msg.type}]`);
                 const msgId = msg.id;
                 const timestamp = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString();
                 const customerName = contactMap[customerWaId] ?? null;
@@ -141,7 +238,25 @@ Deno.serve(async (req: Request) => {
                   continue;
                 }
 
-                await supabase.from("whatsapp_messages").insert({
+                let mediaUrl: string | null = null;
+                const mediaInfo = getMediaIdAndType(msg as Record<string, unknown>);
+                if (mediaInfo && accessToken) {
+                  mediaUrl = await resolveInboundMediaUrl(
+                    mediaInfo.id,
+                    accessToken,
+                    supabase,
+                    conv.id,
+                    msgId,
+                    mediaInfo.type,
+                    mediaInfo.mime,
+                    mediaInfo.filename
+                  );
+                  if (!mediaUrl) {
+                    console.warn("Inbound media resolution failed (Meta or storage). Message will show [image] + Tampilkan gambar.", { msgId, type: mediaInfo.type });
+                  }
+                }
+
+                const insertPayload: Record<string, unknown> = {
                   conversation_id: conv.id,
                   direction: "inbound",
                   wa_message_id: msgId,
@@ -149,7 +264,10 @@ Deno.serve(async (req: Request) => {
                   message_type: msg.type ?? "text",
                   raw_metadata: msg,
                   created_at: timestamp,
-                });
+                };
+                if (mediaUrl) insertPayload.media_url = mediaUrl;
+
+                await supabase.from("whatsapp_messages").insert(insertPayload);
                 // Sync last_message from actual latest message so preview is always correct
                 await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conv.id });
               }

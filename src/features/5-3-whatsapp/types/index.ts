@@ -31,6 +31,10 @@ export interface WhatsAppConversation {
   customer_name: string | null;
   last_message_at: string | null;
   last_message_body: string | null;
+  /** Arah pesan terakhir: inbound / outbound (untuk tampilkan checklist di list). */
+  last_message_direction?: string | null;
+  /** Status pesan terakhir: sent / delivered / read (untuk checklist di list). */
+  last_message_status?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,4 +53,13 @@ export interface WhatsAppMessage {
   status: WhatsAppMessageStatus | null;
   status_updated_at: string | null;
   read_at: string | null;
+  /** Public URL for image/video/document preview (outbound: our storage; inbound: our storage after download from Meta). */
+  media_url?: string | null;
+  /** Pesan yang dibalas: wa_message_id dan body untuk ditampilkan di bubble. */
+  reply_to_wa_message_id?: string | null;
+  reply_to_body?: string | null;
+  /** Tipe pesan yang dibalas (text, image, video, document, audio) untuk tampilan ikon + caption. */
+  reply_to_message_type?: string | null;
+  /** Nama pengirim pesan yang dibalas (untuk tampilan reply seperti WhatsApp). */
+  reply_to_sender?: string | null;
 }

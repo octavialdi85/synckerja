@@ -1,0 +1,7 @@
+# Supabase local/config - used by CLI (e.g. supabase functions deploy)
+# See: https://supabase.com/docs/guides/functions/config
+
+[functions]
+# resolve-whatsapp-media: must allow unauthenticated OPTIONS so CORS preflight from browser gets 200.
+# We validate JWT inside the function for POST requests.
+resolve-whatsapp-media.verify_jwt = false

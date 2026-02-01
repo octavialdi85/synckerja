@@ -1,17 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
 const META_GRAPH_VERSION = "v21.0";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
@@ -76,8 +77,9 @@ Deno.serve(async (req: Request) => {
     const phoneNumberId = config.phone_number_id.trim();
     const wabaId = config.whatsapp_business_account_id?.trim() || "";
 
-    // 1) GET single phone number WITHOUT fields = default response includes display_phone_number, verified_name (per Meta docs)
-    const metaUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}`;
+    // 1) GET phone number with explicit fields so name_status is always returned (Meta: APPROVED / DECLINED / PENDING)
+    const fields = "verified_name,display_phone_number,name_status";
+    const metaUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=${encodeURIComponent(fields)}`;
     const metaRes = await fetch(metaUrl, {
       method: "GET",
       headers: { "Authorization": `Bearer ${accessToken}` },
@@ -91,15 +93,22 @@ Deno.serve(async (req: Request) => {
     };
 
     if (!metaRes.ok) {
-      const msg = metaData?.error?.message ?? "Meta API error";
+      const metaError = metaData?.error as { message?: string; code?: number; error_subcode?: number } | undefined;
+      const msg = metaError?.message ?? (metaData?.error as { message?: string })?.message ?? "Meta API error";
+      const code = metaError?.code;
+      const subcode = metaError?.error_subcode;
+      const userHint =
+        code === 100 && (subcode === 33 || /does not exist|missing permissions|does not support/i.test(msg))
+          ? "Phone Number ID atau token tidak valid. Periksa di Meta Business: App → WhatsApp → API Setup. Pastikan Phone Number ID dan Access Token dari App & WABA yang sama."
+          : msg;
       return new Response(
-        JSON.stringify({ error: msg }),
+        JSON.stringify({ error: userHint }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const name = typeof metaData?.verified_name === "string" ? metaData.verified_name.trim() : null;
-    let nameStatus: string | null = typeof metaData?.name_status === "string" ? metaData.name_status.trim() : null;
+    let nameStatusRaw: string | null = typeof metaData?.name_status === "string" ? metaData.name_status.trim() : null;
     let displayPhone: string | null = null;
     if (metaData?.display_phone_number != null) {
       const raw = metaData.display_phone_number;
@@ -107,13 +116,16 @@ Deno.serve(async (req: Request) => {
       if (displayPhone && /^\d+$/.test(displayPhone)) displayPhone = `+${displayPhone}`;
     }
 
-    // 2) If name_status missing from default, fetch it (beta field)
-    if (nameStatus == null) {
+    // 2) If name_status still missing, fetch it in a second request (some API versions omit it)
+    if (nameStatusRaw == null || nameStatusRaw === "") {
       const statusUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=name_status`;
       const statusRes = await fetch(statusUrl, { method: "GET", headers: { "Authorization": `Bearer ${accessToken}` } });
       const statusData = await statusRes.json().catch(() => ({})) as { name_status?: string };
-      if (statusRes.ok && typeof statusData?.name_status === "string") nameStatus = statusData.name_status.trim();
+      if (statusRes.ok && typeof statusData?.name_status === "string") nameStatusRaw = statusData.name_status.trim();
     }
+
+    // Normalize name_status to uppercase (APPROVED / DECLINED / PENDING) for consistent UI
+    const nameStatus = nameStatusRaw && nameStatusRaw.length > 0 ? nameStatusRaw.toUpperCase() : null;
 
     // 3) Fallback: if still no display_phone_number, get from WABA phone_numbers list
     if (!displayPhone && wabaId) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '@/features/5-3-dashboard/HeaderAndTab';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
@@ -18,19 +18,52 @@ import { WhatsAppConnectForm } from '../components/connect/WhatsAppConnectForm';
 import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
 import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
 import { format } from 'date-fns';
-import { CheckCircle2, CircleOff, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
+import { CheckCircle2, CircleOff, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck, RefreshCw } from 'lucide-react';
+
+/** Ikon logo WhatsApp (akun WhatsApp). */
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+/** Badge verified Meta/WhatsApp (ikon asli: lingkaran bergerigi biru + centang putih). */
+function MetaVerifiedBadge({ className, title, 'aria-label': ariaLabel }: { className?: string; title?: string; 'aria-label'?: string }) {
+  // Lingkaran bergerigi (serrated) seperti badge Meta: gigi jelas, radius luar/dalam bergantian
+  const teeth = 16;
+  const R = 12;   // radius luar (ujung gigi)
+  const r = 8.5;  // radius dalam (lembah) — beda jelas agar gerigi terlihat
+  const cx = 12;
+  const cy = 12;
+  const points: string[] = [];
+  for (let i = 0; i < teeth * 2; i++) {
+    const radius = i % 2 === 0 ? R : r;
+    const angle = (i * 360) / (teeth * 2) - 90; // 32 titik merata 360°
+    const rad = (angle * Math.PI) / 180;
+    points.push(`${(cx + radius * Math.cos(rad)).toFixed(2)},${(cy + radius * Math.sin(rad)).toFixed(2)}`);
+  }
+  const serratedCircle = `M ${points.join(' L ')} Z`;
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" role="img" title={title} aria-label={ariaLabel}>
+      <path d={serratedCircle} fill="#1877F2" />
+      <path d="M7 12l3 3 6-6" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
 
 export function WhatsAppConnectPage() {
   const { t } = useAppTranslation();
   const { config, isLoading, disconnect, isDisconnecting, refetch } = useWhatsAppConfig();
   const [disconnectOpen, setDisconnectOpen] = useState(false);
-  const syncAttemptedRef = useRef(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const isConnected = !!config?.is_active && !!config?.phone_number_id;
 
-  // Sync WhatsApp Business Name from Meta when page loads with connected account (fixes stale name e.g. "Klinik Pandawa" -> "Vialdi Wedding")
+  // Sync WhatsApp data (name, status, phone) from Meta when page loads with connected account
   useEffect(() => {
-    if (!isConnected || !config || syncAttemptedRef.current) return;
-    syncAttemptedRef.current = true;
+    if (!isConnected || !config) return;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -44,15 +77,16 @@ export function WhatsAppConnectPage() {
         });
         if (res.ok) await refetch();
       } catch {
-        // Ignore; name stays as-is
+        // Ignore; data stays as-is
       }
     })();
   }, [isConnected, config?.id, refetch]);
   const accountName = config?.whatsapp_business_name?.trim() || config?.display_phone_number?.trim() || config?.phone_number_id || 'WhatsApp Account';
   const displayNumber = config?.display_phone_number?.trim() || '—';
-  const statusLabel = config?.name_status === 'APPROVED'
+  const statusUpper = config?.name_status?.trim()?.toUpperCase();
+  const statusLabel = statusUpper === 'APPROVED'
     ? t('whatsappConnect.statusApproved', 'Approved')
-    : config?.name_status === 'DECLINED'
+    : statusUpper === 'DECLINED'
       ? t('whatsappConnect.statusDeclined', 'Declined')
       : (config?.name_status?.trim() || t('whatsappConnect.statusPending', 'Pending'));
   const updatedAtLabel = config?.updated_at
@@ -62,6 +96,36 @@ export function WhatsAppConnectPage() {
   const handleDisconnectConfirm = async () => {
     await disconnect();
     setDisconnectOpen(false);
+  };
+
+  const handleRefreshFromMeta = async () => {
+    if (!isConnected || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error(t('whatsappConnect.refreshError', 'Sesi habis. Silakan login lagi.'));
+        return;
+      }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-whatsapp-business-name`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || t('whatsappConnect.refreshError', 'Gagal menyinkronkan dari Meta.'));
+        return;
+      }
+      await refetch();
+      toast.success(t('whatsappConnect.refreshSuccess', 'Data diperbarui dari Meta.'));
+    } catch {
+      toast.error(t('whatsappConnect.refreshError', 'Gagal menyinkronkan dari Meta.'));
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -96,7 +160,7 @@ export function WhatsAppConnectPage() {
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_3fr] gap-6">
                       {/* Left: Akun Configuration (WhatsApp – nanti bisa ditambah Instagram, dll.) */}
                       <Card>
                         <CardHeader className="space-y-3">
@@ -172,10 +236,15 @@ export function WhatsAppConnectPage() {
                                   <div className="flex items-center justify-between gap-3 flex-wrap">
                                     <div className="flex items-center gap-3 min-w-0">
                                       <div className="w-11 h-11 rounded-xl bg-[#25D366]/15 flex items-center justify-center shrink-0">
-                                        <MessageCircle className="w-6 h-6 text-[#25D366]" />
+                                        <WhatsAppIcon className="w-6 h-6 text-[#25D366]" />
                                       </div>
                                       <div className="min-w-0">
-                                        <h3 className="font-semibold text-slate-900 truncate">{accountName}</h3>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <h3 className="font-semibold text-slate-900 truncate">{accountName}</h3>
+                                          {statusUpper === 'APPROVED' && (
+                                            <MetaVerifiedBadge className="w-5 h-5 shrink-0" title={t('whatsappConnect.statusApproved', 'Approved by Meta')} aria-label={t('whatsappConnect.statusApproved', 'Approved')} />
+                                          )}
+                                        </div>
                                         <span className="inline-flex items-center gap-1.5 text-green-600 text-sm font-medium mt-0.5">
                                           <CheckCircle2 className="w-4 h-4 shrink-0" />
                                           Connected
@@ -184,37 +253,53 @@ export function WhatsAppConnectPage() {
                                     </div>
                                   </div>
                                   {/* 2x2 info grid */}
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                                  <div className="grid grid-cols-4 gap-3 min-w-0">
+                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3 min-w-0">
                                       <div className="flex items-center gap-2 text-slate-500 text-xs font-medium mb-1">
-                                        <Phone className="w-3.5 h-3.5" />
+                                        <Phone className="w-3.5 h-3.5 shrink-0" />
                                         {t('whatsappConnect.labelNumber', 'Number')}
                                       </div>
                                       <p className="text-sm font-medium text-slate-800 truncate">{displayNumber}</p>
                                     </div>
-                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3 min-w-0">
                                       <div className="flex items-center gap-2 text-slate-500 text-xs font-medium mb-1">
-                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                                         {t('whatsappConnect.labelStatus', 'Status')}
                                       </div>
-                                      <p className="text-sm font-medium text-slate-800">{statusLabel}</p>
+                                      <p className="text-sm font-medium text-slate-800 flex items-center gap-1.5">
+                                        {statusUpper === 'APPROVED' && (
+                                          <MetaVerifiedBadge className="w-4 h-4 shrink-0" title={t('whatsappConnect.statusApproved', 'Approved by Meta')} aria-label={t('whatsappConnect.statusApproved', 'Approved')} />
+                                        )}
+                                        {statusLabel}
+                                      </p>
                                     </div>
-                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3 min-w-0">
                                       <div className="flex items-center gap-2 text-slate-500 text-xs font-medium mb-1">
-                                        <Hash className="w-3.5 h-3.5" />
-                                        {t('whatsappConnect.labelNumberId', 'Number ID')}
+                                        <Hash className="w-3.5 h-3.5 shrink-0" />
+                                        {t('whatsappConnect.labelNumberId', 'Phone Number ID')}
                                       </div>
                                       <p className="text-sm font-medium text-slate-800 truncate font-mono">{config?.phone_number_id ?? '—'}</p>
                                     </div>
-                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3 min-w-0">
                                       <div className="flex items-center gap-2 text-slate-500 text-xs font-medium mb-1">
-                                        <Calendar className="w-3.5 h-3.5" />
+                                        <Calendar className="w-3.5 h-3.5 shrink-0" />
                                         {t('whatsappConnect.labelUpdated', 'Updated')}
                                       </div>
                                       <p className="text-sm font-medium text-slate-800">{updatedAtLabel}</p>
                                     </div>
                                   </div>
-                                  <div className="pt-2 border-t border-emerald-200/60">
+                                  <div className="pt-2 border-t border-emerald-200/60 flex flex-wrap items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full sm:w-auto"
+                                      onClick={handleRefreshFromMeta}
+                                      disabled={isSyncing}
+                                    >
+                                      <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                                      {isSyncing ? t('whatsappConnect.syncing', 'Menyinkronkan...') : t('whatsappConnect.refreshFromMeta', 'Refresh dari Meta')}
+                                    </Button>
                                     <Button
                                       type="button"
                                       variant="outline"
