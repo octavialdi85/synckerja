@@ -14,6 +14,7 @@ import { EditLeadDialog } from './EditLeadDialog';
 import { ViewLeadDialog } from './ViewLeadDialog';
 import { ClientProfilePopup } from './ClientProfilePopup';
 import { LeadStatusHistoryDialog } from './LeadStatusHistoryDialog';
+import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { useClientProfileStatus } from '@/hooks/organized/sales';
 import { LoadingDots } from '@/components/LoadingDots';
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +76,10 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
 
     if (field === 'status_id') {
       const selectedStatus = leadStatuses.find(s => s.id === value);
+      if (selectedStatus?.name?.trim().toLowerCase() === 'closed') {
+        const confirmed = window.confirm(t('leadsManagement.confirmResolve', 'Yakin ingin mengubah status menjadi Resolve? Chat outbound akan diblokir sampai ada pesan masuk baru dari customer.'));
+        if (!confirmed) return;
+      }
       updatedLead = {
         ...lead,
         status_id: value,
@@ -172,6 +177,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     TERMINAL_STATUS_NAMES.some(
       (name) => getCurrentLeadStatusName(lead).toLowerCase() === name.toLowerCase()
     );
+
+  const isResolvedLead = (l: NewLead) => (l.lead_status?.name ?? leadStatuses.find(s => s.id === l.status_id)?.name ?? '').trim().toLowerCase() === 'closed';
 
   // Get Status with soft colors - rectangular style
   const getStatusColor = (lead: NewLead) => {
@@ -310,7 +317,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                       value={(lead as NewLead & { assignee_id?: string | null }).assignee_id ?? (employees.find((e) => (e.full_name || e.email) === lead.assignee)?.id) ?? ''}
                       onValueChange={(value) => handleFieldUpdate(lead.id, 'assignee_id', value)}
                     >
-                      <SelectTrigger className="w-full h-8 text-xs">
+                      <SelectTrigger className="w-full h-8 text-xs" disabled={isResolvedLead(lead)}>
                         <SelectValue placeholder="Select assignee" />
                       </SelectTrigger>
                       <SelectContent>
@@ -359,15 +366,17 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         value={lead.status_id || (lead.lead_status?.id ?? (leadStatuses.length > 0 ? leadStatuses[0].id : ''))}
                         onValueChange={(value) => handleFieldUpdate(lead.id, 'status_id', value)}
                       >
-                        <SelectTrigger className={`w-28 h-7 text-xs border ${getStatusColor(lead)} rounded-sm font-medium justify-between px-2`}>
+                        <SelectTrigger className={`w-28 h-7 text-xs border ${getStatusColor(lead)} rounded-sm font-medium justify-between px-2`} disabled={isResolvedLead(lead)}>
                           <span className="text-left">
-                            {lead.lead_status?.name ||
-                             (leadStatuses.find(s => s.id === lead.status_id)?.name) ||
-                             (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')}
+                            {getLeadStatusDisplayName(
+                              lead.lead_status?.name ||
+                              leadStatuses.find(s => s.id === lead.status_id)?.name ||
+                              (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')
+                            )}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
-                          {leadStatuses.map((status) => {
+                          {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => {
                             const isOpenOption = status.name?.toLowerCase() === 'open';
                             const disableOpen = isOpenOption && isOpenDisabledForLead(lead);
                             return (
@@ -376,9 +385,9 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                                 value={status.id}
                                 disabled={disableOpen}
                                 className={disableOpen ? 'opacity-60 cursor-not-allowed' : undefined}
-                                title={disableOpen ? t('leadsManagement.openDisabledForTerminalStatus', 'Status Lost/Closed/Converted tidak dapat dikembalikan ke Open') : undefined}
+                                title={disableOpen ? t('leadsManagement.openDisabledForTerminalStatus', 'Status On Going/Qualified/Converted/Resolve tidak dapat dikembalikan ke Unread') : undefined}
                               >
-                                {status.name}
+                                {getLeadStatusDisplayName(status.name)}
                               </SelectItem>
                             );
                           })}

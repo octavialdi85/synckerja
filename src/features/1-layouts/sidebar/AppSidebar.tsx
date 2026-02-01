@@ -351,7 +351,7 @@ export function AppSidebar() {
               <div className="space-y-1 px-1">
                 {menuItems.map((item, index) => {
                   const localizedTitle = t(item.titleKey, item.title);
-                  const showWhatsAppBadge = item.title === 'Operations' && whatsAppUnreadCount > 0;
+                  const showWhatsAppBadge = false;
                   return <div key={item.title}>
                     <div onMouseEnter={() => handleMenuItemHover(item.title, item.hasSubSidebar || false)} className="relative group/item">
                       {item.url && item.url !== "#" ? <button

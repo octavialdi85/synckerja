@@ -280,7 +280,7 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              {leadStatuses.map((status) => (
+              {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => (
                 <SelectItem key={status.id} value={status.name}>
                   {status.name}
                 </SelectItem>

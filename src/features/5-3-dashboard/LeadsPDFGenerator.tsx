@@ -260,7 +260,7 @@ export const generateLeadsPDF = (data: FilteredData) => {
   }
   if (closedLeads > 0) {
     yPos += 6;
-    doc.text(`Closed: ${closedLeads}`, 20, yPos);
+    doc.text(`Resolve: ${closedLeads}`, 20, yPos);
   }
   
   // Add footer to all pages

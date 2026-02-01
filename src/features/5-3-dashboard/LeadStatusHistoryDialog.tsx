@@ -10,6 +10,7 @@ import { Badge } from "@/features/ui/badge";
 import { ScrollArea } from "@/features/ui/scroll-area";
 import { format } from "date-fns";
 import { useLeadStatusHistory, LeadStatusHistoryEntry } from '@/hooks/organized/sales';
+import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { Calendar, User, ArrowRight } from 'lucide-react';
 
 interface LeadStatusHistoryDialogProps {
@@ -113,13 +114,13 @@ export const LeadStatusHistoryDialog: React.FC<LeadStatusHistoryDialogProps> = (
                       {entry.old_status && (
                         <>
                           <Badge className={`${getStatusColor(entry.old_status)} text-xs px-2 py-1 rounded-sm font-medium border`}>
-                            {entry.old_status}
+                            {getLeadStatusDisplayName(entry.old_status)}
                           </Badge>
                           <ArrowRight className="h-4 w-4 text-gray-400" />
                         </>
                       )}
                       <Badge className={`${getStatusColor(entry.new_status)} text-xs px-2 py-1 rounded-sm font-medium border`}>
-                        {entry.new_status}
+                        {getLeadStatusDisplayName(entry.new_status)}
                       </Badge>
                       {entry.new_status === 'Converted' && (
                         <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs px-2 py-1 rounded-sm font-medium border">

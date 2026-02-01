@@ -9,6 +9,8 @@ import { LeadsSidebarFooter } from './LeadsSidebarFooter';
 import { useLeads } from '@/hooks/organized/sales';
 import { NewLead } from '@/types/leads';
 import { useClientProfileStatus } from '@/hooks/organized/sales';
+import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/features/ui/button';
 import { Plus, Download, Loader2 } from 'lucide-react';
@@ -29,7 +31,9 @@ export const ConsultantsPageContent = () => {
     dateRange: null,
     search: ''
   });
-  const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads();
+  const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads({ scope: 'all' });
+  const { data: employees = [] } = useAvailableEmployees();
+  const { organizationId } = useCurrentOrg();
 
   const handleNewLeadClick = () => {
     setIsCreateDialogOpen(true);
@@ -151,7 +155,8 @@ export const ConsultantsPageContent = () => {
 
     // Status filter
     if (filters.status !== 'all' && filters.status) {
-      filtered = filtered.filter(lead => lead.lead_status?.name === filters.status);
+      const statusNorm = (filters.status as string).trim().toLowerCase();
+      filtered = filtered.filter(lead => (lead.lead_status?.name?.trim().toLowerCase() ?? '') === statusNorm);
     }
 
     // Source filter
@@ -175,7 +180,7 @@ export const ConsultantsPageContent = () => {
     return filtered;
   }, [leads, filters, clientStatuses]);
 
-  const convertedLeads = filteredLeads.filter(lead => lead.lead_status?.name === 'Converted').length;
+  const convertedLeads = filteredLeads.filter(lead => (lead.lead_status?.name?.trim().toLowerCase() ?? '') === 'converted').length;
 
   // Generate PDF Report
   const generatePDFReport = async () => {
@@ -297,7 +302,9 @@ export const ConsultantsPageContent = () => {
                     leads={filteredLeads} 
                     filters={filters} 
                     clientStatuses={clientStatuses} 
-                    clientProfiles={clientProfiles} 
+                    clientProfiles={clientProfiles}
+                    allEmployees={employees}
+                    organizationId={organizationId ?? undefined}
                   />
                 </div>
               </div>

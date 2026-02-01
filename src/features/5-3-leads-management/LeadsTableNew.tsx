@@ -14,7 +14,9 @@ import { EditLeadDialog } from './EditLeadDialog';
 import { ViewLeadDialog } from './ViewLeadDialog';
 import { ClientProfilePopup } from '@/components/1_halaman/5_3_sales-consultant/ClientProfilePopup';
 import { LeadStatusHistoryDialog } from './LeadStatusHistoryDialog';
+import { LeadStatusSelect } from './LeadStatusSelect';
 import { useClientProfileStatus } from '@/hooks/organized/sales';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Check, X, Minus } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -32,16 +34,7 @@ interface LeadsTableNewProps {
 }
 
 export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRefreshLeads }: LeadsTableNewProps) {
-  console.log('🔢 LeadsTableNew received leads:', leads.length, leads);
-  // Debug status data
-  leads.forEach(lead => {
-    console.log(`📊 Lead ${lead.id}:`, {
-      status_id: lead.status_id,
-      lead_status: lead.lead_status,
-      lead_status_name: lead.lead_status?.name
-    });
-  });
-  
+  const { t } = useAppTranslation();
   const [selectedLead, setSelectedLead] = useState<NewLead | null>(null);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -55,22 +48,25 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   const [isStatusHistoryOpen, setIsStatusHistoryOpen] = useState(false);
   const [statusHistoryLead, setStatusHistoryLead] = useState<NewLead | null>(null);
 
-  // Fetch lead statuses from database
+  // Fetch lead statuses from database (filter by org when available, so dropdown sync with leads)
   useEffect(() => {
     const fetchLeadStatuses = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('lead_statuses')
         .select('id, name, color')
         .eq('is_active', true)
         .order('sort_order');
-
+      if (organizationId) {
+        query = query.eq('organization_id', organizationId);
+      }
+      const { data, error } = await query;
       if (!error && data) {
         setLeadStatuses(data);
       }
     };
 
     fetchLeadStatuses();
-  }, []);
+  }, [organizationId]);
 
   const handleFieldUpdate = (leadId: string, field: string, value: string) => {
     const lead = leads.find(l => l.id === leadId);
@@ -80,6 +76,15 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
       // Special handling for status updates to use status_id
       if (field === 'status_id') {
         const selectedStatus = leadStatuses.find(s => s.id === value);
+        // Block changing to Unread (Open) when current status is not Open
+        if (selectedStatus?.name?.trim().toLowerCase() === 'open') {
+          const currentName = (lead.lead_status?.name ?? leadStatuses.find(s => s.id === lead.status_id)?.name ?? '').trim().toLowerCase();
+          if (currentName && currentName !== 'open') return;
+        }
+        if (selectedStatus?.name?.trim().toLowerCase() === 'closed') {
+          const confirmed = window.confirm(t('leadsManagement.confirmResolve', 'Yakin ingin mengubah status menjadi Resolve? Chat outbound akan diblokir sampai ada pesan masuk baru dari customer.'));
+          if (!confirmed) return;
+        }
         updatedLead = { 
           ...lead, 
           status_id: value,
@@ -168,24 +173,11 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     return colors[priority as keyof typeof colors] || colors.Medium;
   };
 
-  // Get Status with soft colors - rectangular style
-  const getStatusColor = (lead: NewLead) => {
-    // First try to use lead_status from joined data, then find by status_id
-    const statusData = lead.lead_status || leadStatuses.find(s => s.id === lead.status_id);
-    if (statusData?.color) {
-      // Convert hex color to background and text color classes
-      const colorMap: { [key: string]: string } = {
-        '#F59E0B': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-        '#10B981': 'bg-green-50 text-green-700 border-green-200', 
-        '#059669': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        '#EF4444': 'bg-red-50 text-red-700 border-red-200',
-        '#6B7280': 'bg-gray-50 text-gray-700 border-gray-200',
-        '#3B82F6': 'bg-blue-50 text-blue-700 border-blue-200'
-      };
-      return colorMap[statusData.color] || 'bg-gray-50 text-gray-700 border-gray-200';
-    }
-    return 'bg-gray-50 text-gray-700 border-gray-200';
-  };
+  const isResolvedLead = (l: NewLead) => (l.lead_status?.name ?? leadStatuses.find(s => s.id === l.status_id)?.name ?? '').trim().toLowerCase() === 'closed';
+
+  // Untuk guard di handleFieldUpdate dan currentStatusName di LeadStatusSelect (kode status = livechat)
+  const getCurrentLeadStatusName = (l: NewLead) =>
+    (l.lead_status?.name ?? leadStatuses.find(s => s.id === l.status_id)?.name ?? '').trim();
 
   // Get Source with soft rectangular colors
   const getSourceColor = (source?: string) => {
@@ -280,7 +272,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         value={lead.assignee}
                         onValueChange={(value) => handleFieldUpdate(lead.id, 'assignee', value)}
                       >
-                        <SelectTrigger className="w-full h-8 text-xs">
+                        <SelectTrigger className="w-full h-8 text-xs" disabled={isResolvedLead(lead)}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -312,28 +304,17 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         {(lead.followup === 0) ? 'Please Follow Up' : (lead.fu_priority || 'Medium')}
                       </Badge>
                     </TableCell>
-                     {/* Status Column - Fixed width dropdown with history button */}
+                     {/* Status Column - kode sama dengan sidebar livechat (LeadStatusSelect) */}
                      <TableCell className="whitespace-nowrap">
                        <div className="flex items-center gap-2">
-                         <Select
-                           value={lead.status_id || (lead.lead_status?.id ? lead.lead_status.id : (leadStatuses.length > 0 ? leadStatuses[0].id : ''))}
+                         <LeadStatusSelect
+                           value={lead.status_id || (lead.lead_status?.id ?? leadStatuses[0]?.id ?? '')}
                            onValueChange={(value) => handleFieldUpdate(lead.id, 'status_id', value)}
-                         >
-                            <SelectTrigger className={`w-28 h-7 text-xs border ${getStatusColor(lead)} rounded-sm font-medium justify-between px-2`}>
-                              <span className="text-left">
-                                {lead.lead_status?.name || 
-                                 (leadStatuses.find(s => s.id === lead.status_id)?.name) || 
-                                 (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')}
-                              </span>
-                            </SelectTrigger>
-                           <SelectContent>
-                             {leadStatuses.map((status) => (
-                               <SelectItem key={status.id} value={status.id}>
-                                 {status.name}
-                               </SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
+                           leadStatuses={leadStatuses}
+                           currentStatusName={getCurrentLeadStatusName(lead)}
+                           disabled={isResolvedLead(lead)}
+                           triggerClassName="w-28 h-7 text-xs border rounded-sm font-medium justify-between px-2"
+                         />
                          <Button
                            variant="ghost"
                            size="sm"

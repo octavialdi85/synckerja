@@ -1,7 +1,7 @@
 // Sales hooks - Placeholder implementations
 // TODO: Implement actual hooks based on Supabase queries
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
@@ -884,6 +884,46 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
   // Owner always sees all leads regardless of scope
   const effectiveScope: LeadsScope = isOwner ? 'all' : scope;
 
+  // Realtime: invalidate leads query when leads atau whatsapp_conversations berubah (status/assignee dll) — sama seperti tab live chat
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  useEffect(() => {
+    if (!organizationId) return;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    channelRef.current = supabase
+      .channel('leads_management_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'whatsapp_conversations' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_conversations' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
+      .subscribe();
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [organizationId, queryClient]);
+
   // Fetch leads with join to lead_statuses; filter by scope (assignee_id)
   const { data: rawLeadsList = [], isLoading: loading, refetch } = useQuery({
     queryKey: ['leads', organizationId, effectiveScope, currentEmployeeId, isOwner],
@@ -911,19 +951,17 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         .select('id, name, color, is_active')
         .eq('organization_id', organizationId);
 
+      const normId = (id: string | null | undefined) => (id == null ? '' : String(id));
       if (!statusesError && statusesData) {
         statusesData.forEach((status: any) => {
-          statusMap.set(status.id, {
-            id: status.id,
-            name: status.name,
-            color: status.color,
-          });
+          const id = normId(status.id);
+          statusMap.set(id, { id: status.id, name: status.name, color: status.color });
         });
       }
       const missingStatusIds = [...new Set(
         rawLeads
           .map((lead: any) => lead.status_id)
-          .filter((statusId: string) => statusId && !statusMap.has(statusId))
+          .filter((statusId: string) => statusId && !statusMap.has(normId(statusId)))
       )];
       if (missingStatusIds.length > 0) {
         const { data: missingStatuses, error: missingError } = await supabase
@@ -932,18 +970,15 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           .in('id', missingStatusIds);
         if (!missingError && missingStatuses) {
           missingStatuses.forEach((status: any) => {
-            statusMap.set(status.id, {
-              id: status.id,
-              name: status.name,
-              color: status.color,
-            });
+            const id = normId(status.id);
+            statusMap.set(id, { id: status.id, name: status.name, color: status.color });
           });
         }
       }
 
       // Merge leads with their status information
-      const leadsWithStatus = rawLeads.map((lead: any) => {
-        const status = statusMap.get(lead.status_id);
+      let leadsWithStatus = rawLeads.map((lead: any) => {
+        const status = statusMap.get(normId(lead.status_id));
         return {
           ...lead,
           lead_status: status || null,
@@ -957,20 +992,55 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         .eq('organization_id', organizationId)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
+      // Resolve assignee_id → assignee name for ALL leads (regular + WhatsApp) so Consultant Performance section has data
+      const assigneeIdsFromLeads = [...new Set(rawLeads.map((l: any) => l.assignee_id).filter(Boolean))] as string[];
+      const assigneeIdsFromWa = (whatsappConvs ?? []).map((c: any) => c.assignee_id).filter(Boolean) as string[];
+      const allAssigneeIds = [...new Set([...assigneeIdsFromLeads, ...assigneeIdsFromWa])];
+      const assigneeNameMap = new Map<string, string>();
+      if (allAssigneeIds.length > 0) {
+        const { data: assigneeRows } = await supabase
+          .from('employees')
+          .select('id, full_name, email')
+          .in('id', allAssigneeIds);
+        (assigneeRows ?? []).forEach((e: any) => {
+          assigneeNameMap.set(normId(e.id), e.full_name || e.email || '');
+        });
+      }
+      leadsWithStatus = leadsWithStatus.map((lead: any) => ({
+        ...lead,
+        assignee: (lead.assignee && String(lead.assignee).trim()) ? lead.assignee : (lead.assignee_id ? assigneeNameMap.get(normId(lead.assignee_id)) ?? null : null),
+      }));
+
       if (!whatsappError && whatsappConvs && whatsappConvs.length > 0) {
+        // Ensure statusMap has all statuses used by WhatsApp (for Report Summary "Converted" count)
+        const waStatusIds = [...new Set(whatsappConvs.map((c: any) => c.lead_status_id).filter(Boolean))].filter((id: string) => !statusMap.has(normId(id)));
+        if (waStatusIds.length > 0) {
+          const { data: waStatuses, error: waErr } = await supabase
+            .from('lead_statuses')
+            .select('id, name, color, is_active')
+            .in('id', waStatusIds);
+          if (!waErr && waStatuses) {
+            waStatuses.forEach((status: any) => {
+              const id = normId(status.id);
+              statusMap.set(id, { id: status.id, name: status.name, color: status.color });
+            });
+          }
+        }
         const whatsappAsLeads = whatsappConvs.map((c: any) => {
           const statusId = c.lead_status_id ?? '';
-          const leadStatus = statusId ? statusMap.get(statusId) ?? null : null;
+          const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
           // Ticket ID dari DB (kolom generated); fallback ke hitungan dari id jika belum ada
           const waTicketId = c.ticket_id ?? ('WA-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          const assigneeId = c.assignee_id ?? null;
+          const assigneeName = assigneeId ? assigneeNameMap.get(normId(assigneeId)) ?? null : null;
           return {
             id: 'wa-' + c.id,
             client: c.customer_name || c.customer_wa_id || 'WhatsApp',
             title: (c.last_message_body || 'WhatsApp').slice(0, 100),
             services: null,
             category: '-',
-            assignee: null as string | null,
-            assignee_id: c.assignee_id ?? null,
+            assignee: assigneeName as string | null,
+            assignee_id: assigneeId,
             fu_priority: c.fu_priority ?? null,
             status_id: statusId,
             source: 'WhatsApp',
@@ -994,6 +1064,7 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       return filterLeadsByScope(leadsWithStatus, effectiveScope, currentEmployeeId);
     },
     enabled: !!organizationId && (effectiveScope === 'all' || !!currentEmployeeId || effectiveScope === 'unassigned'),
+    refetchInterval: 10000, // Fallback refresh setiap 10s (sama seperti tab live chat)
   });
 
   const leads = rawLeadsList;
@@ -1086,10 +1157,30 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             organization_id: lead.organization_id,
           });
         }
+        if (newStatusName?.trim().toLowerCase() === 'closed') {
+          const now = new Date().toISOString();
+          await supabase
+            .from('whatsapp_conversation_cycles')
+            .update({ resolved_at: now, updated_at: now })
+            .eq('conversation_id', convId)
+            .is('resolved_at', null);
+        }
         return lead;
       }
-      const { id, lead_status, ...updateData } = lead;
-      
+      const { id, lead_status, organization_id: leadOrgId, ...updateData } = lead;
+      const organizationIdForHistory = leadOrgId ?? organizationId;
+
+      // Ambil status lama dari DB untuk catat ke lead_status_history
+      let oldStatusId: string | null = null;
+      if (updateData.status_id !== undefined) {
+        const { data: currentLead } = await supabase
+          .from('leads')
+          .select('status_id')
+          .eq('id', id)
+          .maybeSingle();
+        oldStatusId = currentLead?.status_id ?? null;
+      }
+
       // Only update valid database columns (exclude joined/computed fields like lead_status)
       const validFields: Record<string, unknown> = {
         client: updateData.client,
@@ -1106,14 +1197,14 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         ticket_id: updateData.ticket_id,
         updated_at: new Date().toISOString(),
       };
-      
+
       // Remove undefined/null fields to avoid overwriting with null
       Object.keys(validFields).forEach(key => {
         if (validFields[key as keyof typeof validFields] === undefined) {
           delete validFields[key as keyof typeof validFields];
         }
       });
-      
+
       const { data, error } = await supabase
         .from('leads')
         .update(validFields)
@@ -1124,6 +1215,43 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       if (error) {
         console.error('Error updating lead:', error);
         throw error;
+      }
+
+      // Catat perubahan status ke lead_status_history (agar Status History modal berisi data)
+      const newStatusId = validFields.status_id as string | undefined;
+      if (newStatusId !== undefined && String(newStatusId) !== String(oldStatusId)) {
+        let oldStatusName: string | null = null;
+        let newStatusName: string = '';
+        if (oldStatusId) {
+          const { data: oldRow } = await supabase
+            .from('lead_statuses')
+            .select('name')
+            .eq('id', oldStatusId)
+            .maybeSingle();
+          oldStatusName = (oldRow?.name as string) ?? null;
+        }
+        const { data: newRow } = await supabase
+          .from('lead_statuses')
+          .select('name')
+          .eq('id', newStatusId)
+          .maybeSingle();
+        newStatusName = (newRow?.name as string) ?? '';
+
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id ?? null;
+        const userName = (userData?.user?.user_metadata?.full_name as string) || (userData?.user?.email as string) || null;
+        const orgId = organizationIdForHistory ?? organizationId;
+        if (orgId) {
+          await supabase.from('lead_status_history').insert({
+            lead_id: id,
+            old_status: oldStatusName,
+            new_status: newStatusName || 'Open',
+            changed_at: new Date().toISOString(),
+            changed_by: userId,
+            changed_by_name: userName,
+            organization_id: orgId,
+          });
+        }
       }
 
       return data;

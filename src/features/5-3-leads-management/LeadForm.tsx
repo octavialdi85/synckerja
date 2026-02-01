@@ -210,8 +210,8 @@ export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Open">Open</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Closed">Closed</SelectItem>
+                  <SelectItem value="In Progress">On going</SelectItem>
+                  <SelectItem value="Closed">Resolve</SelectItem>
                 </SelectContent>
               </Select>
             </div>

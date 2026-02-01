@@ -31,6 +31,8 @@ interface ConversationListProps {
   onSelect: (conv: WhatsAppConversation) => void;
   /** When set, select this conversation once the list has loaded (e.g. from Leads "Open Chat" link). */
   initialConversationId?: string | null;
+  /** Filter conversations by name or phone (customer name / customer_wa_id). */
+  searchQuery?: string;
 }
 
 function formatTime(iso: string | null) {
@@ -43,13 +45,31 @@ function formatTime(iso: string | null) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export function ConversationList({ selectedId, onSelect, initialConversationId }: ConversationListProps) {
+/** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
+function maskPhoneLast4(phone: string | null | undefined): string {
+  if (phone == null || phone === '') return '';
+  const s = String(phone).trim();
+  if (s.length <= 4) return '****';
+  return s.slice(0, -4) + '****';
+}
+
+export function ConversationList({ selectedId, onSelect, initialConversationId, searchQuery = '' }: ConversationListProps) {
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { data: conversations = [], isLoading, error } = useWhatsAppConversations();
   const { config: whatsappConfig } = useWhatsAppConfig();
   const { unreadByConversation, markConversationRead } = useWhatsAppUnreadByConversation();
   const businessName = whatsappConfig?.whatsapp_business_name ?? whatsappConfig?.display_phone_number ?? null;
+
+  const filteredConversations = React.useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const q = searchQuery.trim().toLowerCase();
+    return conversations.filter((conv) => {
+      const name = (conv.customer_name ?? '').toLowerCase();
+      const waId = (conv.customer_wa_id ?? '').toLowerCase();
+      return name.includes(q) || waId.includes(q);
+    });
+  }, [conversations, searchQuery]);
 
   useEffect(() => {
     if (conversations.length === 0 || !initialConversationId) return;
@@ -110,9 +130,18 @@ export function ConversationList({ selectedId, onSelect, initialConversationId }
     );
   }
 
+  if (filteredConversations.length === 0) {
+    return (
+      <div className="p-4 text-sm text-gray-500 flex flex-col items-center justify-center h-32 text-center">
+        <MessageCircle className="w-8 h-8 text-gray-300 mb-2" />
+        <span>{searchQuery ? 'No conversations match your search.' : 'No conversations yet.'}</span>
+      </div>
+    );
+  }
+
   return (
     <ul className="divide-y divide-gray-100">
-      {conversations.map((conv) => {
+      {filteredConversations.map((conv) => {
         const unread = unreadByConversation[conv.id] ?? 0;
         return (
           <li
@@ -124,7 +153,7 @@ export function ConversationList({ selectedId, onSelect, initialConversationId }
           >
             <div className="flex justify-between items-start gap-2">
               <span className="font-medium text-gray-900 truncate min-w-0">
-                {conv.customer_name || conv.customer_wa_id || 'Unknown'}
+                {conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown'}
               </span>
               <div className="flex items-center gap-2 shrink-0">
                 {unread > 0 && (

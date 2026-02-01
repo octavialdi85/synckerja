@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { X, User, Calendar, Tag, UserCheck, BarChart3, Activity, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { NewLead } from '@/types/leads';
+import { getLeadStatusDisplayName } from './leadStatusDisplay';
 
 interface ViewLeadDialogProps {
   open: boolean;
@@ -108,7 +109,7 @@ export const ViewLeadDialog = ({
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div className="mt-1">
                   <Badge className={`${getStatusColor(lead.lead_status?.name || 'Open')} text-xs px-3 py-1 rounded-full font-medium`}>
-                    {lead.lead_status?.name || 'Open'}
+                    {getLeadStatusDisplayName(lead.lead_status?.name || 'Open')}
                   </Badge>
                 </div>
               </div>

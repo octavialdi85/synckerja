@@ -16,17 +16,35 @@ import {
   DropdownMenuTrigger,
 } from '@/features/ui/dropdown-menu';
 import { Dialog, DialogContent } from '@/features/ui/dialog';
-import { Check, CheckCheck, Paperclip, FileText, X, Download, ChevronDown, Trash2, Reply, Image, Video, Music, Send } from 'lucide-react';
+import { Check, CheckCheck, Paperclip, FileText, X, Download, ChevronDown, Trash2, Reply, Copy, Image, Video, Music, Send } from 'lucide-react';
+import { messageContainsContactRequest } from '../../constants/contactRequestBlockPhrases';
+import { isResolvedStatus } from '../../constants/leadStatus';
 
 /** Bucket yang sama dipakai untuk kirim (outbound) dan terima (webhook/resolve) media */
 const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
 
 interface ChatThreadProps {
   conversation: WhatsAppConversation | null;
+  /** When set, after messages load scroll to first message whose body contains this text (e.g. from search popup). */
+  scrollToTextInChat?: string | null;
+  /** Called after scroll-to-text is done so parent can clear scrollToTextInChat. */
+  onScrollToTextDone?: () => void;
+  /** When set, scroll to this message id and highlight it (e.g. from WhatsApp-style search result click). */
+  scrollToMessageId?: string | null;
+  /** Called after scroll-to-message and highlight is done. */
+  onScrollToMessageDone?: () => void;
 }
 
 function formatMessageTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
+function maskPhoneLast4(phone: string | null | undefined): string {
+  if (phone == null || phone === '') return '';
+  const s = String(phone).trim();
+  if (s.length <= 4) return '****';
+  return s.slice(0, -4) + '****';
 }
 
 /** Checklist di sebelah pesan outbound: satu centang (terkirim), dua centang (delivered), dua centang biru (dibaca). */
@@ -298,7 +316,7 @@ type PendingMedia = {
   previewUrl?: string;
 };
 
-export function ChatThread({ conversation }: ChatThreadProps) {
+export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone }: ChatThreadProps) {
   const [text, setText] = useState('');
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
@@ -331,8 +349,8 @@ export function ChatThread({ conversation }: ChatThreadProps) {
     media_url?: string | null;
   } | null>(null);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: string } | null>(null);
+  const [scrollToMessageIdLocal, setScrollToMessageIdLocal] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const clearPendingMedia = useCallback(() => {
     setPendingMedia((prev) => {
@@ -401,9 +419,82 @@ export function ChatThread({ conversation }: ChatThreadProps) {
       : []),
   ];
 
+  const scrollToTextInChatTrimmed = scrollToTextInChat?.trim();
+  const onScrollToTextDoneRef = useRef(onScrollToTextDone);
+  onScrollToTextDoneRef.current = onScrollToTextDone;
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [displayMessages.length]);
+    if (!scrollToTextInChatTrimmed || isLoading || displayMessages.length === 0) return;
+    const q = scrollToTextInChatTrimmed.toLowerCase();
+    const firstMatch = displayMessages.find((msg) => {
+      const body = (msg.body ?? '').toLowerCase();
+      const caption = (getMessageCaptionForReply(msg) ?? '').toLowerCase();
+      return body.includes(q) || caption.includes(q);
+    });
+    const done = () => onScrollToTextDoneRef.current?.();
+    if (firstMatch) {
+      const el = document.getElementById(`msg-${firstMatch.id}`);
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          done();
+        });
+      } else {
+        done();
+      }
+    } else {
+      done();
+    }
+  }, [scrollToTextInChatTrimmed, isLoading, displayMessages]);
+
+  const onScrollToMessageDoneRef = useRef(onScrollToMessageDone);
+  onScrollToMessageDoneRef.current = onScrollToMessageDone;
+  const scrollHighlightTimeoutRef = useRef<number | null>(null);
+  const effectiveScrollToMessageId = scrollToMessageId ?? scrollToMessageIdLocal;
+  const fromPropRef = useRef(false);
+  useEffect(() => {
+    if (!effectiveScrollToMessageId || isLoading || displayMessages.length === 0) return;
+    const el = document.getElementById(`msg-${effectiveScrollToMessageId}`);
+    const fromProp = scrollToMessageId != null && scrollToMessageId === effectiveScrollToMessageId;
+    fromPropRef.current = fromProp;
+    const done = () => {
+      if (fromPropRef.current) onScrollToMessageDoneRef.current?.();
+      else setScrollToMessageIdLocal(null);
+    };
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+        scrollHighlightTimeoutRef.current = window.setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+          scrollHighlightTimeoutRef.current = null;
+          done();
+        }, 2500);
+      });
+    } else {
+      done();
+    }
+    return () => {
+      if (scrollHighlightTimeoutRef.current != null) {
+        window.clearTimeout(scrollHighlightTimeoutRef.current);
+        scrollHighlightTimeoutRef.current = null;
+      }
+    };
+  }, [effectiveScrollToMessageId, scrollToMessageId, isLoading, displayMessages]);
+
+  /** Hilangkan highlight segera saat user klik pesan yang sedang disorot (klik kedua). */
+  const clearHighlightImmediately = useCallback(() => {
+    if (!effectiveScrollToMessageId) return;
+    const el = document.getElementById(`msg-${effectiveScrollToMessageId}`);
+    if (el) {
+      el.classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+    }
+    if (scrollHighlightTimeoutRef.current != null) {
+      window.clearTimeout(scrollHighlightTimeoutRef.current);
+      scrollHighlightTimeoutRef.current = null;
+    }
+    if (fromPropRef.current) onScrollToMessageDoneRef.current?.();
+    else setScrollToMessageIdLocal(null);
+  }, [effectiveScrollToMessageId]);
 
   const SEND_TIMEOUT_MS = 12000;
 
@@ -466,13 +557,30 @@ export function ChatThread({ conversation }: ChatThreadProps) {
     [conversation, send]
   );
 
+  /** Blokir pesan yang meminta kontak. Default ON; set VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS=false untuk nonaktifkan. */
+  const blockContactRequests =
+    (import.meta.env.VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS as string) !== 'false';
+
+  const isResolved = isResolvedStatus(conversation?.lead_status_name);
+
   const handleSend = async () => {
     if (!conversation) return;
+    if (isResolved) {
+      toast.error(t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.'));
+      return;
+    }
     const trimmed = text.trim();
+
+    if (blockContactRequests && messageContainsContactRequest(trimmed)) {
+      toast.error(
+        t('whatsappInbox.blockContactRequest', 'Pesan mengandung permintaan kontak dan tidak dapat dikirim.')
+      );
+      return;
+    }
 
     const replySender =
       replyTo?.direction === 'inbound'
-        ? (conversation?.customer_name || conversation?.customer_wa_id || '')
+        ? (conversation?.customer_name || maskPhoneLast4(conversation?.customer_wa_id) || '')
         : replyTo?.direction === 'outbound'
           ? t('whatsappInbox.you', 'You')
           : '';
@@ -534,7 +642,7 @@ export function ChatThread({ conversation }: ChatThreadProps) {
 
   if (!conversation) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50">
+      <div className="flex-1 min-w-0 flex items-center justify-center text-gray-500 bg-gray-50">
         <p>{t('whatsappInbox.selectConversation', 'Select a conversation to view and reply.')}</p>
       </div>
     );
@@ -554,14 +662,14 @@ export function ChatThread({ conversation }: ChatThreadProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2] border-l border-gray-200">
+    <div className="flex-1 min-w-0 flex flex-col min-h-0 bg-[#efeae2] border-l border-gray-200">
       <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 min-h-[60px] border-b border-gray-200 bg-[#f0f2f5]">
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-gray-900 truncate">
-            {conversation.customer_name || conversation.customer_wa_id || 'Unknown'}
+            {conversation.customer_name || maskPhoneLast4(conversation.customer_wa_id) || 'Unknown'}
           </h3>
           {conversation.customer_name && (
-            <p className="text-xs text-gray-500 truncate">{conversation.customer_wa_id}</p>
+            <p className="text-xs text-gray-500 truncate">{maskPhoneLast4(conversation.customer_wa_id)}</p>
           )}
         </div>
         <Button
@@ -586,11 +694,11 @@ export function ChatThread({ conversation }: ChatThreadProps) {
           </Button>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-1 min-h-0 bg-[#efeae2]">
+      <div className="flex-1 overflow-y-auto seamless-scroll p-4 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1">
         {isLoading ? (
           <p className="text-sm text-gray-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
         ) : (
-          displayMessages.map((msg) => {
+          [...displayMessages].reverse().map((msg) => {
             const CheckboxBtn = () =>
               selectionMode ? (
                 <button
@@ -642,11 +750,26 @@ export function ChatThread({ conversation }: ChatThreadProps) {
               msg.direction === 'inbound' &&
               !isInboundMedia;
             const dropdownTriggerClass =
-              'h-7 w-7 text-gray-600 hover:text-gray-800 border border-gray-400 rounded bg-white/95 shadow-sm hover:bg-gray-50';
+              'group h-7 w-7 flex items-center justify-center text-gray-600 hover:text-gray-800 p-0 min-w-0 border-0 bg-transparent shadow-none hover:bg-transparent rounded-none';
+            const handleCopyMessage = () => {
+              const text = getMessageCaptionForReply(msg) ?? msg.body ?? '';
+              if (text.trim()) {
+                navigator.clipboard.writeText(text.trim());
+                toast.success(t('whatsappInbox.copiedToClipboard', 'Copied to clipboard'));
+              } else {
+                toast.info(t('whatsappInbox.noTextToCopy', 'No text to copy'));
+              }
+            };
             const replyMenuItem = (
               <DropdownMenuItem onClick={() => setReplyTo({ id: msg.id, body: getMessageCaptionForReply(msg) ?? msg.body, wa_message_id: msg.wa_message_id, message_type: msg.message_type, direction: msg.direction, media_url: msg.media_url ?? null })}>
                 <Reply className="w-4 h-4 mr-2" />
                 {t('whatsappInbox.reply', 'Reply')}
+              </DropdownMenuItem>
+            );
+            const copyMenuItem = (
+              <DropdownMenuItem onClick={handleCopyMessage}>
+                <Copy className="w-4 h-4 mr-2" />
+                {t('whatsappInbox.copy', 'Copy')}
               </DropdownMenuItem>
             );
             const inboundDropdown = msg.direction === 'inbound' && !selectionMode ? (
@@ -660,14 +783,65 @@ export function ChatThread({ conversation }: ChatThreadProps) {
                     onClick={(e) => e.stopPropagation()}
                     aria-label="Opsi pesan"
                   >
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   {isInboundText ? (
-                    replyMenuItem
+                    <>
+                      {copyMenuItem}
+                      {replyMenuItem}
+                    </>
                   ) : (
                     <>
+                      {copyMenuItem}
+                      <DropdownMenuItem onClick={handleSaveAs}>
+                        <Download className="w-4 h-4 mr-2" />
+                        {t('whatsappInbox.saveAs', 'Save as')}
+                      </DropdownMenuItem>
+                      {replyMenuItem}
+                      <DropdownMenuItem onClick={handleDeleteMsg} className="text-red-600 focus:text-red-600">
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {t('whatsappInbox.delete', 'Delete')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null;
+
+            const isOutboundText =
+              msg.direction === 'outbound' &&
+              !(msg.media_url && MEDIA_TYPES.includes(msg.message_type ?? ''));
+            const isOutboundMedia =
+              msg.direction === 'outbound' &&
+              !!(msg.media_url && MEDIA_TYPES.includes(msg.message_type ?? ''));
+            const hasReplyBlock = !!(msg.reply_to_body ?? msg.reply_to_wa_message_id ?? msg.reply_to_sender);
+            const dropdownTriggerClassOutbound =
+              'group h-7 w-7 flex items-center justify-center text-white/90 hover:text-white p-0 min-w-0 border-0 bg-transparent shadow-none hover:bg-transparent rounded-none';
+            const outboundDropdown = msg.direction === 'outbound' && !selectionMode ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={dropdownTriggerClassOutbound}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={t('whatsappInbox.messageOptions', 'Message options')}
+                  >
+                    <ChevronDown className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {isOutboundText ? (
+                    <>
+                      {copyMenuItem}
+                      {replyMenuItem}
+                    </>
+                  ) : (
+                    <>
+                      {copyMenuItem}
                       <DropdownMenuItem onClick={handleSaveAs}>
                         <Download className="w-4 h-4 mr-2" />
                         {t('whatsappInbox.saveAs', 'Save as')}
@@ -685,8 +859,31 @@ export function ChatThread({ conversation }: ChatThreadProps) {
 
             return (
             <div
+              id={`msg-${msg.id}`}
               key={msg.id}
-              className={`flex items-start gap-2 ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+              className={`flex items-start gap-2 ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
+              onClick={
+                effectiveScrollToMessageId === msg.id
+                  ? (e) => {
+                      e.stopPropagation();
+                      clearHighlightImmediately();
+                    }
+                  : undefined
+              }
+              role={effectiveScrollToMessageId === msg.id ? 'button' : undefined}
+              tabIndex={effectiveScrollToMessageId === msg.id ? 0 : undefined}
+              onKeyDown={
+                effectiveScrollToMessageId === msg.id
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        clearHighlightImmediately();
+                      }
+                    }
+                  : undefined
+              }
+              title={effectiveScrollToMessageId === msg.id ? t('whatsappInbox.clickToRemoveHighlight', 'Click to remove highlight') : undefined}
+              aria-label={effectiveScrollToMessageId === msg.id ? t('whatsappInbox.clickToRemoveHighlight', 'Click to remove highlight') : undefined}
             >
               {msg.direction === 'inbound' && <CheckboxBtn />}
               <div className="relative max-w-[80%]">
@@ -699,7 +896,11 @@ export function ChatThread({ conversation }: ChatThreadProps) {
                     msg.direction === 'outbound'
                       ? 'bg-[#128C7E] text-white'
                       : 'bg-white text-gray-900 shadow-sm'
-                  } ${selectionMode ? 'cursor-pointer' : ''} ${isInboundText ? 'pr-10' : ''}`}
+                  } ${selectionMode ? 'cursor-pointer' : ''} ${
+                    isInboundText ? 'pr-10' : ''
+                  } ${
+                    msg.direction === 'outbound' && !selectionMode && !hasReplyBlock ? 'pr-10' : ''
+                  }`}
                   onClick={selectionMode ? () => toggleSelectMessage(msg.id) : undefined}
                 >
                   {isInboundText && inboundDropdown && (
@@ -707,16 +908,30 @@ export function ChatThread({ conversation }: ChatThreadProps) {
                       {inboundDropdown}
                     </div>
                   )}
+                  {msg.direction === 'outbound' && !hasReplyBlock && outboundDropdown && (
+                    <div className="absolute top-1 right-1" onClick={(e) => e.stopPropagation()}>
+                      {outboundDropdown}
+                    </div>
+                  )}
                   {(msg.reply_to_body ?? msg.reply_to_wa_message_id ?? msg.reply_to_sender) && (() => {
                     const repliedToMsg = messages.find((m) => m.wa_message_id === msg.reply_to_wa_message_id);
                     const replyThumbUrl = repliedToMsg?.media_url && (repliedToMsg.message_type === 'image' || repliedToMsg.message_type === 'video') ? repliedToMsg.media_url : null;
+                    const goToRepliedMessage = () => {
+                      if (repliedToMsg?.id) setScrollToMessageIdLocal(repliedToMsg.id);
+                    };
                     return (
                     <div
-                      className={`flex items-start gap-1.5 mb-2 pb-2 -ml-1 -mr-1 px-1 rounded-r-sm border-l-2 border-r border-b ${
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); goToRepliedMessage(); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToRepliedMessage(); } }}
+                      className={`flex items-start gap-1.5 mb-2 pb-2 -ml-1 -mr-1 px-1 rounded-r-sm border-l-2 border-r border-b cursor-pointer hover:opacity-95 ${
                         msg.direction === 'outbound'
                           ? 'bg-[#0a5a4a]/90 border-l-[#7dd3fc] border-r-white/90 border-white/20 text-white/90'
                           : 'bg-gray-100 border-l-[#128C7E] border-r-white border-gray-200 text-gray-700'
                       }`}
+                      title={t('whatsappInbox.scrollToRepliedMessage', 'Click to go to the replied message')}
+                      aria-label={t('whatsappInbox.scrollToRepliedMessage', 'Click to go to the replied message')}
                     >
                       {replyThumbUrl && (
                         <img src={replyThumbUrl} alt="" className="w-10 h-10 object-cover rounded shrink-0" />
@@ -737,6 +952,11 @@ export function ChatThread({ conversation }: ChatThreadProps) {
                           </span>
                         </div>
                       </div>
+                      {msg.direction === 'outbound' && outboundDropdown && (
+                        <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                          {outboundDropdown}
+                        </div>
+                      )}
                     </div>
                     );
                   })()}
@@ -772,9 +992,13 @@ export function ChatThread({ conversation }: ChatThreadProps) {
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
       <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-[#f0f2f5]">
+        {isResolved && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2" role="status">
+            {t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.')}
+          </p>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -798,7 +1022,7 @@ export function ChatThread({ conversation }: ChatThreadProps) {
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-[#128C7E]">
                 {replyTo.direction === 'inbound'
-                  ? (conversation?.customer_name ?? conversation?.customer_wa_id ?? 'Contact')
+                  ? (conversation?.customer_name ?? maskPhoneLast4(conversation?.customer_wa_id) ?? 'Contact')
                   : t('whatsappInbox.you', 'You')}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 text-sm text-gray-700 min-w-0">
@@ -847,12 +1071,12 @@ export function ChatThread({ conversation }: ChatThreadProps) {
             </Button>
           </div>
         )}
-        <div className="flex rounded-lg border border-input bg-background min-h-[44px] overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+        <div className={`flex rounded-lg border border-input bg-background min-h-[44px] overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${isResolved ? 'opacity-70' : ''}`}>
           <button
             type="button"
             className="shrink-0 p-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50 self-center"
-            disabled={isSending || isUploading}
-            onClick={() => fileInputRef.current?.click()}
+            disabled={isSending || isUploading || isResolved}
+            onClick={() => !isResolved && fileInputRef.current?.click()}
             title={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
             aria-label={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
           >
@@ -861,20 +1085,21 @@ export function ChatThread({ conversation }: ChatThreadProps) {
           <Textarea
             placeholder={pendingMedia ? t('whatsappInbox.writeCaption', 'Write caption (optional)...') : t('whatsappInbox.typeMessage', 'Type a message...')}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => !isResolved && setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                if (!isResolved) handleSend();
               }
             }}
             rows={2}
+            readOnly={isResolved}
             className="resize-none min-h-[44px] flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent py-2 pr-1 pl-0"
           />
           <button
             type="button"
             onClick={handleSend}
-            disabled={(!text.trim() && !pendingMedia) || isSending || isUploading}
+            disabled={isResolved || (!text.trim() && !pendingMedia) || isSending || isUploading}
             title={t('whatsappInbox.send', 'Send')}
             aria-label={t('whatsappInbox.send', 'Send')}
             className="shrink-0 self-center mr-1.5 w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white"

@@ -80,6 +80,9 @@ export function useSendWhatsAppMessage() {
           queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
         }
         queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+        // Balasan pertama dari Unread → edge function set status ke On Going; refetch agar dropdown langsung tampil On going
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+        queryClient.refetchQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
       }
     },
   });

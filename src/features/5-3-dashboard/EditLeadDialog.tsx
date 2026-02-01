@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { NewLead } from '@/types/leads';
 import { supabase } from '@/integrations/supabase/client';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface LeadStatus {
   id: string;
@@ -28,6 +29,7 @@ export const EditLeadDialog = ({
   lead,
   onUpdateLead
 }: EditLeadDialogProps) => {
+  const { t } = useAppTranslation();
   const [formData, setFormData] = useState<Partial<NewLead>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
@@ -99,6 +101,12 @@ export const EditLeadDialog = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lead) return;
+
+    const newStatus = leadStatuses.find((s) => s.id === formData.status_id);
+    if (newStatus?.name?.trim().toLowerCase() === 'closed') {
+      const confirmed = window.confirm(t('leadsManagement.confirmResolve', 'Yakin ingin mengubah status menjadi Resolve? Chat outbound akan diblokir sampai ada pesan masuk baru dari customer.'));
+      if (!confirmed) return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -228,7 +236,7 @@ export const EditLeadDialog = ({
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
-                {leadStatuses.map((status) => (
+                {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => (
                   <SelectItem key={status.id} value={status.id}>
                     {status.name}
                   </SelectItem>

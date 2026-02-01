@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { NewLead } from '@/types/leads';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Progress } from '@/features/ui/progress';
@@ -11,21 +12,46 @@ import { generateLeadsPDF } from './LeadsPDFGenerator';
 import { supabase } from '@/integrations/supabase/client';
 import { LeadStatusHistoryEntry } from '@/hooks/organized/sales';
 
+function formatDurationMs(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3600_000) return `${Math.round(ms / 60_000)}m`;
+  const h = Math.floor(ms / 3600_000);
+  const m = Math.round((ms % 3600_000) / 60_000);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 interface LeadsInsightsProps {
   leads: NewLead[];
   filters?: any;
   clientStatuses?: Record<string, 'full' | 'partial' | 'empty'>;
   clientProfiles?: Record<string, any>;
+  /** When provided, show ALL agents (employees) with their lead/chat count; agents with 0 leads are included. */
+  allEmployees?: Array<{ id: string; full_name: string; email: string }>;
+  /** When provided, fetch WhatsApp cycle metrics (response time, time to resolve) per assignee. */
+  organizationId?: string;
 }
 
 export const LeadsInsights = ({
   leads,
   filters,
   clientStatuses = {},
-  clientProfiles = {}
+  clientProfiles = {},
+  allEmployees = [],
+  organizationId
 }: LeadsInsightsProps) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+
+  const { data: cycleRows = [] } = useQuery({
+    queryKey: ['whatsapp-cycle-metrics', organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase.rpc('get_whatsapp_cycle_metrics', { p_organization_id: organizationId });
+      if (error) throw error;
+      return (data ?? []) as Array<{ conversation_id: string; assignee_id: string | null; cycle_started_at: string; first_response_at: string | null; resolved_at: string | null }>;
+    },
+  });
 
   // Debug: Log the input data (only once per render)
   React.useEffect(() => {
@@ -39,8 +65,15 @@ export const LeadsInsights = ({
   }, [leads.length, Object.keys(clientProfiles).length, filters?.dateRange]);
   const totalLeads = leads.length;
 
+  // Treat as Converted if status name is "Converted" (trim + case-insensitive, so DB "Converted "/"CONVERTED" still count)
+  const isConvertedLead = (lead: { lead_status?: { name?: string | null } | null }) =>
+    (lead.lead_status?.name?.trim().toLowerCase() ?? '') === 'converted';
+  const TERMINAL_STATUS_NAMES = ['lost', 'closed', 'converted'];
+  const isTerminalStatus = (lead: { lead_status?: { name?: string | null } | null }) =>
+    TERMINAL_STATUS_NAMES.includes(lead.lead_status?.name?.trim().toLowerCase() ?? '');
+
   // Calculate conversion metrics with proper date filtering
-  const convertedLeads = leads.filter(lead => lead.lead_status?.name === 'Converted');
+  const convertedLeads = leads.filter(lead => isConvertedLead(lead));
   
   // Calculate "Conversion Deal Periode Ini" based on date filters and lead converted_at field
   const calculateConversionDealPeriode = () => {
@@ -269,22 +302,111 @@ export const LeadsInsights = ({
   })();
 
   // Employee performance analysis with conversion tracking
-  const employeeAnalysis = [...new Set(leads.map(lead => lead.assignee).filter(Boolean))].map(assignee => {
-    const assigneeLeads = leads.filter(lead => lead.assignee === assignee);
-    const convertedLeads = assigneeLeads.filter(lead => lead.lead_status?.name === 'Converted');
-    const conversionRate = assigneeLeads.length > 0 ? convertedLeads.length / assigneeLeads.length * 100 : 0;
-    return {
-      employee: assignee || 'Unassigned',
-      totalLeads: assigneeLeads.length,
-      convertedLeads: convertedLeads.length,
-      conversionRate: Math.round(conversionRate * 10) / 10 // Round to 1 decimal place
-    };
-  }).sort((a, b) => b.conversionRate - a.conversionRate); // Sort by conversion rate descending
+  const unassignedLeads = leads.filter(lead => !lead.assignee || !String(lead.assignee).trim());
+  const leadAssigneeId = (lead: NewLead) => (lead as NewLead & { assignee_id?: string | null }).assignee_id;
+  type EmployeeAnalysisItem = { employee: string; employeeId: string; employeeIds: string[]; totalLeads: number; convertedLeads: number; conversionRate: number; activeLeads: number };
+  let employeeAnalysis: EmployeeAnalysisItem[];
+  if (allEmployees && allEmployees.length > 0) {
+    // Deduplicate by unique display name so each agent appears once (nama agent Unique)
+    const byName = new Map<string, { displayName: string; ids: string[] }>();
+    for (const emp of allEmployees) {
+      const name = (emp.full_name || emp.email || '').trim() || 'Agent';
+      const key = name.toLowerCase();
+      if (!byName.has(key)) byName.set(key, { displayName: name, ids: [emp.id] });
+      else byName.get(key)!.ids.push(emp.id);
+    }
+    const uniqueAgents = [...byName.values()];
+    employeeAnalysis = uniqueAgents.map(({ displayName, ids }) => {
+      const assigneeLeads = leads.filter(lead =>
+        (lead.assignee && (lead.assignee === displayName || lead.assignee === (allEmployees!.find(e => e.id === ids[0])?.email ?? ''))) ||
+        (leadAssigneeId(lead) && ids.includes(leadAssigneeId(lead)!))
+      );
+      const convertedLeads = assigneeLeads.filter(lead => isConvertedLead(lead));
+      const activeLeads = assigneeLeads.filter(lead => !isTerminalStatus(lead)).length;
+      const conversionRate = assigneeLeads.length > 0 ? convertedLeads.length / assigneeLeads.length * 100 : 0;
+      return {
+        employee: displayName,
+        employeeId: ids[0],
+        employeeIds: ids,
+        totalLeads: assigneeLeads.length,
+        convertedLeads: convertedLeads.length,
+        conversionRate: Math.round(conversionRate * 10) / 10,
+        activeLeads
+      };
+    });
+  } else {
+    const assigneesWithLeads = [...new Set(leads.map(lead => lead.assignee).filter(Boolean))];
+    employeeAnalysis = assigneesWithLeads.map(assignee => {
+      const assigneeLeads = leads.filter(lead => lead.assignee === assignee);
+      const convertedLeads = assigneeLeads.filter(lead => isConvertedLead(lead));
+      const activeLeads = assigneeLeads.filter(lead => !isTerminalStatus(lead)).length;
+      const conversionRate = assigneeLeads.length > 0 ? convertedLeads.length / assigneeLeads.length * 100 : 0;
+      return {
+        employee: assignee || 'Unassigned',
+        employeeId: assignee || 'unassigned',
+        employeeIds: [],
+        totalLeads: assigneeLeads.length,
+        convertedLeads: convertedLeads.length,
+        conversionRate: Math.round(conversionRate * 10) / 10,
+        activeLeads
+      };
+    });
+    if (employeeAnalysis.length === 0 && unassignedLeads.length > 0) {
+      const converted = unassignedLeads.filter(lead => isConvertedLead(lead)).length;
+      const rate = unassignedLeads.length > 0 ? (converted / unassignedLeads.length) * 100 : 0;
+      employeeAnalysis = [{
+        employee: 'Unassigned',
+        employeeId: 'unassigned',
+        employeeIds: [],
+        totalLeads: unassignedLeads.length,
+        convertedLeads: converted,
+        conversionRate: Math.round(rate * 10) / 10,
+        activeLeads: unassignedLeads.filter(lead => !isTerminalStatus(lead)).length
+      }];
+    }
+  }
+  employeeAnalysis = employeeAnalysis.sort((a, b) => b.conversionRate - a.conversionRate);
+
+  const filterFrom = filters?.dateRange?.from ? new Date(filters.dateRange.from) : null;
+  const filterTo = filters?.dateRange?.to ? new Date(filters.dateRange.to) : null;
+  const cycleMetricsByAssignee = (() => {
+    const map = new Map<string, { avgResponseFormatted: string; avgResolveFormatted: string }>();
+    const filtered = filterFrom && filterTo
+      ? cycleRows.filter((r) => {
+          const started = new Date(r.cycle_started_at).getTime();
+          const resolved = r.resolved_at ? new Date(r.resolved_at).getTime() : started;
+          const from = filterFrom.getTime();
+          const to = filterTo.getTime();
+          return (started >= from && started <= to) || (resolved >= from && resolved <= to);
+        })
+      : cycleRows;
+    const byAssignee = new Map<string, { responseMs: number[]; resolveMs: number[] }>();
+    for (const r of filtered) {
+      const aid = r.assignee_id ?? 'unassigned';
+      if (!byAssignee.has(aid)) byAssignee.set(aid, { responseMs: [], resolveMs: [] });
+      const entry = byAssignee.get(aid)!;
+      if (r.first_response_at) {
+        entry.responseMs.push(new Date(r.first_response_at).getTime() - new Date(r.cycle_started_at).getTime());
+      }
+      if (r.resolved_at) {
+        entry.resolveMs.push(new Date(r.resolved_at).getTime() - new Date(r.cycle_started_at).getTime());
+      }
+    }
+    for (const [aid, data] of byAssignee) {
+      const avgResp = data.responseMs.length ? data.responseMs.reduce((a, b) => a + b, 0) / data.responseMs.length : 0;
+      const avgRes = data.resolveMs.length ? data.resolveMs.reduce((a, b) => a + b, 0) / data.resolveMs.length : 0;
+      map.set(aid, {
+        avgResponseFormatted: data.responseMs.length ? formatDurationMs(avgResp) : '',
+        avgResolveFormatted: data.resolveMs.length ? formatDurationMs(avgRes) : '',
+      });
+    }
+    return map;
+  })();
 
   // Source Performance Analysis with conversion tracking - use dynamic sources
   const sourcePerformanceAnalysis = uniqueSources.map(source => {
     const sourceLeads = leads.filter(lead => lead.source === source);
-    const convertedSourceLeads = sourceLeads.filter(lead => lead.lead_status?.name === 'Converted');
+    const convertedSourceLeads = sourceLeads.filter(lead => isConvertedLead(lead));
     const conversionRate = sourceLeads.length > 0 ? convertedSourceLeads.length / sourceLeads.length * 100 : 0;
     const percentage = totalLeads > 0 ? sourceLeads.length / totalLeads * 100 : 0;
     return {
@@ -624,7 +746,12 @@ export const LeadsInsights = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {employeeAnalysis.map((employee, index) => <div key={index} className="p-3 bg-white/70 rounded-lg space-y-2">
+                {employeeAnalysis.map((employee, index) => {
+                  const cycleMetrics = employee.employeeIds?.length
+                    ? employee.employeeIds.map((id) => cycleMetricsByAssignee.get(id)).find(Boolean)
+                    : cycleMetricsByAssignee.get(employee.employeeId);
+                  return (
+                    <div key={index} className="p-3 bg-white/70 rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-slate-700">{employee.employee}</span>
                       <Badge variant="outline" className="text-xs">
@@ -638,7 +765,25 @@ export const LeadsInsights = ({
                       </div>
                       <Progress value={employee.conversionRate} className="h-2" />
                     </div>
-                  </div>)}
+                    {cycleMetrics && (cycleMetrics.avgResponseFormatted || cycleMetrics.avgResolveFormatted) && (
+                      <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                        {cycleMetrics.avgResponseFormatted && (
+                          <div>
+                            <span className="text-slate-500">Avg response: </span>
+                            <span className="font-medium">{cycleMetrics.avgResponseFormatted}</span>
+                          </div>
+                        )}
+                        {cycleMetrics.avgResolveFormatted && (
+                          <div>
+                            <span className="text-slate-500">Avg resolve: </span>
+                            <span className="font-medium">{cycleMetrics.avgResolveFormatted}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  );
+                })}
               </CardContent>
             </Card>}
 
@@ -852,6 +997,7 @@ export const LeadsInsights = ({
                   Individual consultant performance metrics and analytics
                 </div>
                 <div className="text-xs text-slate-500 mt-1">Sorted by conversion rate</div>
+                <div className="text-xs text-slate-500 mt-1">All agents with total chats/leads handled. Based on current filters.</div>
               </div>
             </CardContent>
           </Card>
@@ -865,7 +1011,10 @@ export const LeadsInsights = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {employeeAnalysis.map((consultant, index) => <div key={consultant.employee} className="p-3 bg-white/70 rounded-lg space-y-2">
+                {employeeAnalysis.map((consultant, index) => {
+                  const isConsultantLead = (lead: NewLead) =>
+                    lead.assignee === consultant.employee || (leadAssigneeId(lead) && consultant.employeeIds.includes(leadAssigneeId(lead)!));
+                  return <div key={consultant.employeeId} className="p-3 bg-white/70 rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-slate-700">{consultant.employee}</span>
                       <div className="flex items-center gap-2">
@@ -884,10 +1033,14 @@ export const LeadsInsights = ({
                       </div>
                       <Progress value={consultant.conversionRate} className="h-2" />
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
                       <div className="bg-slate-50 rounded p-2">
                         <div className="font-semibold text-slate-700">{consultant.totalLeads}</div>
-                        <div className="text-slate-500">Total Leads</div>
+                        <div className="text-slate-500">Total Chats/Leads</div>
+                      </div>
+                      <div className="bg-blue-50 rounded p-2">
+                        <div className="font-semibold text-blue-700">{consultant.activeLeads}</div>
+                        <div className="text-blue-600">On Going</div>
                       </div>
                       <div className="bg-green-50 rounded p-2">
                         <div className="font-semibold text-green-700">{consultant.convertedLeads}</div>
@@ -906,10 +1059,8 @@ export const LeadsInsights = ({
                         <div className="text-center">
                            <div className="text-lg font-bold text-emerald-600">
                              {(() => {
-                                // Get converted leads for this consultant
-                                const consultantLeads = leads.filter(lead => 
-                                  lead.assignee === consultant.employee && lead.lead_status?.name === 'Converted'
-                                );
+                                // Get converted leads for this consultant (match by name or assignee_id)
+                                const consultantLeads = leads.filter(lead => isConsultantLead(lead) && isConvertedLead(lead));
                                
                                // If there's a date range filter, check against converted_at
                                if (filters?.dateRange?.from && filters?.dateRange?.to) {
@@ -934,8 +1085,8 @@ export const LeadsInsights = ({
                            </div>
                           <div className="text-xs text-slate-600">
                             {filters?.dateRange?.from && filters?.dateRange?.to 
-                              ? 'Deals Closed in Period' 
-                              : 'Total Deals Closed'}
+                              ? 'Deals Resolved in Period' 
+                              : 'Total Deals Resolved'}
                           </div>
                         </div>
                       </div>
@@ -947,19 +1098,19 @@ export const LeadsInsights = ({
                       <div className="grid grid-cols-3 gap-2 text-center text-xs">
                         <div className="bg-red-50 rounded p-2">
                           <div className="font-semibold text-red-600">
-                            {leads.filter(lead => lead.assignee === consultant.employee && lead.fu_priority === 'High').length}
+                            {leads.filter(lead => isConsultantLead(lead) && lead.fu_priority === 'High').length}
                           </div>
                           <div className="text-red-500">High</div>
                         </div>
                         <div className="bg-orange-50 rounded p-2">
                           <div className="font-semibold text-orange-600">
-                            {leads.filter(lead => lead.assignee === consultant.employee && lead.fu_priority === 'Medium').length}
+                            {leads.filter(lead => isConsultantLead(lead) && lead.fu_priority === 'Medium').length}
                           </div>
                           <div className="text-orange-500">Medium</div>
                         </div>
                         <div className="bg-blue-50 rounded p-2">
                           <div className="font-semibold text-blue-600">
-                            {leads.filter(lead => lead.assignee === consultant.employee && lead.fu_priority === 'Low').length}
+                            {leads.filter(lead => isConsultantLead(lead) && lead.fu_priority === 'Low').length}
                           </div>
                           <div className="text-blue-500">Low</div>
                         </div>
@@ -970,10 +1121,10 @@ export const LeadsInsights = ({
                     <div className="mt-3 pt-3 border-t border-slate-200">
                       <div className="text-xs font-medium text-slate-600 mb-2">Services Handled</div>
                       <div className="space-y-1">
-                        {[...new Set(leads.filter(lead => lead.assignee === consultant.employee && lead.services).map(lead => lead.services))].map(service => <div key={service} className="flex justify-between items-center bg-slate-50 rounded px-2 py-1">
+                        {[...new Set(leads.filter(lead => isConsultantLead(lead) && lead.services).map(lead => lead.services))].map(service => <div key={service} className="flex justify-between items-center bg-slate-50 rounded px-2 py-1">
                             <span className="text-xs text-slate-600">{service}</span>
                             <Badge variant="outline" className="text-xs">
-                              {leads.filter(lead => lead.assignee === consultant.employee && lead.services === service).length}
+                              {leads.filter(lead => isConsultantLead(lead) && lead.services === service).length}
                             </Badge>
                           </div>)}
                       </div>
@@ -983,15 +1134,16 @@ export const LeadsInsights = ({
                     <div className="mt-3 pt-3 border-t border-slate-200">
                       <div className="text-xs font-medium text-slate-600 mb-2">Lead Sources</div>
                       <div className="space-y-1">
-                        {[...new Set(leads.filter(lead => lead.assignee === consultant.employee && lead.source).map(lead => lead.source))].map(source => <div key={source} className="flex justify-between items-center bg-slate-50 rounded px-2 py-1">
+                        {[...new Set(leads.filter(lead => isConsultantLead(lead) && lead.source).map(lead => lead.source))].map(source => <div key={source} className="flex justify-between items-center bg-slate-50 rounded px-2 py-1">
                             <span className="text-xs text-slate-600">{source}</span>
                             <Badge variant="outline" className="text-xs">
-                              {leads.filter(lead => lead.assignee === consultant.employee && lead.source === source).length}
+                              {leads.filter(lead => isConsultantLead(lead) && lead.source === source).length}
                             </Badge>
                           </div>)}
                       </div>
                     </div>
-                  </div>)}
+                  </div>;
+                })}
               </CardContent>
             </Card> : <Card className="border-none shadow-sm bg-gradient-to-r from-gray-50 to-slate-50">
               <CardContent className="p-6 text-center">

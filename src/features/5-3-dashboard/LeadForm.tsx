@@ -213,7 +213,7 @@ export const LeadForm = ({ open, onClose, onSubmit, lead }: LeadFormProps) => {
                 <SelectContent>
                   <SelectItem value="Open">Open</SelectItem>
                   <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Closed">Closed</SelectItem>
+                  <SelectItem value="Closed">Resolve</SelectItem>
                 </SelectContent>
               </Select>
             </div>

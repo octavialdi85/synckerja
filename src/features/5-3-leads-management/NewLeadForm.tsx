@@ -9,6 +9,7 @@ import { SourceManagementDialog } from '@/components/1_halaman/5_3_sales-consult
 import { ServicesManagementDialog } from '@/components/1_halaman/5_3_sales-consultant/ServicesManagementDialog';
 import { CategoriesManagementDialog } from '@/components/1_halaman/5_3_sales-consultant/CategoriesManagementDialog';
 import { useLeadSources } from '@/hooks/organized/salesources';
+import { getLeadStatusDisplayName } from './leadStatusDisplay';
 import { MoreVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -276,13 +277,13 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
             <Select value={formData.status_id || ''} onValueChange={(value) => handleInputChange('status_id', value)}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Select status">
-                  {leadStatuses.find(status => status.id === formData.status_id)?.name || 'Select status'}
+                  {getLeadStatusDisplayName(leadStatuses.find(status => status.id === formData.status_id)?.name) || 'Select status'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {leadStatuses.map((status) => (
                   <SelectItem key={status.id} value={status.id}>
-                    {status.name}
+                    {getLeadStatusDisplayName(status.name)}
                   </SelectItem>
                 ))}
               </SelectContent>

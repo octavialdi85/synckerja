@@ -8,6 +8,7 @@ const QUERY_KEY = ['whatsapp-messages'] as const;
 export function useWhatsAppMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -30,11 +31,25 @@ export function useWhatsAppMessages(conversationId: string | null) {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, conversationId] });
+          // Pesan baru masuk (bisa dari customer setelah Resolve) → webhook set status ke Unread; refresh status UI
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          // Fallback: webhook commit UPDATE setelah INSERT; invalidation ulang setelah 2s agar status Unread terbaca
+          if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+          fallbackTimeoutRef.current = setTimeout(() => {
+            fallbackTimeoutRef.current = null;
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          }, 2000);
         }
       )
       .subscribe();
 
     return () => {
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TrendingUp, Users, Calendar, Target, Download, FileText, BarChart3, MapPin, Loader2, User2, LineChart, ChevronDown } from 'lucide-react';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
+import { getLeadStatusDisplayName } from './leadStatusDisplay';
 import { supabase } from '@/integrations/supabase/client';
 import { LeadStatusHistoryEntry } from '@/hooks/organized/sales';
 interface LeadsInsightsProps {
@@ -653,7 +654,7 @@ export const LeadsInsights = ({
               </CardHeader>
               <CardContent className="space-y-2">
                 {statusAnalysis.map((status, index) => <div key={index} className="flex items-center justify-between p-2 bg-white/70 rounded">
-                    <span className="text-sm text-slate-700">{status.status}</span>
+                    <span className="text-sm text-slate-700">{getLeadStatusDisplayName(status.status)}</span>
                     <Badge variant="outline" className="text-xs">
                       {status.count}
                     </Badge>
@@ -929,8 +930,8 @@ export const LeadsInsights = ({
                            </div>
                           <div className="text-xs text-slate-600">
                             {filters?.dateRange?.from && filters?.dateRange?.to 
-                              ? 'Deals Closed in Period' 
-                              : 'Total Deals Closed'}
+                              ? 'Deals Resolved in Period' 
+                              : 'Total Deals Resolved'}
                           </div>
                         </div>
                       </div>

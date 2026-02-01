@@ -111,6 +111,33 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (conversationId) {
+      const { data: convRow } = await supabase
+        .from("whatsapp_conversations")
+        .select("lead_status_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const leadStatusId = convRow?.lead_status_id ?? null;
+      if (leadStatusId) {
+        const { data: statusRow } = await supabase
+          .from("lead_statuses")
+          .select("name")
+          .eq("id", leadStatusId)
+          .maybeSingle();
+        const statusName = (statusRow?.name as string) ?? "";
+        if (statusName.trim().toLowerCase() === "closed") {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.",
+              code: "CONVERSATION_RESOLVED",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
     const metaUrl = `${META_API_BASE}/${config.phone_number_id}/messages`;
     let metaBody: Record<string, unknown> = {
       messaging_product: "whatsapp",
@@ -192,6 +219,22 @@ Deno.serve(async (req: Request) => {
       if (insertError) {
         console.error("whatsapp_messages insert error:", insertError);
       }
+      const { data: convBefore } = await supabase
+        .from("whatsapp_conversations")
+        .select("lead_status_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const statusIdBefore = convBefore?.lead_status_id ?? null;
+      let statusNameBefore: string | null = null;
+      if (statusIdBefore) {
+        const { data: st } = await supabase
+          .from("lead_statuses")
+          .select("name")
+          .eq("id", statusIdBefore)
+          .maybeSingle();
+        statusNameBefore = (st?.name as string) ?? null;
+      }
+
       await supabase
         .from("whatsapp_conversations")
         .update({
@@ -200,6 +243,39 @@ Deno.serve(async (req: Request) => {
           updated_at: now,
         })
         .eq("id", conversationId);
+
+      if (statusNameBefore?.trim().toLowerCase() === "open") {
+        const { data: inProgressStatus } = await supabase
+          .from("lead_statuses")
+          .select("id")
+          .eq("name", "In Progress")
+          .maybeSingle();
+        console.log("Unread→On Going:", { conversationId, statusNameBefore, inProgressId: inProgressStatus?.id ?? "MISSING" });
+        if (inProgressStatus?.id) {
+          const { error: updateErr } = await supabase
+            .from("whatsapp_conversations")
+            .update({ lead_status_id: inProgressStatus.id, updated_at: now })
+            .eq("id", conversationId);
+          if (updateErr) console.error("Update to In Progress (On Going) failed:", updateErr);
+          else console.log("Status updated to On Going:", conversationId);
+          const { data: currentCycle } = await supabase
+            .from("whatsapp_conversation_cycles")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .is("resolved_at", null)
+            .order("cycle_started_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (currentCycle?.id) {
+            await supabase
+              .from("whatsapp_conversation_cycles")
+              .update({ first_response_at: now, updated_at: now })
+              .eq("id", currentCycle.id);
+          }
+        } else {
+          console.warn("Cannot set On Going: lead_statuses has no row with name 'In Progress'.");
+        }
+      }
 
       return new Response(
         JSON.stringify({

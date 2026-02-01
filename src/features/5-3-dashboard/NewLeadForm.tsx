@@ -282,7 +282,7 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {leadStatuses.map((status) => (
+                {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => (
                   <SelectItem key={status.id} value={status.id}>
                     {status.name}
                   </SelectItem>

@@ -35,6 +35,9 @@ export interface WhatsAppConversation {
   last_message_direction?: string | null;
   /** Status pesan terakhir: sent / delivered / read (untuk checklist di list). */
   last_message_status?: string | null;
+  /** Lead status (Open/Unread, On going, Resolve) untuk blokir outbound saat Resolve. */
+  lead_status_id?: string | null;
+  lead_status_name?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -253,14 +253,14 @@ export const generateLeadsPDF = (data: FilteredData) => {
   
   doc.setFont(undefined, 'normal');
   doc.setTextColor(130, 130, 130);
-  doc.text(`In Progress: ${inProgressLeads}`, 20, yPos);
+  doc.text(`On going: ${inProgressLeads}`, 20, yPos);
   if (openLeads > 0) {
     yPos += 6;
     doc.text(`Open: ${openLeads}`, 20, yPos);
   }
   if (closedLeads > 0) {
     yPos += 6;
-    doc.text(`Closed: ${closedLeads}`, 20, yPos);
+    doc.text(`Resolve: ${closedLeads}`, 20, yPos);
   }
   
   // Add footer to all pages

@@ -6,7 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X } from "lucide-react";
 import { NewLead } from '@/types/leads';
+import { getLeadStatusDisplayName } from './leadStatusDisplay';
 import { supabase } from '@/integrations/supabase/client';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface LeadStatus {
   id: string;
@@ -27,6 +29,7 @@ export const EditLeadDialog = ({
   lead,
   onUpdateLead
 }: EditLeadDialogProps) => {
+  const { t } = useAppTranslation();
   const [formData, setFormData] = useState<Partial<NewLead>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
@@ -97,6 +100,12 @@ export const EditLeadDialog = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lead) return;
+
+    const newStatus = leadStatuses.find((s) => s.id === formData.status_id);
+    if (newStatus?.name?.trim().toLowerCase() === 'closed') {
+      const confirmed = window.confirm(t('leadsManagement.confirmResolve', 'Yakin ingin mengubah status menjadi Resolve? Chat outbound akan diblokir sampai ada pesan masuk baru dari customer.'));
+      if (!confirmed) return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -228,7 +237,7 @@ export const EditLeadDialog = ({
               <SelectContent>
                 {leadStatuses.map((status) => (
                   <SelectItem key={status.id} value={status.id}>
-                    {status.name}
+                    {getLeadStatusDisplayName(status.name)}
                   </SelectItem>
                 ))}
               </SelectContent>

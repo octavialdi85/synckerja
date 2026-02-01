@@ -20,4 +20,4 @@ export { ViewLeadDialog } from './ViewLeadDialog';
 export { LeadFollowUpForm } from './LeadFollowUpForm';
 export { LeadActionsDropdown } from './LeadActionsDropdown';
 export { LeadStatusHistoryDialog } from './LeadStatusHistoryDialog';
-
+export { LeadStatusSelect } from './LeadStatusSelect';

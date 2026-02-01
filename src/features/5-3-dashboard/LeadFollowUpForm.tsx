@@ -179,7 +179,6 @@ export const LeadFollowUpForm = ({
         });
         if (insertError) throw insertError;
       }
-      if (insertError) throw insertError;
 
       // Sync follow up count and FU Priority with actual updates
       await syncFollowUpCountAndPriority();

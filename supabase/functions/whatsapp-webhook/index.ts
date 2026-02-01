@@ -11,6 +11,33 @@ const META_GRAPH_BASE = "https://graph.facebook.com/v18.0";
 /** Same bucket as outbound sends (ChatThread) – satu bucket untuk kirim & terima media */
 const WHATSAPP_MEDIA_BUCKET = "whatsapp-media";
 
+/** Frasa + kata satuan yang mengindikasikan permintaan kontak. On/off via env WHATSAPP_BLOCK_CONTACT_REQUESTS. */
+const CONTACT_REQUEST_PHRASES: readonly string[] = [
+  "nomor", "wa", "whatsapp", "hp", "telepon", "telpon", "tlp", "tlpn", "telephone", "email", "kontak", "contact",
+  "nomor hp", "nomor telepon", "nomor wa", "nomor whatsapp", "no hp", "no telepon", "no wa", "no whatsapp",
+  "number wa", "whatsapp number", "hp kamu", "telepon kamu", "wa kamu", "kirim nomor", "beri nomor", "bagi nomor",
+  "share nomor", "kontak kamu", "kontak anda", "nomor kontak", "no kontak", "bisa wa", "bisa chat wa", "chat wa dong",
+  "wa saja", "hubungi wa", "whatsapp saja", "dm wa", "invite wa", "add wa", "nomor untuk dihubungi",
+  "nomor yang bisa dihubungi", "no yang bisa dihubungi",
+  "email kamu", "email anda", "alamat email", "e-mail", "kirim email", "beri email", "bagi email", "share email",
+  "kontak email", "email untuk konfirmasi", "email untuk dihubungi", "dm email", "send email", "your email", "email address",
+  "cara menghubungi", "cara hubungi", "bagaimana menghubungi", "how to contact", "contact you", "hubungi kamu",
+  "nomor atau email", "no atau email", "line kamu", "id line", "telegram", "ig kamu", "instagram kamu", "sosmed", "media sosial",
+  "minta nomor wa", "minta nomor", "berapa nomor", "apa nomor", "bisa minta nomor", "boleh minta nomor", "bisa minta kontak", "boleh minta kontak",
+  "bisa minta email", "boleh minta email", "bisa kasih nomor", "boleh kasih nomor", "bisa share nomor", "boleh share nomor",
+  "what's your number", "what's your email", "whatsapp number", "phone number", "contact number",
+  "can i get your number", "can i get your email", "give me your number", "give me your email",
+  "send me your number", "send me your email", "share your number", "share your email",
+  "drop your number", "drop your email", "dm your number", "dm your email",
+];
+
+function messageContainsContactRequest(text: string | null | undefined): boolean {
+  if (text == null || text === "") return false;
+  const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
+  if (normalized.length === 0) return false;
+  return CONTACT_REQUEST_PHRASES.some((phrase) => normalized.includes(phrase));
+}
+
 function getMediaIdAndType(msg: Record<string, unknown>): { id: string; type: string; mime?: string; filename?: string } | null {
   const img = msg.image as { id?: string; mime_type?: string } | undefined;
   if (img?.id) return { id: img.id, type: "image", mime: img.mime_type };
@@ -205,6 +232,9 @@ Deno.serve(async (req: Request) => {
                 (a, b) => (Number(a.timestamp ?? 0) - Number(b.timestamp ?? 0))
               );
 
+              /** Blokir pesan yang meminta kontak. Default ON; set WHATSAPP_BLOCK_CONTACT_REQUESTS=false untuk nonaktifkan. */
+              const blockContactRequests = Deno.env.get("WHATSAPP_BLOCK_CONTACT_REQUESTS") !== "false";
+
               for (const msg of sortedMessages) {
                 if (msg.type === "unsupported") {
                   continue;
@@ -213,6 +243,9 @@ Deno.serve(async (req: Request) => {
                 const mediaCaption = getInboundMediaCaption(msg as Record<string, unknown>);
                 const bodyText =
                   msg.text?.body ?? mediaCaption ?? (msg.type === "text" ? "" : `[${msg.type}]`);
+                if (blockContactRequests && messageContainsContactRequest(bodyText)) {
+                  continue;
+                }
                 const msgId = msg.id;
                 const timestamp = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString();
                 const customerName = contactMap[customerWaId] ?? null;
@@ -270,6 +303,62 @@ Deno.serve(async (req: Request) => {
                 await supabase.from("whatsapp_messages").insert(insertPayload);
                 // Sync last_message from actual latest message so preview is always correct
                 await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conv.id });
+
+                // Resolve-cycle tracking: first_inbound_at, re-open to Unread (Open), new cycle when Closed or new conv
+                const { data: convRow } = await supabase
+                  .from("whatsapp_conversations")
+                  .select("lead_status_id, first_inbound_at")
+                  .eq("id", conv.id)
+                  .single();
+                const statusId = convRow?.lead_status_id ?? null;
+                const firstInboundAt = convRow?.first_inbound_at ?? null;
+                let leadStatusName: string | null = null;
+                if (statusId) {
+                  const { data: statusRow } = await supabase
+                    .from("lead_statuses")
+                    .select("name")
+                    .eq("id", statusId)
+                    .maybeSingle();
+                  leadStatusName = (statusRow?.name as string) ?? null;
+                }
+                const { data: openStatus } = await supabase
+                  .from("lead_statuses")
+                  .select("id")
+                  .eq("name", "Open")
+                  .maybeSingle();
+                const openStatusId = openStatus?.id ?? null;
+
+                if (firstInboundAt == null) {
+                  await supabase
+                    .from("whatsapp_conversations")
+                    .update({ first_inbound_at: timestamp, updated_at: timestamp })
+                    .eq("id", conv.id);
+                }
+
+                const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
+                const isNewOrReopen = openStatusId && (statusId == null || isClosed);
+                console.log("Resolve-cycle:", {
+                  conversation_id: conv.id,
+                  leadStatusName,
+                  isClosed,
+                  openStatusId: openStatusId ?? "MISSING",
+                  isNewOrReopen,
+                });
+                if (isNewOrReopen) {
+                  const { error: updateErr } = await supabase
+                    .from("whatsapp_conversations")
+                    .update({ lead_status_id: openStatusId, updated_at: timestamp })
+                    .eq("id", conv.id);
+                  if (updateErr) console.error("Reopen to Open (Unread) update error:", updateErr);
+                  else console.log("Reopened conversation to Open (Unread):", conv.id);
+                  const { error: cycleErr } = await supabase.from("whatsapp_conversation_cycles").insert({
+                    conversation_id: conv.id,
+                    cycle_started_at: timestamp,
+                  });
+                  if (cycleErr) console.error("New cycle insert error:", cycleErr);
+                } else if (isClosed && !openStatusId) {
+                  console.warn("Cannot reopen: lead_statuses has no row with name 'Open'. Add Open status in DB.");
+                }
               }
             }
           }

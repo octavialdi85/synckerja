@@ -8,6 +8,27 @@ import { useToast } from "@/features/1-login/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Edit, Save, X, User, Phone, Mail, Hash, Briefcase, MapPin } from 'lucide-react';
 
+/** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
+function maskPhoneLast4(phone: string | null | undefined): string {
+  if (phone == null || phone === '') return '';
+  const s = String(phone).trim();
+  if (s.length <= 4) return '****';
+  return s.slice(0, -4) + '****';
+}
+
+/** Email: hanya huruf paling depan dan paling belakang sebelum @ yang ditampilkan, selebihnya masking; domain tetap. */
+function maskEmailForDisplay(email: string | null | undefined): string {
+  if (email == null || email === '') return '';
+  const s = String(email).trim();
+  const at = s.indexOf('@');
+  if (at <= 0) return s;
+  const local = s.slice(0, at);
+  const domain = s.slice(at);
+  if (local.length === 0) return domain;
+  if (local.length === 1) return local + domain;
+  return local[0] + '*'.repeat(local.length - 2) + local[local.length - 1] + domain;
+}
+
 interface ClientProfile {
   id?: string;
   lead_id: string;
@@ -311,7 +332,7 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
                   {isEditing ? (
                     <Input id="phone_number" type="tel" value={profile.phone_number} onChange={(e) => handleInputChange('phone_number', e.target.value)} placeholder="Enter phone number" className="h-10" />
                   ) : (
-                    <div className={fieldViewClass}><Phone className={iconSoft} />{profile.phone_number || '—'}</div>
+                    <div className={fieldViewClass}><Phone className={iconSoft} />{profile.phone_number ? maskPhoneLast4(profile.phone_number) : '—'}</div>
                   )}
                 </div>
                 <div className={spaceBetween}>
@@ -319,7 +340,7 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
                   {isEditing ? (
                     <Input id="email" type="email" value={profile.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="Enter email" className="h-10" />
                   ) : (
-                    <div className={fieldViewClass}><Mail className={iconSoft} />{profile.email || '—'}</div>
+                    <div className={fieldViewClass}><Mail className={iconSoft} />{profile.email ? maskEmailForDisplay(profile.email) : '—'}</div>
                   )}
                 </div>
               </div>
