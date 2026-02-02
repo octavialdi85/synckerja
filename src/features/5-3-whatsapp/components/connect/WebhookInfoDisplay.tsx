@@ -50,7 +50,7 @@ export function WebhookInfoDisplay({ embedded }: WebhookInfoDisplayProps) {
             </Button>
           </div>
           <p className="text-xs text-slate-500">
-            Meta Developer Console → WhatsApp → Configuration → Callback URL
+            Meta Developer → WhatsApp &amp; Instagram: pakai URL ini. Untuk Instagram DM ke live chat, di Webhooks tambah <strong>Instagram</strong> (Callback URL + Verify Token sama), lalu subscribe <strong>messages</strong>. Lihat <code className="text-xs bg-slate-100 px-1 rounded">docs/instagram-webhook-setup.md</code>.
           </p>
         </div>
         {/* Verify Token */}
@@ -76,7 +76,7 @@ export function WebhookInfoDisplay({ embedded }: WebhookInfoDisplayProps) {
             )}
           </div>
           <p className="text-xs text-slate-500">
-            Use as Verify Token in Meta Developer Console when subscribing to webhook
+            Pakai Verify Token yang sama untuk WhatsApp dan Instagram di Meta Developer saat subscribe webhook.
           </p>
         </div>
       </div>

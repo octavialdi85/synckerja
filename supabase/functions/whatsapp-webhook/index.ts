@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// @ts-expect-error - Deno/ESM URL import; resolved at runtime by Supabase Edge
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /** Declare Deno global for IDE when edge-runtime.d.ts is not resolved */
@@ -8,16 +7,18 @@ declare const Deno: {
   env: { get(key: string): string | undefined };
 };
 
-/** Meta Instagram webhook entry (object.entry[]) – bisa pakai messaging ATAU changes */
+/** Meta Instagram webhook entry (object.entry[]) – bisa pakai messaging, value, atau changes */
 interface InstagramWebhookEntry {
   id?: string | number;
   time?: number;
   messaging?: InstagramMessagingEvent[];
+  value?: { messaging?: InstagramMessagingEvent[]; messages?: InstagramMessagingEvent[]; sender?: unknown; message?: unknown };
   changes?: { field?: string; value?: { messaging?: InstagramMessagingEvent[] } }[];
 }
-/** Meta Instagram Messaging webhook event (entry.messaging[]) */
+/** Meta Instagram Messaging webhook event (entry.messaging[]). Meta kadang pakai "from" instead of "sender". */
 interface InstagramMessagingEvent {
   sender?: { id?: string | number };
+  from?: { id?: string | number };
   recipient?: { id?: string | number };
   timestamp?: number;
   message?: InstagramMessage;
@@ -404,20 +405,39 @@ Deno.serve(async (req: Request) => {
       const isInstagramPayload = body.object != null && String(body.object).toLowerCase() === "instagram";
       if (isInstagramPayload) {
         try {
-          const entries = (body.entry ?? []) as InstagramWebhookEntry[];
-          const firstEntry = entries[0];
-          const firstEntryKeys = firstEntry && typeof firstEntry === "object" ? Object.keys(firstEntry) : [];
+          console.log("Instagram webhook: entered");
+          const rawEntry = body.entry;
+          const entries = Array.isArray(rawEntry) ? (rawEntry as InstagramWebhookEntry[]) : [];
+          const firstEntry = entries[0] != null && typeof entries[0] === "object" ? entries[0] : null;
+          const firstEntryKeys = firstEntry ? Object.keys(firstEntry) : [];
+          const safeMessagingCount = entries.reduce((n: number, e: InstagramWebhookEntry) => n + (e && typeof e === "object" && Array.isArray(e.messaging) ? e.messaging.length : 0), 0);
+          const safeHasChanges = entries.some((e: InstagramWebhookEntry) => e && typeof e === "object" && (e.changes?.length ?? 0) > 0);
           console.log("Instagram webhook: received", {
             entryCount: entries.length,
             firstEntryId: firstEntry?.id ?? null,
             firstEntryKeys,
-            messagingCount: entries.reduce((n: number, e: InstagramWebhookEntry) => n + (e.messaging?.length ?? 0), 0),
-            hasChanges: entries.some((e: InstagramWebhookEntry) => (e.changes?.length ?? 0) > 0),
+            messagingCount: safeMessagingCount,
+            hasChanges: safeHasChanges,
           });
           let instagramProcessedCount = 0;
           for (const entry of entries) {
-            // Meta bisa kirim entry.messaging (DM real) ATAU entry.changes (test / beberapa event)
-            const fromMessaging = entry.messaging ?? [];
+            if (!entry || typeof entry !== "object") continue;
+            // Meta bisa kirim entry.messaging (DM real) sebagai array ATAU objek tunggal; entry.changes; entry.value
+            const rawMessaging = entry.messaging;
+            const fromMessaging: InstagramMessagingEvent[] = Array.isArray(rawMessaging)
+              ? rawMessaging
+              : rawMessaging != null && typeof rawMessaging === "object"
+                ? [rawMessaging as InstagramMessagingEvent]
+                : [];
+            const fromValue: InstagramMessagingEvent[] = [];
+            const entryValue = entry.value as Record<string, unknown> | undefined;
+            if (entryValue && typeof entryValue === "object") {
+              const arr = (entryValue.messaging ?? entryValue.messages) as InstagramMessagingEvent[] | undefined;
+              if (Array.isArray(arr) && arr.length > 0) fromValue.push(...arr);
+              else if (entryValue.sender != null && entryValue.message != null) {
+                fromValue.push(entryValue as unknown as InstagramMessagingEvent);
+              }
+            }
             const fromChanges: InstagramMessagingEvent[] = [];
             if (entry.changes?.length) {
               for (const ch of entry.changes) {
@@ -440,20 +460,62 @@ Deno.serve(async (req: Request) => {
                 });
               }
             }
-            const messaging = fromMessaging.length > 0 ? fromMessaging : fromChanges;
+            const messaging = fromMessaging.length > 0 ? fromMessaging : fromValue.length > 0 ? fromValue : fromChanges;
             if (fromMessaging.length > 0) {
               console.log("Instagram webhook: using entry.messaging", { count: fromMessaging.length });
+            }
+            if (fromValue.length > 0) {
+              console.log("Instagram webhook: using entry.value.messaging", { count: fromValue.length });
             }
             if (fromChanges.length > 0) {
               console.log("Instagram webhook: using events from entry.changes", { count: fromChanges.length });
             }
+            if (messaging.length === 0) {
+              console.log("Instagram webhook: no messaging array found in entry", { entryKeys: Object.keys(entry) });
+            } else if (messaging.length > 0) {
+              const firstEv = messaging[0] as Record<string, unknown>;
+              console.log("Instagram webhook: first event keys", { keys: firstEv ? Object.keys(firstEv) : [] });
+            }
             for (const ev of messaging) {
+              const eventObj = ev as Record<string, unknown>;
               const event = ev as InstagramMessagingEvent;
-              const senderId = event.sender?.id != null ? String(event.sender.id) : "";
-              const recipientId = event.recipient?.id != null ? String(event.recipient.id) : "";
-              const message = event.message as InstagramMessage | undefined;
-              if (!senderId || !recipientId) continue;
-              if (!message) continue;
+              const hasMessageEdit = "message_edit" in eventObj && eventObj.message_edit != null;
+              let message = eventObj.message as InstagramMessage | undefined;
+              let senderId = (event.sender ?? event.from)?.id != null ? String((event.sender ?? event.from)!.id) : (eventObj.sender as { id?: string | number } | undefined)?.id != null ? String((eventObj.sender as { id: string | number }).id) : "";
+              let recipientId = event.recipient?.id != null ? String(event.recipient.id) : (eventObj.recipient as { id?: string | number } | undefined)?.id != null ? String((eventObj.recipient as { id: string | number }).id) : "";
+
+              if (hasMessageEdit && !message) {
+                const me = eventObj.message_edit as Record<string, unknown> | undefined;
+                const meKeys = me ? Object.keys(me) : [];
+                const senderFromMe = (me?.sender as { id?: string | number } | undefined)?.id ?? (me?.from as { id?: string | number } | undefined)?.id;
+                const recipientFromMe = (me?.recipient as { id?: string | number } | undefined)?.id;
+                if (senderFromMe != null) senderId = String(senderFromMe);
+                if (recipientFromMe != null) recipientId = String(recipientFromMe);
+                if (!recipientId && entry.id != null) recipientId = String(entry.id);
+                const editText = typeof me?.text === "string" ? me.text.trim() : "";
+                if (senderId && recipientId && editText) {
+                  message = { mid: typeof me?.mid === "string" ? me.mid : undefined, text: editText } as InstagramMessage;
+                } else {
+                  if (meKeys.length > 0) {
+                    console.log("Instagram webhook: message_edit structure", { message_editKeys: meKeys, entryId: entry.id });
+                  }
+                  continue;
+                }
+              }
+
+              if (!senderId || !recipientId) {
+                if (!hasMessageEdit) {
+                  console.log("Instagram webhook: skip event missing sender/recipient", { hasSender: !!senderId, hasRecipient: !!recipientId, eventKeys: Object.keys(eventObj) });
+                }
+                continue;
+              }
+              if (!message) {
+                if (!hasMessageEdit) {
+                  console.log("Instagram webhook: skip event missing message", { eventKeys: Object.keys(eventObj) });
+                }
+                continue;
+              }
+
               console.log("Instagram webhook: processing event", {
                 senderId: senderId.slice(0, 8) + "...",
                 recipientId: recipientId.slice(0, 8) + "...",
@@ -515,7 +577,7 @@ Deno.serve(async (req: Request) => {
               }
 
               if (!config) {
-                console.error("Instagram webhook: config not found. Di Meta Developer pastikan Webhooks → Instagram → Callback URL & Verify Token sama dengan WhatsApp. Di DB pastikan organization_meta_config.instagram_business_account_id = recipient.id dari webhook (untuk pesan masuk = ID akun @octa.vialdi). Tried ids:", possibleOurIds, "error:", configError?.message ?? null);
+                console.error("Instagram webhook: config not found. Untuk pesan masuk, recipient.id = ID akun Instagram Anda (mis. 17841445621371498). Pastikan: 1) Meta Developer → Webhooks → Instagram → Callback URL & Verify Token sama dengan WhatsApp, subscribe 'messages'. 2) Di DB organization_meta_config.instagram_business_account_id harus sama dengan recipient.id. recipientId=", recipientId, "possibleOurIds=", possibleOurIds, "error:", configError?.message ?? null);
                 continue;
               }
 
@@ -547,6 +609,20 @@ Deno.serve(async (req: Request) => {
               const messageType = attachments.length > 0
                 ? (attachments[0]?.type === "image" ? "image" : attachments[0]?.type === "video" ? "video" : attachments[0]?.type === "audio" ? "audio" : "document")
                 : "text";
+
+              if (isOutbound && msgMid) {
+                const { data: existingOutbound } = await supabase
+                  .from("whatsapp_messages")
+                  .select("id")
+                  .eq("conversation_id", conv.id)
+                  .eq("wa_message_id", msgMid)
+                  .eq("direction", "outbound")
+                  .maybeSingle();
+                if (existingOutbound) {
+                  await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conv.id });
+                  continue;
+                }
+              }
 
               const { error: insertMsgError } = await supabase.from("whatsapp_messages").insert({
                 conversation_id: conv.id,
@@ -616,12 +692,33 @@ Deno.serve(async (req: Request) => {
             }
           }
           if (instagramProcessedCount === 0) {
-            const hasChanges = entries.some((e: InstagramWebhookEntry) => (e.changes?.length ?? 0) > 0);
+            const hasChanges = entries.some((e: InstagramWebhookEntry) => e && typeof e === "object" && (e.changes?.length ?? 0) > 0);
+            const firstEntryRaw = entries[0];
+            const firstMessagingRaw = firstEntryRaw && typeof firstEntryRaw === "object" ? (firstEntryRaw as InstagramWebhookEntry).messaging : undefined;
+            const firstMessagingArr = Array.isArray(firstMessagingRaw) ? firstMessagingRaw : firstMessagingRaw != null && typeof firstMessagingRaw === "object" ? [firstMessagingRaw] : [];
+            const firstEv = firstMessagingArr[0] as Record<string, unknown> | undefined;
+            const firstEvKeys = firstEv ? Object.keys(firstEv) : [];
+            const hasMessageEdit = firstEv?.message_edit != null;
+            const hasMessage = firstEv?.message != null;
+            const hint = hasMessageEdit && !hasMessage
+              ? "Event ini message_edit (pesan diedit), bukan pesan baru. Kirim pesan baru (bukan edit) ke @akun_instagram untuk tes inbound."
+              : hasChanges
+                ? "Payload pakai entry.changes – mungkin format lain."
+                : "Pastikan event punya sender, recipient, message.";
             console.log("Instagram webhook: no message events processed.", {
-              hint: hasChanges ? "Payload has entry.changes (bukan entry.messaging) – mungkin format lain." : "Pastikan event punya sender, recipient, message.",
+              hint,
               entryCount: entries.length,
               firstEntryKeys: firstEntry && typeof firstEntry === "object" ? Object.keys(firstEntry) : [],
+              firstMessagingLength: firstMessagingArr.length,
+              firstEventKeys: firstEvKeys,
+              isMessageEditOnly: hasMessageEdit && !hasMessage,
             });
+            if (hasMessageEdit && firstEv?.message_edit != null) {
+              try {
+                const meStr = JSON.stringify(firstEv.message_edit).slice(0, 800);
+                console.log("Instagram webhook: message_edit payload (untuk parsing)", { message_editSample: meStr });
+              } catch (_) {}
+            }
           }
         } catch (instagramErr) {
           console.error("Instagram webhook: error", instagramErr);

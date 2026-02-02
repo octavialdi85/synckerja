@@ -29,10 +29,16 @@ export function useWhatsAppConversations() {
       )
       .on(
         'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_conversations' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'whatsapp_conversations' },
         () => {
           queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-          // Status (Unread/Resolve) berubah di backend (webhook); refresh query status agar UI tidak tetap "Resolve"
           queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status'] });
         }
       )

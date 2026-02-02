@@ -9,7 +9,7 @@ import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
 import { Instagram, CheckCircle2, Unplug, Loader2, Facebook } from 'lucide-react';
 import { toast } from 'sonner';
 
-const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic';
+const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic,business_management';
 const META_OAUTH_VERSION = 'v18.0';
 
 export function InstagramConnectPage() {
@@ -77,7 +77,30 @@ export function InstagramConnectPage() {
             return;
           }
           await refetch();
-          toast.success(t('instagramConnect.oauthSuccess', 'Connected. You can now load Instagram accounts.'));
+          // Setelah token tersimpan, ambil daftar akun Instagram dan auto-connect yang pertama (jika ada)
+          try {
+            const listRes = await fetch(`${SUPABASE_URL}/functions/v1/list-instagram-accounts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            });
+            const listData = await listRes.json().catch(() => ({}));
+            const accounts = Array.isArray(listData?.accounts) ? listData.accounts : [];
+            if (accounts.length >= 1) {
+              const first = accounts[0];
+              await updateInstagram({
+                id: first.id,
+                username: first.username ?? null,
+                name: first.name ?? null,
+                page_id: first.page_id ?? null,
+              });
+              await refetch();
+              toast.success(t('instagramConnect.oauthSuccess', 'Connected. Instagram account linked.'));
+            } else {
+              toast.success(t('instagramConnect.oauthSuccessNoAccount', 'Token saved. No Instagram Business account found—link a Page to Instagram in Meta Business Suite.'));
+            }
+          } catch {
+            toast.success(t('instagramConnect.oauthSuccess', 'Connected. You can now load Instagram accounts.'));
+          }
         } catch {
           toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
         } finally {

@@ -121,14 +121,18 @@ Deno.serve(async (req: Request) => {
 
     const fields = "id,name,instagram_business_account{id,username,name}";
     const accounts: InstagramBusinessAccount[] = [];
+    const seenIgIds = new Set<string>();
 
     function collectFromPages(pages: Array<{ id?: string; instagram_business_account?: { id?: string; username?: string; name?: string } }>) {
       for (const page of pages) {
         const ig = page?.instagram_business_account;
         const pageId = page?.id ? String(page.id) : null;
         if (ig?.id) {
+          const igId = String(ig.id);
+          if (seenIgIds.has(igId)) continue;
+          seenIgIds.add(igId);
           accounts.push({
-            id: String(ig.id),
+            id: igId,
             username: typeof ig.username === "string" ? ig.username : null,
             name: typeof ig.name === "string" ? ig.name : null,
             page_id: pageId,
@@ -166,7 +170,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 2) If no accounts from me/accounts, try Business Manager owned_pages (System User / Business token)
+    // 2) If no accounts from me/accounts, try Business Manager owned_pages (when meta_business_manager_id is set)
     if (accounts.length === 0 && businessId) {
       const bizUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(businessId)}/owned_pages?fields=${encodeURIComponent(fields)}`;
       const bizRes = await fetch(bizUrl, {
@@ -183,6 +187,34 @@ Deno.serve(async (req: Request) => {
       };
       if (bizRes.ok && Array.isArray(bizData?.data)) {
         collectFromPages(bizData.data);
+      }
+    }
+
+    // 3) If still no accounts, try me/businesses (User token with business_management – Pages owned by businesses the user has a role in)
+    if (accounts.length === 0) {
+      const businessesUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/me/businesses?fields=${encodeURIComponent("owned_pages{" + fields + "}")}`;
+      const bizListRes = await fetch(businessesUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const bizListData = await bizListRes.json().catch(() => ({})) as {
+        data?: Array<{
+          id?: string;
+          owned_pages?: {
+            data?: Array<{
+              id?: string;
+              name?: string;
+              instagram_business_account?: { id?: string; username?: string; name?: string };
+            }>;
+          };
+        }>;
+        error?: { message?: string };
+      };
+      if (bizListRes.ok && Array.isArray(bizListData?.data)) {
+        for (const biz of bizListData.data) {
+          const pages = biz?.owned_pages?.data;
+          if (Array.isArray(pages)) collectFromPages(pages);
+        }
       }
     }
 
