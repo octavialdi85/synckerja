@@ -390,6 +390,13 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     defaultRoles: ['owner', 'admin', 'employee']
   },
   {
+    path: '/operations/consultant/instagram/connect',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Connect Instagram Business Account',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
     path: '/operations/consultant/all/livechat',
     requiresAuth: true,
     requiresPermissions: true,

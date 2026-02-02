@@ -366,15 +366,24 @@ export interface Database {
           updated_at?: string
         }
       }
-      organization_whatsapp_config: {
+      organization_meta_config: {
         Row: {
           id: string
           organization_id: string
+          meta_access_token: string
+          meta_business_manager_id: string | null
           whatsapp_business_account_id: string
-          whatsapp_access_token: string
           verify_token: string
           phone_number_id: string | null
           display_phone_number: string | null
+          whatsapp_business_name: string | null
+          name_status: string | null
+          facebook_page_id: string | null
+          facebook_verify_token: string | null
+          instagram_business_account_id: string | null
+          instagram_verify_token: string | null
+          instagram_username: string | null
+          instagram_name: string | null
           is_active: boolean
           created_by: string | null
           created_at: string
@@ -383,11 +392,20 @@ export interface Database {
         Insert: {
           id?: string
           organization_id: string
-          whatsapp_business_account_id: string
-          whatsapp_access_token: string
-          verify_token: string
+          meta_access_token: string
+          meta_business_manager_id?: string | null
+          whatsapp_business_account_id?: string
+          verify_token?: string
           phone_number_id?: string | null
           display_phone_number?: string | null
+          whatsapp_business_name?: string | null
+          name_status?: string | null
+          facebook_page_id?: string | null
+          facebook_verify_token?: string | null
+          instagram_business_account_id?: string | null
+          instagram_verify_token?: string | null
+          instagram_username?: string | null
+          instagram_name?: string | null
           is_active?: boolean
           created_by?: string | null
           created_at?: string
@@ -396,11 +414,20 @@ export interface Database {
         Update: {
           id?: string
           organization_id?: string
+          meta_access_token?: string
+          meta_business_manager_id?: string | null
           whatsapp_business_account_id?: string
-          whatsapp_access_token?: string
           verify_token?: string
           phone_number_id?: string | null
           display_phone_number?: string | null
+          whatsapp_business_name?: string | null
+          name_status?: string | null
+          facebook_page_id?: string | null
+          facebook_verify_token?: string | null
+          instagram_business_account_id?: string | null
+          instagram_verify_token?: string | null
+          instagram_username?: string | null
+          instagram_name?: string | null
           is_active?: boolean
           created_by?: string | null
           created_at?: string

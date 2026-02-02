@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppMessages } from '../../hooks/useWhatsAppMessages';
 import { useResolveWhatsAppMedia } from '../../hooks/useResolveWhatsAppMedia';
 import { useSendWhatsAppMessage } from '../../hooks/useSendWhatsAppMessage';
+import { useSendInstagramMessage } from '../../hooks/useSendInstagramMessage';
 import type { WhatsAppConversation, WhatsAppMessage } from '../../types';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Button } from '@/features/ui/button';
@@ -18,6 +19,7 @@ import {
 import { Dialog, DialogContent } from '@/features/ui/dialog';
 import { Check, CheckCheck, Paperclip, FileText, X, Download, ChevronDown, Trash2, Reply, Copy, Image, Video, Music, Send } from 'lucide-react';
 import { messageContainsContactRequest } from '../../constants/contactRequestBlockPhrases';
+import { isLikelyInstagramId } from '../../constants/instagramId';
 import { isResolvedStatus } from '../../constants/leadStatus';
 
 /** Bucket yang sama dipakai untuk kirim (outbound) dan terima (webhook/resolve) media */
@@ -361,8 +363,14 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
   const { data: messages = [], isLoading } = useWhatsAppMessages(conversation?.id ?? null);
-  const { send, isSending } = useSendWhatsAppMessage();
+  const { send, isSending: isSendingWhatsApp } = useSendWhatsAppMessage();
+  const { send: sendInstagram, isSending: isSendingInstagram } = useSendInstagramMessage();
   const { resolve: resolveMedia, isResolving: isResolvingMedia, resolvingMessageId } = useResolveWhatsAppMedia(conversation?.id ?? null);
+
+  const isInstagramConversation =
+    (conversation?.channel ?? '').toLowerCase() === 'instagram' ||
+    isLikelyInstagramId(conversation?.customer_wa_id);
+  const isSending = isSendingWhatsApp || isSendingInstagram;
 
   const optimisticEntry = optimisticMessage || optimisticMedia;
 
@@ -508,7 +516,15 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
       replyToMessageType?: string | null,
       replyToSender?: string | null
     ) => {
-      if (!conversation?.customer_wa_id?.replace(/\D/g, '')) {
+      if (!conversation?.customer_wa_id) {
+        toast.error('Penerima tidak tersedia.');
+        return;
+      }
+      if (isInstagramConversation) {
+        toast.error(t('whatsappInbox.instagramMediaNotSupported', 'Pengiriman media ke Instagram belum tersedia. Kirim pesan teks saja.'));
+        return;
+      }
+      if (!conversation.customer_wa_id.replace(/\D/g, '')) {
         toast.error('Nomor WhatsApp penerima tidak tersedia.');
         return;
       }
@@ -554,7 +570,7 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
       }
       // Optimistic media dihapus saat pesan asli ada di list (useEffect hasMatchingRealMessage)
     },
-    [conversation, send]
+    [conversation, send, isInstagramConversation, t]
   );
 
   /** Blokir pesan yang meminta kontak. Default ON; set VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS=false untuk nonaktifkan. */
@@ -611,23 +627,37 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
     setText('');
     setReplyTo(null);
     try {
-      const sendPromise = send({
-        to: conversation.customer_wa_id,
-        text: trimmed,
-        conversation_id: conversation.id,
-        reply_to_wa_message_id: replyWaId ?? undefined,
-        reply_to_body: replyBody ?? undefined,
-        reply_to_message_type: replyMessageType ?? undefined,
-        reply_to_sender: replySender || undefined,
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out. Please try again.')), SEND_TIMEOUT_MS)
-      );
-      await Promise.race([sendPromise, timeoutPromise]);
+      if (isInstagramConversation) {
+        const sendPromise = sendInstagram({
+          to: conversation.customer_wa_id,
+          text: trimmed,
+          conversation_id: conversation.id,
+          reply_to_wa_message_id: replyWaId ?? undefined,
+        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please try again.')), SEND_TIMEOUT_MS)
+        );
+        await Promise.race([sendPromise, timeoutPromise]);
+      } else {
+        const sendPromise = send({
+          to: conversation.customer_wa_id,
+          text: trimmed,
+          conversation_id: conversation.id,
+          reply_to_wa_message_id: replyWaId ?? undefined,
+          reply_to_body: replyBody ?? undefined,
+          reply_to_message_type: replyMessageType ?? undefined,
+          reply_to_sender: replySender || undefined,
+        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please try again.')), SEND_TIMEOUT_MS)
+        );
+        await Promise.race([sendPromise, timeoutPromise]);
+      }
       // Optimistic dihapus saat pesan asli sudah ada di list (useEffect hasMatchingRealMessage)
-    } catch {
+    } catch (err) {
       setOptimisticMessage(null);
-      // onError in useSendWhatsAppMessage shows toast
+      const msg = err instanceof Error ? err.message : 'Gagal mengirim pesan.';
+      toast.error(msg);
     }
   };
 

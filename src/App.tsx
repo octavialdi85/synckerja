@@ -10,7 +10,7 @@ import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
 import { HomeAccessGuard } from "@/components/HomeAccessGuard";
 import { SubscriptionExpiryGuard } from "@/components/SubscriptionExpiryGuard";
-import Inde from "./features/1-login/pages/Inde";
+import Inde from "./features/1-login/pages/Index";
 import Login from "./features/1-login/pages/Login";
 import Register from "./features/1-login/pages/Register";
 import VerifyEmail from "./features/1-login/pages/VerifyEmail";
@@ -84,7 +84,7 @@ import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { useSecurityInterceptor } from "./hooks/useSecurityInterceptor";
 import { PlaceholderPage } from "./features/2-9-PageAccess/PlaceholderPage";
 import TransferOwnership from "./features/1-layouts/TransferOwnership/page/TransferOwnership";
-import { Settings, Users, UserCheck, FileTet, Briefcase } from "lucide-react";
+import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
 import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage";
@@ -101,7 +101,7 @@ import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
-import { WhatsAppConnectPage, WhatsAppInboxPage } from "./features/5-3-whatsapp";
+import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
 import { ExpenseDashboard } from "./features/4_2_dashboard";
@@ -316,6 +316,8 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
+              {/* OAuth callback (popup) - no auth required so popup can load */}
+              <Route path="/auth/meta/callback" element={<MetaOAuthCallbackPage />} />
               {/* Public Terms Page */}
               <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
               <Route path="/policy/terms" element={<TermsOfServicePage />} />
@@ -581,6 +583,11 @@ const App = () => (
               <Route path="/operations/consultant/whatsapp/connect" element={
                 <ProtectedRoute>
                   <WhatsAppConnectPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/instagram/connect" element={
+                <ProtectedRoute>
+                  <InstagramConnectPage />
                 </ProtectedRoute>
               } />
               <Route path="/operations/consultant/all/livechat" element={
@@ -904,7 +911,7 @@ const App = () => (
               {/* Catch any unregistered /access-permissions/* paths - redirect to main page-access */}
               <Route path="/access-permissions/*" element={
                 <ProtectedRoute>
-                  <PlaceholderPage />
+                  <PlaceholderPage title="Akses Halaman" description="Halaman akses izin untuk path ini sedang dalam pengembangan." />
                 </ProtectedRoute>
               } />
               

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, MessageCircle, Inbox } from "lucide-react";
+import { LayoutDashboard, Users, MessageCircle, Instagram, Inbox } from "lucide-react";
 
 const tabs = [
   {
@@ -22,6 +22,12 @@ const tabs = [
     icon: MessageCircle,
   },
   {
+    key: "instagram-connect",
+    path: "/operations/consultant/instagram/connect",
+    title: "Connect Instagram",
+    icon: Instagram,
+  },
+  {
     key: "livechat",
     path: "/operations/consultant/all/livechat",
     title: "Live Chat",
@@ -36,6 +42,7 @@ export const HeaderAndTab = () => {
   const activeKey = useMemo(() => {
     if (location.pathname === "/operations/consultant/leads-management") return "leads-management";
     if (location.pathname.startsWith("/operations/consultant/whatsapp/connect")) return "whatsapp-connect";
+    if (location.pathname.startsWith("/operations/consultant/instagram/connect")) return "instagram-connect";
     if (location.pathname.startsWith("/operations/consultant/all/livechat")) return "livechat";
     const match = tabs.find((tab) => location.pathname.startsWith(tab.path));
     return match?.key ?? "leads-management";

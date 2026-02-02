@@ -185,13 +185,17 @@ export function ConversationList({ selectedId, onSelect, initialConversationId, 
               ) : (
                 <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
               )}
-              {businessName ? (
+              {(businessName || conv.channel) ? (
                 <span className="flex items-center gap-1.5 shrink-0 min-w-0">
-                  <span className="w-4 h-4 shrink-0 text-[#25D366]" title="WhatsApp" aria-hidden>
-                    <ChannelIcon channel="whatsapp" className="w-4 h-4" />
+                  <span
+                    className={conv.channel === 'instagram' ? 'w-4 h-4 shrink-0 text-[#E4405F]' : 'w-4 h-4 shrink-0 text-[#25D366]'}
+                    title={conv.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
+                    aria-hidden
+                  >
+                    <ChannelIcon channel={(conv.channel ?? 'whatsapp') as 'whatsapp' | 'instagram'} className="w-4 h-4" />
                   </span>
-                  <span className="text-xs text-gray-400 truncate max-w-[100px]" title={businessName}>
-                    {businessName}
+                  <span className="text-xs text-gray-400 truncate max-w-[100px]" title={businessName ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
+                    {businessName ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
                   </span>
                 </span>
               ) : null}

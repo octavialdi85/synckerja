@@ -143,6 +143,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.operations.whatsappConnect.description",
       },
       {
+        title: "Connect Instagram",
+        titleKey: "sidebar.operations.instagramConnect.title",
+        url: "/operations/consultant/instagram/connect",
+        description: "Connect Instagram Business Account",
+        descriptionKey: "sidebar.operations.instagramConnect.description",
+      },
+      {
         title: "Livechat",
         titleKey: "sidebar.operations.livechat.title",
         url: "/operations/consultant/all/livechat",

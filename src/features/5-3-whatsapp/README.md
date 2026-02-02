@@ -17,7 +17,7 @@ Fitur integrasi WhatsApp Business API untuk area Operations → Consultant.
 
 ## Backend
 
-- **Tabel:** `organization_whatsapp_config`, `whatsapp_conversations`, `whatsapp_messages` (RLS per org).
+- **Tabel:** `organization_meta_config` (token Meta + konfig WhatsApp/FB/IG), `whatsapp_conversations`, `whatsapp_messages` (RLS per org).
 - **Edge Function:** `whatsapp-webhook` — GET (verification), POST (simpan pesan masuk, map org by phone_number_id). URL: `{SUPABASE_URL}/functions/v1/whatsapp-webhook`.
 - **Edge Function:** `send-whatsapp-message` — POST (kirim pesan via Meta API, simpan outbound ke DB). URL: `{SUPABASE_URL}/functions/v1/send-whatsapp-message`. Auth: JWT.
 

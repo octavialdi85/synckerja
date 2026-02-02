@@ -3,6 +3,7 @@ import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '@/features/5-3-dashboard/HeaderAndTab';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
+import { Label } from '@/features/ui/label';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -19,7 +20,7 @@ import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
 import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { CheckCircle2, CircleOff, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck, RefreshCw } from 'lucide-react';
+import { CheckCircle2, CircleOff, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck, RefreshCw, FileText } from 'lucide-react';
 
 /** Ikon logo WhatsApp (akun WhatsApp). */
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -184,30 +185,57 @@ export function WhatsAppConnectPage() {
                             <WebhookInfoDisplay embedded />
                           </div>
                           <div className="border-t border-slate-200 pt-6">
-                            <h3 className="text-sm font-semibold text-slate-800 mb-3">Policy URLs</h3>
-                            <p className="text-xs text-slate-500 mb-3">Required for Meta WhatsApp configuration</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <FileText className="w-4 h-4 text-slate-600 shrink-0" aria-hidden />
                               <div>
-                                <p className="text-sm text-slate-500 mb-1">Privacy Policy URL</p>
-                                <a
-                                  href={`${window.location.origin}/policy/privacy`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 hover:underline break-all"
-                                >
-                                  {window.location.origin}/policy/privacy
-                                </a>
+                                <h3 className="text-sm font-semibold text-slate-800">Policy URLs</h3>
+                                <p className="text-xs text-slate-500">Required for Meta WhatsApp configuration</p>
                               </div>
-                              <div>
-                                <p className="text-sm text-slate-500 mb-1">Terms of Service URL</p>
-                                <a
-                                  href={`${window.location.origin}/policy/terms`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 hover:underline break-all"
-                                >
-                                  {window.location.origin}/policy/terms
-                                </a>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                                <Label className="text-slate-700 text-xs font-medium uppercase tracking-wide">Privacy Policy URL</Label>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <a
+                                    href={`${window.location.origin}/policy/privacy`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 hover:underline break-all flex-1 min-w-0"
+                                  >
+                                    {window.location.origin}/policy/privacy
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0"
+                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/policy/privacy`)}
+                                  >
+                                    Copy
+                                  </Button>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                                <Label className="text-slate-700 text-xs font-medium uppercase tracking-wide">Terms of Service URL</Label>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <a
+                                    href={`${window.location.origin}/policy/terms`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 hover:underline break-all flex-1 min-w-0"
+                                  >
+                                    {window.location.origin}/policy/terms
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0"
+                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/policy/terms`)}
+                                  >
+                                    Copy
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </div>

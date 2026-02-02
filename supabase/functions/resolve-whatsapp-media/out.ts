@@ -204,13 +204,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const { data: config, error: configError } = await supabase
-      .from("organization_whatsapp_config")
-      .select("whatsapp_access_token")
+      .from("organization_meta_config")
+      .select("meta_access_token")
       .eq("organization_id", orgId)
       .eq("is_active", true)
       .maybeSingle();
 
-    if (configError || !config?.whatsapp_access_token) {
+    if (configError || !config?.meta_access_token) {
       return new Response(JSON.stringify({ error: "WhatsApp not configured" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -219,7 +219,7 @@ Deno.serve(async (req: Request) => {
 
     const result = await resolveMediaUrl(
       mediaInfo.id,
-      config.whatsapp_access_token,
+      config.meta_access_token,
       supabase,
       message.conversation_id,
       message.wa_message_id ?? message.id,

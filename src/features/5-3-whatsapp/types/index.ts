@@ -1,23 +1,38 @@
 export interface WhatsAppConfig {
   id: string;
   organization_id: string;
+  meta_access_token: string;
+  meta_business_manager_id: string | null;
   whatsapp_business_account_id: string;
-  whatsapp_access_token: string;
   verify_token: string;
   phone_number_id: string | null;
   display_phone_number: string | null;
   whatsapp_business_name: string | null;
   name_status: string | null; // Meta display name verification: APPROVED | DECLINED
+  instagram_business_account_id: string | null;
+  instagram_verify_token: string | null;
+  instagram_username: string | null;
+  instagram_name: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
+/** Instagram Business Account from Meta Graph API (linked to a Facebook Page). */
+export interface InstagramBusinessAccount {
+  id: string;
+  username: string | null;
+  name: string | null;
+  /** Facebook Page ID linked to this Instagram account; used for Send API (avoids "me" with User token). */
+  page_id?: string | null;
+}
+
 export interface WhatsAppConfigUpsert {
   organization_id: string;
   whatsapp_business_account_id: string;
-  whatsapp_access_token: string;
+  meta_access_token: string;
+  meta_business_manager_id?: string | null;
   verify_token: string;
   phone_number_id?: string | null;
   display_phone_number?: string | null;
@@ -38,6 +53,8 @@ export interface WhatsAppConversation {
   /** Lead status (Open/Unread, On going, Resolve) untuk blokir outbound saat Resolve. */
   lead_status_id?: string | null;
   lead_status_name?: string | null;
+  /** Channel sumber: 'whatsapp' | 'instagram'. Untuk live chat unified inbox. */
+  channel?: string | null;
   created_at: string;
   updated_at: string;
 }

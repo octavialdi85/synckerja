@@ -10,6 +10,7 @@ export function WhatsAppConnectForm() {
   const { config, isLoading, upsert, isUpserting, updateBusinessName, updateDisplayPhone } = useWhatsAppConfig();
   const [businessAccountId, setBusinessAccountId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [metaBusinessManagerId, setMetaBusinessManagerId] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
 
@@ -17,6 +18,7 @@ export function WhatsAppConnectForm() {
   useEffect(() => {
     setBusinessAccountId('');
     setAccessToken('');
+    setMetaBusinessManagerId('');
     setVerifyToken('');
     setPhoneNumberId('');
   }, []);
@@ -74,7 +76,8 @@ export function WhatsAppConnectForm() {
     const wabaId = businessAccountId.trim();
     await upsert({
       whatsapp_business_account_id: wabaId,
-      whatsapp_access_token: accessToken.trim(),
+      meta_access_token: accessToken.trim(),
+      meta_business_manager_id: metaBusinessManagerId.trim() || null,
       verify_token: verifyToken.trim(),
       phone_number_id: pnId || null,
     });
@@ -120,6 +123,18 @@ export function WhatsAppConnectForm() {
           className="bg-gray-50"
           autoComplete="new-password"
         />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="meta-business-manager-id">Meta Business Manager ID (opsional, untuk Connect Instagram)</Label>
+        <Input
+          id="meta-business-manager-id"
+          placeholder="Contoh: 123456789012345"
+          value={metaBusinessManagerId}
+          onChange={(e) => setMetaBusinessManagerId(e.target.value)}
+          className="bg-gray-50"
+          autoComplete="off"
+        />
+        <p className="text-xs text-gray-500">Diperlukan jika token dari Meta Business Suite dan Load Instagram accounts kosong. Cek di Meta Business Suite → Settings → Business info.</p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="phone-number-id">Phone Number ID</Label>

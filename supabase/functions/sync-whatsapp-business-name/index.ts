@@ -52,28 +52,66 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id)
       .single();
 
-    const orgId = profile?.active_organization_id;
-    if (!orgId) {
-      return new Response(JSON.stringify({ error: "No active organization" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let orgId = profile?.active_organization_id ?? null;
+
+    // Resolve org with WhatsApp config: use active org if it has config, else find first user org that has config
+    const { data: userOrgs } = await supabase
+      .from("user_organizations")
+      .select("organization_id")
+      .eq("user_id", user.id);
+    const orgIds = (userOrgs ?? []).map((r: { organization_id: string }) => r.organization_id);
+
+    let config: { meta_access_token: string; phone_number_id: string; whatsapp_business_account_id?: string } | null = null;
+    let resolvedOrgId: string | null = null;
+
+    const tryOrg = async (oid: string) => {
+      const { data, error } = await supabase
+        .from("organization_meta_config")
+        .select("meta_access_token, phone_number_id, whatsapp_business_account_id")
+        .eq("organization_id", oid)
+        .maybeSingle();
+      if (!error && data?.meta_access_token?.trim() && data?.phone_number_id?.trim()) return { config: data, orgId: oid };
+      return null;
+    };
+
+    if (orgId) {
+      const current = await tryOrg(orgId);
+      if (current) {
+        config = current.config;
+        resolvedOrgId = current.orgId;
+      }
     }
-
-    const { data: config, error: configError } = await supabase
-      .from("organization_whatsapp_config")
-      .select("whatsapp_access_token, phone_number_id, whatsapp_business_account_id")
-      .eq("organization_id", orgId)
-      .maybeSingle();
-
-    if (configError || !config?.whatsapp_access_token?.trim() || !config?.phone_number_id?.trim()) {
+    if (!config && orgIds.length > 0) {
+      for (const oid of orgIds) {
+        if (oid === orgId) continue;
+        const current = await tryOrg(oid);
+        if (current) {
+          config = current.config;
+          resolvedOrgId = current.orgId;
+          if (!orgId) {
+            await supabase.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
+            orgId = oid;
+          }
+          break;
+        }
+      }
+    }
+    if (!config && !resolvedOrgId && orgId) {
       return new Response(JSON.stringify({ error: "WhatsApp not configured or missing Phone Number ID" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!config || !resolvedOrgId) {
+      return new Response(JSON.stringify({ error: "No active organization or WhatsApp not configured" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    const accessToken = config.whatsapp_access_token.trim();
+    orgId = resolvedOrgId;
+
+    const accessToken = config.meta_access_token.trim();
     const phoneNumberId = config.phone_number_id.trim();
     const wabaId = config.whatsapp_business_account_id?.trim() || "";
 
@@ -163,7 +201,7 @@ Deno.serve(async (req: Request) => {
     if (displayPhone) updatePayload.display_phone_number = displayPhone;
 
     const { error: updateError } = await supabase
-      .from("organization_whatsapp_config")
+      .from("organization_meta_config")
       .update(updatePayload)
       .eq("organization_id", orgId);
 

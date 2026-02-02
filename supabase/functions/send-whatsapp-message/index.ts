@@ -1,3 +1,4 @@
+/// <reference path="../edge-runtime.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -52,13 +53,7 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id)
       .single();
 
-    const orgId = profile?.active_organization_id;
-    if (!orgId) {
-      return new Response(
-        JSON.stringify({ error: "No active organization. Set active organization in settings.", code: "NO_ORG" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    let orgId = profile?.active_organization_id ?? null;
 
     const body = await req.json().catch(() => ({}));
     const to = body.to != null ? String(body.to).replace(/\D/g, "") : "";
@@ -93,14 +88,50 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: config, error: configError } = await supabase
-      .from("organization_whatsapp_config")
-      .select("whatsapp_access_token, phone_number_id")
-      .eq("organization_id", orgId)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolve org with WhatsApp config: use active org if it has config, else find first user org that has config
+    const { data: userOrgs } = await supabase
+      .from("user_organizations")
+      .select("organization_id")
+      .eq("user_id", user.id);
+    const orgIds = (userOrgs ?? []).map((r: { organization_id: string }) => r.organization_id);
 
-    if (configError || !config?.whatsapp_access_token || !config?.phone_number_id) {
+    let config: { meta_access_token: string; phone_number_id: string } | null = null;
+    let resolvedOrgId: string | null = null;
+
+    const tryOrg = async (oid: string) => {
+      const { data, error } = await supabase
+        .from("organization_meta_config")
+        .select("meta_access_token, phone_number_id")
+        .eq("organization_id", oid)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!error && data?.meta_access_token?.trim() && data?.phone_number_id?.trim()) return { config: data, orgId: oid };
+      return null;
+    };
+
+    if (orgId) {
+      const current = await tryOrg(orgId);
+      if (current) {
+        config = current.config;
+        resolvedOrgId = current.orgId;
+      }
+    }
+    if (!config && orgIds.length > 0) {
+      for (const oid of orgIds) {
+        if (oid === orgId) continue;
+        const current = await tryOrg(oid);
+        if (current) {
+          config = current.config;
+          resolvedOrgId = current.orgId;
+          if (!orgId) {
+            await supabase.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
+            orgId = oid;
+          }
+          break;
+        }
+      }
+    }
+    if (!config || !resolvedOrgId) {
       return new Response(
         JSON.stringify({
           error:
@@ -110,6 +141,8 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    orgId = resolvedOrgId;
 
     if (conversationId) {
       const { data: convRow } = await supabase
@@ -161,7 +194,7 @@ Deno.serve(async (req: Request) => {
     const metaRes = await fetch(metaUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${config.whatsapp_access_token}`,
+        "Authorization": `Bearer ${config.meta_access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(metaBody),
@@ -201,6 +234,8 @@ Deno.serve(async (req: Request) => {
         conversation_id: conversationId,
         direction: "outbound",
         wa_message_id: waMessageId,
+        platform_message_id: waMessageId,
+        channel: "whatsapp",
         body: storedBody,
         message_type: hasMedia ? mediaType : "text",
         raw_metadata: metaData,

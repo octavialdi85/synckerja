@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "types": [],
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": ["**/*.ts", "edge-runtime.d.ts"],
+  "exclude": ["node_modules"]
+}

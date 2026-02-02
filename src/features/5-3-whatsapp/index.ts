@@ -1,9 +1,11 @@
 export { WhatsAppConnectPage } from './pages/WhatsAppConnectPage';
 export { WhatsAppInboxPage } from './pages/WhatsAppInboxPage';
+export { InstagramConnectPage } from './pages/InstagramConnectPage';
+export { MetaOAuthCallbackPage } from './pages/MetaOAuthCallbackPage';
 export { useWhatsAppConfig } from './hooks/useWhatsAppConfig';
 export { useWhatsAppConversations } from './hooks/useWhatsAppConversations';
 export { useWhatsAppMessages } from './hooks/useWhatsAppMessages';
 export { useSendWhatsAppMessage } from './hooks/useSendWhatsAppMessage';
 export { useWhatsAppUnreadCount } from './hooks/useWhatsAppUnreadCount';
 export { useWhatsAppUnreadByConversation } from './hooks/useWhatsAppUnreadByConversation';
-export type { WhatsAppConfig, WhatsAppConfigUpsert, WhatsAppConversation, WhatsAppMessage, WhatsAppMessageStatus } from './types';
+export type { WhatsAppConfig, WhatsAppConfigUpsert, WhatsAppConversation, WhatsAppMessage, WhatsAppMessageStatus, InstagramBusinessAccount } from './types';

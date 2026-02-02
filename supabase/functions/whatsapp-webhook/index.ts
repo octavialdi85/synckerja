@@ -1,5 +1,34 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-expect-error - Deno/ESM URL import; resolved at runtime by Supabase Edge
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/** Declare Deno global for IDE when edge-runtime.d.ts is not resolved */
+declare const Deno: {
+  serve: (handler: (req: Request) => Promise<Response> | Response) => void;
+  env: { get(key: string): string | undefined };
+};
+
+/** Meta Instagram webhook entry (object.entry[]) – bisa pakai messaging ATAU changes */
+interface InstagramWebhookEntry {
+  id?: string | number;
+  time?: number;
+  messaging?: InstagramMessagingEvent[];
+  changes?: { field?: string; value?: { messaging?: InstagramMessagingEvent[] } }[];
+}
+/** Meta Instagram Messaging webhook event (entry.messaging[]) */
+interface InstagramMessagingEvent {
+  sender?: { id?: string | number };
+  recipient?: { id?: string | number };
+  timestamp?: number;
+  message?: InstagramMessage;
+}
+/** Meta Instagram message object */
+interface InstagramMessage {
+  mid?: string;
+  text?: string;
+  is_echo?: boolean;
+  attachments?: { type?: string }[];
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,7 +176,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const { data: config, error } = await supabase
-        .from("organization_whatsapp_config")
+        .from("organization_meta_config")
         .select("id")
         .eq("verify_token", token)
         .eq("is_active", true)
@@ -166,7 +195,8 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
-      console.log("WhatsApp webhook POST:", JSON.stringify(body));
+      const objectType = body?.object ?? "(none)";
+      console.log("Webhook POST: object=", objectType, "entryCount=", (body?.entry ?? []).length);
 
       if (body.object === "whatsapp_business_account") {
         const entries = body.entry ?? [];
@@ -195,8 +225,8 @@ Deno.serve(async (req: Request) => {
               if (!phoneNumberId || messages.length === 0) continue;
 
               const { data: config, error: configError } = await supabase
-                .from("organization_whatsapp_config")
-                .select("organization_id, whatsapp_access_token")
+                .from("organization_meta_config")
+                .select("organization_id, meta_access_token")
                 .eq("phone_number_id", phoneNumberId)
                 .eq("is_active", true)
                 .maybeSingle();
@@ -207,7 +237,7 @@ Deno.serve(async (req: Request) => {
               }
 
               const orgId = config.organization_id;
-              const accessToken = config.whatsapp_access_token ?? "";
+              const accessToken = config.meta_access_token ?? "";
 
               // Backfill display_phone_number from webhook metadata (works in dev & live; Meta sends it in every message)
               const rawDisplayNumber = value.metadata?.display_phone_number;
@@ -216,7 +246,7 @@ Deno.serve(async (req: Request) => {
                 if (displayNumber && /^\d+$/.test(displayNumber)) displayNumber = `+${displayNumber}`;
                 if (displayNumber) {
                   await supabase
-                    .from("organization_whatsapp_config")
+                    .from("organization_meta_config")
                     .update({ display_phone_number: displayNumber, updated_at: new Date().toISOString() })
                     .eq("organization_id", orgId);
                 }
@@ -254,6 +284,8 @@ Deno.serve(async (req: Request) => {
                 const convPayload: Record<string, unknown> = {
                   organization_id: orgId,
                   customer_wa_id: customerWaId,
+                  customer_external_id: customerWaId,
+                  channel: "whatsapp",
                   last_message_at: timestamp,
                   last_message_body: lastBody,
                   updated_at: timestamp,
@@ -293,6 +325,8 @@ Deno.serve(async (req: Request) => {
                   conversation_id: conv.id,
                   direction: "inbound",
                   wa_message_id: msgId,
+                  platform_message_id: msgId,
+                  channel: "whatsapp",
                   body: bodyText,
                   message_type: msg.type ?? "text",
                   raw_metadata: msg,
@@ -362,6 +396,235 @@ Deno.serve(async (req: Request) => {
               }
             }
           }
+        }
+      }
+
+      // Instagram: Meta mengirim object="instagram". Pastikan di Meta Developer → Webhooks → Instagram
+      // Callback URL = URL whatsapp-webhook ini, Verify Token = sama dengan organization_meta_config.verify_token, subscribe "messages".
+      const isInstagramPayload = body.object != null && String(body.object).toLowerCase() === "instagram";
+      if (isInstagramPayload) {
+        try {
+          const entries = (body.entry ?? []) as InstagramWebhookEntry[];
+          const firstEntry = entries[0];
+          const firstEntryKeys = firstEntry && typeof firstEntry === "object" ? Object.keys(firstEntry) : [];
+          console.log("Instagram webhook: received", {
+            entryCount: entries.length,
+            firstEntryId: firstEntry?.id ?? null,
+            firstEntryKeys,
+            messagingCount: entries.reduce((n: number, e: InstagramWebhookEntry) => n + (e.messaging?.length ?? 0), 0),
+            hasChanges: entries.some((e: InstagramWebhookEntry) => (e.changes?.length ?? 0) > 0),
+          });
+          let instagramProcessedCount = 0;
+          for (const entry of entries) {
+            // Meta bisa kirim entry.messaging (DM real) ATAU entry.changes (test / beberapa event)
+            const fromMessaging = entry.messaging ?? [];
+            const fromChanges: InstagramMessagingEvent[] = [];
+            if (entry.changes?.length) {
+              for (const ch of entry.changes) {
+                if (ch.field !== "messages" || !ch.value) continue;
+                const val = ch.value as Record<string, unknown>;
+                const arr = (val.messaging ?? val.messages) as InstagramMessagingEvent[] | undefined;
+                if (Array.isArray(arr) && arr.length > 0) {
+                  fromChanges.push(...arr);
+                } else if (val.sender != null && val.message != null) {
+                  fromChanges.push(val as unknown as InstagramMessagingEvent);
+                }
+              }
+              if (fromChanges.length === 0 && entry.changes.length > 0) {
+                const first = entry.changes[0];
+                const val = first?.value as Record<string, unknown> | undefined;
+                console.log("Instagram webhook: entry.changes value structure (no events parsed)", {
+                  firstChangeField: first?.field,
+                  valueKeys: val ? Object.keys(val) : [],
+                  hint: "DM asli mungkin pakai struktur value lain; sesuaikan parsing.",
+                });
+              }
+            }
+            const messaging = fromMessaging.length > 0 ? fromMessaging : fromChanges;
+            if (fromMessaging.length > 0) {
+              console.log("Instagram webhook: using entry.messaging", { count: fromMessaging.length });
+            }
+            if (fromChanges.length > 0) {
+              console.log("Instagram webhook: using events from entry.changes", { count: fromChanges.length });
+            }
+            for (const ev of messaging) {
+              const event = ev as InstagramMessagingEvent;
+              const senderId = event.sender?.id != null ? String(event.sender.id) : "";
+              const recipientId = event.recipient?.id != null ? String(event.recipient.id) : "";
+              const message = event.message as InstagramMessage | undefined;
+              if (!senderId || !recipientId) continue;
+              if (!message) continue;
+              console.log("Instagram webhook: processing event", {
+                senderId: senderId.slice(0, 8) + "...",
+                recipientId: recipientId.slice(0, 8) + "...",
+                isEcho: !!message.is_echo,
+                hasText: !!(message.text && String(message.text).trim()),
+                hasAttachments: !!(message.attachments && message.attachments.length > 0),
+              });
+
+              const isOutbound = message.is_echo === true;
+              const msgMid = message.mid;
+              let bodyText = (message.text && String(message.text).trim()) ? String(message.text).trim() : "";
+              const attachments = message.attachments ?? [];
+              if (!bodyText && attachments.length > 0) {
+                const firstType = attachments[0]?.type ?? "file";
+                bodyText = firstType === "image" ? "[image]" : firstType === "video" ? "[video]" : firstType === "audio" ? "[audio]" : "[file]";
+              }
+              const timestamp = event.timestamp
+                ? new Date(Number(event.timestamp)).toISOString()
+                : new Date().toISOString();
+
+              const ourIgId = isOutbound ? senderId : recipientId;
+              const customerExternalId = isOutbound ? recipientId : senderId;
+
+              const entryIdStr = entry.id != null ? String(entry.id) : "";
+              const possibleOurIds = [ourIgId, entryIdStr, recipientId, senderId].filter(
+                (id) => id && id !== "undefined"
+              );
+
+              let config: { organization_id: string; meta_access_token: string } | null = null;
+              let configError: Error | null = null;
+              for (const igId of possibleOurIds) {
+                const { data, error } = await supabase
+                  .from("organization_meta_config")
+                  .select("organization_id, meta_access_token")
+                  .eq("instagram_business_account_id", igId)
+                  .eq("is_active", true)
+                  .maybeSingle();
+                if (!error && data) {
+                  config = data;
+                  break;
+                }
+                configError = error ?? null;
+              }
+
+              if (!config) {
+                const { data: fallbackRow, error: fallbackErr } = await supabase
+                  .from("organization_meta_config")
+                  .select("organization_id, meta_access_token, instagram_business_account_id")
+                  .eq("is_active", true)
+                  .not("instagram_business_account_id", "is", null)
+                  .limit(1)
+                  .maybeSingle();
+                if (!fallbackErr && fallbackRow?.organization_id && fallbackRow?.meta_access_token) {
+                  config = {
+                    organization_id: fallbackRow.organization_id,
+                    meta_access_token: fallbackRow.meta_access_token,
+                  };
+                }
+              }
+
+              if (!config) {
+                console.error("Instagram webhook: config not found. Di Meta Developer pastikan Webhooks → Instagram → Callback URL & Verify Token sama dengan WhatsApp. Di DB pastikan organization_meta_config.instagram_business_account_id = recipient.id dari webhook (untuk pesan masuk = ID akun @octa.vialdi). Tried ids:", possibleOurIds, "error:", configError?.message ?? null);
+                continue;
+              }
+
+              console.log("Instagram webhook: config found", { orgId: config.organization_id });
+              const orgId = config.organization_id;
+              const lastBody = bodyText.slice(0, 200);
+
+              const convPayload: Record<string, unknown> = {
+                organization_id: orgId,
+                customer_wa_id: customerExternalId,
+                customer_external_id: customerExternalId,
+                channel: "instagram",
+                last_message_at: timestamp,
+                last_message_body: lastBody,
+                updated_at: timestamp,
+              };
+
+              const { data: conv, error: convError } = await supabase
+                .from("whatsapp_conversations")
+                .upsert(convPayload, { onConflict: "organization_id,customer_wa_id", ignoreDuplicates: false })
+                .select("id")
+                .single();
+
+              if (convError || !conv) {
+                console.error("Instagram webhook: conversation upsert error", convError);
+                continue;
+              }
+
+              const messageType = attachments.length > 0
+                ? (attachments[0]?.type === "image" ? "image" : attachments[0]?.type === "video" ? "video" : attachments[0]?.type === "audio" ? "audio" : "document")
+                : "text";
+
+              const { error: insertMsgError } = await supabase.from("whatsapp_messages").insert({
+                conversation_id: conv.id,
+                direction: isOutbound ? "outbound" : "inbound",
+                wa_message_id: msgMid,
+                platform_message_id: msgMid,
+                channel: "instagram",
+                body: bodyText,
+                message_type: messageType,
+                raw_metadata: event,
+                created_at: timestamp,
+              });
+
+              if (insertMsgError) {
+                console.error("Instagram webhook: whatsapp_messages insert failed", insertMsgError);
+                continue;
+              }
+              instagramProcessedCount++;
+              console.log("Instagram webhook: message saved", { conversationId: conv.id, direction: isOutbound ? "outbound" : "inbound" });
+
+              await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conv.id });
+
+              if (!isOutbound) {
+                const { data: convRow } = await supabase
+                  .from("whatsapp_conversations")
+                  .select("lead_status_id, first_inbound_at")
+                  .eq("id", conv.id)
+                  .single();
+                const statusId = convRow?.lead_status_id ?? null;
+                const firstInboundAt = convRow?.first_inbound_at ?? null;
+                let leadStatusName: string | null = null;
+                if (statusId) {
+                  const { data: statusRow } = await supabase
+                    .from("lead_statuses")
+                    .select("name")
+                    .eq("id", statusId)
+                    .maybeSingle();
+                  leadStatusName = (statusRow?.name as string) ?? null;
+                }
+                const { data: openStatus } = await supabase
+                  .from("lead_statuses")
+                  .select("id")
+                  .eq("name", "Open")
+                  .maybeSingle();
+                const openStatusId = openStatus?.id ?? null;
+
+                if (firstInboundAt == null) {
+                  await supabase
+                    .from("whatsapp_conversations")
+                    .update({ first_inbound_at: timestamp, updated_at: timestamp })
+                    .eq("id", conv.id);
+                }
+
+                const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
+                const isNewOrReopen = openStatusId && (statusId == null || isClosed);
+                if (isNewOrReopen) {
+                  await supabase
+                    .from("whatsapp_conversations")
+                    .update({ lead_status_id: openStatusId, updated_at: timestamp })
+                    .eq("id", conv.id);
+                  await supabase.from("whatsapp_conversation_cycles").insert({
+                    conversation_id: conv.id,
+                    cycle_started_at: timestamp,
+                  });
+                }
+              }
+            }
+          }
+          if (instagramProcessedCount === 0) {
+            const hasChanges = entries.some((e: InstagramWebhookEntry) => (e.changes?.length ?? 0) > 0);
+            console.log("Instagram webhook: no message events processed.", {
+              hint: hasChanges ? "Payload has entry.changes (bukan entry.messaging) – mungkin format lain." : "Pastikan event punya sender, recipient, message.",
+              entryCount: entries.length,
+              firstEntryKeys: firstEntry && typeof firstEntry === "object" ? Object.keys(firstEntry) : [],
+            });
+          }
+        } catch (instagramErr) {
+          console.error("Instagram webhook: error", instagramErr);
         }
       }
 
