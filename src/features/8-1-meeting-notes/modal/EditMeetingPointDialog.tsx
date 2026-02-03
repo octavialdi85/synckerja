@@ -57,7 +57,8 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
 
     setIsSubmitting(true);
     try {
-      await onEditSuccess(meetingPoint.id, formData);
+      const requestByName = employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by;
+      await onEditSuccess(meetingPoint.id, { ...formData, request_by: requestByName });
       onClose();
     } catch (error) {
       console.error('Error updating meeting point:', error);
@@ -105,13 +106,16 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                 <User className="w-3 h-3" />
                 Request By
               </Label>
-              <Select value={formData.request_by} onValueChange={(value) => handleInputChange('request_by', value)}>
+              <Select
+                value={employees.find((e) => e.id === formData.request_by || e.full_name === formData.request_by || e.email === formData.request_by)?.id ?? (formData.request_by || '')}
+                onValueChange={(value) => handleInputChange('request_by', value)}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder={isLoadingEmployees ? "Loading employees..." : "Select employee..."} />
                 </SelectTrigger>
                 <SelectContent className="bg-white border shadow-md z-50">
                   {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.full_name || employee.email}>
+                    <SelectItem key={employee.id} value={employee.id}>
                       {employee.full_name || employee.email}
                     </SelectItem>
                   ))}

@@ -33,9 +33,10 @@ const MeetingNotesInput = () => {
     try {
       console.log('Submitting meeting point:', formData); // Debug log
       
+      const requestByName = employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by;
       await addMeetingPoint({
         discussion_point: formData.discussion_point,
-        request_by: formData.request_by,
+        request_by: requestByName,
         status: formData.status,
         meeting_date: new Date().toISOString().split('T')[0] // Auto set today's date
       });
@@ -94,13 +95,16 @@ const MeetingNotesInput = () => {
 
           {/* Request By - kompak */}
           <div className="w-48 flex flex-col">
-            <Select value={formData.request_by} onValueChange={(value) => handleInputChange('request_by', value)}>
+            <Select
+              value={formData.request_by ? (employees.find((e) => e.id === formData.request_by)?.id ?? employees.find((e) => e.full_name === formData.request_by)?.id ?? '') : ''}
+              onValueChange={(value) => handleInputChange('request_by', value)}
+            >
               <SelectTrigger className="h-[60px] text-sm">
                 <SelectValue placeholder={isLoadingEmployees ? "Loading..." : "Select employee"} />
               </SelectTrigger>
               <SelectContent className="bg-white border shadow-md z-50">
                 {employees.map((employee) => (
-                  <SelectItem key={employee.id} value={employee.full_name}>
+                  <SelectItem key={employee.id} value={employee.id}>
                     {employee.full_name}
                   </SelectItem>
                 ))}

@@ -205,7 +205,7 @@ export const useKOLAnalytics = () => {
         // First, get content posts for campaigns to calculate real metrics
         const { data: contentPosts, error: postsError } = await supabase
           .from('kol_content_posts')
-          .select('id, campaign_id, kol_profile_id, performance')
+          .select('id, campaign_id, kol_profile_id')
           .eq('organization_id', currentOrg.id);
 
         if (postsError && import.meta.env.DEV) {
@@ -226,10 +226,8 @@ export const useKOLAnalytics = () => {
           
           // Calculate real metrics
           const campaignReach = Number(campaign.target_reach) || 0;
-          const campaignEngagement = campaignPosts.reduce((sum, post) => {
-            const perf = post.performance as any;
-            return sum + (Number(perf?.engagement) || 0);
-          }, 0);
+          // kol_content_posts has no engagement column in schema; use 0 for engagement from posts
+          const campaignEngagement = 0;
           const campaignConversionsCount = campaignConversions.length;
           const campaignRevenue = campaignConversions.reduce((sum, conv) => 
             sum + (Number(conv.conversion_value) || 0), 0

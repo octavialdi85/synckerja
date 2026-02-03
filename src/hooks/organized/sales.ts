@@ -477,7 +477,7 @@ export const useOfficeLocations = () => {
       const { data, error } = await supabase
         .from('office_locations')
         .select('*')
-        .eq('active_organization_id', organizationId)
+        .eq('organization_id', organizationId)
         .order('name');
 
       if (error) throw error;
@@ -491,7 +491,7 @@ export const useOfficeLocations = () => {
       .from('office_locations')
       .insert({
         ...locationData,
-        active_organization_id: organizationId,
+        organization_id: organizationId,
       })
       .select()
       .single();
@@ -558,31 +558,71 @@ export const useLocationTypes = () => {
   };
 };
 
-// Hook: useVisitScheduling
+// Hook: useVisitScheduling (uses client_visits with joined client, employee, location)
 export const useVisitScheduling = () => {
   const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
 
-  const { data: visits = [], isLoading: loading, refetch } = useQuery({
+  const { data: rawVisits = [], isLoading: loading, refetch } = useQuery({
     queryKey: ['visit-scheduling', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
-      
+
       const { data, error } = await supabase
-        .from('visit_scheduling')
-        .select('*')
-        .eq('active_organization_id', organizationId)
-        .order('scheduled_date', { ascending: false });
+        .from('client_visits')
+        .select(`
+          *,
+          clients ( id, company_name, contact_person, contact_phone, address ),
+          employees ( id, full_name, email ),
+          office_locations ( id, name, address )
+        `)
+        .eq('organization_id', organizationId)
+        .order('visit_date', { ascending: false })
+        .order('planned_start_time', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+
+      const visits = (data || []).map((row: any) => ({
+        ...row,
+        clientInfo: row.clients ?? null,
+        locationInfo: row.office_locations ?? null,
+        employees: row.employees ?? null,
+      }));
+
+      return visits;
     },
     enabled: !!organizationId,
   });
 
+  const createScheduledVisit = async (visitData: any) => {
+    if (!organizationId) throw new Error('Organization ID is required');
+
+    const { data, error } = await supabase
+      .from('client_visits')
+      .insert({
+        organization_id: organizationId,
+        lead_client_id: visitData.client_id ?? visitData.lead_client_id,
+        employee_id: visitData.employee_id ?? visitData.sales_person_id,
+        validated_location_id: visitData.location_id ?? visitData.validated_location_id ?? null,
+        visit_date: visitData.visit_date ?? visitData.scheduled_date,
+        visit_purpose: visitData.visit_purpose ?? visitData.purpose ?? '',
+        status: visitData.status ?? 'scheduled',
+        planned_start_time: visitData.planned_start_time ?? visitData.plannedStartTime ?? null,
+        planned_end_time: visitData.planned_end_time ?? visitData.plannedEndTime ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    queryClient.invalidateQueries({ queryKey: ['visit-scheduling', organizationId] });
+    return data;
+  };
+
   return {
-    visits,
+    visits: rawVisits,
     loading,
     refetch,
+    createScheduledVisit,
   };
 };
 
