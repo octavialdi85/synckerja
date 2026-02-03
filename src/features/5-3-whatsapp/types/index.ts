@@ -112,3 +112,55 @@ export interface WhatsAppMessage {
   /** Nama pengirim pesan yang dibalas (untuk tampilan reply seperti WhatsApp). */
   reply_to_sender?: string | null;
 }
+
+// --- Email Connect (organization_email_connections, email_conversations, email_messages) ---
+
+export interface EmailConnection {
+  id: string;
+  organization_id: string;
+  email_address: string;
+  inbound_address: string;
+  provider: string | null;
+  status: 'pending_verification' | 'verified';
+  confirmation_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailConnectionInsert {
+  organization_id: string;
+  email_address: string;
+  inbound_address: string;
+  provider?: string | null;
+  status?: 'pending_verification' | 'verified';
+}
+
+export interface EmailConversation {
+  id: string;
+  organization_id: string;
+  email_connection_id: string;
+  from_email: string | null;
+  last_message_at: string | null;
+  last_message_body: string | null;
+  last_message_direction: string | null;
+  email_connection_display: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailMessage {
+  id: string;
+  conversation_id: string;
+  direction: 'inbound' | 'outbound';
+  from_email: string | null;
+  to_email: string | null;
+  subject: string | null;
+  body: string | null;
+  confirmation_code: string | null;
+  created_at: string;
+}
+
+/** Unified conversation for Live Chat list (WhatsApp/Instagram or Email). */
+export type LiveChatConversation =
+  | (WhatsAppConversation & { source: 'whatsapp' })
+  | (EmailConversation & { source: 'email' });

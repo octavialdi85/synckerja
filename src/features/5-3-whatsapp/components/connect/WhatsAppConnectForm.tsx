@@ -33,21 +33,21 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
       setBusinessAccountId(editingAccount.whatsapp_business_account_id);
       setPhoneNumberId(editingAccount.phone_number_id);
       setAccessToken(editingAccount.meta_access_token ?? '');
-      setMetaBusinessManagerId(orgConfig?.meta_business_manager_id ?? '');
+      setMetaBusinessManagerId('');
     } else {
       setBusinessAccountId('');
       setPhoneNumberId('');
       setAccessToken('');
-      setMetaBusinessManagerId(orgConfig?.meta_business_manager_id ?? '');
+      setMetaBusinessManagerId('');
     }
-  }, [editingAccount, orgConfig?.meta_business_manager_id]);
+  }, [editingAccount]);
 
   const handleCancelEdit = () => {
     onClearEdit?.();
     setBusinessAccountId('');
     setPhoneNumberId('');
     setAccessToken('');
-    setMetaBusinessManagerId(orgConfig?.meta_business_manager_id ?? '');
+    setMetaBusinessManagerId('');
   };
 
   const fetchPhoneNumberProfileFromMeta = async (
@@ -169,7 +169,6 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
         <Label htmlFor="business-account-id">WhatsApp Business Account ID</Label>
         <Input
           id="business-account-id"
-          placeholder="WhatsApp Business Account ID"
           value={businessAccountId}
           onChange={(e) => setBusinessAccountId(e.target.value)}
           className="bg-gray-50"
@@ -181,7 +180,6 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
         <Input
           id="access-token"
           type="password"
-          placeholder={sharedToken ? 'Kosongkan untuk pakai token bersama' : 'Access Token'}
           value={accessToken}
           onChange={(e) => setAccessToken(e.target.value)}
           className="bg-gray-50"
@@ -192,7 +190,6 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
         <Label htmlFor="meta-business-manager-id">Meta Business Manager ID</Label>
         <Input
           id="meta-business-manager-id"
-          placeholder="Contoh: 123456789012345"
           value={metaBusinessManagerId}
           onChange={(e) => setMetaBusinessManagerId(e.target.value)}
           className="bg-gray-50"
@@ -203,7 +200,6 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
         <Label htmlFor="phone-number-id">Phone Number ID</Label>
         <Input
           id="phone-number-id"
-          placeholder="From Meta WhatsApp API Setup (required for inbox)"
           value={phoneNumberId}
           onChange={(e) => setPhoneNumberId(e.target.value)}
           className="bg-gray-50"

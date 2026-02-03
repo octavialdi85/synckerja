@@ -20,7 +20,7 @@ import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
 import { useWhatsAppAccounts } from '../hooks/useWhatsAppAccounts';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { CheckCircle2, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck, RefreshCw, FileText, Pencil, HelpCircle } from 'lucide-react';
+import { CheckCircle2, Unplug, MessageCircle, Phone, Hash, Calendar, ShieldCheck, RefreshCw, FileText, Pencil } from 'lucide-react';
 import type { WhatsAppAccount } from '../types';
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -274,14 +274,6 @@ export function WhatsAppConnectPage() {
                           />
                           <div className="border-t border-slate-200 pt-6">
                             <WebhookInfoDisplay embedded />
-                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 p-3">
-                              <p className="text-sm text-amber-800 flex items-start gap-2">
-                                <HelpCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
-                                <span>
-                                  {t('whatsappConnect.inboundHint', 'Pesan masuk tidak muncul?')} Meta Developer → WhatsApp → Configuration → Webhook: set <strong>Callback URL</strong> (sama dengan di atas), <strong>Verify Token</strong> (sama dengan di atas), lalu subscribe <strong>messages</strong>. Lihat docs/whatsapp-webhook-inbound.md.
-                                </span>
-                              </p>
-                            </div>
                           </div>
                           <div className="border-t border-slate-200 pt-6">
                             <div className="flex items-center gap-2 mb-4">

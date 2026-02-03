@@ -5,17 +5,20 @@ import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '@/features/5-3-dashboard/HeaderAndTab';
 import { ConversationList } from '../components/inbox/ConversationList';
 import { ChatThread } from '../components/inbox/ChatThread';
+import { EmailChatThread } from '../components/inbox/EmailChatThread';
 import { LivechatQuickActionPanel } from '../components/inbox/LivechatQuickActionPanel';
 import { SearchConversationPopup } from '../components/inbox/SearchConversationPopup';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { useWhatsAppConversations } from '../hooks/useWhatsAppConversations';
-import type { WhatsAppConversation } from '../types';
+import { useEmailConversations } from '../hooks/useEmailConversations';
+import type { LiveChatConversation, WhatsAppConversation } from '../types';
 
 export function WhatsAppInboxPage() {
   const { t } = useAppTranslation();
   const [searchParams] = useSearchParams();
-  const { data: conversations = [] } = useWhatsAppConversations();
+  const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
+  const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isQuickActionExpanded, setIsQuickActionExpanded] = useState(true);
   const [conversationSearch, setConversationSearch] = useState('');
@@ -24,13 +27,24 @@ export function WhatsAppInboxPage() {
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
   const initialConversationId = searchParams.get('conversation');
 
-  // Ambil objek percakapan dari list yang ter-refresh (realtime/polling) agar status Unread/Resolve selalu sinkron
+  const conversations: LiveChatConversation[] = useMemo(() => {
+    const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));
+    const email: LiveChatConversation[] = emailConversations.map((c) => ({ ...c, source: 'email' as const }));
+    const merged = [...wa, ...email];
+    merged.sort((a, b) => {
+      const aAt = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bAt = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return bAt - aAt;
+    });
+    return merged;
+  }, [waConversations, emailConversations]);
+
   const selectedConversation = useMemo(
     () => (selectedId ? conversations.find((c) => c.id === selectedId) ?? null : null),
     [conversations, selectedId]
   );
 
-  const handleSelectConversation = (conv: WhatsAppConversation) => {
+  const handleSelectConversation = (conv: LiveChatConversation) => {
     setSelectedId(conv.id);
   };
 
@@ -86,6 +100,9 @@ export function WhatsAppInboxPage() {
                   </Dialog>
                   <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
                     <ConversationList
+                      conversations={conversations}
+                      isLoading={waLoading || emailLoading}
+                      error={waError ?? emailError}
                       selectedId={selectedId}
                       onSelect={handleSelectConversation}
                       initialConversationId={initialConversationId}
@@ -95,13 +112,21 @@ export function WhatsAppInboxPage() {
                 </aside>
                 {/* Tengah: chat thread */}
                 <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden" role="main">
-                  <ChatThread
-                    conversation={selectedConversation}
-                    scrollToTextInChat={scrollToTextInChat}
-                    onScrollToTextDone={() => setScrollToTextInChat(null)}
-                    scrollToMessageId={scrollToMessageId}
-                    onScrollToMessageDone={() => setScrollToMessageId(null)}
-                  />
+                  {selectedConversation?.source === 'email' ? (
+                    <EmailChatThread conversation={selectedConversation} />
+                  ) : selectedConversation ? (
+                    <ChatThread
+                      conversation={selectedConversation}
+                      scrollToTextInChat={scrollToTextInChat}
+                      onScrollToTextDone={() => setScrollToTextInChat(null)}
+                      scrollToMessageId={scrollToMessageId}
+                      onScrollToMessageDone={() => setScrollToMessageId(null)}
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-4">
+                      <p className="text-sm">{t('whatsappInbox.selectConversation', 'Pilih percakapan untuk melihat dan membalas.')}</p>
+                    </div>
+                  )}
                 </main>
                 {/* Kanan: quick action - sidebar (bisa collapse agar body chat lebih luas) */}
                 <aside
@@ -125,7 +150,7 @@ export function WhatsAppInboxPage() {
                         </button>
                       </div>
                       <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 p-4">
-                        <LivechatQuickActionPanel conversation={selectedConversation} />
+                        <LivechatQuickActionPanel conversation={selectedConversation?.source === 'whatsapp' ? selectedConversation : null} />
                       </div>
                     </>
                   ) : (

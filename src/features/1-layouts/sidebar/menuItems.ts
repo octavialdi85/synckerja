@@ -136,7 +136,7 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.operations.crm.description",
       },
       {
-        title: "Account Connect",
+        title: "Connect WhatsApp",
         titleKey: "sidebar.operations.whatsappConnect.title",
         url: "/operations/consultant/whatsapp/connect",
         description: "Configure WhatsApp Business API",
@@ -148,6 +148,13 @@ export const menuItems: MenuItem[] = [
         url: "/operations/consultant/instagram/connect",
         description: "Connect Instagram Business Account",
         descriptionKey: "sidebar.operations.instagramConnect.description",
+      },
+      {
+        title: "Connect Email",
+        titleKey: "sidebar.operations.emailConnect.title",
+        url: "/operations/consultant/email/connect",
+        description: "Connect email account for CRM",
+        descriptionKey: "sidebar.operations.emailConnect.description",
       },
       {
         title: "Livechat",

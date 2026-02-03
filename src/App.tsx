@@ -101,7 +101,7 @@ import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
-import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
+import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, EmailConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
 import { IncomeDashboard } from "./features/4-1-dashboard";
 import { IncomeTransactionPage } from "./features/4-1-transaction";
 import { ExpenseDashboard } from "./features/4_2_dashboard";
@@ -588,6 +588,11 @@ const App = () => (
               <Route path="/operations/consultant/instagram/connect" element={
                 <ProtectedRoute>
                   <InstagramConnectPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/operations/consultant/email/connect" element={
+                <ProtectedRoute>
+                  <EmailConnectPage />
                 </ProtectedRoute>
               } />
               <Route path="/operations/consultant/all/livechat" element={

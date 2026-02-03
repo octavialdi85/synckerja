@@ -5,3 +5,5 @@
 # resolve-whatsapp-media: must allow unauthenticated OPTIONS so CORS preflight from browser gets 200.
 # We validate JWT inside the function for POST requests.
 resolve-whatsapp-media.verify_jwt = false
+# whatsapp-webhook: Meta (WhatsApp/Instagram) memanggil GET/POST tanpa JWT. Verifikasi via hub.verify_token.
+whatsapp-webhook.verify_jwt = false

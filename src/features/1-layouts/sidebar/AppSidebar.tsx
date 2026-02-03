@@ -94,6 +94,7 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
         '/operations/consultant/leads-management',
         '/operations/consultant/whatsapp/connect',
         '/operations/consultant/instagram/connect',
+        '/operations/consultant/email/connect',
         '/operations/consultant/all/livechat'
       ],
       '/admin': [

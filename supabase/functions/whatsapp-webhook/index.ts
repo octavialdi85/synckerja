@@ -41,6 +41,31 @@ const META_GRAPH_BASE = "https://graph.facebook.com/v18.0";
 /** Same bucket as outbound sends (ChatThread) – satu bucket untuk kirim & terima media */
 const WHATSAPP_MEDIA_BUCKET = "whatsapp-media";
 
+/** Fetch Instagram user profile (name, username) via Meta User Profile API. Returns display name or error. */
+async function fetchInstagramUserDisplayName(
+  igScopedUserId: string,
+  accessToken: string
+): Promise<{ name: string } | { error: string }> {
+  try {
+    const url = `${META_GRAPH_BASE}/${encodeURIComponent(igScopedUserId)}?fields=name,username`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = (await res.json().catch(() => ({}))) as { name?: string; username?: string; error?: { message?: string; code?: number } };
+    if (data?.error) {
+      const errMsg = data.error.message ?? JSON.stringify(data.error);
+      return { error: errMsg };
+    }
+    const name = typeof data?.name === "string" ? data.name.trim() : null;
+    const username = typeof data?.username === "string" ? data.username.trim() : null;
+    if (name) return { name };
+    if (username) return { name: `@${username}` };
+    return { error: "no name or username in response" };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "fetch failed" };
+  }
+}
+
 /** Frasa + kata satuan yang mengindikasikan permintaan kontak. On/off via env WHATSAPP_BLOCK_CONTACT_REQUESTS. */
 const CONTACT_REQUEST_PHRASES: readonly string[] = [
   "nomor", "wa", "whatsapp", "hp", "telepon", "telpon", "tlp", "tlpn", "telephone", "email", "kontak", "contact",
@@ -156,6 +181,10 @@ async function resolveInboundMediaUrl(
 }
 
 Deno.serve(async (req: Request) => {
+  // Log every request immediately so Dashboard shows activity (Meta GET verification + POST webhooks)
+  const url = new URL(req.url);
+  console.log("whatsapp-webhook request:", req.method, url.pathname, req.method === "GET" ? "query=" + url.searchParams.toString().slice(0, 80) : "");
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -167,15 +196,16 @@ Deno.serve(async (req: Request) => {
     );
 
     if (req.method === "GET") {
-      const url = new URL(req.url);
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
 
       if (mode !== "subscribe" || !token || !challenge) {
+        console.log("Webhook GET: verification missing params", { mode, hasToken: !!token, hasChallenge: !!challenge });
         return new Response("Missing params", { status: 400, headers: corsHeaders });
       }
 
+      console.log("Webhook GET: verification (hub.mode=subscribe), checking verify_token...");
       const { data: config, error } = await supabase
         .from("organization_meta_config")
         .select("id")
@@ -184,10 +214,11 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (error || !config) {
-        console.error("Verify token not found:", error);
+        console.error("Webhook GET: Verify token not found or DB error", error ?? "no matching config");
         return new Response("Forbidden", { status: 403, headers: corsHeaders });
       }
 
+      console.log("Webhook GET: verification success, returning challenge");
       return new Response(challenge, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/plain" },
@@ -649,25 +680,66 @@ Deno.serve(async (req: Request) => {
               const orgId = config.organization_id;
               const lastBody = bodyText.slice(0, 200);
 
-              const convPayload: Record<string, unknown> = {
-                organization_id: orgId,
-                customer_wa_id: customerExternalId,
-                customer_external_id: customerExternalId,
-                channel: "instagram",
-                last_message_at: timestamp,
-                last_message_body: lastBody,
-                updated_at: timestamp,
-              };
-
-              const { data: conv, error: convError } = await supabase
+              // Table has partial unique index (org, customer_wa_id) WHERE channel='instagram', not a full constraint,
+              // so ON CONFLICT is not usable. Do select-then-insert-or-update instead.
+              const { data: existingConv } = await supabase
                 .from("whatsapp_conversations")
-                .upsert(convPayload, { onConflict: "organization_id,customer_wa_id", ignoreDuplicates: false })
-                .select("id")
-                .single();
+                .select("id, customer_name")
+                .eq("organization_id", orgId)
+                .eq("customer_wa_id", customerExternalId)
+                .or("channel.eq.instagram,channel.is.null")
+                .maybeSingle();
 
-              if (convError || !conv) {
-                console.error("Instagram webhook: conversation upsert error", convError);
-                continue;
+              let conv: { id: string } | null = null;
+              let needsCustomerName = false;
+              if (existingConv?.id) {
+                const currentName = (existingConv as { customer_name?: string }).customer_name?.trim() ?? "";
+                needsCustomerName = !currentName || currentName === "Instagram User";
+                const { error: updateErr } = await supabase
+                  .from("whatsapp_conversations")
+                  .update({
+                    last_message_at: timestamp,
+                    last_message_body: lastBody,
+                    updated_at: timestamp,
+                  })
+                  .eq("id", existingConv.id);
+                if (!updateErr) conv = { id: existingConv.id };
+              }
+              if (!conv) {
+                needsCustomerName = true;
+                const { data: inserted, error: insertErr } = await supabase
+                  .from("whatsapp_conversations")
+                  .insert({
+                    organization_id: orgId,
+                    customer_wa_id: customerExternalId,
+                    customer_external_id: customerExternalId,
+                    channel: "instagram",
+                    last_message_at: timestamp,
+                    last_message_body: lastBody,
+                    updated_at: timestamp,
+                  })
+                  .select("id")
+                  .single();
+                if (insertErr || !inserted) {
+                  console.error("Instagram webhook: conversation insert/update error", insertErr ?? "no row");
+                  continue;
+                }
+                conv = inserted;
+              }
+
+              // Tarik nama real dari Meta User Profile API agar tampil nama akun (bukan nomor/****)
+              if (needsCustomerName && config.meta_access_token) {
+                const profileResult = await fetchInstagramUserDisplayName(customerExternalId, config.meta_access_token);
+                if ("name" in profileResult && profileResult.name) {
+                  await supabase
+                    .from("whatsapp_conversations")
+                    .update({ customer_name: profileResult.name, updated_at: timestamp })
+                    .eq("id", conv.id);
+                  console.log("Instagram webhook: customer_name updated", { conversationId: conv.id, displayName: profileResult.name });
+                } else {
+                  const errMsg = "error" in profileResult ? profileResult.error : "no name";
+                  console.warn("Instagram webhook: profile API could not get name", { conversationId: conv.id, customerId: customerExternalId.slice(0, 8) + "...", reason: errMsg });
+                }
               }
 
               const messageType = attachments.length > 0

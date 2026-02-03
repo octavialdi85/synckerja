@@ -397,6 +397,13 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     defaultRoles: ['owner', 'admin', 'employee']
   },
   {
+    path: '/operations/consultant/email/connect',
+    requiresAuth: true,
+    requiresPermissions: true,
+    description: 'Connect Email account for CRM',
+    defaultRoles: ['owner', 'admin', 'employee']
+  },
+  {
     path: '/operations/consultant/all/livechat',
     requiresAuth: true,
     requiresPermissions: true,

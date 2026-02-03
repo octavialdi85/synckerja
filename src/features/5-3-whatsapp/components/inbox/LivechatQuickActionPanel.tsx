@@ -24,7 +24,10 @@ function maskPhoneLast4(phone: string | null | undefined): string {
   return s.slice(0, -4) + '****';
 }
 
-function getLeadTitle(conv: WhatsAppConversation): string {
+function getLeadTitle(conv: WhatsAppConversation, t: (key: string, fallback?: string) => string): string {
+  if (conv.channel === 'instagram' && !conv.customer_name?.trim()) {
+    return t('whatsappInbox.instagramContact', 'Kontak Instagram');
+  }
   return conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown';
 }
 
@@ -182,7 +185,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   }
 
   const leadId = `wa-${conversation.id}`;
-  const leadTitle = getLeadTitle(conversation);
+  const leadTitle = getLeadTitle(conversation, t);
   const currentStatusId = conversationStatus ?? (leadStatuses.length > 0 ? leadStatuses[0].id : '');
   const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
   const isResolved = currentStatus?.name?.trim().toLowerCase() === 'closed';

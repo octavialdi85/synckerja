@@ -596,7 +596,9 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
 
     const replySender =
       replyTo?.direction === 'inbound'
-        ? (conversation?.customer_name || maskPhoneLast4(conversation?.customer_wa_id) || '')
+        ? (conversation?.channel === 'instagram' && !conversation?.customer_name?.trim()
+          ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
+          : (conversation?.customer_name || maskPhoneLast4(conversation?.customer_wa_id) || ''))
         : replyTo?.direction === 'outbound'
           ? t('whatsappInbox.you', 'You')
           : '';
@@ -696,9 +698,11 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
       <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 min-h-[60px] border-b border-gray-200 bg-[#f0f2f5]">
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-gray-900 truncate">
-            {conversation.customer_name || maskPhoneLast4(conversation.customer_wa_id) || 'Unknown'}
+            {conversation.channel === 'instagram' && !conversation.customer_name?.trim()
+              ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
+              : (conversation.customer_name || maskPhoneLast4(conversation.customer_wa_id) || 'Unknown')}
           </h3>
-          {conversation.customer_name && (
+          {conversation.customer_name && conversation.channel !== 'instagram' && (
             <p className="text-xs text-gray-500 truncate">{maskPhoneLast4(conversation.customer_wa_id)}</p>
           )}
         </div>
@@ -1052,7 +1056,9 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-[#128C7E]">
                 {replyTo.direction === 'inbound'
-                  ? (conversation?.customer_name ?? maskPhoneLast4(conversation?.customer_wa_id) ?? 'Contact')
+                  ? (conversation?.channel === 'instagram' && !conversation?.customer_name?.trim()
+                    ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
+                    : (conversation?.customer_name ?? maskPhoneLast4(conversation?.customer_wa_id) ?? 'Contact'))
                   : t('whatsappInbox.you', 'You')}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 text-sm text-gray-700 min-w-0">

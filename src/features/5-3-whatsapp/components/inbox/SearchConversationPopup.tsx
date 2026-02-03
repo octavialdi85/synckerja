@@ -173,7 +173,7 @@ export function SearchConversationPopup({
     <ul className="divide-y divide-gray-100 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[min(50vh,320px)] min-h-0">
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
-        const displayName = conv ? (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown') : '—';
+        const displayName = conv ? (conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown')) : '—';
         const body = row.body ?? '';
         const isOutbound = row.direction === 'outbound';
         return (
@@ -219,7 +219,7 @@ export function SearchConversationPopup({
       ) : (
         filteredConversations.map((conv) => {
           const unread = unreadByConversation[conv.id] ?? 0;
-          const displayName = conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown';
+          const displayName = conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
           const isSelected = selectedId === conv.id;
           const lastBody = conv.last_message_body ?? '';
           const showHighlight = searchQuery.trim() && lastBody.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -285,7 +285,7 @@ export function SearchConversationPopup({
     <ul className="divide-y divide-gray-100 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[min(50vh,320px)] min-h-0">
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
-        const displayName = conv ? (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown') : '—';
+        const displayName = conv ? (conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown')) : '—';
         const body = row.body ?? '';
         const isOutbound = row.direction === 'outbound';
         return (
@@ -319,7 +319,7 @@ export function SearchConversationPopup({
       })}
       {contactMatchesNotInMessageResults.map((conv) => {
         const unread = unreadByConversation[conv.id] ?? 0;
-        const displayName = conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown';
+        const displayName = conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
         const isSelected = selectedId === conv.id;
         const lastBody = conv.last_message_body ?? '';
         const showHighlight = searchQuery.trim() && lastBody.toLowerCase().includes(searchQuery.trim().toLowerCase());

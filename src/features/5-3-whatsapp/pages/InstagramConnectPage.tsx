@@ -6,6 +6,7 @@ import { Button } from '@/features/ui/button';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
+import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
 import { Instagram, CheckCircle2, Unplug, Loader2, Facebook } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -144,7 +145,7 @@ export function InstagramConnectPage() {
                             </div>
                             <div>
                               <h2 className="text-xl font-bold text-[#E4405F]">{t('instagramConnect.leftTitle', 'Connect Instagram')}</h2>
-                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescription', 'Connect with Facebook to authorize, or use token from Account Connect (WhatsApp).')}</p>
+                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescription', 'Connect with Facebook to authorize, or use token from Connect WhatsApp.')}</p>
                             </div>
                           </div>
                         </CardHeader>
@@ -170,8 +171,8 @@ export function InstagramConnectPage() {
                               )}
                               <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800">
                                 {hasOAuth
-                                  ? t('instagramConnect.noMetaConfigOrOAuth', 'Or connect Account Connect (WhatsApp) first to use a manual token.')
-                                  : t('instagramConnect.noMetaConfig', 'Connect Account Connect (WhatsApp) first so the Meta token is available, or set VITE_META_APP_ID for OAuth.')}
+                                  ? t('instagramConnect.noMetaConfigOrOAuth', 'Or open Connect WhatsApp first to use a manual token.')
+                                  : t('instagramConnect.noMetaConfig', 'Open Connect WhatsApp first so the Meta token is available, or set VITE_META_APP_ID for OAuth.')}
                               </div>
                             </div>
                           ) : (
@@ -194,6 +195,9 @@ export function InstagramConnectPage() {
                               </Button>
                             )
                           )}
+                          <div className="border-t border-slate-200 pt-4 mt-4">
+                            <WebhookInfoDisplay embedded />
+                          </div>
                         </CardContent>
                       </Card>
 
@@ -217,6 +221,7 @@ export function InstagramConnectPage() {
                               </p>
                             </div>
                           ) : (
+                            <>
                             <div className="space-y-4">
                               <div className="rounded-xl border border-purple-200/70 bg-purple-50/60 p-5 shadow-sm">
                                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -253,6 +258,7 @@ export function InstagramConnectPage() {
                                 </div>
                               </div>
                             </div>
+                            </>
                           )}
                         </CardContent>
                       </Card>
