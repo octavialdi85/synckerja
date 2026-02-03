@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppConversations } from '../../hooks/useWhatsAppConversations';
-import { useWhatsAppConfig } from '../../hooks/useWhatsAppConfig';
 import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadByConversation';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,9 +56,7 @@ export function ConversationList({ selectedId, onSelect, initialConversationId, 
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { data: conversations = [], isLoading, error } = useWhatsAppConversations();
-  const { config: whatsappConfig } = useWhatsAppConfig();
   const { unreadByConversation, markConversationRead } = useWhatsAppUnreadByConversation();
-  const businessName = whatsappConfig?.whatsapp_business_name ?? whatsappConfig?.display_phone_number ?? null;
 
   const filteredConversations = React.useMemo(() => {
     if (!searchQuery.trim()) return conversations;
@@ -185,7 +182,7 @@ export function ConversationList({ selectedId, onSelect, initialConversationId, 
               ) : (
                 <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
               )}
-              {(businessName || conv.channel) ? (
+              {(conv.whatsapp_account_display_name ?? conv.channel) ? (
                 <span className="flex items-center gap-1.5 shrink-0 min-w-0">
                   <span
                     className={conv.channel === 'instagram' ? 'w-4 h-4 shrink-0 text-[#E4405F]' : 'w-4 h-4 shrink-0 text-[#25D366]'}
@@ -194,8 +191,8 @@ export function ConversationList({ selectedId, onSelect, initialConversationId, 
                   >
                     <ChannelIcon channel={(conv.channel ?? 'whatsapp') as 'whatsapp' | 'instagram'} className="w-4 h-4" />
                   </span>
-                  <span className="text-xs text-gray-400 truncate max-w-[100px]" title={businessName ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
-                    {businessName ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
+                  <span className="text-xs text-gray-400 truncate max-w-[100px]" title={conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
+                    {conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
                   </span>
                 </span>
               ) : null}

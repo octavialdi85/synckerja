@@ -435,6 +435,48 @@ export interface Database {
         }
         Relationships: []
       }
+      organization_whatsapp_accounts: {
+        Row: {
+          id: string
+          organization_id: string
+          whatsapp_business_account_id: string
+          phone_number_id: string
+          meta_access_token: string | null
+          display_phone_number: string | null
+          whatsapp_business_name: string | null
+          name_status: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          whatsapp_business_account_id: string
+          phone_number_id: string
+          meta_access_token?: string | null
+          display_phone_number?: string | null
+          whatsapp_business_name?: string | null
+          name_status?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          whatsapp_business_account_id?: string
+          phone_number_id?: string
+          meta_access_token?: string | null
+          display_phone_number?: string | null
+          whatsapp_business_name?: string | null
+          name_status?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_conversations: {
         Row: {
           id: string
@@ -442,6 +484,7 @@ export interface Database {
           customer_wa_id: string
           customer_name: string | null
           last_message_at: string | null
+          phone_number_id: string | null
           created_at: string
           updated_at: string
         }
@@ -451,6 +494,7 @@ export interface Database {
           customer_wa_id: string
           customer_name?: string | null
           last_message_at?: string | null
+          phone_number_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -460,6 +504,7 @@ export interface Database {
           customer_wa_id?: string
           customer_name?: string | null
           last_message_at?: string | null
+          phone_number_id?: string | null
           created_at?: string
           updated_at?: string
         }

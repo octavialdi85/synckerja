@@ -177,6 +177,50 @@ export function useWhatsAppConfig() {
     },
   });
 
+  /** Ensure org has meta_config row with verify_token (and optional shared token). For multi-account connect page. */
+  const ensureOrgMetaConfigMutation = useMutation({
+    mutationFn: async (payload: { verify_token?: string | null; meta_business_manager_id?: string | null; meta_access_token?: string | null }) => {
+      if (!organizationId) throw new Error('No organization selected');
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: existing } = await supabase
+        .from('organization_meta_config')
+        .select('id, verify_token, meta_access_token, meta_business_manager_id')
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+      const existingConfig = existing as WhatsAppConfig | null;
+      const existingVerify = existingConfig?.verify_token?.trim() ?? '';
+      // Verify token unik per organisasi: gunakan yang ada, atau dari payload, atau generate baru (berbeda per org)
+      let verifyToken = existingVerify || payload.verify_token?.trim() || '';
+      if (!verifyToken) {
+        const orgPart = organizationId.replace(/-/g, '').slice(0, 8);
+        const randomPart = Math.random().toString(36).slice(2, 18);
+        verifyToken = `wa_${orgPart}_${randomPart}`;
+      }
+      const metaToken = payload.meta_access_token?.trim() || existingConfig?.meta_access_token || '';
+      const metaBmId = payload.meta_business_manager_id?.trim() || existingConfig?.meta_business_manager_id || null;
+      const row = {
+        organization_id: organizationId,
+        verify_token: verifyToken,
+        meta_access_token: metaToken || existingConfig?.meta_access_token || '',
+        meta_business_manager_id: metaBmId,
+        whatsapp_business_account_id: existingConfig?.whatsapp_business_account_id ?? '',
+        phone_number_id: existingConfig?.phone_number_id ?? null,
+        updated_at: new Date().toISOString(),
+        ...(user?.id && { created_by: user.id }),
+      };
+      const { data, error } = await supabase
+        .from('organization_meta_config')
+        .upsert(row, { onConflict: 'organization_id', ignoreDuplicates: false })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as WhatsAppConfig;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config', organizationId] });
+    },
+  });
+
   return {
     config: query.data ?? null,
     isLoading: query.isLoading,
@@ -190,5 +234,6 @@ export function useWhatsAppConfig() {
     updateDisplayPhone: updateDisplayPhoneMutation.mutateAsync,
     updateInstagram: updateInstagramMutation.mutateAsync,
     isUpdatingInstagram: updateInstagramMutation.isPending,
+    ensureOrgMetaConfig: ensureOrgMetaConfigMutation.mutateAsync,
   };
 }

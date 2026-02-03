@@ -156,7 +156,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: conv } = await supabase
       .from("whatsapp_conversations")
-      .select("organization_id")
+      .select("organization_id, phone_number_id")
       .eq("id", message.conversation_id)
       .single();
 
@@ -181,20 +181,32 @@ Deno.serve(async (req: Request) => {
       return ok({ error: "No media id in message" });
     }
 
-    const { data: config, error: configError } = await supabase
-      .from("organization_meta_config")
-      .select("meta_access_token")
-      .eq("organization_id", orgId)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (configError || !config?.meta_access_token) {
+    let accessToken: string | null = null;
+    if (conv.phone_number_id) {
+      const { data: accountRow } = await supabase
+        .from("organization_whatsapp_accounts")
+        .select("meta_access_token")
+        .eq("organization_id", orgId)
+        .eq("phone_number_id", conv.phone_number_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      accessToken = (accountRow?.meta_access_token ?? "").trim() || null;
+    }
+    if (!accessToken) {
+      const { data: orgMeta } = await supabase
+        .from("organization_meta_config")
+        .select("meta_access_token")
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      accessToken = (orgMeta?.meta_access_token ?? "").trim() || null;
+    }
+    if (!accessToken) {
       return ok({ error: "WhatsApp not configured" });
     }
 
     const result = await resolveMediaUrl(
       mediaInfo.id,
-      config.meta_access_token,
+      accessToken,
       supabase,
       message.conversation_id,
       (message.wa_message_id ?? message.id) as string,

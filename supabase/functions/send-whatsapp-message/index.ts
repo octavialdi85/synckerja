@@ -33,13 +33,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseWithUser = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabaseWithUser.auth.getUser(token);
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
@@ -47,7 +46,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("active_organization_id")
       .eq("user_id", user.id)
@@ -88,49 +87,74 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Resolve org with WhatsApp config: use active org if it has config, else find first user org that has config
-    const { data: userOrgs } = await supabase
-      .from("user_organizations")
-      .select("organization_id")
-      .eq("user_id", user.id);
-    const orgIds = (userOrgs ?? []).map((r: { organization_id: string }) => r.organization_id);
-
+    // Resolve config: when conversationId given, use that conversation's phone_number_id + org → organization_whatsapp_accounts (admin client so RLS does not block)
     let config: { meta_access_token: string; phone_number_id: string } | null = null;
     let resolvedOrgId: string | null = null;
 
-    const tryOrg = async (oid: string) => {
-      const { data, error } = await supabase
-        .from("organization_meta_config")
+    const tryAccount = async (oid: string, pnId: string | null) => {
+      const base = supabaseAdmin
+        .from("organization_whatsapp_accounts")
         .select("meta_access_token, phone_number_id")
         .eq("organization_id", oid)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (!error && data?.meta_access_token?.trim() && data?.phone_number_id?.trim()) return { config: data, orgId: oid };
+        .eq("is_active", true);
+      const q = pnId ? base.eq("phone_number_id", pnId) : base.limit(1);
+      const { data: rows, error } = await q;
+      const data = Array.isArray(rows) ? rows[0] : null;
+      if (!error && data?.phone_number_id) {
+        let accessToken = (data.meta_access_token ?? "").trim();
+        if (!accessToken) {
+          const { data: orgMeta } = await supabaseAdmin.from("organization_meta_config").select("meta_access_token").eq("organization_id", oid).maybeSingle();
+          accessToken = (orgMeta?.meta_access_token ?? "").trim();
+        }
+        if (accessToken) return { config: { meta_access_token: accessToken, phone_number_id: data.phone_number_id }, orgId: oid };
+      }
       return null;
     };
 
-    if (orgId) {
-      const current = await tryOrg(orgId);
-      if (current) {
-        config = current.config;
-        resolvedOrgId = current.orgId;
-      }
-    }
-    if (!config && orgIds.length > 0) {
-      for (const oid of orgIds) {
-        if (oid === orgId) continue;
-        const current = await tryOrg(oid);
+    if (conversationId) {
+      const { data: convRow } = await supabaseAdmin
+        .from("whatsapp_conversations")
+        .select("organization_id, phone_number_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (convRow?.organization_id) {
+        const pnId = convRow.phone_number_id != null ? String(convRow.phone_number_id).trim() || null : null;
+        const current = pnId
+          ? await tryAccount(convRow.organization_id, pnId)
+          : await tryAccount(convRow.organization_id, null);
         if (current) {
           config = current.config;
           resolvedOrgId = current.orgId;
-          if (!orgId) {
-            await supabase.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
-            orgId = oid;
-          }
-          break;
         }
       }
     }
+
+    if (!config || !resolvedOrgId) {
+      const { data: userOrgs } = await supabaseAdmin
+        .from("user_organizations")
+        .select("organization_id")
+        .eq("user_id", user.id);
+      const orgIds = (userOrgs ?? []).map((r: { organization_id: string }) => r.organization_id);
+      if (orgId) {
+        const current = await tryAccount(orgId, null);
+        if (current) {
+          config = current.config;
+          resolvedOrgId = current.orgId;
+        }
+      }
+      if (!config && orgIds.length > 0) {
+        for (const oid of orgIds) {
+          if (oid === orgId) continue;
+          const current = await tryAccount(oid, null);
+          if (current) {
+            config = current.config;
+            resolvedOrgId = current.orgId;
+            break;
+          }
+        }
+      }
+    }
+
     if (!config || !resolvedOrgId) {
       return new Response(
         JSON.stringify({
@@ -142,17 +166,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    orgId = resolvedOrgId;
-
     if (conversationId) {
-      const { data: convRow } = await supabase
+      const { data: convRow } = await supabaseAdmin
         .from("whatsapp_conversations")
         .select("lead_status_id")
         .eq("id", conversationId)
         .maybeSingle();
       const leadStatusId = convRow?.lead_status_id ?? null;
       if (leadStatusId) {
-        const { data: statusRow } = await supabase
+        const { data: statusRow } = await supabaseAdmin
           .from("lead_statuses")
           .select("name")
           .eq("id", leadStatusId)
@@ -246,7 +268,7 @@ Deno.serve(async (req: Request) => {
         reply_to_sender: replyToSender ?? null,
       };
       if (hasMedia && mediaLink) insertPayload.media_url = mediaLink;
-      const { data: insertedMessage, error: insertError } = await supabase
+      const { data: insertedMessage, error: insertError } = await supabaseAdmin
         .from("whatsapp_messages")
         .insert(insertPayload)
         .select()
@@ -254,7 +276,7 @@ Deno.serve(async (req: Request) => {
       if (insertError) {
         console.error("whatsapp_messages insert error:", insertError);
       }
-      const { data: convBefore } = await supabase
+      const { data: convBefore } = await supabaseAdmin
         .from("whatsapp_conversations")
         .select("lead_status_id")
         .eq("id", conversationId)
@@ -262,7 +284,7 @@ Deno.serve(async (req: Request) => {
       const statusIdBefore = convBefore?.lead_status_id ?? null;
       let statusNameBefore: string | null = null;
       if (statusIdBefore) {
-        const { data: st } = await supabase
+        const { data: st } = await supabaseAdmin
           .from("lead_statuses")
           .select("name")
           .eq("id", statusIdBefore)
@@ -270,7 +292,7 @@ Deno.serve(async (req: Request) => {
         statusNameBefore = (st?.name as string) ?? null;
       }
 
-      await supabase
+      await supabaseAdmin
         .from("whatsapp_conversations")
         .update({
           last_message_at: now,
@@ -280,20 +302,20 @@ Deno.serve(async (req: Request) => {
         .eq("id", conversationId);
 
       if (statusNameBefore?.trim().toLowerCase() === "open") {
-        const { data: inProgressStatus } = await supabase
+        const { data: inProgressStatus } = await supabaseAdmin
           .from("lead_statuses")
           .select("id")
           .eq("name", "In Progress")
           .maybeSingle();
         console.log("Unread→On Going:", { conversationId, statusNameBefore, inProgressId: inProgressStatus?.id ?? "MISSING" });
         if (inProgressStatus?.id) {
-          const { error: updateErr } = await supabase
+          const { error: updateErr } = await supabaseAdmin
             .from("whatsapp_conversations")
             .update({ lead_status_id: inProgressStatus.id, updated_at: now })
             .eq("id", conversationId);
           if (updateErr) console.error("Update to In Progress (On Going) failed:", updateErr);
           else console.log("Status updated to On Going:", conversationId);
-          const { data: currentCycle } = await supabase
+          const { data: currentCycle } = await supabaseAdmin
             .from("whatsapp_conversation_cycles")
             .select("id")
             .eq("conversation_id", conversationId)
@@ -302,7 +324,7 @@ Deno.serve(async (req: Request) => {
             .limit(1)
             .maybeSingle();
           if (currentCycle?.id) {
-            await supabase
+            await supabaseAdmin
               .from("whatsapp_conversation_cycles")
               .update({ first_response_at: now, updated_at: now })
               .eq("id", currentCycle.id);

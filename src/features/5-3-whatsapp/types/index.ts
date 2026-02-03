@@ -39,6 +39,31 @@ export interface WhatsAppConfigUpsert {
   whatsapp_business_name?: string | null;
 }
 
+/** Single WhatsApp Business API account (multi-account: max 3 per org). DB: organization_whatsapp_accounts.phone_number_id is NOT NULL. */
+export interface WhatsAppAccount {
+  id: string;
+  organization_id: string;
+  whatsapp_business_account_id: string;
+  /** Required; column is NOT NULL in organization_whatsapp_accounts. */
+  phone_number_id: string;
+  meta_access_token: string | null;
+  display_phone_number: string | null;
+  whatsapp_business_name: string | null;
+  name_status: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppAccountUpsert {
+  whatsapp_business_account_id: string;
+  phone_number_id: string;
+  /** Optional: use shared org token when empty. */
+  meta_access_token?: string | null;
+  display_phone_number?: string | null;
+  whatsapp_business_name?: string | null;
+}
+
 export interface WhatsAppConversation {
   id: string;
   organization_id: string;
@@ -55,6 +80,10 @@ export interface WhatsAppConversation {
   lead_status_name?: string | null;
   /** Channel sumber: 'whatsapp' | 'instagram'. Untuk live chat unified inbox. */
   channel?: string | null;
+  /** WhatsApp Phone Number ID for channel=whatsapp; for multi-account indicator. */
+  phone_number_id?: string | null;
+  /** Display name of the WhatsApp account (for inbox indicator). */
+  whatsapp_account_display_name?: string | null;
   created_at: string;
   updated_at: string;
 }

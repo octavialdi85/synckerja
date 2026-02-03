@@ -32,13 +32,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseWithUser = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabaseWithUser.auth.getUser(token);
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
@@ -46,7 +45,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: profile } = await supabase
+    const body = await req.json().catch(() => ({})) as { phone_number_id?: string };
+    const bodyPhoneNumberId = body?.phone_number_id != null ? String(body.phone_number_id).trim() || null : null;
+
+    const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("active_organization_id")
       .eq("user_id", user.id)
@@ -54,8 +56,7 @@ Deno.serve(async (req: Request) => {
 
     let orgId = profile?.active_organization_id ?? null;
 
-    // Resolve org with WhatsApp config: use active org if it has config, else find first user org that has config
-    const { data: userOrgs } = await supabase
+    const { data: userOrgs } = await supabaseAdmin
       .from("user_organizations")
       .select("organization_id")
       .eq("user_id", user.id);
@@ -64,18 +65,52 @@ Deno.serve(async (req: Request) => {
     let config: { meta_access_token: string; phone_number_id: string; whatsapp_business_account_id?: string } | null = null;
     let resolvedOrgId: string | null = null;
 
-    const tryOrg = async (oid: string) => {
-      const { data, error } = await supabase
-        .from("organization_meta_config")
+    const tryAccount = async (oid: string, pnId: string | null) => {
+      const base = supabaseAdmin
+        .from("organization_whatsapp_accounts")
         .select("meta_access_token, phone_number_id, whatsapp_business_account_id")
         .eq("organization_id", oid)
-        .maybeSingle();
-      if (!error && data?.meta_access_token?.trim() && data?.phone_number_id?.trim()) return { config: data, orgId: oid };
+        .eq("is_active", true);
+      const q = pnId ? base.eq("phone_number_id", pnId) : base.limit(1);
+      const { data: rows, error } = await q;
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!error && row?.phone_number_id) {
+        let accessToken = (row.meta_access_token ?? "").trim();
+        if (!accessToken) {
+          const { data: orgMeta } = await supabaseAdmin.from("organization_meta_config").select("meta_access_token").eq("organization_id", oid).maybeSingle();
+          accessToken = (orgMeta?.meta_access_token ?? "").trim();
+        }
+        if (accessToken) return { config: { ...row, meta_access_token: accessToken }, orgId: oid };
+      }
       return null;
     };
 
-    if (orgId) {
-      const current = await tryOrg(orgId);
+    if (bodyPhoneNumberId && orgIds.length > 0) {
+      if (orgId) {
+        const current = await tryAccount(orgId, bodyPhoneNumberId);
+        if (current) {
+          config = current.config;
+          resolvedOrgId = current.orgId;
+        }
+      }
+      if (!config) {
+        for (const oid of orgIds) {
+          if (oid === orgId) continue;
+          const current = await tryAccount(oid, bodyPhoneNumberId);
+          if (current) {
+            config = current.config;
+            resolvedOrgId = current.orgId;
+            if (!orgId) {
+              await supabaseAdmin.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
+              orgId = oid;
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (!config && orgId) {
+      const current = await tryAccount(orgId, null);
       if (current) {
         config = current.config;
         resolvedOrgId = current.orgId;
@@ -84,29 +119,28 @@ Deno.serve(async (req: Request) => {
     if (!config && orgIds.length > 0) {
       for (const oid of orgIds) {
         if (oid === orgId) continue;
-        const current = await tryOrg(oid);
+        const current = await tryAccount(oid, null);
         if (current) {
           config = current.config;
           resolvedOrgId = current.orgId;
           if (!orgId) {
-            await supabase.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
+            await supabaseAdmin.from("profiles").update({ active_organization_id: oid }).eq("user_id", user.id);
             orgId = oid;
           }
           break;
         }
       }
     }
-    if (!config && !resolvedOrgId && orgId) {
-      return new Response(JSON.stringify({ error: "WhatsApp not configured or missing Phone Number ID" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     if (!config || !resolvedOrgId) {
-      return new Response(JSON.stringify({ error: "No active organization or WhatsApp not configured" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const hint = !bodyPhoneNumberId
+        ? "Kirim phone_number_id di body (dari akun yang terhubung)."
+        : orgIds.length === 0
+          ? "User belum tergabung organisasi. Pilih organisasi di pengaturan."
+          : "Akun WhatsApp tidak ditemukan untuk organisasi Anda. Pastikan akun sudah tersimpan di halaman Connect.";
+      return new Response(
+        JSON.stringify({ error: "WhatsApp not configured or missing Phone Number ID", hint }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     orgId = resolvedOrgId;
@@ -200,10 +234,11 @@ Deno.serve(async (req: Request) => {
     };
     if (displayPhone) updatePayload.display_phone_number = displayPhone;
 
-    const { error: updateError } = await supabase
-      .from("organization_meta_config")
+    const { error: updateError } = await supabaseAdmin
+      .from("organization_whatsapp_accounts")
       .update(updatePayload)
-      .eq("organization_id", orgId);
+      .eq("organization_id", orgId)
+      .eq("phone_number_id", phoneNumberId);
 
     if (updateError) {
       return new Response(JSON.stringify({ error: "Failed to update name" }), {

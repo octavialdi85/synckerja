@@ -206,7 +206,8 @@ Deno.serve(async (req: Request) => {
           for (const change of changes) {
             if (change.field === "messages") {
               const value = change.value ?? {};
-              const phoneNumberId = value.metadata?.phone_number_id ?? value.phone_number_id;
+              const rawPhoneNumberId = value.metadata?.phone_number_id ?? value.phone_number_id;
+              const phoneNumberId = rawPhoneNumberId != null ? String(rawPhoneNumberId).trim() || null : null;
               const contacts = value.contacts ?? [];
               const messages = value.messages ?? [];
               const statuses = value.statuses ?? [];
@@ -225,31 +226,64 @@ Deno.serve(async (req: Request) => {
 
               if (!phoneNumberId || messages.length === 0) continue;
 
-              const { data: config, error: configError } = await supabase
-                .from("organization_meta_config")
+              // Resolve org + token: organization_whatsapp_accounts first, then fallback organization_meta_config (legacy)
+              let orgId: string | null = null;
+              let accessToken = "";
+
+              const { data: accountRow, error: accountError } = await supabase
+                .from("organization_whatsapp_accounts")
                 .select("organization_id, meta_access_token")
                 .eq("phone_number_id", phoneNumberId)
                 .eq("is_active", true)
                 .maybeSingle();
 
-              if (configError || !config) {
-                console.error("Config not found for phone_number_id:", phoneNumberId, configError);
+              if (!accountError && accountRow) {
+                orgId = accountRow.organization_id;
+                accessToken = (accountRow.meta_access_token ?? "").trim();
+              }
+
+              if (!orgId || !accessToken) {
+                const { data: metaRow, error: metaError } = await supabase
+                  .from("organization_meta_config")
+                  .select("organization_id, meta_access_token, phone_number_id")
+                  .eq("phone_number_id", phoneNumberId)
+                  .eq("is_active", true)
+                  .maybeSingle();
+                if (!metaError && metaRow?.organization_id) {
+                  orgId = metaRow.organization_id;
+                  accessToken = (metaRow.meta_access_token ?? "").trim();
+                }
+              }
+
+              if (!orgId || !accessToken) {
+                console.error("Config not found for phone_number_id:", phoneNumberId, accountError ?? null);
                 continue;
               }
 
-              const orgId = config.organization_id;
-              const accessToken = config.meta_access_token ?? "";
+              if (!accessToken) {
+                const { data: orgConfig } = await supabase
+                  .from("organization_meta_config")
+                  .select("meta_access_token")
+                  .eq("organization_id", orgId)
+                  .maybeSingle();
+                accessToken = (orgConfig?.meta_access_token ?? "").trim();
+              }
+              if (!accessToken) {
+                console.error("No token for org/phone_number_id:", orgId, phoneNumberId);
+                continue;
+              }
 
-              // Backfill display_phone_number from webhook metadata (works in dev & live; Meta sends it in every message)
+              // Backfill display_phone_number on organization_whatsapp_accounts from webhook metadata
               const rawDisplayNumber = value.metadata?.display_phone_number;
               if (rawDisplayNumber != null) {
                 let displayNumber = typeof rawDisplayNumber === "number" ? String(rawDisplayNumber) : (typeof rawDisplayNumber === "string" ? rawDisplayNumber.trim() : "");
                 if (displayNumber && /^\d+$/.test(displayNumber)) displayNumber = `+${displayNumber}`;
                 if (displayNumber) {
                   await supabase
-                    .from("organization_meta_config")
+                    .from("organization_whatsapp_accounts")
                     .update({ display_phone_number: displayNumber, updated_at: new Date().toISOString() })
-                    .eq("organization_id", orgId);
+                    .eq("organization_id", orgId)
+                    .eq("phone_number_id", phoneNumberId);
                 }
               }
 
@@ -287,20 +321,50 @@ Deno.serve(async (req: Request) => {
                   customer_wa_id: customerWaId,
                   customer_external_id: customerWaId,
                   channel: "whatsapp",
+                  phone_number_id: phoneNumberId,
                   last_message_at: timestamp,
                   last_message_body: lastBody,
                   updated_at: timestamp,
                 };
                 if (customerName) convPayload.customer_name = customerName;
 
-                const { data: conv, error: convError } = await supabase
+                const { data: existingConv } = await supabase
                   .from("whatsapp_conversations")
-                  .upsert(convPayload, { onConflict: "organization_id,customer_wa_id", ignoreDuplicates: false })
                   .select("id")
-                  .single();
+                  .eq("organization_id", orgId)
+                  .eq("customer_wa_id", customerWaId)
+                  .eq("channel", "whatsapp")
+                  .eq("phone_number_id", phoneNumberId)
+                  .maybeSingle();
 
-                if (convError || !conv) {
-                  console.error("Conversation upsert error:", convError);
+                let conv: { id: string } | null = null;
+                if (existingConv) {
+                  const { data: updated } = await supabase
+                    .from("whatsapp_conversations")
+                    .update({
+                      last_message_at: timestamp,
+                      last_message_body: lastBody,
+                      customer_name: customerName ?? undefined,
+                      updated_at: timestamp,
+                    })
+                    .eq("id", existingConv.id)
+                    .select("id")
+                    .single();
+                  conv = updated;
+                } else {
+                  const { data: inserted, error: insertErr } = await supabase
+                    .from("whatsapp_conversations")
+                    .insert(convPayload)
+                    .select("id")
+                    .single();
+                  if (insertErr) {
+                    console.error("Conversation insert error", insertErr);
+                    continue;
+                  }
+                  conv = inserted;
+                }
+
+                if (!conv) {
                   continue;
                 }
 

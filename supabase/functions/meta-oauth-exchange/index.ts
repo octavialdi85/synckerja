@@ -42,13 +42,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseWithUser = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+    const { data: { user }, error: userError } = await supabaseWithUser.auth.getUser(authHeader.replace("Bearer ", ""));
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
@@ -56,7 +55,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("active_organization_id")
       .eq("user_id", user.id)
@@ -121,14 +120,16 @@ Deno.serve(async (req: Request) => {
       accessToken = longData.access_token.trim();
     }
 
-    const { data: existing } = await supabase
+    const { data: existing, error: selectErr } = await supabaseAdmin
       .from("organization_meta_config")
-      .select("id, verify_token, whatsapp_business_account_id")
+      .select("id")
       .eq("organization_id", orgId)
       .maybeSingle();
 
-    if (existing) {
-      const { error: updateErr } = await supabase
+    const rowExists = !selectErr && existing != null;
+
+    if (rowExists) {
+      const { error: updateErr } = await supabaseAdmin
         .from("organization_meta_config")
         .update({
           meta_access_token: accessToken,
@@ -145,21 +146,38 @@ Deno.serve(async (req: Request) => {
       }
     } else {
       const verifyToken = crypto.randomUUID().replace(/-/g, "");
-      const { error: insertErr } = await supabase.from("organization_meta_config").insert({
+      const insertPayload: Record<string, unknown> = {
         organization_id: orgId,
         meta_access_token: accessToken,
         verify_token: verifyToken,
-        whatsapp_business_account_id: "",
         created_by: user.id,
         updated_at: new Date().toISOString(),
-      });
+      };
+      const { error: insertErr } = await supabaseAdmin.from("organization_meta_config").insert(insertPayload);
 
       if (insertErr) {
-        console.error("meta-oauth-exchange: insert failed", insertErr);
-        return new Response(
-          JSON.stringify({ error: "Failed to save token." }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        if (insertErr.code === "23505") {
+          const { error: updateErr } = await supabaseAdmin
+            .from("organization_meta_config")
+            .update({
+              meta_access_token: accessToken,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("organization_id", orgId);
+          if (updateErr) {
+            console.error("meta-oauth-exchange: update after conflict failed", updateErr);
+            return new Response(
+              JSON.stringify({ error: "Failed to save token." }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          console.error("meta-oauth-exchange: insert failed", insertErr);
+          return new Response(
+            JSON.stringify({ error: "Failed to save token." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     }
 

@@ -903,7 +903,7 @@ export const TaskList = () => {
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
                   Task Title
                 </TableHead>
-                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '150px', minWidth: '150px', maxWidth: '150px' }}>
+                <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
                   Department
                 </TableHead>
                 <TableHead className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
@@ -1064,15 +1064,18 @@ export const TaskList = () => {
                         </TableCell>
 
                         {/* Department */}
-                        <TableCell className="px-2 py-3 text-left" style={{ width: '150px', minWidth: '150px', maxWidth: '150px' }}>
-                          <div className="flex items-center">
+                        <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
+                          <div className="flex items-center gap-2 min-w-0">
                             {departmentMap[task.id] ? (
-                              <div className="flex items-center gap-2">
-                                <Building2 className="w-4 h-4 text-blue-600" />
-                                <span className="text-sm text-gray-900 font-medium">
+                              <>
+                                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                                <span
+                                  className="text-sm text-gray-900 font-medium truncate block min-w-0"
+                                  title={departmentMap[task.id].name}
+                                >
                                   {departmentMap[task.id].name}
                                 </span>
-                              </div>
+                              </>
                             ) : (
                               <span className="text-sm text-gray-400 italic">
                                 No Department
