@@ -7,7 +7,6 @@ import { useWhatsAppConfig } from '../../hooks/useWhatsAppConfig';
 import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadByConversation';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import type { WhatsAppConversation } from '../../types';
 
@@ -396,46 +395,23 @@ export function SearchConversationPopup({
           autoFocus
         />
       </div>
-      <Tabs defaultValue="conversations" className="mt-4 flex flex-col min-h-0 overflow-hidden flex-1">
-        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-          <TabsTrigger value="contacts">{t('whatsappInbox.tabContacts', 'Contacts')}</TabsTrigger>
-          <TabsTrigger value="conversations">{t('whatsappInbox.tabConversations', 'Conversations')}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="contacts" className="mt-3 focus-visible:outline-none min-h-0 overflow-hidden flex-1 data-[state=inactive]:hidden">
-          {isLoading ? (
-            <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-              <MessageCircle className="w-4 h-4 animate-pulse" />
-              {t('whatsappInbox.loading', 'Loading...')}
-            </div>
-          ) : error ? (
-            <div className="py-6 text-center text-sm text-red-600">Failed to load.</div>
-          ) : searchQuery.trim() && isSearchingMessages && !hasMessageResults ? (
-            <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-              <MessageCircle className="w-4 h-4 animate-pulse" />
-              {t('whatsappInbox.searchingInChats', 'Searching in chats...')}
-            </div>
-          ) : (
-            listContent
-          )}
-        </TabsContent>
-        <TabsContent value="conversations" className="mt-3 focus-visible:outline-none min-h-0 overflow-hidden flex-1 data-[state=inactive]:hidden">
-          {isLoading ? (
-            <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-              <MessageCircle className="w-4 h-4 animate-pulse" />
-              {t('whatsappInbox.loading', 'Loading...')}
-            </div>
-          ) : error ? (
-            <div className="py-6 text-center text-sm text-red-600">Failed to load.</div>
-          ) : searchQuery.trim() && isSearchingMessages && !hasMessageResults ? (
-            <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-              <MessageCircle className="w-4 h-4 animate-pulse" />
-              {t('whatsappInbox.searchingInChats', 'Searching in chats...')}
-            </div>
-          ) : (
-            listContent
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="mt-4 flex flex-col min-h-0 overflow-hidden flex-1">
+        {isLoading ? (
+          <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+            <MessageCircle className="w-4 h-4 animate-pulse" />
+            {t('whatsappInbox.loading', 'Loading...')}
+          </div>
+        ) : error ? (
+          <div className="py-6 text-center text-sm text-red-600">Failed to load.</div>
+        ) : searchQuery.trim() && isSearchingMessages && !hasMessageResults ? (
+          <div className="py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+            <MessageCircle className="w-4 h-4 animate-pulse" />
+            {t('whatsappInbox.searchingInChats', 'Searching in chats...')}
+          </div>
+        ) : (
+          listContent
+        )}
+      </div>
     </div>
   );
 }

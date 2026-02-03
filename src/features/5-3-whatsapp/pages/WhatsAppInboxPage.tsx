@@ -10,24 +10,32 @@ import { LivechatQuickActionPanel } from '../components/inbox/LivechatQuickActio
 import { SearchConversationPopup } from '../components/inbox/SearchConversationPopup';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useWhatsAppConversations } from '../hooks/useWhatsAppConversations';
 import { useEmailConversations } from '../hooks/useEmailConversations';
+import { useWhatsAppAccounts } from '../hooks/useWhatsAppAccounts';
+import { useEmailConnections } from '../hooks/useEmailConnections';
 import type { LiveChatConversation, WhatsAppConversation } from '../types';
+
+type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
 export function WhatsAppInboxPage() {
   const { t } = useAppTranslation();
   const [searchParams] = useSearchParams();
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
   const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
+  const { accounts: waAccounts } = useWhatsAppAccounts();
+  const { connections: emailConnections } = useEmailConnections();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isQuickActionExpanded, setIsQuickActionExpanded] = useState(true);
   const [conversationSearch, setConversationSearch] = useState('');
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
+  const [accountFilter, setAccountFilter] = useState<AccountFilterValue>('');
   const [scrollToTextInChat, setScrollToTextInChat] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
   const initialConversationId = searchParams.get('conversation');
 
-  const conversations: LiveChatConversation[] = useMemo(() => {
+  const allConversations: LiveChatConversation[] = useMemo(() => {
     const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));
     const email: LiveChatConversation[] = emailConversations.map((c) => ({ ...c, source: 'email' as const }));
     const merged = [...wa, ...email];
@@ -38,6 +46,56 @@ export function WhatsAppInboxPage() {
     });
     return merged;
   }, [waConversations, emailConversations]);
+
+  const accountOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      { value: 'all', label: t('whatsappInbox.filterAllAccounts', 'Semua akun') },
+    ];
+    waAccounts.forEach((acc) => {
+      const name = acc.whatsapp_business_name?.trim() || acc.display_phone_number?.trim() || acc.phone_number_id || t('whatsappInbox.whatsApp', 'WhatsApp');
+      opts.push({ value: `wa:${acc.phone_number_id}` as const, label: `WhatsApp - ${name}` });
+    });
+    // Instagram: phone_number_id is NULL in DB; group by whatsapp_account_display_name (e.g. @octa.vialdi)
+    const igFromConvs = new Map<string, string>();
+    (waConversations as WhatsAppConversation[]).forEach((c) => {
+      if (c.channel === 'instagram') {
+        const name = c.whatsapp_account_display_name?.trim() || t('whatsappInbox.instagram', 'Instagram');
+        const key = name || 'instagram';
+        if (!igFromConvs.has(key)) igFromConvs.set(key, name);
+      }
+    });
+    igFromConvs.forEach((name, key) => {
+      opts.push({ value: `ig:${encodeURIComponent(key)}`, label: `Instagram - ${name}` });
+    });
+    emailConnections.forEach((conn) => {
+      opts.push({ value: `email:${conn.id}` as const, label: `Email - ${conn.email_address}` });
+    });
+    return opts;
+  }, [waAccounts, waConversations, emailConnections, t]);
+
+  const conversations = useMemo(() => {
+    if (!accountFilter) return allConversations;
+    if (accountFilter.startsWith('wa:')) {
+      const pnid = accountFilter.slice(3);
+      return allConversations.filter(
+        (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).channel !== 'instagram' && (c as WhatsAppConversation).phone_number_id === pnid
+      );
+    }
+    if (accountFilter.startsWith('ig:')) {
+      const key = decodeURIComponent(accountFilter.slice(3));
+      return allConversations.filter((c) => {
+        if (c.source !== 'whatsapp' || (c as WhatsAppConversation).channel !== 'instagram') return false;
+        const displayName = (c as WhatsAppConversation).whatsapp_account_display_name?.trim() || '';
+        const convKey = displayName || 'instagram';
+        return convKey === key;
+      });
+    }
+    if (accountFilter.startsWith('email:')) {
+      const connId = accountFilter.slice(6);
+      return allConversations.filter((c) => c.source === 'email' && (c as { email_connection_id: string }).email_connection_id === connId);
+    }
+    return allConversations;
+  }, [allConversations, accountFilter]);
 
   const selectedConversation = useMemo(
     () => (selectedId ? conversations.find((c) => c.id === selectedId) ?? null : null),
@@ -60,17 +118,30 @@ export function WhatsAppInboxPage() {
               <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-row max-w-full rounded-lg border border-gray-200 shadow-sm bg-white max-h-[calc(100vh-120px)]">
                 {/* Kiri: daftar conversation - sidebar */}
                 <aside className="flex-shrink-0 border-r border-gray-200 flex flex-col min-h-0 bg-white" style={{ width: '20rem', minWidth: '20rem' }} aria-label="Conversations">
-                  <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
-                    <h2 className="font-semibold text-gray-900">Conversations</h2>
-                    <button
-                      type="button"
-                      onClick={() => setSearchPopupOpen(true)}
-                      className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
-                      title={t('whatsappInbox.searchConversations', 'Search conversation or people')}
-                      aria-label={t('whatsappInbox.searchConversations', 'Search conversation or people')}
-                    >
-                      <Search className="h-4 w-4" />
-                    </button>
+                  <div className="flex-shrink-0 px-3 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Select value={accountFilter || 'all'} onValueChange={(v) => setAccountFilter((v === 'all' ? '' : v) as AccountFilterValue)}>
+                        <SelectTrigger className="flex-1 min-w-0 h-9 text-sm font-medium text-gray-900 border-gray-200 bg-white" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
+                          <SelectValue placeholder={t('whatsappInbox.filterByAccount', 'Filter menurut akun')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
+                          {accountOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        type="button"
+                        onClick={() => setSearchPopupOpen(true)}
+                        className="shrink-0 p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                        title={t('whatsappInbox.searchConversations', 'Search conversation or people')}
+                        aria-label={t('whatsappInbox.searchConversations', 'Search conversation or people')}
+                      >
+                        <Search className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <Dialog open={searchPopupOpen} onOpenChange={(open) => { setSearchPopupOpen(open); if (!open) setConversationSearch(''); }}>
                     <DialogContent className="sm:max-w-md max-h-[85vh] overflow-hidden flex flex-col p-4">
