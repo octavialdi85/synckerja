@@ -3,15 +3,13 @@ import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { SectionMotifation } from '../components/SectionMotifation';
 import { SectionProfile } from '../components/SectionProfile';
 import { HomeOKRDashboard } from '../components/HomeOKRDashboard/HomeOKRDashboard';
+import { OKRSectionVisibilityProvider } from '../components/HomeOKRDashboard/OKRSectionVisibilityContext';
 import { SectionActivityNotifikasi } from '../components/SectionActivityNotifikasi';
 import { SectionStatusKaryawan } from '../components/SectionStatusKaryawan';
 // TODO: Update to use specific contribution modals
 // import { ModalCreateObjective } from '../components/ModalCreateObjective';
 import { ModalMotifationForm } from '../components/ModalMotifationForm/ModalMotifationForm';
 import { ModalStatusKaryawan } from '../components/ModalStatusKaryawan';
-import { Card, CardContent } from '@/features/ui/card';
-import { TrendingUp, Users, Target } from 'lucide-react';
-
 function ModernHomePage() {
   const [showCreateObjectiveModal, setShowCreateObjectiveModal] = useState(false);
   const [showMotivationModal, setShowMotivationModal] = useState(false);
@@ -78,10 +76,12 @@ function ModernHomePage() {
                     </div>
                   </div>
 
-                  {/* Center Section - OKR Dashboard (50%) */}
+                  {/* Center Section - OKR Dashboard (50%) - single load like social-media dashboard, no blink */}
                   <div className="col-span-6 h-full">
                     <div className="h-full flex flex-col max-h-[calc(100vh-200px)]">
-                      <HomeOKRDashboard />
+                      <OKRSectionVisibilityProvider>
+                        <HomeOKRDashboard />
+                      </OKRSectionVisibilityProvider>
                     </div>
                   </div>
 
@@ -93,7 +93,7 @@ function ModernHomePage() {
                   </div>
                 </div>
 
-                {/* Status Karyawan - Moved to Bottom */}
+                {/* Status Karyawan */}
                 <div className="flex-shrink-0 mt-2">
                   <SectionStatusKaryawan 
                     statusCreatedTrigger={statusCreatedTrigger}

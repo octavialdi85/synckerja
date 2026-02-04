@@ -683,18 +683,9 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
-              {/* OKR Routes - PROTECTED */}
-              <Route path="/okr/company-objective" element={
-                <ProtectedRoute>
-                  <OKRPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/okr/department-objective" element={
-                <ProtectedRoute>
-                  <OKRPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/okr/individual-objective" element={
+              {/* OKR - satu route agar header/sidebar tidak remount saat ganti tab */}
+              <Route path="/okr" element={<Navigate to="/okr/company-objective" replace />} />
+              <Route path="/okr/*" element={
                 <ProtectedRoute>
                   <OKRPage />
                 </ProtectedRoute>

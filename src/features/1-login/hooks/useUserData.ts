@@ -65,7 +65,6 @@ export const useUserData = (): UserData => {
     const cacheKey = `user-${userId}`;
     const cached = userDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      logger.userData('📋 Using cached user data for:', userId);
       setProfile(cached.data.profile);
       setOrganization(cached.data.organization);
       setUserRole(cached.data.userRole);

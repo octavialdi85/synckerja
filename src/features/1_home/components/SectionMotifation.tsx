@@ -13,6 +13,7 @@ import { MotivationLikeButton } from './MotivationLikeButton';
 import { useMotivations } from './ModalMotifationForm/useMotivations';
 import { useToast } from '@/features/ui/use-toast';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { LoadingDots } from '@/components/LoadingDots';
 
 export const SectionMotifation = () => {
   const { t } = useAppTranslation();
@@ -97,8 +98,8 @@ export const SectionMotifation = () => {
     return (
       <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white min-h-[70px]">
         <CardContent className="p-4 flex items-center justify-center h-full">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          <div className="flex flex-col items-center gap-2">
+            <LoadingDots size="sm" className="[&>*]:bg-white" />
             <span className="text-sm">{t('motivation.loading', 'Loading motivation...')}</span>
           </div>
         </CardContent>

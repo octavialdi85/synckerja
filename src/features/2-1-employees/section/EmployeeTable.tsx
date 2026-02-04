@@ -100,14 +100,15 @@ const EmployeeRow = memo(({
     }
   }
 
+  const photoUrl = getPhotoUrl(employee.photo_url);
   return (
     <TableRow className="hover:bg-gray-50/50 h-12 transition-colors">
       <TableCell className="w-64 px-4">
         <div className="flex items-center space-x-2">
           <Avatar className="h-8 w-8">
-            {getPhotoUrl(employee.photo_url) && (
+            {photoUrl && (
               <AvatarImage 
-                src={getPhotoUrl(employee.photo_url)!} 
+                src={photoUrl} 
                 alt={employee.full_name}
                 className="object-cover"
                 loading="lazy"

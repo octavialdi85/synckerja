@@ -51,7 +51,8 @@ export const ViewLeadDialog = ({
       'Phone': 'bg-purple-100 text-purple-700',
       'Chat': 'bg-pink-100 text-pink-700',
       'Website': 'bg-green-100 text-green-700',
-      'WhatsApp': 'bg-emerald-100 text-emerald-700'
+      'WhatsApp': 'bg-emerald-100 text-emerald-700',
+      'Instagram': 'bg-amber-100 text-amber-700'
     };
     return colors[source as keyof typeof colors] || colors.Website;
   };

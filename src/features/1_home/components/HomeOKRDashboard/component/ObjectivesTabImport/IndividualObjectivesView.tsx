@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Building, Plus, Target, ChevronRight, ChevronDown, User, MoreHorizontal, CheckCircle, Calendar, Trash2, Edit } from 'lucide-react';
+import { LoadingDots } from '@/components/LoadingDots';
 import { Progress } from '@/features/ui/progress';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { getEmployeeStatus } from '@/features/2-1-employees/utils/employeeUtils';
@@ -281,8 +282,8 @@ export const IndividualObjectivesView = ({
 
   if (loadingEmployees || loadingObjectives || loadingDepartments) {
     return <div className="flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto mb-3"></div>
+        <div className="text-center flex flex-col items-center gap-2">
+          <LoadingDots size="md" />
           <p className="text-sm text-gray-600">Loading objectives...</p>
         </div>
       </div>;

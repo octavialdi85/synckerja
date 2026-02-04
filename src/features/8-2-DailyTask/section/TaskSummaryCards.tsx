@@ -1,4 +1,4 @@
-import { CheckSquare, Clock, AlertTriangle, XCircle, Calendar, TrendingUp } from 'lucide-react';
+import { CheckSquare, Clock, AlertTriangle, Calendar, TrendingUp, Percent } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
 import RecentUpdateSteps from './RecentUpdateSteps';
 import { PendingApprovalSection } from './PendingApprovalSection';
@@ -80,6 +80,17 @@ const TaskSummaryCards = () => {
       textColor: 'text-indigo-600', 
       borderColor: 'border-indigo-200' 
     },
+    { 
+      label: 'Completion Rate', 
+      count: summaryData.totalSteps > 0 
+        ? Math.round((summaryData.completedSteps / summaryData.totalSteps) * 100) 
+        : 0, 
+      color: 'teal', 
+      icon: Percent, 
+      bgColor: 'bg-teal-50', 
+      textColor: 'text-teal-600', 
+      borderColor: 'border-teal-200' 
+    },
   ];
 
   if (isLoading) {
@@ -104,36 +115,12 @@ const TaskSummaryCards = () => {
                 <IconComponent className={`w-4 h-4 ${item.textColor}`} />
                 <span className="text-sm font-medium text-gray-700">{item.label}</span>
               </div>
-              <span className={`text-xl font-bold ${item.textColor}`}>{item.count}</span>
+              <span className={`text-xl font-bold ${item.textColor}`}>
+                {item.label === 'Completion Rate' ? `${item.count}%` : item.count}
+              </span>
             </div>
           );
         })}
-      </div>
-      
-      <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
-        <h4 className="font-semibold text-gray-900 text-sm mb-2">Quick Stats</h4>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Completion Rate</span>
-            <span className="font-medium text-gray-900">
-              {summaryData.totalSteps > 0 
-                ? Math.round((summaryData.completedSteps / summaryData.totalSteps) * 100)
-                : 0}%
-            </span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Active Tasks</span>
-            <span className="font-medium text-gray-900">
-              {summaryData.pending + summaryData.inProgress}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Overdue Tasks</span>
-            <span className={`font-medium ${summaryData.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-              {summaryData.overdue}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Pending your approval (assigner) + Rejected (assignee) */}

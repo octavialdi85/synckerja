@@ -6,6 +6,7 @@ import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, User, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { LoadingDots } from '@/components/LoadingDots';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
 import { useDepartments } from './CompanyObjectivesDetailViewImport/useDepartments';
@@ -320,8 +321,8 @@ export const DepartmentObjectivesView = ({
   };
   if (loadingObjectives || loadingDepartments || loadingAllObjectives) {
     return <div className="flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto mb-3"></div>
+        <div className="text-center flex flex-col items-center gap-2">
+          <LoadingDots size="md" />
           <p className="text-sm text-gray-600">Loading objectives...</p>
         </div>
       </div>;

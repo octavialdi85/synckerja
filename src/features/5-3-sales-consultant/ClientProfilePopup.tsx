@@ -51,6 +51,10 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
     location: ''
   });
 
+  const isWhatsApp = leadId.startsWith('wa-');
+  const isEmail = leadId.startsWith('email-');
+  const conversationId = isWhatsApp ? leadId.replace(/^wa-/, '') : null;
+
   // Load existing profile when popup opens
   useEffect(() => {
     if (open && leadId) {
@@ -61,6 +65,53 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
   const loadClientProfile = async () => {
     setLoading(true);
     try {
+      // Synthetic IDs: do not query lead_client_profiles (UUID column)
+      if (isEmail) {
+        setProfile({
+          lead_id: leadId,
+          name: clientName,
+          code: '',
+          gender: '' as ClientProfile['gender'],
+          age: '',
+          occupation: '',
+          location: ''
+        });
+        setLoading(false);
+        return;
+      }
+      if (isWhatsApp && conversationId) {
+        const { data, error } = await supabase
+          .from('whatsapp_conversation_client_profiles')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          setProfile({
+            id: data.id,
+            lead_id: leadId,
+            name: data.name,
+            code: (data as any).code || '',
+            gender: (data.gender || '') as ClientProfile['gender'],
+            age: data.age || '',
+            occupation: data.occupation || '',
+            location: data.location || ''
+          });
+        } else {
+          setProfile({
+            lead_id: leadId,
+            name: clientName,
+            code: '',
+            gender: '' as ClientProfile['gender'],
+            age: '',
+            occupation: '',
+            location: ''
+          });
+        }
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('lead_client_profiles')
         .select('*')
@@ -81,7 +132,6 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
           location: data.location || ''
         });
       } else {
-        // Reset to default if no profile exists
         setProfile({
           lead_id: leadId,
           name: clientName,
@@ -123,6 +173,15 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
       return;
     }
 
+    if (isEmail) {
+      toast({
+        title: "Not available",
+        description: "Saving client profile for email leads is not supported yet.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const profileData = {
@@ -136,24 +195,39 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
         organization_id: organizationId
       };
 
-      if (profile.id) {
-        // Update existing profile
-        const { error } = await supabase
-          .from('lead_client_profiles')
-          .update(profileData)
-          .eq('id', profile.id);
-
-        if (error) throw error;
+      if (isWhatsApp && conversationId) {
+        const payload = { ...profileData, conversation_id: conversationId };
+        if (profile.id) {
+          const { error } = await supabase
+            .from('whatsapp_conversation_client_profiles')
+            .update(payload)
+            .eq('id', profile.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('whatsapp_conversation_client_profiles')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          setProfile(prev => ({ ...prev, id: data.id }));
+        }
       } else {
-        // Create new profile
-        const { data, error } = await supabase
-          .from('lead_client_profiles')
-          .insert(profileData)
-          .select()
-          .single();
-
-        if (error) throw error;
-        setProfile(prev => ({ ...prev, id: data.id }));
+        if (profile.id) {
+          const { error } = await supabase
+            .from('lead_client_profiles')
+            .update(profileData)
+            .eq('id', profile.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('lead_client_profiles')
+            .insert(profileData)
+            .select()
+            .single();
+          if (error) throw error;
+          setProfile(prev => ({ ...prev, id: data.id }));
+        }
       }
 
       toast({

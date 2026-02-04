@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Calendar, Plus, Building } from 'lucide-react';
+import { LoadingDots } from '@/components/LoadingDots';
 import { ModalAddDepartmentContribution } from '@/features/1_home/components/HomeOKRDashboard/modal/ModalAddDepartmentContribution';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
 
@@ -129,9 +130,9 @@ export const DepartmentObjectivesProgressCard = ({
         {/* Progress Bar - Always Visible */}
         <div className="p-3">
           {loading ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
-              <span className="ml-2 text-sm text-gray-600">Loading progress...</span>
+            <div className="flex flex-col items-center justify-center gap-2 py-4">
+              <LoadingDots size="md" />
+              <span className="text-sm text-gray-600">Loading progress...</span>
             </div>
           ) : error ? (
             <div className="text-center py-4">

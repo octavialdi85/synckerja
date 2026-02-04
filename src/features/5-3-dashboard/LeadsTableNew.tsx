@@ -206,7 +206,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
       'Phone': 'bg-purple-50 text-purple-700 border-purple-200',
       'Chat': 'bg-pink-50 text-pink-700 border-pink-200',
       'Website': 'bg-green-50 text-green-700 border-green-200',
-      'WhatsApp': 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      'WhatsApp': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      'Instagram': 'bg-amber-50 text-amber-700 border-amber-200'
     };
   return colors[source as keyof typeof colors] || colors.Website;
   };
@@ -359,40 +360,16 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                       );
                     })()}
                   </TableCell>
-                  {/* Status Column - Same dropdown for all leads (regular + WhatsApp); optional chat-opened hint for WhatsApp */}
+                  {/* Status Column - Read-only badge from lead_statuses; no dropdown. Change status via Edit lead or View detail. */}
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <Select
-                        value={lead.status_id || (lead.lead_status?.id ?? (leadStatuses.length > 0 ? leadStatuses[0].id : ''))}
-                        onValueChange={(value) => handleFieldUpdate(lead.id, 'status_id', value)}
-                      >
-                        <SelectTrigger className={`w-28 h-7 text-xs border ${getStatusColor(lead)} rounded-sm font-medium justify-between px-2`} disabled={isResolvedLead(lead)}>
-                          <span className="text-left">
-                            {getLeadStatusDisplayName(
-                              lead.lead_status?.name ||
-                              leadStatuses.find(s => s.id === lead.status_id)?.name ||
-                              (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')
-                            )}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => {
-                            const isOpenOption = status.name?.toLowerCase() === 'open';
-                            const disableOpen = isOpenOption && isOpenDisabledForLead(lead);
-                            return (
-                              <SelectItem
-                                key={status.id}
-                                value={status.id}
-                                disabled={disableOpen}
-                                className={disableOpen ? 'opacity-60 cursor-not-allowed' : undefined}
-                                title={disableOpen ? t('leadsManagement.openDisabledForTerminalStatus', 'Status On Going/Qualified/Converted/Resolve tidak dapat dikembalikan ke Unread') : undefined}
-                              >
-                                {getLeadStatusDisplayName(status.name)}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      <Badge className={`${getStatusColor(lead)} text-xs px-3 py-1 rounded-sm font-medium border w-28 justify-center`}>
+                        {getLeadStatusDisplayName(
+                          lead.lead_status?.name ||
+                          leadStatuses.find(s => s.id === lead.status_id)?.name ||
+                          (leadStatuses.length > 0 ? leadStatuses[0].name : 'Open')
+                        )}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="sm"

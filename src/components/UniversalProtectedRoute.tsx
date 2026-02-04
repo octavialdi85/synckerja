@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { XCircle, Shield } from 'lucide-react';
 import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentAccess';
@@ -36,12 +36,19 @@ export const UniversalProtectedRoute = ({
   const [isValidating, setIsValidating] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [deniedReason, setDeniedReason] = useState('');
+  // Prevent showing loading again after access was already granted (avoids double mount of children)
+  const accessGrantedRef = useRef(false);
+  // Skip re-validation when path/user/config unchanged and access already granted (reduces log noise and effect runs)
+  const lastValidatedPathRef = useRef<string>('');
+  const lastValidatedUserIdRef = useRef<string>('');
+  const lastValidatedConfigHashRef = useRef<string>('');
 
   const {
     canAccessPage,
     getAccessLevel,
     getDepartmentRestrictionMessage,
-    configLoading
+    configLoading,
+    configHash
   } = useDepartmentAccess();
 
   const { userRole, isOwner, isAdmin, employee, organization } = useCentralizedUserData();
@@ -50,8 +57,22 @@ export const UniversalProtectedRoute = ({
   useEffect(() => {
     const validateUniversalAccess = async () => {
       const currentPath = location.pathname;
+      const currentUserId = user?.id ?? '';
       const isDev = import.meta.env.DEV;
-      
+
+      // Optimization: skip re-validation when access already granted and path/user/config unchanged
+      if (
+        accessGrantedRef.current &&
+        lastValidatedPathRef.current === currentPath &&
+        lastValidatedUserIdRef.current === currentUserId &&
+        lastValidatedConfigHashRef.current === (configHash ?? '')
+      ) {
+        if (isDev) {
+          logger.debug('🌍 UNIVERSAL ROUTE PROTECTION (skipped – already granted, unchanged)');
+        }
+        return;
+      }
+
       if (isDev) {
         logger.debug('🌍 UNIVERSAL ROUTE PROTECTION');
         logger.debug('Validating Path:', currentPath);
@@ -123,6 +144,10 @@ export const UniversalProtectedRoute = ({
       if (isDev) {
         logger.debug('✅ ACCESS GRANTED by Page Access Configuration');
       }
+      accessGrantedRef.current = true;
+      lastValidatedPathRef.current = currentPath;
+      lastValidatedUserIdRef.current = currentUserId;
+      lastValidatedConfigHashRef.current = configHash ?? '';
       setAccessDenied(false);
       setDeniedReason('');
       setIsValidating(false);
@@ -130,22 +155,31 @@ export const UniversalProtectedRoute = ({
 
     validateUniversalAccess();
   }, [
-    location.pathname, 
-    user, 
-    userRole, 
-    isOwner, 
-    isAdmin, 
-    configLoading, 
+    location.pathname,
+    user,
+    userRole,
+    isOwner,
+    isAdmin,
+    configLoading,
     requiresAuth,
     employee,
     organization,
     canAccessPage,
     getAccessLevel,
-    getDepartmentRestrictionMessage
+    getDepartmentRestrictionMessage,
+    configHash
   ]);
 
-  // Unified loading state - combine all loading checks into one simple message
-  const isLoading = loading || (requiresAuth && configLoading) || isValidating;
+  // Reset "access granted" when path or user changes so we re-validate on navigate/re-login
+  useEffect(() => {
+    accessGrantedRef.current = false;
+    lastValidatedPathRef.current = '';
+    lastValidatedUserIdRef.current = '';
+    lastValidatedConfigHashRef.current = '';
+  }, [location.pathname, user?.id]);
+
+  // Unified loading state - after first grant, don't show loading again for configLoading flicker (avoids double mount)
+  const isLoading = loading || (requiresAuth && configLoading && !accessGrantedRef.current) || isValidating;
   
   if (isLoading) {
     return (

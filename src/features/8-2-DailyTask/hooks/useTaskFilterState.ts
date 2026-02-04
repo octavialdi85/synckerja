@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TaskFilters } from './useTaskFilters';
-import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
-const FILTER_STORAGE_KEY = 'daily-task-filters-v1';
+const FILTER_STORAGE_KEY = 'daily-task-filters-v3'; // v3: default department = All Departments (ignore saved department)
 
 const defaultFilters: TaskFilters = {
   search: '',
@@ -12,11 +11,11 @@ const defaultFilters: TaskFilters = {
   dateRange: undefined,
   customStartDate: undefined,
   customEndDate: undefined,
-  planDateRange: undefined,
+  planDateRange: 'this_month_plan', // Default "This Month Plan" for date/plan filter
   customPlanMonth: undefined,
   pic: '',
-  myTask: 'my_task', // Default to "My Task"
-  department: undefined, // Will be set from current employee
+  myTask: 'all', // Default to "All" so users see all org tasks; switch to "My Task" to filter
+  department: undefined, // Default "All Departments" so list shows all; user can filter by department if needed
 };
 
 /**
@@ -24,23 +23,20 @@ const defaultFilters: TaskFilters = {
  * Menyimpan preferensi filter user antar session
  */
 export const useTaskFilterState = () => {
-  const { data: currentEmployee } = useCurrentEmployee();
-  
   const [filters, setFiltersState] = useState<TaskFilters>(() => {
     // Load from localStorage on initial mount
     try {
       const saved = localStorage.getItem(FILTER_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Validate and merge with defaults to handle schema changes
+        // Validate and merge with defaults; always use All Departments as default (ignore saved department)
         return {
           ...defaultFilters,
           ...parsed,
-          // Ensure myTask has valid value
-          myTask: parsed.myTask === 'all' || parsed.myTask === 'my_task' 
-            ? parsed.myTask 
+          department: defaultFilters.department, // Always default "All Departments"
+          myTask: parsed.myTask === 'all' || parsed.myTask === 'my_task'
+            ? parsed.myTask
             : defaultFilters.myTask,
-          // Convert 'all' to 'task' for picLevel (backward compatibility)
           picLevel: parsed.picLevel === 'all' ? 'task' : (parsed.picLevel || undefined),
         };
       }
@@ -49,22 +45,6 @@ export const useTaskFilterState = () => {
     }
     return defaultFilters;
   });
-
-  // Set default department from current employee if not set and no saved value
-  useEffect(() => {
-    if (currentEmployee?.department_id) {
-      setFiltersState(prev => {
-        // Only set default if department is not already set
-        if (!prev.department) {
-          return {
-            ...prev,
-            department: currentEmployee.department_id
-          };
-        }
-        return prev;
-      });
-    }
-  }, [currentEmployee?.department_id]);
 
   // Save to localStorage whenever filters change
   useEffect(() => {

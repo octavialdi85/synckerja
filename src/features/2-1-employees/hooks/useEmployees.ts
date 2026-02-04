@@ -38,10 +38,7 @@ export const useEmployees = () => {
   return useQuery({
     queryKey: ['employees-optimized'],
     queryFn: async () => {
-      console.log('Fetching employees with optimized queries...');
-
       const { organizationId } = await getOptimizedCurrentOrganizationId();
-      console.log('Current organization ID:', organizationId);
 
       // First get employees without JOINs to avoid relation errors
       const { data: employees, error } = await supabase

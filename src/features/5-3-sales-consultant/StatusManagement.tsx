@@ -16,6 +16,8 @@ interface LeadStatus {
   color: string;
   is_active: boolean;
   sort_order: number;
+  /** Null = status default/utama yang dipakai semua tenant; tidak boleh dihapus */
+  organization_id: string | null;
 }
 
 interface StatusManagementProps {
@@ -56,6 +58,9 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
   useEffect(() => {
     if (open) {
       fetchStatuses();
+      setFormData({ name: '', description: '', color: '#6B7280' });
+      setIsEditing(false);
+      setEditingStatus(null);
     }
   }, [open]);
 
@@ -81,6 +86,14 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
     }
 
     if (isEditing && editingStatus) {
+      if (editingStatus.organization_id == null) {
+        toast({
+          title: "Tidak dapat diedit",
+          description: "Status default/utama (tanpa organization) tidak boleh diubah.",
+          variant: "destructive"
+        });
+        return;
+      }
       const { error } = await supabase
         .from('lead_statuses')
         .update(formData)
@@ -130,6 +143,14 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
   };
 
   const handleEdit = (status: LeadStatus) => {
+    if (status.organization_id == null) {
+      toast({
+        title: "Tidak dapat diedit",
+        description: "Status default/utama (tanpa organization) tidak boleh diubah.",
+        variant: "destructive"
+      });
+      return;
+    }
     setEditingStatus(status);
     setFormData({
       name: status.name,
@@ -139,13 +160,21 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
     setIsEditing(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (status: LeadStatus) => {
+    if (status.organization_id == null) {
+      toast({
+        title: "Tidak dapat dihapus",
+        description: "Status default/utama (tanpa organization) dipakai semua tenant dan tidak boleh dihapus.",
+        variant: "destructive"
+      });
+      return;
+    }
     if (!confirm('Are you sure you want to delete this status?')) return;
 
     const { error } = await supabase
       .from('lead_statuses')
       .update({ is_active: false })
-      .eq('id', id);
+      .eq('id', status.id);
 
     if (error) {
       toast({
@@ -169,6 +198,8 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
     setEditingStatus(null);
   };
 
+  const isEditingDefaultStatus = isEditing && editingStatus != null && editingStatus.organization_id == null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -182,7 +213,11 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
             <h3 className="text-lg font-semibold">
               {isEditing ? 'Edit Status' : 'Add New Status'}
             </h3>
-            
+            {isEditingDefaultStatus && (
+              <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                Status default/utama (tanpa organization) dipakai semua tenant dan tidak dapat diedit atau dihapus.
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="name">Status Name</Label>
@@ -192,6 +227,7 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Enter status name"
                   required
+                  disabled={isEditingDefaultStatus}
                 />
               </div>
 
@@ -203,6 +239,7 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Enter status description"
                   rows={3}
+                  disabled={isEditingDefaultStatus}
                 />
               </div>
 
@@ -215,17 +252,19 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                     className="w-20 h-10"
+                    disabled={isEditingDefaultStatus}
                   />
                   <Input
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                     placeholder="#6B7280"
+                    disabled={isEditingDefaultStatus}
                   />
                 </div>
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit" className="flex-1">
+                <Button type="submit" className="flex-1" disabled={isEditingDefaultStatus}>
                   <Plus className="w-4 h-4 mr-2" />
                   {isEditing ? 'Update' : 'Add'}
                 </Button>
@@ -275,13 +314,17 @@ export const StatusManagement = ({ open, onOpenChange }: StatusManagementProps) 
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(status)}
+                          disabled={status.organization_id == null}
+                          title={status.organization_id == null ? 'Status default (tanpa organization) tidak bisa diedit' : 'Edit status'}
                         >
                           <Edit className="w-3 h-3" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleDelete(status.id)}
+                          onClick={() => handleDelete(status)}
+                          disabled={status.organization_id == null}
+                          title={status.organization_id == null ? 'Status default (tanpa organization) tidak bisa dihapus' : 'Hapus status'}
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCurrentOrg } from './useCurrentOrg';
 import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
+import { clearHomeSubscriptionCache } from '@/components/HomeAccessGuard';
 
 interface CreateSubscriptionRequest {
   plan_id?: string;
@@ -115,6 +116,9 @@ export const useCreateSubscription = () => {
         });
       }
       
+      // Clear home subscription cache so next visit to home refetches (allows access)
+      clearHomeSubscriptionCache(organizationId);
+
       // Store subscription creation flag and redirect to employee welcome
       sessionStorage.setItem('subscriptionJustCreated', 'true');
       sessionStorage.setItem('planSelectionCompleted', 'true');

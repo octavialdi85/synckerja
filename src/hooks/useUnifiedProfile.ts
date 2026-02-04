@@ -173,13 +173,6 @@ export const useUnifiedProfile = () => {
         organizationName: orgData?.company_name || null
       };
 
-      if (import.meta.env?.DEV) {
-        console.log('✅ useUnifiedProfile: All data fetched successfully');
-        console.log('📊 Profile:', profileData?.full_name);
-        console.log('👔 Role:', roleData);
-        console.log('🏢 Organization:', orgData?.company_name);
-      }
-
       return unifiedData;
     },
     enabled: !!user && !!session,

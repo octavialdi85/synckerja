@@ -222,7 +222,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     subStepLevel: [],
     combined: []
   });
-  
+  // Lazy load task_files: track which tasks have had files loaded (reset on full fetch)
+  const taskIdsWithFilesLoadedRef = useRef<Set<string>>(new Set());
+
   // Use custom hook for filter state with localStorage persistence
   const { filters, setFilters } = useTaskFilterState();
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
@@ -745,86 +747,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // Fetch task files - SIMPLIFIED: Load in background, skip on errors (non-critical)
+      // Task files: LAZY LOAD when user expands a task (see fetchTaskFilesForTask + useEffect on expandedTasks)
       const filesByStepId: Record<string, any[]> = {};
-      
-      // Load files in background (non-blocking, simplified)
-      if (stepIds.length > 0) {
-        (async () => {
-          try {
-            const BATCH_SIZE = 2; // Very small batch size
-            const MAX_ERRORS = 3; // Circuit breaker: stop after 3 errors
-            let errorCount = 0;
-            const allFiles: any[] = [];
-            
-            // Process sequentially (one batch at a time) to avoid overwhelming database
-            for (let i = 0; i < stepIds.length; i += BATCH_SIZE) {
-              // Circuit breaker: stop if too many errors
-              if (errorCount >= MAX_ERRORS) {
-                if (isDev) {
-                  logger.query('⚠️ Stopping files fetch due to too many errors');
-                }
-                break;
-              }
-              
-              const batch = stepIds.slice(i, i + BATCH_SIZE);
-              
-              try {
-                // Simple timeout (5 seconds)
-                const timeoutPromise = new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('timeout')), 5000)
-                );
-                
-                const queryPromise = supabase
-                  .from('task_files')
-                  .select('id, task_steps_id, filename, file_url, file_size, created_at')
-                  .in('task_steps_id', batch)
-                  .order('created_at', { ascending: false })
-                  .limit(500); // Limit to prevent statement timeout
-                
-                const result = await Promise.race([queryPromise, timeoutPromise]) as any;
-                
-                if (result?.data && !result.error) {
-                  allFiles.push(...result.data);
-                } else {
-                  errorCount++;
-                }
-              } catch (err: any) {
-                errorCount++;
-                // Skip this batch, continue with next
-              }
-              
-              // Small delay between batches
-              await new Promise(resolve => setTimeout(resolve, 200));
-            }
-            
-            // Update state only if we got some files
-            if (allFiles.length > 0) {
-              const newFilesByStepId: Record<string, any[]> = {};
-              allFiles.forEach(file => {
-                if (!newFilesByStepId[file.task_steps_id]) {
-                  newFilesByStepId[file.task_steps_id] = [];
-                }
-                newFilesByStepId[file.task_steps_id].push(file);
-              });
-              
-              setTasks(prevTasks => 
-                prevTasks.map(task => ({
-                  ...task,
-                  steps: task.steps.map(step => ({
-                    ...step,
-                    files: newFilesByStepId[step.id] || step.files || []
-                  }))
-                }))
-              );
-            }
-          } catch (error) {
-            // Silently fail - files are non-critical
-          }
-        })().catch(() => {
-          // Silently fail
-        });
-      }
 
       // Fetch due dates for step assignments - OPTIMIZED: Load in background if too many
       let stepDueDatesData: any[] = [];
@@ -1061,9 +985,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           files: []
         };
       });
-      
+
+      // Reset lazy-loaded files cache so files are re-fetched when user expands tasks
+      taskIdsWithFilesLoadedRef.current = new Set();
       setTasks(tasksWithProgress);
-      
+
       // Cache the results
       setCache(cacheKey, tasksWithProgress);
       
@@ -2670,6 +2596,58 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       });
     }
   };
+
+  // Lazy load task_files for one task when user expands it (reduces API calls on page load)
+  const fetchTaskFilesForTask = useCallback(async (taskId: string) => {
+    if (taskIdsWithFilesLoadedRef.current.has(taskId)) return;
+    const task = tasks.find(t => t.id === taskId);
+    const stepIds = task?.steps?.map((s: any) => s.id) ?? [];
+    if (stepIds.length === 0) {
+      taskIdsWithFilesLoadedRef.current.add(taskId);
+      return;
+    }
+    try {
+      const { data: files, error } = await supabase
+        .from('task_files')
+        .select('id, task_steps_id, filename, file_url, file_size, created_at')
+        .in('task_steps_id', stepIds)
+        .order('created_at', { ascending: false });
+      if (error || !files?.length) {
+        taskIdsWithFilesLoadedRef.current.add(taskId);
+        if (error && isDev) logger.query('⚠️ task_files fetch (lazy):', error.message);
+        return;
+      }
+      const filesByStepId: Record<string, any[]> = {};
+      files.forEach((file: any) => {
+        if (!filesByStepId[file.task_steps_id]) filesByStepId[file.task_steps_id] = [];
+        filesByStepId[file.task_steps_id].push(file);
+      });
+      setTasks(prev =>
+        prev.map(t =>
+          t.id === taskId
+            ? {
+                ...t,
+                steps: t.steps.map(step => ({
+                  ...step,
+                  files: filesByStepId[step.id] || step.files || []
+                }))
+              }
+            : t
+        )
+      );
+      taskIdsWithFilesLoadedRef.current.add(taskId);
+    } catch {
+      taskIdsWithFilesLoadedRef.current.add(taskId);
+    }
+  }, [tasks]);
+
+  // When user expands a task, lazy-load its files (one request per expanded task)
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    expandedTasks.forEach(taskId => {
+      fetchTaskFilesForTask(taskId);
+    });
+  }, [expandedTasks, tasks.length, fetchTaskFilesForTask]);
 
   const value: DailyTaskContextType = {
     tasks,

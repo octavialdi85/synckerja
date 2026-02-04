@@ -10,6 +10,7 @@ import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmploy
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
+import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { NewLead } from '@/types/leads';
 
 interface LeadStatus {
@@ -282,7 +283,7 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
               <SelectItem value="all">All Status</SelectItem>
               {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => (
                 <SelectItem key={status.id} value={status.name}>
-                  {status.name}
+                  {getLeadStatusDisplayName(status.name)}
                 </SelectItem>
               ))}
             </SelectContent>

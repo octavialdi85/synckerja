@@ -5,6 +5,7 @@ import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { Building, Plus, Target, ChevronRight, ChevronDown, CheckCircle, Users, TrendingUp, Calendar, BarChart3, Trash2, Edit } from 'lucide-react';
+import { LoadingDots } from '@/components/LoadingDots';
 import { logger } from '@/config/logger';
 import { useObjectives } from './useObjectives';
 import { useFilteredObjectives } from './useFilteredObjectives';
@@ -81,7 +82,8 @@ export const CompanyObjectivesDetailView = ({
   } = useCurrentOrg();
   
   const {
-    data: cycles = []
+    data: cycles = [],
+    isLoading: isLoadingCycles
   } = useOkrCycles(organizationId);
 
   // Get available years from cycles
@@ -373,13 +375,33 @@ export const CompanyObjectivesDetailView = ({
       type: 'company'
     });
   };
+  // #region agent log
+  const viewPhase = isLoadingCycles ? 'skeleton_cycles' : (loadingObjectives || loadingDepartments || loadingAllObjectives) ? 'skeleton_objectives' : (companyObjectives.length === 0 ? 'empty_state' : 'main_content');
+  if (typeof fetch !== 'undefined') {
+    fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesDetailView.tsx:phase', message: 'DetailView phase', data: { viewPhase, isLoadingCycles, loadingObjectives, loadingDepartments, loadingAllObjectives, shouldUseFilteredObjectives, filteredCycleIdsLen: filteredCycleIds?.length ?? 0, companyObjectivesLen: companyObjectives.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H3,H4' }) }).catch(() => {});
+  }
+  // #endregion
+
+  // Skeleton when cycles loading to avoid empty→filtered list flicker
+  if (isLoadingCycles) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-12 bg-gray-100 rounded-lg" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+      </div>
+    );
+  }
   if (loadingObjectives || loadingDepartments || loadingAllObjectives) {
-    return <div className="flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-3"></div>
-          <p className="text-xs text-gray-600 leading-relaxed">Loading objectives...</p>
-        </div>
-      </div>;
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-12 bg-gray-100 rounded-lg" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+        <div className="h-24 bg-gray-100 rounded-lg border-l-4 border-gray-200" />
+      </div>
+    );
   }
   if (companyObjectives.length === 0) {
     return <div className="relative text-center p-6 bg-gray-50 rounded-lg h-full w-full flex flex-col items-center justify-center min-h-[400px] max-h-full overflow-hidden">
@@ -439,7 +461,7 @@ export const CompanyObjectivesDetailView = ({
                 title={deleteCompanyObjective.isPending ? 'Deleting...' : 'Delete objective'}
               >
                 {deleteCompanyObjective.isPending ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500"></div>
+                  <LoadingDots size="sm" className="flex-shrink-0" />
                 ) : (
                   <Trash2 className="h-3 w-3" />
                 )}
@@ -652,7 +674,7 @@ export const CompanyObjectivesDetailView = ({
       </AccordionItem>
     );
   };
-  return <div className="h-full flex flex-col max-h-[calc(100vh-120px)] overflow-hidden">
+  return <div className="h-full flex flex-col max-h-[calc(100vh-120px)] overflow-hidden animate-in fade-in duration-200">
 
       {/* Status Groups */}
       <div className="flex-1 space-y-2 seamless-scroll overflow-y-auto scrollbar-hide min-h-0 mt-1">

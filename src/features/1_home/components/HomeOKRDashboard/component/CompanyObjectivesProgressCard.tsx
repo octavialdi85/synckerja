@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronRight, Calendar, Plus, Target } from 'lucide-react';
 import { AddObjectiveDialog } from '../../AddObjectiveDialog';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
@@ -60,7 +60,19 @@ export const CompanyObjectivesProgressCard = ({
   };
   
   const currentYearQuarterSelection = yearQuarterSelection || defaultYearQuarterSelection;
-  
+  const prevLoadingRef = useRef<boolean | undefined>(undefined);
+  // #region agent log
+  useEffect(() => {
+    const prev = prevLoadingRef.current;
+    if (prev !== loading) {
+      prevLoadingRef.current = loading;
+      if (typeof fetch !== 'undefined') {
+        fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesProgressCard.tsx:loadingChange', message: 'ProgressCard loading changed', data: { loading, prev }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H5' }) }).catch(() => {});
+      }
+    }
+  }, [loading]);
+  // #endregion
+
   const handleYearQuarterChange = (selection: YearQuarterSelection) => {
     logger.debug('🟡 SectionCompanyObjectivesProgressOverview - Year quarter selection changed:', selection);
     if (onYearQuarterChange) {
@@ -137,6 +149,12 @@ export const CompanyObjectivesProgressCard = ({
     };
   })();
 
+  // #region agent log
+  if (typeof fetch !== 'undefined') {
+    fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesProgressCard.tsx:render', message: 'ProgressCard render', data: { loading, showingContent: !loading && !error, finalStatsTotal: finalStats.total }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H5' }) }).catch(() => {});
+  }
+  // #endregion
+
   return (
     <div className="space-y-3 flex-shrink-0">
 
@@ -181,12 +199,17 @@ export const CompanyObjectivesProgressCard = ({
           </div>
         </div>
         
-        {/* Progress Bar - Always Visible */}
+        {/* Progress Bar - Always Visible (skeleton when loading to avoid layout flicker) */}
         <div className="p-3">
           {loading ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-              <span className="ml-2 text-sm text-gray-600">Loading progress...</span>
+            <div className="space-y-2 animate-pulse">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Average Progress</span>
+                <span className="h-4 w-8 rounded bg-gray-200" />
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-300 h-2 rounded-full w-0" />
+              </div>
             </div>
           ) : error ? (
             <div className="text-center py-4">
@@ -210,31 +233,40 @@ export const CompanyObjectivesProgressCard = ({
         </div>
         
         {/* Collapsible Content */}
-        {isExpanded && !loading && !error && (
+        {isExpanded && !error && (
           <div className="p-3 border-t border-gray-100 space-y-3">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-green-50 rounded-md p-2">
-                <div className="text-sm font-bold text-green-600">{finalStats.active}</div>
-                <div className="text-xs text-green-700 font-medium">Active</div>
+            {loading ? (
+              <div className="grid grid-cols-3 gap-2 text-center animate-pulse">
+                <div className="bg-gray-100 rounded-md p-2"><div className="h-4 bg-gray-200 rounded mx-auto w-6" /><div className="h-3 bg-gray-200 rounded mt-1 w-12 mx-auto" /></div>
+                <div className="bg-gray-100 rounded-md p-2"><div className="h-4 bg-gray-200 rounded mx-auto w-6" /><div className="h-3 bg-gray-200 rounded mt-1 w-12 mx-auto" /></div>
+                <div className="bg-gray-100 rounded-md p-2"><div className="h-4 bg-gray-200 rounded mx-auto w-6" /><div className="h-3 bg-gray-200 rounded mt-1 w-12 mx-auto" /></div>
+                <div className="col-span-3 text-center bg-gray-50 rounded-md p-2"><div className="h-4 bg-gray-200 rounded mx-auto w-16" /><div className="h-3 bg-gray-200 rounded mt-1 w-24 mx-auto" /></div>
               </div>
-              <div className="bg-gray-50 rounded-md p-2">
-                <div className="text-sm font-bold text-gray-600">{finalStats.draft}</div>
-                <div className="text-xs text-gray-600 font-medium">Draft</div>
-              </div>
-              <div className="bg-blue-50 rounded-md p-2">
-                <div className="text-sm font-bold text-blue-600">{finalStats.completed}</div>
-                <div className="text-xs text-blue-700 font-medium">Completed</div>
-              </div>
-            </div>
-            
-            <div className="text-center bg-gray-50 rounded-md p-2">
-              <div className="text-sm font-bold text-gray-900">{finalStats.total} Total</div>
-              <div className="text-xs text-gray-600">Overall Progress: {finalStats.averageProgress}%</div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-green-50 rounded-md p-2">
+                    <div className="text-sm font-bold text-green-600">{finalStats.active}</div>
+                    <div className="text-xs text-green-700 font-medium">Active</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-md p-2">
+                    <div className="text-sm font-bold text-gray-600">{finalStats.draft}</div>
+                    <div className="text-xs text-gray-600 font-medium">Draft</div>
+                  </div>
+                  <div className="bg-blue-50 rounded-md p-2">
+                    <div className="text-sm font-bold text-blue-600">{finalStats.completed}</div>
+                    <div className="text-xs text-blue-700 font-medium">Completed</div>
+                  </div>
+                </div>
+                <div className="text-center bg-gray-50 rounded-md p-2">
+                  <div className="text-sm font-bold text-gray-900">{finalStats.total} Total</div>
+                  <div className="text-xs text-gray-600">Overall Progress: {finalStats.averageProgress}%</div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
-
-          </div>
-        );
-      };
+    </div>
+  );
+};

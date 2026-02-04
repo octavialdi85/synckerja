@@ -84,35 +84,27 @@ export const useOptimizedSubscription = () => {
 
     // Debounce invalidation to prevent rapid-fire invalidations
     timeoutRef.current = setTimeout(() => {
-      // Double-check org hasn't changed during debounce
       if (lastOrgIdRef.current !== organizationId) {
         const previousOrgId = lastOrgIdRef.current;
         lastOrgIdRef.current = organizationId;
         hasInitializedRef.current = true;
 
-        logger.debug('🔄 [useOptimizedSubscription] Organization changed to:', organizationId);
-        
-        // Remove stale queries from previous organizations
         if (previousOrgId) {
           queryClient.removeQueries({
             predicate: (query) => {
               const queryKey = query.queryKey;
-              return Array.isArray(queryKey) && 
-                     queryKey[0] === 'subscriptionStatus' && 
-                     queryKey[1] === previousOrgId; // Remove queries for previous organization
+              return Array.isArray(queryKey) && queryKey[0] === 'subscriptionStatus' && queryKey[1] === previousOrgId;
             }
           });
+          queryClient.invalidateQueries({
+            queryKey: optimizedQueryKeys.subscription.status(organizationId),
+            refetchType: 'active'
+          });
+          logger.debug('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
         }
-        
-        // Invalidate and force refetch subscription data for new organization
-        queryClient.invalidateQueries({ 
-          queryKey: optimizedQueryKeys.subscription.status(organizationId),
-          refetchType: 'active' // Immediately refetch active queries
-        });
-        
-        logger.debug('✅ [useOptimizedSubscription] Subscription query invalidated and will refetch for org:', organizationId);
+        // On initial load (previousOrgId null): do NOT invalidate — useQuery already runs once; invalidating caused duplicate RPC/logs
       }
-    }, 150); // 150ms debounce to prevent rapid-fire invalidations
+    }, 150);
 
     // Cleanup timeout on unmount or org change
     return () => {

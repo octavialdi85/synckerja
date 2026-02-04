@@ -8,6 +8,53 @@ import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { LoadingDots } from './LoadingDots';
 import { logger } from '@/config/logger';
 
+const SUBSCRIPTION_CACHE_KEY_PREFIX = 'home_subscription_';
+const SUBSCRIPTION_CACHE_TTL_MS = 60 * 1000; // 1 minute – avoid 2 queries on every home open
+
+interface SubscriptionCacheEntry {
+  hasActiveSubscription: boolean | null;
+  subscriptionStatus: string | null;
+  timestamp: number;
+}
+
+function getSubscriptionCache(organizationId: string): SubscriptionCacheEntry | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${SUBSCRIPTION_CACHE_KEY_PREFIX}${organizationId}`);
+    if (!raw) return null;
+    const entry: SubscriptionCacheEntry = JSON.parse(raw);
+    if (Date.now() - entry.timestamp > SUBSCRIPTION_CACHE_TTL_MS) return null;
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+function setSubscriptionCache(organizationId: string, hasActiveSubscription: boolean | null, subscriptionStatus: string | null): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(
+      `${SUBSCRIPTION_CACHE_KEY_PREFIX}${organizationId}`,
+      JSON.stringify({
+        hasActiveSubscription,
+        subscriptionStatus,
+        timestamp: Date.now(),
+      } as SubscriptionCacheEntry)
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function clearHomeSubscriptionCache(organizationId: string | undefined): void {
+  if (typeof sessionStorage === 'undefined' || !organizationId) return;
+  try {
+    sessionStorage.removeItem(`${SUBSCRIPTION_CACHE_KEY_PREFIX}${organizationId}`);
+  } catch {
+    // ignore
+  }
+}
+
 interface HomeAccessGuardProps {
   children: ReactNode;
 }
@@ -84,11 +131,20 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // Flag akan di-clear oleh CreatePlan page setelah subscription dibuat
   // atau oleh EmployeeWelcome setelah user selesai onboarding
 
-  // Load subscription status from both organization_subscriptions and organizations table
+  // Load subscription status: use session cache to avoid 2 queries on every home open
   useEffect(() => {
     const checkSubscription = async () => {
       if (!organization?.id) {
         setLoadingSubscription(false);
+        return;
+      }
+
+      const cached = getSubscriptionCache(organization.id);
+      if (cached) {
+        setHasActiveSubscription(cached.hasActiveSubscription);
+        setSubscriptionStatus(cached.subscriptionStatus);
+        setLoadingSubscription(false);
+        logger.debug('HomeAccessGuard: using cached subscription (skip 2 queries)');
         return;
       }
 
@@ -100,11 +156,13 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
           .eq('id', organization.id)
           .single();
 
+        let active: boolean | null = null;
+        let subStatus: string | null = null;
+
         if (orgError) {
           console.error('Error checking organization subscription status:', orgError);
         } else if (orgData) {
-          // Set has_active_subscription from organizations table
-          const active = orgData.has_active_subscription === true;
+          active = orgData.has_active_subscription === true;
           setHasActiveSubscription(active);
           logger.debug('HomeAccessGuard: has_active_subscription from organizations table:', active);
         }
@@ -117,9 +175,12 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
           .maybeSingle();
 
         if (!subError && subData && 'status' in subData) {
-          setSubscriptionStatus(subData.status as string);
-          logger.debug('HomeAccessGuard: subscription status from organization_subscriptions:', subData.status);
+          subStatus = subData.status as string;
+          setSubscriptionStatus(subStatus);
+          logger.debug('HomeAccessGuard: subscription status from organization_subscriptions:', subStatus);
         }
+
+        setSubscriptionCache(organization.id, active, subStatus);
       } catch (error) {
         console.error('Error checking subscription:', error);
       } finally {
@@ -208,6 +269,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // This check is based on trial_end_date or subscription_end_date from organization_subscriptions table
   // Takes priority over status checks because it's date-based (more accurate)
   if (expiryStatus.isExpired) {
+    clearHomeSubscriptionCache(organization?.id);
     console.warn('HomeAccessGuard: Subscription/Trial expired based on dates, redirecting to create-plan', {
       isTrialExpired: expiryStatus.isTrialExpired,
       isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
@@ -223,6 +285,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // This is the main gate - if has_active_subscription = FALSE, block access immediately
   // Applies to both mobile and desktop versions
   if (hasActiveSubscription === false) {
+    clearHomeSubscriptionCache(organization?.id);
     logger.debug('HomeAccessGuard: has_active_subscription = FALSE, redirecting to create-plan');
     return <Navigate to="/create-plan" replace />;
   }
@@ -242,15 +305,18 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
       logger.debug('HomeAccessGuard: has_active_subscription is null but subscription status is active, allowing access');
       return <>{children}</>;
     } else if (subscriptionStatus !== null && subscriptionStatus !== undefined && subscriptionStatus !== 'active') {
+      clearHomeSubscriptionCache(organization?.id);
       logger.debug('HomeAccessGuard: has_active_subscription is null and subscription status is not active:', subscriptionStatus, 'redirecting to create-plan');
       return <Navigate to="/create-plan" replace />;
     }
     // If both are null/undefined, redirect to create-plan for safety
+    clearHomeSubscriptionCache(organization?.id);
     logger.debug('HomeAccessGuard: has_active_subscription is null and no subscription status found, redirecting to create-plan');
     return <Navigate to="/create-plan" replace />;
   }
 
   // Default fallback: redirect to create-plan if we can't determine status
+  clearHomeSubscriptionCache(organization?.id);
   logger.debug('HomeAccessGuard: Unable to determine subscription status, redirecting to create-plan');
   return <Navigate to="/create-plan" replace />;
 };

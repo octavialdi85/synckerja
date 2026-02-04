@@ -57,6 +57,33 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
       
       for (const lead of leads) {
         try {
+          const isWhatsApp = String(lead.id).startsWith('wa-');
+          const isEmail = String(lead.id).startsWith('email-');
+          const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
+
+          if (isEmail) {
+            statusMap[lead.id] = 'empty';
+            profileMap[lead.id] = null;
+            continue;
+          }
+          if (isWhatsApp && conversationId) {
+            const { data: waData } = await supabase
+              .from('whatsapp_conversation_client_profiles')
+              .select('*')
+              .eq('conversation_id', conversationId)
+              .maybeSingle();
+            if (!waData) {
+              statusMap[lead.id] = 'empty';
+              profileMap[lead.id] = null;
+            } else {
+              profileMap[lead.id] = waData;
+              const fields = [waData.name, (waData as any).code, waData.gender, waData.age, waData.occupation, waData.location, (waData as any).phone_number, (waData as any).email];
+              const filledFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
+              statusMap[lead.id] = filledFields === 0 ? 'empty' : filledFields === fields.length ? 'full' : 'partial';
+            }
+            continue;
+          }
+
           const { data } = await supabase
             .from('lead_client_profiles')
             .select('*')

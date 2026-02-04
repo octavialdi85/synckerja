@@ -15,7 +15,8 @@ interface ObjectiveStats {
 export const useObjectiveStats = (
   organizationId: string | undefined,
   type: 'company' | 'department' | 'individual',
-  cycleIds?: string[]
+  cycleIds?: string[],
+  enabled: boolean = true
 ) => {
   return useQuery({
     queryKey: ['objective-stats', organizationId, type, cycleIds],
@@ -38,7 +39,7 @@ export const useObjectiveStats = (
         logger.query(`🎯 [${type}] Filtering by cycle IDs:`, validCycleIds);
         query = query.in('cycle_id', validCycleIds);
       } else {
-        logger.query(`⚠️ [${type}] No valid cycle IDs provided, returning zero stats`);
+        // Normal when year/quarter filter matches no cycles; return zero stats without warning
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
@@ -278,7 +279,7 @@ export const useObjectiveStats = (
         completed: statusCounts.completed
       };
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };

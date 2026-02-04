@@ -420,10 +420,11 @@ export const useTaskFilters = ({
       }
 
       // Early exit 8: Department filter
-      // Hanya apply jika department diisi, jika kosong maka skip filter ini
+      // Only exclude when we have department data and it doesn't match.
+      // When departmentMap is still loading (taskDepartment undefined), include task so list isn't empty.
       if (filters.department) {
         const taskDepartment = departmentMap?.[task.id];
-        if (!taskDepartment || taskDepartment.id !== filters.department) {
+        if (taskDepartment && taskDepartment.id !== filters.department) {
           return false;
         }
       }

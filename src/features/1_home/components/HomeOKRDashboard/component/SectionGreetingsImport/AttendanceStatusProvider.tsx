@@ -43,8 +43,6 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
     }
 
     try {
-      logger.debug('🔄 Refreshing attendance status...');
-      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         logger.debug('⚠️ No authenticated user');

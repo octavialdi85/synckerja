@@ -89,17 +89,19 @@ const Login = () => {
       });
       if (error) {
         console.log('Login: Authentication error:', error.message);
-        // Handle timeout/network/abort errors explicitly
+        // Handle timeout/network/abort/504 errors (Supabase "context deadline exceeded")
         const isTimeoutOrNetwork = error.message?.includes('timeout') ||
           error.message?.includes('Network request failed') ||
           error.message?.includes('Failed to fetch') ||
           error.message?.includes('signal is aborted') ||
+          error.message?.includes('504') ||
+          error.message?.includes('Gateway Timeout') ||
           error.name === 'AbortError';
         if (isTimeoutOrNetwork) {
-          setError("Koneksi timeout atau server tidak merespons. Silakan coba lagi.");
+          setError("Koneksi timeout atau server sibuk. Silakan coba lagi.");
           toast({
             title: "Koneksi timeout",
-            description: "Server tidak merespons. Pastikan koneksi internet stabil dan coba lagi.",
+            description: "Server sibuk atau tidak merespons. Silakan coba login lagi.",
             variant: "destructive"
           });
           setLoading(false);

@@ -51,9 +51,12 @@ export async function createCompletionApprovalIfAssignee(params: {
   }
 }
 
+const PENDING_APPROVAL_SELECT =
+  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, daily_tasks(title), task_steps(title), task_steps_to_steps(title), assignee:employees!assignee_employee_id(id, full_name)';
+
 /**
  * Fetch pending approvals for the current user as assigner (to show "Pending your approval").
- * Select only completion_approvals columns to avoid 500 from RLS on joined tables; UI shows entity_type and links to task.
+ * Includes task/step/substep titles and assignee name for card display.
  */
 export async function fetchPendingApprovalsForAssigner(
   organizationId: string,
@@ -62,9 +65,7 @@ export async function fetchPendingApprovalsForAssigner(
   try {
     const { data, error } = await supabase
       .from('completion_approvals')
-      .select(
-        'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason'
-      )
+      .select(PENDING_APPROVAL_SELECT)
       .eq('organization_id', organizationId)
       .eq('assigner_employee_id', assignerEmployeeId)
       .eq('status', 'pending')
@@ -76,9 +77,12 @@ export async function fetchPendingApprovalsForAssigner(
   }
 }
 
+const REJECTED_SELECT =
+  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at, daily_tasks(title), task_steps(title), task_steps_to_steps(title), assignee:employees!assignee_employee_id(id, full_name)';
+
 /**
  * Fetch rejected completions for the current user as assignee (to show "Rejected by assigner").
- * Select only completion_approvals columns to avoid 500 from RLS on joined tables.
+ * Includes task/step/substep titles and assignee name for card display.
  */
 export async function fetchRejectedForAssignee(
   organizationId: string,
@@ -87,9 +91,7 @@ export async function fetchRejectedForAssignee(
   try {
     const { data, error } = await supabase
       .from('completion_approvals')
-      .select(
-        'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at'
-      )
+      .select(REJECTED_SELECT)
       .eq('organization_id', organizationId)
       .eq('assignee_employee_id', assigneeEmployeeId)
       .eq('status', 'rejected')

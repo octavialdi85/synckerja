@@ -7,14 +7,13 @@ import { NewLeadForm } from './NewLeadForm';
 import { LeadsTableFooter } from './LeadsTableFooter';
 import { LeadsSidebarFooter } from './LeadsSidebarFooter';
 import { useLeads } from '@/hooks/organized/sales';
-import { NewLead } from '@/types/leads';
-import { useClientProfileStatus } from '@/hooks/organized/sales';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/features/ui/button';
-import { Plus, Download, Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
+import { LoadingDots } from '@/components/LoadingDots';
 
 export const ConsultantsPageContent = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -64,7 +63,15 @@ export const ConsultantsPageContent = () => {
       for (const lead of leads) {
         try {
           const isWhatsApp = String(lead.id).startsWith('wa-');
+          const isEmail = String(lead.id).startsWith('email-');
           const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
+
+          // Email leads: no client profile table; lead_id is synthetic (not UUID) — skip DB query
+          if (isEmail) {
+            statusMap[lead.id] = 'empty';
+            profileMap[lead.id] = null;
+            continue;
+          }
 
           const { data } = isWhatsApp && conversationId
             ? await supabase
@@ -222,12 +229,16 @@ export const ConsultantsPageContent = () => {
         isSubmitting={isSubmitting}
       />
 
-      {/* Grid Layout: 12 columns (9-3) */}
+      {/* Single load like /digital-marketing/social-media/dashboard: one loading state, then all content (no blink) */}
+      {loading ? (
+        <div className="flex items-center justify-center min-h-[500px] w-full">
+          <LoadingDots size="lg" />
+        </div>
+      ) : (
       <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
         {/* Main Content - 9 columns */}
         <div className="col-span-9 h-full flex flex-col min-h-0">
-          <div className="h-full flex flex-col min-h-0">
-            {/* Filter Section */}
+          <div className="h-full flex flex-col min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
             <div className="flex-shrink-0 mb-2">
               <div className="bg-white border rounded-md p-2">
                 <LeadsFilters 
@@ -238,15 +249,13 @@ export const ConsultantsPageContent = () => {
                 />
               </div>
             </div>
-            
-            {/* Metrics Cards Section */}
+
             <div className="flex-shrink-0 mb-2">
               <LeadsMetricsCards leads={filteredLeads} />
             </div>
-            
-            {/* Table Section - Main Content */}
-            <div className="flex-1 min-h-0 h-full">
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll max-h-[calc(100vh-320px)]">
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <LeadsTableNew 
                     leads={filteredLeads}
@@ -256,7 +265,6 @@ export const ConsultantsPageContent = () => {
                     loading={loading}
                   />
                 </div>
-                {/* Table Footer */}
                 <LeadsTableFooter 
                   totalLeads={leads.length}
                   convertedLeads={convertedLeads}
@@ -267,12 +275,11 @@ export const ConsultantsPageContent = () => {
             </div>
           </div>
         </div>
-        
-        {/* Right Column - Overview Sidebar (3 columns) */}
+
+        {/* Right Column - Sidebar */}
         <div className="col-span-3 h-full flex flex-col min-h-0">
-          <div className="h-full flex flex-col min-h-0">
+          <div className="h-full flex flex-col min-h-0 max-h-[calc(100vh-120px)]">
             <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col min-h-0">
-              {/* Sidebar Header */}
               <div className="px-4 py-1.5 border-b flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div>
@@ -295,7 +302,6 @@ export const ConsultantsPageContent = () => {
                 </div>
               </div>
 
-              {/* Scrollable Sidebar Content */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <div className="h-full p-4 seamless-scroll overflow-y-auto">
                   <LeadsInsights 
@@ -309,7 +315,6 @@ export const ConsultantsPageContent = () => {
                 </div>
               </div>
 
-              {/* Sidebar Footer */}
               <LeadsSidebarFooter 
                 totalLeads={filteredLeads.length}
                 convertedLeads={convertedLeads}
@@ -318,6 +323,7 @@ export const ConsultantsPageContent = () => {
           </div>
         </div>
       </div>
+      )}
     </>
   );
 };

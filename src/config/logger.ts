@@ -7,11 +7,38 @@ const LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 } as const;
 const envLevel = (import.meta.env.VITE_LOG_LEVEL as keyof typeof LEVELS) || (isDevelopment ? 'info' : 'warn');
 const currentLevel = LEVELS[envLevel] ?? (isDevelopment ? 2 : 1);
 
+/** When true, all logs use console.log (not debug) so DevTools "Default" level shows them; no "133 hidden". */
+function isDailyTaskPage(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname.includes('/tools/daily-task');
+}
+
+/** Home page (path "/") – show all console for analysis/optimization decisions. */
+function isHomePage(): boolean {
+  return typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '');
+}
+
+/** OKR section (all paths under /okr) – show all console for performance analysis. */
+function isOKRPage(): boolean {
+  return typeof window !== 'undefined' && (window.location.pathname === '/okr' || window.location.pathname.startsWith('/okr/'));
+}
+
+/** Pages where we show full console (no hidden logs) for analysis and optimization. */
+function isAnalysisPage(): boolean {
+  return isDailyTaskPage() || isHomePage() || isOKRPage();
+}
+
+/** On analysis pages (home, daily-task) use log so nothing is hidden by DevTools Verbose filter; else use debug. */
+function consoleForAnalysisPage(...args: any[]) {
+  if (isAnalysisPage()) console.log(...args);
+  else console.debug(...args);
+}
+
 // Simple in-memory rate limiter and log-once tracker
 const lastLogAt = new Map<string, number>();
 const loggedOnce = new Set<string>();
 
 function shouldLogRateLimited(key: string, minIntervalMs = 3000): boolean {
+  if (isAnalysisPage()) return true; // no throttling on home/daily-task for performance analysis
   const now = Date.now();
   const last = lastLogAt.get(key) ?? 0;
   if (now - last < minIntervalMs) return false;
@@ -26,7 +53,7 @@ function shouldLogOnce(key: string): boolean {
 }
 
 function withGroupCollapsed(label: string, fn: () => void): void {
-  if (isDevelopment) {
+  if (isDevelopment || isAnalysisPage()) {
     console.groupCollapsed(label);
     try {
       fn();
@@ -39,15 +66,15 @@ function withGroupCollapsed(label: string, fn: () => void): void {
 }
 
 export const logger = {
-  // Level-aware logging
+  // Level-aware logging; on home/daily-task use console.log so DevTools doesn't hide as "Verbose"
   trace: (...args: any[]) => {
-    if (currentLevel >= LEVELS.trace) console.debug(...args);
+    if (isAnalysisPage() || currentLevel >= LEVELS.trace) consoleForAnalysisPage(...args);
   },
   debug: (...args: any[]) => {
-    if (currentLevel >= LEVELS.debug || isVerbose) console.debug(...args);
+    if (isAnalysisPage() || currentLevel >= LEVELS.debug || isVerbose) consoleForAnalysisPage(...args);
   },
   info: (...args: any[]) => {
-    if (currentLevel >= LEVELS.info || isVerbose) console.info(...args);
+    if (isAnalysisPage() || currentLevel >= LEVELS.info || isVerbose) console.info(...args);
   },
   warn: (...args: any[]) => {
     if (currentLevel >= LEVELS.warn) console.warn(...args);
@@ -56,34 +83,31 @@ export const logger = {
     if (currentLevel >= LEVELS.error) console.error(...args);
   },
 
-  // Special channels to reduce noise in production
+  // Special channels: on home/daily-task use console.log so nothing appears as "133 hidden"
   query: (...args: any[]) => {
-    if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug)) {
-      console.debug(...args);
+    if (isAnalysisPage() || (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug))) {
+      (isAnalysisPage() ? console.log : console.debug)(...args);
     }
   },
   userData: (...args: any[]) => {
-    if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug)) {
-      console.debug(...args);
+    if (isAnalysisPage() || (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug))) {
+      (isAnalysisPage() ? console.log : console.debug)(...args);
     }
   },
   realtime: (...args: any[]) => {
-    if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug)) {
-      console.debug(...args);
+    if (isAnalysisPage() || (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug))) {
+      (isAnalysisPage() ? console.log : console.debug)(...args);
     }
   },
 
-  // Performance monitoring - logs slow operations even in production
+  // Performance monitoring; on home/daily-task use console.log so visible without Verbose level
   performance: (label: string, duration: number, threshold: number = 500) => {
-    // Suppress User Data Fetch warnings - expected to be slow on initial load
     const isUserDataFetch = label.toLowerCase().includes('user data fetch');
-    
+    const showAll = isAnalysisPage();
     if (duration > threshold && !isUserDataFetch) {
-      // Always log slow operations, even in production (except User Data Fetch)
       console.warn(`⚠️ SLOW OPERATION: ${label} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
-    } else if (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug) && !isUserDataFetch) {
-      // Only log fast operations in development (except User Data Fetch)
-      console.debug(`⚡ ${label}: ${duration.toFixed(2)}ms`);
+    } else if ((showAll || (isDevelopment && (isVerbose || currentLevel >= LEVELS.debug))) && !isUserDataFetch) {
+      (isAnalysisPage() ? console.log : console.debug)(`⚡ ${label}: ${duration.toFixed(2)}ms`);
     }
   },
 

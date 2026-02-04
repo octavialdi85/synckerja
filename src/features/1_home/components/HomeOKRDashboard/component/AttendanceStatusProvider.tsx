@@ -44,10 +44,6 @@ export const AttendanceStatusProvider = ({ children }: AttendanceStatusProviderP
     }
 
     try {
-      if (import.meta.env?.DEV) {
-        console.log('🔄 Refreshing attendance status...');
-      }
-      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         if (import.meta.env?.DEV) {

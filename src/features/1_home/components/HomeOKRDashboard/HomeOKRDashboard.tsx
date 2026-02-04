@@ -17,6 +17,17 @@ import { useObjectiveStats } from './hooks/useObjectiveStats';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { filterCyclesByYearQuarter, hasYearQuarterSelection } from './component/yearQuarterFilter';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+/** Lazy load: becomes true after delay to stagger stats fetches. */
+function useDeferredReady(delayMs: number): boolean {
+  const [ready, setReady] = useState(delayMs <= 0);
+  useEffect(() => {
+    if (delayMs <= 0) return;
+    const t = setTimeout(() => setReady(true), delayMs);
+    return () => clearTimeout(t);
+  }, [delayMs]);
+  return ready;
+}
+
 const HomeOKRDashboardContent = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'employee'>('employee');
@@ -40,6 +51,10 @@ const HomeOKRDashboardContent = () => {
   const {
     data: currentEmployee
   } = useCurrentEmployee();
+
+  // Lazy load: stagger objective stats (company first, then department, then individual)
+  const readyDepartmentStats = useDeferredReady(350);
+  const readyIndividualStats = useDeferredReady(700);
 
   // Get available years from cycles
   const availableYears = cycles.length > 0 ? cycles.map(c => c.year).filter((year, index, arr) => arr.indexOf(year) === index).sort((a, b) => b - a) : undefined;
@@ -68,10 +83,10 @@ const HomeOKRDashboardContent = () => {
       : undefined;
   };
 
-  // Get real stats for each objective type
-  const companyStats = useObjectiveStats(organizationId, 'company', getFilteredCycleIds(yearQuarterSelection));
-  const departmentStats = useObjectiveStats(organizationId, 'department', getFilteredCycleIds(yearQuarterSelection));
-  const individualStats = useObjectiveStats(organizationId, 'individual', getFilteredCycleIds(yearQuarterSelection));
+  // Get real stats for each objective type (lazy: company first, then department, then individual)
+  const companyStats = useObjectiveStats(organizationId, 'company', getFilteredCycleIds(yearQuarterSelection), true);
+  const departmentStats = useObjectiveStats(organizationId, 'department', getFilteredCycleIds(yearQuarterSelection), readyDepartmentStats);
+  const individualStats = useObjectiveStats(organizationId, 'individual', getFilteredCycleIds(yearQuarterSelection), readyIndividualStats);
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);

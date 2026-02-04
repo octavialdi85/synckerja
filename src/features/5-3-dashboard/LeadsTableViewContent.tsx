@@ -61,7 +61,14 @@ export const LeadsTableViewContent = ({}: LeadsTableViewContentProps) => {
       for (const lead of leads) {
         try {
           const isWhatsApp = String(lead.id).startsWith('wa-');
+          const isEmail = String(lead.id).startsWith('email-');
           const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
+
+          if (isEmail) {
+            statusMap[lead.id] = 'empty';
+            profileMap[lead.id] = null;
+            continue;
+          }
 
           const { data } = isWhatsApp && conversationId
             ? await supabase

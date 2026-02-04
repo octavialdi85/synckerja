@@ -1,0 +1,561 @@
+import React from 'react';
+import {
+  CheckSquare,
+  Square,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  User,
+  History,
+  Clock3,
+  Paperclip,
+  Target,
+  Bell,
+  Building2,
+  Edit,
+  Trash2,
+  Plus,
+  Flag,
+} from 'lucide-react';
+import { Button } from '@/features/ui/button';
+import { TableCell, TableRow } from '@/features/ui/table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/features/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/features/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/features/ui/dropdown-menu';
+import { CustomDatePicker } from '@/features/share/calendar';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { format, isSameMonth } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
+import { TaskStep } from '../TaskStep';
+import {
+  getStatusBadge,
+  getPriorityBadge,
+  formatDate,
+  isOverdue,
+  isTaskCreator,
+  isTaskFullyCompleteBySteps,
+  calculateAssignedStepsProgress,
+} from './taskListHelpers';
+import type { Task } from '../../types';
+
+export interface TaskListRowProps {
+  task: Task;
+  isExpanded: boolean;
+  isHighlighted: boolean;
+  department: { id: string; name: string } | undefined;
+  blockerCount: number;
+  filters: { pic?: string } | null;
+  getVisibleSteps: (task: Task) => Task['steps'];
+  rowRef: (el: HTMLTableRowElement | null) => void;
+  datePickerOpen: string | null;
+  reminderPendingTaskId: string | null;
+  onToggleExpansion: (taskId: string) => void;
+  onStatusToggle: (task: Task) => void;
+  onOpenBlockers: (task: Task) => void;
+  onDateChange: (taskId: string, date: Date) => void;
+  onClearDate: (taskId: string) => void;
+  onPriorityChange: (taskId: string, priority: Task['priority']) => void;
+  onDeleteClick: (task: Task) => void;
+  onToggleReminder: (task: Task) => void;
+  setDatePickerOpen: (v: string | null) => void;
+  setReminderPendingTaskId: (v: string | null) => void;
+  setHistoryDialog: (v: { isOpen: boolean; taskId: string | null }) => void;
+  setDeadlineDialog: (v: { isOpen: boolean; taskId: string | null }) => void;
+  setEditingTask: (v: string | null) => void;
+  setAddStepDialog: (v: { isOpen: boolean; taskId: string | null; taskTitle: string }) => void;
+  userId: string | undefined;
+}
+
+export function TaskListRow({
+  task,
+  isExpanded,
+  isHighlighted,
+  department,
+  blockerCount,
+  filters,
+  getVisibleSteps,
+  rowRef,
+  datePickerOpen,
+  reminderPendingTaskId,
+  onToggleExpansion,
+  onStatusToggle,
+  onOpenBlockers,
+  onDateChange,
+  onClearDate,
+  onPriorityChange,
+  onDeleteClick,
+  onToggleReminder,
+  setDatePickerOpen,
+  setReminderPendingTaskId,
+  setHistoryDialog,
+  setDeadlineDialog,
+  setEditingTask,
+  setAddStepDialog,
+  userId,
+}: TaskListRowProps) {
+  const visibleSteps = getVisibleSteps(task);
+  const progress = calculateAssignedStepsProgress(task, visibleSteps);
+  const creatorCanEdit = isTaskCreator(task, userId);
+  const isOverdueTask = isOverdue(task.due_date, task.status);
+  const displayStatus =
+    task.status === 'cancelled'
+      ? 'cancelled'
+      : progress >= 100
+        ? 'completed'
+        : progress > 0
+          ? 'in_progress'
+          : 'pending';
+
+  return (
+    <React.Fragment>
+      <TableRow
+        ref={rowRef}
+        className={`w-full hover:bg-gray-50 transition-all duration-300 ${
+          isHighlighted ? 'bg-blue-50 border-l-4 border-l-blue-500 shadow-md' : ''
+        }`}
+      >
+        <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggleExpansion(task.id)}
+            className="h-7 w-7 p-0 hover:bg-gray-200"
+          >
+            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </Button>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onStatusToggle(task);
+            }}
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+            title={
+              task.has_substeps === false
+                ? task.status === 'completed'
+                  ? 'Mark incomplete'
+                  : 'Mark complete'
+                : isTaskFullyCompleteBySteps(task)
+                  ? 'Mark complete / reopen'
+                  : 'Complete all steps to mark task complete'
+            }
+          >
+            {isTaskFullyCompleteBySteps(task) ? (
+              <CheckSquare className="w-5 h-5 text-green-600" />
+            ) : (
+              <Square className="w-5 h-5" />
+            )}
+          </button>
+        </TableCell>
+
+        <TableCell className="px-2 py-3" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
+                  isTaskFullyCompleteBySteps(task) ? 'line-through text-gray-500' : 'text-gray-900'
+                }`}
+                onClick={() => onToggleExpansion(task.id)}
+              >
+                {isHighlighted && <Target className="w-4 h-4 text-blue-600 animate-pulse" />}
+                {task.title}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start" className="max-w-md p-4 bg-gray-900 text-white shadow-lg border-gray-700">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{task.title}</p>
+              {task.description && (
+                <p className="text-xs text-gray-300 mt-2 border-t border-gray-700 pt-2">{task.description}</p>
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            {task.steps.length > 0 && (
+              <div className="flex items-center gap-1">
+                <CheckSquare className="w-3 h-3" />
+                {task.steps.filter((s) => s.is_completed).length}/{task.steps.length} steps
+              </div>
+            )}
+            {task.files.length > 0 && (
+              <div className="flex items-center gap-1">
+                <Paperclip className="w-3 h-3" />
+                {task.files.length} files
+              </div>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            {department ? (
+              <>
+                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                <span className="text-sm text-gray-900 font-medium truncate block min-w-0" title={department.name}>
+                  {department.name}
+                </span>
+              </>
+            ) : (
+              <span className="text-sm text-gray-400 italic">No Department</span>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+          <div className="flex items-center">
+            {task.assigned_to_name ? (
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-gray-900 font-medium">{task.assigned_to_name}</span>
+              </div>
+            ) : (
+              <span className="text-sm text-gray-400 italic">Unassigned</span>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+          {task.plan_date ? (
+            (() => {
+              const planDateObj = new Date(task.plan_date);
+              const dueDateObj = task.due_date ? new Date(task.due_date) : null;
+              const isDifferent = dueDateObj && !isSameMonth(planDateObj, dueDateObj);
+              return (
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-blue-600" />
+                  <span className="text-sm text-blue-600 font-medium">
+                    {format(planDateObj, 'MMM yyyy', { locale: idLocale })}
+                  </span>
+                  {isDifferent && (
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-100 text-orange-700 text-xs font-bold"
+                      title="Plan date berbeda dari Due date"
+                    >
+                      !
+                    </span>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
+            <span className="text-sm text-gray-400">-</span>
+          )}
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+          <Popover
+            open={datePickerOpen === task.id}
+            onOpenChange={(open) => {
+              setDatePickerOpen(open ? task.id : null);
+              if (!open && reminderPendingTaskId === task.id) setReminderPendingTaskId(null);
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                className={`h-auto p-1 hover:bg-gray-100 rounded-md transition-colors ${
+                  isOverdueTask ? 'text-red-600 font-medium hover:bg-red-50' : 'text-gray-600'
+                }`}
+              >
+                {task.due_date ? (
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      <span className="text-sm">{formatDate(task.due_date)}</span>
+                    </div>
+                    {isOverdueTask && <span className="text-xs text-red-500">Overdue</span>}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <Calendar className="w-3 h-3" />
+                    <span className="text-sm">Set date</span>
+                  </div>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="center">
+              <div className="p-2">
+                {reminderPendingTaskId === task.id && !task.due_date && (
+                  <div className="mb-2 px-2 py-1.5 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                    Set due date untuk mengaktifkan pengingat
+                  </div>
+                )}
+                <CustomDatePicker
+                  selected={task.due_date ? new Date(task.due_date) : undefined}
+                  onSelect={(date) => date && onDateChange(task.id, date)}
+                  className="border-0 shadow-none"
+                />
+                {task.due_date && (
+                  <div className="flex justify-center pt-2 border-t mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onClearDate(task.id)}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      Clear Date
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+          {task.finish_date ? (
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-green-600" />
+                <span className="text-sm text-green-600 font-medium">{formatDate(task.finish_date)}</span>
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm text-gray-400">-</span>
+          )}
+        </TableCell>
+
+        <TableCell className="px-2 pr-2 py-3 text-center" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+          {blockerCount > 0 ? (
+            <button onClick={() => onOpenBlockers(task)} className="text-xs font-medium text-purple-700 hover:underline">
+              Found {blockerCount} Blocker{blockerCount > 1 ? 's' : ''}
+            </button>
+          ) : (
+            <span className="text-xs text-gray-400">-</span>
+          )}
+        </TableCell>
+
+        <TableCell className="px-2 pr-8 py-3 text-center" style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                disabled={!creatorCanEdit}
+                className={`priority-dropdown-trigger h-auto p-1 rounded-md transition-colors ${
+                  creatorCanEdit ? 'hover:bg-gray-50 hover:text-inherit cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                }`}
+                title={creatorCanEdit ? 'Change priority' : '🔒 Only task creator can change priority'}
+              >
+                {getPriorityBadge(task.priority)}
+              </Button>
+            </DropdownMenuTrigger>
+            {creatorCanEdit && (
+              <DropdownMenuContent align="center" className="w-32">
+                <DropdownMenuItem onClick={() => onPriorityChange(task.id, 'low')} className="flex items-center gap-2">
+                  <Flag className="w-3 h-3 text-green-600" />
+                  <span className="text-green-700">Low</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onPriorityChange(task.id, 'medium')} className="flex items-center gap-2">
+                  <Flag className="w-3 h-3 text-blue-600" />
+                  <span className="text-blue-700">Medium</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onPriorityChange(task.id, 'high')} className="flex items-center gap-2">
+                  <Flag className="w-3 h-3 text-orange-600" />
+                  <span className="text-orange-700">High</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onPriorityChange(task.id, 'urgent')} className="flex items-center gap-2">
+                  <Flag className="w-3 h-3 text-red-600" />
+                  <span className="text-red-700">Urgent</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onPriorityChange(task.id, 'needs_to_be_presented')}
+                  className="flex items-center gap-2"
+                >
+                  <Flag className="w-3 h-3 text-purple-600" />
+                  <span className="text-purple-700">Presentation</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            )}
+          </DropdownMenu>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-center" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
+          {getStatusBadge(displayStatus)}
+        </TableCell>
+
+        <TableCell className="px-2 py-3" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+          <div className="flex flex-col items-center gap-1">
+            <div className="text-xs text-gray-500">
+              {visibleSteps.length > 0 ? `${progress}%` : task.status === 'completed' ? '100%' : 'No steps'}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  progress === 100 ? 'bg-green-500' : 'bg-blue-600'
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-center" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
+          <div className="flex items-center justify-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggleReminder(task)}
+              className={`h-7 w-7 p-0 ${
+                task.has_reminder ?? false
+                  ? 'text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700'
+                  : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+              }`}
+              title={
+                task.has_reminder ?? false
+                  ? 'Pengingat aktif'
+                  : task.due_date
+                    ? 'Aktifkan pengingat'
+                    : 'Set due date terlebih dahulu untuk mengaktifkan pengingat'
+              }
+            >
+              <Bell className={`w-3 h-3 ${task.has_reminder ?? false ? 'fill-current' : ''}`} />
+            </Button>
+            {task.deadline_history && task.deadline_history.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setHistoryDialog({ isOpen: true, taskId: task.id })}
+                className="h-7 w-7 p-0 hover:bg-gray-50 hover:text-gray-600"
+                title="View deadline history"
+              >
+                <History className="w-3 h-3" />
+              </Button>
+            )}
+            {task.status !== 'completed' && task.due_date && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeadlineDialog({ isOpen: true, taskId: task.id })}
+                className="h-7 w-7 p-0 hover:bg-orange-50 hover:text-orange-600"
+                title="Request deadline extension"
+              >
+                <Clock3 className="w-3 h-3" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => creatorCanEdit && setEditingTask(task.id)}
+              disabled={!creatorCanEdit}
+              className={`h-7 w-7 p-0 ${
+                creatorCanEdit ? 'hover:bg-blue-50 hover:text-blue-600 cursor-pointer' : 'opacity-40 cursor-not-allowed'
+              }`}
+              title={creatorCanEdit ? 'Edit task' : '🔒 Only task creator can edit'}
+            >
+              <Edit className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => creatorCanEdit && onDeleteClick(task)}
+              disabled={!creatorCanEdit}
+              className={`h-7 w-7 p-0 ${
+                creatorCanEdit ? 'hover:bg-red-50 hover:text-red-600 cursor-pointer' : 'opacity-40 cursor-not-allowed'
+              }`}
+              title={creatorCanEdit ? 'Delete task' : '🔒 Only task creator can delete'}
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {isExpanded && (
+        <TableRow className="w-full">
+          <TableCell
+            colSpan={13}
+            className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
+              isHighlighted ? 'bg-blue-100 border-l-4 border-l-blue-500' : 'bg-blue-50'
+            }`}
+            style={{ width: '100%', minWidth: 0, maxWidth: '100%' }}
+          >
+            {task.description && (
+              <div className="mb-4 w-full min-w-0">
+                <h4 className="text-xs font-medium text-gray-700 mb-1">Description</h4>
+                <div className="max-h-48 overflow-y-auto seamless-scroll">
+                  <p
+                    className="text-sm text-gray-600 break-words whitespace-pre-wrap overflow-wrap-anywhere"
+                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                  >
+                    {task.description}
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="w-full space-y-4" style={{ width: '100%' }}>
+              <div className="w-full">
+                <div className="flex items-center justify-between mb-3 w-full">
+                  <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    Steps (
+                    {`${visibleSteps.filter((s) => s.is_completed).length}/${visibleSteps.length}`})
+                  </h4>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (creatorCanEdit) setAddStepDialog({ isOpen: true, taskId: task.id, taskTitle: task.title });
+                    }}
+                    disabled={!creatorCanEdit}
+                    className={`${
+                      creatorCanEdit
+                        ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer'
+                        : 'text-gray-400 opacity-50 cursor-not-allowed'
+                    }`}
+                    title={creatorCanEdit ? 'Add a new step to this task' : '🔒 Only task creator can add steps'}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Step
+                  </Button>
+                </div>
+                <SortableContext
+                  items={task.steps.map((step) => `step-${step.id}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2 min-h-[50px] w-full">
+                    {visibleSteps.length === 0 ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                        <CheckSquare className="w-8 h-8 mx-auto text-blue-400 mb-2" />
+                        <p className="text-sm font-medium text-blue-900 mb-1">No steps yet</p>
+                        <p className="text-xs text-blue-700">
+                          {filters?.pic ? 'No steps assigned to selected PIC' : 'Steps will appear here once created or assigned to you'}
+                        </p>
+                      </div>
+                    ) : (
+                      visibleSteps
+                        .sort((a, b) => a.order - b.order)
+                        .map((step, index) => (
+                          <TaskStep
+                            key={step.id}
+                            step={step}
+                            index={index}
+                            taskCreatedBy={task.created_by}
+                            taskTitle={task.title}
+                            autoReorder={true}
+                          />
+                        ))
+                    )}
+                  </div>
+                </SortableContext>
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </React.Fragment>
+  );
+}

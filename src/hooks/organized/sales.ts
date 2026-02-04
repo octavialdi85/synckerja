@@ -827,10 +827,15 @@ export const useClientProfileStatus = (leadId: string) => {
   const isWhatsApp = leadId.startsWith('wa-');
   const conversationId = isWhatsApp ? leadId.replace(/^wa-/, '') : null;
 
+  const isEmail = leadId.startsWith('email-');
+
   const { data: profile, isLoading: loading } = useQuery({
     queryKey: ['client-profile-status', leadId, organizationId],
     queryFn: async () => {
       if (!leadId || !organizationId) return null;
+
+      // Email leads: no client profile table yet; treat as empty (lead_id is synthetic, not UUID)
+      if (isEmail) return null;
 
       if (isWhatsApp && conversationId) {
         const { data, error } = await supabase
@@ -845,6 +850,7 @@ export const useClientProfileStatus = (leadId: string) => {
         return data;
       }
 
+      // Only real lead UUIDs go to lead_client_profiles
       const { data, error } = await supabase
         .from('lead_client_profiles')
         .select('*')
@@ -1039,10 +1045,10 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         };
       });
 
-      // 2) Fetch leads from whatsapp_conversations (same org) and map to lead-like rows (with lead_status_id, assignee_id)
+      // 2) Fetch leads from whatsapp_conversations (same org; includes channel: whatsapp | instagram) and map to lead-like rows
       const { data: whatsappConvs, error: whatsappError } = await supabase
         .from('whatsapp_conversations')
-        .select('id, organization_id, customer_wa_id, customer_name, last_message_at, last_message_body, last_opened_at, lead_status_id, followup, fu_priority, assignee_id, created_at, updated_at, ticket_id')
+        .select('id, organization_id, customer_wa_id, customer_name, channel, last_message_at, last_message_body, last_opened_at, lead_status_id, followup, fu_priority, assignee_id, created_at, updated_at, ticket_id')
         .eq('organization_id', organizationId)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
@@ -1085,20 +1091,22 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         const whatsappAsLeads = whatsappConvs.map((c: any) => {
           const statusId = c.lead_status_id ?? '';
           const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
-          const waTicketId = c.ticket_id ?? ('WA-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
+          const sourceLabel = isInstagram ? 'Instagram' : 'WhatsApp';
+          const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
           const assigneeId = c.assignee_id ?? null;
           const assigneeName = assigneeId ? assigneeNameMap.get(normId(assigneeId)) ?? null : null;
           return {
             id: 'wa-' + c.id,
-            client: c.customer_name || c.customer_wa_id || 'WhatsApp',
-            title: (c.last_message_body || 'WhatsApp').slice(0, 100),
+            client: c.customer_name || c.customer_wa_id || sourceLabel,
+            title: (c.last_message_body || sourceLabel).slice(0, 100),
             services: null,
             category: '-',
             assignee: assigneeName as string | null,
             assignee_id: assigneeId,
             fu_priority: c.fu_priority ?? null,
             status_id: statusId,
-            source: 'WhatsApp',
+            source: sourceLabel,
             followup: c.followup ?? 0,
             converted_at: null,
             created_at: c.created_at,

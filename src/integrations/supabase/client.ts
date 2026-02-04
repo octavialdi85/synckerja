@@ -36,7 +36,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
       // Login: longer timeout (40s) and 1 retry on timeout so slow networks can complete
       const isLoginRequest = isAuthRequest && !isRefreshToken;
       const MAX_RETRIES = isRefreshToken ? 1 : (isAuthRequest ? 1 : 1);
-      const TIMEOUT_MS = isRefreshToken ? 12000 : (isAuthRequest ? 40000 : 15000);
+      const TIMEOUT_MS = isRefreshToken ? 18000 : (isAuthRequest ? 40000 : 25000);
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         // Create abort controller for timeout if not already provided
@@ -78,6 +78,23 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
           }
           
           if (response.status === 500) {
+            // Refresh token: retry once on "context canceled" (server-side cancel, often transient)
+            if (isRefreshToken && attempt < MAX_RETRIES) {
+              let bodyText = '';
+              try {
+                bodyText = await response.clone().text();
+              } catch {
+                // ignore
+              }
+              if (bodyText && (bodyText.includes('context canceled') || bodyText.includes('context cancelled'))) {
+                if (timeoutId) clearTimeout(timeoutId);
+                if (import.meta.env.DEV) {
+                  console.warn('⚠️ Auth refresh 500 (context canceled), retrying...');
+                }
+                await new Promise(r => setTimeout(r, Math.min(600 * Math.pow(2, attempt), 2000)));
+                continue;
+              }
+            }
             if (url.includes('/auth/v1/')) {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
                 detail: { status: 500, message: 'Session or refresh token error (500)', url }
@@ -153,14 +170,23 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
 
           // CRITICAL: Handle 504/522 on any auth path (/token refresh, /user, etc.)
           // 522 = Connection Timed Out (Cloudflare can't reach Supabase origin - server down/slow)
-          // 504 = Gateway Timeout (Supabase service overloaded)
+          // 504 = Gateway Timeout (Supabase "context deadline exceeded" - auth service overloaded)
           if ((response.status === 504 || response.status === 522) && url.includes('/auth/v1/')) {
             const errorType = response.status === 504 ? 'Gateway Timeout' : 'Connection Timed Out';
             const isRefresh = url.includes('grant_type=refresh_token');
+            // Retry login once on 504/522 (server-side timeout) - often succeeds on retry
+            if (isLoginRequest && !isRefresh && attempt < MAX_RETRIES) {
+              if (timeoutId) clearTimeout(timeoutId);
+              if (import.meta.env.DEV) {
+                console.warn(`⚠️ Auth login ${response.status} (${errorType}), retrying (${attempt + 1}/${MAX_RETRIES + 1})...`);
+              }
+              const delay = Math.min(800 * Math.pow(2, attempt), 3000);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
             if (import.meta.env.DEV) {
               console.warn(`⚠️ Auth ${isRefresh ? 'refresh token' : 'request'} ${response.status} (${errorType})`);
             }
-            // Always dispatch event for redirect to login
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
                 detail: { 

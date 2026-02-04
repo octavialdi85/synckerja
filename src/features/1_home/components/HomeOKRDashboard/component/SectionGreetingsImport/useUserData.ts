@@ -80,9 +80,6 @@ export const useUserData = (): UserData => {
     const cacheKey = `user-${userId}`;
     const cached = userDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      if (import.meta.env?.DEV) {
-        console.log('📋 Using cached user data for:', userId);
-      }
       setProfile(cached.data.profile);
       setOrganization(cached.data.organization);
       setUserRole(cached.data.userRole);

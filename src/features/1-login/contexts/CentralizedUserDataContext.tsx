@@ -102,7 +102,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     employee: Employee | null;
     timestamp: number;
   } | null>(null);
-  const CACHE_DURATION = 30 * 1000; // 30 seconds cache
+  const CACHE_DURATION = 60 * 1000; // 60 seconds cache - reduce refetches and timeout risk
 
   // Fetch user data - focus only on 5 core tables
   const refreshUserData = useCallback(async () => {
@@ -192,74 +192,82 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setLoading(true);
       setError(null);
       
-      // Run profile and email verification queries in parallel with timeout
-      // Timeout 8s: fail fast agar UI tampil cepat dengan fallback; query lambat tidak block 20s
-      const QUERY_TIMEOUT = 8000;
-      
-      // Optimize queries - use maybeSingle() to avoid PGRST116 error if profile doesn't exist
+      // Run profile and email verification in parallel with timeout; one retry on timeout
+      const QUERY_TIMEOUT = 12000; // 12s - balanced so slow DB can finish (indexes reduce load)
       const startTime = performance.now();
-      const profilePromise = supabase
-        .from('profiles')
-        .select('user_id, full_name, email, active_organization_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-        
-      // Email verification can be optional - wrap in promise to handle errors gracefully
-      const verificationPromise = (async () => {
-        try {
-          return await supabase
-            .from('email_verification_tokens')
-            .select('email_verified')
-            .eq('user_id', user.id)
-            .order('used_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        } catch (error) {
-          // Don't fail if verification query fails - return null data
-          return { data: null, error: null };
-        }
-      })();
-      
-      // Race queries against timeout - handle timeout gracefully
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('User data query timeout')), QUERY_TIMEOUT)
-      );
-      
-      let profileData: any = null;
-      let profileError: any = null;
-      let verificationToken: any = null;
-      
-      try {
-        // Use Promise.allSettled to handle partial failures, then race against timeout
-        const queriesPromise = Promise.allSettled([profilePromise, verificationPromise]);
-        
-        const results = await Promise.race([queriesPromise, timeoutPromise]) as PromiseSettledResult<any>[];
-        
-        // Process profile result
+
+      const runFirstBatch = async (): Promise<{
+        profileData: any;
+        profileError: any;
+        verificationToken: any;
+      }> => {
+        const profilePromise = supabase
+          .from('profiles')
+          .select('user_id, full_name, email, active_organization_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const verificationPromise = (async () => {
+          try {
+            return await supabase
+              .from('email_verification_tokens')
+              .select('email_verified')
+              .eq('user_id', user.id)
+              .order('used_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+          } catch {
+            return { data: null, error: null };
+          }
+        })();
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('User data query timeout')), QUERY_TIMEOUT)
+        );
+
+        const results = await Promise.race(
+          [Promise.allSettled([profilePromise, verificationPromise]), timeoutPromise]
+        ) as PromiseSettledResult<any>[];
+
+        let profileData: any = null;
+        let profileError: any = null;
+        let verificationToken: any = null;
         if (results[0]?.status === 'fulfilled') {
           profileData = results[0].value.data;
           profileError = results[0].value.error;
         } else if (results[0]?.status === 'rejected') {
           profileError = results[0].reason;
         }
-        
-        // Process verification result (optional)
         if (results[1]?.status === 'fulfilled') {
           verificationToken = results[1].value.data;
         }
-      } catch (timeoutError: any) {
-        if (timeoutError.message === 'User data query timeout') {
-          throw timeoutError;
+        return { profileData, profileError, verificationToken };
+      };
+
+      let profileData: any = null;
+      let profileError: any = null;
+      let verificationToken: any = null;
+      try {
+        const batch = await runFirstBatch();
+        profileData = batch.profileData;
+        profileError = batch.profileError;
+        verificationToken = batch.verificationToken;
+      } catch (firstError: any) {
+        if (firstError?.message === 'User data query timeout' && import.meta.env.DEV) {
+          logger.debug('CentralizedUserDataContext: First batch timeout, retrying once...');
         }
-        profileError = timeoutError;
-      }
-      
-      if (import.meta.env.DEV) {
-        logger.userData('CentralizedUserDataContext: Email verification check:', {
-          userId: user.id,
-          verificationToken,
-          verificationStatus: verificationToken?.email_verified
-        });
+        if (firstError?.message === 'User data query timeout') {
+          try {
+            const batch = await runFirstBatch();
+            profileData = batch.profileData;
+            profileError = batch.profileError;
+            verificationToken = batch.verificationToken;
+          } catch (retryError: any) {
+            throw retryError;
+          }
+        } else {
+          throw firstError;
+        }
       }
       
       const verificationStatus = verificationToken?.email_verified === true;
@@ -411,27 +419,25 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
           .eq('id', organizationId)
           .maybeSingle();
 
-        // Run employee, role, and organization queries in parallel with timeout
-        const orgDataTimeoutPromise = new Promise((_, reject) => 
+        // Run employee, role, and organization in parallel with timeout (indexes speed these up)
+        const orgDataTimeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Organization data query timeout')), QUERY_TIMEOUT)
         );
-        
+
         try {
-          // Use Promise.allSettled to handle partial failures gracefully
           const results = await Promise.race([
             Promise.allSettled([employeePromise, rolePromise, organizationPromise]),
             orgDataTimeoutPromise
           ]) as PromiseSettledResult<any>[];
-          
+
           const employeeData = results[0]?.status === 'fulfilled' ? results[0].value.data : null;
           const roleData = results[1]?.status === 'fulfilled' ? results[1].value.data : null;
           const orgData = results[2]?.status === 'fulfilled' ? results[2].value.data : null;
 
           // Calculate is_organization_owner (not a database field)
           const calculatedIsOwner = employeeData && orgData && employeeData.user_id === (orgData as any).user_id;
-          
+
           // SECURITY CHECK: If employee is terminated or inactive (resigned) and not owner, block access
-          // This is a double-check in case query filter didn't work
           const isTerminatedOrInactive = employeeData?.status === 'terminated' || employeeData?.status === 'inactive';
           if (employeeData && isTerminatedOrInactive && !isOrgOwner && !calculatedIsOwner) {
             if (import.meta.env.DEV) {
@@ -442,28 +448,22 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
                 calculatedIsOwner
               });
             }
-            // Set employee to null to block access
             setEmployee(null);
             setUserRole(null);
             setOrganization(null);
-            // Don't update userData with department_id if access is denied
           } else {
-            // Add calculated is_organization_owner to employee data
             const enrichedEmployeeData = employeeData ? {
               ...employeeData,
               is_organization_owner: calculatedIsOwner || false
             } : null;
-            
+
             setEmployee(enrichedEmployeeData);
             setUserRole(roleData?.role || null);
             setOrganization(orgData);
-            
-            // Update userData with department_id from employee data
+
             if (employeeData?.department_id) {
               const updatedUserData = { ...userData, department_id: employeeData.department_id };
               setUserData(updatedUserData);
-              
-              // Update cache
               userDataCacheRef.current = {
                 data: updatedUserData,
                 organization: orgData,
@@ -472,7 +472,6 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
                 timestamp: Date.now()
               };
             } else {
-              // Update cache even if no department_id
               userDataCacheRef.current = {
                 data: userData,
                 organization: orgData,
@@ -602,7 +601,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     fetchingRef.current = false;
     
     // Call refreshUserData with user parameter
-    await refreshUserData(user);
+    await refreshUserData();
   }, [refreshUserData, user]);
 
   

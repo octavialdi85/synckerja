@@ -80,6 +80,7 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
   });
 
   const isWhatsApp = leadId.startsWith('wa-');
+  const isEmail = leadId.startsWith('email-');
   const conversationId = isWhatsApp ? leadId.replace(/^wa-/, '') : null;
 
   // Load existing profile when popup opens
@@ -92,6 +93,22 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
   const loadClientProfile = async () => {
     setLoading(true);
     try {
+      // Email leads: no client profile table yet; show empty form (do not query lead_client_profiles — lead_id is synthetic)
+      if (isEmail) {
+        setProfile({
+          lead_id: leadId,
+          name: clientName,
+          code: '',
+          gender: '' as ClientProfile['gender'],
+          age: '',
+          occupation: '',
+          location: '',
+          phone_number: '',
+          email: ''
+        });
+        setLoading(false);
+        return;
+      }
       if (isWhatsApp && conversationId) {
         const { data, error } = await supabase
           .from('whatsapp_conversation_client_profiles')
@@ -205,6 +222,15 @@ export const ClientProfilePopup: React.FC<ClientProfilePopupProps> = ({
         organization_id: organizationId
       };
 
+      if (isEmail) {
+        toast({
+          title: "Not available",
+          description: "Saving client profile for email leads is not supported yet.",
+          variant: "destructive"
+        });
+        setSaving(false);
+        return;
+      }
       if (isWhatsApp && conversationId) {
         const payload = { ...baseData, conversation_id: conversationId, updated_at: new Date().toISOString() };
         if (profile.id) {

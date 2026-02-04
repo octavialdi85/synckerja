@@ -5,6 +5,7 @@ import { useToast } from '@/features/ui/use-toast';
 import { logger } from '@/config/logger';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
 import { globalDepartmentObjectivesCache } from './globalDepartmentObjectivesCache';
+import { useOKRSectionVisibility } from '../OKRSectionVisibilityContext';
 
 export interface DepartmentObjective {
   id: string;
@@ -69,6 +70,7 @@ interface CreateDepartmentObjectiveWithKeyResults extends CreateDepartmentObject
 export const useDepartmentObjectives = (organizationId?: string, cycleIds?: string[], includeIndividualObjectives: boolean = false) => {
   const queryClient = useQueryClient();
   const subscriptionRef = useRef<any>(null);
+  const isOKRSectionVisible = useOKRSectionVisibility();
 
   // Real-time subscription for department objectives
   useEffect(() => {
@@ -140,7 +142,7 @@ export const useDepartmentObjectives = (organizationId?: string, cycleIds?: stri
         includeIndividualObjectives
       );
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && isOKRSectionVisible,
     staleTime: 120 * 1000, // 120 seconds - increased cache time to reduce refetch frequency
     refetchOnMount: false, // Don't refetch on mount if data is fresh
     refetchOnWindowFocus: false, // Don't refetch on window focus (global cache handles this)

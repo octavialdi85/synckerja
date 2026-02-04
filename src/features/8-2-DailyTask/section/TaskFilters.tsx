@@ -8,6 +8,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from '@/features/ui/select';
 import {
   Popover,
@@ -24,7 +26,6 @@ import { MonthPicker } from '@/features/share/calendar';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
-import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 
 interface TaskFiltersProps {
   onAddTask?: () => void;
@@ -34,7 +35,6 @@ interface TaskFiltersProps {
 export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
   const { filters, setFilters, tasks } = useDailyTask();
   const { organizationId } = useCurrentOrg();
-  const { data: currentEmployee } = useCurrentEmployee();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
@@ -57,22 +57,6 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     },
     enabled: !!organizationId,
   });
-
-  // Set default department from current employee if not set (only once)
-  useEffect(() => {
-    if (currentEmployee?.department_id) {
-      setFilters(prev => {
-        // Only set default if department is not already set
-        if (!prev.department) {
-          return {
-            ...prev,
-            department: currentEmployee.department_id
-          };
-        }
-        return prev;
-      });
-    }
-  }, [currentEmployee?.department_id, setFilters]); // Remove filters.department from dependency to avoid loop
 
   // Get unique employees from all task steps for PIC filter
   const availableEmployees = useMemo(() => {
@@ -151,9 +135,9 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     }
     if (filters.pic) {
       const selectedEmployee = availableEmployees.find(emp => emp.id === filters.pic);
-      return selectedEmployee ? selectedEmployee.full_name : 'All PIC';
+      return selectedEmployee ? selectedEmployee.full_name : 'All tasks';
     }
-    return 'All PIC';
+    return 'All tasks';
   };
 
   const handleDateRangeChange = (value: string) => {
@@ -166,6 +150,66 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         customStartDate: undefined,
         customEndDate: undefined
       }));
+    }
+  };
+
+  // Merged Date & Plan: single value for combined dropdown (date options without This Month/Last Month)
+  const getMergedDatePlanValue = () => {
+    if (filters.dateRange) return filters.dateRange;
+    if (filters.planDateRange) return filters.planDateRange;
+    return 'all';
+  };
+
+  const getMergedDatePlanDisplayText = () => {
+    if (filters.dateRange) return getDateRangeDisplayText();
+    if (filters.planDateRange) return getPlanDateRangeDisplayText();
+    return 'All Dates & Plans';
+  };
+
+  const handleMergedDatePlanChange = (value: string) => {
+    if (value === 'all') {
+      setFilters(prev => ({
+        ...prev,
+        dateRange: undefined,
+        customStartDate: undefined,
+        customEndDate: undefined,
+        planDateRange: undefined,
+        customPlanMonth: undefined
+      }));
+      return;
+    }
+    const dateOptions = ['today', 'yesterday', 'this_week', 'custom'];
+    const planOptions = ['this_month_plan', 'next_month_plan', 'last_month_plan', 'custom_month_plan'];
+    if (dateOptions.includes(value)) {
+      if (value === 'custom') {
+        setFilters(prev => ({ ...prev, dateRange: 'custom', planDateRange: undefined, customPlanMonth: undefined }));
+        setIsCustomDatePickerOpen(true);
+      } else {
+        setFilters(prev => ({
+          ...prev,
+          dateRange: value as any,
+          customStartDate: undefined,
+          customEndDate: undefined,
+          planDateRange: undefined,
+          customPlanMonth: undefined
+        }));
+      }
+      return;
+    }
+    if (planOptions.includes(value)) {
+      if (value === 'custom_month_plan') {
+        setFilters(prev => ({ ...prev, planDateRange: 'custom_month_plan', dateRange: undefined, customStartDate: undefined, customEndDate: undefined }));
+        setTimeout(() => setIsPlanDatePickerOpen(true), 150);
+      } else {
+        setFilters(prev => ({
+          ...prev,
+          planDateRange: value as any,
+          customPlanMonth: undefined,
+          dateRange: undefined,
+          customStartDate: undefined,
+          customEndDate: undefined
+        }));
+      }
     }
   };
 
@@ -241,8 +285,8 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       customPlanMonth: undefined,
       pic: '',
       picLevel: undefined,
-      myTask: filters.myTask || 'my_task', // Preserve myTask preference (from localStorage)
-      department: currentEmployee?.department_id || undefined // Reset to current employee's department
+      myTask: filters.myTask || 'all', // Default to "All tasks" so list is visible
+      department: undefined // Default "All Departments"
     });
   };
 
@@ -312,23 +356,19 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectContent>
       </Select>
 
-      {/* Combined My Task / All PIC Filter */}
+      {/* Combined My Task / All tasks / PIC Filter - "All tasks" shown for everyone so list is not empty by default */}
       <Select value={getCurrentTaskViewValue()} onValueChange={handleTaskViewChange}>
         <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 text-left">
-          <SelectValue placeholder="My Task" />
+          <SelectValue placeholder="All tasks" />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value="all_pic">All tasks</SelectItem>
           <SelectItem value="my_task">My Task</SelectItem>
-          {isOwner && (
-            <>
-              <SelectItem value="all_pic">All PIC</SelectItem>
-              {availableEmployees.map((employee) => (
-                <SelectItem key={employee.id} value={employee.id}>
-                  {employee.full_name}
-                </SelectItem>
-              ))}
-            </>
-          )}
+          {isOwner && availableEmployees.map((employee) => (
+            <SelectItem key={employee.id} value={employee.id}>
+              {employee.full_name}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 
@@ -378,57 +418,43 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectContent>
       </Select>
 
-      {/* Due Date Range Filter */}
-      <Select 
-        value={filters.dateRange || "all"} 
-        onValueChange={handleDateRangeChange}
-      >
-        <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
-          <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
-            <CalendarIcon className="h-4 w-4 text-gray-500" />
-            <SelectValue placeholder="All Dates" className="truncate">
-              {getDateRangeDisplayText()}
-            </SelectValue>
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Dates</SelectItem>
-          <SelectItem value="today">Today</SelectItem>
-          <SelectItem value="yesterday">Yesterday</SelectItem>
-          <SelectItem value="this_week">This Week</SelectItem>
-          <SelectItem value="this_month">This Month</SelectItem>
-          <SelectItem value="last_month">Last Month</SelectItem>
-          <SelectItem value="custom">Custom Range</SelectItem>
-        </SelectContent>
-      </Select>
-
-      {/* Plan Date Range Filter */}
+      {/* Merged Date & Plan Filter (All Dates + All Plans in one; This Month / Last Month removed from date, use Plan section) */}
       <div className="relative">
         <Select 
-          value={filters.planDateRange || "all"} 
-          onValueChange={handlePlanDateRangeChange}
+          value={getMergedDatePlanValue()} 
+          onValueChange={handleMergedDatePlanChange}
         >
           <SelectTrigger 
             ref={planDateSelectTriggerRef}
-            className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden"
+            className="w-auto min-w-[180px] max-w-[240px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden"
           >
             <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
-              <CalendarIcon className="h-4 w-4 text-blue-500" />
-              <SelectValue placeholder="All Plans" className="truncate">
-                {getPlanDateRangeDisplayText()}
+              <CalendarIcon className="h-4 w-4 text-gray-500" />
+              <SelectValue placeholder="All Dates & Plans" className="truncate">
+                {getMergedDatePlanDisplayText()}
               </SelectValue>
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Plans</SelectItem>
-            <SelectItem value="this_month_plan">This Month Plan</SelectItem>
-            <SelectItem value="next_month_plan">Next Month Plan</SelectItem>
-            <SelectItem value="last_month_plan">Last Month Plan</SelectItem>
-            <SelectItem value="custom_month_plan">Custom Month</SelectItem>
+            <SelectItem value="all">All Dates & Plans</SelectItem>
+            <SelectGroup>
+              <SelectLabel className="text-xs text-gray-500 font-medium">Due date</SelectLabel>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+              <SelectItem value="this_week">This Week</SelectItem>
+              <SelectItem value="custom">Custom Range</SelectItem>
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel className="text-xs text-gray-500 font-medium">Plan</SelectLabel>
+              <SelectItem value="this_month_plan">This Month Plan</SelectItem>
+              <SelectItem value="next_month_plan">Next Month Plan</SelectItem>
+              <SelectItem value="last_month_plan">Last Month Plan</SelectItem>
+              <SelectItem value="custom_month_plan">Custom Month</SelectItem>
+            </SelectGroup>
           </SelectContent>
         </Select>
-        
-        {/* Month Picker Popover - positioned relative to SelectTrigger */}
+
+        {/* Month Picker Popover - for Custom Month Plan */}
         <Popover open={isPlanDatePickerOpen} onOpenChange={setIsPlanDatePickerOpen}>
           <PopoverTrigger asChild>
             <button
@@ -468,7 +494,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       </div>
 
       {/* Clear Filters Button */}
-      {(filters.search || filters.status || filters.priority || filters.pic || filters.picLevel || filters.department || filters.dateRange || filters.planDateRange || (filters.myTask && filters.myTask !== 'my_task')) && (
+      {(filters.search || filters.status || filters.priority || filters.pic || filters.picLevel || filters.department || filters.dateRange || filters.planDateRange || filters.myTask === 'my_task') && (
         <button
           onClick={clearFilters}
           className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center ml-auto"

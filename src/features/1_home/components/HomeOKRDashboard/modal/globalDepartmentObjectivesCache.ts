@@ -119,7 +119,35 @@ class GlobalDepartmentObjectivesCache {
   }
 
   /**
-   * Actual fetch from database
+   * Fetch via RPC (single round-trip). Used when includeIndividualObjectives is false.
+   * Falls back to client queries on error or when RPC not available.
+   */
+  private async fetchDepartmentObjectivesViaRpc(
+    organizationId: string,
+    cycleIds?: string[]
+  ): Promise<any[] | null> {
+    const validCycleIds = filterValidCycleIds(cycleIds);
+    const pCycleIds = validCycleIds.length > 0 ? validCycleIds : null;
+    const startTime = performance.now();
+    const { data, error } = await supabase.rpc('get_department_objectives_with_key_results', {
+      p_organization_id: organizationId,
+      p_cycle_ids: pCycleIds,
+      p_include_individual: false,
+    });
+    const duration = performance.now() - startTime;
+    logger.performance(`Department Objectives RPC (${organizationId})`, duration, 6000);
+    if (error) {
+      if (import.meta.env?.DEV) {
+        logger.debug('Department Objectives RPC fallback (using client queries):', error.message);
+      }
+      return null;
+    }
+    if (data == null || !Array.isArray(data)) return data ?? [];
+    return data as any[];
+  }
+
+  /**
+   * Actual fetch from database (tries RPC first when not including individual objectives)
    */
   private async fetchDepartmentObjectives(
     organizationId: string,
@@ -137,7 +165,18 @@ class GlobalDepartmentObjectivesCache {
     }
 
     logger.query('🔍 Fetching department objectives:', { organizationId, cycleIds, includeIndividualObjectives });
-    
+
+    // Prefer RPC (single round-trip) when not including individual objectives
+    if (!includeIndividualObjectives) {
+      const rpcResult = await this.fetchDepartmentObjectivesViaRpc(organizationId, cycleIds);
+      if (rpcResult !== null) {
+        if (isDev) console.timeEnd(timerId);
+        if (isDev) logger.debug('✅ Department objectives fetched via RPC:', rpcResult.length);
+        return rpcResult;
+      }
+    }
+
+    // Fallback: client queries (2 round-trips)
     // Build base query
     let selectQuery = `
       *,

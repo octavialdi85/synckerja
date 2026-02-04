@@ -45,11 +45,6 @@ let lastClearTime = 0;
 const MIN_CLEAR_INTERVAL = 5000; // Minimum 5 seconds between clears
 const isDev = import.meta.env.DEV; // Define once at module level for performance
 
-// Debounce for CONFIG CHANGED logs
-let configChangedLogTimeout: NodeJS.Timeout | null = null;
-let lastConfigChangedLogTime = 0;
-const CONFIG_CHANGED_LOG_DEBOUNCE = 2000; // 2 seconds debounce
-
 // Track logged paths for CAN ACCESS PAGE OVERRIDE to avoid duplicate logs
 const loggedOverridePaths = new Set<string>();
 
@@ -57,20 +52,11 @@ const loggedOverridePaths = new Set<string>();
 export const clearAccessCache = () => {
   const now = Date.now();
   if (now - lastClearTime < MIN_CLEAR_INTERVAL) {
-    if (isDev) {
-      logger.debug('🔄 CACHE: Skipping clear - too recent (', Math.round((now - lastClearTime) / 1000), 's ago)');
-    }
     return;
   }
-  
-  if (isDev) {
-    logger.debug('🧹 Smart clearing access cache with', accessCache.size, 'entries');
-  }
+
   accessCache.clear();
   lastClearTime = now;
-  if (isDev) {
-    logger.debug('✅ Access cache cleared');
-  }
 };
 
 // Debug function to inspect cache
@@ -111,32 +97,12 @@ export const useDepartmentAccess = () => {
     // Create config hash for intelligent cache invalidation
     const configHash = configurations.map(c => `${c.id}-${c.updated_at}`).join('|');
     
-    // Smart cache clearing - only when config actually changes
-    const lastConfigHash = accessCache.size > 0 ? 
+    // Smart cache clearing - only when config actually changes and we have cached entries
+    // Skip clear when cache is empty (initial load) to avoid re-validation storm and flicker
+    const lastConfigHash = accessCache.size > 0 ?
       Array.from(accessCache.values())[0]?.configHash : '';
-    
-    // isDev is defined at module level
-    if (configHash !== lastConfigHash && configurations.length > 0) {
-      // Debounce CONFIG CHANGED logs to reduce noise
-      const now = Date.now();
-      if (isDev) {
-        // Clear existing timeout
-        if (configChangedLogTimeout) {
-          clearTimeout(configChangedLogTimeout);
-        }
-        
-        // Only log if enough time has passed since last log
-        if (now - lastConfigChangedLogTime >= CONFIG_CHANGED_LOG_DEBOUNCE) {
-          logger.debug('🔄 CONFIG CHANGED: Smart cache clear triggered');
-          lastConfigChangedLogTime = now;
-        } else {
-          // Schedule delayed log if not logged recently
-          configChangedLogTimeout = setTimeout(() => {
-            logger.debug('🔄 CONFIG CHANGED: Smart cache clear triggered (debounced)');
-            lastConfigChangedLogTime = Date.now();
-          }, CONFIG_CHANGED_LOG_DEBOUNCE);
-        }
-      }
+
+    if (configHash !== lastConfigHash && configurations.length > 0 && accessCache.size > 0) {
       clearAccessCache();
     }
     
@@ -168,29 +134,11 @@ export const useDepartmentAccess = () => {
       
       // OWNER/ADMIN OVERRIDE - Always grant access immediately
       if (isOwner || userRole === 'owner') {
-        // Only log once per path to reduce noise
-        if (isDev && !loggedOverridePaths.has(pagePath)) {
-          logger.debug('🔑 CAN ACCESS PAGE OVERRIDE: Owner full access to', pagePath);
-          loggedOverridePaths.add(pagePath);
-          // Clear logged paths after 5 minutes to allow re-logging if path changes
-          setTimeout(() => {
-            loggedOverridePaths.delete(pagePath);
-          }, 5 * 60 * 1000);
-        }
         return true;
       }
       
       // ADMIN OVERRIDE - Always grant access immediately
       if (isAdmin || userRole === 'admin') {
-        // Only log once per path to reduce noise
-        if (isDev && !loggedOverridePaths.has(pagePath)) {
-          logger.debug('🔧 CAN ACCESS PAGE OVERRIDE: Admin full access to', pagePath);
-          loggedOverridePaths.add(pagePath);
-          // Clear logged paths after 5 minutes to allow re-logging if path changes
-          setTimeout(() => {
-            loggedOverridePaths.delete(pagePath);
-          }, 5 * 60 * 1000);
-        }
         return true;
       }
 
@@ -647,7 +595,8 @@ export const useDepartmentAccess = () => {
       isOwner,
       isAdmin,
       departmentName: employee?.departments?.name || employee?.department?.name,
-      configLoading
+      configLoading,
+      configHash
     };
   }, [userRole, employee, userData, isOwner, isAdmin, configurations, configLoading]);
   
