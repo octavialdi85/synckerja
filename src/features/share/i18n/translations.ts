@@ -644,6 +644,8 @@ const idTranslations: TranslationDictionary = {
   "dailyTask.approval.rejectReasonDesc": "Provide a reason so the assignee knows what to adjust. The task/step will be unchecked.",
   "dailyTask.approval.reasonPlaceholder": "Reason for rejection (required)...",
   "dailyTask.approval.cancel": "Cancel",
+  "dailyTask.approval.fetchError": "Failed to load approvals. Please try again.",
+  "dailyTask.approval.retry": "Retry",
 
   "pages.campaignCalculator.title": "Kalkulator Kampanye",
   "pages.campaignCalculator.description":
@@ -2736,6 +2738,8 @@ const enTranslations: TranslationDictionary = {
   "dailyTask.approval.rejectReasonDesc": "Provide a reason so the assignee knows what to adjust. The task/step will be unchecked.",
   "dailyTask.approval.reasonPlaceholder": "Reason for rejection (required)...",
   "dailyTask.approval.cancel": "Cancel",
+  "dailyTask.approval.fetchError": "Failed to load approvals. Please try again.",
+  "dailyTask.approval.retry": "Retry",
 
   "pages.campaignCalculator.title": "Campaign Calculator",
   "pages.campaignCalculator.description":

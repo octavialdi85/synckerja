@@ -8,7 +8,11 @@ import { Input } from '@/features/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 
 const RecentUpdateSteps = () => {
-  const { filteredRecentStepUpdates, recentStepFilters, setRecentStepFilters, isLoading, navigateToTask } = useDailyTask();
+  const { filteredTasks, filteredRecentStepUpdates, recentStepFilters, setRecentStepFilters, isLoading, navigateToTask } = useDailyTask();
+  const displayUpdates = React.useMemo(() => {
+    const ids = new Set((filteredTasks || []).map((t) => t.id));
+    return (filteredRecentStepUpdates || []).filter((u) => ids.has(u.task_id));
+  }, [filteredTasks, filteredRecentStepUpdates]);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [clickedUpdateId, setClickedUpdateId] = useState<string | null>(null);
 
@@ -126,7 +130,7 @@ const RecentUpdateSteps = () => {
     }, 2000);
   };
 
-  if (filteredRecentStepUpdates.length === 0 && !isLoading) {
+  if (displayUpdates.length === 0 && !isLoading) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
@@ -252,7 +256,7 @@ const RecentUpdateSteps = () => {
       </div>
       
       <div className="space-y-3 max-h-64 overflow-y-auto seamless-scroll">
-        {filteredRecentStepUpdates.map((update) => {
+        {displayUpdates.map((update) => {
           const isClicked = clickedUpdateId === update.id;
           return (
           <div

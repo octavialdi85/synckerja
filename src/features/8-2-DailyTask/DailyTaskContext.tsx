@@ -3,9 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { retryableQuery } from '@/integrations/supabase/retry';
 import { useToast } from '@/features/ui/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { getCached, setCache, clearCache, trackQuery } from './utils/optimizationUtils';
 import { useTaskFilterState } from './hooks/useTaskFilterState';
-import { TaskFilters } from './hooks/useTaskFilters';
+import { useTaskFilters, TaskFilters } from './hooks/useTaskFilters';
 import { useTaskRealtime } from './hooks/useTaskRealtime';
 import { logger } from '@/config/logger';
 import { globalTaskIdsCache } from './utils/globalTaskIdsCache';
@@ -142,6 +145,8 @@ const batchQuery = async <T,>(
 
 export interface DailyTaskContextType {
   tasks: Task[];
+  filteredTasks: Task[];
+  getVisibleSteps: (task: Task) => TaskStep[];
   summaryData: SummaryData;
   recentStepUpdates: RecentStepUpdate[];
   filteredRecentStepUpdates: RecentStepUpdate[];
@@ -221,6 +226,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
+  const { user } = useCurrentUser();
+  const { data: currentEmployee } = useCurrentEmployee();
+  const { isOwner } = useCentralizedUserData();
+  const [departmentMap, setDepartmentMap] = useState<Record<string, { id: string; name: string }>>({});
 
   // Centralized fetch functions
   const fetchRecentStepUpdates = useCallback(async () => {
@@ -241,6 +250,73 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
     */
   }, [organizationId]);
+
+  // Fetch departments for tasks (for department filter in useTaskFilters)
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      if (!tasks || tasks.length === 0) {
+        setDepartmentMap({});
+        return;
+      }
+      const taskIds = tasks.map((t) => t.id);
+      try {
+        const { data: assignments, error: assignmentError } = await supabase
+          .from('daily_tasks_assigned')
+          .select(`
+            daily_task_id,
+            department_id,
+            employee_id,
+            employee:employees!employee_id(department_id)
+          `)
+          .in('daily_task_id', taskIds);
+        if (assignmentError) {
+          return;
+        }
+        const departmentIds = new Set<string>();
+        const taskDeptMapping: Array<{ taskId: string; deptId: string }> = [];
+        (assignments || []).forEach((assignment: any) => {
+          let deptId = assignment.department_id;
+          if (!deptId && assignment.employee_id && assignment.employee?.department_id) {
+            deptId = assignment.employee.department_id;
+          }
+          if (deptId) {
+            departmentIds.add(deptId);
+            taskDeptMapping.push({ taskId: assignment.daily_task_id, deptId });
+          }
+        });
+        if (departmentIds.size === 0) {
+          setDepartmentMap({});
+          return;
+        }
+        const { data: departments, error: deptError } = await supabase
+          .from('departments')
+          .select('id, name')
+          .in('id', Array.from(departmentIds));
+        if (deptError) return;
+        const deptMap: Record<string, { id: string; name: string }> = {};
+        (departments || []).forEach((dept: any) => {
+          deptMap[dept.id] = { id: dept.id, name: dept.name };
+        });
+        const taskDeptMap: Record<string, { id: string; name: string }> = {};
+        taskDeptMapping.forEach(({ taskId, deptId }) => {
+          if (deptMap[deptId]) taskDeptMap[taskId] = deptMap[deptId];
+        });
+        setDepartmentMap(taskDeptMap);
+      } catch {
+        setDepartmentMap({});
+      }
+    };
+    fetchDepartments();
+  }, [tasks]);
+
+  const { filteredTasks, filteredSummaryData, getVisibleSteps } = useTaskFilters({
+    tasks,
+    filters,
+    currentUserId: user?.id,
+    currentEmployeeId: currentEmployee?.id,
+    departmentMap,
+    isOwner,
+  });
 
   const fetchTasks = async (force = false) => {
     if (!organizationId) return;
@@ -1043,30 +1119,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
 
-  // Calculate summary data from tasks
-  const now = new Date();
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  
-  const summaryData: SummaryData = {
-    pending: (tasks || []).filter(task => task && task.status === 'pending').length,
-    inProgress: (tasks || []).filter(task => task && task.status === 'in_progress').length,
-    completed: (tasks || []).filter(task => task && task.status === 'completed').length,
-    cancelled: (tasks || []).filter(task => task && task.status === 'cancelled').length,
-    overdue: (tasks || []).filter(task => {
-      if (!task || !task.due_date) return false;
-      return new Date(task.due_date) < new Date() && task.status !== 'completed';
-    }).length,
-    totalSteps: (tasks || []).reduce((sum, task) => sum + (task?.steps?.length || 0), 0),
-    completedSteps: (tasks || []).reduce((sum, task) => 
-      sum + (task?.steps?.filter(step => step && step.is_completed).length || 0), 0
-    ),
-    tasksPlannedThisMonth: (tasks || []).filter(task => {
-      if (!task || !task.plan_date) return false;
-      const planDate = new Date(task.plan_date);
-      return planDate >= currentMonthStart && planDate < nextMonthStart;
-    }).length
-  };
+  // Summary data from filtered tasks so all sections respond to filters
+  const summaryData: SummaryData = filteredSummaryData;
 
   const addTask = async (data: Partial<Task>) => {
     if (!organizationId) return;
@@ -1234,8 +1288,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       if (error) throw error;
 
-      // When assignee marks task completed, create pending approval for assigner (task-level, no steps)
-      if (data.status === 'completed' && organizationId) {
+      // When assignee marks task completed, create pending approval for assigner only if task has NO steps (per spec: task with steps only need step-level approval)
+      const taskHasNoSteps = !currentTask?.steps?.length || currentTask?.has_steps === false;
+      if (data.status === 'completed' && organizationId && taskHasNoSteps) {
         const { data: { user } } = await supabase.auth.getUser();
         const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
         const { data: assignment } = await supabase.from('daily_tasks_assigned').select('employee_id, assigned_by').eq('daily_task_id', id).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
@@ -2633,6 +2688,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const value: DailyTaskContextType = {
     tasks,
+    filteredTasks,
+    getVisibleSteps,
     summaryData,
     recentStepUpdates,
     filteredRecentStepUpdates,

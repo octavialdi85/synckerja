@@ -33,7 +33,7 @@ function getEntityTypeLabel(entityType: string, t: (k: string, fallback: string)
 
 export const PendingApprovalSection = () => {
   const { t } = useAppTranslation();
-  const { pending, rejected, loading, approve, reject, refresh } = useCompletionApprovals([]);
+  const { pending, rejected, loading, fetchError, approve, reject, refresh } = useCompletionApprovals([]);
   const { refetchTasks } = useDailyTask();
   const { toast } = useToast();
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; row: CompletionApprovalRow | null; reason: string }>({
@@ -81,14 +81,6 @@ export const PendingApprovalSection = () => {
     await refetchTasks();
   };
 
-  if (loading && pending.length === 0 && rejected.length === 0) {
-    return (
-      <div className="mt-4 flex items-center justify-center py-4 text-gray-500">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <>
       {/* Pending Approval card (same style as Task Summary cards) */}
@@ -107,7 +99,19 @@ export const PendingApprovalSection = () => {
 
         {/* List of items to approve (seamless vertical scroll) */}
         <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
-          {pending.length === 0 ? (
+          {fetchError ? (
+            <p className="text-xs text-red-600 py-2">
+              {t('dailyTask.approval.fetchError', 'Failed to load approvals. Please try again.')}
+              <button type="button" onClick={() => refresh()} className="ml-2 underline font-medium">
+                {t('dailyTask.approval.retry', 'Retry')}
+              </button>
+            </p>
+          ) : loading && pending.length === 0 ? (
+            <p className="text-xs text-gray-500 py-2 flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
+              {t('dailyTask.approval.loading', 'Loading...')}
+            </p>
+          ) : pending.length === 0 ? (
             <p className="text-xs text-gray-500 py-2">{t('dailyTask.approval.noPending', 'No items pending approval.')}</p>
           ) : (
             <ul className="space-y-2 pr-1">

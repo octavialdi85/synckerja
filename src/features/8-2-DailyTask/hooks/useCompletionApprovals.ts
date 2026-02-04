@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import {
@@ -9,33 +9,52 @@ import {
   type CompletionApprovalRow,
 } from '../services/completionApprovalService';
 
+/** Delay (ms) before fetching approval data so it doesn't compete with initial task list fetch. */
+const DEFER_APPROVAL_FETCH_MS = 400;
+
 export function useCompletionApprovals(refreshDeps: unknown[] = []) {
   const { organizationId } = useCurrentOrg();
   const { data: currentEmployee } = useCurrentEmployee();
   const [pending, setPending] = useState<CompletionApprovalRow[]>([]);
   const [rejected, setRejected] = useState<CompletionApprovalRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
+  const deferredRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!organizationId || !currentEmployee?.id) {
       setPending([]);
       setRejected([]);
       setLoading(false);
+      setFetchError(null);
       return;
     }
     setLoading(true);
+    setFetchError(null);
     const [pendingRes, rejectedRes] = await Promise.all([
       fetchPendingApprovalsForAssigner(organizationId, currentEmployee.id),
       fetchRejectedForAssignee(organizationId, currentEmployee.id),
     ]);
     if (!pendingRes.error) setPending(pendingRes.data);
+    else console.warn('[useCompletionApprovals] Fetch pending approvals failed:', pendingRes.error.message);
     if (!rejectedRes.error) setRejected(rejectedRes.data);
+    else console.warn('[useCompletionApprovals] Fetch rejected for assignee failed:', rejectedRes.error.message);
+    setFetchError(pendingRes.error ?? rejectedRes.error ?? null);
     setLoading(false);
   }, [organizationId, currentEmployee?.id, ...refreshDeps]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!organizationId || !currentEmployee?.id) return;
+    if (deferredRef.current) {
+      refresh();
+      return;
+    }
+    deferredRef.current = true;
+    const t = setTimeout(() => {
+      refresh();
+    }, DEFER_APPROVAL_FETCH_MS);
+    return () => clearTimeout(t);
+  }, [organizationId, currentEmployee?.id, refresh]);
 
   const approve = useCallback(
     async (approvalId: string) => {
@@ -57,5 +76,5 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
     [currentEmployee?.id, refresh]
   );
 
-  return { pending, rejected, loading, refresh, approve, reject };
+  return { pending, rejected, loading, fetchError, refresh, approve, reject };
 }

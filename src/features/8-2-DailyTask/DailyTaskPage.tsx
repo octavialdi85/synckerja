@@ -26,7 +26,7 @@ const DailyTaskPage = () => {
 
 const DailyTaskContent = () => {
   const { t } = useAppTranslation();
-  const { tasks, filters, isLoading } = useDailyTask();
+  const { tasks, filteredTasks, isLoading } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
   const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
@@ -55,41 +55,16 @@ const DailyTaskContent = () => {
     );
   }
 
-  // Filter tasks based on filters
-  const filteredTasks = tasks.filter(task => {
-    // Search filter - now includes both task title, description and step titles
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      const taskTitleMatch = task.title?.toLowerCase().includes(searchTerm) || false;
-      const taskDescriptionMatch = task.description?.toLowerCase().includes(searchTerm) || false;
-      const stepMatch = task.steps?.some(step => 
-        step.title?.toLowerCase().includes(searchTerm)
-      ) || false;
-      
-      if (!taskTitleMatch && !taskDescriptionMatch && !stepMatch) {
-        return false;
-      }
-    }
-    
-    if (filters.status && task.status !== filters.status) {
-      return false;
-    }
-    if (filters.priority && task.priority !== filters.priority) {
-      return false;
-    }
-    return true;
-  });
-
-  // Calculate statistics
-  const thisWeekTasks = tasks.filter(task => {
+  // Statistics from filtered tasks so sidebar responds to filters
+  const thisWeekTasks = filteredTasks.filter(task => {
     const taskDate = new Date(task.created_at);
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     return taskDate >= weekAgo;
   }).length;
 
-  const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const completionRate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+  const completedTasks = filteredTasks.filter(task => task.status === 'completed').length;
+  const completionRate = filteredTasks.length > 0 ? Math.round((completedTasks / filteredTasks.length) * 100) : 0;
 
   return (
     <StandardLayout>
@@ -184,7 +159,7 @@ const DailyTaskContent = () => {
                       {/* Sidebar Footer - Conditional based on active tab */}
                       {sidebarTab === 'summary' && (
                         <TaskSidebarFooter 
-                          totalTasks={tasks.length}
+                          totalTasks={filteredTasks.length}
                           thisWeek={thisWeekTasks}
                           completionRate={completionRate}
                         />

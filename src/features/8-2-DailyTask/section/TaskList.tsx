@@ -50,7 +50,6 @@ import {
 import { CustomDatePicker } from '@/features/share/calendar';
 import { useDailyTask } from '../DailyTaskContext';
 import { type Task } from '../types';
-import { useTaskFilters } from '../hooks/useTaskFilters';
 import { supabase } from '@/integrations/supabase/client';
 import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/BlockerDetailsModal';
 import { logger } from '@/config/logger';
@@ -92,29 +91,15 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
-import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
-import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 
 export const TaskList = () => {
   const context = useDailyTask();
-  const { tasks, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps, expandedTasks, setExpandedTasks, highlightedTask } = context;
+  const { tasks, filteredTasks, getVisibleSteps, filters, updateTask, deleteTask, addTaskStep, reorderTaskSteps, expandedTasks, setExpandedTasks, highlightedTask } = context;
   const [departmentMap, setDepartmentMap] = useState<Record<string, { id: string; name: string }>>({});
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
   const { user } = useCurrentUser();
-  const { data: currentEmployee } = useCurrentEmployee();
   const { toast } = useToast();
-  const { isOwner } = useCentralizedUserData();
-  
-  // Use custom hook for filtering logic
-  const { filteredTasks, getVisibleSteps } = useTaskFilters({
-    tasks,
-    filters,
-    currentUserId: user?.id,
-    currentEmployeeId: currentEmployee?.id,
-    departmentMap,
-    isOwner,
-  });
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
   const [reminderPendingTaskId, setReminderPendingTaskId] = useState<string | null>(null);

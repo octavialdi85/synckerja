@@ -42,6 +42,7 @@ interface TaskInitiativeProps {
 const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
   const { 
     tasks, 
+    filteredTasks,
     isLoading: tasksLoading,
     setFilters,
     setExpandedTasks,
@@ -410,14 +411,6 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setUncompletedItems(items);
-      
-      // Notify parent of stats change
-      if (onStatsChange) {
-        onStatsChange({
-          totalItems: items.length,
-          unassignedItems: items.filter(item => !item.assignedTo).length
-        });
-      }
     } catch (error) {
       console.error('Error fetching uncompleted items:', error);
         toast({
@@ -429,6 +422,26 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         setIsLoading(false);
       }
   }, [organizationId, tasksLoading, tasks, onStatsChange, toast]);
+
+  // Show only items whose task is in the current filter set
+  const displayItems = React.useMemo(() => {
+    const filteredIds = new Set((filteredTasks || []).map((t) => t.id));
+    return (uncompletedItems || []).filter((item) =>
+      item.type === 'task'
+        ? filteredIds.has(item.id)
+        : !!(item.taskId && filteredIds.has(item.taskId))
+    );
+  }, [filteredTasks, uncompletedItems]);
+
+  // Notify parent of filter-aware stats
+  useEffect(() => {
+    if (onStatsChange) {
+      onStatsChange({
+        totalItems: displayItems.length,
+        unassignedItems: displayItems.filter((item) => !item.assignedTo).length,
+      });
+    }
+  }, [displayItems, onStatsChange]);
 
   // Fetch uncompleted items on mount and when dependencies change
   useEffect(() => {
@@ -655,12 +668,12 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Total Available</span>
-            <span className="font-medium text-gray-900">{uncompletedItems.length}</span>
+            <span className="font-medium text-gray-900">{displayItems.length}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Unassigned</span>
             <span className="font-medium text-gray-900">
-              {uncompletedItems.filter(item => !item.assignedTo).length}
+              {displayItems.filter(item => !item.assignedTo).length}
             </span>
           </div>
         </div>
@@ -668,14 +681,14 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
 
       {/* Uncompleted Items List */}
       <div className="space-y-2">
-        {uncompletedItems.length === 0 ? (
+        {displayItems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <CheckCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p className="text-sm font-medium">All tasks completed!</p>
             <p className="text-xs mt-1">Great job, nothing left to do.</p>
           </div>
         ) : (
-          uncompletedItems.map((item) => (
+          displayItems.map((item) => (
             <div
               key={`${item.type}-${item.id}`}
               className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"

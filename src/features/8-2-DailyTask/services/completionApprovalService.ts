@@ -53,6 +53,7 @@ export async function createCompletionApprovalIfAssignee(params: {
 
 /**
  * Fetch pending approvals for the current user as assigner (to show "Pending your approval").
+ * Select does not join employees to avoid FK ambiguity with multiple FKs to employees; assignee name shown as "Assignee" in UI.
  */
 export async function fetchPendingApprovalsForAssigner(
   organizationId: string,
@@ -67,8 +68,7 @@ export async function fetchPendingApprovalsForAssigner(
         assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason,
         daily_tasks(title),
         task_steps(title),
-        task_steps_to_steps(title),
-        assignee:employees!assignee_employee_id(id, full_name)
+        task_steps_to_steps(title)
         `
       )
       .eq('organization_id', organizationId)
