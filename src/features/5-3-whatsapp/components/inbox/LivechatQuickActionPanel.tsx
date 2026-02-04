@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import { Plus, User, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
-import type { WhatsAppConversation } from '../../types';
+import type { LiveChatConversation } from '../../types';
 
 const PROSPECT_STATUS_OPTIONS = ['Hot Prospect', 'Warm Prospect', 'Cold Prospect'] as const;
 
@@ -24,7 +24,10 @@ function maskPhoneLast4(phone: string | null | undefined): string {
   return s.slice(0, -4) + '****';
 }
 
-function getLeadTitle(conv: WhatsAppConversation, t: (key: string, fallback?: string) => string): string {
+function getLeadTitle(conv: LiveChatConversation, t: (key: string, fallback?: string) => string): string {
+  if (conv.source === 'email') {
+    return conv.from_email || conv.email_connection_display || 'Email';
+  }
   if (conv.channel === 'instagram' && !conv.customer_name?.trim()) {
     return t('whatsappInbox.instagramContact', 'Kontak Instagram');
   }
@@ -38,7 +41,7 @@ interface LeadStatus {
 }
 
 interface LivechatQuickActionPanelProps {
-  conversation: WhatsAppConversation | null;
+  conversation: LiveChatConversation | null;
 }
 
 interface FollowUpUpdateRow {
@@ -76,12 +79,16 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
     },
   });
 
+  const isEmail = conversation?.source === 'email';
+  const statusTable = isEmail ? 'email_conversations' : 'whatsapp_conversations';
+  const followUpTable = isEmail ? 'email_conversation_follow_up_updates' : 'whatsapp_conversation_follow_up_updates';
+
   const { data: conversationStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ['whatsapp-conversation-status', conversation?.id],
+    queryKey: [isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status', conversation?.id],
     queryFn: async () => {
       if (!conversation?.id) return null;
       const { data, error } = await supabase
-        .from('whatsapp_conversations')
+        .from(statusTable)
         .select('lead_status_id')
         .eq('id', conversation.id)
         .maybeSingle();
@@ -89,15 +96,15 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       return (data?.lead_status_id as string) ?? null;
     },
     enabled: !!conversation?.id,
-    refetchInterval: 5000, // Poll setiap 5s agar status Resolve → Unread (setelah customer kirim pesan) ikut ter-refresh
+    refetchInterval: 5000,
   });
 
   const { data: followUpUpdates = [], refetch: refetchFollowUps } = useQuery({
-    queryKey: ['whatsapp-conversation-follow-ups', conversation?.id],
+    queryKey: [isEmail ? 'email-conversation-follow-ups' : 'whatsapp-conversation-follow-ups', conversation?.id],
     queryFn: async (): Promise<FollowUpUpdateRow[]> => {
       if (!conversation?.id) return [];
       const { data, error } = await supabase
-        .from('whatsapp_conversation_follow_up_updates')
+        .from(followUpTable)
         .select('*')
         .eq('conversation_id', conversation.id)
         .order('created_at', { ascending: false });
@@ -111,7 +118,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   const syncFollowUpCountAndPriority = useCallback(async () => {
     if (!conversation?.id || !organizationId) return;
     const { data: allUpdates, error: fetchError } = await supabase
-      .from('whatsapp_conversation_follow_up_updates')
+      .from(followUpTable)
       .select('status')
       .eq('conversation_id', conversation.id);
     if (fetchError) return;
@@ -131,11 +138,11 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       else if (cold === max && max > 0) fu_priority = 'Low';
     }
     await supabase
-      .from('whatsapp_conversations')
+      .from(statusTable)
       .update({ followup: count, fu_priority, updated_at: new Date().toISOString() })
       .eq('id', conversation.id);
     queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
-  }, [conversation?.id, organizationId, queryClient]);
+  }, [conversation?.id, organizationId, queryClient, statusTable, followUpTable]);
 
   const handleAddUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +158,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         .single();
       const orgId = profile?.active_organization_id;
       if (!orgId) throw new Error('No active organization');
-      const { error } = await supabase.from('whatsapp_conversation_follow_up_updates').insert({
+      const { error } = await supabase.from(followUpTable).insert({
         conversation_id: conversation.id,
         update_details: updateDetails.trim(),
         status: prospectStatus || null,
@@ -184,12 +191,13 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
     );
   }
 
-  const leadId = `wa-${conversation.id}`;
+  const leadId = conversation.source === 'email' ? `email-${conversation.id}` : `wa-${conversation.id}`;
   const leadTitle = getLeadTitle(conversation, t);
   const currentStatusId = conversationStatus ?? (leadStatuses.length > 0 ? leadStatuses[0].id : '');
   const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
   const isResolved = currentStatus?.name?.trim().toLowerCase() === 'closed';
-  // Unread (Open) locked when current status is On Going / Qualified / Converted / Resolve / Lost
+  const statusQueryKey = isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status';
+
   const handleStatusChange = async (newStatusId: string) => {
     const newStatus = leadStatuses.find((s) => s.id === newStatusId);
     if (newStatus?.name?.trim().toLowerCase() === 'closed') {
@@ -204,7 +212,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         organization_id: conversation.organization_id,
         lead_status: oldStatusName ? { name: oldStatusName } : undefined,
       });
-      await queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversation.id] });
+      await queryClient.invalidateQueries({ queryKey: [statusQueryKey, conversation.id] });
       await queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success(t('whatsappInbox.statusUpdated', 'Status updated'));
     } catch (err) {

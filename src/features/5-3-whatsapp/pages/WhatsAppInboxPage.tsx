@@ -221,7 +221,7 @@ export function WhatsAppInboxPage() {
                         </button>
                       </div>
                       <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 p-4">
-                        <LivechatQuickActionPanel conversation={selectedConversation?.source === 'whatsapp' ? selectedConversation : null} />
+                        <LivechatQuickActionPanel conversation={selectedConversation ?? null} />
                       </div>
                     </>
                   ) : (

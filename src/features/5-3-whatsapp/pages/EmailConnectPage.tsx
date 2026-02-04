@@ -16,6 +16,7 @@ import {
 } from '@/features/ui/command';
 import { Checkbox } from '@/features/ui/checkbox';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useEmailConnections } from '../hooks/useEmailConnections';
 import { Mail, Plus, ChevronLeft, ChevronDown, Copy, CheckCircle2, Unplug, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,8 +26,14 @@ import type { EmailConnection } from '../types';
 const EMAIL_INBOUND_DOMAIN = (import.meta.env.VITE_EMAIL_INBOUND_DOMAIN as string)?.trim() || 'chat.example.com';
 const IS_INBOUND_DOMAIN_CONFIGURED = EMAIL_INBOUND_DOMAIN !== 'chat.example.com';
 
-function generateInboundAddress(): string {
-  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+/** Deterministic inbound address per (org, email) so re-adding the same connection gives the same address. */
+async function generateInboundAddress(organizationId: string, emailAddress: string): Promise<string> {
+  const input = `${organizationId}|${emailAddress.toLowerCase().trim()}`;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const hex = Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const id = hex.slice(0, 12);
   return `inbound-${id}@${EMAIL_INBOUND_DOMAIN}`;
 }
 
@@ -41,6 +48,7 @@ const EMAIL_PROVIDERS = [
 export function EmailConnectPage() {
   const { t } = useAppTranslation();
   const navigate = useNavigate();
+  const { organizationId } = useCurrentOrg();
   const { connections, isLoading: connectionsLoading, insertConnection, insertConnectionMutation, deleteConnection } = useEmailConnections();
   const [isAddingEmail, setIsAddingEmail] = useState(false);
   const [email, setEmail] = useState('');
@@ -69,8 +77,19 @@ export function EmailConnectPage() {
       toast.error(t('emailConnect.emailRequired', 'Email address is required.'));
       return;
     }
-    const inboundAddress = generateInboundAddress();
+    if (!organizationId) {
+      toast.error(t('emailConnect.noOrganization', 'No organization selected.'));
+      return;
+    }
+    const alreadyConnected = connections.some(
+      (c) => c.email_address?.toLowerCase().trim() === emailTrim.toLowerCase()
+    );
+    if (alreadyConnected) {
+      toast.error(t('emailConnect.alreadyConnected', 'This email is already connected.'));
+      return;
+    }
     try {
+      const inboundAddress = await generateInboundAddress(organizationId, emailTrim);
       await insertConnection({
         organization_id: '', // filled in hook
         email_address: emailTrim,
@@ -343,10 +362,10 @@ export function EmailConnectPage() {
                                         <span
                                           className={cn(
                                             'inline-flex text-xs font-medium mt-1',
-                                            conn.status === 'verified' ? 'text-green-600' : 'text-amber-600'
+                                            (conn.status === 'verified' || conn.confirmation_code) ? 'text-green-600' : 'text-amber-600'
                                           )}
                                         >
-                                          {conn.status === 'verified'
+                                          {conn.status === 'verified' || conn.confirmation_code
                                             ? t('emailConnect.statusVerified', 'Verified')
                                             : t('emailConnect.statusPending', 'Pending verification')}
                                         </span>

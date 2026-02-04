@@ -955,6 +955,20 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           queryClient.invalidateQueries({ queryKey: ['leads'] });
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'email_conversations' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'email_messages' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
       .subscribe();
     return () => {
       if (channelRef.current) {
@@ -1051,6 +1065,8 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         assignee: (lead.assignee && String(lead.assignee).trim()) ? lead.assignee : (lead.assignee_id ? assigneeNameMap.get(normId(lead.assignee_id)) ?? null : null),
       }));
 
+      const defaultStatusId = statusesData?.[0]?.id ?? '';
+
       if (!whatsappError && whatsappConvs && whatsappConvs.length > 0) {
         // Ensure statusMap has all statuses used by WhatsApp (for Report Summary "Converted" count)
         const waStatusIds = [...new Set(whatsappConvs.map((c: any) => c.lead_status_id).filter(Boolean))].filter((id: string) => !statusMap.has(normId(id)));
@@ -1069,7 +1085,6 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         const whatsappAsLeads = whatsappConvs.map((c: any) => {
           const statusId = c.lead_status_id ?? '';
           const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
-          // Ticket ID dari DB (kolom generated); fallback ke hitungan dari id jika belum ada
           const waTicketId = c.ticket_id ?? ('WA-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
           const assigneeId = c.assignee_id ?? null;
           const assigneeName = assigneeId ? assigneeNameMap.get(normId(assigneeId)) ?? null : null;
@@ -1093,12 +1108,48 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             organization_id: c.organization_id,
             ticket_id: waTicketId,
             lead_status: leadStatus,
-          _fromWhatsApp: true as const,
-          _chatOpenedAt: c.last_opened_at ?? null,
-          _customerWaId: (c.customer_wa_id ?? '') as string,
-        };
+            _fromWhatsApp: true as const,
+            _chatOpenedAt: c.last_opened_at ?? null,
+            _customerWaId: (c.customer_wa_id ?? '') as string,
+          };
         });
-        return filterLeadsByScope([...leadsWithStatus, ...whatsappAsLeads], effectiveScope, currentEmployeeId);
+        leadsWithStatus = [...leadsWithStatus, ...whatsappAsLeads];
+      }
+
+      // 3) Fetch email conversations (same org) and map to lead-like rows with source: Email
+      const { data: emailConvs, error: emailError } = await supabase.rpc('get_email_conversations_with_preview', {
+        p_organization_id: organizationId,
+      });
+      if (!emailError && emailConvs && emailConvs.length > 0) {
+        const emailAsLeads = (emailConvs as any[]).map((c: any) => {
+          const statusId = c.lead_status_id ?? defaultStatusId;
+          const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
+          const ticketId = 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+          const lastBody = (c.last_message_body ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+          return {
+            id: 'email-' + c.id,
+            client: c.from_email || c.email_connection_display || 'Email',
+            title: lastBody || 'Email',
+            services: null,
+            category: '-',
+            assignee: null as string | null,
+            assignee_id: null as string | null,
+            fu_priority: c.fu_priority ?? null,
+            status_id: statusId,
+            source: 'Email',
+            followup: c.followup ?? 0,
+            converted_at: null,
+            created_at: c.created_at ?? c.last_message_at,
+            updated_at: c.updated_at ?? c.created_at,
+            created_by: '',
+            created_by_name: '',
+            organization_id: c.organization_id,
+            ticket_id: ticketId,
+            lead_status: leadStatus,
+            _fromEmail: true as const,
+          };
+        });
+        leadsWithStatus = [...leadsWithStatus, ...emailAsLeads];
       }
 
       return filterLeadsByScope(leadsWithStatus, effectiveScope, currentEmployeeId);
@@ -1155,6 +1206,22 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
   // Update lead mutation
   const updateLeadMutation = useMutation({
     mutationFn: async (lead: any) => {
+      // Email conversation: update email_conversations.lead_status_id (same as WhatsApp)
+      if (lead?.id && String(lead.id).startsWith('email-')) {
+        const convId = String(lead.id).replace(/^email-/, '');
+        const { error: updateError } = await supabase
+          .from('email_conversations')
+          .update({
+            lead_status_id: lead.status_id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', convId);
+        if (updateError) {
+          console.error('Error updating email conversation status:', updateError);
+          throw updateError;
+        }
+        return lead;
+      }
       // WhatsApp conversation: update lead_status_id and record status history
       if (lead?.id && String(lead.id).startsWith('wa-')) {
         const convId = String(lead.id).replace(/^wa-/, '');

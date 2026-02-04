@@ -255,8 +255,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         <ClientStatusIcon leadId={lead.id} />
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className="text-sm">{lead.title}</span>
+                    <TableCell className="w-[200px] max-w-[200px] min-w-0 overflow-hidden">
+                      <span className="text-sm truncate block" title={lead.title ?? ''}>{lead.title}</span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <span className="text-sm">{lead.services || '-'}</span>

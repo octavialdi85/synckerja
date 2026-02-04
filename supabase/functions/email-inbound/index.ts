@@ -78,7 +78,7 @@ async function verifyResendWebhook(
   return false;
 }
 
-/** Resend email.received webhook payload */
+/** Resend email.received webhook payload – body often empty; use email_id + Resend API to get full content. */
 interface ResendEmailReceivedPayload {
   type?: string;
   created_at?: string;
@@ -88,10 +88,32 @@ interface ResendEmailReceivedPayload {
     from?: string;
     to?: string[];
     subject?: string;
-    /** Body may be present in some Resend inbound payloads; otherwise fetch via API. */
     text?: string;
     html?: string;
   };
+}
+
+const RESEND_API_KEY_ENV = "RESEND_API_KEY";
+const RESEND_RECEIVING_API = "https://api.resend.com/emails/receiving";
+
+/** Fetch full email content (html/text) from Resend Receiving API so links and body are available. */
+async function fetchReceivedEmailContent(emailId: string): Promise<{ html?: string; text?: string } | null> {
+  const apiKey = Deno.env.get(RESEND_API_KEY_ENV);
+  if (!apiKey?.trim()) return null;
+  try {
+    const res = await fetch(`${RESEND_RECEIVING_API}/${encodeURIComponent(emailId)}`, {
+      headers: { Authorization: `Bearer ${apiKey.trim()}` },
+    });
+    if (!res.ok) {
+      console.error("email-inbound: Resend receiving API", res.status, await res.text());
+      return null;
+    }
+    const data = (await res.json()) as { html?: string; text?: string };
+    return { html: data?.html, text: data?.text };
+  } catch (e) {
+    console.error("email-inbound: fetch received email failed", e);
+    return null;
+  }
 }
 
 /** Extract Gmail confirmation code from text (e.g. "Kode konfirmasi: 106074202" or "Confirmation code: 106074202"). */
@@ -126,6 +148,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    console.log("email-inbound: POST received");
     const rawBody = await req.text();
     const webhookSecret = Deno.env.get(WEBHOOK_SECRET_ENV);
     if (webhookSecret) {
@@ -167,6 +190,7 @@ Deno.serve(async (req: Request) => {
       });
     }
     if (body?.type !== "email.received" || !body?.data?.to?.length) {
+      console.log("email-inbound: skipped, type or to missing", body?.type, body?.data?.to);
       return new Response(JSON.stringify({ received: false, reason: "invalid payload" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -175,10 +199,17 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const toAddresses = body.data.to as string[];
+    console.log("email-inbound: processing to", toAddresses);
     const fromRaw = body.data.from ?? "";
     const fromEmail = parseFromEmail(fromRaw);
     const subject = body.data.subject ?? "";
-    const textBody = body.data.text ?? body.data.html ?? "";
+    let textBody = (body.data.text ?? body.data.html ?? "").trim();
+    if (body.data.email_id && (!textBody || textBody.length < 100)) {
+      const full = await fetchReceivedEmailContent(body.data.email_id);
+      if (full?.html || full?.text) {
+        textBody = (full.html ?? full.text ?? "").trim();
+      }
+    }
     const confirmationCode = extractConfirmationCode(textBody) || extractConfirmationCode(subject);
 
     for (const to of toAddresses) {
@@ -191,7 +222,11 @@ Deno.serve(async (req: Request) => {
         .eq("inbound_address", toNormalized)
         .maybeSingle();
 
-      if (connError || !conn) continue;
+      if (connError || !conn) {
+        if (connError) console.error("email-inbound: connection lookup error", connError);
+        else console.log("email-inbound: no connection for inbound_address", toNormalized, "- add this address in Connect Email");
+        continue;
+      }
 
       let conversationId: string;
       const { data: existingConv } = await supabase
@@ -248,11 +283,43 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", conversationId);
 
+      // Reopen to Unread (Open) when customer sends new email and status was Closed (same as whatsapp-webhook)
+      const { data: convRow } = await supabase
+        .from("email_conversations")
+        .select("lead_status_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const statusId = convRow?.lead_status_id ?? null;
+      let leadStatusName: string | null = null;
+      if (statusId) {
+        const { data: statusRow } = await supabase
+          .from("lead_statuses")
+          .select("name")
+          .eq("id", statusId)
+          .maybeSingle();
+        leadStatusName = (statusRow?.name as string) ?? null;
+      }
+      const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
+      if (isClosed) {
+        const { data: openStatus } = await supabase
+          .from("lead_statuses")
+          .select("id")
+          .eq("name", "Open")
+          .maybeSingle();
+        if (openStatus?.id) {
+          await supabase
+            .from("email_conversations")
+            .update({ lead_status_id: openStatus.id, updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
+        }
+      }
+
       if (confirmationCode) {
         await supabase
           .from("organization_email_connections")
           .update({
             confirmation_code: confirmationCode,
+            status: "verified",
             updated_at: new Date().toISOString(),
           })
           .eq("id", conn.id);

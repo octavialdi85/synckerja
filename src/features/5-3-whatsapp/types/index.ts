@@ -146,6 +146,10 @@ export interface EmailConversation {
   email_connection_display: string | null;
   created_at: string;
   updated_at: string;
+  /** From DB after migration; used by Quick Action and Leads Management */
+  lead_status_id?: string | null;
+  followup?: number;
+  fu_priority?: string | null;
 }
 
 export interface EmailMessage {

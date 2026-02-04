@@ -51,6 +51,36 @@ function formatTime(iso: string | null) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+/** Strip HTML tags so preview shows plain text (e.g. email body). */
+function stripHtmlForPreview(html: string | null | undefined): string {
+  if (html == null || html === '') return '';
+  return String(html)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Truncate at quoted-reply block so preview shows only the core message (no "Pada Rab, ..." / "On ... wrote:"). */
+function truncateAtQuotedReply(text: string): string {
+  if (!text.trim()) return text;
+  const t = text.trim();
+  const quoteStarts = [
+    t.search(/\sPada\s+[A-Za-z]{2,4},\s*\d/), // " Pada Rab, 4 Feb" (ID)
+    t.search(/\sOn\s+[A-Za-z]{2,4},\s*.+wrote:/i), // " On Wed, ... wrote:"
+    t.search(/\s-{5,}/), // " -----..."
+    t.search(/\sFrom\s*:/i),
+    t.search(/\sSent\s*:/i),
+  ].filter((i) => i >= 0);
+  const first = quoteStarts.length > 0 ? Math.min(...quoteStarts) : t.length;
+  return t.slice(0, first).trim();
+}
+
+/** Plain-text preview for list: strip HTML and remove quoted-reply block. */
+function getEmailPreviewSnippet(html: string | null | undefined): string {
+  const plain = stripHtmlForPreview(html);
+  return truncateAtQuotedReply(plain);
+}
+
 /** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
 function maskPhoneLast4(phone: string | null | undefined): string {
   if (phone == null || phone === '') return '';
@@ -205,8 +235,8 @@ export function ConversationList({
                 </span>
               )}
               {conv.last_message_body != null && conv.last_message_body !== '' ? (
-                <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={conv.last_message_body}>
-                  {conv.last_message_body}
+                <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body)}>
+                  {isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body)}
                 </span>
               ) : (
                 <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>

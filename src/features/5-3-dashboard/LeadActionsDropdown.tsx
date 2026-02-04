@@ -11,7 +11,7 @@ import { MoreHorizontal, Edit, Eye, Trash2, MessageCircle } from "lucide-react";
 import { NewLead } from '@/types/leads';
 
 interface LeadActionsDropdownProps {
-  lead: NewLead & { _fromWhatsApp?: boolean };
+  lead: NewLead & { _fromWhatsApp?: boolean; _fromEmail?: boolean };
   onEdit: (lead: NewLead) => void;
   onViewDetail: (lead: NewLead) => void;
   onDelete: (leadId: string) => void;
@@ -20,6 +20,8 @@ interface LeadActionsDropdownProps {
 export const LeadActionsDropdown = ({ lead, onEdit, onViewDetail, onDelete }: LeadActionsDropdownProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const fromWhatsApp = (lead as any)._fromWhatsApp === true;
+  const fromEmail = (lead as any)._fromEmail === true || (typeof lead.id === 'string' && lead.id.startsWith('email-'));
+  const fromChat = fromWhatsApp || fromEmail;
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this lead?')) return;
@@ -42,9 +44,12 @@ export const LeadActionsDropdown = ({ lead, onEdit, onViewDetail, onDelete }: Le
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {fromWhatsApp ? (
+        {fromChat ? (
           <DropdownMenuItem asChild>
-            <Link to={`/operations/consultant/all/livechat?conversation=${lead.id.replace(/^wa-/, '')}`} className="flex items-center cursor-pointer">
+            <Link
+              to={`/operations/consultant/all/livechat?conversation=${lead.id.replace(/^wa-/, '').replace(/^email-/, '')}`}
+              className="flex items-center cursor-pointer"
+            >
               <MessageCircle className="mr-2 h-4 w-4" />
               Open Chat
             </Link>
