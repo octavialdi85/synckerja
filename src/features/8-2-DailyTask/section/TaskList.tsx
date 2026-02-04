@@ -1267,13 +1267,20 @@ export const TaskList = () => {
                           </DropdownMenu>
                         </TableCell>
 
-                        {/* Status - untuk task dengan steps, tampilkan derived: completed hanya jika semua step selesai */}
+                        {/* Status - ikut kolom Progress: Pending = 0%, In Progress = >0%, Completed = 100% */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {getStatusBadge(
-                            task.steps.length > 0
-                              ? (isTaskFullyCompleteBySteps(task) ? 'completed' : task.status === 'cancelled' ? 'cancelled' : 'pending')
-                              : task.status
-                          )}
+                          {(() => {
+                            const progress = calculateAssignedStepsProgress(task);
+                            const displayStatus =
+                              task.status === 'cancelled'
+                                ? 'cancelled'
+                                : progress >= 100
+                                  ? 'completed'
+                                  : progress > 0
+                                    ? 'in_progress'
+                                    : 'pending';
+                            return getStatusBadge(displayStatus);
+                          })()}
                         </TableCell>
 
                         {/* Progress */}

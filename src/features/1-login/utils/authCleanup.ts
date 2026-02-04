@@ -169,14 +169,15 @@ export const checkAndCleanupStaleAuth = async () => {
   }
 };
 
-export const forceAuthReset = async () => {
-  console.log('🔄 Forcing complete auth reset');
+/** Reason for redirect so login page can show a message */
+export type AuthResetReason = 'session_expired' | 'stale' | undefined;
+
+export const forceAuthReset = async (reason?: AuthResetReason) => {
+  console.log('🔄 Forcing complete auth reset', reason ? `(${reason})` : '');
   
   try {
-    // Force cleanup
     cleanupAuthState();
     
-    // Try multiple sign out methods
     try {
       await Promise.allSettled([
         supabase.auth.signOut({ scope: 'global' }),
@@ -187,13 +188,10 @@ export const forceAuthReset = async () => {
       console.warn('Force sign out error (continuing):', signOutError);
     }
     
-    // More aggressive cleanup
     try {
-      // Clear all possible storage locations
       localStorage.clear();
       sessionStorage.clear();
       
-      // Clear any IndexedDB data related to Supabase
       if ('indexedDB' in window) {
         const databases = await indexedDB.databases();
         for (const db of databases) {
@@ -203,7 +201,6 @@ export const forceAuthReset = async () => {
         }
       }
       
-      // Clear service worker if any
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         for (const registration of registrations) {
@@ -214,16 +211,24 @@ export const forceAuthReset = async () => {
       console.warn('Additional cleanup error:', cleanupError);
     }
     
-    // Small delay before redirect
-    setTimeout(() => {
-      console.log('🔄 Reloading page for clean state');
-      window.location.href = '/login';
-    }, 100);
+    const loginUrl = reason === 'session_expired' ? '/login?reason=session_expired' : '/login';
+    const isAlreadyOnLogin = typeof window !== 'undefined' && (
+      window.location.pathname === '/login' || window.location.pathname === '/login/'
+    );
+    if (!isAlreadyOnLogin) {
+      setTimeout(() => {
+        window.location.href = loginUrl;
+      }, 100);
+    }
     
   } catch (error) {
     console.error('Force auth reset error:', error);
-    // Force reload even if cleanup fails
-    window.location.href = '/login';
+    const isAlreadyOnLogin = typeof window !== 'undefined' && (
+      window.location.pathname === '/login' || window.location.pathname === '/login/'
+    );
+    if (!isAlreadyOnLogin) {
+      window.location.href = reason === 'session_expired' ? '/login?reason=session_expired' : '/login';
+    }
   }
 };
 

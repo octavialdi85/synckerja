@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from './section/HeaderAndTab';
 import { TaskFilters } from './section/TaskFilters';
@@ -26,22 +27,39 @@ const DailyTaskPage = () => {
 
 const DailyTaskContent = () => {
   const { t } = useAppTranslation();
-  const { tasks, filteredTasks, isLoading } = useDailyTask();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { tasks, filteredTasks, isLoading, setFilters, setExpandedTasks, setHighlightedTask, scrollToStep } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
   const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
+  const appliedNavParamsRef = useRef(false);
 
-  // OPTIMIZATION: Show skeleton UI after 500ms even if still loading
-  // This prevents blank screen during slow queries
+  // Very short loading only when organizationId not ready yet (avoids flash)
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setInitialLoadTimeout(true);
-    }, 500);
+    const timer = setTimeout(() => setInitialLoadTimeout(true), 150);
     return () => clearTimeout(timer);
   }, []);
 
-  // Show loading state only on initial load (before timeout)
-  // After timeout, show skeleton UI instead of full loading screen
+  // Apply URL params from Home (standalone SectionActivityNotifikasi) after tasks are loaded
+  useEffect(() => {
+    if (isLoading || tasks.length === 0 || appliedNavParamsRef.current) return;
+    const taskId = searchParams.get('taskId');
+    const stepId = searchParams.get('stepId');
+    const search = searchParams.get('search');
+    const action = searchParams.get('action');
+    if (!taskId) return;
+
+    appliedNavParamsRef.current = true;
+    if (search) setFilters(prev => ({ ...prev, search }));
+    setExpandedTasks(prev => new Set([...prev, taskId]));
+    setHighlightedTask(taskId);
+    setTimeout(() => setHighlightedTask(null), 3000);
+    if (action === 'scroll' && stepId) {
+      setTimeout(() => scrollToStep(stepId), 400);
+    }
+    setSearchParams({}, { replace: true });
+  }, [isLoading, tasks.length, searchParams, setFilters, setExpandedTasks, setHighlightedTask, scrollToStep, setSearchParams]);
+
   if (isLoading && !initialLoadTimeout) {
     return (
       <StandardLayout>

@@ -53,7 +53,7 @@ export async function createCompletionApprovalIfAssignee(params: {
 
 /**
  * Fetch pending approvals for the current user as assigner (to show "Pending your approval").
- * Select does not join employees to avoid FK ambiguity with multiple FKs to employees; assignee name shown as "Assignee" in UI.
+ * Select only completion_approvals columns to avoid 500 from RLS on joined tables; UI shows entity_type and links to task.
  */
 export async function fetchPendingApprovalsForAssigner(
   organizationId: string,
@@ -63,13 +63,7 @@ export async function fetchPendingApprovalsForAssigner(
     const { data, error } = await supabase
       .from('completion_approvals')
       .select(
-        `
-        id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id,
-        assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason,
-        daily_tasks(title),
-        task_steps(title),
-        task_steps_to_steps(title)
-        `
+        'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason'
       )
       .eq('organization_id', organizationId)
       .eq('assigner_employee_id', assignerEmployeeId)
@@ -84,6 +78,7 @@ export async function fetchPendingApprovalsForAssigner(
 
 /**
  * Fetch rejected completions for the current user as assignee (to show "Rejected by assigner").
+ * Select only completion_approvals columns to avoid 500 from RLS on joined tables.
  */
 export async function fetchRejectedForAssignee(
   organizationId: string,
@@ -93,13 +88,7 @@ export async function fetchRejectedForAssignee(
     const { data, error } = await supabase
       .from('completion_approvals')
       .select(
-        `
-        id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id,
-        assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at,
-        daily_tasks(title),
-        task_steps(title),
-        task_steps_to_steps(title)
-        `
+        'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at'
       )
       .eq('organization_id', organizationId)
       .eq('assignee_employee_id', assigneeEmployeeId)

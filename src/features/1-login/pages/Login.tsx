@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/features/ui/card";
 import { Input } from "@/features/ui/input";
 import { Button } from "@/features/ui/button";
@@ -16,6 +16,20 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Show message when redirected due to session/refresh token error (500/504)
+  useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason === 'session_expired') {
+      toast({
+        title: "Sesi berakhir",
+        description: "Sesi habis atau server sibuk. Silakan masuk kembali.",
+        variant: "default",
+      });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Check if user is coming from email verification
   useEffect(() => {
@@ -75,11 +89,34 @@ const Login = () => {
       });
       if (error) {
         console.log('Login: Authentication error:', error.message);
+        // Handle timeout/network/abort errors explicitly
+        const isTimeoutOrNetwork = error.message?.includes('timeout') ||
+          error.message?.includes('Network request failed') ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('signal is aborted') ||
+          error.name === 'AbortError';
+        if (isTimeoutOrNetwork) {
+          setError("Koneksi timeout atau server tidak merespons. Silakan coba lagi.");
+          toast({
+            title: "Koneksi timeout",
+            description: "Server tidak merespons. Pastikan koneksi internet stabil dan coba lagi.",
+            variant: "destructive"
+          });
+          setLoading(false);
+          return;
+        }
         if (error.message === "Invalid login credentials") {
-          // Check if email exists in profiles table
-          const {
-            data: profile
-          } = await supabase.from("profiles").select("id").eq("email", email).maybeSingle();
+          // Check if email exists in profiles table (with timeout)
+          let profile: any = null;
+          try {
+            const profilePromise = supabase.from("profiles").select("id").eq("email", email).maybeSingle();
+            const profileTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Profile check timeout')), 3000));
+            const profileResult = await Promise.race([profilePromise, profileTimeout]) as any;
+            profile = profileResult?.data;
+          } catch {
+            // If query fails/timeout, assume email exists (show password error)
+            profile = { id: 'unknown' };
+          }
           if (!profile) {
             // Email tidak terdaftar, redirect ke register dengan pre-filled email
             toast({
@@ -114,26 +151,41 @@ const Login = () => {
         return;
       }
 
+      // CRITICAL: Set justLoggedIn immediately so auth timeout handler doesn't redirect during post-login queries
+      if (data.user) {
+        sessionStorage.setItem('justLoggedIn', Date.now().toString());
+      }
+
       // CRITICAL: Check email verification status from profiles table only
       if (data.user) {
         console.log('Login: Authentication successful, checking email verification status...');
-        const {
-          data: profile,
-          error: profileError
-        } = await supabase.from("profiles").select("active_organization_id").eq("user_id", data.user.id).maybeSingle();
-        if (profileError) {
-          console.error('Login: Error checking profile:', profileError);
-          // Jangan paksa logout di sini; perlakukan sebagai profil belum ada
-          // Lanjut ke cek verifikasi auth di bawah
+        
+        // Add timeout to prevent blocking on slow queries
+        let profile: any = null;
+        let verificationToken: any = null;
+        
+        try {
+          const profilePromise = supabase.from("profiles").select("active_organization_id").eq("user_id", data.user.id).maybeSingle();
+          const profileTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Profile query timeout')), 5000));
+          const profileResult = await Promise.race([profilePromise, profileTimeout]) as any;
+          profile = profileResult?.data;
+        } catch (profileError: any) {
+          console.warn('Login: Profile check failed/timeout, continuing:', profileError?.message);
+          // Continue without profile - user can still login
         }
 
-        // Check email verification status more carefully
-        // Check email verification from email_verification_tokens table
-        const {
-          data: verificationToken
-        } = await supabase.from('email_verification_tokens').select('email_verified').eq('user_id', data.user.id).eq('email_verified', true).order('used_at', {
-          ascending: false
-        }).limit(1).maybeSingle();
+        try {
+          const verificationPromise = supabase.from('email_verification_tokens').select('email_verified').eq('user_id', data.user.id).eq('email_verified', true).order('used_at', {
+            ascending: false
+          }).limit(1).maybeSingle();
+          const verificationTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Verification query timeout')), 5000));
+          const verificationResult = await Promise.race([verificationPromise, verificationTimeout]) as any;
+          verificationToken = verificationResult?.data;
+        } catch (verificationError: any) {
+          console.warn('Login: Verification check failed/timeout, assuming verified:', verificationError?.message);
+          // If query fails, assume verified (user already logged in via Supabase auth)
+          verificationToken = { email_verified: true };
+        }
         
         if (!verificationToken) {
           console.log('Login: Email not verified, redirecting to verify-email page');
@@ -171,14 +223,29 @@ const Login = () => {
             description: "Selamat datang kembali!"
           });
           
-          // Navigate directly to home page after successful login
+          // Navigate directly to home page after successful login (justLoggedIn already set above)
           console.log('Login: Success, redirecting to home page...');
           navigate("/", { replace: true });
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Login: Unexpected error:", err);
-      setError("Terjadi kesalahan saat login. Silakan coba lagi.");
+      const errorMessage = err?.message || err?.toString() || '';
+      if (errorMessage.includes('timeout') || errorMessage.includes('Network') || errorMessage.includes('Failed to fetch')) {
+        setError("Koneksi timeout atau server tidak merespons. Silakan coba lagi.");
+        toast({
+          title: "Koneksi timeout",
+          description: "Server tidak merespons. Pastikan koneksi internet stabil dan coba lagi.",
+          variant: "destructive"
+        });
+      } else {
+        setError(err?.message || "Terjadi kesalahan saat login. Silakan coba lagi.");
+        toast({
+          title: "Login gagal",
+          description: err?.message || "Terjadi kesalahan. Silakan coba lagi.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }

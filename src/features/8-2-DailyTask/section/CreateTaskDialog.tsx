@@ -367,11 +367,12 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 {/* Task Title & Description */}
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="title" className="text-sm font-medium">
+                    <Label htmlFor="create-task-title" className="text-sm font-medium">
                       Task Title <span className="text-red-500">*</span>
                     </Label>
                     <Input
-                      id="title"
+                      id="create-task-title"
+                      name="title"
                       placeholder="What needs to be done?"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
@@ -383,11 +384,12 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="description" className="text-sm font-medium">
+                    <Label htmlFor="create-task-description" className="text-sm font-medium">
                       Description
                     </Label>
                     <Textarea
-                      id="description"
+                      id="create-task-description"
+                      name="description"
                       placeholder="Add description (optional)..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -596,33 +598,35 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         currentAssignment={assignment}
       />
 
-      {/* Objective Hierarchy Dialog - Use mobile version on mobile devices */}
-      {isMobile ? (
-        <MobileObjectiveHierarchyDialog
-          open={isObjectiveDialogOpen}
-          onOpenChange={setIsObjectiveDialogOpen}
-          onSelect={(id, context) => {
-            setObjectiveId(id);
-            setObjectiveContext(context);
-          }}
-          selectedObjectiveId={objectiveId}
-          organizationId={organizationId || ''}
-          cycleIds={activeCycleIds}
-          planDate={planDate}
-        />
-      ) : (
-        <ObjectiveHierarchyDialog
-          open={isObjectiveDialogOpen}
-          onOpenChange={setIsObjectiveDialogOpen}
-          onSelect={(id, context) => {
-            setObjectiveId(id);
-            setObjectiveContext(context);
-          }}
-          selectedObjectiveId={objectiveId}
-          organizationId={organizationId || ''}
-          cycleIds={activeCycleIds}
-          planDate={planDate}
-        />
+      {/* Lazy-load objective dialogs only when open so Company/Department objectives aren't fetched on page load */}
+      {isObjectiveDialogOpen && (
+        isMobile ? (
+          <MobileObjectiveHierarchyDialog
+            open={isObjectiveDialogOpen}
+            onOpenChange={setIsObjectiveDialogOpen}
+            onSelect={(id, context) => {
+              setObjectiveId(id);
+              setObjectiveContext(context);
+            }}
+            selectedObjectiveId={objectiveId}
+            organizationId={organizationId || ''}
+            cycleIds={activeCycleIds}
+            planDate={planDate}
+          />
+        ) : (
+          <ObjectiveHierarchyDialog
+            open={isObjectiveDialogOpen}
+            onOpenChange={setIsObjectiveDialogOpen}
+            onSelect={(id, context) => {
+              setObjectiveId(id);
+              setObjectiveContext(context);
+            }}
+            selectedObjectiveId={objectiveId}
+            organizationId={organizationId || ''}
+            cycleIds={activeCycleIds}
+            planDate={planDate}
+          />
+        )
       )}
     </>
   );

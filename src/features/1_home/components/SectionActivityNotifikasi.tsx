@@ -11,7 +11,7 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { LoadingDots } from '@/components/LoadingDots';
 import { useEmployeeAssignments } from './hooks/useEmployeeAssignments';
 import { JobDescTimeframe, DateRangeValue, JobDescAssignment } from '@/features/8-2-DailyTask/section/JobDescTracker/types';
-import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { useDailyTaskOptional } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { differenceInCalendarDays, startOfDay, format, formatDistanceToNowStrict } from 'date-fns';
 import { ModalViewSubSteps } from '@/features/8-2-DailyTask/section/ModalViewSubSteps';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,10 +40,16 @@ const formatDate = (value: string | null, fallback: string) => {
   }
 };
 
-export const SectionActivityNotifikasi = () => {
+interface SectionActivityNotifikasiProps {
+  /** When true, used on Home without DailyTaskProvider; only navigates to /tools/daily-task with params. */
+  standalone?: boolean;
+}
+
+export const SectionActivityNotifikasi = ({ standalone }: SectionActivityNotifikasiProps = {}) => {
   const { t, language } = useAppTranslation();
   const locale = language === "id" ? indonesianLocale : undefined;
   const navigate = useNavigate();
+  const dailyTask = useDailyTaskOptional();
   const [activeTab, setActiveTab] = useState<'activities' | 'notifications'>('activities');
   const [timeframe, setTimeframe] = useState<JobDescTimeframe>("weekly");
   const [customRange, setCustomRange] = useState<DateRangeValue>({
@@ -59,7 +65,7 @@ export const SectionActivityNotifikasi = () => {
     includeOverdue: true,
   });
     
-  const { setFilters, navigateToTask, setExpandedTasks, scrollToStep } = useDailyTask();
+  const useNavigateOnly = standalone || !dailyTask;
 
   // State untuk modal sub-step
   const [subStepModal, setSubStepModal] = useState<{
@@ -132,57 +138,54 @@ export const SectionActivityNotifikasi = () => {
 
   // Handle click pada task title - sama persis dengan JobDescEmployeeCard
   const handleTaskTitleClick = useCallback(async (assignment: JobDescAssignment) => {
-    if (assignment.type === 'task') {
-      // Task Title Click: search dengan taskTitle, tampilkan semua step
-      const searchTitle = assignment.title || assignment.taskTitle;
-      setFilters(prev => ({
-        ...prev,
-        search: searchTitle
-      }));
-      // Navigate dengan query parameter untuk trigger action di halaman daily-task
-      navigate(`/tools/daily-task?taskId=${assignment.taskId}&action=navigate`);
-      
-    } else if (assignment.type === 'step') {
-      // Step Title Click: search dengan stepTitle, tampilkan hanya step spesifik
-      setFilters(prev => ({
-        ...prev,
-        search: assignment.stepTitle
-      }));
-      
-      // Query stepId untuk scroll ke step spesifik
-      const stepId = await getStepId(assignment.assignmentId);
-      
-      // Expand task (disimpan di localStorage melalui context)
-      setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+    const params = new URLSearchParams();
+    params.set('taskId', assignment.taskId);
 
-      // Navigate dengan query parameter
-      if (stepId) {
-        navigate(`/tools/daily-task?taskId=${assignment.taskId}&stepId=${stepId}&action=scroll`);
-      } else {
-        navigate(`/tools/daily-task?taskId=${assignment.taskId}&action=navigate`);
+    if (assignment.type === 'task') {
+      const searchTitle = assignment.title || assignment.taskTitle;
+      if (searchTitle) params.set('search', searchTitle);
+      params.set('action', 'navigate');
+      if (!useNavigateOnly && dailyTask) {
+        dailyTask.setFilters(prev => ({ ...prev, search: searchTitle }));
       }
-      
-    } else if (assignment.type === 'subStep') {
-      // Sub-step Title Click: search dengan stepTitle (parent), buka modal, scroll ke parent step
-      setFilters(prev => ({
-        ...prev,
-        search: assignment.stepTitle
-      }));
-      
-      // Query parentStepId untuk buka modal dan scroll
-      const parentStepId = await getParentStepId(assignment.assignmentId);
-      
-      // Expand task (disimpan di localStorage melalui context)
-      setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
-      
-      // Navigate dengan query parameter
-      if (parentStepId) {
-        navigate(`/tools/daily-task?taskId=${assignment.taskId}&stepId=${parentStepId}&action=scroll&subStep=true`);
-      } else {
-        navigate(`/tools/daily-task?taskId=${assignment.taskId}&action=navigate`);
-      }
+      navigate(`/tools/daily-task?${params.toString()}`);
+      return;
     }
-  }, [navigate, setFilters, setExpandedTasks, getStepId, getParentStepId]);
+
+    if (assignment.type === 'step') {
+      if (assignment.stepTitle) params.set('search', assignment.stepTitle);
+      const stepId = await getStepId(assignment.assignmentId);
+      if (stepId) {
+        params.set('stepId', stepId);
+        params.set('action', 'scroll');
+      } else {
+        params.set('action', 'navigate');
+      }
+      if (!useNavigateOnly && dailyTask) {
+        dailyTask.setFilters(prev => ({ ...prev, search: assignment.stepTitle }));
+        dailyTask.setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+      }
+      navigate(`/tools/daily-task?${params.toString()}`);
+      return;
+    }
+
+    if (assignment.type === 'subStep') {
+      if (assignment.stepTitle) params.set('search', assignment.stepTitle);
+      const parentStepId = await getParentStepId(assignment.assignmentId);
+      if (parentStepId) {
+        params.set('stepId', parentStepId);
+        params.set('action', 'scroll');
+        params.set('subStep', 'true');
+      } else {
+        params.set('action', 'navigate');
+      }
+      if (!useNavigateOnly && dailyTask) {
+        dailyTask.setFilters(prev => ({ ...prev, search: assignment.stepTitle }));
+        dailyTask.setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
+      }
+      navigate(`/tools/daily-task?${params.toString()}`);
+    }
+  }, [navigate, useNavigateOnly, dailyTask, getStepId, getParentStepId]);
 
   // Filter completed assignments (same logic as JobDescEmployeeCard)
   const completedAssignments = useMemo(

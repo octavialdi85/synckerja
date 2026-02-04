@@ -90,11 +90,13 @@ export const PriceCalculator = ({ onCalculate }: PriceCalculatorProps) => {
                 </Select>
               </div>
               <div>
-                <Label className="text-sm font-medium">
+                <Label htmlFor="price-calculator-value" className="text-sm font-medium">
                   {calculationMethod === 'markup' ? 'Markup %' : 
                    calculationMethod === 'margin' ? 'Margin %' : 'Profit Amount'}
                 </Label>
                 <Input 
+                  id="price-calculator-value"
+                  name="priceValue"
                   type="number" 
                   placeholder={calculationMethod === 'fixed' ? '0' : '0'} 
                   className="mt-1"

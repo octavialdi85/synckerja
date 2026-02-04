@@ -496,45 +496,6 @@ export const useTaskFilters = ({
     departmentMap,
   ]);
 
-  /** Same display status as TaskList: for tasks with steps, completed only when all steps done */
-  const getDisplayStatus = useCallback((task: Task): string => {
-    if (!task) return 'pending';
-    const steps = task.steps || [];
-    if (steps.length > 0) {
-      const allStepsComplete = steps.every((s) => s && s.is_completed);
-      return allStepsComplete ? 'completed' : (task.status === 'cancelled' ? 'cancelled' : 'pending');
-    }
-    return task.status || 'pending';
-  }, []);
-
-  /** Summary stats use display status so counts match the task list (synchronous) */
-  const filteredSummaryData: SummaryData = useMemo(() => {
-    const list = filteredTasks || [];
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return {
-      pending: list.filter((t) => t && getDisplayStatus(t) === 'pending').length,
-      inProgress: list.filter((t) => t && getDisplayStatus(t) === 'in_progress').length,
-      completed: list.filter((t) => t && getDisplayStatus(t) === 'completed').length,
-      cancelled: list.filter((t) => t && getDisplayStatus(t) === 'cancelled').length,
-      overdue: list.filter((t) => {
-        if (!t || !t.due_date) return false;
-        return new Date(t.due_date) < new Date() && getDisplayStatus(t) !== 'completed';
-      }).length,
-      totalSteps: list.reduce((sum, t) => sum + (t?.steps?.length || 0), 0),
-      completedSteps: list.reduce(
-        (sum, t) => sum + (t?.steps?.filter((s) => s && s.is_completed).length || 0),
-        0
-      ),
-      tasksPlannedThisMonth: list.filter((t) => {
-        if (!t || !t.plan_date) return false;
-        const planDate = new Date(t.plan_date);
-        return planDate >= currentMonthStart && planDate < nextMonthStart;
-      }).length,
-    };
-  }, [filteredTasks, getDisplayStatus]);
-
   /**
    * Get visible steps untuk task berdasarkan filter
    */
@@ -920,6 +881,57 @@ export const useTaskFilters = ({
     },
     [filters, currentEmployeeId, currentUserId, isOwner]
   );
+
+  /**
+   * Display status based on progress (same as table column):
+   * Pending = 0%, In Progress = >0% and <100%, Completed = 100%.
+   * Uses visible steps progress so summary and table stay in sync.
+   */
+  const getDisplayStatus = useCallback(
+    (task: Task): string => {
+      if (!task) return 'pending';
+      if (task.status === 'cancelled') return 'cancelled';
+      const visibleSteps = getVisibleSteps(task);
+      const progress =
+        visibleSteps.length > 0
+          ? calculateProgress(visibleSteps, task.status)
+          : task.status === 'completed'
+            ? 100
+            : 0;
+      if (progress >= 100) return 'completed';
+      if (progress > 0) return 'in_progress';
+      return 'pending';
+    },
+    [getVisibleSteps]
+  );
+
+  /** Summary stats use display status so counts match the task list (synchronous) */
+  const filteredSummaryData: SummaryData = useMemo(() => {
+    const list = filteredTasks || [];
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return {
+      pending: list.filter((t) => t && getDisplayStatus(t) === 'pending').length,
+      inProgress: list.filter((t) => t && getDisplayStatus(t) === 'in_progress').length,
+      completed: list.filter((t) => t && getDisplayStatus(t) === 'completed').length,
+      cancelled: list.filter((t) => t && getDisplayStatus(t) === 'cancelled').length,
+      overdue: list.filter((t) => {
+        if (!t || !t.due_date) return false;
+        return new Date(t.due_date) < new Date() && getDisplayStatus(t) !== 'completed';
+      }).length,
+      totalSteps: list.reduce((sum, t) => sum + (t?.steps?.length || 0), 0),
+      completedSteps: list.reduce(
+        (sum, t) => sum + (t?.steps?.filter((s) => s && s.is_completed).length || 0),
+        0
+      ),
+      tasksPlannedThisMonth: list.filter((t) => {
+        if (!t || !t.plan_date) return false;
+        const planDate = new Date(t.plan_date);
+        return planDate >= currentMonthStart && planDate < nextMonthStart;
+      }).length,
+    };
+  }, [filteredTasks, getDisplayStatus]);
 
   return {
     filteredTasks,

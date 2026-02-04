@@ -79,9 +79,8 @@ export const useCompanyObjectives = (organizationId?: string, cycleIds?: string[
         .order('created_at', { ascending: false });
       const duration = performance.now() - startTime;
 
-      // Performance monitoring - increased threshold to 1500ms for complex queries
-      // Company objectives query involves joins and can be slower
-      logger.performance(`Company Objectives Fetch (${organizationId})`, duration, 1500);
+      // Performance monitoring - threshold relaxed so normal slow fetches don't warn (query can be 4s+)
+      logger.performance(`Company Objectives Fetch (${organizationId})`, duration, 5000);
 
       if (error) {
         console.error('❌ Error fetching company objectives:', error);

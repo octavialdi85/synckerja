@@ -33,6 +33,10 @@ const BATCH_SIZE = 10; // Balanced batch size - small enough to prevent 500 erro
 const MAX_RETRIES = 1; // Reduced retries for faster failure detection (was 2)
 const QUERY_TIMEOUT = 20000; // Increased to 20 seconds timeout per query to handle slow database queries
 
+// Prevent duplicate initial load when React Strict Mode double-mounts (dev only)
+const INITIAL_LOAD_DEDUPE_MS = 2500;
+let initialLoadState: { orgId: string; at: number } | null = null;
+
 const batchQuery = async <T,>(
   ids: string[],
   queryFn: (batch: string[]) => Promise<{ data: T[] | null; error: any }>
@@ -189,6 +193,9 @@ export const useDailyTask = () => {
   return context;
 };
 
+/** Returns context or undefined when not inside DailyTaskProvider (e.g. Home page standalone). */
+export const useDailyTaskOptional = () => useContext(DailyTaskContext);
+
 interface DailyTaskProviderProps {
   children: ReactNode;
 }
@@ -197,7 +204,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentStepUpdates, setRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
   const [filteredRecentStepUpdates, setFilteredRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   // Track recently updated tasks to skip real-time refresh (optimization for status updates)
   const recentlyUpdatedTasksRef = useRef<Set<string>>(new Set());
   // Track tasks that have been auto-fixed for has_reminder to avoid duplicate updates
@@ -251,13 +258,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     */
   }, [organizationId]);
 
-  // Fetch departments for tasks (for department filter in useTaskFilters)
+  // Defer department fetch so initial task list renders first (keeps page load fast)
+  const DEFER_DEPARTMENT_FETCH_MS = 500;
   useEffect(() => {
-    const fetchDepartments = async () => {
-      if (!tasks || tasks.length === 0) {
-        setDepartmentMap({});
-        return;
-      }
+    if (!tasks || tasks.length === 0) {
+      setDepartmentMap({});
+      return;
+    }
+    const t = setTimeout(async () => {
       const taskIds = tasks.map((t) => t.id);
       try {
         const { data: assignments, error: assignmentError } = await supabase
@@ -269,9 +277,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
             employee:employees!employee_id(department_id)
           `)
           .in('daily_task_id', taskIds);
-        if (assignmentError) {
-          return;
-        }
+        if (assignmentError) return;
         const departmentIds = new Set<string>();
         const taskDeptMapping: Array<{ taskId: string; deptId: string }> = [];
         (assignments || []).forEach((assignment: any) => {
@@ -305,8 +311,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       } catch {
         setDepartmentMap({});
       }
-    };
-    fetchDepartments();
+    }, DEFER_DEPARTMENT_FETCH_MS);
+    return () => clearTimeout(t);
   }, [tasks]);
 
   const { filteredTasks, filteredSummaryData, getVisibleSteps } = useTaskFilters({
@@ -328,23 +334,17 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       }
       trackQuery('fetch_tasks');
       
-      // Get current user to filter personal tasks only
-      // OPTIMIZATION: Add timeout to prevent blocking on slow auth.getUser()
-      // Increased timeout to 8 seconds to handle slow auth responses
+      // Get current user - fail fast if slow (2s max)
       const getUserPromise = supabase.auth.getUser();
       const getUserTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('getUser timeout')), 8000)
+        setTimeout(() => reject(new Error('getUser timeout')), 2000)
       );
       
       let user: any = null;
       try {
         const result = await Promise.race([getUserPromise, getUserTimeout]);
         user = (result as any)?.data?.user;
-      } catch (error) {
-        // If getUser times out, try to continue with cached user ID or return empty
-        if (import.meta.env.DEV) {
-          logger.debug('getUser timeout in fetchTasks, returning empty tasks');
-        }
+      } catch {
         setTasks([]);
         return;
       }
@@ -1245,11 +1245,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       delete data.finish_date;
     }
     
-    // Extract assigned_to from data since it's not a column in daily_tasks table
+    // Extract assigned_to from data (handled via daily_tasks_assigned table)
     const assignedTo = data.assigned_to;
-    const updateData = { ...data };
-    delete (updateData as any).assigned_to;
-    delete (updateData as any).assigned_to_name;
+    // Whitelist columns that exist on daily_tasks table to avoid 500 from invalid/relation fields
+    const allowedKeys = [
+      'title', 'description', 'status', 'priority', 'due_date', 'finish_date',
+      'organization_id', 'created_by', 'plan_date', 'objective_id',
+      'has_reminder', 'has_steps', 'has_substeps', 'updated_at'
+    ] as const;
+    const updateData: Record<string, unknown> = {};
+    for (const key of allowedKeys) {
+      if (key in data && (data as any)[key] !== undefined) {
+        if (key === 'finish_date') continue; // Let DB trigger handle finish_date
+        updateData[key] = (data as any)[key];
+      }
+    }
     
     // Optimistic update: update local state immediately
     const previousTasks = [...tasks];
@@ -1280,13 +1290,20 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     );
 
     try {
-      // Update the task (excluding assigned_to which is handled separately)
-      const { error } = await supabase
-        .from('daily_tasks')
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) throw error;
+      // Update the task (only whitelisted columns); retry once on 500 (transient server error)
+      for (let attempt = 0; attempt <= 1; attempt++) {
+        const { error } = await supabase
+          .from('daily_tasks')
+          .update(updateData)
+          .eq('id', id);
+        if (!error) break;
+        const isRetryable = (error as any).status === 500 || (error as any).code === 'PGRST301';
+        if (isRetryable && attempt < 1) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        throw error;
+      }
 
       // When assignee marks task completed, create pending approval for assigner only if task has NO steps (per spec: task with steps only need step-level approval)
       const taskHasNoSteps = !currentTask?.steps?.length || currentTask?.has_steps === false;
@@ -2556,80 +2573,48 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   useEffect(() => {
     if (!organizationId) return;
 
-    const loadData = async () => {
-      setIsLoading(true);
-      
-      try {
-        // OPTIMIZATION: Try to load cached data first for instant display
-        // Use Promise.race with timeout to avoid blocking on slow auth.getUser()
-        // Increased timeout to 5 seconds to handle slow auth responses
-        const getUserPromise = supabase.auth.getUser();
-        const getUserTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('getUser timeout')), 5000)
-        );
-        
-        let user: any = null;
-        try {
-          const result = await Promise.race([getUserPromise, getUserTimeout]);
-          user = (result as any)?.data?.user;
-        } catch (error) {
-          // If getUser times out or fails, try to get user from session storage or continue without cache
-          if (import.meta.env.DEV) {
-            logger.debug('getUser timeout/failed, continuing without cache check');
-          }
-        }
-        
-        if (user) {
-          const cacheKey = `tasks_${organizationId}_${user.id}`;
-          const cached = getCached<any[]>(cacheKey, 60000);
-          if (cached !== undefined && cached !== null) {
-            // Show cached data immediately (even if empty array - means no tasks)
-            setTasks(cached);
-            setIsLoading(false);
-            
-            // Fetch fresh data in background (non-blocking)
-            fetchTasks(true).catch(err => {
-              if (import.meta.env.DEV) {
-                logger.debug('Background refresh failed:', err);
-              }
-            });
-            fetchRecentStepUpdates().catch(err => {
-              if (import.meta.env.DEV) {
-                logger.debug('Background recent updates failed:', err);
-              }
-            });
-            return;
-          }
-        }
-      } catch (cacheError) {
-        // If cache check fails, continue with normal fetch
-        if (import.meta.env.DEV) {
-          logger.debug('Cache check failed, proceeding with normal fetch:', cacheError);
-        }
+    // Skip duplicate run from React Strict Mode (double-mount in dev)
+    const now = Date.now();
+    if (
+      initialLoadState &&
+      initialLoadState.orgId === organizationId &&
+      now - initialLoadState.at < INITIAL_LOAD_DEDUPE_MS
+    ) {
+      if (import.meta.env.DEV) {
+        logger.debug('⏭️ Skipping duplicate daily-task load for org:', organizationId);
       }
-      
-      // OPTIMIZATION: Set loading to false early with empty array to allow UI to render
-      // This prevents blocking on slow queries
+      return;
+    }
+    initialLoadState = { orgId: organizationId, at: now };
+
+    const loadData = async () => {
       setTasks([]);
       setIsLoading(false);
-      
-      // No cache available - fetch data normally in background
-      // Load tasks first (critical) - don't wait for recent updates
-      const tasksPromise = fetchTasks();
-      
-      // Update tasks when loaded (non-blocking)
-      tasksPromise.catch((err) => {
-        if (import.meta.env.DEV) {
-          logger.debug('Error fetching tasks:', err);
+
+      // Non-blocking cache check: don't wait, run in background
+      (async () => {
+        try {
+          const getUserPromise = supabase.auth.getUser();
+          const getUserTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('getUser timeout')), 2000)
+          );
+          const result = await Promise.race([getUserPromise, getUserTimeout]);
+          const user = (result as any)?.data?.user;
+          if (user) {
+            const cacheKey = `tasks_${organizationId}_${user.id}`;
+            const cached = getCached<any[]>(cacheKey, 60000);
+            if (cached !== undefined && cached !== null) {
+              setTasks(cached);
+            }
+          }
+        } catch {
+          // Ignore - continue without cache
         }
-      });
-      
-      // Load recent updates in background (non-blocking, non-critical)
-      fetchRecentStepUpdates().catch(err => {
-        if (import.meta.env.DEV) {
-          logger.debug('Background recent updates failed:', err);
-        }
-      });
+      })();
+
+      // Start fetching immediately - don't wait for cache check
+      fetchTasks().catch(() => {});
+      fetchRecentStepUpdates().catch(() => {});
     };
 
     loadData();

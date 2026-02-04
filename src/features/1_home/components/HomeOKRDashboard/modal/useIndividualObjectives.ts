@@ -143,10 +143,11 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
         query = query.in('cycle_id', validCycleIds);
       }
 
-      // TIMEOUT PROTECTION: Add timeout to prevent hanging
+      // Allow query to complete: longer timeout so slow DB/network can finish (no aggressive cutoff)
+      const INDIVIDUAL_OBJECTIVES_TIMEOUT_MS = 25000;
       const queryPromise = query.order('created_at', { ascending: false });
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Individual objectives query timeout')), 8000)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Individual objectives query timeout')), INDIVIDUAL_OBJECTIVES_TIMEOUT_MS)
       );
 
       let data: any;

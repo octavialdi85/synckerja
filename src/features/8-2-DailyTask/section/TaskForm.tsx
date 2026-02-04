@@ -117,6 +117,8 @@ export const TaskForm = () => {
         {/* Task Title */}
         <div className="flex-1">
           <Input
+            id="task-form-title"
+            name="title"
             placeholder="What needs to be done?"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -254,6 +256,8 @@ export const TaskForm = () => {
       {title && (
         <div className="mt-3">
           <Textarea
+            id="task-form-description"
+            name="description"
             placeholder="Add description (optional)..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -272,18 +276,20 @@ export const TaskForm = () => {
         currentAssignment={assignment}
       />
 
-      {/* Objective Hierarchy Dialog */}
-      <ObjectiveHierarchyDialog
-        open={isObjectiveDialogOpen}
-        onOpenChange={setIsObjectiveDialogOpen}
-        onSelect={(id, context) => {
-          setObjectiveId(id);
-          setObjectiveContext(context);
-        }}
-        selectedObjectiveId={objectiveId}
-        organizationId={organizationId || ''}
-        cycleIds={activeCycleIds}
-      />
+      {/* Lazy-load so Company/Department objectives aren't fetched until user opens picker */}
+      {isObjectiveDialogOpen && (
+        <ObjectiveHierarchyDialog
+          open={isObjectiveDialogOpen}
+          onOpenChange={setIsObjectiveDialogOpen}
+          onSelect={(id, context) => {
+            setObjectiveId(id);
+            setObjectiveContext(context);
+          }}
+          selectedObjectiveId={objectiveId}
+          organizationId={organizationId || ''}
+          cycleIds={activeCycleIds}
+        />
+      )}
     </>
   );
 };

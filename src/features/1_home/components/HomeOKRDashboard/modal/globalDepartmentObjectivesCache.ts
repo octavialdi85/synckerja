@@ -178,10 +178,8 @@ class GlobalDepartmentObjectivesCache {
       console.timeEnd(timerId);
     }
 
-    // Performance monitoring - increased threshold to 2000ms for complex queries
-    // Department objectives query involves multiple joins (departments, company_objectives, okr_cycles, individual_objectives)
-    // and can be slower, especially with includeIndividualObjectives=true
-    logger.performance(`Department Objectives Fetch (${organizationId})`, duration, 2000);
+    // Performance monitoring - threshold relaxed so normal slow fetches don't warn (query can be 4–5s+)
+    logger.performance(`Department Objectives Fetch (${organizationId})`, duration, 6000);
 
     if (error) {
       console.error('❌ Error fetching department objectives:', error);

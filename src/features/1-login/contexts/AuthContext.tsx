@@ -124,13 +124,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // This event is dispatched when auth service is overloaded (36+ second response)
     const handleAuthTimeout = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const { status, message } = customEvent.detail || {};
+      const { status } = customEvent.detail || {};
       
-      if (status === 504) {
-        console.error('⚠️ AuthContext: Auth service timeout (504) - infrastructure overloaded');
-        console.warn('⏰ Session validation failed due to timeout, forcing logout for safety');
+      // Don't redirect if already on login page (avoid overwriting URL with ?reason=session_expired)
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (pathname === '/login' || pathname === '/login/') {
+        if (import.meta.env.DEV) {
+          console.log(`AuthContext: Ignoring auth error (${status}) - already on login page`);
+        }
+        return;
+      }
+      
+      // Don't redirect if user just logged in (< 60 seconds ago) - prevent immediate redirect after login
+      const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+      if (justLoggedIn) {
+        const loginTime = parseInt(justLoggedIn, 10);
+        const timeSinceLogin = Date.now() - loginTime;
+        if (timeSinceLogin < 60000) {
+          if (import.meta.env.DEV) {
+            console.log(`AuthContext: Ignoring auth error (${status}) - user just logged in ${Math.round(timeSinceLogin / 1000)}s ago`);
+          }
+          return; // Don't redirect - user just logged in successfully
+        }
+        sessionStorage.removeItem('justLoggedIn');
+      }
+      
+      if (status === 408 || status === 500 || status === 502 || status === 504 || status === 522) {
+        if (import.meta.env.DEV) {
+          console.warn('AuthContext: Auth error (408/500/502/504/522), forcing logout and redirect with message');
+        }
         if (mounted) {
-          forceAuthReset();
+          forceAuthReset('session_expired');
         }
       }
     };
@@ -180,13 +204,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.error('Error getting session:', error);
           }
           
-          // Check for stale auth errors
+          // Check for stale auth / refresh token errors (500 from server: "error finding refresh token: context canceled")
+          const msg = (error.message || '').toLowerCase();
           if (error.message?.includes('JWT expired') ||
               error.message?.includes('User from sub claim in JWT does not exist') ||
               error.message?.includes('Invalid Refresh Token') ||
-              error.message?.includes('Refresh Token Not Found')) {
-            console.warn('AuthContext: Stale auth detected, forcing reset');
-            forceAuthReset();
+              error.message?.includes('Refresh Token Not Found') ||
+              msg.includes('refresh token') ||
+              msg.includes('context canceled')) {
+            console.warn('AuthContext: Stale/refresh token error, forcing reset');
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            forceAuthReset('session_expired');
             return;
           }
           
@@ -225,12 +255,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                   return;
                 }
                 
+                const uMsg = (userError.message || '').toLowerCase();
                 if (userError.message?.includes('User from sub claim in JWT does not exist') ||
                     userError.message?.includes('user_not_found') ||
                     userError.message?.includes('Invalid Refresh Token') ||
-                    userError.message?.includes('Refresh Token Not Found')) {
-                  console.warn('AuthContext: Invalid user in session or refresh token error, forcing reset');
-                  forceAuthReset();
+                    userError.message?.includes('Refresh Token Not Found') ||
+                    uMsg.includes('refresh token') ||
+                    uMsg.includes('context canceled')) {
+                  console.warn('AuthContext: Invalid user or refresh token error, forcing reset');
+                  forceAuthReset('session_expired');
                   return;
                 }
               }
@@ -254,12 +287,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 console.warn('AuthContext: User verification failed:', userCheckError);
               }
               
+              const cMsg = (userCheckError?.message || '').toLowerCase();
               if (userCheckError?.status === 403 ||
                   userCheckError?.message?.includes('User from sub claim in JWT does not exist') ||
                   userCheckError?.message?.includes('Invalid Refresh Token') ||
-                  userCheckError?.message?.includes('Refresh Token Not Found')) {
-                console.warn('AuthContext: 403 or user not found or invalid refresh token, forcing reset');
-                forceAuthReset();
+                  userCheckError?.message?.includes('Refresh Token Not Found') ||
+                  cMsg.includes('refresh token') ||
+                  cMsg.includes('context canceled')) {
+                console.warn('AuthContext: 403 or refresh token error, forcing reset');
+                forceAuthReset('session_expired');
                 return;
               }
             }
@@ -293,13 +329,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           console.error('Session check error:', err);
         }
         
-        // Handle auth errors in catch block too
+        const eMsg = (err?.message || '').toLowerCase();
         if (err?.message?.includes('User from sub claim in JWT does not exist') ||
             err?.status === 403 ||
             err?.message?.includes('Invalid Refresh Token') ||
-            err?.message?.includes('Refresh Token Not Found')) {
+            err?.message?.includes('Refresh Token Not Found') ||
+            eMsg.includes('refresh token') ||
+            eMsg.includes('context canceled')) {
           console.warn('AuthContext: Auth error in session check, forcing reset');
-          forceAuthReset();
+          forceAuthReset('session_expired');
           return;
         }
         

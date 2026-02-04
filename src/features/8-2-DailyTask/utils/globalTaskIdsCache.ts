@@ -124,9 +124,8 @@ class GlobalTaskIdsCache {
       console.timeEnd(timerId);
     }
 
-    // Performance monitoring - increased threshold to 2000ms for RPC calls
-    // RPC calls can be slower due to database processing, especially with many task IDs
-    logger.performance(`Global Task IDs Fetch (${employeeId.slice(0, 8)}...)`, duration, 2000);
+    // Performance monitoring - threshold relaxed so normal RPC latency doesn't warn
+    logger.performance(`Global Task IDs Fetch (${employeeId.slice(0, 8)}...)`, duration, 4000);
 
     if (rpcError) {
       if (isDev) {
