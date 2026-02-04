@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -35,7 +35,6 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
   item,
   onAssign
 }) => {
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
@@ -43,9 +42,24 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
   const [isAssigning, setIsAssigning] = useState(false);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
-  const { data: employees = [], isLoading: loading } = useAvailableEmployees();
+  const { data: employeesData, isLoading: loading } = useAvailableEmployees();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
-  
+
+  // Stable reference: avoid new [] on every render when data is undefined (prevents infinite loop)
+  const employees = employeesData ?? null;
+  const employeesList = employees ?? [];
+
+  // Derive filtered list with useMemo instead of useEffect+state to avoid "Maximum update depth" loop
+  const filteredEmployees = useMemo(() => {
+    if (searchTerm.trim() === '') return employeesList;
+    const term = searchTerm.toLowerCase();
+    return employeesList.filter(
+      (emp) =>
+        emp.full_name?.toLowerCase().includes(term) ||
+        emp.email?.toLowerCase().includes(term)
+    );
+  }, [searchTerm, employeesList]);
+
   // Check if user can assign employees (not employee role)
   const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
 
@@ -58,18 +72,6 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
       setDueTime('23:59');
     }
   }, [open]);
-
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredEmployees(employees);
-    } else {
-      const filtered = employees.filter(emp =>
-        emp.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredEmployees(filtered);
-    }
-  }, [searchTerm, employees]);
 
   const handleAssign = async () => {
     if (!canAssignEmployees) {

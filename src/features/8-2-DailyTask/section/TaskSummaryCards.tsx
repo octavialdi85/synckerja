@@ -1,6 +1,7 @@
 import { CheckSquare, Clock, AlertTriangle, XCircle, Calendar, TrendingUp } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
 import RecentUpdateSteps from './RecentUpdateSteps';
+import { PendingApprovalSection } from './PendingApprovalSection';
 
 interface SummaryData {
   label: string;
@@ -134,6 +135,9 @@ const TaskSummaryCards = () => {
           </div>
         </div>
       </div>
+
+      {/* Pending your approval (assigner) + Rejected (assignee) */}
+      <PendingApprovalSection />
 
       {/* Recent Step Updates */}
       <div className="mt-4">

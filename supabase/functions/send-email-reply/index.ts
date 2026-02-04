@@ -68,11 +68,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = await req.json().catch(() => ({})) as { conversation_id?: string; body?: string; subject?: string };
+    const body = await req.json().catch(() => ({})) as {
+      conversation_id?: string;
+      body?: string;
+      subject?: string;
+      to?: string;
+      cc?: string;
+      bcc?: string;
+      attachments?: Array<{ filename: string; content: string }>;
+    };
     const conversationId = body.conversation_id != null ? String(body.conversation_id).trim() : "";
     const replyBody = body.body != null ? String(body.body).trim() : "";
     const replySubject = body.subject != null ? String(body.subject).trim() : null;
-    console.log("[send-email-reply] conversation_id=", conversationId, "body_len=", replyBody.length);
+    const overrideTo = body.to != null ? String(body.to).trim() : null;
+    const cc = body.cc != null ? String(body.cc).trim() : null;
+    const bcc = body.bcc != null ? String(body.bcc).trim() : null;
+    const attachments = Array.isArray(body.attachments)
+      ? body.attachments.filter((a) => a && typeof a.filename === "string" && typeof a.content === "string")
+      : [];
+    console.log("[send-email-reply] conversation_id=", conversationId, "body_len=", replyBody.length, "attachments=", attachments.length);
 
     if (!conversationId) {
       return new Response(JSON.stringify({ error: "Missing conversation_id" }), {
@@ -120,8 +134,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const toEmail = conv.from_email?.trim();
-    if (!toEmail) {
+    const toRaw = (overrideTo || conv.from_email)?.trim();
+    const toEmails = toRaw ? toRaw.split(",").map((e) => e.trim()).filter(Boolean) : [];
+    if (toEmails.length === 0) {
       return new Response(JSON.stringify({ error: "No recipient (from_email) for this conversation" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -144,19 +159,25 @@ Deno.serve(async (req: Request) => {
     const subject = subjectBase === "Email" ? rawSubject : `Re: ${subjectBase}`;
     const htmlBody = replyBody.replace(/\n/g, "<br>\n");
 
+    const payload: Record<string, unknown> = {
+      from: fromHeader,
+      to: toEmails,
+      subject,
+      html: htmlBody,
+      reply_to: conn.email_address?.trim() || undefined,
+    };
+    if (cc) payload.cc = cc.split(",").map((e) => e.trim()).filter(Boolean);
+    if (bcc) payload.bcc = bcc.split(",").map((e) => e.trim()).filter(Boolean);
+    if (attachments.length > 0) {
+      payload.attachments = attachments.map((a) => ({ filename: a.filename, content: a.content }));
+    }
     const res = await fetch(RESEND_SEND_API, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: fromHeader,
-        to: [toEmail],
-        subject,
-        html: htmlBody,
-        reply_to: conn.email_address?.trim() || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const resJson = await res.json().catch(() => ({})) as { id?: string; message?: string };
@@ -175,12 +196,14 @@ Deno.serve(async (req: Request) => {
         conversation_id: conversationId,
         direction: "outbound",
         from_email: fromAddress,
-        to_email: toEmail,
+        to_email: toEmails[0],
         subject: subject || null,
         body: replyBody,
         confirmation_code: null,
+        cc: cc || null,
+        bcc: bcc || null,
       })
-      .select("id, conversation_id, direction, from_email, to_email, subject, body, created_at")
+      .select("id, conversation_id, direction, from_email, to_email, subject, body, cc, bcc, created_at")
       .single();
 
     if (insertError) {

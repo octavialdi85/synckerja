@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadByConversation';
+import { useEmailUnreadByConversation } from '../../hooks/useEmailUnreadByConversation';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
@@ -89,6 +90,16 @@ function maskPhoneLast4(phone: string | null | undefined): string {
   return s.slice(0, -4) + '****';
 }
 
+/** Fallback when from_display_name is NULL: humanize local part of email (e.g. jasafotowedding85 -> Jasa Foto Wedding 85). */
+function emailToDisplayLabel(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string') return '';
+  const local = email.split('@')[0]?.trim() || email;
+  if (!local) return email;
+  const withSpaces = local.replace(/[._-]+/g, ' ');
+  const titleCase = withSpaces.replace(/\b\w/g, (c) => c.toUpperCase());
+  return titleCase.trim() || email;
+}
+
 export function ConversationList({
   conversations,
   isLoading = false,
@@ -102,6 +113,7 @@ export function ConversationList({
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { unreadByConversation, markConversationRead } = useWhatsAppUnreadByConversation();
+  const { unreadByConversation: emailUnreadByConversation, markConversationRead: markEmailConversationRead } = useEmailUnreadByConversation();
 
   const filteredConversations = React.useMemo(() => {
     if (!searchQuery.trim()) return conversations;
@@ -110,7 +122,8 @@ export function ConversationList({
       if (conv.source === 'email') {
         const from = (conv.from_email ?? '').toLowerCase();
         const display = (conv.email_connection_display ?? '').toLowerCase();
-        return from.includes(q) || display.includes(q);
+        const fromName = (conv.from_display_name ?? '').toLowerCase();
+        return from.includes(q) || display.includes(q) || fromName.includes(q);
       }
       const name = (conv.customer_name ?? '').toLowerCase();
       const waId = (conv.customer_wa_id ?? '').toLowerCase();
@@ -154,6 +167,9 @@ export function ConversationList({
         })
         .catch(() => {});
     }
+    if (conv.source === 'email' && (emailUnreadByConversation[conv.id] ?? 0) > 0) {
+      markEmailConversationRead(conv.id).catch(() => {});
+    }
     onSelect(conv);
   };
 
@@ -193,9 +209,9 @@ export function ConversationList({
     <ul className="divide-y divide-gray-100">
       {filteredConversations.map((conv) => {
         const isEmail = conv.source === 'email';
-        const unread = isEmail ? 0 : (unreadByConversation[conv.id] ?? 0);
+        const unread = isEmail ? (emailUnreadByConversation[conv.id] ?? 0) : (unreadByConversation[conv.id] ?? 0);
         const displayName = isEmail
-          ? (conv.from_email || conv.email_connection_display || 'Email')
+          ? (conv.from_display_name || emailToDisplayLabel(conv.from_email) || conv.from_email || conv.email_connection_display || 'Email')
           : (conv.channel === 'instagram' && !conv.customer_name?.trim()
             ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
             : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown'));
@@ -213,7 +229,7 @@ export function ConversationList({
               </span>
               <div className="flex items-center gap-2 shrink-0">
                 {unread > 0 && (
-                  <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-medium flex items-center justify-center">
+                  <span className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-xs font-medium flex items-center justify-center ${isEmail ? 'bg-blue-600' : 'bg-green-600'}`}>
                     {unread > 99 ? '99+' : unread}
                   </span>
                 )}

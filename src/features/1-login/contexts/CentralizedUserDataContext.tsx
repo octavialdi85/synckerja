@@ -60,6 +60,26 @@ interface CentralizedUserDataContextType {
 // Create context
 const CentralizedUserDataContext = createContext<CentralizedUserDataContextType | undefined>(undefined);
 
+// Nilai default saat hook dipanggil di luar provider (mis. saat HMR / React Fast Refresh)
+const DEFAULT_CENTRALIZED_USER_DATA: CentralizedUserDataContextType = {
+  user: null,
+  userData: null,
+  organization: null,
+  userRole: null,
+  employee: null,
+  loading: true,
+  error: null,
+  isAuthenticated: false,
+  isEmailVerified: false,
+  hasOrganization: false,
+  isOwner: false,
+  isAdmin: false,
+  displayName: '',
+  organizationName: '',
+  refreshUserData: async () => {},
+  forceRefreshUserData: async () => {},
+};
+
 // Provider component
 export const CentralizedUserDataProvider = ({ children }: { children: React.ReactNode }) => {
   const { user, session, loading: authLoading } = useAuth();
@@ -173,9 +193,8 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       setError(null);
       
       // Run profile and email verification queries in parallel with timeout
-      // Increased timeout to 20 seconds to handle database overload situations
-      // Database logs show frequent statement timeouts, so we need more tolerance
-      const QUERY_TIMEOUT = 20000; // 20 seconds timeout - increased to handle slow database queries
+      // Timeout 8s: fail fast agar UI tampil cepat dengan fallback; query lambat tidak block 20s
+      const QUERY_TIMEOUT = 8000;
       
       // Optimize queries - use maybeSingle() to avoid PGRST116 error if profile doesn't exist
       const startTime = performance.now();
@@ -517,12 +536,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
       }
 
     } catch (err: any) {
-      // Only log errors in development mode to reduce console noise
-      if (import.meta.env.DEV) {
-        logger.error('❌ Error fetching user data:', err);
-      }
-      
-      // Handle timeout gracefully - create fallback user data from auth info
+      // Handle timeout first - jangan log sebagai error (fallback dipakai, UX tetap jalan)
       if (err.message === 'User data query timeout') {
         // Timeout is handled gracefully with fallback, only log in dev mode
         if (import.meta.env.DEV) {
@@ -564,6 +578,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
         // Don't set error state for timeout, just finish loading
         setError(null);
       } else {
+        if (import.meta.env.DEV) {
+          logger.error('❌ Error fetching user data:', err);
+        }
         setError(err as Error);
       }
     } finally {
@@ -685,10 +702,14 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
 };
 
 // Hooks
-export const useCentralizedUserData = () => {
+export const useCentralizedUserData = (): CentralizedUserDataContextType => {
   const context = useContext(CentralizedUserDataContext);
+  // Saat di luar provider (mis. HMR / React Fast Refresh), kembalikan default agar tidak crash
   if (context === undefined) {
-    throw new Error('useCentralizedUserData must be used within a CentralizedUserDataProvider');
+    if (import.meta.env.DEV) {
+      console.warn('useCentralizedUserData: called outside CentralizedUserDataProvider, using default (loading)');
+    }
+    return DEFAULT_CENTRALIZED_USER_DATA;
   }
   return context;
 };

@@ -7,6 +7,12 @@ export interface SendEmailReplyParams {
   conversation_id: string;
   body: string;
   subject?: string | null;
+  /** Override To (default: conversation from_email). */
+  to?: string | null;
+  cc?: string | null;
+  bcc?: string | null;
+  /** Base64-encoded attachments (same format as Resend API). */
+  attachments?: Array<{ filename: string; content: string }>;
 }
 
 export function useSendEmailReply() {
@@ -27,6 +33,10 @@ export function useSendEmailReply() {
           conversation_id: params.conversation_id,
           body: params.body,
           subject: params.subject ?? undefined,
+          to: params.to ?? undefined,
+          cc: params.cc ?? undefined,
+          bcc: params.bcc ?? undefined,
+          attachments: params.attachments?.length ? params.attachments : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));

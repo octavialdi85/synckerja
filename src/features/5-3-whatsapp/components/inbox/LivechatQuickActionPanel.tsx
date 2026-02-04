@@ -24,9 +24,19 @@ function maskPhoneLast4(phone: string | null | undefined): string {
   return s.slice(0, -4) + '****';
 }
 
+/** Fallback when from_display_name is NULL: humanize local part of email. */
+function emailToDisplayLabel(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string') return '';
+  const local = email.split('@')[0]?.trim() || email;
+  if (!local) return email;
+  const withSpaces = local.replace(/[._-]+/g, ' ');
+  const titleCase = withSpaces.replace(/\b\w/g, (c) => c.toUpperCase());
+  return titleCase.trim() || email;
+}
+
 function getLeadTitle(conv: LiveChatConversation, t: (key: string, fallback?: string) => string): string {
   if (conv.source === 'email') {
-    return conv.from_email || conv.email_connection_display || 'Email';
+    return conv.from_display_name || emailToDisplayLabel(conv.from_email) || conv.from_email || conv.email_connection_display || 'Email';
   }
   if (conv.channel === 'instagram' && !conv.customer_name?.trim()) {
     return t('whatsappInbox.instagramContact', 'Kontak Instagram');

@@ -1,16 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useEmailMessages } from '../../hooks/useEmailMessages';
 import { useSendEmailReply } from '../../hooks/useSendEmailReply';
 import type { EmailConversation, EmailMessage } from '../../types';
-import { Mail, Copy, Send, Reply } from 'lucide-react';
+import { Mail, Copy, Reply } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Button } from '@/features/ui/button';
-import { Textarea } from '@/features/ui/textarea';
-import { Input } from '@/features/ui/input';
-import { Label } from '@/features/ui/label';
+import { EmailComposePopup } from './EmailComposePopup';
 
 /** Sanitize email body and make URLs clickable (linkify plain text). */
 function sanitizeEmailBody(body: string): string {
@@ -38,12 +36,22 @@ function formatTime(iso: string) {
   }
 }
 
-/** For outbound messages, show real email (connection) instead of inbound address. */
+/** Fallback when from_display_name is NULL: humanize local part of email. */
+function emailToDisplayLabel(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string') return '';
+  const local = email.split('@')[0]?.trim() || email;
+  if (!local) return email;
+  const withSpaces = local.replace(/[._-]+/g, ' ');
+  const titleCase = withSpaces.replace(/\b\w/g, (c) => c.toUpperCase());
+  return titleCase.trim() || email;
+}
+
+/** Show nama akun (display name) when set, else fallback label from email, else email. For outbound use connection display. */
 function getMessageSenderDisplay(msg: EmailMessage, conversation: EmailConversation): string {
   if (msg.direction === 'outbound' && msg.from_email?.includes('inbound-')) {
     return conversation.email_connection_display ?? msg.from_email ?? '';
   }
-  return msg.from_email ?? '';
+  return msg.from_display_name ?? emailToDisplayLabel(msg.from_email) ?? msg.from_email ?? '';
 }
 
 /** Strip HTML to plain text for quoting in reply body. */
@@ -67,11 +75,9 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
   const { t } = useAppTranslation();
   const { data: messages = [], isLoading } = useEmailMessages(conversation.id);
   const { sendReply, isSending } = useSendEmailReply();
-  const [replyBody, setReplyBody] = useState('');
-  const [replySubject, setReplySubject] = useState('');
-  const replyBodyRef = useRef<HTMLTextAreaElement>(null);
-  const replyFormRef = useRef<HTMLFormElement>(null);
-  const prevConvIdRef = useRef(conversation.id);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeInitialSubject, setComposeInitialSubject] = useState('');
+  const [composeInitialBody, setComposeInitialBody] = useState('');
 
   const handleCopyCode = (code: string) => {
     void navigator.clipboard.writeText(code).then(() => {
@@ -79,21 +85,11 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
     });
   };
 
-  const displayName = conversation.from_email || conversation.email_connection_display || 'Email';
+  const displayName = conversation.from_display_name || emailToDisplayLabel(conversation.from_email) || conversation.from_email || conversation.email_connection_display || 'Email';
 
-  // Derived before any early return so hooks (useEffect) are always called in the same order
   const lastInboundSubject = messages.filter((m) => m.direction === 'inbound').slice(-1)[0]?.subject;
   const defaultSubject = lastInboundSubject ? `Re: ${lastInboundSubject.replace(/^(Re:\s*)+/i, '').trim() || lastInboundSubject}` : '';
   const subjectForReply = defaultSubject ? (defaultSubject.startsWith('Re:') ? defaultSubject : `Re: ${defaultSubject}`) : '';
-
-  useEffect(() => {
-    if (prevConvIdRef.current !== conversation.id) {
-      prevConvIdRef.current = conversation.id;
-      setReplySubject(subjectForReply);
-    } else if (subjectForReply && !replySubject) {
-      setReplySubject(subjectForReply);
-    }
-  }, [conversation.id, subjectForReply, replySubject]);
 
   if (isLoading) {
     return (
@@ -104,33 +100,42 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
   }
 
   const handleReplyToMessage = (msg: EmailMessage) => {
-    // Hanya isi body dengan kutipan; subject tetap pakai default thread (tidak ikut subject pesan yang diklik)
     const senderDisplay = getMessageSenderDisplay(msg, conversation) || msg.from_email || '';
     const plainBody = stripHtmlToPlain(msg.body);
     const dateStr = formatTime(msg.created_at);
     const quotedLine = senderDisplay ? `${t('emailConnect.onDateWrote', 'On {{date}}, {{sender}} wrote:', { date: dateStr, sender: senderDisplay })}` : dateStr;
     const quotedBlock = plainBody ? `${quotedLine}\n${plainBody}` : quotedLine;
-    setReplyBody((prev) => (prev.trim() ? `${prev.trim()}\n\n${quotedBlock}` : `\n\n${quotedBlock}`));
-    replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    setTimeout(() => replyBodyRef.current?.focus(), 100);
+    setComposeInitialSubject(subjectForReply);
+    setComposeInitialBody(`\n\n${quotedBlock}`);
+    setComposeOpen(true);
   };
 
-  const handleSendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const bodyTrim = replyBody.trim();
-    if (!bodyTrim) {
-      toast.error(t('emailConnect.replyBodyRequired', 'Please enter a message.'));
-      return;
-    }
+  const handleOpenCompose = () => {
+    setComposeInitialSubject(subjectForReply);
+    setComposeInitialBody('');
+    setComposeOpen(true);
+  };
+
+  const handleSendFromPopup = async (params: {
+    subject: string;
+    body: string;
+    to?: string;
+    cc?: string;
+    bcc?: string;
+    attachments: Array<{ filename: string; content: string }>;
+  }) => {
     try {
       await sendReply({
         conversation_id: conversation.id,
-        body: bodyTrim,
-        subject: replySubject.trim() || defaultSubject || null,
+        body: params.body,
+        subject: params.subject || defaultSubject || null,
+        to: params.to || null,
+        cc: params.cc || null,
+        bcc: params.bcc || null,
+        attachments: params.attachments.length ? params.attachments : undefined,
       });
-      setReplyBody('');
-      setReplySubject('');
       toast.success(t('emailConnect.replySent', 'Reply sent.'));
+      setComposeOpen(false);
     } catch (err) {
       toast.error((err as Error)?.message ?? t('emailConnect.replyFailed', 'Failed to send reply.'));
     }
@@ -222,39 +227,26 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
           );
         })}
       </div>
-      <form
-        ref={replyFormRef}
-        onSubmit={handleSendReply}
-        className="flex-shrink-0 p-3 border-t border-gray-200 bg-white flex flex-col gap-2"
-      >
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="email-reply-subject" className="text-xs text-slate-500">
-            {t('emailConnect.subject', 'Subject')}
-          </Label>
-          <Input
-            id="email-reply-subject"
-            value={replySubject}
-            onChange={(e) => setReplySubject(e.target.value)}
-            placeholder=""
-            className="text-sm"
-            disabled={isSending}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Textarea
-            ref={replyBodyRef}
-            value={replyBody}
-            onChange={(e) => setReplyBody(e.target.value)}
-            placeholder={t('emailConnect.replyPlaceholder', 'Type your reply...')}
-            className="min-h-[80px] resize-none text-sm flex-1"
-            disabled={isSending}
-            rows={3}
-          />
-          <Button type="submit" size="icon" disabled={isSending} className="shrink-0 h-10 w-10">
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
-      </form>
+      <div className="flex-shrink-0 p-3 border-t border-gray-200 bg-white">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={handleOpenCompose}
+          disabled={isSending}
+        >
+          {t('emailConnect.newMessage', 'Pesan Baru')}
+        </Button>
+      </div>
+      <EmailComposePopup
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        toEmail={conversation.from_email ?? ''}
+        defaultSubject={composeInitialSubject || subjectForReply}
+        defaultBody={composeInitialBody}
+        onSend={handleSendFromPopup}
+        isSending={isSending}
+      />
     </div>
   );
 }

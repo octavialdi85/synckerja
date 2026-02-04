@@ -22,6 +22,7 @@ import {
 import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } from './utils/taskUtils';
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
+import { createCompletionApprovalIfAssignee } from './services/completionApprovalService';
 
 // Helper function to batch process large ID arrays (Supabase has limits on .in() queries)
 // Optimized batch size to balance between speed and stability
@@ -170,6 +171,7 @@ export interface DailyTaskContextType {
   rejectDeadlineExtension: (historyId: string) => Promise<void>;
   navigateToTask: (taskId: string, stepId?: string) => void;
   scrollToStep: (stepId: string) => void;
+  refetchTasks: () => Promise<void>;
 }
 
 const DailyTaskContext = createContext<DailyTaskContextType | undefined>(undefined);
@@ -1232,6 +1234,23 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       if (error) throw error;
 
+      // When assignee marks task completed, create pending approval for assigner (task-level, no steps)
+      if (data.status === 'completed' && organizationId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
+        const { data: assignment } = await supabase.from('daily_tasks_assigned').select('employee_id, assigned_by').eq('daily_task_id', id).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
+        if (currentEmp?.id && assignment && assignment.employee_id === currentEmp.id) {
+          await createCompletionApprovalIfAssignee({
+            organizationId,
+            entityType: 'task',
+            dailyTaskId: id,
+            assigneeEmployeeId: assignment.employee_id,
+            assignerEmployeeId: assignment.assigned_by,
+            completedAt: new Date().toISOString(),
+          });
+        }
+      }
+
       // Handle assignment separately using daily_tasks_assigned table
       if (assignedTo !== undefined) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -1438,6 +1457,19 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         console.warn('Failed to update has_steps:', updateError);
       }
 
+      // Sync status ke pending di background (task punya step baru yang belum selesai). Non-blocking agar loading tetap cepat.
+      supabase
+        .from('daily_tasks')
+        .select('status')
+        .eq('id', taskId)
+        .single()
+        .then(({ data: taskRow }) => {
+          if (taskRow?.status === 'completed') {
+            supabase.from('daily_tasks').update({ status: 'pending' }).eq('id', taskId).then(() => {});
+          }
+        })
+        .catch(() => {});
+
       toast({
         title: 'Success',
         description: 'Step added successfully'
@@ -1508,6 +1540,25 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       const beforeCompleted = before ? (before as any).is_completed : false;
       const afterCompleted = typeof updateData.is_completed === 'boolean' ? updateData.is_completed : beforeCompleted;
       const completionChanged = typeof updateData.is_completed === 'boolean' && before && beforeCompleted !== updateData.is_completed;
+
+      // When assignee marks step completed, create pending approval for assigner
+      if (afterCompleted && taskId && organizationId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
+        const { data: stepAssignment } = await supabase.from('task_steps_assigned').select('employee_id, assigned_by').eq('task_step_id', stepId).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
+        if (currentEmp?.id && stepAssignment && stepAssignment.employee_id === currentEmp.id) {
+          const completedAt = (updateData as any).completed_at || new Date().toISOString();
+          await createCompletionApprovalIfAssignee({
+            organizationId,
+            entityType: 'step',
+            dailyTaskId: taskId,
+            taskStepId: stepId,
+            assigneeEmployeeId: stepAssignment.employee_id,
+            assignerEmployeeId: stepAssignment.assigned_by,
+            completedAt,
+          });
+        }
+      }
 
       // Track if we should skip refresh (for mobile auto-reorder)
       let skipRefresh = false;
@@ -2610,7 +2661,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     approveDeadlineExtension,
     rejectDeadlineExtension,
     navigateToTask,
-    scrollToStep
+    scrollToStep,
+    refetchTasks: () => {
+      clearCache(`tasks_${organizationId}_*`);
+      return fetchTasks(true);
+    }
   };
 
   return (

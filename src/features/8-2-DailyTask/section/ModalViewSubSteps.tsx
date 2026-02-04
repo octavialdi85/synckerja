@@ -23,6 +23,7 @@ import { AssignSubStepDialog } from './AssignSubStepDialog';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { logger } from '@/config/logger';
+import { createCompletionApprovalIfAssignee } from '../services/completionApprovalService';
 
 interface SubStep {
   id: string;
@@ -342,6 +343,29 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       ));
       setSubSteps(updated);
       await syncParentCompletion(updated);
+
+      // When assignee marks sub-step completed, create pending approval for assigner
+      if (willBeCompleted && organizationId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
+        const { data: subAssignment } = await supabase.from('task_steps_to_steps_assigned').select('employee_id, assigned_by').eq('task_steps_to_steps_id', id).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
+        if (currentEmp?.id && subAssignment && subAssignment.employee_id === currentEmp.id) {
+          const { data: parentStep } = await supabase.from('task_steps').select('task_id').eq('id', parentStepId).single();
+          const dailyTaskId = (parentStep as any)?.task_id;
+          if (dailyTaskId) {
+            await createCompletionApprovalIfAssignee({
+              organizationId,
+              entityType: 'substep',
+              dailyTaskId,
+              taskStepId: parentStepId,
+              taskStepsToStepsId: id,
+              assigneeEmployeeId: subAssignment.employee_id,
+              assignerEmployeeId: subAssignment.assigned_by,
+              completedAt: updateData.completed_at || new Date().toISOString(),
+            });
+          }
+        }
+      }
 
       // insert recent update history for sub-step
       try {

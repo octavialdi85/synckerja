@@ -135,6 +135,17 @@ function parseFromEmail(from: string | undefined): string | null {
   return from.trim().toLowerCase();
 }
 
+/** Parse "Display Name <email@domain.com>" to display name (or null if plain email). */
+function parseFromDisplayName(from: string | undefined): string | null {
+  if (!from || typeof from !== "string") return null;
+  const trimmed = from.trim();
+  const match = /^([^<]+)<([^>]+)>$/.exec(trimmed);
+  if (!match) return null;
+  const name = match[1].trim();
+  if (!name || name.includes("@")) return null;
+  return name;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: { ...corsHeaders, "Content-Length": "2" } });
@@ -202,6 +213,7 @@ Deno.serve(async (req: Request) => {
     console.log("email-inbound: processing to", toAddresses);
     const fromRaw = body.data.from ?? "";
     const fromEmail = parseFromEmail(fromRaw);
+    const fromDisplayName = parseFromDisplayName(fromRaw);
     const fromEmailNormalized = (fromEmail ?? fromRaw).trim().toLowerCase();
     const subject = body.data.subject ?? "";
     let textBody = (body.data.text ?? body.data.html ?? "").trim();
@@ -249,6 +261,7 @@ Deno.serve(async (req: Request) => {
             organization_id: conn.organization_id,
             email_connection_id: conn.id,
             from_email: fromEmailNormalized,
+            from_display_name: fromDisplayName || null,
             thread_subject: subject || null,
             last_message_at: new Date().toISOString(),
           })
@@ -265,6 +278,7 @@ Deno.serve(async (req: Request) => {
         conversation_id: conversationId,
         direction: "inbound",
         from_email: fromEmail ?? fromRaw,
+        from_display_name: fromDisplayName || null,
         to_email: toNormalized,
         subject: subject || null,
         body: textBody || null,
@@ -282,6 +296,7 @@ Deno.serve(async (req: Request) => {
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           thread_subject: subject || null,
+          from_display_name: fromDisplayName || undefined,
         })
         .eq("id", conversationId);
 

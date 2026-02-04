@@ -140,6 +140,8 @@ export interface EmailConversation {
   organization_id: string;
   email_connection_id: string;
   from_email: string | null;
+  /** Sender display name from From header (e.g. "Octa Vialdi"). Shown in list/thread instead of email when set. */
+  from_display_name?: string | null;
   last_message_at: string | null;
   last_message_body: string | null;
   last_message_direction: string | null;
@@ -157,10 +159,16 @@ export interface EmailMessage {
   conversation_id: string;
   direction: 'inbound' | 'outbound';
   from_email: string | null;
+  /** Sender display name from From header. Shown in thread instead of email when set. */
+  from_display_name?: string | null;
   to_email: string | null;
   subject: string | null;
   body: string | null;
   confirmation_code: string | null;
+  /** CC recipients (outbound; comma-separated if multiple). */
+  cc?: string | null;
+  /** BCC recipients (outbound; comma-separated if multiple). */
+  bcc?: string | null;
   created_at: string;
 }
 

@@ -646,6 +646,21 @@ export const TaskList = () => {
     return task.created_by === user?.id;
   };
 
+  // Task dianggap "completed" hanya jika SEMUA step selesai (sesuai tampilan "X/Y steps").
+  // Jika task punya steps, SELALU pakai step completion sebagai sumber kebenaran (abaikan task.status).
+  // Jika ada step tambahan yang belum selesai (mis. 3/3 lalu jadi 3/4), task = belum completed.
+  const isTaskFullyCompleteBySteps = (task: Task): boolean => {
+    if (task.steps.length > 0) {
+      const completedCount = task.steps.filter(s => s.is_completed).length;
+      return completedCount === task.steps.length;
+    }
+    // Tanpa steps: ikut status (dan has_substeps untuk toggle behavior)
+    if (task.has_substeps === false) {
+      return task.status === 'completed';
+    }
+    return task.status === 'completed';
+  };
+
   // Calculate progress only for visible steps (assigned OR created by user OR has assigned substeps)
   // When PIC filter is active, calculate progress for steps assigned to that PIC
   // When All PIC is selected, calculate progress for ALL steps
@@ -688,10 +703,8 @@ export const TaskList = () => {
       return;
     }
     
-    // If task has substeps, require all steps to be completed first
-    const assignedProgress = calculateAssignedStepsProgress(task);
-    const visibleSteps = getVisibleSteps(task);
-    const isFullComplete = visibleSteps.length > 0 && assignedProgress === 100;
+    // Jika task punya substeps: completed hanya ketika SEMUA step selesai (termasuk step tambahan baru).
+    const isFullComplete = isTaskFullyCompleteBySteps(task);
     const newStatus = isFullComplete ? (task.status === 'completed' ? 'pending' : 'completed') : 'pending';
     if (newStatus !== task.status) {
       // Show notification
@@ -991,25 +1004,14 @@ export const TaskList = () => {
                             title={
                               task.has_substeps === false
                                 ? (task.status === 'completed' ? 'Mark incomplete' : 'Mark complete')
-                                : (calculateAssignedStepsProgress(task) === 100 ? 'Mark complete / reopen' : 'Complete all assigned steps to mark task complete')
+                                : (isTaskFullyCompleteBySteps(task) ? 'Mark complete / reopen' : 'Complete all steps to mark task complete')
                             }
                           >
-                            {(() => {
-                              // If task has no substeps, show checkbox based on task status directly
-                              if (task.has_substeps === false) {
-                                return task.status === 'completed' ? (
-                                  <CheckSquare className="w-5 h-5 text-green-600" />
-                                ) : (
-                                  <Square className="w-5 h-5" />
-                                );
-                              }
-                              // If task has substeps, show checkbox based on progress
-                              return calculateAssignedStepsProgress(task) === 100 ? (
-                                <CheckSquare className="w-5 h-5 text-green-600" />
-                              ) : (
-                                <Square className="w-5 h-5" />
-                              );
-                            })()}
+                            {isTaskFullyCompleteBySteps(task) ? (
+                              <CheckSquare className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
                           </button>
                         </TableCell>
 
@@ -1019,10 +1021,7 @@ export const TaskList = () => {
                             <TooltipTrigger asChild>
                               <div 
                                 className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
-                                  (task.has_substeps === false && task.status === 'completed') || 
-                                  (task.has_substeps !== false && calculateAssignedStepsProgress(task) === 100)
-                                    ? 'line-through text-gray-500' 
-                                    : 'text-gray-900'
+                                  isTaskFullyCompleteBySteps(task) ? 'line-through text-gray-500' : 'text-gray-900'
                                 }`}
                                 onClick={() => toggleTaskExpansion(task.id)}
                               >
@@ -1283,9 +1282,13 @@ export const TaskList = () => {
                           </DropdownMenu>
                         </TableCell>
 
-                        {/* Status */}
+                        {/* Status - untuk task dengan steps, tampilkan derived: completed hanya jika semua step selesai */}
                         <TableCell className="px-2 py-3 text-center" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {getStatusBadge(task.status)}
+                          {getStatusBadge(
+                            task.steps.length > 0
+                              ? (isTaskFullyCompleteBySteps(task) ? 'completed' : task.status === 'cancelled' ? 'cancelled' : 'pending')
+                              : task.status
+                          )}
                         </TableCell>
 
                         {/* Progress */}
