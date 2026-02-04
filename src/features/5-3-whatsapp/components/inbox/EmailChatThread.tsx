@@ -81,14 +81,7 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
 
   const displayName = conversation.from_email || conversation.email_connection_display || 'Email';
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2] p-4">
-        <p className="text-sm text-slate-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
-      </div>
-    );
-  }
-
+  // Derived before any early return so hooks (useEffect) are always called in the same order
   const lastInboundSubject = messages.filter((m) => m.direction === 'inbound').slice(-1)[0]?.subject;
   const defaultSubject = lastInboundSubject ? `Re: ${lastInboundSubject.replace(/^(Re:\s*)+/i, '').trim() || lastInboundSubject}` : '';
   const subjectForReply = defaultSubject ? (defaultSubject.startsWith('Re:') ? defaultSubject : `Re: ${defaultSubject}`) : '';
@@ -101,6 +94,14 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
       setReplySubject(subjectForReply);
     }
   }, [conversation.id, subjectForReply, replySubject]);
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2] p-4">
+        <p className="text-sm text-slate-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
+      </div>
+    );
+  }
 
   const handleReplyToMessage = (msg: EmailMessage) => {
     // Hanya isi body dengan kutipan; subject tetap pakai default thread (tidak ikut subject pesan yang diklik)

@@ -202,6 +202,7 @@ Deno.serve(async (req: Request) => {
     console.log("email-inbound: processing to", toAddresses);
     const fromRaw = body.data.from ?? "";
     const fromEmail = parseFromEmail(fromRaw);
+    const fromEmailNormalized = (fromEmail ?? fromRaw).trim().toLowerCase();
     const subject = body.data.subject ?? "";
     let textBody = (body.data.text ?? body.data.html ?? "").trim();
     if (body.data.email_id && (!textBody || textBody.length < 100)) {
@@ -228,11 +229,13 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // One room per sender: find or create conversation by (connection, from_email)
       let conversationId: string;
       const { data: existingConv } = await supabase
         .from("email_conversations")
         .select("id")
         .eq("email_connection_id", conn.id)
+        .eq("from_email", fromEmailNormalized)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -245,7 +248,7 @@ Deno.serve(async (req: Request) => {
           .insert({
             organization_id: conn.organization_id,
             email_connection_id: conn.id,
-            from_email: fromEmail ?? fromRaw,
+            from_email: fromEmailNormalized,
             thread_subject: subject || null,
             last_message_at: new Date().toISOString(),
           })
@@ -278,7 +281,6 @@ Deno.serve(async (req: Request) => {
         .update({
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          from_email: fromEmail ?? fromRaw,
           thread_subject: subject || null,
         })
         .eq("id", conversationId);
