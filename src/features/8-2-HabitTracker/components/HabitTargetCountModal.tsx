@@ -24,20 +24,6 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
   const dateStr = format(date, 'yyyy-MM-dd');
   const targetCount = habit?.target_count || 1;
   
-  // Debug: Log habit data to check checklist_names
-  useEffect(() => {
-    if (isOpen && habit) {
-      console.log('Habit data:', {
-        id: habit.id,
-        name: habit.name,
-        target_count: habit.target_count,
-        checklist_names: habit.checklist_names,
-        checklist_names_type: typeof habit.checklist_names,
-        is_array: Array.isArray(habit.checklist_names),
-      });
-    }
-  }, [isOpen, habit]);
-
   // Get existing entries for this habit and date
   const existingEntries = useMemo(() => {
     return entries.filter(
@@ -131,8 +117,7 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
         description: `${completionText} for ${format(date, 'MMM d')}`,
       });
       onClose();
-    } catch (error) {
-      console.error('Error saving entries:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to save entries. Please try again.',

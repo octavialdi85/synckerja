@@ -43,24 +43,20 @@ function ModernHomePage() {
 
   const handleMotivationCreated = () => {
     setMotivationReloadTrigger(prev => prev + 1);
-    console.log('Motivation created, reloading data...');
   };
 
-  const handleObjectiveCreated = () => {
-    console.log('Objective created, reloading data...');
-  };
+  const handleObjectiveCreated = () => {};
 
   const handleStatusCreated = () => {
     setStatusCreatedTrigger(prev => prev + 1);
-    console.log('Status created, reloading data...');
   };
 
   return (
     <StandardLayout>
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4 overflow-hidden">
             <div className="h-full flex flex-col overflow-hidden">
                 {/* Carousel Banner - Motivational Quote + Training Notifications */}
                 <div className="flex-shrink-0 mt-2 mb-2">

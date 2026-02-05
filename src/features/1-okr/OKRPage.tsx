@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from './section/HeaderAndTab';
@@ -21,8 +21,6 @@ import type { YearQuarterSelection } from '@/features/1_home/components/HomeOKRD
 import { AttendanceStatusProvider } from '@/features/1_home/components/HomeOKRDashboard/component/AttendanceStatusProvider';
 
 const OKRPageContent = () => {
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
   const location = useLocation();
   const navigate = useNavigate();
   const { organizationId } = useCurrentOrg();
@@ -94,13 +92,6 @@ const OKRPageContent = () => {
     (activeTab === 'company-objectives' && companyReady) ||
     (activeTab === 'department-objectives' && departmentReady) ||
     (activeTab === 'individual-objectives' && individualReady);
-
-  // #region agent log
-  if (typeof fetch !== 'undefined' && location.pathname.startsWith('/okr')) {
-    const branch = !pageReady ? 'loading' : 'content';
-    fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'OKRPage.tsx:render', message: 'OKR render', data: { renderCount: renderCountRef.current, pathname: location.pathname, activeTab, pageReady, branch, isLoadingCycles, companyStatsLoading: companyStats.isLoading, departmentStatsLoading: departmentStats.isLoading, individualStatsLoading: individualStats.isLoading, companyReady, departmentReady, individualReady, statsEnabled, hasOrgId: !!organizationId, cyclesLen: cycles.length, filteredCycleIdsLen: filteredCycleIds?.length ?? null }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H2,H3,H4,H5' }) }).catch(() => {});
-  }
-  // #endregion
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);

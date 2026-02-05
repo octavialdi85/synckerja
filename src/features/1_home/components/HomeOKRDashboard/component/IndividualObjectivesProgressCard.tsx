@@ -42,14 +42,14 @@ export const IndividualObjectivesProgressCard = ({
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   
-  // Default year quarter selection if not provided
+  const currentYear = new Date().getFullYear().toString();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentQuarter = currentMonth <= 3 ? 'Q1' : currentMonth <= 6 ? 'Q2' : currentMonth <= 9 ? 'Q3' : 'Q4';
   const defaultYearQuarterSelection: YearQuarterSelection = {
     years: {
-      [new Date().getFullYear().toString()]: {
+      [currentYear]: {
         selected: false,
-        quarters: {
-          'Q3': true // Default to current quarter
-        }
+        quarters: { [currentQuarter]: true }
       }
     }
   };
@@ -57,13 +57,7 @@ export const IndividualObjectivesProgressCard = ({
   const currentYearQuarterSelection = yearQuarterSelection || defaultYearQuarterSelection;
   
   const handleYearQuarterChange = (selection: YearQuarterSelection) => {
-    console.log('🟡 SectionIndividualObjectivesProgressOverview - Year quarter selection changed:', selection);
-    if (onYearQuarterChange) {
-      console.log('🟡 Calling parent onYearQuarterChange');
-      onYearQuarterChange(selection);
-    } else {
-      console.log('🟡 No parent onYearQuarterChange handler provided');
-    }
+    if (onYearQuarterChange) onYearQuarterChange(selection);
   };
 
   const handleToggle = () => {
@@ -71,9 +65,9 @@ export const IndividualObjectivesProgressCard = ({
   };
 
 
-  // Check if any period is selected
-  const hasSelectedPeriod = yearQuarterSelection && 
-    Object.values(yearQuarterSelection.years).some(year => 
+  // Check if any period is selected (use currentYearQuarterSelection so default works when parent hasn't passed)
+  const hasSelectedPeriod = currentYearQuarterSelection &&
+    Object.values(currentYearQuarterSelection.years).some(year =>
       year.selected || Object.values(year.quarters).some(Boolean)
     );
 
@@ -95,7 +89,7 @@ export const IndividualObjectivesProgressCard = ({
             <div className="flex items-center">
               <User className="h-5 w-5 text-green-600 mr-2" />
               <h4 className="text-sm font-semibold text-gray-900">
-                Individual Objectives - 2025
+                Individual Objectives - {new Date().getFullYear()}
               </h4>
             </div>
             <div className="flex items-center space-x-3">
@@ -192,6 +186,6 @@ export const IndividualObjectivesProgressCard = ({
                 departmentId={departmentId}
               />
             )}
-          </div>
-        );
-      };
+    </div>
+  );
+};

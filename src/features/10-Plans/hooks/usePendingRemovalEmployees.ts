@@ -33,7 +33,6 @@ export const useActiveEmployeesForRemoval = () => {
         .order('full_name');
 
       if (error) {
-        console.error('❌ Error fetching active employees:', error);
         throw error;
       }
 
@@ -62,13 +61,6 @@ export const useMarkEmployeesForRemoval = () => {
     }) => {
       if (!organizationId) throw new Error('No organization ID');
 
-      console.log('🔍 useMarkEmployeesForRemoval - Starting mutation:', {
-        employeeIds,
-        organizationId,
-        reason
-      });
-
-      // Get current session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No active session');
@@ -93,32 +85,18 @@ export const useMarkEmployeesForRemoval = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        console.error('❌ Edge Function error:', errorData);
         throw new Error(errorData.message || `Failed to mark employees for removal (${response.status})`);
       }
 
       const result = await response.json();
-      console.log('✅ Successfully marked employees for removal:', result);
-      
       return { success: true, count: employeeIds.length, updated: result.updated || [] };
     },
-    onSuccess: (result) => {
-      console.log('✅ Mutation onSuccess called:', result);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-employees-for-removal'] });
       queryClient.invalidateQueries({ queryKey: ['employee-count'] }); // Also invalidate employee count
       toast.success(t('subscription.employeeRemoval.markedSuccess', 'Employees marked for removal'));
     },
     onError: (error: any) => {
-      console.error('❌ Mutation onError called:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-        statusCode: error.statusCode,
-        status: error.status
-      });
-      
       // Provide more specific error messages
       let errorMessage = t('subscription.employeeRemoval.markedError', 'Failed to mark employees for removal');
       if (error.message?.includes('permission') || error.message?.includes('policy') || error.code === '42501') {
@@ -128,7 +106,6 @@ export const useMarkEmployeesForRemoval = () => {
       }
       
       toast.error(errorMessage);
-      console.error('❌ Failed to mark employees:', error);
     },
   });
 };
@@ -144,11 +121,6 @@ export const useUnmarkEmployeesForRemoval = () => {
   return useMutation({
     mutationFn: async ({ employeeIds }: { employeeIds: string[] }) => {
       if (!organizationId) throw new Error('No organization ID');
-
-      console.log('🔍 useUnmarkEmployeesForRemoval - Starting mutation:', {
-        employeeIds,
-        organizationId
-      });
 
       // Get current session
       const { data: { session } } = await supabase.auth.getSession();
@@ -174,22 +146,18 @@ export const useUnmarkEmployeesForRemoval = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        console.error('❌ Edge Function error:', errorData);
         throw new Error(errorData.message || `Failed to unmark employees from removal (${response.status})`);
       }
 
       const result = await response.json();
-      console.log('✅ Successfully unmarked employees from removal:', result);
-
       return { success: true, count: employeeIds.length };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-employees-for-removal'] });
       toast.success(t('subscription.employeeRemoval.unmarkedSuccess', 'Employees unmarked from removal'));
     },
-    onError: (error: any) => {
+    onError: () => {
       toast.error(t('subscription.employeeRemoval.unmarkedError', 'Failed to unmark employees'));
-      console.error('❌ Failed to unmark employees:', error);
     },
   });
 };
@@ -217,7 +185,6 @@ export const useClearAllPendingRemovals = () => {
         .eq('pending_removal', true);
 
       if (error) {
-        console.error('❌ Error clearing pending removals:', error);
         throw error;
       }
 
@@ -227,9 +194,8 @@ export const useClearAllPendingRemovals = () => {
       queryClient.invalidateQueries({ queryKey: ['active-employees-for-removal'] });
       toast.success(t('subscription.employeeRemoval.clearedSuccess', 'All pending removals cleared'));
     },
-    onError: (error: any) => {
+    onError: () => {
       toast.error(t('subscription.employeeRemoval.clearedError', 'Failed to clear pending removals'));
-      console.error('❌ Failed to clear pending removals:', error);
     },
   });
 };

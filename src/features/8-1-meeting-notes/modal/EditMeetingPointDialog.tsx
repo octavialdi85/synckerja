@@ -60,8 +60,8 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
       const requestByName = employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by;
       await onEditSuccess(meetingPoint.id, { ...formData, request_by: requestByName });
       onClose();
-    } catch (error) {
-      console.error('Error updating meeting point:', error);
+    } catch {
+      // Error surfaced to caller
     } finally {
       setIsSubmitting(false);
     }

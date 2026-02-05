@@ -44,7 +44,6 @@ export const LoadTemplateModal: React.FC<LoadTemplateModalProps> = ({
       .order('updated_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching KPI templates:', error);
       if (notifyOnError) {
         toast({
           title: 'Unable to load templates',
@@ -87,7 +86,6 @@ export const LoadTemplateModal: React.FC<LoadTemplateModalProps> = ({
     setIsDeletingTemplateId(null);
 
     if (error) {
-      console.error('Error deleting KPI template:', error);
       toast({
         title: 'Failed to delete template',
         description: error.message || 'Please try again later.',

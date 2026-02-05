@@ -31,7 +31,6 @@ export const ProductManagerOverview = () => {
         .limit(3);
 
       if (error) {
-        console.error('Error fetching top products:', error);
         return;
       }
 
@@ -42,7 +41,6 @@ export const ProductManagerOverview = () => {
         .eq('organization_id', organizationId);
 
       if (allError) {
-        console.error('Error fetching all products:', allError);
         return;
       }
 
@@ -51,8 +49,8 @@ export const ProductManagerOverview = () => {
         totalProducts: allProducts?.length || 0,
         activeProducts: allProducts?.filter(p => p.status === 'active').length || 0
       });
-    } catch (error) {
-      console.error('Error fetching product data:', error);
+    } catch {
+      // Fetch failed - metrics stay at default
     } finally {
       setLoading(false);
     }

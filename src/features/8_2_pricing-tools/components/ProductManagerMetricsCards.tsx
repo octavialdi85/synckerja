@@ -33,7 +33,6 @@ export const ProductManagerMetricsCards = () => {
         .eq('organization_id', organizationId);
 
       if (error) {
-        console.error('Error fetching product metrics:', error);
         return;
       }
 
@@ -59,8 +58,8 @@ export const ProductManagerMetricsCards = () => {
         draftProducts: draft.length,
         draftValue
       });
-    } catch (error) {
-      console.error('Error fetching product metrics:', error);
+    } catch {
+      // Fetch failed
     } finally {
       setLoading(false);
     }

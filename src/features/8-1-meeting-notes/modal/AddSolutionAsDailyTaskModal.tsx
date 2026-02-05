@@ -150,8 +150,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         setSelectedObjectiveId(existingObjectiveId);
         setObjectiveContext(context);
         setIsAutoSelected(true);
-      } catch (error) {
-        console.error('Error checking existing task:', error);
+      } catch {
         // Silent fail - user can still select manually
       } finally {
         setIsCheckingExistingTask(false);
@@ -232,7 +231,6 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         .maybeSingle();
 
       if (checkTaskError) {
-        console.error('Error checking existing task:', checkTaskError);
         throw checkTaskError;
       }
 
@@ -252,7 +250,6 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
           .maybeSingle();
 
         if (checkStepError) {
-          console.error('Error checking existing step:', checkStepError);
           throw checkStepError;
         }
 
@@ -296,7 +293,6 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         .limit(1);
 
       if (stepsQueryError) {
-        console.error('Error fetching existing steps:', stepsQueryError);
         throw stepsQueryError;
       }
 
@@ -327,8 +323,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
 
       // Close modal
       onClose();
-    } catch (error) {
-      console.error('Error adding solution as daily task:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to add solution as daily task',

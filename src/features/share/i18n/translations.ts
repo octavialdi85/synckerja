@@ -2092,10 +2092,12 @@ const idTranslations: TranslationDictionary = {
   "productKnowledge.tabs.dashboard": "Dashboard",
   "productKnowledge.tabs.contentCalendar": "Kalender Konten",
   "productKnowledge.tabs.productKnowledge": "Pengetahuan Produk",
+  "productKnowledge.tabs.scriptGenerator": "Customer Persona",
   "productKnowledge.tabs.settings": "Pengaturan",
   "productKnowledge.tabs.dashboardDescription": "Dashboard dan metrik media sosial",
   "productKnowledge.tabs.contentCalendarDescription": "Kelola kalender konten",
   "productKnowledge.tabs.productKnowledgeDescription": "Kelola pengetahuan produk",
+  "productKnowledge.tabs.scriptGeneratorDescription": "Generate marketing scripts",
   "productKnowledge.tabs.settingsDescription": "Pengaturan media sosial"
 };
 
@@ -4189,10 +4191,12 @@ const enTranslations: TranslationDictionary = {
   "productKnowledge.tabs.dashboard": "Dashboard",
   "productKnowledge.tabs.contentCalendar": "Content Calendar",
   "productKnowledge.tabs.productKnowledge": "Product Knowledge",
+  "productKnowledge.tabs.scriptGenerator": "Customer Persona",
   "productKnowledge.tabs.settings": "Settings",
   "productKnowledge.tabs.dashboardDescription": "Social media dashboard and metrics",
   "productKnowledge.tabs.contentCalendarDescription": "Manage content calendar",
   "productKnowledge.tabs.productKnowledgeDescription": "Manage product knowledge",
+  "productKnowledge.tabs.scriptGeneratorDescription": "Generate marketing scripts",
   "productKnowledge.tabs.settingsDescription": "Social media settings"
 };
 

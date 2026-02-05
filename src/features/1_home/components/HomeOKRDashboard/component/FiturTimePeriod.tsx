@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ChevronDown, Calendar } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { cn } from '@/lib/utils';
 import { TimePeriods } from '@/features/share/TimePeriods';
+
+const DEBOUNCE_MS = 400;
 
 export interface YearQuarterSelection {
   years: {
@@ -49,8 +51,23 @@ export const FiturTimePeriod: React.FC<FiturTimePeriodProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  // Removed excessive debug logging for performance
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSelectionRef = useRef<YearQuarterSelection | null>(null);
+
+  const flushPending = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (pendingSelectionRef.current) {
+      onChange(pendingSelectionRef.current);
+      pendingSelectionRef.current = null;
+    }
+  }, [onChange]);
+
+  useEffect(() => () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+  }, []);
 
   // Only use availableYears from database, no fallback to hardcoded years
   const years = availableYears || [];
@@ -138,30 +155,39 @@ export const FiturTimePeriod: React.FC<FiturTimePeriodProps> = ({
     });
   };
 
-  // Handle selection change from TimePeriods component
-  const handleTimePeriodsChange = (selection: { years: string[], quarters: string[] }) => {
+  // Handle selection change from TimePeriods – debounce so parent/refetch doesn’t run on every click (avoids “reload” feeling)
+  const handleTimePeriodsChange = useCallback((selection: { years: string[], quarters: string[] }) => {
     const newValue: YearQuarterSelection = { years: {} };
-    
     years.forEach(year => {
       const yearStr = year.toString();
       const isYearSelected = selection.years.includes(yearStr);
-      
       newValue.years[yearStr] = {
         selected: isYearSelected,
         quarters: {}
       };
-      
       QUARTERS.forEach(quarter => {
         const quarterId = `${quarter.key}-${yearStr}`;
         newValue.years[yearStr].quarters[quarter.key] = selection.quarters.includes(quarterId);
       });
     });
-    
-    onChange(newValue);
-  };
+    pendingSelectionRef.current = newValue;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      if (pendingSelectionRef.current) {
+        onChange(pendingSelectionRef.current);
+        pendingSelectionRef.current = null;
+      }
+    }, DEBOUNCE_MS);
+  }, [years, onChange]);
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) flushPending();
+    setIsOpen(open);
+  }, [flushPending]);
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button 
           variant="outline" 

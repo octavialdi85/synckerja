@@ -69,8 +69,7 @@ export const SectionMotifation = () => {
       if (currentIndex >= totalItems - 1 && totalItems > 1) {
         setCurrentIndex(0);
       }
-    } catch (error) {
-      console.error('Error deleting motivation:', error);
+    } catch {
       toast({
         title: t('common.error', 'Error'),
         description: t('motivation.failedToDelete', 'Failed to delete motivation'),

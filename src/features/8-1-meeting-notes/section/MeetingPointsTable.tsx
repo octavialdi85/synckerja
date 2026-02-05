@@ -38,8 +38,6 @@ const MeetingPointsTable = () => {
   const [issuesPoint, setIssuesPoint] = useState<any>(null);
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
 
-  console.log('Meeting points in table:', meetingPoints); // Debug log
-
   // Load issue counts for all meeting points
   useEffect(() => {
     const loadIssueCounts = async () => {

@@ -51,8 +51,6 @@ export const useSubscriptionAnalytics = () => {
     queryKey: ['subscription-analytics', organizationId],
     queryFn: async () => {
       if (!organizationId) throw new Error('No organization ID');
-      
-      console.log('🔍 Fetching subscription analytics for org:', organizationId);
 
       // Get employee growth data (last 6 months)
       const { data: employeeGrowth, error: employeeError } = await supabase
@@ -161,7 +159,6 @@ export const useSubscriptionAnalytics = () => {
         usage_metrics
       };
 
-      console.log('✅ Subscription analytics loaded:', result);
       return result;
     },
     enabled: !!organizationId,

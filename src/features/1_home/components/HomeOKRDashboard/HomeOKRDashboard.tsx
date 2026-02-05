@@ -120,7 +120,7 @@ const HomeOKRDashboardContent = () => {
               <TabsTrigger value="individual-objectives" className="text-sm font-semibold">Individual Objective</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="company-objectives" className="space-y-4 mt-4 flex-1 overflow-auto">
+            <TabsContent value="company-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
               {/* Company Objectives Progress Overview */}
               <CompanyObjectivesProgressCard
                 enhancedCompanyObjectives={[]} // Will be populated by ObjectivesTab
@@ -140,7 +140,7 @@ const HomeOKRDashboardContent = () => {
               
               <ObjectivesTab 
                 type="company" 
-                title="Company Objectives 2024" 
+                title={`Company Objectives ${new Date().getFullYear()}`}
                 icon={Target} 
                 iconColor="text-blue-600" 
                 userRole={userRole} 
@@ -155,7 +155,7 @@ const HomeOKRDashboardContent = () => {
               />
             </TabsContent>
 
-            <TabsContent value="department-objectives" className="space-y-4 mt-4 flex-1 overflow-auto">
+            <TabsContent value="department-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
               {/* Department Objectives Progress Overview */}
               <DepartmentObjectivesProgressCard
                 enhancedDepartmentObjectives={[]} // Will be populated by ObjectivesTab
@@ -191,7 +191,7 @@ const HomeOKRDashboardContent = () => {
               />
             </TabsContent>
 
-            <TabsContent value="individual-objectives" className="space-y-4 mt-4 flex-1 overflow-auto">
+            <TabsContent value="individual-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
               {/* Individual Objectives Progress Overview */}
               <IndividualObjectivesProgressCard
                 enhancedIndividualObjectives={[]} // Will be populated by ObjectivesTab

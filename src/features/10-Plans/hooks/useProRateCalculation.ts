@@ -48,14 +48,11 @@ export const useProRateCalculation = () => {
   
   return useMutation({
     mutationFn: async (request: ProRateRequest): Promise<ProRateCalculation> => {
-      console.log('🧮 Calculating prorate for:', request);
-      
       const { data, error } = await supabase.functions.invoke('calculate-prorate', {
         body: request,
       });
 
       if (error) {
-        console.error('❌ ProRate calculation error:', error);
         throw error;
       }
 
@@ -63,11 +60,9 @@ export const useProRateCalculation = () => {
         throw new Error(data.error);
       }
 
-      console.log('✅ ProRate calculation result:', data);
       return data as ProRateCalculation;
     },
     onError: (error: any) => {
-      console.error('❌ ProRate calculation failed:', error);
       toast.error(applyVariables(t('subscription.plans.error.proRateFailed', 'Failed to calculate prorate: {{message}}'), { message: error.message || 'Unknown error' }));
     },
   });

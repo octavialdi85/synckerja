@@ -262,7 +262,6 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
     // Prevent duplicate loads for the same org (e.g., React strict mode)
     if (isLoadingOrgRef.current && inFlightOrgRef.current === organizationId) {
-      console.debug('⏭️ Skipping duplicate report load for org:', organizationId);
       return;
     }
 

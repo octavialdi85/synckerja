@@ -43,7 +43,6 @@ export const useMidtransPayment = () => {
 
   const initiateMidtransPayment = async (params: PaymentParams) => {
     if (isLoading || isPopupOpen) {
-      console.log('Payment already in progress, ignoring request');
       return;
     }
 
@@ -56,16 +55,12 @@ export const useMidtransPayment = () => {
         await loadMidtransScript();
       }
 
-      console.log('Creating payment with params:', params);
-
       // Get auth session for direct fetch call
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No active session');
       }
 
-      // Direct fetch to Edge Function to capture error details
-      console.log('🚀 Calling Edge Function directly with fetch...');
       const functionUrl = `${SUPABASE_URL}/functions/v1/create-midtrans-payment`;
       
       const rawResponse = await fetch(functionUrl, {
@@ -78,65 +73,33 @@ export const useMidtransPayment = () => {
         body: JSON.stringify(params)
       });
 
-      console.log('📡 Raw response status:', rawResponse.status);
-
       if (!rawResponse.ok) {
         // Read error response body
         let errorDetails = 'Unknown error';
         try {
           const errorBody = await rawResponse.json();
-          console.error('📦 Error response body:', errorBody);
-          
           if (errorBody.error) errorDetails = errorBody.error;
           if (errorBody.message) errorDetails += `\n${errorBody.message}`;
           if (errorBody.details) {
-            console.error('📦 Error stack trace:', errorBody.details);
             errorDetails += `\n\nStack trace:\n${errorBody.details}`;
           }
-        } catch (jsonError) {
-          // Try as text
+        } catch {
           try {
             const errorText = await rawResponse.text();
-            console.error('📦 Error response text:', errorText);
             errorDetails = errorText;
-          } catch (textError) {
-            console.error('❌ Failed to read error response');
+          } catch {
+            // Use default errorDetails
           }
         }
-        
-        console.error('🚨 DETAILED ERROR FROM EDGE FUNCTION:', errorDetails);
+
         throw new Error(`Edge Function failed (${rawResponse.status}): ${errorDetails}`);
       }
 
-      // Parse successful response
       const data = await rawResponse.json();
-      console.log('✅ Payment response data:', data);
-      
-      // ENHANCED DEBUG: Log Midtrans response details
-      console.log('=== FRONTEND MIDTRANS RESPONSE DEBUG ===');
-      console.log('Full response object:', JSON.stringify(data, null, 2));
-      
-      if (data.debug_info) {
-        console.log('📋 Requested payments:', data.debug_info.requested_payments);
-        console.log('📋 Midtrans full response:', JSON.stringify(data.debug_info.midtrans_response, null, 2));
-        
-        if (data.debug_info.midtrans_response.enabled_payments) {
-          console.log('✅ Enabled payments from Midtrans:', data.debug_info.midtrans_response.enabled_payments);
-        }
-        
-        if (data.debug_info.midtrans_response.available_payment_methods) {
-          console.log('✅ Available payment methods:', data.debug_info.midtrans_response.available_payment_methods);
-        }
-      }
 
-      // Validate response data - all payments must go through Midtrans
       if (!data || !data.token) {
-        console.error('❌ Invalid response data:', data);
         throw new Error('No payment token received from server');
       }
-
-      console.log('✅ Payment token:', data.token);
-      console.log('✅ Order ID:', data.order_id);
 
       // Force close any existing Midtrans elements and reset state
       try {
@@ -156,8 +119,8 @@ export const useMidtransPayment = () => {
           delete (window.snap as any)._current_popup;
           delete (window.snap as any)._state;
         }
-      } catch (e) {
-        console.log('Cleanup attempt completed');
+      } catch {
+        // Cleanup attempt completed
       }
 
       // Delay to ensure cleanup is complete
@@ -194,36 +157,15 @@ export const useMidtransPayment = () => {
           });
 
           if (!response.ok) {
-            const errText = await response.text();
-            console.error('❌ Failed to sync payment status:', errText);
-          } else {
-            console.log('✅ Payment status synced successfully');
+            await response.text();
           }
-        } catch (syncError) {
-          console.error('❌ Error syncing payment status:', syncError);
+        } catch {
+          // Sync failed - non-blocking
         }
       };
 
       const snapConfig: any = {
         onSuccess: (result: any) => {
-          console.log('✅ Payment success:', result);[
-  {
-    "boot_time": null,
-    "cpu_time_used": null,
-    "deployment_id": "najgdwffjhnqlogfrlqa_cdc583e7-b538-4297-8e61-be0bf949b28e_139",
-    "event_type": "Log",
-    "execution_id": "34502baa-b839-4a57-af01-8fbeeec2771b",
-    "function_id": "cdc583e7-b538-4297-8e61-be0bf949b28e",
-    "level": "info",
-    "memory_used": [],
-    "project_ref": "najgdwffjhnqlogfrlqa",
-    "reason": null,
-    "region": "ap-southeast-1",
-    "served_by": "supabase-edge-runtime-1.69.4 (compatible with Deno v2.1.4)",
-    "timestamp": "2025-10-26T01:40:31.419Z",
-    "version": "139"
-  }
-]
           syncPaymentStatus(result, 'success');
           setIsPopupOpen(false);
           toast.success(t('subscription.plans.success.paymentSuccess', 'Payment successful! Your subscription is being activated...'));
@@ -235,7 +177,6 @@ export const useMidtransPayment = () => {
           }, 2000);
         },
         onPending: (result: any) => {
-          console.log('⏳ Payment pending:', result);
           syncPaymentStatus(result, 'pending');
           setIsPopupOpen(false);
           toast.info(t('subscription.plans.info.paymentProcessing', 'Payment is being processed...'));
@@ -246,14 +187,12 @@ export const useMidtransPayment = () => {
             window.location.href = successRedirectUrl;
           }, 1000);
         },
-        onError: (result: any) => {
-          console.error('❌ Payment error:', result);
+        onError: () => {
           setIsPopupOpen(false);
           toast.error(t('subscription.plans.error.paymentFailed', 'Payment failed. Please try again.'));
           window.location.href = fallbackRedirectUrl;
         },
         onClose: () => {
-          console.log('🔒 Payment popup closed');
           setIsPopupOpen(false);
           toast.info(t('subscription.plans.info.paymentCancelled', 'Payment cancelled'));
           window.location.href = fallbackRedirectUrl;
@@ -264,7 +203,6 @@ export const useMidtransPayment = () => {
       try {
         window.snap.pay(data.token, snapConfig);
       } catch (snapError: any) {
-        console.error('❌ Snap.pay error:', snapError);
         // Ignore postMessage errors in development
         if (snapError.message && !snapError.message.includes('postMessage')) {
           throw snapError;
@@ -272,7 +210,6 @@ export const useMidtransPayment = () => {
       }
 
     } catch (error: any) {
-      console.error('Payment initiation error:', error);
       const errorMessage = error.message || t('subscription.plans.error.paymentStartFailed', 'Failed to start payment');
       
       // Handle specific error cases
@@ -301,7 +238,6 @@ export const useMidtransPayment = () => {
         const { data: keyData, error } = await supabase.functions.invoke('get-midtrans-config');
         
         if (error) {
-          console.error('Failed to get Midtrans config:', error);
           reject(new Error('Failed to get Midtrans configuration'));
           return;
         }
@@ -317,16 +253,13 @@ export const useMidtransPayment = () => {
         script.src = 'https://app.midtrans.com/snap/snap.js';
         script.setAttribute('data-client-key', clientKey);
         script.onload = () => {
-          console.log('Midtrans script loaded successfully');
           resolve();
         };
-        script.onerror = (error) => {
-          console.error('Failed to load Midtrans script:', error);
+        script.onerror = () => {
           reject(new Error('Failed to load Midtrans script'));
         };
         document.head.appendChild(script);
       } catch (error) {
-        console.error('Error in loadMidtransScript:', error);
         reject(error);
       }
     });

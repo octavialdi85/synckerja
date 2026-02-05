@@ -1,12 +1,11 @@
-﻿import { memo, Suspense, useState, useCallback } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOptimizedPerformanceMonitor } from '@/features/10-management/hooks/useOptimizedPerformanceMonitor';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
-import { Skeleton } from '@/features/ui/skeleton';
 import { LoadingDots } from '@/components/LoadingDots';
 import { HeaderAndTab } from '@/features/10-management/components/sections/HeaderAndTab';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { CreditCard } from 'lucide-react';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOptimizedSubscription } from '../hooks/useOptimizedSubscription';
 import { CurrentPlanSection, QuickActionsPanel, PaymentHistory } from '../components/sections';
 
@@ -105,10 +104,35 @@ const ManagementContent = memo(() => {
 
 ManagementContent.displayName = 'ManagementContent';
 
+const loadingFallback = (
+  <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+    <div className="col-span-9">
+      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+        <LoadingDots size="lg" />
+      </div>
+    </div>
+    <div className="col-span-3">
+      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+        <LoadingDots size="lg" />
+      </div>
+    </div>
+  </div>
+);
+
 const ManagementTabPage = memo(() => {
   useOptimizedPerformanceMonitor('ManagementTabPage');
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('management');
+  const { loading: orgLoading, organizationId } = useCurrentOrg();
+  const { statusLoading, subscriptionStatus, statusError } = useOptimizedSubscription();
+
+  // Single loading gate: wait for org, then subscription data or error (avoids race where statusLoading is false for one frame after org appears)
+  const hasSubscriptionResult = subscriptionStatus != null || statusError != null;
+  const pageLoading =
+    orgLoading ||
+    !organizationId ||
+    statusLoading ||
+    (!!organizationId && !statusLoading && !hasSubscriptionResult);
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
@@ -144,24 +168,9 @@ const ManagementTabPage = memo(() => {
                   />
                 </div>
 
-                {/* Management Content */}
+                {/* Management Content - single loading state to avoid flicker */}
                 <div className="flex-1 min-h-0">
-                  <Suspense fallback={
-                    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                      <div className="col-span-9">
-                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
-                          <LoadingDots size="lg" />
-                        </div>
-                      </div>
-                      <div className="col-span-3">
-                        <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
-                          <LoadingDots size="lg" />
-                        </div>
-                      </div>
-                    </div>
-                  }>
-                    <ManagementContent />
-                  </Suspense>
+                  {pageLoading ? loadingFallback : <ManagementContent />}
                 </div>
             </div>
           </div>

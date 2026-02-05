@@ -69,33 +69,16 @@ export const SectionProfile = () => {
 
   const handlePhotoUpdate = async (photoUrl: string | null) => {
     try {
-      console.log('🔄 SectionProfile: Starting photo update process');
-      console.log('📸 New photo URL:', photoUrl);
-      
-      // Show loading toast
       const loadingToast = toast.loading(t('profile.updatingPhoto', 'Updating profile photo...'));
-      
-      // Sync avatar across all app components
       const result = await syncAvatarAcrossApp(photoUrl);
-      
-      // Dismiss loading toast
       toast.dismiss(loadingToast);
-      
       if (result?.success) {
-        // Wait a bit for database update to propagate
-        setTimeout(async () => {
-          console.log('🔄 Refetching employee data after photo update');
-          await refetchEmployee();
-        }, 500);
-        
+        setTimeout(() => { refetchEmployee(); }, 500);
         toast.success(t('profile.photoUpdatedSuccess', 'Profile photo updated successfully across the app! 🎉'));
-        console.log('✅ SectionProfile: Photo sync completed successfully');
       } else {
         toast.error(t('profile.failedToSyncPhoto', 'Failed to sync photo across the app'));
-        console.error('❌ SectionProfile: Photo sync failed:', result?.error);
       }
-    } catch (error) {
-      console.error('❌ SectionProfile: Error during photo update:', error);
+    } catch {
       toast.error(t('profile.failedToUpdatePhoto', 'Failed to update profile photo'));
     }
   };

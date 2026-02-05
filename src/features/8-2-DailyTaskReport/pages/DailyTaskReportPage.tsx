@@ -38,5 +38,3 @@ const DailyTaskReportPage = () => {
 };
 
 export default DailyTaskReportPage;
-
-

@@ -149,9 +149,7 @@ const OverviewTabPage = memo(() => {
     let emergencyTimer: NodeJS.Timeout;
     
     if (organizationId && isLoading && !subscriptionStatus && !statusError) {
-      console.log('⏰ Starting emergency refresh timer (10s)');
       emergencyTimer = setTimeout(() => {
-        console.log('🚨 EMERGENCY REFRESH: Data not loaded after 10s, forcing refresh');
         refreshSubscriptionStatus();
         setForceRefresh(prev => prev + 1);
       }, 10000);
@@ -163,19 +161,6 @@ const OverviewTabPage = memo(() => {
       }
     };
   }, [organizationId, isLoading, subscriptionStatus, statusError, refreshSubscriptionStatus]);
-
-  // Optimized debug logging - only in development and only on changes
-  useEffect(() => {
-    if (import.meta.env.DEV && subscriptionStatus) {
-      console.log('🎯 Subscription Data:', {
-        plan: subscriptionStatus.plan_name,
-        members: `${subscriptionStatus.current_employees}/${subscriptionStatus.member_count}`,
-        active: subscriptionStatus.is_active
-      });
-    }
-  }, [subscriptionStatus?.plan_name, subscriptionStatus?.is_active]);
-
-
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);

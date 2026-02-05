@@ -28,13 +28,11 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
   const { statuses, loading, refetch, deleteStatus, updateStatus } = useEmployeeStatus();
   const { data: currentEmployee } = useCurrentEmployee();
 
-  // Listen for status creation to trigger refetch
   React.useEffect(() => {
     if (statusCreatedTrigger && statusCreatedTrigger > 0) {
-      console.log('🔄 SectionStatusKaryawan: Triggering refetch due to status creation');
       refetch();
     }
-  }, [statusCreatedTrigger]);
+  }, [statusCreatedTrigger, refetch]);
 
   const handleCreateStatus = () => {
     setIsModalOpen(true);
@@ -58,8 +56,8 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
         setDeleteStatusId(null);
         refetch();
       }
-    } catch (error) {
-      console.error('Error deleting status:', error);
+    } catch {
+      // Delete failed; refetch not called
     } finally {
       setIsDeleting(false);
     }

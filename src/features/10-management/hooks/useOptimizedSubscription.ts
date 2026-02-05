@@ -127,7 +127,6 @@ export const useOptimizedSubscription = () => {
       logger.query('Organization ID:', organizationId);
       
       if (!organizationId) {
-        console.error('❌ No organization ID available in main query');
         throw new Error('No organization ID');
       }
       
@@ -140,7 +139,6 @@ export const useOptimizedSubscription = () => {
       logger.query('📊 MAIN QUERY Raw Response:', { data, error });
       
       if (error) {
-        console.error('❌ Main query subscription error:', error);
         throw error;
       }
       
@@ -191,7 +189,6 @@ export const useOptimizedSubscription = () => {
     refetchOnMount: false, // Disabled - use staleTime instead, real-time updates will handle critical changes
     refetchOnReconnect: true, // Keep enabled for network recovery
     retry: (failureCount, error: any) => {
-      console.error('🔄 Query retry:', failureCount, error);
       // Don't retry on 4xx errors
       if (error?.status >= 400 && error?.status < 500) {
         return false;
@@ -214,10 +211,9 @@ export const useOptimizedSubscription = () => {
         .order('base_price_per_member', { ascending: true });
 
       if (error) {
-        console.error('❌ Subscription plans error:', error);
         throw error;
       }
-      
+
       return data as SubscriptionPlan[];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes - plans don't change often
@@ -235,14 +231,12 @@ export const useOptimizedSubscription = () => {
       });
 
       if (error) {
-        console.error('❌ Employee limit check error:', error);
         throw error;
       }
       
       return data as boolean;
     },
-    onError: (error) => {
-      console.error('❌ Error checking employee limit:', error);
+    onError: () => {
       toast.error('Failed to check employee limit');
     },
     // Cache the result for 30 seconds to avoid repeated calls
@@ -254,8 +248,7 @@ export const useOptimizedSubscription = () => {
     try {
       const result = await checkEmployeeLimitMutation.mutateAsync();
       return result;
-    } catch (error) {
-      console.error('❌ canAddEmployee error:', error);
+    } catch {
       return false;
     }
   }, [checkEmployeeLimitMutation]);
@@ -283,7 +276,7 @@ export const useOptimizedSubscription = () => {
   // Optimized logging - only log on initial load or errors (prevent spam)
   useEffect(() => {
     if (statusError) {
-      console.error('🚨 Subscription error:', statusError);
+      // Error surfaced via query
     } else if (subscriptionStatus && !statusLoading) {
       // Only log once when data is first loaded
       const hasLogged = sessionStorage.getItem('subscription_loaded');

@@ -353,12 +353,6 @@ export const calculateRecommendedMarketingSpend = (
   // Marketing cost menambah total cost per unit → net profit per unit turun → units required NAIK
   // Jika units setelah marketing lebih kecil atau sama, berarti ada masalah dengan perhitungan
   if (finalUnitsRequired <= unitsRequiredBeforeMarketing && marketingCostPerUnit > 0) {
-    console.error(
-      `ERROR: Final units (${finalUnitsRequired}) <= Before marketing units (${unitsRequiredBeforeMarketing}). ` +
-      `This is logically incorrect. Marketing cost increases total cost, so units required MUST increase. ` +
-      `Fixing by ensuring minimum 5% increase...`
-    );
-    
     // Fix: Set minimum units to be at least 5% more than before marketing
     // Ini memastikan units selalu naik setelah marketing ditambahkan
     const minUnitsRequired = Math.ceil(unitsRequiredBeforeMarketing * 1.05);

@@ -375,13 +375,6 @@ export const CompanyObjectivesDetailView = ({
       type: 'company'
     });
   };
-  // #region agent log
-  const viewPhase = isLoadingCycles ? 'skeleton_cycles' : (loadingObjectives || loadingDepartments || loadingAllObjectives) ? 'skeleton_objectives' : (companyObjectives.length === 0 ? 'empty_state' : 'main_content');
-  if (typeof fetch !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesDetailView.tsx:phase', message: 'DetailView phase', data: { viewPhase, isLoadingCycles, loadingObjectives, loadingDepartments, loadingAllObjectives, shouldUseFilteredObjectives, filteredCycleIdsLen: filteredCycleIds?.length ?? 0, companyObjectivesLen: companyObjectives.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H3,H4' }) }).catch(() => {});
-  }
-  // #endregion
-
   // Skeleton when cycles loading to avoid empty→filtered list flicker
   if (isLoadingCycles) {
     return (

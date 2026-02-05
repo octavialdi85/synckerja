@@ -70,22 +70,12 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
 
     // If editing but habit not found yet, wait for it to load
     if (habitId && !habit) {
-      console.log('Waiting for habit to load...', habitId);
       return;
     }
 
     setIsInitializing(true);
     
     if (habit && habitId) {
-      // Debug: Log habit data
-      console.log('=== Loading habit for edit ===');
-      console.log('Habit ID:', habit.id);
-      console.log('Habit Name:', habit.name);
-      console.log('Target Count:', habit.target_count);
-      console.log('Checklist Names (raw):', habit.checklist_names);
-      console.log('Checklist Names (type):', typeof habit.checklist_names);
-      console.log('Checklist Names (isArray):', Array.isArray(habit.checklist_names));
-      
       setName(habit.name);
       setDescription(habit.description || '');
       setFrequency(habit.frequency);
@@ -102,8 +92,8 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
             if (Array.isArray(parsed)) {
               loadedWeeklyDays = parsed.filter((day: any) => typeof day === 'number' && day >= 0 && day <= 6);
             }
-          } catch (e) {
-            console.error('Error parsing weekly_days string:', e);
+          } catch {
+            // Invalid weekly_days format, use empty
           }
         }
       }
@@ -120,8 +110,8 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
             if (Array.isArray(parsed)) {
               loadedMonthlyDates = parsed.filter((date: any) => typeof date === 'number' && date >= 1 && date <= 31);
             }
-          } catch (e) {
-            console.error('Error parsing monthly_dates string:', e);
+          } catch {
+            // Invalid monthly_dates format, use empty
           }
         }
       }
@@ -143,15 +133,12 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                 name && typeof name === 'string' ? name.trim() : ''
               );
             }
-          } catch (e) {
-            console.error('Error parsing checklist_names string:', e);
+          } catch {
+            // Invalid checklist_names format, use empty
           }
         }
       }
-      
-      console.log('Loaded Checklist Names:', loadedChecklistNames);
-      console.log('Loaded Checklist Names Length:', loadedChecklistNames.length);
-      
+
       // Ensure array has exactly target_count items (pad with empty strings if needed)
       // Only for daily frequency
       const finalChecklistNames = habit.frequency === 'daily' && habit.target_count > 1
@@ -159,11 +146,7 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
             return loadedChecklistNames[idx] || '';
           })
         : [];
-      
-      console.log('Final Checklist Names:', finalChecklistNames);
-      console.log('Final Checklist Names Length:', finalChecklistNames.length);
-      console.log('=== End Loading ===');
-      
+
       // Use requestAnimationFrame to ensure state updates happen in the right order
       requestAnimationFrame(() => {
         setChecklistNames(finalChecklistNames);
@@ -173,12 +156,10 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
         // Small delay to ensure state is set before allowing targetCount changes to affect checklistNames
         setTimeout(() => {
           setIsInitializing(false);
-          console.log('Initialization complete. Checklist names state:', finalChecklistNames);
         }, 100);
       });
     } else {
       // Reset form for new habit
-      console.log('Resetting form for new habit');
       setName('');
       setDescription('');
       setFrequency('daily');
@@ -197,10 +178,9 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
   useEffect(() => {
     // Don't update during initialization or when modal is closed
     if (!isOpen || isInitializing) {
-      console.log('Skipping checklist names update:', { isOpen, isInitializing });
       return;
     }
-    
+
     // Only update checklist names for daily frequency
     if (frequency !== 'daily') {
       // Clear checklist names if frequency is not daily
@@ -209,42 +189,25 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
       }
       return;
     }
-    
+
     // Don't update if we're editing and this is the initial load
-    // (check if habit exists and targetCount matches habit's target_count)
     if (habit && targetCount === habit.target_count) {
-      console.log('Skipping checklist names update - targetCount matches habit.target_count');
       return;
     }
-    
-    console.log('Updating checklist names due to targetCount change:', {
-      targetCount,
-      currentLength: checklistNames.length,
-      habitId: habit?.id,
-      frequency,
-    });
-    
+
     // User has changed targetCount, update checklistNames accordingly
     if (targetCount > 1) {
-      // Initialize or extend checklist names array to match targetCount
       const currentLength = checklistNames.length;
       if (currentLength < targetCount) {
-        // Add new empty names, preserve existing ones
         const newNames = [...checklistNames];
         for (let i = currentLength; i < targetCount; i++) {
           newNames.push('');
         }
-        console.log('Extending checklist names:', newNames);
         setChecklistNames(newNames);
       } else if (currentLength > targetCount) {
-        // Remove excess names
-        const trimmedNames = checklistNames.slice(0, targetCount);
-        console.log('Trimming checklist names:', trimmedNames);
-        setChecklistNames(trimmedNames);
+        setChecklistNames(checklistNames.slice(0, targetCount));
       }
     } else {
-      // Clear checklist names if target count is 1 or less
-      console.log('Clearing checklist names (targetCount <= 1)');
       setChecklistNames([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,9 +216,8 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
   // Clear checklist names when frequency changes from daily to something else
   useEffect(() => {
     if (!isOpen || isInitializing) return;
-    
+
     if (frequency !== 'daily' && checklistNames.length > 0) {
-      console.log('Clearing checklist names - frequency changed to', frequency);
       setChecklistNames([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -517,16 +479,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                 <div className="space-y-2 max-h-48 overflow-y-auto seamless-scroll border border-gray-200 rounded-md p-3">
                   {Array.from({ length: targetCount }, (_, index) => {
                     const currentValue = checklistNames[index] || '';
-                    // Debug: Log each input field value
-                    if (index === 0) {
-                      console.log(`Rendering checklist input ${index}:`, {
-                        index,
-                        currentValue,
-                        checklistNamesLength: checklistNames.length,
-                        checklistNames: checklistNames,
-                      });
-                    }
-                    
                     return (
                       <div key={index} className="flex items-center gap-2">
                         <Label htmlFor={`checklist-${index}`} className="text-sm font-medium min-w-[80px]">

@@ -30,17 +30,6 @@ export const EmployeeRemovalSelector = ({
   const requiredRemovals = Math.max(0, actualEmployeeCount - newMemberCount);
   const needsRemoval = actualEmployeeCount > newMemberCount;
 
-  // Debug logging
-  console.log('🔍 EmployeeRemovalSelector Debug:', {
-    propCurrentEmployeeCount: currentEmployeeCount,
-    actualEmployeeCount,
-    employeesLength: employees.length,
-    newMemberCount,
-    requiredRemovals,
-    needsRemoval,
-    isLoading
-  });
-
   // State untuk selected employees
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
 
@@ -59,42 +48,30 @@ export const EmployeeRemovalSelector = ({
   }, [selectedCount, requiredRemovals, onSelectionChange]);
 
   const handleToggleEmployee = async (employeeId: string, currentlySelected: boolean) => {
-    console.log('🔍 handleToggleEmployee called:', { employeeId, currentlySelected, selectedCount, requiredRemovals });
-    
     const newSelected = new Set(selectedEmployeeIds);
-    
+
     if (currentlySelected) {
-      // Unmark employee
-      console.log('🔍 Unmarking employee:', employeeId);
       newSelected.delete(employeeId);
       setSelectedEmployeeIds(newSelected);
       try {
         await unmarkForRemoval.mutateAsync({ employeeIds: [employeeId] });
-        console.log('✅ Successfully unmarked employee:', employeeId);
-      } catch (error) {
-        console.error('❌ Error unmarking employee:', error);
+      } catch {
         // Revert state on error
         setSelectedEmployeeIds(prev => new Set([...prev, employeeId]));
       }
     } else {
       // Check if we've reached the limit
       if (selectedCount >= requiredRemovals) {
-        console.log('⚠️ Reached removal limit, cannot select more');
-        // Don't allow selecting more than required
         return;
       }
-      // Mark employee
-      console.log('🔍 Marking employee for removal:', employeeId);
       newSelected.add(employeeId);
       setSelectedEmployeeIds(newSelected);
       try {
-        const result = await markForRemoval.mutateAsync({ 
+        await markForRemoval.mutateAsync({
           employeeIds: [employeeId],
           reason: 'Subscription downgrade'
         });
-        console.log('✅ Successfully marked employee for removal:', employeeId, result);
-      } catch (error) {
-        console.error('❌ Error marking employee for removal:', error);
+      } catch {
         // Revert state on error
         setSelectedEmployeeIds(prev => {
           const reverted = new Set(prev);
@@ -121,14 +98,7 @@ export const EmployeeRemovalSelector = ({
       const nameB = b.full_name || '';
       return nameA.localeCompare(nameB);
     });
-    
-    console.log('🔍 Available Employees:', {
-      totalEmployees: employees.length,
-      activeEmployeesCount: activeEmployees.length,
-      availableEmployeesCount: sorted.length,
-      employees: employees.map(e => ({ id: e.id, name: e.full_name, status: e.status, pending_removal: e.pending_removal }))
-    });
-    
+
     return sorted;
   }, [employees]);
 
@@ -145,11 +115,6 @@ export const EmployeeRemovalSelector = ({
 
   // If we don't need removal (actualEmployeeCount <= newMemberCount), don't show
   if (!needsRemoval) {
-    console.log('🔍 EmployeeRemovalSelector: No removal needed', {
-      actualEmployeeCount,
-      newMemberCount,
-      requiredRemovals
-    });
     return null;
   }
 

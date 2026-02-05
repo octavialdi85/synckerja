@@ -48,7 +48,6 @@ export const BlockersPanel = () => {
         .eq('id', resolutionFor.id);
       
       if (error) {
-        console.error('Error updating blocker resolution status:', error);
         toast({
           title: 'Error',
           description: `Failed to mark blocker as resolved: ${error.message}`,
@@ -63,19 +62,14 @@ export const BlockersPanel = () => {
           p_task_step_history_ids: [resolutionFor.id]
         });
       
-      if (checkError) {
-        console.error('Error verifying blocker resolution:', checkError);
-      } else if (!resolutionCheck || resolutionCheck.length === 0) {
-        console.warn('⚠️ Blocker marked as resolved but no resolution entry found in task_step_history_blocker_resolved');
+      if (!checkError && (!resolutionCheck || resolutionCheck.length === 0)) {
         toast({
           title: 'Warning',
           description: 'Blocker marked as resolved but resolution details may not have been saved',
           variant: 'destructive',
         });
-      } else {
-        console.log('✅ Resolution verified:', resolutionCheck[0]);
       }
-      
+
       // Update local state
       setLocResolved(prev => ({ ...prev, [resolutionFor.id]: true }));
       
@@ -86,8 +80,7 @@ export const BlockersPanel = () => {
         title: 'Success',
         description: 'Blocker marked as resolved',
       });
-    } catch (error: any) {
-      console.error('Unexpected error in handleResolutionComplete:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred while updating blocker status',
@@ -112,7 +105,6 @@ export const BlockersPanel = () => {
         .eq('id', deletingBlocker.id);
 
       if (error) {
-        console.error('Error deleting blocker:', error);
         toast({
           title: 'Error',
           description: `Failed to delete blocker: ${error.message}`,
@@ -129,7 +121,7 @@ export const BlockersPanel = () => {
           .eq('task_step_history_id', deletingBlocker.id);
 
         if (resError) {
-          console.warn('Could not delete resolution entry:', resError);
+          // Resolution entry delete failed (non-blocking)
         }
       }
 
@@ -141,8 +133,7 @@ export const BlockersPanel = () => {
         title: 'Success',
         description: 'Blocker deleted successfully',
       });
-    } catch (error: any) {
-      console.error('Unexpected error deleting blocker:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',
@@ -170,7 +161,6 @@ export const BlockersPanel = () => {
         .eq('id', editingBlocker.id);
 
       if (error) {
-        console.error('Error updating blocker:', error);
         toast({
           title: 'Error',
           description: `Failed to update blocker: ${error.message}`,
@@ -190,8 +180,7 @@ export const BlockersPanel = () => {
 
       // Trigger re-render by forcing a state update
       window.location.reload();
-    } catch (error: any) {
-      console.error('Unexpected error updating blocker:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',

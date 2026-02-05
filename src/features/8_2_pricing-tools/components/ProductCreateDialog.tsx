@@ -91,8 +91,7 @@ export const ProductCreateDialog = ({ open, onOpenChange, onSuccess }: ProductCr
       reset();
       onOpenChange(false);
       onSuccess?.();
-    } catch (error) {
-      console.error('Error creating product and services:', error);
+    } catch {
       toast({ title: "Error", description: "Failed to create product and services", variant: "destructive" });
     } finally {
       setIsLoading(false);

@@ -36,8 +36,8 @@ export const useOptimizedPerformanceMonitor = (componentName: string) => {
         metricsRef.current.renderTime = now - startTimeRef.current;
         
         // Only log slow renders to reduce console noise
-        if (metricsRef.current.renderTime > 50) { // Increased threshold to 50ms
-          console.warn(`⚠️ ${componentName} SLOW RENDER: ${metricsRef.current.renderTime.toFixed(2)}ms`);
+        if (metricsRef.current.renderTime > 50) {
+          // Slow render - metrics available in metricsRef
         }
       }
     }
@@ -59,13 +59,7 @@ export const useOptimizedPerformanceMonitor = (componentName: string) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📊 ${componentName} Final Stats:`, {
-          totalUpdates: metricsRef.current.updateCount,
-          avgRenderTime: `${metricsRef.current.renderTime.toFixed(2)}ms`,
-          lifespan: `${(performance.now() - metricsRef.current.mountTime).toFixed(2)}ms`
-        });
-      }
+      // Cleanup on unmount
     };
   }, [componentName]);
 
@@ -104,12 +98,8 @@ export const useMemoryMonitor = (componentName: string) => {
     if (process.env.NODE_ENV === 'development' && 'memory' in performance) {
       const checkMemory = () => {
         const memory = (performance as any).memory;
-        if (memory.usedJSHeapSize > 50 * 1024 * 1024) { // 50MB threshold
-          console.warn(`🧠 ${componentName} High Memory Usage:`, {
-            used: `${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-            total: `${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-            limit: `${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)}MB`
-          });
+        if (memory.usedJSHeapSize > 50 * 1024 * 1024) {
+          // High memory - metrics available in memory object
         }
       };
       

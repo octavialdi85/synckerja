@@ -87,8 +87,8 @@ export const PricingToolsSidebar = ({
       });
       setSaveDialogOpen(false);
       setCalculationName('');
-    } catch (error) {
-      console.error('Error saving calculation:', error);
+    } catch {
+      // Error shown via mutation onError toast
     }
   };
 

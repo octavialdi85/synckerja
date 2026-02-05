@@ -54,8 +54,8 @@ const PaymentHistory = () => {
         if (!error && data && data.success) {
           return data;
         }
-      } catch (err) {
-        console.log('check-midtrans-payment-status not available, using process-midtrans-payment instead');
+      } catch {
+        // check-midtrans-payment-status not available, fallback below
       }
 
       // Fallback: Use process-midtrans-payment to manually trigger webhook processing

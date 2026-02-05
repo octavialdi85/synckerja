@@ -44,7 +44,6 @@ export const useBusinessExpenses = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching business expenses:', error);
         throw error;
       }
 
@@ -83,8 +82,7 @@ export const useBusinessExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['business-expenses', organizationId] });
       toast.success('Business expense saved successfully');
     },
-    onError: (error: any) => {
-      console.error('Error creating business expense:', error);
+    onError: () => {
       toast.error('Failed to save business expense');
     },
   });
@@ -113,8 +111,7 @@ export const useBusinessExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['business-expenses', organizationId] });
       toast.success('Business expense updated successfully');
     },
-    onError: (error: any) => {
-      console.error('Error updating business expense:', error);
+    onError: () => {
       toast.error('Failed to update business expense');
     },
   });
@@ -135,8 +132,7 @@ export const useBusinessExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['business-expenses', organizationId] });
       toast.success('Business expense deleted successfully');
     },
-    onError: (error: any) => {
-      console.error('Error deleting business expense:', error);
+    onError: () => {
       toast.error('Failed to delete business expense');
     },
   });
@@ -172,8 +168,7 @@ export const useBusinessExpenses = () => {
       queryClient.invalidateQueries({ queryKey: ['business-expenses', organizationId] });
       toast.success('Business expenses saved successfully');
     },
-    onError: (error: any) => {
-      console.error('Error saving business expenses:', error);
+    onError: () => {
       toast.error('Failed to save business expenses');
     },
   });

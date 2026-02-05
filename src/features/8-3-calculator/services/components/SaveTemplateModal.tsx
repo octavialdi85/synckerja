@@ -86,7 +86,6 @@ export const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({
     setIsSavingTemplate(false);
 
     if (error) {
-      console.error('Error saving KPI template:', error);
       toast({
         title: "Failed to save template",
         description: error.message || "Please try again later.",

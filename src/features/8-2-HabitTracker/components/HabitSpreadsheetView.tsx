@@ -152,19 +152,6 @@ export const HabitSpreadsheetView = () => {
         // Ensure monthly_dates contains numbers and check if dayOfMonth is included
         const monthlyDatesNumbers = habit.monthly_dates.map((d: any) => Number(d));
         const isIncluded = monthlyDatesNumbers.includes(dayOfMonth);
-        
-        // Debug logging for monthly habits
-        const dateStr = format(day, 'yyyy-MM-dd');
-        if (dateStr === '2026-01-28' && habit.name === 'Main kerumah ibu') {
-          console.log(`[isHabitActiveOnDay Debug] Monthly habit "${habit.name}" (${dateStr}):`, {
-            dayOfMonth,
-            monthly_dates: habit.monthly_dates,
-            monthlyDatesNumbers,
-            isIncluded,
-            result: isIncluded,
-          });
-        }
-        
         return isIncluded;
       }
       // If no monthly_dates specified, assume not active (monthly habits need specific dates)
@@ -297,22 +284,6 @@ export const HabitSpreadsheetView = () => {
         
         // Then check if habit is active on this specific day
         const isActiveOnThisDay = isHabitActiveOnDay(habit, day);
-        
-        // Debug logging for specific dates
-        if (dateStr === '2026-01-11' || dateStr === '2026-01-28') {
-          const dayEntries = entries.filter((e) => e.habit_id === habit.id && e.entry_date === dateStr);
-          console.log(`[Daily Stats Debug] Habit "${habit.name}" (${dateStr}):`, {
-            habitIsActive: habit.is_active,
-            isActiveOnThisDay,
-            frequency: habit.frequency,
-            target_count: habit.target_count,
-            entriesCount: dayEntries.length,
-            weekly_days: habit.weekly_days,
-            monthly_dates: habit.monthly_dates,
-            dayOfMonth: parseInt(format(day, 'd')),
-          });
-        }
-        
         return isActiveOnThisDay;
       });
       
@@ -327,18 +298,7 @@ export const HabitSpreadsheetView = () => {
       
       const done = completedHabits.length;
       const left = Math.max(0, totalHabits - done);
-      
-      // Debug logging for specific dates
-      if (dateStr === '2026-01-11' || dateStr === '2026-01-28') {
-        console.log(`[Daily Stats Debug] Date ${dateStr}:`, {
-          totalHabits,
-          done,
-          percentage: totalHabits > 0 ? Math.round((done / totalHabits) * 100) : 0,
-          activeHabitNames: activeHabits.map(h => h.name),
-          completedHabitNames: completedHabits.map(h => h.name),
-        });
-      }
-      
+
       return {
         date: format(day, 'd'),
         dayName: format(day, 'EEE'),
@@ -446,8 +406,7 @@ export const HabitSpreadsheetView = () => {
           description: `Entry removed for ${format(date, 'MMM d')}`,
         });
       }
-    } catch (error) {
-      console.error('Error toggling entry:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update entry',
@@ -1092,8 +1051,7 @@ export const HabitSpreadsheetView = () => {
                       title: 'Habit deleted',
                       description: `"${habitToDelete.name}" has been deleted successfully`,
                     });
-                  } catch (error) {
-                    console.error('Error deleting habit:', error);
+                  } catch {
                     toast({
                       title: 'Error',
                       description: 'Failed to delete habit',
@@ -1302,8 +1260,7 @@ export const HabitSpreadsheetView = () => {
                       newDate: formatDateForToast(monthlyHabitConfirmModal.newDate)
                     }),
                   });
-                } catch (error) {
-                  console.error('Error updating monthly habit date:', error);
+                } catch {
                   toast({
                     title: t('common.error', 'Error'),
                     description: t('habitTracker.monthlyHabit.changeDateError', 'Gagal mengubah tanggal habit'),

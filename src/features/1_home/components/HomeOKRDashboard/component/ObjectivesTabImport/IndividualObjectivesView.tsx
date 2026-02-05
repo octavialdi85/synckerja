@@ -44,6 +44,10 @@ export const IndividualObjectivesView = ({
     title: string;
   } | null>(null);
 
+  // Create Activity modal state (handler used by dropdown; modal can be wired later)
+  const [selectedObjectiveForActivity, setSelectedObjectiveForActivity] = useState<{ id: string; title: string; employeeId: string } | null>(null);
+  const [showCreateActivityModal, setShowCreateActivityModal] = useState(false);
+
   // Edit Modal states
   const [editModal, setEditModal] = useState<{
     open: boolean;
@@ -633,14 +637,10 @@ export const IndividualObjectivesView = ({
       if (!open) {
         setSelectedEmployee(null);
       }
-    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
-      console.log('✅ Individual objective created successfully');
-    }} />}
+    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {}} />}
 
       {/* Add Individual Contribution Modal */}
-      <ModalAddIndividualContribution open={showContributionModal} onOpenChange={setShowContributionModal} organizationId={organizationId} cycleId={cycleId || finalCycleIds?.[0] || ''} onSuccess={() => {
-      console.log('✅ Individual contribution created successfully');
-    }} />
+      <ModalAddIndividualContribution open={showContributionModal} onOpenChange={setShowContributionModal} organizationId={organizationId} cycleId={cycleId || finalCycleIds?.[0] || ''} onSuccess={() => {}} />
 
       {/* Delete Individual Objective Dialog */}
       <DeleteIndividualObjectiveDialog
@@ -660,10 +660,7 @@ export const IndividualObjectivesView = ({
           organizationId={organizationId}
           cycleId={cycleId || finalCycleIds?.[0] || ''}
           editObjective={editModal.objective}
-          onSuccess={() => {
-            console.log('✅ Individual objective updated successfully');
-            setEditModal({ open: false });
-          }}
+          onSuccess={() => setEditModal({ open: false })}
         />
       )}
     </div>;

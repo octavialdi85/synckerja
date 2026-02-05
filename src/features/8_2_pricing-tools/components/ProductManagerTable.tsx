@@ -50,7 +50,6 @@ export const ProductManagerTable = ({ refreshTrigger }: ProductManagerTableProps
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching products:', error);
         toast({
           title: "Error",
           description: "Failed to load products",
@@ -60,8 +59,7 @@ export const ProductManagerTable = ({ refreshTrigger }: ProductManagerTableProps
       }
 
       setProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
+    } catch {
       toast({
         title: "Error",
         description: "Failed to load products",
@@ -96,11 +94,11 @@ export const ProductManagerTable = ({ refreshTrigger }: ProductManagerTableProps
   };
 
   const handleViewDetails = (product: any) => {
-    console.log('View details for product:', product.id);
+    // Navigate or open details - implement as needed
   };
 
   const handleEdit = (product: any) => {
-    console.log('Edit product:', product.id);
+    // Open edit - implement as needed
   };
 
   const handleDelete = async (product: any) => {
@@ -118,8 +116,7 @@ export const ProductManagerTable = ({ refreshTrigger }: ProductManagerTableProps
       });
       
       fetchProducts(); // Refresh the list
-    } catch (error) {
-      console.error('Error deleting product:', error);
+    } catch {
       toast({
         title: "Error",
         description: "Failed to delete product",

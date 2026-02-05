@@ -31,8 +31,7 @@ export const usePasswords = () => {
       }));
 
       setCategories(categoriesWithCount);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load categories',
@@ -72,8 +71,7 @@ export const usePasswords = () => {
         updatedAt: new Date(item.updated_at),
       }));
       setPasswords(formattedPasswords);
-    } catch (error) {
-      console.error('Error fetching passwords:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load passwords',
@@ -115,8 +113,7 @@ export const usePasswords = () => {
       });
 
       await fetchPasswords();
-    } catch (error) {
-      console.error('Error adding password:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to save password',
@@ -154,8 +151,7 @@ export const usePasswords = () => {
       });
 
       await fetchPasswords();
-    } catch (error) {
-      console.error('Error updating password:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update password',
@@ -184,8 +180,7 @@ export const usePasswords = () => {
       });
 
       await fetchPasswords();
-    } catch (error) {
-      console.error('Error deleting password:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete password',
@@ -215,8 +210,7 @@ export const usePasswords = () => {
       if (error) throw error;
 
       await fetchPasswords();
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update favorite',

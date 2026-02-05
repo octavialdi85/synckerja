@@ -115,11 +115,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
   };
 
   const handleUpgrade = useCallback(async (plan: SubscriptionPlan, memberCount: number, billingCycleOverride?: 'monthly' | 'yearly') => {
-    console.log('🚀 Starting upgrade process for plan:', plan.name, 'with', memberCount, 'members');
-    
     const selectedBillingCycle = billingCycleOverride || billingCycles[plan.id] || 'monthly';
-    console.log('🔄 Selected billing cycle:', selectedBillingCycle);
-    
+
     setSelectedPlan(plan);
     setSelectedMemberCount(memberCount);
     // Update global isYearly state for modal consistency
@@ -140,12 +137,10 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           // Set scheduled_date ke hari ini karena expired, perubahan harus langsung
           calculation.calculation.scheduled_date = new Date().toISOString();
           calculation.calculation.remaining_days = 0;
-          console.log('⚠️ Subscription expired - forcing immediate charge:', calculation.calculation);
         }
 
         setProRatedData(calculation);
-        console.log('✅ ProRate calculation completed:', calculation);
-        
+
         // Check if this is a member increase (scale-up) without plan change
         const isMemberIncrease = calculation.calculation?.member_difference > 0 && 
                                 !calculation.calculation?.is_plan_change;
@@ -163,8 +158,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
         setProRatedData(null);
         setIsModalOpen(true);
       }
-    } catch (error) {
-      console.error('❌ ProRate calculation failed:', error);
+    } catch {
       setProRatedData(null);
       setIsModalOpen(true);
     }
@@ -189,8 +183,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
         memberCount,
         billingCycle: chargeCycle,
       });
-    } catch (error) {
-      console.error('❌ Renewal payment failed:', error);
+    } catch {
       toast.error(t('subscription.plans.error.renewalFailed', 'Unable to start renewal payment. Please try again.'));
     }
   }, [subscriptionStatus, initiateMidtransPayment, t]);
@@ -249,8 +242,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       setIsModalOpen(false);
       setSelectedPlan(null);
       setProRatedData(null);
-    } catch (error) {
-      console.error('❌ Action failed:', error);
+    } catch {
+      // Error surfaced via toast from payment/schedule
     }
   }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData, schedulePlanChange, subscriptionStatus]);
 
@@ -287,8 +280,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       
       setSelectedPlan(null);
       setProRatedData(null);
-    } catch (error) {
-      console.error('❌ Payment failed:', error);
+    } catch {
+      // Error surfaced via toast from payment
     }
   }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData]);
 
@@ -310,8 +303,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       setIsOptionsModalOpen(false);
       setSelectedPlan(null);
       setProRatedData(null);
-    } catch (error) {
-      console.error('❌ Failed to schedule change:', error);
+    } catch {
+      // Error surfaced via toast from schedulePlanChange
     }
   }, [selectedPlan, proRatedData, schedulePlanChange]);
 

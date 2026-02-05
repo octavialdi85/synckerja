@@ -44,7 +44,6 @@ export const usePricingCalculations = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching pricing calculations:', error);
         throw error;
       }
 
@@ -90,8 +89,7 @@ export const usePricingCalculations = () => {
       queryClient.invalidateQueries({ queryKey: ['pricing-calculations', organizationId] });
       toast.success('Calculation saved successfully');
     },
-    onError: (error: any) => {
-      console.error('Error saving calculation:', error);
+    onError: () => {
       toast.error('Failed to save calculation');
     },
   });
@@ -129,8 +127,7 @@ export const usePricingCalculations = () => {
       queryClient.invalidateQueries({ queryKey: ['pricing-calculations', organizationId] });
       toast.success('Calculation updated successfully');
     },
-    onError: (error: any) => {
-      console.error('Error updating calculation:', error);
+    onError: () => {
       toast.error('Failed to update calculation');
     },
   });
@@ -151,8 +148,7 @@ export const usePricingCalculations = () => {
       queryClient.invalidateQueries({ queryKey: ['pricing-calculations', organizationId] });
       toast.success('Calculation deleted successfully');
     },
-    onError: (error: any) => {
-      console.error('Error deleting calculation:', error);
+    onError: () => {
       toast.error('Failed to delete calculation');
     },
   });

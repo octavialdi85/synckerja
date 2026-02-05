@@ -42,7 +42,6 @@ export const useSchedulePlanChange = () => {
       });
 
       if (error) {
-        console.error('❌ Failed to schedule plan change:', error);
         throw error;
       }
 

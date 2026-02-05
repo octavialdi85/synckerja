@@ -106,29 +106,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         expectedQuarter = 'Q4';
         expectedQuarterLower = 'q4';
       }
-      
-      // Log all available cycles for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 All available cycles:', cycles.map(c => ({
-          id: c.id,
-          name: (c as any).name,
-          period_type: (c as any).period_type,
-          quarter: (c as any).quarter,
-          year: (c as any).year,
-          start_date: (c as any).start_date,
-          end_date: (c as any).end_date
-        })));
-        console.log('📅 Plan date info:', {
-          planDate: planDate.toISOString(),
-          planYear,
-          planMonth,
-          expectedQuarter,
-          expectedQuarterLower,
-          planMonthStart: planMonthStart.toISOString(),
-          planMonthEnd: planMonthEnd.toISOString()
-        });
-      }
-      
+
       const filteredCycles = cycles
         .filter(cycle => {
           const cyclePeriodType = (cycle as any).period_type;
@@ -156,75 +134,17 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             );
             const yearMatches = cycleYear === planYear;
             
-            const matches = quarterMatches && yearMatches && overlaps;
-            
-            if (process.env.NODE_ENV === 'development') {
-              console.log('🔍 Quarterly cycle check:', {
-                cycleName: (cycle as any).name,
-                cycleQuarter,
-                expectedQuarter,
-                expectedQuarterLower,
-                quarterMatches,
-                cycleYear,
-                planYear,
-                yearMatches,
-                cycleStart: cycleStartStr,
-                cycleEnd: cycleEndStr,
-                planMonth,
-                overlaps,
-                matches
-              });
-            }
-            
-            return matches;
+            return quarterMatches && yearMatches && overlaps;
           }
           
-          // For yearly cycles: check date overlap only
-          if (cyclePeriodType === 'yearly') {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('🔍 Yearly cycle check:', {
-                cycleName: (cycle as any).name,
-                cycleStart: cycleStartStr,
-                cycleEnd: cycleEndStr,
-                planMonth,
-                overlaps
-              });
-            }
-            
-            return overlaps;
-          }
-          
-          // Fallback: if period_type is not set, use date overlap
-          if (!cyclePeriodType) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('🔍 Unknown period_type, using date overlap:', {
-                cycleName: (cycle as any).name,
-                cycleStart: cycleStartStr,
-                cycleEnd: cycleEndStr,
-                planMonth,
-                overlaps
-              });
-            }
-            
-            return overlaps;
-          }
+          if (cyclePeriodType === 'yearly') return overlaps;
+
+          if (!cyclePeriodType) return overlaps;
           
           return false;
         })
         .map(cycle => cycle.id);
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📅 Filtered cycles for plan date:', {
-          planDate: planDate.toISOString(),
-          planYear,
-          planMonth,
-          expectedQuarter,
-          totalCycles: cycles.length,
-          filteredCycleIds: filteredCycles,
-          filteredCycleNames: cycles.filter(c => filteredCycles.includes(c.id)).map(c => (c as any).name)
-        });
-      }
-      
+
       return filteredCycles;
     } else {
       // Fallback: include active cycles and cycles from current year and next year

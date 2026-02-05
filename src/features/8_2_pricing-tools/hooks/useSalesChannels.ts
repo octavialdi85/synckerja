@@ -49,7 +49,6 @@ export const useSalesChannels = () => {
         .order('name', { ascending: true });
 
       if (error) {
-        console.error('Error fetching sales channels:', error);
         throw error;
       }
 
@@ -93,8 +92,7 @@ export const useSalesChannels = () => {
       queryClient.invalidateQueries({ queryKey: ['sales-channels', organizationId] });
       toast.success('Sales channel saved successfully');
     },
-    onError: (error: any) => {
-      console.error('Error creating sales channel:', error);
+    onError: () => {
       toast.error('Failed to save sales channel');
     },
   });
@@ -140,7 +138,6 @@ export const useSalesChannels = () => {
       toast.success('Sales channel updated successfully');
     },
     onError: (error: any) => {
-      console.error('Error updating sales channel:', error);
       toast.error(error.message || 'Failed to update sales channel');
     },
   });
@@ -168,7 +165,6 @@ export const useSalesChannels = () => {
       toast.success('Sales channel deleted successfully');
     },
     onError: (error: any) => {
-      console.error('Error deleting sales channel:', error);
       toast.error(error.message || 'Failed to delete sales channel');
     },
   });
@@ -210,8 +206,7 @@ export const useSalesChannels = () => {
       queryClient.invalidateQueries({ queryKey: ['sales-channels', organizationId] });
       toast.success('Sales channels saved successfully');
     },
-    onError: (error: any) => {
-      console.error('Error saving sales channels:', error);
+    onError: () => {
       toast.error('Failed to save sales channels');
     },
   });

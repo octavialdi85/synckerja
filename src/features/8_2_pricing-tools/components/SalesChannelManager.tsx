@@ -208,8 +208,8 @@ export const SalesChannelManager = ({ onChannelsChange, initialChannels }: Sales
               if (channelsToSave.length > 0) {
                 try {
                   await saveMultipleChannels(channelsToSave);
-                } catch (error) {
-                  console.error('Error saving channels:', error);
+                } catch {
+                  // Error shown via mutation onError toast
                 }
               }
             }}

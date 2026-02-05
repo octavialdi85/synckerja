@@ -61,8 +61,8 @@ export const SimpleAttendanceCamera = ({ onAttendanceUpdate, onCameraStateChange
           }
         }
       }
-    } catch (error) {
-      console.error('Clock action failed:', error);
+    } catch {
+      // Clock action failed; toast handled by useSimpleAttendance
     } finally {
       setIsCapturing(false);
     }

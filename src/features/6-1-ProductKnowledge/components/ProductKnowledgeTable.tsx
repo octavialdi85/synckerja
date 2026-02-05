@@ -80,12 +80,10 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
               <tr>
                 <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="px-2 py-2 text-center border-r border-gray-200 border-b-2 border-gray-300">
                   <Checkbox 
-                    checked={data.length > 0 && selectedItems.length === data.length && data.length > 0}
+                    checked={data.length > 0 && data.every((item) => selectedItems.includes(item.id))}
                     onCheckedChange={(checked) => {
                       if (data.length > 0) {
-                        data.forEach(item => {
-                          onSelectItem(item.id, !!checked);
-                        });
+                        data.forEach((item) => onSelectItem(item.id, !!checked));
                       }
                     }}
                   />

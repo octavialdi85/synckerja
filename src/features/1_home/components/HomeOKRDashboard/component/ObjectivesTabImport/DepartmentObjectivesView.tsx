@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -82,6 +82,13 @@ export const DepartmentObjectivesView = ({
     data: employees = []
   } = useEmployees();
 
+  const activeEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const status = getEmployeeStatus(emp);
+      return status?.toLowerCase() !== 'terminated';
+    });
+  }, [employees]);
+
   // Get individual objectives ONLY for the specific department objectives
   // This prevents data sharing and improves performance
   const {
@@ -126,10 +133,7 @@ export const DepartmentObjectivesView = ({
           .eq('individual_objective_id', individualObjectiveId)
           .limit(1);
 
-        if (error) {
-          console.error('Error fetching key results for individual objective:', error);
-          return 0;
-        }
+        if (error) return 0;
 
         if (keyResults && keyResults.length > 0) {
           const keyResult = keyResults[0];
@@ -228,9 +232,6 @@ export const DepartmentObjectivesView = ({
     setShowCreateDialog(true);
   };
   const handleAddContribution = (departmentId: string) => {
-    console.log('Add Contribution clicked for department:', departmentId);
-    console.log('Setting selectedDepartmentId:', departmentId);
-    console.log('Opening contribution modal');
     setSelectedDepartmentId(departmentId);
     setShowContributionModal(true);
   };
@@ -298,7 +299,6 @@ export const DepartmentObjectivesView = ({
         toast.success(`Check-in berhasil untuk objective: ${objectiveTitle}`);
       }
     } catch (error) {
-      console.error('Error during check-in:', error);
       if (error instanceof GeolocationPositionError) {
         switch (error.code) {
           case error.PERMISSION_DENIED:
@@ -585,9 +585,7 @@ export const DepartmentObjectivesView = ({
           organizationId={organizationId}
           cycleId={finalCycleIds?.[0] || cycleId || ''}
           departmentId={selectedDepartmentId}
-          onSuccess={() => {
-            console.log('Department contribution created successfully');
-          }}
+          onSuccess={() => {}}
         />
       </div>
     );
@@ -731,9 +729,7 @@ export const DepartmentObjectivesView = ({
         cycleId={finalCycleIds?.[0] || cycleId || ''} 
         cycleIds={finalCycleIds} 
         departmentId={selectedDepartmentId}
-        onSuccess={() => {
-          console.log("Department contribution created successfully");
-        }} 
+        onSuccess={() => {}}
       />
       
       {/* Debug logging for cycle IDs - moved to useEffect above */}
@@ -750,9 +746,7 @@ export const DepartmentObjectivesView = ({
       if (!open) {
         setSelectedEmployee(null);
       }
-    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {
-      console.log('Individual objective created successfully');
-    }} />}
+    }} organizationId={organizationId} cycleId={cycleId || ''} employeeId={selectedEmployee} employeeName={activeEmployees.find(emp => emp.id === selectedEmployee)?.full_name || 'Unknown Employee'} onSuccess={() => {}} />}
 
       {/* Edit Department Objective Modal */}
       {editModal.open && editModal.objective && (
@@ -763,10 +757,7 @@ export const DepartmentObjectivesView = ({
           cycleId={cycleId || ''}
           departmentId={editModal.objective.department_id}
           editObjective={editModal.objective}
-          onSuccess={() => {
-            console.log('Department objective updated successfully');
-            setEditModal({ open: false });
-          }}
+          onSuccess={() => setEditModal({ open: false })}
         />
       )}
     </>

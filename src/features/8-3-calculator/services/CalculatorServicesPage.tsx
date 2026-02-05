@@ -11,9 +11,7 @@ import { ServiceKPISettings } from "../../8-3-CampaignCalculator/types/kpi-templ
 
 const CalculatorServicesPage = () => {
   const { t } = useAppTranslation();
-  
-  console.log('CalculatorServicesPage: Component rendering');
-  
+
   const [servicesSettings, setServicesSettings] = useState<ServiceKPISettings>({
     brandingBudget: "",
     brandingCpm: "",
@@ -50,8 +48,6 @@ const CalculatorServicesPage = () => {
       adType: settings.adType || 'meta',
     });
   }, []);
-
-  console.log('CalculatorServicesPage: About to render JSX');
 
   return (
     <StandardLayout>

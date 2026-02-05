@@ -19,8 +19,6 @@ export const useSubscriptionPlans = () => {
   return useQuery({
     queryKey: ['subscription-plans'],
     queryFn: async () => {
-      console.log('🔍 Fetching subscription plans from database...');
-      
       const { data, error } = await supabase
         .from('subscription_plans')
         .select('*')
@@ -28,11 +26,9 @@ export const useSubscriptionPlans = () => {
         .order('base_price_per_member', { ascending: true });
 
       if (error) {
-        console.error('❌ Subscription plans error:', error);
         throw error;
       }
-      
-      console.log('✅ Subscription plans loaded:', data?.length, data);
+
       return data as SubscriptionPlan[];
     },
     staleTime: 15 * 60 * 1000, // 15 minutes - plans don't change often

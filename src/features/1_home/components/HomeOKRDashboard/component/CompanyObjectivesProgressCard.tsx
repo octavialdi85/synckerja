@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Calendar, Plus, Target } from 'lucide-react';
 import { AddObjectiveDialog } from '../../AddObjectiveDialog';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
@@ -47,40 +47,22 @@ export const CompanyObjectivesProgressCard = ({
 }: SectionCompanyObjectivesProgressOverviewProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
   
-  // Default year quarter selection if not provided
+  const currentYear = new Date().getFullYear().toString();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentQuarter = currentMonth <= 3 ? 'Q1' : currentMonth <= 6 ? 'Q2' : currentMonth <= 9 ? 'Q3' : 'Q4';
   const defaultYearQuarterSelection: YearQuarterSelection = {
     years: {
-      [new Date().getFullYear().toString()]: {
+      [currentYear]: {
         selected: false,
-        quarters: {
-          'Q3': true // Default to current quarter
-        }
+        quarters: { [currentQuarter]: true }
       }
     }
   };
   
   const currentYearQuarterSelection = yearQuarterSelection || defaultYearQuarterSelection;
-  const prevLoadingRef = useRef<boolean | undefined>(undefined);
-  // #region agent log
-  useEffect(() => {
-    const prev = prevLoadingRef.current;
-    if (prev !== loading) {
-      prevLoadingRef.current = loading;
-      if (typeof fetch !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesProgressCard.tsx:loadingChange', message: 'ProgressCard loading changed', data: { loading, prev }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H5' }) }).catch(() => {});
-      }
-    }
-  }, [loading]);
-  // #endregion
 
   const handleYearQuarterChange = (selection: YearQuarterSelection) => {
-    logger.debug('🟡 SectionCompanyObjectivesProgressOverview - Year quarter selection changed:', selection);
-    if (onYearQuarterChange) {
-      logger.debug('🟡 Calling parent onYearQuarterChange');
-      onYearQuarterChange(selection);
-    } else {
-      logger.debug('🟡 No parent onYearQuarterChange handler provided');
-    }
+    if (onYearQuarterChange) onYearQuarterChange(selection);
   };
 
   const handleToggle = () => {
@@ -149,12 +131,6 @@ export const CompanyObjectivesProgressCard = ({
     };
   })();
 
-  // #region agent log
-  if (typeof fetch !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/c9a4cb8d-4352-4f3a-94df-51991f6f2fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CompanyObjectivesProgressCard.tsx:render', message: 'ProgressCard render', data: { loading, showingContent: !loading && !error, finalStatsTotal: finalStats.total }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1,H5' }) }).catch(() => {});
-  }
-  // #endregion
-
   return (
     <div className="space-y-3 flex-shrink-0">
 
@@ -165,7 +141,7 @@ export const CompanyObjectivesProgressCard = ({
             <div className="flex items-center">
               <Target className="h-5 w-5 text-blue-600 mr-2" />
               <h4 className="text-sm font-semibold text-gray-900">
-                Company Objectives - 2025
+                Company Objectives - {new Date().getFullYear()}
               </h4>
             </div>
             <div className="flex items-center space-x-3">

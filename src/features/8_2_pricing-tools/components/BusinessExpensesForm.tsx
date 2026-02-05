@@ -332,8 +332,8 @@ export const BusinessExpensesForm = ({
                       year: timePeriod === 'yearly' ? new Date().getFullYear() : undefined,
                     }))
                   );
-                } catch (error) {
-                  console.error('Error saving expenses:', error);
+                } catch {
+                  // Error shown via mutation onError toast
                 }
               }
             }}

@@ -8,10 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/features/ui/badge';
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-// import { useCreateIndividualObjective } from '@/hooks/organized/okr'; // TODO: File not found
-// import { useDepartmentObjectives } from '@/hooks/organized/okr'; // TODO: File not found
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { User, Target, AlertCircle, RefreshCcw } from 'lucide-react';
+import { useCreateIndividualObjective } from '../../../modal/useIndividualObjectives';
 import { useDepartmentObjectives } from '../../../modal/useDepartmentObjectives';
 
 interface CreateIndividualObjectiveModalProps {

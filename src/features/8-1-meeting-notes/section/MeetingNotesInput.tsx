@@ -29,10 +29,8 @@ const MeetingNotesInput = () => {
     if (!formData.discussion_point.trim()) return;
 
     setIsSubmitting(true);
-    
+
     try {
-      console.log('Submitting meeting point:', formData); // Debug log
-      
       const requestByName = employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by;
       await addMeetingPoint({
         discussion_point: formData.discussion_point,
@@ -47,8 +45,8 @@ const MeetingNotesInput = () => {
         request_by: formData.request_by, // Keep selected employee
         status: 'Not Started'
       });
-    } catch (error) {
-      console.error('Error submitting meeting point:', error);
+    } catch {
+      // Error handled by context / caller
     } finally {
       setIsSubmitting(false);
     }
@@ -64,7 +62,6 @@ const MeetingNotesInput = () => {
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      console.log('Enter pressed, submitting form'); // Debug log
       handleSubmit();
     }
   };

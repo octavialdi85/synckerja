@@ -35,7 +35,6 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
       });
 
       if (insertError) {
-        console.error('Error inserting blocker resolution:', insertError);
         toast({
           title: 'Error',
           description: `Failed to save resolution: ${insertError.message}`,
@@ -44,9 +43,7 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
         setSaving(false);
         return;
       }
-      
-      console.log('✅ Blocker resolution saved with ID:', resolutionId);
-      
+
       // Trigger callback if provided (to update is_resolved flag)
       if (onResolutionComplete) {
         await onResolutionComplete();
@@ -59,8 +56,7 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
         title: 'Success',
         description: 'Blocker resolution saved successfully',
       });
-    } catch (error: any) {
-      console.error('Unexpected error saving blocker resolution:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',

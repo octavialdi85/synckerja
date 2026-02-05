@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { Search, FilterX, CalendarIcon, Plus, Building2 } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
@@ -221,14 +221,6 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       customEndDate: format(endDate, 'yyyy-MM-dd')
     }));
   };
-
-  // Effect to handle opening popover after Select closes
-  useEffect(() => {
-    if (isPlanDatePickerOpen && planDateSelectTriggerRef.current) {
-      // Popover will position relative to the trigger
-      // The trigger is the SelectTrigger which is already rendered
-    }
-  }, [isPlanDatePickerOpen]);
 
   const handlePlanDateRangeChange = (value: string) => {
     if (value === 'custom_month_plan') {

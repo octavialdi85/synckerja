@@ -107,14 +107,7 @@ export const PerformanceTable = () => {
       try {
         // Get date range from filters for server-side filtering
         const { start, end } = getDateRangeForRPC();
-        
-        console.log('🔍 Fetching resolved blockers with date filter:', {
-          organizationId,
-          start,
-          end,
-          timePeriod: filters.timePeriod
-        });
-        
+
         // Call RPC with date parameters (server-side filtering for better performance)
         const { data: resolvedData, error } = await (supabase as any).rpc('get_all_resolved_blockers', {
           p_organization_id: organizationId,
@@ -126,7 +119,6 @@ export const PerformanceTable = () => {
         if (isCancelled) return; // Check if request was cancelled
 
         if (error) {
-          console.error('❌ Error loading resolved blockers:', error);
           if (!isCancelled) {
             setResolvedRows([]);
             toast({
@@ -139,7 +131,6 @@ export const PerformanceTable = () => {
         }
 
         if (!resolvedData || resolvedData.length === 0) {
-          console.log('📭 No resolved blockers found for selected date range');
           if (!isCancelled) {
             setResolvedRows([]);
           }
@@ -169,11 +160,9 @@ export const PerformanceTable = () => {
 
         if (!isCancelled) {
           setResolvedRows(mapped);
-          console.log('✅ Loaded resolved blockers:', mapped.length);
         }
-      } catch (error: any) {
+      } catch {
         if (!isCancelled) {
-          console.error('Error in fetchResolvedDetails:', error);
           setResolvedRows([]);
           toast({
             title: 'Error',
@@ -212,12 +201,6 @@ export const PerformanceTable = () => {
     // Prevent duplicate requests
     setIsSaving(true);
 
-    console.log('🔄 Saving resolution edit:', {
-      id: editingRow.id,
-      task_step_history_id: editingRow.task_step_history_id,
-      newDescription: editResolutionText.trim()
-    });
-
     try {
       // Update using id as the WHERE clause (primary key - more efficient)
       const { data, error } = await supabase
@@ -228,7 +211,6 @@ export const PerformanceTable = () => {
         .single();
 
       if (error) {
-        console.error('❌ Error updating resolution:', error);
         toast({
           title: 'Error',
           description: `Failed to update resolution: ${error.message}`,
@@ -236,8 +218,6 @@ export const PerformanceTable = () => {
         });
         return;
       }
-
-      console.log('✅ Resolution updated successfully:', data);
 
       // Update local state
       setResolvedRows(prev => prev.map(row => 
@@ -253,8 +233,7 @@ export const PerformanceTable = () => {
         title: 'Success',
         description: 'Resolution details updated successfully',
       });
-    } catch (error: any) {
-      console.error('❌ Unexpected error updating resolution:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',
@@ -281,7 +260,6 @@ export const PerformanceTable = () => {
         .eq('id', rowToDelete.id);
 
       if (deleteResError) {
-        console.error('Error deleting resolution:', deleteResError);
         toast({
           title: 'Error',
           description: `Failed to delete resolution: ${deleteResError.message}`,
@@ -298,7 +276,6 @@ export const PerformanceTable = () => {
         .eq('id', rowToDelete.task_step_history_id);
 
       if (updateError) {
-        console.error('Error updating blocker status:', updateError);
         toast({
           title: 'Warning',
           description: 'Resolution deleted but blocker status not updated',
@@ -314,8 +291,7 @@ export const PerformanceTable = () => {
         title: 'Success',
         description: 'Resolution deleted successfully',
       });
-    } catch (error: any) {
-      console.error('Error deleting resolution:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',

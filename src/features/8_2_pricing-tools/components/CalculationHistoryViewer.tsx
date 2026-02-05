@@ -54,8 +54,8 @@ export const CalculationHistoryViewer = ({ onLoadCalculation }: CalculationHisto
       await deleteCalculation(calculation.id);
       setDeleteDialogOpen(false);
       setSelectedCalculation(null);
-    } catch (error) {
-      console.error('Error deleting calculation:', error);
+    } catch {
+      // Error shown via mutation onError toast
     }
   };
 
@@ -67,8 +67,6 @@ export const CalculationHistoryViewer = ({ onLoadCalculation }: CalculationHisto
   const handleLoadCalculation = (calculation: SavedCalculation, closeDialog = false) => {
     if (onLoadCalculation) {
       onLoadCalculation(calculation);
-    } else {
-      console.warn('onLoadCalculation prop is not provided');
     }
     if (closeDialog) {
       setViewDialogOpen(false);
@@ -96,8 +94,8 @@ export const CalculationHistoryViewer = ({ onLoadCalculation }: CalculationHisto
       setEditDialogOpen(false);
       setSelectedCalculation(null);
       setEditCalculationName('');
-    } catch (error) {
-      console.error('Error updating calculation:', error);
+    } catch {
+      // Error shown via mutation onError toast
     }
   };
 

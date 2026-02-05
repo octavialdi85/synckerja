@@ -27,8 +27,6 @@ export const usePendingSubscriptionChanges = () => {
     queryFn: async () => {
       if (!organizationId) throw new Error('No organization ID');
 
-      console.log('🔍 Fetching pending subscription changes for org:', organizationId);
-
       const { data, error } = await supabase
         .from('subscription_change_requests')
         .select(`
@@ -39,7 +37,6 @@ export const usePendingSubscriptionChanges = () => {
         .order('scheduled_date', { ascending: true });
 
       if (error) {
-        console.error('❌ Error fetching pending changes:', error);
         throw error;
       }
 
@@ -60,7 +57,6 @@ export const usePendingSubscriptionChanges = () => {
         .in('id', planIds);
 
       if (plansError) {
-        console.error('❌ Error fetching plans:', plansError);
         throw plansError;
       }
 
@@ -71,7 +67,6 @@ export const usePendingSubscriptionChanges = () => {
         target_plan: plans?.find((p: any) => p.id === item.target_plan_id)
       }));
 
-      console.log('✅ Pending subscription changes loaded:', enhancedData?.length || 0);
       return (enhancedData || []) as PendingSubscriptionChange[];
     },
     enabled: !!organizationId,

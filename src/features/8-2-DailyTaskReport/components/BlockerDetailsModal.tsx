@@ -46,7 +46,6 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
         .eq('id', resolutionFor.id);
       
       if (error) {
-        console.error('Error updating blocker resolution status:', error);
         toast({
           title: 'Error',
           description: `Failed to mark blocker as resolved: ${error.message}`,
@@ -61,19 +60,14 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
           p_task_step_history_ids: [resolutionFor.id]
         });
       
-      if (checkError) {
-        console.error('Error verifying blocker resolution:', checkError);
-      } else if (!resolutionCheck || resolutionCheck.length === 0) {
-        console.warn('⚠️ Blocker marked as resolved but no resolution entry found in task_step_history_blocker_resolved');
+      if (!checkError && (!resolutionCheck || resolutionCheck.length === 0)) {
         toast({
           title: 'Warning',
           description: 'Blocker marked as resolved but resolution details may not have been saved',
           variant: 'destructive',
         });
-      } else {
-        console.log('✅ Resolution verified:', resolutionCheck[0]);
       }
-      
+
       // Update local state to remove from active blockers list
       setLocalItems(prev => prev.filter(it => it.id !== resolutionFor.id));
       
@@ -87,8 +81,7 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
         title: 'Success',
         description: 'Blocker marked as resolved',
       });
-    } catch (error: any) {
-      console.error('Unexpected error in handleResolutionComplete:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred while updating blocker status',
@@ -114,7 +107,6 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
         });
         
         if (error) {
-          console.error('Error loading resolved blockers:', error);
           setResolvedRows([]);
           return;
         }
@@ -133,9 +125,7 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
           };
         });
         setResolvedRows(mapped);
-        console.log('✅ Loaded resolved blockers in details modal:', mapped.length);
-      } catch (error) {
-        console.error('Error in loadResolved:', error);
+      } catch {
         setResolvedRows([]);
       } finally {
         setIsLoadingResolved(false);

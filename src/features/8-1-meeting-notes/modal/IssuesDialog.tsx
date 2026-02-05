@@ -98,14 +98,13 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
         try {
           const updates = await getUpdateHistory(solution.id);
           updateCounts[solution.id] = updates.length;
-        } catch (error) {
-          console.error(`Error loading update count for solution ${solution.id}:`, error);
+        } catch {
           updateCounts[solution.id] = 0;
         }
       }
       setSolutionUpdateCounts(updateCounts);
-    } catch (error) {
-      console.error('Error loading data:', error);
+    } catch {
+      // Load failed
     } finally {
       setIsLoading(false);
     }
@@ -119,8 +118,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await addIssue(meetingPointId, newIssue);
       await loadData();
       setNewIssue('');
-    } catch (error) {
-      console.error('Error adding issue:', error);
+    } catch {
+      // Add issue failed
     } finally {
       setIsSubmitting(false);
     }
@@ -139,8 +138,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setEditingIssueId(null);
       setEditingIssueText('');
-    } catch (error) {
-      console.error('Error updating issue:', error);
+    } catch {
+      // Update issue failed
     }
   };
 
@@ -157,8 +156,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     try {
       await deleteIssue(issueId);
       await loadData();
-    } catch (error) {
-      console.error('Error deleting issue:', error);
+    } catch {
+      // Delete issue failed
     }
   };
 
@@ -171,8 +170,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setNewSolution('');
       setSelectedIssueId('');
-    } catch (error) {
-      console.error('Error adding solution:', error);
+    } catch {
+      // Add solution failed
     } finally {
       setIsSubmitting(false);
     }
@@ -191,8 +190,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setEditingSolutionId(null);
       setEditingSolutionText('');
-    } catch (error) {
-      console.error('Error updating solution:', error);
+    } catch {
+      // Update solution failed
     }
   };
 
@@ -209,8 +208,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     try {
       await deleteSolution(solutionId);
       await loadData();
-    } catch (error) {
-      console.error('Error deleting solution:', error);
+    } catch {
+      // Delete solution failed
     }
   };
 
@@ -225,8 +224,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setNotesIssueId(null);
       setEditingIssueNotes('');
-    } catch (error) {
-      console.error('Error saving issue notes:', error);
+    } catch {
+      // Save issue notes failed
     }
   };
 
@@ -246,8 +245,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setNotesSolutionId(null);
       setEditingSolutionNotes('');
-    } catch (error) {
-      console.error('Error saving solution notes:', error);
+    } catch {
+      // Save solution notes failed
     }
   };
 

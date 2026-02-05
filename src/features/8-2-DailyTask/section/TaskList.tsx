@@ -120,8 +120,7 @@ export const TaskList = () => {
           title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
           description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
         });
-        updateTask(task.id, { status: newStatus }).catch((err) => {
-          console.error('Error updating task status:', err);
+        updateTask(task.id, { status: newStatus }).catch(() => {
           toast({ title: 'Error', description: 'Failed to update task status', variant: 'destructive' });
         });
       }
@@ -138,8 +137,7 @@ export const TaskList = () => {
         title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
         description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
       });
-      updateTask(task.id, { status: newStatus }).catch((err) => {
-        console.error('Error updating task status:', err);
+      updateTask(task.id, { status: newStatus }).catch(() => {
         toast({ title: 'Error', description: 'Failed to update task status', variant: 'destructive' });
       });
     } else if (!isFullComplete && task.status !== 'completed') {

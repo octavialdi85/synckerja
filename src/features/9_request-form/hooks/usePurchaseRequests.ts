@@ -96,15 +96,11 @@ export const usePurchaseRequests = () => {
   return useQuery({
     queryKey: ['purchase-requests', organizationId],
     queryFn: async () => {
-      console.log('Fetching purchase requests for organization:', organizationId);
-      
       if (!organizationId) {
-        console.log('No organization ID found');
         return [];
       }
 
       try {
-        // First, try to fetch with joins
         const { data, error } = await supabase
           .from('purchase_requests')
           .select(`
@@ -116,12 +112,9 @@ export const usePurchaseRequests = () => {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Error fetching purchase requests:', error);
           throw error;
         }
-        
-        console.log('Fetched purchase requests:', data);
-        
+
         return (data || []).map(item => {
           // Handle expense_types join - could be object, array, or null
           let expenseTypes = null;
@@ -143,15 +136,6 @@ export const usePurchaseRequests = () => {
             }
           }
           
-          // Log for debugging if expense_type_id exists but expense_types is null
-          if (item.expense_type_id && !expenseTypes) {
-            console.warn('Expense type join failed for purchase request:', {
-              id: item.id,
-              expense_type_id: item.expense_type_id,
-              expense_types: item.expense_types
-            });
-          }
-          
           return {
             ...item,
             // Keep original_receipt_amount as string since database expects string
@@ -163,7 +147,6 @@ export const usePurchaseRequests = () => {
           } as PurchaseRequest;
         });
       } catch (error) {
-        console.error('Failed to fetch purchase requests:', error);
         throw error;
       }
     },
@@ -293,8 +276,7 @@ export const useCreatePurchaseRequest = () => {
         });
       }
     },
-    onError: (error) => {
-      console.error('Purchase request error:', error);
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to submit purchase request. Please try again.",
@@ -410,8 +392,7 @@ export const useUpdatePurchaseRequestStatus = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
     },
-    onError: (error) => {
-      console.error('Status update error:', error);
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to update status. Please try again.",
@@ -432,9 +413,6 @@ export const useDeletePurchaseRequest = () => {
         throw new Error('Organization not found');
       }
 
-      console.log('🗑️ Starting deletion process for purchase request:', id);
-      console.log('📋 Organization ID:', organizationId);
-
       // Step 1: Verify purchase request exists and belongs to organization
       const { data: existingRequest, error: fetchError } = await supabase
         .from('purchase_requests')
@@ -443,25 +421,16 @@ export const useDeletePurchaseRequest = () => {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('❌ Error fetching purchase request:', fetchError);
         throw new Error(`Failed to verify purchase request: ${fetchError.message}`);
       }
 
       if (!existingRequest) {
-        console.error('❌ Purchase request not found');
-        console.error('   Request ID:', id);
-        console.error('   Organization ID:', organizationId);
         throw new Error('Purchase request not found');
       }
 
       if (existingRequest.organization_id !== organizationId) {
-        console.error('❌ Purchase request does not belong to organization');
-        console.error('   Request Organization ID:', existingRequest.organization_id);
-        console.error('   Current Organization ID:', organizationId);
         throw new Error('Purchase request does not belong to your organization');
       }
-
-      console.log('✅ Purchase request verified, proceeding with deletion');
 
       // Step 2: Get all documents for this request BEFORE deleting
       const { data: documents, error: documentsError } = await supabase
@@ -470,11 +439,8 @@ export const useDeletePurchaseRequest = () => {
         .eq('purchase_request_id', id);
 
       let filePaths: string[] = [];
-      if (documentsError) {
-        console.warn('⚠️ Error fetching documents (continuing anyway):', documentsError);
-      } else if (documents && documents.length > 0) {
+      if (!documentsError && documents && documents.length > 0) {
         filePaths = documents.map(doc => doc.file_path);
-        console.log('📄 Found', filePaths.length, 'document(s) to delete');
       }
 
       // Step 3: Delete the purchase request itself
@@ -485,20 +451,12 @@ export const useDeletePurchaseRequest = () => {
         .select();
 
       if (deleteError) {
-        console.error('❌ Error deleting purchase request from database:', deleteError);
-        console.error('   Error code:', deleteError.code);
-        console.error('   Error message:', deleteError.message);
         throw new Error(`Failed to delete purchase request: ${deleteError.message}`);
       }
 
       if (!deletedData || deletedData.length === 0) {
-        console.error('❌ No purchase request was deleted (may be blocked by RLS policy)');
-        console.error('   Request ID:', id);
-        console.error('   Organization ID:', organizationId);
         throw new Error('Purchase request was not deleted. It may be blocked by security policy.');
       }
-
-      console.log('✅ Purchase request deleted successfully from database');
 
       // Step 3: Delete files from storage (if documents existed)
       if (filePaths.length > 0) {
@@ -507,27 +465,18 @@ export const useDeletePurchaseRequest = () => {
           .remove(filePaths);
 
         if (storageError) {
-          console.warn('⚠️ Error deleting files from storage (files may be orphaned):', storageError);
-          // Don't throw - request is already deleted, just log the warning
-        } else {
-          console.log('✅ Files deleted from storage:', filePaths.length, 'files');
+          // Don't throw - request is already deleted; files may be orphaned
         }
       }
 
       // Step 4: Clean up any orphaned document records (in case cascade didn't work)
       if (filePaths.length > 0) {
-        const { error: cleanupError } = await supabase
+        await supabase
           .from('purchase_request_documents')
           .delete()
           .eq('purchase_request_id', id);
-
-        if (cleanupError) {
-          console.warn('⚠️ Error cleaning up document records (may already be deleted):', cleanupError);
-          // Don't throw - request is already deleted
-        }
       }
 
-      console.log('✅ Deleted purchase request ID:', id);
       return id;
     },
     onSuccess: (deletedId) => {
@@ -539,7 +488,6 @@ export const useDeletePurchaseRequest = () => {
             if (!oldData) return oldData;
             // Filter out the deleted request
             const filtered = oldData.filter((request) => request.id !== deletedId);
-            console.log('✅ Data removed from cache. Remaining items:', filtered.length);
             return filtered;
           }
         );
@@ -550,8 +498,7 @@ export const useDeletePurchaseRequest = () => {
         description: "Purchase request deleted successfully.",
       });
     },
-    onError: (error: any) => {
-      console.error('❌ Failed to delete purchase request:', error);
+    onError: () => {
       // Revalidate queries on error to restore correct state
       queryClient.invalidateQueries({ queryKey: ['purchase-requests'] });
       toast({

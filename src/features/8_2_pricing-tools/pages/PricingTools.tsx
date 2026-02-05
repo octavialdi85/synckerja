@@ -58,9 +58,8 @@ const PricingTools = () => {
         wizardRef.current.loadCalculation(calculation);
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        console.error('PricingWizard ref is not available');
       }
+      // If wizardRef not yet available, load will be retried on next mount
     }, 100);
   }, []);
 

@@ -118,8 +118,7 @@ export const useCreateLoanRequest = () => {
         });
       }
     },
-    onError: (error) => {
-      console.error('Loan request error:', error);
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to submit loan request. Please try again.",

@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { useToast } from '@/features/ui/use-toast';
 import { Trash2, Edit, Clock } from 'lucide-react';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
-import { logger } from '@/config/logger';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,18 +20,8 @@ import {
 } from '@/features/ui/alert-dialog';
 
 export const BlockersAndUpdatesPanel = () => {
-  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading, blockers: rawBlockers } = useDailyTaskReport() as any;
+  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport() as any;
   const [activeTab, setActiveTab] = useState<'blockers' | 'updates'>('blockers');
-  
-  // Debug logging
-  React.useEffect(() => {
-    logger.debug('🔍 BlockersAndUpdatesPanel - Debug:', {
-      rawBlockersCount: rawBlockers?.length || 0,
-      filteredBlockersCount: blockers?.length || 0,
-      loading,
-      sampleBlocker: blockers?.[0]
-    });
-  }, [blockers, rawBlockers, loading]);
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
   const [resolutionFor, setResolutionFor] = useState<any | null>(null);
@@ -78,19 +67,14 @@ export const BlockersAndUpdatesPanel = () => {
           p_task_step_history_ids: [resolutionFor.id]
         });
       
-      if (checkError) {
-        console.error('Error verifying blocker resolution:', checkError);
-      } else if (!resolutionCheck || resolutionCheck.length === 0) {
-        console.warn('⚠️ Blocker marked as resolved but no resolution entry found in task_step_history_blocker_resolved');
+      if (!checkError && (!resolutionCheck || resolutionCheck.length === 0)) {
         toast({
           title: 'Warning',
           description: 'Blocker marked as resolved but resolution details may not have been saved',
           variant: 'destructive',
         });
-      } else {
-        logger.debug('✅ Resolution verified:', resolutionCheck[0]);
       }
-      
+
       // Update local state
       setLocResolved(prev => ({ ...prev, [resolutionFor.id]: true }));
       
@@ -101,8 +85,7 @@ export const BlockersAndUpdatesPanel = () => {
         title: 'Success',
         description: 'Blocker marked as resolved',
       });
-    } catch (error: any) {
-      console.error('Unexpected error in handleResolutionComplete:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred while updating blocker status',
@@ -127,7 +110,6 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', deletingBlocker.id);
 
       if (error) {
-        console.error('Error deleting blocker:', error);
         toast({
           title: 'Error',
           description: `Failed to delete blocker: ${error.message}`,
@@ -144,7 +126,7 @@ export const BlockersAndUpdatesPanel = () => {
           .eq('task_step_history_id', deletingBlocker.id);
 
         if (resError) {
-          console.warn('Could not delete resolution entry:', resError);
+          // Resolution entry delete failed (non-blocking)
         }
       }
 
@@ -156,8 +138,7 @@ export const BlockersAndUpdatesPanel = () => {
         title: 'Success',
         description: 'Blocker deleted successfully',
       });
-    } catch (error: any) {
-      console.error('Unexpected error deleting blocker:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',
@@ -185,7 +166,6 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', editingBlocker.id);
 
       if (error) {
-        console.error('Error updating blocker:', error);
         toast({
           title: 'Error',
           description: `Failed to update blocker: ${error.message}`,
@@ -205,8 +185,7 @@ export const BlockersAndUpdatesPanel = () => {
 
       // Trigger re-render by forcing a state update
       window.location.reload();
-    } catch (error: any) {
-      console.error('Unexpected error updating blocker:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred',

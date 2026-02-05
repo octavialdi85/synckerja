@@ -60,8 +60,6 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
 
   // ENHANCED NULL CHECK with Fallback Data
   if (!subscriptionStatus || quickStats.length === 0) {
-    console.log('⚠️ MetricCards - No subscription status, showing loading cards');
-    
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
         <Card className="border-slate-200 shadow-sm">
@@ -116,8 +114,6 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
   }
 
   // Render real subscription data
-  console.log('✅ MetricCards - Rendering subscription data from Supabase');
-  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
       {quickStats.map((stat, index) => (

@@ -99,8 +99,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       if (issuesData.length > 0 && !selectedIssueId) {
         setSelectedIssueId(issuesData[0].id);
       }
-    } catch (error) {
-      console.error('Error loading issues:', error);
+    } catch {
+      // Load issues failed
     }
   };
 
@@ -129,8 +129,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         // If no solutionId, solutions will be filtered by selectedIssueId in useEffect
         // Don't auto-select here, let the useEffect handle it
       }
-    } catch (error) {
-      console.error('Error loading solutions:', error);
+    } catch {
+      // Load solutions failed
     }
   };
 
@@ -166,8 +166,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         const history = await getUpdateHistoryByMeetingPoint(meetingPointId);
         setUpdateHistory(history);
       }
-    } catch (error) {
-      console.error('Error loading update history:', error);
+    } catch {
+      // Load update history failed
     } finally {
       setIsLoading(false);
     }
@@ -197,8 +197,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       
       setNewUpdate('');
       setNewStatus('');
-    } catch (error) {
-      console.error('Error adding update:', error);
+    } catch {
+      // Add update failed
     } finally {
       setIsSubmitting(false);
     }
@@ -230,8 +230,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       await loadUpdateHistory();
       setEditingUpdateId(null);
       setEditingText('');
-    } catch (error) {
-      console.error('Error updating:', error);
+    } catch {
+      // Update failed
     }
   };
 
@@ -250,8 +250,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       
       // Reload update history
       await loadUpdateHistory();
-    } catch (error) {
-      console.error('Error deleting update:', error);
+    } catch {
+      // Delete update failed
     }
   };
 

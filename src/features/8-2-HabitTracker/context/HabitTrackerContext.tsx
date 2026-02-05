@@ -110,17 +110,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
             }
           }
         }
-        
-        // Debug: Log parsed data for habits with checklist_names, weekly_days, or monthly_dates
-        if ((checklistNames && checklistNames.length > 0) || (weeklyDays && weeklyDays.length > 0) || (monthlyDates && monthlyDates.length > 0)) {
-          console.log(`[HabitTrackerContext] Parsed habit "${habit.name}":`, {
-            id: habit.id,
-            checklist_names: checklistNames,
-            weekly_days: weeklyDays,
-            monthly_dates: monthlyDates,
-          });
-        }
-        
+
         return {
           ...habit,
           checklist_names: checklistNames,

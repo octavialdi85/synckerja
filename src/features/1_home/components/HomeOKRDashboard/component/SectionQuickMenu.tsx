@@ -56,27 +56,20 @@ export const SectionQuickMenu = ({
   const workingHoursToday = todayRecord ? calculateWorkingHours(todayRecord) : t('quickMenu.workingTimeZero', '0 hours 0 minutes');
 
   const handleRiwayatAbsensi = async () => {
-    console.log('🔍 Riwayat Absensi clicked, employeeData:', employeeData);
-    
     if (employeeLoading) {
       toast.info(t('quickMenu.loadingEmployee', 'Loading employee data...'));
       return;
     }
-    
     if (employeeData?.id) {
-      console.log('✅ Navigating to attendance page with employee ID:', employeeData.id);
       setIsNavigating(true);
       try {
         navigate(`/my-info/attendance?id=${employeeData.id}`);
-      } catch (error) {
-        console.error('Navigation error:', error);
+      } catch {
         toast.error(t('quickMenu.failedToOpenHistory', 'Failed to open attendance history page'));
       } finally {
         setIsNavigating(false);
       }
     } else {
-      console.warn('⚠️ No employee data available for navigation');
-      // Show a toast notification to inform the user
       toast.error(t('quickMenu.employeeDataNotAvailable', 'Employee data is not available. Please refresh the page or contact administrator.'));
     }
   };
@@ -93,10 +86,7 @@ export const SectionQuickMenu = ({
     setIsModalOpen(false);
   };
 
-  const handleStatusCreated = () => {
-    // Handle status creation if needed
-    console.log('Status created successfully');
-  };
+  const handleStatusCreated = () => {};
 
   return (
     <Card className="border border-border h-full flex flex-col overflow-hidden">

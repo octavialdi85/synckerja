@@ -93,19 +93,6 @@ export const UpgradeConfirmationModal = ({
   // The component itself will handle the actual removal requirement check
   const requiresRemoval = isDowngrade;
 
-  // Debug logging
-  if (isDowngrade) {
-    console.log('🔍 UpgradeConfirmationModal - Downgrade detected:', {
-      effectiveCurrentCount,
-      effectiveNewCount,
-      currentEmployeeCount,
-      propCurrentEmployeeCount,
-      fetchedEmployeeCount,
-      requiresRemoval,
-      proRatedData: proRatedData?.calculation
-    });
-  }
-
   // Reset selection state when requiresRemoval changes
   useEffect(() => {
     if (!requiresRemoval) {
@@ -167,14 +154,11 @@ export const UpgradeConfirmationModal = ({
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date string:', dateStr);
       return t('subscription.plans.modal.date.invalid', 'Invalid date');
     }
-    
-    // Check if date is in the past (shouldn't happen for scheduled changes)
+
     const now = new Date();
     if (date < now) {
-      console.warn('Scheduled date is in the past:', dateStr);
       // For past dates, show current date + 1 day as fallback
       const tomorrow = new Date(now);
       tomorrow.setDate(now.getDate() + 1);
