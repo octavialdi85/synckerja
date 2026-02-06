@@ -21,7 +21,7 @@ export const useOptimizedFiltering = (
       monthEnd = endOfMonth(selectedMonth);
     }
     
-    return contentPlans.filter(plan => {
+    const result = contentPlans.filter(plan => {
       // Month filter - filter by post_date
       let matchesMonth = true;
       if (monthStart && monthEnd && plan.post_date) {
@@ -122,5 +122,6 @@ export const useOptimizedFiltering = (
 
       return matchesMonth && matchesSearch && matchesStatus && matchesService;
     });
+    return result;
   }, [contentPlans, searchTerm, statusFilter, selectedMonth, serviceFilter]);
 };

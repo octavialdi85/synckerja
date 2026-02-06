@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calculator, Megaphone } from 'lucide-react';
+import { Calculator, Megaphone, Tag } from 'lucide-react';
 
 interface PricingToolsHeaderAndTabProps {
   activeTab: string;
@@ -12,6 +12,13 @@ export const PricingToolsHeaderAndTab = ({ activeTab, onTabChange }: PricingTool
   const location = useLocation();
 
   const tabs = [
+    {
+      id: 'default-prices',
+      label: 'Default Prices',
+      icon: Tag,
+      description: 'Set default price per Service + Category for lead conversion',
+      route: '/tools/default-prices'
+    },
     {
       id: 'pricing',
       label: 'Pricing Tools',
@@ -37,6 +44,9 @@ export const PricingToolsHeaderAndTab = ({ activeTab, onTabChange }: PricingTool
   };
 
   const getActiveTab = () => {
+    if (location.pathname === '/tools/default-prices') {
+      return 'default-prices';
+    }
     if (location.pathname === '/tools/promo-simulation') {
       return 'promo';
     }

@@ -278,10 +278,11 @@ Deno.serve(async (req: Request) => {
       }
       const { data: convBefore } = await supabaseAdmin
         .from("whatsapp_conversations")
-        .select("lead_status_id")
+        .select("lead_status_id, organization_id, ticket_id")
         .eq("id", conversationId)
         .maybeSingle();
       const statusIdBefore = convBefore?.lead_status_id ?? null;
+      const convOrgId = convBefore?.organization_id ?? null;
       let statusNameBefore: string | null = null;
       if (statusIdBefore) {
         const { data: st } = await supabaseAdmin
@@ -292,6 +293,8 @@ Deno.serve(async (req: Request) => {
         statusNameBefore = (st?.name as string) ?? null;
       }
 
+      let returnedLeadStatusId: string | null = null;
+
       await supabaseAdmin
         .from("whatsapp_conversations")
         .update({
@@ -301,20 +304,56 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", conversationId);
 
-      if (statusNameBefore?.trim().toLowerCase() === "open") {
-        const { data: inProgressStatus } = await supabaseAdmin
-          .from("lead_statuses")
-          .select("id")
-          .eq("name", "In Progress")
-          .maybeSingle();
-        console.log("Unread→On Going:", { conversationId, statusNameBefore, inProgressId: inProgressStatus?.id ?? "MISSING" });
+      // Treat null (unset), "Open", or "Unread" as Unread → update to In Progress on first outbound reply
+      const statusLower = statusNameBefore?.trim().toLowerCase() ?? "";
+      const isOpenOrUnset =
+        !statusNameBefore || statusLower === "open" || statusLower === "unread";
+      if (!isOpenOrUnset) {
+        console.log("send-whatsapp-message: skip In Progress update (status not Open/Unread)", {
+          conversationId,
+          statusNameBefore,
+          isOpenOrUnset,
+        });
+      }
+      if (isOpenOrUnset) {
+        // Multi-tenant: prefer status for conversation's org, fallback to default (organization_id IS NULL)
+        let inProgressStatus: { id: string } | null = null;
+        if (convOrgId) {
+          const { data: orgStatus } = await supabaseAdmin
+            .from("lead_statuses")
+            .select("id")
+            .eq("organization_id", convOrgId)
+            .eq("name", "In Progress")
+            .maybeSingle();
+          inProgressStatus = orgStatus;
+        }
+        if (!inProgressStatus?.id) {
+          const { data: defaultStatus } = await supabaseAdmin
+            .from("lead_statuses")
+            .select("id")
+            .is("organization_id", null)
+            .eq("name", "In Progress")
+            .maybeSingle();
+          inProgressStatus = defaultStatus;
+        }
+        console.log("Unread→In Progress:", { conversationId, statusNameBefore, inProgressId: inProgressStatus?.id ?? "MISSING" });
         if (inProgressStatus?.id) {
+          returnedLeadStatusId = inProgressStatus.id;
           const { error: updateErr } = await supabaseAdmin
             .from("whatsapp_conversations")
             .update({ lead_status_id: inProgressStatus.id, updated_at: now })
             .eq("id", conversationId);
-          if (updateErr) console.error("Update to In Progress (On Going) failed:", updateErr);
-          else console.log("Status updated to On Going:", conversationId);
+          if (updateErr) console.error("Update to In Progress failed:", updateErr);
+          else console.log("Status updated to In Progress:", conversationId);
+          const ticketId = (convBefore?.ticket_id as string) ?? `WA-${conversationId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+          if (convOrgId) {
+            const { error: leadErr } = await supabaseAdmin
+              .from("leads")
+              .update({ status_id: inProgressStatus.id, updated_at: now })
+              .eq("organization_id", convOrgId)
+              .eq("ticket_id", ticketId);
+            if (leadErr) console.error("Sync leads.status_id to In Progress failed:", leadErr);
+          }
           const { data: currentCycle } = await supabaseAdmin
             .from("whatsapp_conversation_cycles")
             .select("id")
@@ -330,7 +369,10 @@ Deno.serve(async (req: Request) => {
               .eq("id", currentCycle.id);
           }
         } else {
-          console.warn("Cannot set On Going: lead_statuses has no row with name 'In Progress'.");
+          console.warn("Cannot set In Progress: lead_statuses has no row with name 'In Progress'.", {
+            conversationId,
+            convOrgId,
+          });
         }
       }
 
@@ -339,6 +381,7 @@ Deno.serve(async (req: Request) => {
           success: true,
           message_id: waMessageId,
           message: insertedMessage ?? null,
+          lead_status_id: returnedLeadStatusId ?? undefined,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

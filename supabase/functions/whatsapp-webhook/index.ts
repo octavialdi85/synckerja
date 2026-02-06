@@ -180,6 +180,59 @@ async function resolveInboundMediaUrl(
   }
 }
 
+/** Insert a lead row when a new WhatsApp/Instagram conversation is created. Link by ticket_id (WA-xxx). */
+async function ensureLeadForNewConversation(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  convId: string,
+  channel: "whatsapp" | "instagram",
+  client: string,
+  title: string,
+  customerWaId?: string | null
+): Promise<void> {
+  const ticketId = "WA-" + String(convId).replace(/-/g, "").slice(0, 8).toUpperCase();
+  const { data: existing } = await supabase.from("leads").select("id").eq("ticket_id", ticketId).maybeSingle();
+  if (existing) return;
+
+  const { data: unreadStatus } = await supabase
+    .from("lead_statuses")
+    .select("id")
+    .eq("name", "Unread")
+    .limit(1)
+    .maybeSingle();
+  const statusId = unreadStatus?.id ?? null;
+  if (!statusId) {
+    console.warn("ensureLeadForNewConversation: no Unread status in lead_statuses, skip lead insert");
+    return;
+  }
+
+  const source = channel === "instagram" ? "Instagram" : "WhatsApp";
+  const safeClient = (client && String(client).trim()) || source;
+  const safeTitle = (title && String(title).trim().slice(0, 100)) || source;
+  const phoneNumber = source === "WhatsApp" && customerWaId ? String(customerWaId).trim() || null : null;
+
+  const { error } = await supabase.from("leads").insert({
+    ticket_id: ticketId,
+    client: safeClient,
+    title: safeTitle,
+    category: "",
+    created_by: "00000000-0000-0000-0000-000000000000",
+    created_by_name: "System",
+    assignee: "",
+    status_id: statusId,
+    organization_id: orgId,
+    source,
+    services: null,
+    followup: 0,
+    phone_number: phoneNumber,
+  });
+  if (error) {
+    console.error("ensureLeadForNewConversation: insert error", error);
+    return;
+  }
+  console.log("ensureLeadForNewConversation: lead created", { ticket_id: ticketId, source });
+}
+
 Deno.serve(async (req: Request) => {
   // Log every request immediately so Dashboard shows activity (Meta GET verification + POST webhooks)
   const url = new URL(req.url);
@@ -355,6 +408,7 @@ Deno.serve(async (req: Request) => {
                   phone_number_id: phoneNumberId,
                   last_message_at: timestamp,
                   last_message_body: lastBody,
+                  last_inbound_at: timestamp,
                   updated_at: timestamp,
                 };
                 if (customerName) convPayload.customer_name = customerName;
@@ -375,6 +429,7 @@ Deno.serve(async (req: Request) => {
                     .update({
                       last_message_at: timestamp,
                       last_message_body: lastBody,
+                      last_inbound_at: timestamp,
                       customer_name: customerName ?? undefined,
                       updated_at: timestamp,
                     })
@@ -393,6 +448,15 @@ Deno.serve(async (req: Request) => {
                     continue;
                   }
                   conv = inserted;
+                  await ensureLeadForNewConversation(
+                    supabase,
+                    orgId,
+                    conv.id,
+                    "whatsapp",
+                    customerName ?? customerWaId ?? "WhatsApp",
+                    lastBody ?? "WhatsApp",
+                    customerWaId
+                  );
                 }
 
                 if (!conv) {
@@ -456,37 +520,58 @@ Deno.serve(async (req: Request) => {
                   .select("id")
                   .eq("name", "Open")
                   .maybeSingle();
-                const openStatusId = openStatus?.id ?? null;
+                const { data: unreadStatus } = openStatus?.id
+                  ? { data: null }
+                  : await supabase.from("lead_statuses").select("id").eq("name", "Unread").maybeSingle();
+                const openStatusId = openStatus?.id ?? unreadStatus?.id ?? null;
 
                 if (firstInboundAt == null) {
                   await supabase
                     .from("whatsapp_conversations")
-                    .update({ first_inbound_at: timestamp, updated_at: timestamp })
+                    .update({ first_inbound_at: timestamp, last_inbound_at: timestamp, updated_at: timestamp })
                     .eq("id", conv.id);
                 }
 
-                const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
-                const isNewOrReopen = openStatusId && (statusId == null || isClosed);
+                const statusNameLower = leadStatusName?.trim().toLowerCase() ?? "";
+                const isResolved = statusNameLower === "closed" || statusNameLower === "resolve";
+                const isNewOrReopen = openStatusId && (statusId == null || isResolved);
                 console.log("Resolve-cycle:", {
                   conversation_id: conv.id,
                   leadStatusName,
-                  isClosed,
+                  isResolved,
                   openStatusId: openStatusId ?? "MISSING",
                   isNewOrReopen,
                 });
                 if (isNewOrReopen) {
+                  const { data: convBefore } = await supabase
+                    .from("whatsapp_conversations")
+                    .select("organization_id, ticket_id")
+                    .eq("id", conv.id)
+                    .maybeSingle();
                   const { error: updateErr } = await supabase
                     .from("whatsapp_conversations")
-                    .update({ lead_status_id: openStatusId, updated_at: timestamp })
+                    .update({ lead_status_id: openStatusId, last_inbound_at: timestamp, updated_at: timestamp })
                     .eq("id", conv.id);
-                  if (updateErr) console.error("Reopen to Open (Unread) update error:", updateErr);
-                  else console.log("Reopened conversation to Open (Unread):", conv.id);
+                  if (updateErr) {
+                    console.error("Reopen to Open (Unread) update error:", updateErr);
+                  } else {
+                    console.log("Reopened conversation to Open (Unread):", conv.id, { openStatusId, hadStatus: statusId });
+                  }
+                  if (convBefore?.organization_id && openStatusId) {
+                    const ticketId = (convBefore.ticket_id as string) ?? `WA-${conv.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+                    const { error: leadErr } = await supabase
+                      .from("leads")
+                      .update({ status_id: openStatusId, updated_at: timestamp })
+                      .eq("organization_id", convBefore.organization_id)
+                      .eq("ticket_id", ticketId);
+                    if (leadErr) console.error("Reopen: sync leads.status_id to Open failed:", leadErr);
+                  }
                   const { error: cycleErr } = await supabase.from("whatsapp_conversation_cycles").insert({
                     conversation_id: conv.id,
                     cycle_started_at: timestamp,
                   });
                   if (cycleErr) console.error("New cycle insert error:", cycleErr);
-                } else if (isClosed && !openStatusId) {
+                } else if (isResolved && !openStatusId) {
                   console.warn("Cannot reopen: lead_statuses has no row with name 'Open'. Add Open status in DB.");
                 }
               }
@@ -700,6 +785,7 @@ Deno.serve(async (req: Request) => {
                   .update({
                     last_message_at: timestamp,
                     last_message_body: lastBody,
+                    last_inbound_at: timestamp,
                     updated_at: timestamp,
                   })
                   .eq("id", existingConv.id);
@@ -716,6 +802,7 @@ Deno.serve(async (req: Request) => {
                     channel: "instagram",
                     last_message_at: timestamp,
                     last_message_body: lastBody,
+                    last_inbound_at: timestamp,
                     updated_at: timestamp,
                   })
                   .select("id")
@@ -725,6 +812,15 @@ Deno.serve(async (req: Request) => {
                   continue;
                 }
                 conv = inserted;
+                await ensureLeadForNewConversation(
+                  supabase,
+                  orgId,
+                  conv.id,
+                  "instagram",
+                  "Instagram",
+                  lastBody ?? "Instagram",
+                  null
+                );
               }
 
               // Tarik nama real dari Meta User Profile API agar tampil nama akun (bukan nomor/****)
@@ -798,31 +894,51 @@ Deno.serve(async (req: Request) => {
                     .maybeSingle();
                   leadStatusName = (statusRow?.name as string) ?? null;
                 }
-                const { data: openStatus } = await supabase
+                const { data: openStatusIg } = await supabase
                   .from("lead_statuses")
                   .select("id")
                   .eq("name", "Open")
                   .maybeSingle();
-                const openStatusId = openStatus?.id ?? null;
+                const { data: unreadStatusIg } = openStatusIg?.id
+                  ? { data: null }
+                  : await supabase.from("lead_statuses").select("id").eq("name", "Unread").maybeSingle();
+                const openStatusIdIg = openStatusIg?.id ?? unreadStatusIg?.id ?? null;
 
                 if (firstInboundAt == null) {
                   await supabase
                     .from("whatsapp_conversations")
-                    .update({ first_inbound_at: timestamp, updated_at: timestamp })
+                    .update({ first_inbound_at: timestamp, last_inbound_at: timestamp, updated_at: timestamp })
                     .eq("id", conv.id);
                 }
 
-                const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
-                const isNewOrReopen = openStatusId && (statusId == null || isClosed);
+                const statusNameLower = leadStatusName?.trim().toLowerCase() ?? "";
+                const isResolved = statusNameLower === "closed" || statusNameLower === "resolve";
+                const isNewOrReopen = openStatusIdIg && (statusId == null || isResolved);
                 if (isNewOrReopen) {
-                  await supabase
+                  const { data: convBefore } = await supabase
                     .from("whatsapp_conversations")
-                    .update({ lead_status_id: openStatusId, updated_at: timestamp })
+                    .select("organization_id, ticket_id")
+                    .eq("id", conv.id)
+                    .maybeSingle();
+                  const { error: updateErr } = await supabase
+                    .from("whatsapp_conversations")
+                    .update({ lead_status_id: openStatusIdIg, last_inbound_at: timestamp, updated_at: timestamp })
                     .eq("id", conv.id);
-                  await supabase.from("whatsapp_conversation_cycles").insert({
+                  if (updateErr) console.error("Instagram reopen: conversation update error:", updateErr);
+                  if (convBefore?.organization_id && openStatusIdIg) {
+                    const ticketId = (convBefore.ticket_id as string) ?? `WA-${conv.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+                    const { error: leadErr } = await supabase
+                      .from("leads")
+                      .update({ status_id: openStatusIdIg, updated_at: timestamp })
+                      .eq("organization_id", convBefore.organization_id)
+                      .eq("ticket_id", ticketId);
+                    if (leadErr) console.error("Instagram reopen: sync leads.status_id to Open failed:", leadErr);
+                  }
+                  const { error: cycleErr } = await supabase.from("whatsapp_conversation_cycles").insert({
                     conversation_id: conv.id,
                     cycle_started_at: timestamp,
                   });
+                  if (cycleErr) console.error("Instagram reopen: cycle insert error:", cycleErr);
                 }
               }
             }

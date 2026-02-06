@@ -22,8 +22,10 @@ import { StepHistoryModal } from './StepHistoryModal';
 import { AssignSubStepDialog } from './AssignSubStepDialog';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { logger } from '@/config/logger';
 import { createCompletionApprovalIfAssignee } from '../services/completionApprovalService';
+import { useDailyTaskOptional } from '../DailyTaskContext';
 
 interface SubStep {
   id: string;
@@ -73,6 +75,9 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const { toast } = useToast();
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
+  const { t } = useAppTranslation();
+  const dailyTaskContext = useDailyTaskOptional();
+  const rejectedReasonsBySubStepId = dailyTaskContext?.rejectedReasonsBySubStepId ?? {};
   const [parentPlan, setParentPlan] = useState<ParentPlanInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubStepId, setPendingSubStepId] = useState<string | null>(null);
@@ -717,8 +722,23 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 									</div>
 								) : (
 									<>
-                      <div className="flex-1">
-                        <span className={`text-sm ${s.is_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>{s.title}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-sm ${s.is_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>{s.title}</span>
+                          {rejectedReasonsBySubStepId[s.id] && (
+                            <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">
+                              {t('dailyTask.approval.revisionBadge', 'Revision')}
+                            </Badge>
+                          )}
+                        </div>
+                        {rejectedReasonsBySubStepId[s.id] && (
+                          <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+                            <p className="font-medium text-amber-800">
+                              {t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}
+                            </p>
+                            <p className="text-gray-700 mt-0.5">{rejectedReasonsBySubStepId[s.id]}</p>
+                          </div>
+                        )}
                         {s.is_completed && s.updated_at && (
                           <div className="text-[10px] text-gray-400 mt-0.5">Completed: {new Date(s.updated_at).toLocaleString()}</div>
                         )}

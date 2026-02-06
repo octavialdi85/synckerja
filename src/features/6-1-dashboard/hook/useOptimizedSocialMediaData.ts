@@ -141,7 +141,6 @@ export const useOptimizedSocialMediaData = () => {
         subServices: subServicesResult.data || [],
         contentPillars: contentPillarsResult.data || []
       };
-      
       console.log('✅ Master data loaded:', {
         organizationId,
         contentTypes: result.contentTypes.length,
@@ -174,10 +173,11 @@ export const useOptimizedSocialMediaData = () => {
      masterDataQuery.data.services?.length > 0 || 
      masterDataQuery.data.contentPillars?.length > 0);
   
-  // Only show loading if we're truly in initial load state (no data at all)
-  const isLoading = isPending && !hasContentPlans && !hasMasterData;
+  // Both queries have settled (success or error) -> stop showing loading immediately
+  const bothSettled = contentPlansQuery.status !== 'pending' && masterDataQuery.status !== 'pending';
+  // Only show loading if we're truly in initial load state (pending and no data); stop as soon as both have settled
+  const isLoading = !bothSettled && isPending && !hasContentPlans && !hasMasterData;
   const error = contentPlansQuery.error || masterDataQuery.error;
-  
 
   // Return optimized data structure
   return {

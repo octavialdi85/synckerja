@@ -74,22 +74,43 @@ export const AddItemDialog = ({ open, onOpenChange, onSubmit, editingItem }: Add
     },
   });
 
-  // Set initial selected service for editing
+  // When dialog opens, reset form so Edit shows saved values (unit_price, sub_service, etc.)
   React.useEffect(() => {
+    if (!open) return;
     if (editingItem) {
+      reset({
+        service_id: editingItem.service_id || '',
+        sub_service_id: editingItem.sub_service_id || '',
+        service_name: editingItem.service_name || '',
+        sub_service_name: editingItem.sub_service_name || '',
+        quantity: editingItem.quantity ?? 1,
+        unit_price: (() => { const u = Number(editingItem.unit_price); return Number.isNaN(u) ? 0 : u; })(),
+        notes: editingItem.notes || '',
+      });
       setSelectedService(editingItem.service_id || '');
+    } else {
+      reset({
+        service_id: '',
+        sub_service_id: '',
+        service_name: '',
+        sub_service_name: '',
+        quantity: 1,
+        unit_price: 0,
+        notes: '',
+      });
+      setSelectedService('');
     }
-  }, [editingItem]);
+  }, [open, editingItem, reset]);
 
-  // Auto-populate service name when service is selected
+  // Auto-populate service name when service is selected (add mode only; edit mode already has names from reset)
   React.useEffect(() => {
-    if (selectedService) {
+    if (selectedService && !editingItem) {
       const service = parentServices?.find(s => s.id === selectedService);
       if (service) {
         setValue('service_name', service.name);
       }
     }
-  }, [selectedService, parentServices, setValue]);
+  }, [selectedService, parentServices, setValue, editingItem]);
 
   const handleServiceChange = (serviceId: string) => {
     setSelectedService(serviceId);
@@ -114,6 +135,7 @@ export const AddItemDialog = ({ open, onOpenChange, onSubmit, editingItem }: Add
       const submitData: CreateSalesActivityItemData = {
         ...data,
         service_name: data.service_name || 'Unnamed Service',
+        sub_service_name: data.sub_service_name ?? undefined,
         quantity: data.quantity || 1,
         unit_price: data.unit_price || 0,
       };

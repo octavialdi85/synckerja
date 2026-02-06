@@ -29,9 +29,72 @@ export interface SalesActivityItem {
   notes?: string;
 }
 
+/** Resolve service_id and sub_service_id from lead's services (name) and category (name) for org. */
+async function resolveServiceAndSubFromLead(
+  supabaseClient: ReturnType<typeof supabase>,
+  orgId: string,
+  serviceName: string | null | undefined,
+  categoryName: string | null | undefined
+): Promise<{ serviceId: string | null; subServiceId: string | null; serviceName: string; subServiceName: string }> {
+  const sn = (serviceName ?? '').trim();
+  const cn = (categoryName ?? '').trim();
+  if (!sn) {
+    return { serviceId: null, subServiceId: null, serviceName: 'Lead Conversion', subServiceName: cn || '' };
+  }
+  const { data: serviceRow } = await supabaseClient
+    .from('services')
+    .select('id, name')
+    .eq('organization_id', orgId)
+    .ilike('name', sn)
+    .maybeSingle();
+  const resolvedServiceId = serviceRow?.id ?? null;
+  const resolvedServiceName = serviceRow?.name ?? sn;
+  let subServiceId: string | null = null;
+  let resolvedSubName = cn;
+  if (resolvedServiceId && cn) {
+    const { data: subRow } = await supabaseClient
+      .from('sub_services')
+      .select('id, name')
+      .eq('organization_id', orgId)
+      .eq('service_id', resolvedServiceId)
+      .ilike('name', cn)
+      .maybeSingle();
+    subServiceId = subRow?.id ?? null;
+    resolvedSubName = subRow?.name ?? cn;
+  }
+  return {
+    serviceId: resolvedServiceId,
+    subServiceId,
+    serviceName: resolvedServiceName,
+    subServiceName: resolvedSubName,
+  };
+}
+
+/** Get default unit_price from default_prices for (org, service_id, sub_service_id). Returns 0 if either id is null or no row. */
+async function getDefaultPrice(
+  supabaseClient: ReturnType<typeof supabase>,
+  orgId: string,
+  serviceId: string | null,
+  subServiceId: string | null
+): Promise<number> {
+  if (!serviceId || !subServiceId) return 0;
+  const { data, error } = await supabaseClient
+    .from('default_prices')
+    .select('unit_price')
+    .eq('organization_id', orgId)
+    .eq('service_id', serviceId)
+    .eq('sub_service_id', subServiceId)
+    .maybeSingle();
+  if (error || !data) return 0;
+  const n = Number(data.unit_price);
+  return Number.isNaN(n) || n < 0 ? 0 : n;
+}
+
 export interface CreateSalesActivityItemData {
   service_id: string;
   sub_service_id?: string;
+  service_name: string;
+  sub_service_name?: string;
   quantity: number;
   unit_price: number;
   notes?: string;
@@ -312,6 +375,7 @@ export const useSalesActivityMasterData = () => {
 // Hook: useSalesActivityItems
 export const useSalesActivityItems = (salesActivityId?: string) => {
   const queryClient = useQueryClient();
+  const { organizationId } = useCurrentOrg();
 
   const { data: items = [], isLoading: loading } = useQuery({
     queryKey: ['sales-activity-items', salesActivityId],
@@ -330,15 +394,37 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     enabled: !!salesActivityId,
   });
 
+  const syncActivityTotalFromItems = async () => {
+    if (!salesActivityId || !organizationId) return;
+    const { data: rows } = await supabase
+      .from('sales_activity_items')
+      .select('total_price')
+      .eq('sales_activity_id', salesActivityId);
+    const total = (rows ?? []).reduce((sum: number, r: { total_price?: number }) => sum + (Number(r.total_price) || 0), 0);
+    await supabase
+      .from('sales_activities')
+      .update({ total_amount: total, updated_at: new Date().toISOString() })
+      .eq('id', salesActivityId);
+    queryClient.invalidateQueries({ queryKey: ['sales-activities', organizationId] });
+  };
+
   const createItem = useMutation({
     mutationFn: async (itemData: CreateSalesActivityItemData) => {
       if (!salesActivityId) throw new Error('Sales activity ID is required');
+      if (!organizationId) throw new Error('Organization is required to add item');
       
       const { data, error } = await supabase
         .from('sales_activity_items')
         .insert({
-          ...itemData,
+          service_id: itemData.service_id || null,
+          sub_service_id: itemData.sub_service_id || null,
+          service_name: itemData.service_name || 'Unnamed Service',
+          sub_service_name: itemData.sub_service_name ?? null,
+          quantity: itemData.quantity,
+          unit_price: itemData.unit_price,
+          notes: itemData.notes ?? null,
           sales_activity_id: salesActivityId,
+          organization_id: organizationId,
           total_price: itemData.quantity * itemData.unit_price,
         })
         .select()
@@ -349,19 +435,25 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
+      syncActivityTotalFromItems();
     },
   });
 
   const updateItem = useMutation({
     mutationFn: async ({ id, ...itemData }: Partial<CreateSalesActivityItemData> & { id: string }) => {
+      // Allow empty string for service_id/sub_service_id (e.g. Lead Conversion item) -> store as null
+      const payload: Record<string, unknown> = {
+        ...itemData,
+        total_price: itemData.quantity != null && itemData.unit_price != null
+          ? itemData.quantity * itemData.unit_price
+          : undefined,
+      };
+      if (payload.service_id === '') payload.service_id = null;
+      if (payload.sub_service_id === '') payload.sub_service_id = null;
+      if (payload.sub_service_name === '') payload.sub_service_name = null;
       const { data, error } = await supabase
         .from('sales_activity_items')
-        .update({
-          ...itemData,
-          total_price: itemData.quantity && itemData.unit_price 
-            ? itemData.quantity * itemData.unit_price 
-            : undefined,
-        })
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
@@ -371,6 +463,7 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
+      syncActivityTotalFromItems();
     },
   });
 
@@ -385,6 +478,7 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
+      syncActivityTotalFromItems();
     },
   });
 
@@ -975,6 +1069,13 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           queryClient.invalidateQueries({ queryKey: ['leads'] });
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_follow_up_updates' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
       .subscribe();
     return () => {
       if (channelRef.current) {
@@ -1073,6 +1174,36 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
 
       const defaultStatusId = statusesData?.[0]?.id ?? '';
 
+      // 3) Fetch email conversations early so we can build ticket_id list for lead lookup
+      const { data: emailConvs, error: emailError } = await supabase.rpc('get_email_conversations_with_preview', {
+        p_organization_id: organizationId,
+      });
+
+      // Collect ticket_ids from WA/Email conversations and fetch leads by ticket_id for services/category
+      const waTicketIds = (whatsappConvs ?? []).map((c: any) => {
+        const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
+        return c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+      });
+      const emailTicketIds = (emailConvs ?? []).map((c: any) => 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+      const allConvTicketIds = [...new Set([...waTicketIds, ...emailTicketIds])];
+      const leadByTicketMap = new Map<string, { services: string | null; category: string | null }>();
+      if (allConvTicketIds.length > 0) {
+        const { data: convLeads } = await supabase
+          .from('leads')
+          .select('ticket_id, services, category')
+          .eq('organization_id', organizationId)
+          .in('ticket_id', allConvTicketIds);
+        (convLeads ?? []).forEach((row: any) => {
+          leadByTicketMap.set(String(row.ticket_id), {
+            services: row.services ?? null,
+            category: row.category ?? null,
+          });
+        });
+      }
+
+      // Ticket IDs that already have a row in table "leads" — jangan tampilkan duplikat dari virtual conv
+      const ticketIdsInLeadsTable = new Set((rawLeads as any[]).map((l: any) => l.ticket_id).filter(Boolean));
+
       if (!whatsappError && whatsappConvs && whatsappConvs.length > 0) {
         // Ensure statusMap has all statuses used by WhatsApp (for Report Summary "Converted" count)
         const waStatusIds = [...new Set(whatsappConvs.map((c: any) => c.lead_status_id).filter(Boolean))].filter((id: string) => !statusMap.has(normId(id)));
@@ -1088,20 +1219,26 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             });
           }
         }
-        const whatsappAsLeads = whatsappConvs.map((c: any) => {
+        const waConvsWithoutLead = whatsappConvs.filter((c: any) => {
+          const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
+          const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          return !ticketIdsInLeadsTable.has(waTicketId);
+        });
+        const whatsappAsLeads = waConvsWithoutLead.map((c: any) => {
           const statusId = c.lead_status_id ?? '';
           const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
           const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
           const sourceLabel = isInstagram ? 'Instagram' : 'WhatsApp';
           const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          const leadRow = leadByTicketMap.get(waTicketId);
           const assigneeId = c.assignee_id ?? null;
           const assigneeName = assigneeId ? assigneeNameMap.get(normId(assigneeId)) ?? null : null;
           return {
             id: 'wa-' + c.id,
             client: c.customer_name || c.customer_wa_id || sourceLabel,
             title: (c.last_message_body || sourceLabel).slice(0, 100),
-            services: null,
-            category: '-',
+            services: leadRow?.services ?? null,
+            category: leadRow?.category ?? '-',
             assignee: assigneeName as string | null,
             assignee_id: assigneeId,
             fu_priority: c.fu_priority ?? null,
@@ -1124,22 +1261,23 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         leadsWithStatus = [...leadsWithStatus, ...whatsappAsLeads];
       }
 
-      // 3) Fetch email conversations (same org) and map to lead-like rows with source: Email
-      const { data: emailConvs, error: emailError } = await supabase.rpc('get_email_conversations_with_preview', {
-        p_organization_id: organizationId,
-      });
       if (!emailError && emailConvs && emailConvs.length > 0) {
-        const emailAsLeads = (emailConvs as any[]).map((c: any) => {
+        const emailConvsWithoutLead = (emailConvs as any[]).filter((c: any) => {
+          const ticketId = 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+          return !ticketIdsInLeadsTable.has(ticketId);
+        });
+        const emailAsLeads = emailConvsWithoutLead.map((c: any) => {
           const statusId = c.lead_status_id ?? defaultStatusId;
           const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
           const ticketId = 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+          const leadRow = leadByTicketMap.get(ticketId);
           const lastBody = (c.last_message_body ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
           return {
             id: 'email-' + c.id,
             client: c.from_email || c.email_connection_display || 'Email',
             title: lastBody || 'Email',
-            services: null,
-            category: '-',
+            services: leadRow?.services ?? null,
+            category: leadRow?.category ?? '-',
             assignee: null as string | null,
             assignee_id: null as string | null,
             fu_priority: c.fu_priority ?? null,
@@ -1214,9 +1352,10 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
   // Update lead mutation
   const updateLeadMutation = useMutation({
     mutationFn: async (lead: any) => {
-      // Email conversation: update email_conversations.lead_status_id (same as WhatsApp)
+      // Email conversation: update email_conversations.lead_status_id, sync to leads, create sales_activities on Converted
       if (lead?.id && String(lead.id).startsWith('email-')) {
         const convId = String(lead.id).replace(/^email-/, '');
+        const orgId = lead.organization_id ?? organizationId;
         const { error: updateError } = await supabase
           .from('email_conversations')
           .update({
@@ -1227,6 +1366,75 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         if (updateError) {
           console.error('Error updating email conversation status:', updateError);
           throw updateError;
+        }
+        let newStatusName = '';
+        if (lead.status_id) {
+          const { data: statusRow } = await supabase
+            .from('lead_statuses')
+            .select('name')
+            .eq('id', lead.status_id)
+            .maybeSingle();
+          newStatusName = (statusRow?.name as string) ?? '';
+        }
+        const ticketId = 'EMAIL-' + convId.replace(/-/g, '').slice(0, 8).toUpperCase();
+        if (orgId && lead.status_id) {
+          await supabase
+            .from('leads')
+            .update({ status_id: lead.status_id, updated_at: new Date().toISOString() })
+            .eq('organization_id', orgId)
+            .eq('ticket_id', ticketId);
+        }
+        if (newStatusName?.trim().toLowerCase() === 'converted' && orgId) {
+          const { data: leadRow } = await supabase
+            .from('leads')
+            .select('id, client, services, category')
+            .eq('organization_id', orgId)
+            .eq('ticket_id', ticketId)
+            .maybeSingle();
+          if (!leadRow?.id) {
+            console.error('Converted (email): lead not found for ticket_id=', ticketId, 'orgId=', orgId);
+          } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            const createdBy = user?.id ?? null;
+            if (!createdBy) {
+              console.error('Converted (email): no auth user for sales_activities insert (RLS requires created_by)');
+            } else {
+              const { serviceId, subServiceId, serviceName: itemServiceName, subServiceName: itemSubServiceName } = await resolveServiceAndSubFromLead(supabase, orgId, (leadRow as { services?: string }).services, (leadRow as { category?: string }).category);
+              const unitPrice = await getDefaultPrice(supabase, orgId, serviceId, subServiceId);
+              const itemTotal = unitPrice * 1;
+              const { data: newActivity, error: insertErr } = await supabase.from('sales_activities').insert({
+                organization_id: orgId,
+                lead_id: leadRow.id,
+                client_name: leadRow.client ?? 'Email lead',
+                activity_type: 'Lead Conversion',
+                status: 'Converted',
+                date: new Date().toISOString().slice(0, 10),
+                created_by: createdBy,
+                service_id: serviceId ?? undefined,
+                sub_service_id: subServiceId ?? undefined,
+                total_amount: itemTotal,
+                description: lead.conversionDescription ?? null,
+              }).select('id').single();
+              if (insertErr) {
+                console.error('Converted (email): sales_activities insert failed', insertErr);
+                throw insertErr;
+              }
+              if (newActivity?.id) {
+                await supabase.from('sales_activity_items').insert({
+                  sales_activity_id: newActivity.id,
+                  organization_id: orgId,
+                  service_id: serviceId ?? null,
+                  sub_service_id: subServiceId ?? null,
+                  service_name: itemServiceName,
+                  sub_service_name: itemSubServiceName || null,
+                  quantity: 1,
+                  unit_price: unitPrice,
+                  total_price: itemTotal,
+                });
+              }
+              queryClient.invalidateQueries({ queryKey: ['sales-activities', orgId] });
+            }
+          }
         }
         return lead;
       }
@@ -1279,6 +1487,72 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             .update({ resolved_at: now, updated_at: now })
             .eq('conversation_id', convId)
             .is('resolved_at', null);
+        }
+        const orgId = lead.organization_id ?? organizationId;
+        const { data: convRow } = await supabase
+          .from('whatsapp_conversations')
+          .select('ticket_id')
+          .eq('id', convId)
+          .maybeSingle();
+        const ticketId = (convRow?.ticket_id as string) ?? `WA-${convId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+        if (orgId && lead.status_id) {
+          await supabase
+            .from('leads')
+            .update({ status_id: lead.status_id, updated_at: new Date().toISOString() })
+            .eq('organization_id', orgId)
+            .eq('ticket_id', ticketId);
+        }
+        if (newStatusName?.trim().toLowerCase() === 'converted' && orgId) {
+          const { data: leadRow } = await supabase
+            .from('leads')
+            .select('id, client, services, category')
+            .eq('organization_id', orgId)
+            .eq('ticket_id', ticketId)
+            .maybeSingle();
+          if (!leadRow?.id) {
+            console.error('Converted (wa): lead not found for ticket_id=', ticketId, 'orgId=', orgId);
+          } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            const createdBy = user?.id ?? null;
+            if (!createdBy) {
+              console.error('Converted (wa): no auth user for sales_activities insert (RLS requires created_by)');
+            } else {
+              const { serviceId, subServiceId, serviceName: itemServiceName, subServiceName: itemSubServiceName } = await resolveServiceAndSubFromLead(supabase, orgId, (leadRow as { services?: string }).services, (leadRow as { category?: string }).category);
+              const unitPrice = await getDefaultPrice(supabase, orgId, serviceId, subServiceId);
+              const itemTotal = unitPrice * 1;
+              const { data: newActivity, error: insertErr } = await supabase.from('sales_activities').insert({
+                organization_id: orgId,
+                lead_id: leadRow.id,
+                client_name: leadRow.client ?? 'WhatsApp lead',
+                activity_type: 'Lead Conversion',
+                status: 'Converted',
+                date: new Date().toISOString().slice(0, 10),
+                created_by: createdBy,
+                service_id: serviceId ?? undefined,
+                sub_service_id: subServiceId ?? undefined,
+                total_amount: itemTotal,
+                description: lead.conversionDescription ?? null,
+              }).select('id').single();
+              if (insertErr) {
+                console.error('Converted (wa): sales_activities insert failed', insertErr);
+                throw insertErr;
+              }
+              if (newActivity?.id) {
+                await supabase.from('sales_activity_items').insert({
+                  sales_activity_id: newActivity.id,
+                  organization_id: orgId,
+                  service_id: serviceId ?? null,
+                  sub_service_id: subServiceId ?? null,
+                  service_name: itemServiceName,
+                  sub_service_name: itemSubServiceName || null,
+                  quantity: 1,
+                  unit_price: unitPrice,
+                  total_price: itemTotal,
+                });
+              }
+              queryClient.invalidateQueries({ queryKey: ['sales-activities', orgId] });
+            }
+          }
         }
         return lead;
       }
@@ -1334,9 +1608,9 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
 
       // Catat perubahan status ke lead_status_history (agar Status History modal berisi data)
       const newStatusId = validFields.status_id as string | undefined;
+      let newStatusName = '';
       if (newStatusId !== undefined && String(newStatusId) !== String(oldStatusId)) {
         let oldStatusName: string | null = null;
-        let newStatusName: string = '';
         if (oldStatusId) {
           const { data: oldRow } = await supabase
             .from('lead_statuses')
@@ -1366,6 +1640,44 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             changed_by_name: userName,
             organization_id: orgId,
           });
+        }
+        // Create sales_activities entry when status changes to Converted (from leads-management page)
+        if (newStatusName?.trim().toLowerCase() === 'converted' && orgId && userId) {
+          const leadData = data as { client?: string; services?: string; category?: string };
+          const clientName = leadData?.client ?? 'Lead';
+          const { serviceId, subServiceId, serviceName: itemServiceName, subServiceName: itemSubServiceName } = await resolveServiceAndSubFromLead(supabase, orgId, leadData?.services, leadData?.category);
+          const unitPrice = await getDefaultPrice(supabase, orgId, serviceId, subServiceId);
+          const itemTotal = unitPrice * 1;
+          const { data: newActivity, error: insertErr } = await supabase.from('sales_activities').insert({
+            organization_id: orgId,
+            lead_id: id,
+            client_name: clientName,
+            activity_type: 'Lead Conversion',
+            status: 'Converted',
+            date: new Date().toISOString().slice(0, 10),
+            created_by: userId,
+            service_id: serviceId ?? undefined,
+            sub_service_id: subServiceId ?? undefined,
+            total_amount: itemTotal,
+          }).select('id').single();
+          if (insertErr) {
+            console.error('Converted (leads): sales_activities insert failed', insertErr);
+            throw insertErr;
+          }
+          if (newActivity?.id) {
+            await supabase.from('sales_activity_items').insert({
+              sales_activity_id: newActivity.id,
+              organization_id: orgId,
+              service_id: serviceId ?? null,
+              sub_service_id: subServiceId ?? null,
+              service_name: itemServiceName,
+              sub_service_name: itemSubServiceName || null,
+              quantity: 1,
+              unit_price: unitPrice,
+              total_price: itemTotal,
+            });
+          }
+          queryClient.invalidateQueries({ queryKey: ['sales-activities', orgId] });
         }
       }
 

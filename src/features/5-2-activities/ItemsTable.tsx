@@ -75,6 +75,7 @@ export const ItemsTable = ({ items, loading, onEdit, onDelete }: ItemsTableProps
               <TableCell>
                 <div className="flex space-x-1">
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => onEdit(item)}
@@ -82,6 +83,7 @@ export const ItemsTable = ({ items, loading, onEdit, onDelete }: ItemsTableProps
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => onDelete(item.id)}

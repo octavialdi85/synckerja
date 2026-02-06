@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Button } from '@/features/ui/button';
@@ -8,12 +8,27 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useLeads } from '@/hooks/organized/sales';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { LeadStatusSelect } from '@/features/5-3-leads-management/LeadStatusSelect';
+import { useServices } from '@/features/6-1-ProductKnowledge/hooks/useServices';
+import { useSubServices } from '@/features/6-1-ProductKnowledge/hooks/useSubServices';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
-import { Plus, User, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, User, Clock, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { format } from 'date-fns';
 import type { LiveChatConversation } from '../../types';
+import { isResolvedStatus } from '../../constants/leadStatus';
+import { computeFollowUpAndPriority } from '@/features/5-3-leads-management/utils/fuPriorityFromUpdates';
+
+/** Ticket ID for lead lookup: WA-xxx from conversation id (WhatsApp/Instagram), EMAIL-xxx for email. */
+function getTicketIdForConversation(conv: LiveChatConversation): string {
+  if (conv.source === 'email') {
+    return 'EMAIL-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+  }
+  const c = conv as { ticket_id?: string; id: string; channel?: string };
+  if (c.ticket_id) return c.ticket_id;
+  return 'WA-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+}
 
 const PROSPECT_STATUS_OPTIONS = ['Hot Prospect', 'Warm Prospect', 'Cold Prospect'] as const;
 
@@ -54,15 +69,13 @@ interface LivechatQuickActionPanelProps {
   conversation: LiveChatConversation | null;
 }
 
+/** Unified row for display: from email_conversation_follow_up_updates or lead_follow_up_updates (WA, by conversation_id). */
 interface FollowUpUpdateRow {
   id: string;
-  conversation_id: string;
   update_details: string;
   status: string | null;
-  created_by: string;
   created_by_name: string | null;
   created_at: string;
-  organization_id: string;
 }
 
 export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPanelProps) {
@@ -74,6 +87,130 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   const [prospectStatus, setProspectStatus] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFollowUpExpanded, setIsFollowUpExpanded] = useState(true);
+  const [selectedServiceName, setSelectedServiceName] = useState<string>('');
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string>('');
+  const [isUpdatingLead, setIsUpdatingLead] = useState(false);
+  const [serviceCategoryDialogOpen, setServiceCategoryDialogOpen] = useState(false);
+  const [pendingStatusId, setPendingStatusId] = useState<string | null>(null);
+  const [dialogServiceName, setDialogServiceName] = useState<string>('');
+  const [dialogCategoryName, setDialogCategoryName] = useState<string>('');
+  const [dialogDescription, setDialogDescription] = useState<string>('');
+
+  const { data: servicesList = [] } = useServices();
+  const { data: subServicesList = [] } = useSubServices();
+  const categoriesForService = selectedServiceName
+    ? (() => {
+        const svc = servicesList.find((s) => s.name === selectedServiceName);
+        return svc ? subServicesList.filter((ss) => ss.service_id === svc.id) : [];
+      })()
+    : [];
+  const dialogCategoriesForService = dialogServiceName
+    ? (() => {
+        const svc = servicesList.find((s) => s.name === dialogServiceName);
+        return svc ? subServicesList.filter((ss) => ss.service_id === svc.id) : [];
+      })()
+    : [];
+
+  const ticketId = conversation ? getTicketIdForConversation(conversation) : '';
+  const { data: leadRow } = useQuery({
+    queryKey: ['lead-by-ticket', organizationId, ticketId],
+    queryFn: async () => {
+      if (!organizationId || !ticketId) return null;
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, services, category')
+        .eq('ticket_id', ticketId)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; services: string | null; category: string | null } | null;
+    },
+    enabled: !!organizationId && !!ticketId && !!conversation,
+  });
+
+  useEffect(() => {
+    if (!leadRow) return;
+    if (leadRow.services != null && leadRow.services !== '') setSelectedServiceName(leadRow.services);
+    else setSelectedServiceName('');
+    if (leadRow.category != null && leadRow.category !== '' && leadRow.category !== '-') setSelectedCategoryName(leadRow.category);
+    else setSelectedCategoryName('');
+  }, [leadRow?.id, leadRow?.services, leadRow?.category]);
+
+  const updateLeadServicesCategory = useCallback(
+    async (serviceName: string, categoryName: string) => {
+      if (!organizationId || !ticketId) return;
+      setIsUpdatingLead(true);
+      try {
+        if (!leadRow?.id) {
+          const clientName = conversation?.source === 'email'
+            ? (conversation as { from_display_name?: string; from_email?: string }).from_display_name
+              || (conversation as { from_email?: string }).from_email
+              || 'Email'
+            : (conversation as { customer_name?: string; customer_wa_id?: string }).customer_name
+              || (conversation as { customer_wa_id?: string }).customer_wa_id
+              || 'WhatsApp';
+          const title = (conversation as { last_message_body?: string }).last_message_body?.slice(0, 100) || 'Lead';
+          const source = conversation?.source === 'email' ? 'Email' : (conversation as { channel?: string }).channel === 'instagram' ? 'Instagram' : 'WhatsApp';
+          const { data: openStatus } = await supabase
+            .from('lead_statuses')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('name', 'Open')
+            .maybeSingle();
+          if (!openStatus?.id) {
+            toast.error(t('whatsappInbox.noOpenStatus', 'Open status not found'));
+            return;
+          }
+          const { error: insertErr } = await supabase.from('leads').insert({
+            ticket_id: ticketId,
+            client: clientName,
+            title,
+            category: categoryName || '',
+            created_by: '00000000-0000-0000-0000-000000000000',
+            created_by_name: 'System',
+            assignee: '',
+            status_id: openStatus.id,
+            organization_id: organizationId,
+            source,
+            services: serviceName || null,
+            followup: 0,
+          });
+          if (insertErr) throw insertErr;
+        } else {
+          const { error: updateErr } = await supabase
+            .from('leads')
+            .update({
+              services: serviceName || null,
+              category: categoryName || '',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', leadRow.id);
+          if (updateErr) throw updateErr;
+        }
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
+        toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
+      } catch (err) {
+        console.error('Update lead services/category:', err);
+        toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
+      } finally {
+        setIsUpdatingLead(false);
+      }
+    },
+    [organizationId, ticketId, leadRow?.id, conversation, queryClient, t]
+  );
+
+  const handleServiceChange = (value: string) => {
+    setSelectedServiceName(value);
+    setSelectedCategoryName('');
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategoryName(value);
+    if (value && selectedServiceName) {
+      updateLeadServicesCategory(selectedServiceName, value);
+    }
+  };
 
   // Opsi dropdown Status = dari DB (lead_statuses); tampilan pakai getLeadStatusDisplayName (Open→Unread, In Progress→On going, Closed→Resolve)
   const { data: leadStatuses = [] } = useQuery({
@@ -91,8 +228,6 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
 
   const isEmail = conversation?.source === 'email';
   const statusTable = isEmail ? 'email_conversations' : 'whatsapp_conversations';
-  const followUpTable = isEmail ? 'email_conversation_follow_up_updates' : 'whatsapp_conversation_follow_up_updates';
-
   const { data: conversationStatus, isLoading: statusLoading } = useQuery({
     queryKey: [isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status', conversation?.id],
     queryFn: async () => {
@@ -110,16 +245,37 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   });
 
   const { data: followUpUpdates = [], refetch: refetchFollowUps } = useQuery({
-    queryKey: [isEmail ? 'email-conversation-follow-ups' : 'whatsapp-conversation-follow-ups', conversation?.id],
+    queryKey: [isEmail ? 'email-conversation-follow-ups' : 'wa-lead-follow-up-updates', conversation?.id],
     queryFn: async (): Promise<FollowUpUpdateRow[]> => {
       if (!conversation?.id) return [];
+      if (isEmail) {
+        const { data, error } = await supabase
+          .from('email_conversation_follow_up_updates')
+          .select('id, update_details, status, created_by_name, created_at')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data ?? []).map((r) => ({
+          id: r.id,
+          update_details: r.update_details ?? '',
+          status: r.status ?? null,
+          created_by_name: r.created_by_name ?? null,
+          created_at: r.created_at ?? '',
+        }));
+      }
       const { data, error } = await supabase
-        .from(followUpTable)
-        .select('*')
+        .from('lead_follow_up_updates')
+        .select('id, update_details, status, created_by_name, created_at')
         .eq('conversation_id', conversation.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as FollowUpUpdateRow[];
+      return (data ?? []).map((r) => ({
+        id: r.id,
+        update_details: r.update_details ?? '',
+        status: r.status ?? null,
+        created_by_name: r.created_by_name ?? null,
+        created_at: r.created_at ?? '',
+      }));
     },
     enabled: !!conversation?.id,
   });
@@ -127,32 +283,37 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
 
   const syncFollowUpCountAndPriority = useCallback(async () => {
     if (!conversation?.id || !organizationId) return;
-    const { data: allUpdates, error: fetchError } = await supabase
-      .from(followUpTable)
-      .select('status')
-      .eq('conversation_id', conversation.id);
-    if (fetchError) return;
-    const count = allUpdates?.length ?? 0;
-    const statusCounts = { 'Hot Prospect': 0, 'Warm Prospect': 0, 'Cold Prospect': 0 };
-    allUpdates?.forEach((u: { status?: string }) => {
-      if (u.status && u.status in statusCounts) statusCounts[u.status as keyof typeof statusCounts]++;
-    });
-    let fu_priority: string | null = null;
-    if (count > 0) {
-      const hot = statusCounts['Hot Prospect'];
-      const warm = statusCounts['Warm Prospect'];
-      const cold = statusCounts['Cold Prospect'];
-      const max = Math.max(hot, warm, cold);
-      if (hot === max && max > 0) fu_priority = 'High';
-      else if (warm === max && max > 0) fu_priority = 'Medium';
-      else if (cold === max && max > 0) fu_priority = 'Low';
+    let allUpdates: Array<{ status?: string | null }> = [];
+    if (isEmail) {
+      const { data, error: fetchError } = await supabase
+        .from('email_conversation_follow_up_updates')
+        .select('status')
+        .eq('conversation_id', conversation.id);
+      if (fetchError) return;
+      allUpdates = data ?? [];
+    } else {
+      const { data, error: fetchError } = await supabase
+        .from('lead_follow_up_updates')
+        .select('status')
+        .eq('conversation_id', conversation.id);
+      if (fetchError) return;
+      allUpdates = data ?? [];
     }
+    const { followupCount, fuPriority } = computeFollowUpAndPriority(allUpdates);
     await supabase
       .from(statusTable)
-      .update({ followup: count, fu_priority, updated_at: new Date().toISOString() })
+      .update({ followup: followupCount, fu_priority: fuPriority, updated_at: new Date().toISOString() })
       .eq('id', conversation.id);
     queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
-  }, [conversation?.id, organizationId, queryClient, statusTable, followUpTable]);
+  }, [conversation?.id, organizationId, queryClient, statusTable, isEmail]);
+
+  // Derived values used by hooks below — must be before any conditional return so hook order is stable
+  const leadId = conversation ? (conversation.source === 'email' ? `email-${conversation.id}` : `wa-${conversation.id}`) : '';
+  const leadTitle = conversation ? getLeadTitle(conversation, t) : '';
+  const currentStatusId = conversationStatus ?? (leadStatuses.length > 0 ? leadStatuses[0].id : '');
+  const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
+  const isResolved = isResolvedStatus(currentStatus?.name ?? null);
+  const statusQueryKey = isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status';
 
   const handleAddUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,15 +329,42 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         .single();
       const orgId = profile?.active_organization_id;
       if (!orgId) throw new Error('No active organization');
-      const { error } = await supabase.from(followUpTable).insert({
-        conversation_id: conversation.id,
-        update_details: updateDetails.trim(),
-        status: prospectStatus || null,
-        created_by: user.id,
-        created_by_name: profile?.full_name || user.email || 'Unknown',
-        organization_id: orgId,
-      });
-      if (error) throw error;
+      if (isEmail) {
+        const { error } = await supabase.from('email_conversation_follow_up_updates').insert({
+          conversation_id: conversation.id,
+          update_details: updateDetails.trim(),
+          status: prospectStatus || null,
+          created_by: user.id,
+          created_by_name: profile?.full_name || user.email || 'Unknown',
+          organization_id: orgId,
+        });
+        if (error) throw error;
+      } else {
+        let leadUuid = leadRow?.id;
+        if (!leadUuid) {
+          const { data: leadByTicket } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('ticket_id', ticketId)
+            .eq('organization_id', orgId)
+            .maybeSingle();
+          leadUuid = leadByTicket?.id ?? null;
+        }
+        if (!leadUuid) {
+          toast.error(t('whatsappInbox.saveServiceCategoryFirst', 'Save service and category first to link this conversation to a lead.'));
+          return;
+        }
+        const { error } = await supabase.from('lead_follow_up_updates').insert({
+          lead_id: leadUuid,
+          conversation_id: conversation.id,
+          update_details: updateDetails.trim(),
+          status: prospectStatus || null,
+          created_by: user.id,
+          created_by_name: profile?.full_name || user.email || 'Unknown',
+          organization_id: orgId,
+        });
+        if (error) throw error;
+      }
       await syncFollowUpCountAndPriority();
       await refetchFollowUps();
       queryClient.invalidateQueries({ queryKey: ['leads'] });
@@ -201,16 +389,10 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
     );
   }
 
-  const leadId = conversation.source === 'email' ? `email-${conversation.id}` : `wa-${conversation.id}`;
-  const leadTitle = getLeadTitle(conversation, t);
-  const currentStatusId = conversationStatus ?? (leadStatuses.length > 0 ? leadStatuses[0].id : '');
-  const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
-  const isResolved = currentStatus?.name?.trim().toLowerCase() === 'closed';
-  const statusQueryKey = isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status';
-
-  const handleStatusChange = async (newStatusId: string) => {
+  const applyStatusChange = async (newStatusId: string, conversionDescription?: string) => {
     const newStatus = leadStatuses.find((s) => s.id === newStatusId);
-    if (newStatus?.name?.trim().toLowerCase() === 'closed') {
+    const isResolve = isResolvedStatus(newStatus?.name ?? null);
+    if (isResolve) {
       const confirmed = window.confirm(t('leadsManagement.confirmResolve', 'Yakin ingin mengubah status menjadi Resolve? Chat outbound akan diblokir sampai ada pesan masuk baru dari customer.'));
       if (!confirmed) return;
     }
@@ -221,6 +403,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         status_id: newStatusId,
         organization_id: conversation.organization_id,
         lead_status: oldStatusName ? { name: oldStatusName } : undefined,
+        conversionDescription,
       });
       await queryClient.invalidateQueries({ queryKey: [statusQueryKey, conversation.id] });
       await queryClient.invalidateQueries({ queryKey: ['leads'] });
@@ -231,11 +414,201 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
     }
   };
 
+  const handleStatusChange = async (newStatusId: string) => {
+    const newStatus = leadStatuses.find((s) => s.id === newStatusId);
+    const newStatusNameNorm = (newStatus?.name ?? '').trim().toLowerCase();
+    const isConverted = newStatusNameNorm === 'converted';
+    const isResolve = isResolvedStatus(newStatus?.name ?? null);
+
+    if (isConverted) {
+      setPendingStatusId(newStatusId);
+      setDialogServiceName(selectedServiceName || '');
+      setDialogCategoryName(selectedCategoryName || '');
+      setDialogDescription('');
+      setServiceCategoryDialogOpen(true);
+      return;
+    }
+    if (isResolve) {
+      const hasService = !!selectedServiceName?.trim();
+      const hasCategory = !!selectedCategoryName?.trim();
+      if (!hasService || !hasCategory) {
+        setPendingStatusId(newStatusId);
+        setDialogServiceName(selectedServiceName || '');
+        setDialogCategoryName(selectedCategoryName || '');
+        setDialogDescription('');
+        setServiceCategoryDialogOpen(true);
+        return;
+      }
+    }
+
+    await applyStatusChange(newStatusId);
+  };
+
+  const isPendingConverted = pendingStatusId != null && (leadStatuses.find((s) => s.id === pendingStatusId)?.name ?? '').trim().toLowerCase() === 'converted';
+
+  const handleServiceCategoryDialogSave = async () => {
+    const svc = dialogServiceName?.trim();
+    const cat = dialogCategoryName?.trim();
+    if (!svc || !cat) {
+      toast.error(t('whatsappInbox.fillServiceAndCategoryFirst', 'Pilih Layanan dan Kategori terlebih dahulu sebelum mengubah status ke Converted atau Resolve.'));
+      return;
+    }
+    if (isPendingConverted && !dialogDescription.trim()) {
+      toast.error(t('whatsappInbox.fillDescriptionFirst', 'Please fill Description before continuing.'));
+      return;
+    }
+    const idToApply = pendingStatusId;
+    const descriptionToPass = isPendingConverted ? dialogDescription.trim() : undefined;
+    setServiceCategoryDialogOpen(false);
+    setPendingStatusId(null);
+    setDialogDescription('');
+    await updateLeadServicesCategory(svc, cat);
+    setSelectedServiceName(svc);
+    setSelectedCategoryName(cat);
+    if (idToApply) await applyStatusChange(idToApply, descriptionToPass);
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-500 truncate" title={leadTitle}>
         {leadTitle}
       </p>
+
+      {/* Popup: Pilih Layanan dan Kategori sebelum Converted/Resolve */}
+      <Dialog open={serviceCategoryDialogOpen} onOpenChange={(open) => { setServiceCategoryDialogOpen(open); if (!open) { setPendingStatusId(null); setDialogDescription(''); } }}>
+        <DialogContent className="sm:max-w-md" hideCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <AlertCircle className="h-4 w-4" />
+              </span>
+              {t('whatsappInbox.selectServiceAndCategory', 'Pilih Layanan dan Kategori')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('whatsappInbox.fillServiceAndCategoryFirst', 'Pilih Layanan dan Kategori terlebih dahulu sebelum mengubah status ke Converted atau Resolve.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                {t('whatsappInbox.service', 'Layanan')}
+              </label>
+              <Select
+                value={dialogServiceName || undefined}
+                onValueChange={(v) => { setDialogServiceName(v); setDialogCategoryName(''); }}
+              >
+                <SelectTrigger className="w-full bg-white border-gray-200">
+                  <SelectValue placeholder={t('whatsappInbox.selectService', 'Pilih layanan')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {servicesList.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                {t('whatsappInbox.category', 'Kategori')}
+              </label>
+              <Select
+                value={dialogCategoryName || undefined}
+                onValueChange={setDialogCategoryName}
+                disabled={!dialogServiceName}
+              >
+                <SelectTrigger className="w-full bg-white border-gray-200">
+                  <SelectValue
+                    placeholder={
+                      dialogServiceName
+                        ? t('whatsappInbox.selectCategory', 'Select category')
+                        : t('whatsappInbox.selectServiceFirst', 'Select service first')
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {dialogCategoriesForService.map((ss) => (
+                    <SelectItem key={ss.id} value={ss.name}>{ss.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isPendingConverted && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  {t('whatsappInbox.description', 'Description')} <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={dialogDescription}
+                  onChange={(e) => setDialogDescription(e.target.value)}
+                  placeholder={t('whatsappInbox.descriptionPlaceholder', 'Activity / order description...')}
+                  className="min-h-[80px] resize-none text-sm bg-white border-gray-200"
+                  required
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setServiceCategoryDialogOpen(false); setPendingStatusId(null); setDialogDescription(''); }}
+            >
+              {t('whatsappInbox.cancel', 'Batal')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleServiceCategoryDialogSave}
+              disabled={!dialogServiceName?.trim() || !dialogCategoryName?.trim() || (isPendingConverted && !dialogDescription.trim())}
+            >
+              {t('whatsappInbox.saveAndContinue', 'Simpan dan lanjutkan')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Service and Category dropdowns */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-gray-600 block">
+          {t('whatsappInbox.service', 'Service')}
+        </label>
+        <Select value={selectedServiceName || undefined} onValueChange={handleServiceChange} disabled={isUpdatingLead}>
+          <SelectTrigger className="w-full text-sm bg-white border-gray-200 h-9">
+            <SelectValue placeholder={t('whatsappInbox.selectService', 'Select service')} />
+          </SelectTrigger>
+          <SelectContent>
+            {servicesList.map((s) => (
+              <SelectItem key={s.id} value={s.name}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <label className="text-xs font-medium text-gray-600 block">
+          {t('whatsappInbox.category', 'Category')}
+        </label>
+        <Select
+          value={selectedCategoryName || undefined}
+          onValueChange={handleCategoryChange}
+          disabled={!selectedServiceName || isUpdatingLead}
+        >
+          <SelectTrigger className="w-full text-sm bg-white border-gray-200 h-9">
+            <SelectValue
+              placeholder={
+                selectedServiceName
+                  ? t('whatsappInbox.selectCategory', 'Select category')
+                  : t('whatsappInbox.selectServiceFirst', 'Select service first')
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {categoriesForService.map((ss) => (
+              <SelectItem key={ss.id} value={ss.name}>
+                {ss.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Update Follow Up - expand/collapse */}
       <div className="rounded-lg border border-gray-200 bg-slate-50/80 shadow-sm overflow-hidden">

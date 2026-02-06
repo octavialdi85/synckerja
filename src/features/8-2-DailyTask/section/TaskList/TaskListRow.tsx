@@ -50,11 +50,16 @@ import {
   calculateAssignedStepsProgress,
 } from './taskListHelpers';
 import type { Task } from '../../types';
+import { useDailyTask } from '../../DailyTaskContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { Badge } from '@/features/ui/badge';
 
 export interface TaskListRowProps {
   task: Task;
   isExpanded: boolean;
   isHighlighted: boolean;
+  /** When true, use amber highlight (from pending approval click). */
+  isHighlightedFromPendingApproval?: boolean;
   department: { id: string; name: string } | undefined;
   blockerCount: number;
   filters: { pic?: string } | null;
@@ -83,6 +88,7 @@ export function TaskListRow({
   task,
   isExpanded,
   isHighlighted,
+  isHighlightedFromPendingApproval = false,
   department,
   blockerCount,
   filters,
@@ -106,6 +112,9 @@ export function TaskListRow({
   setAddStepDialog,
   userId,
 }: TaskListRowProps) {
+  const { t } = useAppTranslation();
+  const { rejectedReasonsByTaskId } = useDailyTask();
+  const taskRejectReason = rejectedReasonsByTaskId[task.id];
   const visibleSteps = getVisibleSteps(task);
   const progress = calculateAssignedStepsProgress(task, visibleSteps);
   const creatorCanEdit = isTaskCreator(task, userId);
@@ -124,7 +133,11 @@ export function TaskListRow({
       <TableRow
         ref={rowRef}
         className={`w-full hover:bg-gray-50 transition-all duration-300 ${
-          isHighlighted ? 'bg-blue-50 border-l-4 border-l-blue-500 shadow-md' : ''
+          isHighlightedFromPendingApproval
+            ? 'bg-amber-50 border-l-4 border-l-amber-500 shadow-md'
+            : isHighlighted
+              ? 'bg-blue-50 border-l-4 border-l-blue-500 shadow-md'
+              : ''
         }`}
       >
         <TableCell className="px-2 py-3 text-center" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
@@ -168,13 +181,19 @@ export function TaskListRow({
           <Tooltip>
             <TooltipTrigger asChild>
               <div
-                className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex items-center gap-2 ${
+                className={`text-sm font-medium cursor-pointer hover:text-blue-600 truncate flex flex-wrap items-center gap-2 ${
                   isTaskFullyCompleteBySteps(task) ? 'line-through text-gray-500' : 'text-gray-900'
                 }`}
                 onClick={() => onToggleExpansion(task.id)}
               >
-                {isHighlighted && <Target className="w-4 h-4 text-blue-600 animate-pulse" />}
+                {isHighlightedFromPendingApproval && <Target className="w-4 h-4 text-amber-600 animate-pulse" />}
+                {isHighlighted && !isHighlightedFromPendingApproval && <Target className="w-4 h-4 text-blue-600 animate-pulse" />}
                 {task.title}
+                {taskRejectReason && (
+                  <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">
+                    {t('dailyTask.approval.revisionBadge', 'Revision')}
+                  </Badge>
+                )}
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="start" className="max-w-md p-4 bg-gray-900 text-white shadow-lg border-gray-700">
@@ -184,6 +203,14 @@ export function TaskListRow({
               )}
             </TooltipContent>
           </Tooltip>
+          {taskRejectReason && (
+            <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+              <p className="font-medium text-amber-800">
+                {t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}
+              </p>
+              <p className="text-gray-700 mt-0.5">{taskRejectReason}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
             {task.steps.length > 0 && (
               <div className="flex items-center gap-1">
@@ -478,8 +505,12 @@ export function TaskListRow({
         <TableRow className="w-full">
           <TableCell
             colSpan={13}
-            className={`w-full px-4 py-4 border-t border-blue-200 transition-all duration-300 ${
-              isHighlighted ? 'bg-blue-100 border-l-4 border-l-blue-500' : 'bg-blue-50'
+            className={`w-full px-4 py-4 border-t transition-all duration-300 ${
+              isHighlightedFromPendingApproval
+                ? 'bg-amber-50 border-l-4 border-l-amber-500 border-amber-200'
+                : isHighlighted
+                  ? 'bg-blue-100 border-l-4 border-l-blue-500 border-blue-200'
+                  : 'bg-blue-50 border-blue-200'
             }`}
             style={{ width: '100%', minWidth: 0, maxWidth: '100%' }}
           >

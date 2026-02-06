@@ -94,6 +94,7 @@ import { CalculatorServicesPage } from "./features/8-3-calculator/services";
 import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
 import { PricingTools as PricingToolsPage } from "./features/8_2_pricing-tools/pages";
+import { DefaultPricesPage } from "./features/8_2_1_default_prices/pages";
 import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
 import { CustomerServicePage } from "./features/5-1-dashboard/CustomerServicePage";
 import { CustomerServiceDashboard } from "./features/5-1-dashboard";
@@ -469,6 +470,14 @@ const App = () => (
                 element={
                   <UniversalProtectedRoute>
                     <PPh21CalculatorPage />
+                  </UniversalProtectedRoute>
+                }
+              />
+              <Route 
+                path="/tools/default-prices"
+                element={
+                  <UniversalProtectedRoute>
+                    <DefaultPricesPage />
                   </UniversalProtectedRoute>
                 }
               />

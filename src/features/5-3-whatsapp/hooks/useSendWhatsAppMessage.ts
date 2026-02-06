@@ -62,7 +62,7 @@ export function useSendWhatsAppMessage() {
       }
       return json;
     },
-    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null }, variables) => {
+    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null; lead_status_id?: string | null }, variables) => {
       const conversationId = variables.conversation_id;
       if (conversationId && data?.message) {
         queryClient.setQueryData<WhatsAppMessage[]>(
@@ -79,10 +79,22 @@ export function useSendWhatsAppMessage() {
         if (!data?.message) {
           queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
         }
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-        // Balasan pertama dari Unread → edge function set status ke On Going; refetch agar dropdown langsung tampil On going
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
-        queryClient.refetchQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+        const statusQueryKey = ['whatsapp-conversation-status', conversationId] as const;
+        // Prefer lead_status_id from backend so UI updates without depending on lead-statuses cache.
+        const statusIdFromBackend = data?.lead_status_id ?? null;
+        if (statusIdFromBackend) {
+          queryClient.setQueryData(statusQueryKey, statusIdFromBackend);
+        } else {
+          const leadStatuses = queryClient.getQueryData<Array<{ id: string; name: string }>>(['lead-statuses']);
+          const inProgressStatus = leadStatuses?.find((s) => (s.name ?? '').trim().toLowerCase() === 'in progress');
+          if (inProgressStatus?.id) {
+            queryClient.setQueryData(statusQueryKey, inProgressStatus.id);
+          }
+        }
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          void queryClient.refetchQueries({ queryKey: statusQueryKey });
+        }, 1500);
       }
     },
   });

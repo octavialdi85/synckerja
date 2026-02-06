@@ -12,6 +12,14 @@ import {
 /** Delay (ms) before fetching approval data so main task list loads first; keeps page load fast. */
 const DEFER_APPROVAL_FETCH_MS = 800;
 
+/** Key per (entity + assignee) for dedup; same entity rejected multiple times -> keep latest (first in DESC order). */
+function getRejectionKeyForRow(row: CompletionApprovalRow): string {
+  if (row.entity_type === 'task') return `task_${row.daily_task_id}_${row.assignee_employee_id}`;
+  if (row.entity_type === 'step' && row.task_step_id) return `step_${row.task_step_id}_${row.assignee_employee_id}`;
+  if (row.entity_type === 'substep' && row.task_steps_to_steps_id) return `substep_${row.task_steps_to_steps_id}_${row.assignee_employee_id}`;
+  return '';
+}
+
 export function useCompletionApprovals(refreshDeps: unknown[] = []) {
   const { organizationId } = useCurrentOrg();
   const { data: currentEmployee } = useCurrentEmployee();
@@ -37,8 +45,17 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
     ]);
     if (!pendingRes.error) setPending(pendingRes.data);
     else console.warn('[useCompletionApprovals] Fetch pending approvals failed:', pendingRes.error.message);
-    if (!rejectedRes.error) setRejected(rejectedRes.data);
-    else console.warn('[useCompletionApprovals] Fetch rejected for assignee failed:', rejectedRes.error.message);
+    if (!rejectedRes.error) {
+      const raw = rejectedRes.data ?? [];
+      const seen = new Set<string>();
+      const deduped = raw.filter((row) => {
+        const key = getRejectionKeyForRow(row);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setRejected(deduped);
+    } else console.warn('[useCompletionApprovals] Fetch rejected for assignee failed:', rejectedRes.error.message);
     setFetchError(pendingRes.error ?? rejectedRes.error ?? null);
     setLoading(false);
   }, [organizationId, currentEmployee?.id, ...refreshDeps]);

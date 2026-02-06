@@ -13,6 +13,7 @@ import { useToast } from '@/features/1-login/hooks/use-toast';
 import { LeadFollowUpUpdate } from '@/types/leads';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { computeFollowUpAndPriority } from '@/features/5-3-leads-management/utils/fuPriorityFromUpdates';
 interface LeadFollowUpFormProps {
   open: boolean;
   onClose: () => void;
@@ -56,13 +57,13 @@ export const LeadFollowUpForm = ({
     try {
       if (isWhatsAppLead && conversationId) {
         const { data, error } = await supabase
-          .from('whatsapp_conversation_follow_up_updates')
+          .from('lead_follow_up_updates')
           .select('*')
           .eq('conversation_id', conversationId)
           .order('created_at', { ascending: false });
         if (error) throw error;
-        const rows = (data || []) as any[];
-        setUpdates(rows.map((r) => ({ ...r, lead_id: leadId })));
+        const rows = (data || []).map((r) => ({ ...r, lead_id: leadId }));
+        setUpdates(rows as LeadFollowUpUpdate[]);
       } else {
         const { data, error } = await supabase
           .from('lead_follow_up_updates')
@@ -77,11 +78,11 @@ export const LeadFollowUpForm = ({
     }
   };
 
-  // Helper function to sync follow up count and FU Priority with actual updates
+  // Helper: sync follow up count and FU Priority from lead_follow_up_updates (percentage-based: Hot/Warm/Cold %)
   const syncFollowUpCountAndPriority = async () => {
     try {
       const query = isWhatsAppLead && conversationId
-        ? supabase.from('whatsapp_conversation_follow_up_updates').select('status').eq('conversation_id', conversationId)
+        ? supabase.from('lead_follow_up_updates').select('status').eq('conversation_id', conversationId)
         : supabase.from('lead_follow_up_updates').select('status').eq('lead_id', leadId);
       const { data: allUpdates, error: fetchError } = await query;
 
@@ -90,28 +91,11 @@ export const LeadFollowUpForm = ({
         return;
       }
 
-      const actualFollowupCount = allUpdates?.length || 0;
-      const statusCounts = { 'Hot Prospect': 0, 'Warm Prospect': 0, 'Cold Prospect': 0 };
-      allUpdates?.forEach((update: { status?: string }) => {
-        if (update.status && update.status in statusCounts) {
-          statusCounts[update.status as keyof typeof statusCounts]++;
-        }
-      });
-
-      let calculatedPriority: string | null = null;
-      if (actualFollowupCount > 0) {
-        const hotCount = statusCounts['Hot Prospect'];
-        const warmCount = statusCounts['Warm Prospect'];
-        const coldCount = statusCounts['Cold Prospect'];
-        const maxCount = Math.max(hotCount, warmCount, coldCount);
-        if (hotCount === maxCount && maxCount > 0) calculatedPriority = 'High';
-        else if (warmCount === maxCount && maxCount > 0) calculatedPriority = 'Medium';
-        else if (coldCount === maxCount && maxCount > 0) calculatedPriority = 'Low';
-      }
+      const { followupCount, fuPriority } = computeFollowUpAndPriority(allUpdates ?? []);
 
       const updateData: any = {
-        followup: actualFollowupCount,
-        fu_priority: calculatedPriority ?? null,
+        followup: followupCount,
+        fu_priority: fuPriority ?? null,
         updated_at: new Date().toISOString(),
       };
 
@@ -156,10 +140,26 @@ export const LeadFollowUpForm = ({
       if (!profile?.active_organization_id) {
         throw new Error('No active organization found');
       }
-      if (isWhatsAppLead && conversationId) {
+      if (isWhatsAppLead && conversationId && organizationId) {
+        const { data: conv } = await supabase
+          .from('whatsapp_conversations')
+          .select('ticket_id')
+          .eq('id', conversationId)
+          .single();
+        const ticketId = conv?.ticket_id;
+        if (!ticketId) throw new Error('Conversation not found');
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('ticket_id', ticketId)
+          .eq('organization_id', organizationId)
+          .maybeSingle();
+        const realLeadId = lead?.id;
+        if (!realLeadId) throw new Error('Lead not found for this conversation');
         const { error: insertError } = await supabase
-          .from('whatsapp_conversation_follow_up_updates')
+          .from('lead_follow_up_updates')
           .insert({
+            lead_id: realLeadId,
             conversation_id: conversationId,
             update_details: updateDetails,
             status: status || null,
@@ -214,9 +214,8 @@ export const LeadFollowUpForm = ({
   const handleSaveEdit = async (updateId: string) => {
     if (!editUpdateDetails.trim()) return;
     try {
-      const table = isWhatsAppLead ? 'whatsapp_conversation_follow_up_updates' : 'lead_follow_up_updates';
       const { error } = await supabase
-        .from(table as 'lead_follow_up_updates')
+        .from('lead_follow_up_updates')
         .update({ update_details: editUpdateDetails })
         .eq('id', updateId);
       if (error) throw error;
@@ -244,8 +243,7 @@ export const LeadFollowUpForm = ({
   const handleDeleteUpdate = async (updateId: string) => {
     if (!confirm('Are you sure you want to delete this update?')) return;
     try {
-      const table = isWhatsAppLead ? 'whatsapp_conversation_follow_up_updates' : 'lead_follow_up_updates';
-      const { error } = await supabase.from(table as 'lead_follow_up_updates').delete().eq('id', updateId);
+      const { error } = await supabase.from('lead_follow_up_updates').delete().eq('id', updateId);
       if (error) throw error;
       
       // Sync follow up count and FU Priority after deletion

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useDeferredValue } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
@@ -137,6 +137,8 @@ const SocialMediaContent = () => {
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isMonthSelectorOpen, setIsMonthSelectorOpen] = useState(false);
+  // Deferred month for filtering/table/sidebar so dropdown updates immediately without blocking
+  const deferredMonth = useDeferredValue(selectedMonth);
 
   // Edit Target Dialog States
   const [isEditTargetOpen, setIsEditTargetOpen] = useState(false);
@@ -214,12 +216,12 @@ const SocialMediaContent = () => {
     navigate(`/digital-marketing/social-media/${newTab}`);
   };
 
-  // Filtered content plans - use empty array during loading to prevent flicker
+  // Filtered content plans - use deferredMonth so dropdown (selectedMonth) updates immediately
   const filteredContentPlans = useOptimizedFiltering(
     loading ? [] : contentPlans, 
     searchTerm, 
     statusFilter,
-    selectedMonth,
+    deferredMonth,
     serviceFilter
   );
 
@@ -248,8 +250,8 @@ const SocialMediaContent = () => {
     const day = String(today.getDate()).padStart(2, '0');
     const todayDateString = `${year}-${month}-${day}`; // Format: YYYY-MM-DD (local timezone)
     
-    // Use selectedMonth if provided, otherwise use current month
-    const filterDate = selectedMonth || today;
+    // Use deferredMonth for metrics so dropdown stays responsive
+    const filterDate = deferredMonth || today;
     const currentMonth = filterDate.getMonth();
     const currentYear = filterDate.getFullYear();
 
@@ -624,7 +626,7 @@ const SocialMediaContent = () => {
       monthlyRevisedContent: monthlyContentPlans.filter(needsRevision).length,
       monthlyTotalContent: monthlyContentPlans.length
     };
-  }, [contentPlans, activePerformanceTab, allSocialMediaLinks, loading, selectedMonth]); // Add selectedMonth to recalculate when month filter changes
+  }, [contentPlans, activePerformanceTab, allSocialMediaLinks, loading, deferredMonth]);
 
   // Callback handlers
   const handleSelectItem = useCallback((id: string, checked: boolean) => {
@@ -1140,7 +1142,7 @@ const SocialMediaContent = () => {
                            {/* Right Section - Sidebar (25% width / 3 cols) */}
                            <div className="col-span-3 space-y-2 flex flex-col min-h-0 h-full">
                              <div className="h-full flex flex-col">
-                               <SidebarContainer selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
+                               <SidebarContainer selectedMonth={deferredMonth} serviceFilter={serviceFilter} />
                              </div>
                            </div>
                         </div>

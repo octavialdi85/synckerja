@@ -32,8 +32,23 @@ function getStatusColorClass(status: LeadStatusOption | null | undefined): strin
   return colorMap[status.color] ?? 'bg-gray-50 text-gray-700 border-gray-200';
 }
 
-// Sama seperti livechat: Unread (Open) dikunci ketika status On Going / Qualified / Converted / Resolve / Lost
-const STATUSES_THAT_LOCK_UNREAD = ['lost', 'closed', 'converted', 'in progress', 'qualified', 'on going'];
+// Urutan status (progression): status dengan order lebih kecil tidak bisa dipilih ketika status saat ini lebih tinggi
+const STATUS_ORDER: Record<string, number> = {
+  open: 0,
+  unread: 0,
+  'in progress': 1,
+  qualified: 2,
+  converted: 3,
+  closed: 4,
+  resolve: 4,
+  lost: 4,
+};
+
+function getStatusOrder(name: string | null | undefined): number {
+  if (name == null || name === '') return -1;
+  const key = name.trim().toLowerCase();
+  return key in STATUS_ORDER ? STATUS_ORDER[key] : 999;
+}
 
 export interface LeadStatusSelectProps {
   value: string | undefined;
@@ -60,14 +75,17 @@ export function LeadStatusSelect({
 }: LeadStatusSelectProps) {
   const { t } = useAppTranslation();
   const currentStatus = leadStatuses.find((s) => s.id === value);
-  // Kunci Unread jika status saat ini On going / Qualified / Converted / Resolve / Lost (cekal celah kecurangan)
-  const nameFromProp = (currentStatusName ?? '').trim().toLowerCase();
-  const nameFromValue = (currentStatus?.name ?? '').trim().toLowerCase();
-  const isUnreadLocked =
-    STATUSES_THAT_LOCK_UNREAD.some((n) => nameFromProp === n) ||
-    STATUSES_THAT_LOCK_UNREAD.some((n) => nameFromValue === n);
-  const isOpenOptionDisabled = (statusName: string) =>
-    (statusName?.trim().toLowerCase() === 'open') && isUnreadLocked;
+  const currentOrder = Math.max(
+    getStatusOrder(currentStatusName),
+    getStatusOrder(currentStatus?.name ?? '')
+  );
+
+  /** Nonaktifkan opsi yang order-nya lebih kecil dari status saat ini (tidak bisa mundur). */
+  const isOptionDisabled = (statusName: string) => {
+    const order = getStatusOrder(statusName);
+    if (order < 0) return false;
+    return order < currentOrder;
+  };
 
   if (isLoading) {
     return (
@@ -84,10 +102,9 @@ export function LeadStatusSelect({
     );
   }
 
-  // Guard: jangan izinkan pilih Open (Unread) bila status saat ini On going / Qualified / Converted / Resolve / Lost
   const handleValueChange = (newValue: string) => {
     const newStatus = leadStatuses.find((s) => s.id === newValue);
-    if (newStatus?.name?.trim().toLowerCase() === 'open' && isUnreadLocked) return;
+    if (newStatus && isOptionDisabled(newStatus.name ?? '')) return;
     onValueChange(newValue);
   };
 
@@ -101,23 +118,18 @@ export function LeadStatusSelect({
       </SelectTrigger>
       <SelectContent>
         {leadStatuses
-          .filter((s) => {
-            const name = (s.name ?? '').trim().toLowerCase();
-            if (name === 'lost') return false;
-            if (name === 'open' && isUnreadLocked) return false;
-            return true;
-          })
+          .filter((s) => (s.name ?? '').trim().toLowerCase() !== 'lost')
           .map((status) => {
-            const disableUnread = isOpenOptionDisabled(status.name ?? '');
+            const optionDisabled = isOptionDisabled(status.name ?? '');
             return (
               <SelectItem
                 key={status.id}
                 value={status.id}
-                disabled={disableUnread}
-                className={disableUnread ? 'opacity-60 cursor-not-allowed pointer-events-none select-none' : undefined}
+                disabled={optionDisabled}
+                className={optionDisabled ? 'opacity-60 cursor-not-allowed pointer-events-none select-none' : undefined}
                 title={
-                  disableUnread
-                    ? t('leadsManagement.openDisabledForTerminalStatus', 'Status On Going/Qualified/Converted/Resolve tidak dapat dikembalikan ke Unread')
+                  optionDisabled
+                    ? t('leadsManagement.statusCannotGoBack', 'Status tidak dapat dikembalikan ke tahap sebelumnya')
                     : undefined
                 }
               >

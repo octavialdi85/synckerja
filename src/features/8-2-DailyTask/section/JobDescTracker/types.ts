@@ -18,6 +18,10 @@ interface JobDescAssignmentBase {
   pendingHours: number;
   completedAt?: string | null;
   completedInRange?: boolean;
+  /** Reason for rejection when assigner rejected completion (shown in Job Desc Detail + main table). */
+  rejectReason?: string | null;
+  /** True when this assignment was rejected by assigner (show "Revision" badge). */
+  isRejected?: boolean;
 }
 
 export interface JobDescTaskAssignment extends JobDescAssignmentBase {

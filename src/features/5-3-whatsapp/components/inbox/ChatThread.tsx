@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppMessages } from '../../hooks/useWhatsAppMessages';
 import { useResolveWhatsAppMedia } from '../../hooks/useResolveWhatsAppMedia';
 import { useSendWhatsAppMessage } from '../../hooks/useSendWhatsAppMessage';
@@ -367,6 +367,44 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
   const { send: sendInstagram, isSending: isSendingInstagram } = useSendInstagramMessage();
   const { resolve: resolveMedia, isResolving: isResolvingMedia, resolvingMessageId } = useResolveWhatsAppMedia(conversation?.id ?? null);
 
+  // Status from list can be stale; use dedicated query so Resolve blocks send for both WhatsApp and Instagram
+  const hasConversationId = !!conversation?.id;
+  const { data: conversationStatusId } = useQuery({
+    queryKey: ['whatsapp-conversation-status', conversation?.id],
+    queryFn: async () => {
+      if (!conversation?.id) return null;
+      const { data, error } = await supabase
+        .from('whatsapp_conversations')
+        .select('lead_status_id')
+        .eq('id', conversation.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.lead_status_id as string) ?? null;
+    },
+    enabled: hasConversationId,
+    refetchInterval: 5000,
+  });
+  const { data: leadStatuses = [] } = useQuery({
+    queryKey: ['lead-statuses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_statuses')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+    enabled: hasConversationId,
+  });
+  const statusNameFromQuery =
+    conversationStatusId != null
+      ? leadStatuses.find((s) => s.id === conversationStatusId)?.name ?? null
+      : null;
+  const effectiveStatusName = statusNameFromQuery ?? conversation?.lead_status_name ?? null;
+
+  const isResolved = isResolvedStatus(effectiveStatusName);
+
   const isInstagramConversation =
     (conversation?.channel ?? '').toLowerCase() === 'instagram' ||
     isLikelyInstagramId(conversation?.customer_wa_id);
@@ -576,8 +614,6 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
   /** Blokir pesan yang meminta kontak. Default ON; set VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS=false untuk nonaktifkan. */
   const blockContactRequests =
     (import.meta.env.VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS as string) !== 'false';
-
-  const isResolved = isResolvedStatus(conversation?.lead_status_name);
 
   const handleSend = async () => {
     if (!conversation) return;
@@ -1029,9 +1065,18 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
       </div>
       <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-[#f0f2f5]">
         {isResolved && (
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2" role="status">
-            {t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.')}
-          </p>
+          <div
+            className="text-sm font-medium text-amber-800 bg-amber-100 border-2 border-amber-400 rounded-lg px-3 py-2.5 mb-2 flex items-center gap-2"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs" aria-hidden>
+              !
+            </span>
+            <span>
+              {t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.')}
+            </span>
+          </div>
         )}
         <input
           ref={fileInputRef}

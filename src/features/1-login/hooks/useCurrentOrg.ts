@@ -80,7 +80,7 @@ export const useCurrentOrg = () => {
       // Check for new organization from sessionStorage first (highest priority)
       const newOrgId = sessionStorage.getItem('newOrganizationId');
       if (newOrgId) {
-        setOrganizationId(newOrgId);
+        setOrganizationId(prev => prev === newOrgId ? prev : newOrgId);
         setLoading(false);
         fetchingRef.current = false;
         sessionStorage.removeItem('newOrganizationId');
@@ -177,7 +177,7 @@ export const useCurrentOrg = () => {
       }
 
       if (!user) {
-        setOrganizationId(null);
+        setOrganizationId(prev => prev === null ? prev : null);
         setLoading(false);
         fetchingRef.current = false;
         return;
@@ -196,7 +196,7 @@ export const useCurrentOrg = () => {
       const cacheKey = `org-${user.id}`;
       const cached = orgCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-        setOrganizationId(cached.data);
+        setOrganizationId(prev => prev === cached.data ? prev : cached.data);
         setLoading(false);
         fetchingRef.current = false;
         return;
@@ -206,7 +206,7 @@ export const useCurrentOrg = () => {
       const localStorageKey = `org-cache-${user.id}`;
       const localStorageData = getLocalStorageCache(localStorageKey);
       if (localStorageData) {
-        setOrganizationId(localStorageData);
+        setOrganizationId(prev => prev === localStorageData ? prev : localStorageData);
         setLoading(false);
         fetchingRef.current = false;
         // Update memory cache
@@ -258,7 +258,7 @@ export const useCurrentOrg = () => {
           });
           setLocalStorageCache(localStorageKey, defaultOrgId);
           
-          setOrganizationId(defaultOrgId);
+          setOrganizationId(prev => prev === defaultOrgId ? prev : defaultOrgId);
           setLoading(false);
           fetchingRef.current = false;
           return;
@@ -293,7 +293,7 @@ export const useCurrentOrg = () => {
         });
         setLocalStorageCache(localStorageKey, firstOrgId);
 
-        setOrganizationId(firstOrgId);
+        setOrganizationId(prev => prev === firstOrgId ? prev : firstOrgId);
         setLoading(false);
         fetchingRef.current = false;
         return;
@@ -311,9 +311,9 @@ export const useCurrentOrg = () => {
 
       if (!orgId) {
         setError('No active organization selected');
-        setOrganizationId(null);
+        setOrganizationId(prev => prev === null ? prev : null);
       } else {
-        setOrganizationId(orgId);
+        setOrganizationId(prev => prev === orgId ? prev : orgId);
       }
 
       setLoading(false);
@@ -410,7 +410,7 @@ export const useCurrentOrg = () => {
           }
         }, 2000); // Increased debounce to 2 seconds
       } else if (event === 'SIGNED_OUT') {
-        setOrganizationId(null);
+        setOrganizationId(() => null);
         setLoading(false);
         setError(null);
         orgCache.clear(); // Clear cache on sign out

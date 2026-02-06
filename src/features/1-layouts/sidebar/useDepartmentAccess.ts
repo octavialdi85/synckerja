@@ -24,6 +24,7 @@ const UNRESTRICTED_DURING_LOADING = [
   '/tools/calculator/services',               // Calculator tool - Services
   '/tools/calculator/sales',                  // Calculator tool - Sales
   '/tools/pph21-calculator',                  // PPh 21 calculator
+  '/tools/default-prices',                    // Default prices (Service + Category)
   '/tools/pricing-tools',                     // Pricing tool
   '/tools/promo-simulation',                  // Promo simulation
   '/tools'                          // Tools section

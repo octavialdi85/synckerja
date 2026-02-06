@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { PanelRightOpen, PanelRightClose, Search } from 'lucide-react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '@/features/5-3-dashboard/HeaderAndTab';
@@ -15,14 +16,28 @@ import { useWhatsAppConversations } from '../hooks/useWhatsAppConversations';
 import { useEmailConversations } from '../hooks/useEmailConversations';
 import { useWhatsAppAccounts } from '../hooks/useWhatsAppAccounts';
 import { useEmailConnections } from '../hooks/useEmailConnections';
+import { supabase } from '@/integrations/supabase/client';
 import type { LiveChatConversation, WhatsAppConversation } from '../types';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
 export function WhatsAppInboxPage() {
   const { t } = useAppTranslation();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
+
+  // Prefetch lead-statuses so outbound send can optimistically set In Progress (useSendWhatsAppMessage reads from cache).
+  useEffect(() => {
+    void queryClient.prefetchQuery({
+      queryKey: ['lead-statuses'],
+      queryFn: async () => {
+        const { data, error } = await supabase.from('lead_statuses').select('id, name, color').eq('is_active', true).order('sort_order');
+        if (error) throw error;
+        return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
+      },
+    });
+  }, [queryClient]);
   const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
   const { accounts: waAccounts } = useWhatsAppAccounts();
   const { connections: emailConnections } = useEmailConnections();

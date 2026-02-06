@@ -1041,7 +1041,7 @@ export const LeadsInsights = ({
                       </div>
                       <div className="bg-blue-50 rounded p-2">
                         <div className="font-semibold text-blue-700">{consultant.activeLeads}</div>
-                        <div className="text-blue-600">On Going</div>
+                        <div className="text-blue-600">In Progress</div>
                       </div>
                       <div className="bg-green-50 rounded p-2">
                         <div className="font-semibold text-green-700">{consultant.convertedLeads}</div>

@@ -150,9 +150,9 @@ export const SalesActivityItemsManager = React.forwardRef<SalesActivityItemsMana
         description: "Draft item updated successfully",
       });
     } else {
-      // Update saved item
+      // Update saved item (pass single object { id, ...data } for mutation)
       try {
-        await updateItem(editingItem.id, data);
+        await updateItem({ id: editingItem.id, ...data });
         toast({
           title: "Success",
           description: "Item updated successfully",
@@ -193,9 +193,9 @@ export const SalesActivityItemsManager = React.forwardRef<SalesActivityItemsMana
     setShowAddDialog(true);
   };
 
-  const handleCloseDialog = () => {
-    setShowAddDialog(false);
-    setEditingItem(null);
+  const handleCloseDialog = (open: boolean) => {
+    setShowAddDialog(open);
+    if (!open) setEditingItem(null);
   };
 
   // Expose draft helpers to parent (for syncing after creating activity)
@@ -239,7 +239,7 @@ export const SalesActivityItemsManager = React.forwardRef<SalesActivityItemsMana
 
       <AddItemDialog
         open={showAddDialog}
-        onOpenChange={handleCloseDialog}
+        onOpenChange={(open) => handleCloseDialog(open)}
         onSubmit={editingItem ? handleEditItem : handleAddItem}
         editingItem={editingItem}
       />

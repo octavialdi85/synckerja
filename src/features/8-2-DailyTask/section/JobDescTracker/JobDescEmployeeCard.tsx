@@ -234,7 +234,7 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
   );
 
   return (
-    <div className="border border-gray-100 rounded-lg p-3 bg-white shadow-sm">
+    <div className="border-2 border-gray-200 rounded-lg p-3 bg-white shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-sm text-gray-900">{summary.name}</p>
@@ -315,17 +315,24 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
             return (
               <div
                 key={`${assignment.assignmentId}-${assignment.type}`}
-                className="border border-gray-100 rounded-md p-2 text-xs"
+                className="border-2 border-gray-200 rounded-md p-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p 
-                      className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
-                      onClick={() => handleTaskTitleClick(assignment)}
-                      title="Click to search and view this task"
-                    >
-                      {taskTitle}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p 
+                        className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => handleTaskTitleClick(assignment)}
+                        title="Click to search and view this task"
+                      >
+                        {taskTitle}
+                      </p>
+                      {assignment.isRejected && (
+                        <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">
+                          {t("dailyTask.approval.revisionBadge", "Revision")}
+                        </Badge>
+                      )}
+                    </div>
                     {extraLabel && (
                       <p 
                         className="text-[11px] text-gray-500 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
@@ -334,6 +341,14 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                       >
                         {extraLabel}
                       </p>
+                    )}
+                    {assignment.rejectReason && (
+                      <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+                        <p className="font-medium text-amber-800">
+                          {t("dailyTask.approval.reasonForRejectionLabel", "Reason for Rejection")}
+                        </p>
+                        <p className="text-gray-700 mt-0.5">{assignment.rejectReason}</p>
+                      </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
                       {assignment.dueDate && (
@@ -424,17 +439,32 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
                 return (
                   <div
                     key={`${assignment.assignmentId}-${assignment.type}-completed`}
-                    className="border border-green-100 bg-green-50 rounded-md p-2 text-xs"
+                    className="border-2 border-green-200 bg-green-50 rounded-md p-2 text-xs"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p 
-                          className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
-                          onClick={() => handleTaskTitleClick(assignment)}
-                          title="Click to search and view this task"
-                        >
-                          {completedTitle || assignment.taskTitle}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p 
+                            className="font-semibold text-gray-900 line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => handleTaskTitleClick(assignment)}
+                            title="Click to search and view this task"
+                          >
+                            {completedTitle || assignment.taskTitle}
+                          </p>
+                          {assignment.isRejected && (
+                            <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">
+                              {t("dailyTask.approval.revisionBadge", "Revision")}
+                            </Badge>
+                          )}
+                        </div>
+                        {assignment.rejectReason && (
+                          <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+                            <p className="font-medium text-amber-800">
+                              {t("dailyTask.approval.reasonForRejectionLabel", "Reason for Rejection")}
+                            </p>
+                            <p className="text-gray-700 mt-0.5">{assignment.rejectReason}</p>
+                          </div>
+                        )}
                         {assignment.type === "subStep" && assignment.stepTitle && (
                           <p className="text-[11px] text-gray-500">
                             {t("dailyTask.jobDesc.assignment.parentStep", "Step: {{title}}", {

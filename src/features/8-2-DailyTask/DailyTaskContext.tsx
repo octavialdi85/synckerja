@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { retryableQuery } from '@/integrations/supabase/retry';
 import { useToast } from '@/features/ui/use-toast';
@@ -25,7 +25,7 @@ import {
 import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } from './utils/taskUtils';
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
-import { createCompletionApprovalIfAssignee } from './services/completionApprovalService';
+import { createCompletionApprovalIfAssignee, fetchRejectedForAssignee } from './services/completionApprovalService';
 
 // Helper function to batch process large ID arrays (Supabase has limits on .in() queries)
 // Optimized batch size to balance between speed and stability
@@ -162,6 +162,8 @@ export interface DailyTaskContextType {
   highlightedTask: string | null;
   setHighlightedTask: (taskId: string | null) => void;
   setFilters: (filters: TaskFilters | ((prev: TaskFilters) => TaskFilters)) => void;
+  /** Reset all filters to default (e.g. when clicking Refresh to show full task list). */
+  resetFilters: () => void;
   setRecentStepFilters: (filters: RecentStepFilters | ((prev: RecentStepFilters) => RecentStepFilters)) => void;
   addTask: (data: Partial<Task>) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
@@ -181,6 +183,28 @@ export interface DailyTaskContextType {
   navigateToTask: (taskId: string, stepId?: string) => void;
   scrollToStep: (stepId: string) => void;
   refetchTasks: () => Promise<void>;
+  /** Optimistic update: uncheck task/step/substep in local state (e.g. after reject in pending approval). */
+  uncheckCompletionLocally: (params: {
+    entityType: 'task' | 'step' | 'substep';
+    dailyTaskId: string;
+    taskStepId?: string | null;
+    taskStepsToStepsId?: string | null;
+  }) => void;
+  /** Rejection reason by task id (for main table task row). */
+  rejectedReasonsByTaskId: Record<string, string>;
+  /** Rejection reason by step id (for main table "Reason for Rejection" + Revision badge). */
+  rejectedReasonsByStepId: Record<string, string>;
+  /** Rejection reason by sub-step id (for main table). */
+  rejectedReasonsBySubStepId: Record<string, string>;
+  /** Focus from "Pending your approval" click: show only one task/step; cleared on refetch. */
+  pendingApprovalFocus: { taskId: string; stepId?: string; openSubStepModalForStepId?: string } | null;
+  setPendingApprovalFocus: (v: { taskId: string; stepId?: string; openSubStepModalForStepId?: string } | null) => void;
+  /** When true, task/step row uses amber highlight (from pending approval). */
+  highlightFromPendingApproval: boolean;
+  /** Tasks to display: when pendingApprovalFocus.taskId set, only that task; else filteredTasks. */
+  effectiveFilteredTasks: Task[];
+  /** Visible steps: when pendingApprovalFocus.stepId set for task, only that step; else getVisibleSteps. */
+  getVisibleStepsEffective: (task: Task) => TaskStep[];
 }
 
 const DailyTaskContext = createContext<DailyTaskContextType | undefined>(undefined);
@@ -226,7 +250,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const taskIdsWithFilesLoadedRef = useRef<Set<string>>(new Set());
 
   // Use custom hook for filter state with localStorage persistence
-  const { filters, setFilters } = useTaskFilterState();
+  const { filters, setFilters, resetFilters } = useTaskFilterState();
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
     dateRange: 'today',
     actionType: 'all'
@@ -239,6 +263,14 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const { data: currentEmployee } = useCurrentEmployee();
   const { isOwner } = useCentralizedUserData();
   const [departmentMap, setDepartmentMap] = useState<Record<string, { id: string; name: string }>>({});
+  const [rejectedReasonsByTaskId, setRejectedReasonsByTaskId] = useState<Record<string, string>>({});
+  const [rejectedReasonsByStepId, setRejectedReasonsByStepId] = useState<Record<string, string>>({});
+  const [rejectedReasonsBySubStepId, setRejectedReasonsBySubStepId] = useState<Record<string, string>>({});
+  const [pendingApprovalFocus, setPendingApprovalFocus] = useState<{
+    taskId: string;
+    stepId?: string;
+    openSubStepModalForStepId?: string;
+  } | null>(null);
 
   // Centralized fetch functions
   const fetchRecentStepUpdates = useCallback(async () => {
@@ -326,8 +358,31 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     isOwner,
   });
 
+  const highlightFromPendingApproval = pendingApprovalFocus !== null;
+
+  const effectiveFilteredTasks = useMemo(() => {
+    if (pendingApprovalFocus?.taskId) {
+      return tasks.filter((t) => t.id === pendingApprovalFocus.taskId);
+    }
+    return filteredTasks;
+  }, [pendingApprovalFocus?.taskId, tasks, filteredTasks]);
+
+  const getVisibleStepsEffective = useCallback(
+    (task: Task): TaskStep[] => {
+      if (pendingApprovalFocus?.stepId && task.id === pendingApprovalFocus.taskId) {
+        const step = task.steps?.find((s) => s.id === pendingApprovalFocus.stepId);
+        return step ? [step] : [];
+      }
+      return getVisibleSteps(task);
+    },
+    [pendingApprovalFocus?.taskId, pendingApprovalFocus?.stepId, getVisibleSteps]
+  );
+
   const fetchTasks = async (force = false) => {
-    if (!organizationId) return;
+    if (!organizationId) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const isDev = import.meta.env.DEV;
@@ -348,6 +403,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         user = (result as any)?.data?.user;
       } catch {
         setTasks([]);
+        setIsLoading(false);
         return;
       }
       
@@ -356,6 +412,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           logger.debug('⚠️ No authenticated user found');
         }
         setTasks([]);
+        setIsLoading(false);
         return;
       }
 
@@ -366,8 +423,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const cached = getCached<any[]>(cacheKey, 60000); // 60s instead of 30s
         if (cached) {
           setTasks(cached);
-          // Return early with cached data - this allows page to render immediately
-          // Fresh data will be fetched in background if needed
+          setIsLoading(false);
           return;
         }
       }
@@ -516,6 +572,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (!data || data.length === 0) {
         console.warn('⚠️ No tasks found for organization:', organizationId);
         setTasks([]);
+        setIsLoading(false);
         setCache(cacheKey, []);
         return;
       }
@@ -989,6 +1046,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Reset lazy-loaded files cache so files are re-fetched when user expands tasks
       taskIdsWithFilesLoadedRef.current = new Set();
       setTasks(tasksWithProgress);
+      setIsLoading(false);
 
       // Cache the results
       setCache(cacheKey, tasksWithProgress);
@@ -1000,6 +1058,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       );
     } catch (error) {
       console.error('Error fetching tasks:', error);
+      setIsLoading(false);
       toast({
         title: 'Error',
         description: 'Failed to load tasks',
@@ -2480,6 +2539,32 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
+  const fetchRejectedReasons = useCallback(async () => {
+    if (!organizationId || !currentEmployee?.id) {
+      setRejectedReasonsByTaskId({});
+      setRejectedReasonsByStepId({});
+      setRejectedReasonsBySubStepId({});
+      return;
+    }
+    const { data } = await fetchRejectedForAssignee(organizationId, currentEmployee.id);
+    const byTask: Record<string, string> = {};
+    const byStep: Record<string, string> = {};
+    const bySub: Record<string, string> = {};
+    (data ?? []).forEach((row) => {
+      if (!row.reject_reason) return;
+      if (row.entity_type === 'task' && !(row.daily_task_id in byTask)) byTask[row.daily_task_id] = row.reject_reason;
+      if (row.entity_type === 'step' && row.task_step_id && !(row.task_step_id in byStep)) byStep[row.task_step_id] = row.reject_reason;
+      if (row.entity_type === 'substep' && row.task_steps_to_steps_id && !(row.task_steps_to_steps_id in bySub)) bySub[row.task_steps_to_steps_id] = row.reject_reason;
+    });
+    setRejectedReasonsByTaskId(byTask);
+    setRejectedReasonsByStepId(byStep);
+    setRejectedReasonsBySubStepId(bySub);
+  }, [organizationId, currentEmployee?.id]);
+
+  useEffect(() => {
+    fetchRejectedReasons();
+  }, [fetchRejectedReasons]);
+
   // Real-time subscriptions using custom hook
   // Create a stable refresh callback that calls fetchTasks
   const handleRefresh = useCallback(() => {
@@ -2514,7 +2599,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     initialLoadState = { orgId: organizationId, at: now };
 
     const loadData = async () => {
-      setTasks([]);
+      // Do not clear tasks here: it caused empty table until fetch completes (4–5s).
+      // Keep previous list (or initial []) so UI is not empty during refetch.
       setIsLoading(false);
 
       // Non-blocking cache check: don't wait, run in background
@@ -2597,6 +2683,62 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     }
   };
 
+  /** Optimistic update: uncheck task/step/substep in local state (e.g. after reject in pending approval). */
+  const uncheckCompletionLocally = useCallback(
+    (params: {
+      entityType: 'task' | 'step' | 'substep';
+      dailyTaskId: string;
+      taskStepId?: string | null;
+      taskStepsToStepsId?: string | null;
+    }) => {
+      const { entityType, dailyTaskId, taskStepId, taskStepsToStepsId } = params;
+      setTasks((prev) => {
+        if (entityType === 'task') {
+          return prev.map((t) =>
+            t.id === dailyTaskId ? { ...t, status: 'pending' as const } : t
+          );
+        }
+        if (entityType === 'step' && taskStepId) {
+          return prev.map((t) =>
+            t.id !== dailyTaskId
+              ? t
+              : {
+                  ...t,
+                  steps: t.steps.map((s) =>
+                    s.id !== taskStepId
+                      ? s
+                      : { ...s, is_completed: false, completed_at: null }
+                  ),
+                }
+          );
+        }
+        if (entityType === 'substep' && taskStepId && taskStepsToStepsId) {
+          return prev.map((t) =>
+            t.id !== dailyTaskId
+              ? t
+              : {
+                  ...t,
+                  steps: t.steps.map((s) =>
+                    s.id !== taskStepId
+                      ? s
+                      : {
+                          ...s,
+                          sub_steps: (s.sub_steps ?? []).map((sub) =>
+                            sub.id !== taskStepsToStepsId
+                              ? sub
+                              : { ...sub, is_completed: false }
+                          ),
+                        }
+                  ),
+                }
+          );
+        }
+        return prev;
+      });
+    },
+    []
+  );
+
   // Lazy load task_files for one task when user expands it (reduces API calls on page load)
   const fetchTaskFilesForTask = useCallback(async (taskId: string) => {
     if (taskIdsWithFilesLoadedRef.current.has(taskId)) return;
@@ -2664,6 +2806,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     highlightedTask,
     setHighlightedTask,
     setFilters,
+    resetFilters,
     setRecentStepFilters,
     addTask,
     updateTask,
@@ -2682,10 +2825,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     rejectDeadlineExtension,
     navigateToTask,
     scrollToStep,
-    refetchTasks: () => {
+    refetchTasks: async () => {
+      setPendingApprovalFocus(null);
       clearCache(`tasks_${organizationId}_*`);
-      return fetchTasks(true);
-    }
+      await fetchTasks(true);
+      await fetchRejectedReasons();
+    },
+    uncheckCompletionLocally,
+    rejectedReasonsByTaskId,
+    rejectedReasonsByStepId,
+    rejectedReasonsBySubStepId,
+    pendingApprovalFocus,
+    setPendingApprovalFocus,
+    highlightFromPendingApproval,
+    effectiveFilteredTasks,
+    getVisibleStepsEffective,
   };
 
   return (

@@ -61,6 +61,14 @@ export function useSendEmailReply() {
       }
       queryClient.invalidateQueries({ queryKey: ['email-messages', variables.conversation_id] });
       queryClient.invalidateQueries({ queryKey: ['email-conversations'] });
+      const statusQueryKey = ['email-conversation-status', conversationId] as const;
+      const leadStatuses = queryClient.getQueryData<Array<{ id: string; name: string }>>(['lead-statuses']);
+      const inProgressStatus = leadStatuses?.find((s) => (s.name ?? '').trim().toLowerCase() === 'in progress');
+      if (inProgressStatus?.id) {
+        queryClient.setQueryData(statusQueryKey, inProgressStatus.id);
+      }
+      // Jangan invalidate/refetch status di sini: refetch 800ms bisa dapat data lama (race dengan backend)
+      // dan status balik ke Unread. Optimistic update di atas cukup; refetchInterval 5s di panel akan sync nanti.
     },
   });
 

@@ -22,8 +22,8 @@ export const TaskList = () => {
   const context = useDailyTask();
   const {
     tasks,
-    filteredTasks,
-    getVisibleSteps,
+    effectiveFilteredTasks,
+    getVisibleStepsEffective,
     filters,
     setFilters,
     updateTask,
@@ -32,6 +32,7 @@ export const TaskList = () => {
     expandedTasks,
     setExpandedTasks,
     highlightedTask,
+    highlightFromPendingApproval,
   } = context;
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
   const { user } = useCurrentUser();
@@ -46,7 +47,7 @@ export const TaskList = () => {
     openTaskBlockers,
     fetchBlockerCountForTasks,
     blockerCountFetchedForRef,
-  } = useTaskListBlockers(filteredTasks, getVisibleSteps);
+  } = useTaskListBlockers(effectiveFilteredTasks, getVisibleStepsEffective);
 
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export const TaskList = () => {
       setExpandedTasks(new Set());
     } else {
       setExpandedTasks(new Set([taskId]));
-      const ids = filteredTasks.map((t) => t.id);
+      const ids = effectiveFilteredTasks.map((t) => t.id);
       const idx = ids.indexOf(taskId);
       const toFetch: string[] = [taskId];
       for (let i = 1; i <= 4 && idx + i < ids.length; i++) {
@@ -232,7 +233,7 @@ export const TaskList = () => {
             <table className="w-full caption-bottom text-sm task-list-table">
               <TaskListTableHeader />
               <TableBody>
-                {filteredTasks.length === 0 ? (
+                {effectiveFilteredTasks.length === 0 ? (
                   <TableRow className="w-full">
                     <TableCell
                       colSpan={13}
@@ -262,16 +263,17 @@ export const TaskList = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTasks.map((task) => (
+                  effectiveFilteredTasks.map((task) => (
                     <TaskListRow
                       key={task.id}
                       task={task}
                       isExpanded={expandedTasks.has(task.id)}
                       isHighlighted={highlightedTask === task.id}
+                      isHighlightedFromPendingApproval={highlightFromPendingApproval && highlightedTask === task.id}
                       department={departmentMap[task.id]}
                       blockerCount={blockerCountByTask[task.id] ?? 0}
                       filters={filters}
-                      getVisibleSteps={getVisibleSteps}
+                      getVisibleSteps={getVisibleStepsEffective}
                       rowRef={(el) => {
                         taskRefs.current[task.id] = el;
                       }}

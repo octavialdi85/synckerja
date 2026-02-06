@@ -82,7 +82,6 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
       } else {
         newMonth = startOfMonth(now);
       }
-      
       setSelectedMonth(newMonth);
       setIsMonthPickerOpen(false);
     }
@@ -162,32 +161,30 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
           </SelectContent>
         </Select>
         
-        {/* Month Filter Dropdown */}
+        {/* Month Filter Dropdown - Select outside Popover so dropdown closes immediately */}
+        <Select 
+          value={currentFilterType} 
+          onValueChange={handleMonthFilterChange}
+        >
+          <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
+            <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+              <CalendarIcon className="h-4 w-4 text-blue-500" />
+              <SelectValue placeholder="This Month" className="truncate">
+                {getMonthFilterDisplayText()}
+              </SelectValue>
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="this_month">This Month</SelectItem>
+            <SelectItem value="next_month">Next Month</SelectItem>
+            <SelectItem value="last_month">Last Month</SelectItem>
+            <SelectItem value="custom">Custom Month</SelectItem>
+          </SelectContent>
+        </Select>
         <Popover open={isMonthPickerOpen} onOpenChange={setIsMonthPickerOpen}>
           <PopoverTrigger asChild>
-            <div className="hidden" />
+            <div className="hidden" aria-hidden />
           </PopoverTrigger>
-          <Select 
-            value={currentFilterType} 
-            onValueChange={handleMonthFilterChange}
-          >
-            <SelectTrigger className="w-auto min-w-[160px] max-w-[220px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
-              <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
-                <CalendarIcon className="h-4 w-4 text-blue-500" />
-                <SelectValue placeholder="This Month" className="truncate">
-                  {getMonthFilterDisplayText()}
-                </SelectValue>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this_month">This Month</SelectItem>
-              <SelectItem value="next_month">Next Month</SelectItem>
-              <SelectItem value="last_month">Last Month</SelectItem>
-              <SelectItem value="custom">Custom Month</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          {/* Month Picker Popover for Custom Month */}
           <PopoverContent 
             className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" 
             align="start"

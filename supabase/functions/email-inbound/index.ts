@@ -116,6 +116,54 @@ async function fetchReceivedEmailContent(emailId: string): Promise<{ html?: stri
   }
 }
 
+/** Insert a lead row when a new email conversation is created. Link by ticket_id (EMAIL-xxx). */
+async function ensureLeadForNewEmailConversation(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  conversationId: string,
+  client: string,
+  title: string
+): Promise<void> {
+  const ticketId = "EMAIL-" + String(conversationId).replace(/-/g, "").slice(0, 8).toUpperCase();
+  const { data: existing } = await supabase.from("leads").select("id").eq("ticket_id", ticketId).maybeSingle();
+  if (existing) return;
+
+  const { data: unreadStatus } = await supabase
+    .from("lead_statuses")
+    .select("id")
+    .eq("name", "Unread")
+    .limit(1)
+    .maybeSingle();
+  const statusId = unreadStatus?.id ?? null;
+  if (!statusId) {
+    console.warn("ensureLeadForNewEmailConversation: no Unread status in lead_statuses, skip lead insert");
+    return;
+  }
+
+  const safeClient = (client && String(client).trim()) || "Email";
+  const safeTitle = (title && String(title).trim().slice(0, 100)) || "Email";
+
+  const { error } = await supabase.from("leads").insert({
+    ticket_id: ticketId,
+    client: safeClient,
+    title: safeTitle,
+    category: "",
+    created_by: "00000000-0000-0000-0000-000000000000",
+    created_by_name: "System",
+    assignee: "",
+    status_id: statusId,
+    organization_id: orgId,
+    source: "Email",
+    services: null,
+    followup: 0,
+  });
+  if (error) {
+    console.error("ensureLeadForNewEmailConversation: insert error", error);
+    return;
+  }
+  console.log("email-inbound: lead created", { ticket_id: ticketId });
+}
+
 /** Extract Gmail confirmation code from text (e.g. "Kode konfirmasi: 106074202" or "Confirmation code: 106074202"). */
 function extractConfirmationCode(text: string | null | undefined): string | null {
   if (!text || typeof text !== "string") return null;
@@ -255,6 +303,7 @@ Deno.serve(async (req: Request) => {
       if (existingConv?.id) {
         conversationId = existingConv.id;
       } else {
+        const nowIso = new Date().toISOString();
         const { data: newConv, error: insertConvError } = await supabase
           .from("email_conversations")
           .insert({
@@ -263,7 +312,8 @@ Deno.serve(async (req: Request) => {
             from_email: fromEmailNormalized,
             from_display_name: fromDisplayName || null,
             thread_subject: subject || null,
-            last_message_at: new Date().toISOString(),
+            last_message_at: nowIso,
+            last_inbound_at: nowIso,
           })
           .select("id")
           .single();
@@ -272,6 +322,15 @@ Deno.serve(async (req: Request) => {
           continue;
         }
         conversationId = newConv.id;
+        const leadClient = (fromDisplayName?.trim() || fromEmail) ?? fromEmailNormalized ?? "Email";
+        const leadTitle = (subject ?? "").trim().slice(0, 100) || "Email";
+        await ensureLeadForNewEmailConversation(
+          supabase,
+          conn.organization_id,
+          conversationId,
+          leadClient,
+          leadTitle
+        );
       }
 
       const { error: msgError } = await supabase.from("email_messages").insert({
@@ -290,11 +349,13 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      const nowIso = new Date().toISOString();
       await supabase
         .from("email_conversations")
         .update({
-          last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          last_message_at: nowIso,
+          last_inbound_at: nowIso,
+          updated_at: nowIso,
           thread_subject: subject || null,
           from_display_name: fromDisplayName || undefined,
         })
@@ -316,18 +377,38 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
         leadStatusName = (statusRow?.name as string) ?? null;
       }
-      const isClosed = leadStatusName?.trim().toLowerCase() === "closed";
-      if (isClosed) {
+      const statusNameLower = leadStatusName?.trim().toLowerCase() ?? "";
+      const isResolved = statusNameLower === "closed" || statusNameLower === "resolve";
+      if (isResolved) {
         const { data: openStatus } = await supabase
           .from("lead_statuses")
           .select("id")
           .eq("name", "Open")
           .maybeSingle();
-        if (openStatus?.id) {
+        const { data: unreadStatus } = openStatus?.id
+          ? { data: null }
+          : await supabase.from("lead_statuses").select("id").eq("name", "Unread").maybeSingle();
+        const openStatusId = openStatus?.id ?? unreadStatus?.id ?? null;
+        if (openStatusId) {
+          const nowIso = new Date().toISOString();
           await supabase
             .from("email_conversations")
-            .update({ lead_status_id: openStatus.id, updated_at: new Date().toISOString() })
+            .update({ lead_status_id: openStatusId, last_inbound_at: nowIso, updated_at: nowIso })
             .eq("id", conversationId);
+          const ticketId = `EMAIL-${conversationId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+          const { data: convOrg } = await supabase
+            .from("email_conversations")
+            .select("organization_id")
+            .eq("id", conversationId)
+            .maybeSingle();
+          if (convOrg?.organization_id) {
+            const { error: leadErr } = await supabase
+              .from("leads")
+              .update({ status_id: openStatusId, updated_at: nowIso })
+              .eq("organization_id", convOrg.organization_id)
+              .eq("ticket_id", ticketId);
+            if (leadErr) console.error("email-inbound: reopen sync leads.status_id to Open failed:", leadErr);
+          }
         }
       }
 

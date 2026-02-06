@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/organized/utils';
 import { LeadFollowUpUpdate } from '@/types/leads';
+import { computeFollowUpAndPriority } from './utils/fuPriorityFromUpdates';
 interface LeadFollowUpFormProps {
   open: boolean;
   onClose: () => void;
@@ -35,26 +36,68 @@ export const LeadFollowUpForm = ({
     toast
   } = useToast();
 
-  // Fetch updates when dialog opens
+  // WhatsApp/Instagram row: id is 'wa-{conversation_id}' (case-insensitive); follow-ups are stored by conversation_id
+  const isWhatsAppLead = leadId.toLowerCase().startsWith('wa-');
+  const conversationId = isWhatsAppLead ? leadId.replace(/^wa-/i, '') : null;
+
+  // Fetch updates when dialog opens and re-sync fu_priority from lead_follow_up_updates (fixes stale FU Priority display)
   useEffect(() => {
     if (open && leadId) {
       fetchUpdates();
+      syncFollowUpCountAndPriority().then(() => onUpdateAdded());
     }
   }, [open, leadId]);
+
   const fetchUpdates = async () => {
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('lead_follow_up_updates').select('*').eq('lead_id', leadId).order('created_at', {
-        ascending: false
-      });
+      const query = isWhatsAppLead && conversationId
+        ? supabase.from('lead_follow_up_updates').select('*').eq('conversation_id', conversationId)
+        : supabase.from('lead_follow_up_updates').select('*').eq('lead_id', leadId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      setUpdates(data || []);
+      setUpdates((data || []).map((r: any) => ({ ...r, lead_id: r.lead_id ?? leadId })));
     } catch (error) {
       console.error('Error fetching updates:', error);
     }
   };
+
+  /** Sync followup count and fu_priority from lead_follow_up_updates (percentage-based). For wa- rows update whatsapp_conversations. DB trigger also auto-syncs on insert/update/delete. */
+  const syncFollowUpCountAndPriority = async (): Promise<boolean> => {
+    try {
+      const query = isWhatsAppLead && conversationId
+        ? supabase.from('lead_follow_up_updates').select('status').eq('conversation_id', conversationId)
+        : supabase.from('lead_follow_up_updates').select('status').eq('lead_id', leadId);
+      const { data: allUpdates, error: fetchError } = await query;
+
+      if (fetchError) return false;
+
+      const { followupCount, fuPriority } = computeFollowUpAndPriority(allUpdates ?? []);
+
+      const payload = {
+        followup: followupCount,
+        fu_priority: fuPriority,
+        updated_at: new Date().toISOString(),
+      };
+
+      let updateErr: Error | null = null;
+      if (isWhatsAppLead && conversationId) {
+        const res = await supabase.from('whatsapp_conversations').update(payload).eq('id', conversationId);
+        updateErr = res.error ?? null;
+      } else {
+        const res = await supabase.from('leads').update(payload).eq('id', leadId);
+        updateErr = res.error ?? null;
+      }
+      if (updateErr) {
+        console.error('Sync update failed:', updateErr);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error syncing followup count/priority:', err);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!updateDetails.trim()) return;
@@ -73,17 +116,36 @@ export const LeadFollowUpForm = ({
       if (!profile?.active_organization_id) {
         throw new Error('No active organization found');
       }
-      const {
-        error
-      } = await supabase.from('lead_follow_up_updates').insert({
-        lead_id: leadId,
-        update_details: updateDetails,
-        status: status || null,
-        created_by: user.id,
-        created_by_name: profile.full_name || user.email || 'Unknown',
-        organization_id: profile.active_organization_id
-      });
-      if (error) throw error;
+      if (isWhatsAppLead && conversationId) {
+        const { data: conv } = await supabase.from('whatsapp_conversations').select('ticket_id').eq('id', conversationId).single();
+        const ticketId = conv?.ticket_id;
+        let realLeadId: string | null = null;
+        if (ticketId) {
+          const { data: lead } = await supabase.from('leads').select('id').eq('ticket_id', ticketId).eq('organization_id', profile.active_organization_id).maybeSingle();
+          realLeadId = lead?.id ?? null;
+        }
+        const { error: insertErr } = await supabase.from('lead_follow_up_updates').insert({
+          lead_id: realLeadId,
+          conversation_id: conversationId,
+          update_details: updateDetails,
+          status: status || null,
+          created_by: user.id,
+          created_by_name: profile.full_name || user.email || 'Unknown',
+          organization_id: profile.active_organization_id,
+        });
+        if (insertErr) throw insertErr;
+      } else {
+        const { error: insertErr } = await supabase.from('lead_follow_up_updates').insert({
+          lead_id: leadId,
+          update_details: updateDetails,
+          status: status || null,
+          created_by: user.id,
+          created_by_name: profile.full_name || user.email || 'Unknown',
+          organization_id: profile.active_organization_id,
+        });
+        if (insertErr) throw insertErr;
+      }
+      await syncFollowUpCountAndPriority();
       toast({
         title: "Success",
         description: "Follow-up update added successfully"
@@ -116,6 +178,7 @@ export const LeadFollowUpForm = ({
         update_details: editUpdateDetails
       }).eq('id', updateId);
       if (error) throw error;
+      await syncFollowUpCountAndPriority();
       toast({
         title: "Success",
         description: "Update edited successfully"
@@ -123,6 +186,7 @@ export const LeadFollowUpForm = ({
       setIsEditingUpdate(null);
       setEditUpdateDetails('');
       fetchUpdates();
+      onUpdateAdded();
     } catch (error) {
       console.error('Error editing update:', error);
       toast({
@@ -139,11 +203,13 @@ export const LeadFollowUpForm = ({
         error
       } = await supabase.from('lead_follow_up_updates').delete().eq('id', updateId);
       if (error) throw error;
+      await syncFollowUpCountAndPriority();
       toast({
         title: "Success",
         description: "Update deleted successfully"
       });
       fetchUpdates();
+      onUpdateAdded();
     } catch (error) {
       console.error('Error deleting update:', error);
       toast({

@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -56,6 +56,7 @@ interface SalesActivityFormProps {
 }
 
 export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivityFormProps) => {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [selectedIncomeType, setSelectedIncomeType] = useState<string>('');
   const [selectedService, setSelectedService] = useState<string>('');
@@ -120,13 +121,17 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
     },
   });
 
-  // Set initial selected values for editing
+  // Set initial selected values for editing and ensure Item Details refetch when opening Edit
   React.useEffect(() => {
     if (activity) {
       setSelectedIncomeType(activity.income_type_id || '');
       setCurrentActivityId(activity.id);
+      // Refetch items when opening Edit so Item Details shows saved items (avoid stale empty cache)
+      if (activity.id) {
+        queryClient.invalidateQueries({ queryKey: ['sales-activity-items', activity.id] });
+      }
     }
-  }, [activity]);
+  }, [activity, activity?.id, queryClient]);
 
   const downPaymentAmount = watch('down_payment_amount');
   const isDownPayment = watch('is_down_payment');
@@ -533,6 +538,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
                   <SelectItem value="Call">Call</SelectItem>
                   <SelectItem value="Proposal">Proposal</SelectItem>
                   <SelectItem value="Closing">Closing</SelectItem>
+                  <SelectItem value="Lead Conversion">Lead Conversion</SelectItem>
                 </SelectContent>
               </Select>
               {errors.activity_type && (
@@ -552,6 +558,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
                   <SelectItem value="Won">Won</SelectItem>
                   <SelectItem value="Lost">Lost</SelectItem>
                   <SelectItem value="Follow Up">Follow Up</SelectItem>
+                  <SelectItem value="Converted">Converted</SelectItem>
                 </SelectContent>
               </Select>
               {errors.status && (

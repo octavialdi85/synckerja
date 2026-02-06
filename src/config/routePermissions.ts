@@ -129,6 +129,12 @@ export const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     description: 'PPh 21 calculator - accessible to all authenticated users'
   },
   {
+    path: '/tools/default-prices',
+    requiresAuth: true,
+    requiresPermissions: false,
+    description: 'Default prices - set price per Service + Category for lead conversion'
+  },
+  {
     path: '/tools/pricing-tools',
     requiresAuth: true,
     requiresPermissions: false,

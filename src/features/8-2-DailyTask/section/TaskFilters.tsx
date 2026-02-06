@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { Search, FilterX, CalendarIcon, Plus, Building2 } from 'lucide-react';
+import { Search, CalendarIcon, Plus, Building2, RefreshCw } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
 import {
@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { format, startOfMonth } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
@@ -33,7 +34,8 @@ interface TaskFiltersProps {
 }
 
 export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
-  const { filters, setFilters, tasks } = useDailyTask();
+  const { t } = useAppTranslation();
+  const { filters, setFilters, tasks, refetchTasks, resetFilters, highlightFromPendingApproval } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
@@ -264,24 +266,6 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     return 'All Plans';
   };
 
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      status: '',
-      priority: '',
-      dateFilter: '',
-      dateRange: undefined,
-      customStartDate: undefined,
-      customEndDate: undefined,
-      planDateRange: undefined,
-      customPlanMonth: undefined,
-      pic: '',
-      picLevel: undefined,
-      myTask: filters.myTask || 'all', // Default to "All tasks" so list is visible
-      department: undefined // Default "All Departments"
-    });
-  };
-
   const getDateRangeDisplayText = () => {
     if (filters.dateRange === 'custom' && filters.customStartDate && filters.customEndDate) {
       const start = new Date(filters.customStartDate);
@@ -485,16 +469,20 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </Popover>
       </div>
 
-      {/* Clear Filters Button */}
-      {(filters.search || filters.status || filters.priority || filters.pic || filters.picLevel || filters.department || filters.dateRange || filters.planDateRange || filters.myTask === 'my_task') && (
-        <button
-          onClick={clearFilters}
-          className="h-9 px-3 hover:bg-gray-100 rounded-md transition-colors border border-gray-300 flex items-center justify-center ml-auto"
-          title="Clear filters"
-        >
-          <FilterX className="w-4 h-4 text-gray-500" />
-        </button>
-      )}
+      {/* Refresh Button - reset all filters and show full task list (clears pending-approval focus) */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={async () => {
+          resetFilters();
+          await refetchTasks();
+        }}
+        className={`h-9 px-3 gap-1.5 ${highlightFromPendingApproval ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''}`}
+        title={highlightFromPendingApproval ? t('dailyTask.filters.refreshShowAll', 'Refresh to show all tasks') : t('dailyTask.filters.refresh', 'Refresh')}
+      >
+        <RefreshCw className="w-4 h-4" />
+        <span className="hidden sm:inline">{t('dailyTask.filters.refresh', 'Refresh')}</span>
+      </Button>
 
       {/* Add Task Button */}
       {showAddTaskButton && (

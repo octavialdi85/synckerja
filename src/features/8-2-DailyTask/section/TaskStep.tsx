@@ -30,6 +30,7 @@ import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/MobileAssignStepDialog';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface TaskFile {
   id: string;
@@ -90,7 +91,9 @@ interface TaskStepProps {
 }
 
 export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReorder = false }: TaskStepProps) => {
-  const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep } = useDailyTask();
+  const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep, rejectedReasonsByStepId, highlightFromPendingApproval, pendingApprovalFocus, setPendingApprovalFocus } = useDailyTask();
+  const stepRejectReason = rejectedReasonsByStepId[step.id];
+  const isHighlightedFromPendingApproval = Boolean(highlightFromPendingApproval && pendingApprovalFocus?.stepId === step.id);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showFiles, setShowFiles] = useState(false); // Default collapsed
   const [showLinks, setShowLinks] = useState(false);
@@ -100,6 +103,14 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isViewSubStepsOpen, setIsViewSubStepsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Open sub-step modal when pending approval sub-step title was clicked (from sidebar)
+  useEffect(() => {
+    if (pendingApprovalFocus?.openSubStepModalForStepId === step.id) {
+      setIsViewSubStepsOpen(true);
+      setPendingApprovalFocus((prev) => (prev ? { ...prev, openSubStepModalForStepId: undefined } : null));
+    }
+  }, [pendingApprovalFocus?.openSubStepModalForStepId, step.id, setPendingApprovalFocus]);
   const [subStepCount, setSubStepCount] = useState<number>(0);
   const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
   const [historyCount, setHistoryCount] = useState<number>(0);
@@ -110,6 +121,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   // States for meeting point integration
   const [isFromMeetingPoint, setIsFromMeetingPoint] = useState(false);
@@ -836,8 +848,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
         ref={setNodeRef}
         style={style}
         data-step-id={step.id}
-        className={`flex items-start md:items-center gap-2 p-2 bg-white rounded-md hover:bg-blue-50 transition-colors border border-blue-100 ${
-          isDragging ? 'shadow-lg bg-blue-100' : ''
+        className={`flex items-start md:items-center gap-2 p-2 rounded-md transition-colors border ${
+          isHighlightedFromPendingApproval
+            ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+            : isDragging
+              ? 'shadow-lg bg-blue-100 border-blue-100'
+              : 'bg-white hover:bg-blue-50 border-blue-100'
         }`}
       >
       <div className="flex items-start gap-2 flex-shrink-0 pt-0.5">
@@ -881,13 +897,26 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
 
       <>
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <div className="min-w-0">
+            <div className="min-w-0 flex flex-wrap items-center gap-2">
               <span className={`text-sm line-clamp-2 md:truncate min-w-0 block ${
                 isCompleted ? 'line-through text-gray-500' : 'text-gray-900'
               }`}>
                 {step.title}
               </span>
+              {stepRejectReason && (
+                <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">
+                  {t('dailyTask.approval.revisionBadge', 'Revision')}
+                </Badge>
+              )}
             </div>
+            {stepRejectReason && (
+              <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+                <p className="font-medium text-amber-800">
+                  {t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}
+                </p>
+                <p className="text-gray-700 mt-0.5">{stepRejectReason}</p>
+              </div>
+            )}
             {/* Description with see more functionality */}
             {step.description && step.description.trim() && (
               <div className="mt-1 min-w-0 max-w-full">

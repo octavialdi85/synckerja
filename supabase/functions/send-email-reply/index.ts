@@ -120,6 +120,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Block outbound when conversation is Resolved (Closed) until new inbound
+    if (conv.lead_status_id) {
+      const { data: statusRow } = await supabaseAdmin
+        .from("lead_statuses")
+        .select("name")
+        .eq("id", conv.lead_status_id)
+        .maybeSingle();
+      const statusName = (statusRow?.name as string) ?? "";
+      if (statusName.trim().toLowerCase() === "closed") {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.",
+            code: "CONVERSATION_RESOLVED",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const { data: conn, error: connError } = await supabaseAdmin
       .from("organization_email_connections")
       .select("id, inbound_address, email_address")
@@ -222,7 +242,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", conversationId);
 
-    // Unread → On Going when user sends reply (same as WhatsApp send-whatsapp-message)
+    // Unread → In Progress when user sends reply (same as WhatsApp send-whatsapp-message)
     let currentStatusName: string | null = null;
     if (conv.lead_status_id) {
       const { data: statusRow } = await supabaseAdmin
@@ -234,16 +254,41 @@ Deno.serve(async (req: Request) => {
     }
     const isOpenOrUnset = currentStatusName == null || currentStatusName.trim().toLowerCase() === "open";
     if (isOpenOrUnset) {
-      const { data: inProgressStatus } = await supabaseAdmin
-        .from("lead_statuses")
-        .select("id")
-        .eq("name", "In Progress")
-        .maybeSingle();
+      // Multi-tenant: prefer status for conversation's org, fallback to default (organization_id IS NULL)
+      let inProgressStatus: { id: string } | null = null;
+      if (conv.organization_id) {
+        const { data: orgStatus } = await supabaseAdmin
+          .from("lead_statuses")
+          .select("id")
+          .eq("organization_id", conv.organization_id)
+          .eq("name", "In Progress")
+          .maybeSingle();
+        inProgressStatus = orgStatus;
+      }
+      if (!inProgressStatus?.id) {
+        const { data: defaultStatus } = await supabaseAdmin
+          .from("lead_statuses")
+          .select("id")
+          .is("organization_id", null)
+          .eq("name", "In Progress")
+          .maybeSingle();
+        inProgressStatus = defaultStatus;
+      }
       if (inProgressStatus?.id) {
         await supabaseAdmin
           .from("email_conversations")
           .update({ lead_status_id: inProgressStatus.id, updated_at: now })
           .eq("id", conversationId);
+        // Sync leads.status_id so leads-management shows In Progress (same as send-whatsapp-message)
+        const ticketId = `EMAIL-${conversationId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+        if (conv.organization_id) {
+          const { error: leadErr } = await supabaseAdmin
+            .from("leads")
+            .update({ status_id: inProgressStatus.id, updated_at: now })
+            .eq("organization_id", conv.organization_id)
+            .eq("ticket_id", ticketId);
+          if (leadErr) console.error("[send-email-reply] sync leads.status_id to In Progress failed:", leadErr);
+        }
       }
     }
 

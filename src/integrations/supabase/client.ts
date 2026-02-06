@@ -359,6 +359,4 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
   }
 
   return client;
-}
-
-export const supabase = getSupabaseClient();
+}export const supabase = getSupabaseClient();

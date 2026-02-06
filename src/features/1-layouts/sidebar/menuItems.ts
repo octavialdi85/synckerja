@@ -201,6 +201,13 @@ export const menuItems: MenuItem[] = [
         descriptionKey: "sidebar.tools.pph21Calculator.description",
       },
       {
+        title: "Default Prices",
+        titleKey: "sidebar.tools.defaultPrices.title",
+        url: "/tools/default-prices",
+        description: "Set default price per Service + Category for lead conversion",
+        descriptionKey: "sidebar.tools.defaultPrices.description",
+      },
+      {
         title: "Pricing Tool",
         titleKey: "sidebar.tools.pricingTools.title",
         url: "/tools/pricing-tools",

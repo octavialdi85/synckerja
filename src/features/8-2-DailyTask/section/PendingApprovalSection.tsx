@@ -34,7 +34,7 @@ function getEntityTypeLabel(entityType: string, t: (k: string, fallback: string)
 export const PendingApprovalSection = () => {
   const { t } = useAppTranslation();
   const { pending, rejected, loading, fetchError, approve, reject, refresh } = useCompletionApprovals([]);
-  const { refetchTasks } = useDailyTask();
+  const { refetchTasks, uncheckCompletionLocally, setPendingApprovalFocus, navigateToTask } = useDailyTask();
   const { toast } = useToast();
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; row: CompletionApprovalRow | null; reason: string }>({
     open: false,
@@ -68,17 +68,42 @@ export const PendingApprovalSection = () => {
       });
       return;
     }
-    setActingId(rejectDialog.row.id);
-    const { error } = await reject(rejectDialog.row.id, rejectDialog.reason.trim());
+    const row = rejectDialog.row;
+    const reason = rejectDialog.reason.trim();
+    setActingId(row.id);
+    const { error } = await reject(row.id, reason);
     setActingId(null);
     setRejectDialog({ open: false, row: null, reason: '' });
     if (error) {
       toast({ title: t('dailyTask.approval.error', 'Error'), description: error.message, variant: 'destructive' });
       return;
     }
+    // Optimistic update: uncheck item in main table immediately so user sees change without manual refresh
+    uncheckCompletionLocally({
+      entityType: row.entity_type,
+      dailyTaskId: row.daily_task_id,
+      taskStepId: row.task_step_id ?? undefined,
+      taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
+    });
     toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
     refresh();
     await refetchTasks();
+  };
+
+  const handleTitleClick = (row: CompletionApprovalRow) => {
+    const taskId = row.daily_task_id;
+    const stepId = row.task_step_id ?? undefined;
+    if (row.entity_type === 'task') {
+      setPendingApprovalFocus({ taskId });
+      navigateToTask(taskId);
+    } else if (row.entity_type === 'step') {
+      setPendingApprovalFocus({ taskId, stepId });
+      navigateToTask(taskId, stepId);
+    } else {
+      // substep: focus task + step and open sub-step modal for this step
+      setPendingApprovalFocus({ taskId, stepId, openSubStepModalForStepId: stepId });
+      navigateToTask(taskId, stepId);
+    }
   };
 
   return (
@@ -120,9 +145,14 @@ export const PendingApprovalSection = () => {
                   key={row.id}
                   className="border border-gray-200 rounded-lg p-3 bg-white text-sm"
                 >
-                  <div className="font-medium text-gray-900 truncate" title={getDisplayTitle(row)}>
+                  <button
+                    type="button"
+                    onClick={() => handleTitleClick(row)}
+                    className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-amber-700 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-400 rounded"
+                    title={getDisplayTitle(row)}
+                  >
                     {getDisplayTitle(row)}
-                  </div>
+                  </button>
                   <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                     <User className="w-3 h-3" />
                     <span>{row.assignee?.full_name ?? t('dailyTask.approval.assignee', 'Assignee')}</span>

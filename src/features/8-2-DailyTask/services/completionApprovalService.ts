@@ -80,6 +80,36 @@ export async function fetchPendingApprovalsForAssigner(
 const REJECTED_SELECT =
   'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, rejected_at, daily_tasks(title), task_steps(title), task_steps_to_steps(title), assignee:employees!assignee_employee_id(id, full_name)';
 
+/** Minimal row for rejection lookup (Job Desc + main table). */
+export interface RejectedApprovalLookupRow {
+  entity_type: CompletionEntityType;
+  daily_task_id: string;
+  task_step_id: string | null;
+  task_steps_to_steps_id: string | null;
+  assignee_employee_id: string;
+  reject_reason: string | null;
+}
+
+/**
+ * Fetch all rejected completions for an organization (for Job Desc / main table rejection display).
+ */
+export async function fetchRejectedForOrg(
+  organizationId: string
+): Promise<{ data: RejectedApprovalLookupRow[]; error: Error | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('completion_approvals')
+      .select('entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, reject_reason')
+      .eq('organization_id', organizationId)
+      .eq('status', 'rejected')
+      .order('rejected_at', { ascending: false });
+    if (error) return { data: [], error: new Error(error.message) };
+    return { data: (data ?? []) as RejectedApprovalLookupRow[], error: null };
+  } catch (e) {
+    return { data: [], error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
+
 /**
  * Fetch rejected completions for the current user as assignee (to show "Rejected by assigner").
  * Includes task/step/substep titles and assignee name for card display.

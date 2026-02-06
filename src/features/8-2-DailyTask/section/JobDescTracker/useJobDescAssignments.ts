@@ -12,6 +12,7 @@ import {
 } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
+import { fetchRejectedForOrg, type RejectedApprovalLookupRow } from "@/features/8-2-DailyTask/services/completionApprovalService";
 import {
   DateRangeValue,
   JobDescAssignment,
@@ -212,6 +213,14 @@ const applyAssignmentToSummary = (
   }
 };
 
+/** Build lookup key for rejected approval: task/step/substep + entity id + assignee. */
+const getRejectionKey = (row: RejectedApprovalLookupRow): string => {
+  if (row.entity_type === "task") return `task_${row.daily_task_id}_${row.assignee_employee_id}`;
+  if (row.entity_type === "step" && row.task_step_id) return `step_${row.task_step_id}_${row.assignee_employee_id}`;
+  if (row.entity_type === "substep" && row.task_steps_to_steps_id) return `substep_${row.task_steps_to_steps_id}_${row.assignee_employee_id}`;
+  return "";
+};
+
 const buildSummaries = ({
   employees,
   taskAssignments,
@@ -224,6 +233,7 @@ const buildSummaries = ({
   subStepDueDates,
   range,
   includeAllOverdue,
+  rejectionMap,
 }: {
   employees: EmployeeRow[];
   taskAssignments: TaskAssignmentRow[];
@@ -236,6 +246,7 @@ const buildSummaries = ({
   subStepDueDates: Record<string, string>;
   range: DateRangeValue;
   includeAllOverdue: boolean;
+  rejectionMap: Map<string, string>;
 }): JobDescEmployeeSummary[] => {
   const summaryMap = new Map<string, JobDescEmployeeSummary>();
 
@@ -279,6 +290,8 @@ const buildSummaries = ({
       dueDate,
       (task.status ?? "").toLowerCase() === "completed",
     );
+    const taskRejectKey = `task_${task.id}_${assignment.employee_id}`;
+    const taskRejectReason = rejectionMap.get(taskRejectKey);
     const taskAssignment: JobDescTaskAssignment = {
       type: "task",
       assignmentId: assignment.id,
@@ -293,6 +306,8 @@ const buildSummaries = ({
       pendingHours,
       completedAt,
       completedInRange,
+      rejectReason: taskRejectReason ?? null,
+      isRejected: Boolean(taskRejectReason),
     };
 
     const isActive = (task.status ?? "").toLowerCase() !== "completed";
@@ -327,6 +342,8 @@ const buildSummaries = ({
       return;
     }
     const dueStatus = determineDueStatus(dueDate, step.is_completed ?? false);
+    const stepRejectKey = `step_${step.id}_${assignment.employee_id}`;
+    const stepRejectReason = rejectionMap.get(stepRejectKey);
     const stepAssignment: JobDescStepAssignment = {
       type: "step",
       assignmentId: assignment.id,
@@ -341,6 +358,8 @@ const buildSummaries = ({
       isCompleted: step.is_completed ?? false,
       completedAt,
       completedInRange,
+      rejectReason: stepRejectReason ?? null,
+      isRejected: Boolean(stepRejectReason),
     };
 
     const isActive = !(step.is_completed ?? false);
@@ -380,6 +399,8 @@ const buildSummaries = ({
       return;
     }
     const dueStatus = determineDueStatus(dueDate, subStep.is_completed ?? false);
+    const subRejectKey = `substep_${assignment.task_steps_to_steps_id}_${assignment.employee_id}`;
+    const subRejectReason = rejectionMap.get(subRejectKey);
     const subAssignment: JobDescSubStepAssignment = {
       type: "subStep",
       assignmentId: assignment.id,
@@ -395,6 +416,8 @@ const buildSummaries = ({
       isCompleted: subStep.is_completed ?? false,
       completedAt,
       completedInRange,
+      rejectReason: subRejectReason ?? null,
+      isRejected: Boolean(subRejectReason),
     };
 
     const isActive = !(subStep.is_completed ?? false);
@@ -464,6 +487,13 @@ const fetchAssignments = async (
   const stepAssignments = (stepAssignmentsRes.data as StepAssignmentRow[]) ?? [];
   const subStepAssignments =
     (subStepAssignmentsRes.data as SubStepAssignmentRow[]) ?? [];
+
+  const { data: rejectedRows } = await fetchRejectedForOrg(organizationId);
+  const rejectionMap = new Map<string, string>();
+  (rejectedRows ?? []).forEach((row) => {
+    const key = getRejectionKey(row);
+    if (key && row.reject_reason && !rejectionMap.has(key)) rejectionMap.set(key, row.reject_reason);
+  });
 
   const subStepIds = Array.from(
     new Set(
@@ -581,6 +611,7 @@ const fetchAssignments = async (
     subStepDueDates,
     range,
     includeAllOverdue: includeOverdue,
+    rejectionMap,
   });
 
   return {

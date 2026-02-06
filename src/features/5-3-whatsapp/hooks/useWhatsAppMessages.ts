@@ -29,18 +29,21 @@ export function useWhatsAppMessages(conversationId: string | null) {
           table: 'whatsapp_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
+        (payload: { new?: { direction?: string } }) => {
           queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, conversationId] });
-          // Pesan baru masuk (bisa dari customer setelah Resolve) → webhook set status ke Unread; refresh status UI
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
           queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-          // Fallback: webhook commit UPDATE setelah INSERT; invalidation ulang setelah 2s agar status Unread terbaca
-          if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
-          fallbackTimeoutRef.current = setTimeout(() => {
-            fallbackTimeoutRef.current = null;
+          // Hanya refresh status UI ketika pesan INBOUND (customer kirim). Kalau outbound (kita reply),
+          // jangan invalidate status supaya optimistic "In Progress" tidak tertimpa refetch data lama.
+          const isInbound = payload?.new?.direction === 'inbound';
+          if (isInbound) {
             queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
-            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-          }, 2000);
+            if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+            fallbackTimeoutRef.current = setTimeout(() => {
+              fallbackTimeoutRef.current = null;
+              queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+              queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+            }, 2000);
+          }
         }
       )
       .subscribe();

@@ -45,7 +45,7 @@ export function useSendInstagramMessage() {
       }
       return json;
     },
-    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null }, variables) => {
+    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null; lead_status_id?: string | null }, variables) => {
       const conversationId = variables.conversation_id;
       if (conversationId && data?.message) {
         queryClient.setQueryData<WhatsAppMessage[]>(
@@ -62,9 +62,21 @@ export function useSendInstagramMessage() {
         if (!data?.message) {
           queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
         }
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
-        queryClient.refetchQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+        const statusQueryKey = ['whatsapp-conversation-status', conversationId] as const;
+        const statusIdFromBackend = data?.lead_status_id ?? null;
+        if (statusIdFromBackend) {
+          queryClient.setQueryData(statusQueryKey, statusIdFromBackend);
+        } else {
+          const leadStatuses = queryClient.getQueryData<Array<{ id: string; name: string }>>(['lead-statuses']);
+          const inProgressStatus = leadStatuses?.find((s) => (s.name ?? '').trim().toLowerCase() === 'in progress');
+          if (inProgressStatus?.id) {
+            queryClient.setQueryData(statusQueryKey, inProgressStatus.id);
+          }
+        }
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          void queryClient.refetchQueries({ queryKey: statusQueryKey });
+        }, 1500);
       }
     },
   });
