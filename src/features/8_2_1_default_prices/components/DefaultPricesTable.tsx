@@ -13,7 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/features/ui/dropdown-menu';
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/features/ui/tooltip';
+import { MoreVertical, Pencil, Trash2, ListChecks } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
 import type { DefaultPriceRow } from '../types';
 
@@ -26,9 +32,10 @@ interface DefaultPricesTableProps {
   isLoading: boolean;
   onEdit: (row: DefaultPriceRow) => void;
   onDelete: (id: string) => Promise<void>;
+  onOpenSop?: (row: DefaultPriceRow) => void;
 }
 
-export const DefaultPricesTable = ({ rows, isLoading, onEdit, onDelete }: DefaultPricesTableProps) => {
+export const DefaultPricesTable = ({ rows, isLoading, onEdit, onDelete, onOpenSop }: DefaultPricesTableProps) => {
   const { toast } = useToast();
 
   const handleDelete = async (id: string) => {
@@ -52,20 +59,39 @@ export const DefaultPricesTable = ({ rows, isLoading, onEdit, onDelete }: Defaul
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Service</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead className="text-right">Unit Price (Rp)</TableHead>
-          <TableHead className="w-[80px]">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{row.service_name ?? '-'}</TableCell>
-            <TableCell>{row.sub_service_name ?? '-'}</TableCell>
+    <TooltipProvider delayDuration={200}>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="max-w-[160px] w-[160px]">Service</TableHead>
+            <TableHead className="min-w-[180px] w-[180px]">Category</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead className="text-right">Unit Price (Rp)</TableHead>
+            <TableHead className="w-[80px]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell className="max-w-[160px] truncate" title={row.service_name ?? undefined}>{row.service_name ?? '-'}</TableCell>
+              <TableCell className="min-w-[180px] max-w-[200px] truncate" title={row.sub_service_name ?? undefined}>{row.sub_service_name ?? '-'}</TableCell>
+              <TableCell className="max-w-[200px]">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="block truncate cursor-default">
+                      {row.description?.trim() ? row.description : '-'}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-sm bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-3 py-2"
+                  >
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {row.description?.trim() ? row.description : '—'}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TableCell>
             <TableCell className="text-right font-medium">{formatRupiah(row.unit_price)}</TableCell>
             <TableCell>
               <DropdownMenu>
@@ -75,6 +101,12 @@ export const DefaultPricesTable = ({ rows, isLoading, onEdit, onDelete }: Defaul
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {onOpenSop && (
+                    <DropdownMenuItem onClick={() => onOpenSop(row)}>
+                      <ListChecks className="mr-2 h-4 w-4" />
+                      Workflow / SOP
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => onEdit(row)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
@@ -93,5 +125,6 @@ export const DefaultPricesTable = ({ rows, isLoading, onEdit, onDelete }: Defaul
         ))}
       </TableBody>
     </Table>
+    </TooltipProvider>
   );
 };

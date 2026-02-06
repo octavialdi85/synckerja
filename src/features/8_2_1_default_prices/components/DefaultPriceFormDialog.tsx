@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,7 @@ import {
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
+import { Textarea } from '@/features/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -15,8 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/features/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/features/ui/dropdown-menu';
+import { MoreVertical } from 'lucide-react';
 import { useSalesActivityMasterData } from '@/hooks/organized/sales';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { ServicesManagementDialog } from '@/features/5-3-dashboard/ServicesManagementDialog';
+import { CategoriesManagementDialog } from '@/features/5-3-dashboard/CategoriesManagementDialog';
 import type { DefaultPriceRow, DefaultPriceCreate } from '../types';
 
 interface DefaultPriceFormDialogProps {
@@ -32,25 +43,44 @@ export const DefaultPriceFormDialog = ({
   onSubmit,
   editingRow,
 }: DefaultPriceFormDialogProps) => {
+  const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { services, getSubServicesByService } = useSalesActivityMasterData();
   const [serviceId, setServiceId] = useState('');
   const [subServiceId, setSubServiceId] = useState('');
+  const [description, setDescription] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [servicesDialogOpen, setServicesDialogOpen] = useState(false);
+  const [categoriesDialogOpen, setCategoriesDialogOpen] = useState(false);
 
   const subServices = serviceId ? getSubServicesByService(serviceId) : [];
+
+  const handleServicesChanged = () => {
+    if (organizationId) {
+      queryClient.invalidateQueries({ queryKey: ['services', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['sub-services', organizationId] });
+    }
+  };
+
+  const handleCategoriesChanged = () => {
+    if (organizationId) {
+      queryClient.invalidateQueries({ queryKey: ['sub-services', organizationId] });
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
     if (editingRow) {
       setServiceId(editingRow.service_id);
       setSubServiceId(editingRow.sub_service_id ?? '');
+      setDescription(editingRow.description ?? '');
       setUnitPrice(String(editingRow.unit_price ?? ''));
     } else {
       setServiceId('');
       setSubServiceId('');
+      setDescription('');
       setUnitPrice('');
     }
     setError('');
@@ -81,6 +111,7 @@ export const DefaultPriceFormDialog = ({
         service_id: serviceId,
         sub_service_id: subServiceId || null,
         unit_price: price,
+        description: description.trim() || null,
       });
       onOpenChange(false);
     } catch (err: any) {
@@ -91,6 +122,7 @@ export const DefaultPriceFormDialog = ({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -98,7 +130,21 @@ export const DefaultPriceFormDialog = ({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="service">Service *</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="service">Service *</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Kelola Service">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setServicesDialogOpen(true)}>
+                    Kelola Service
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Select value={serviceId} onValueChange={(v) => { setServiceId(v); setSubServiceId(''); }} disabled={!!editingRow}>
               <SelectTrigger id="service" className="mt-1">
                 <SelectValue placeholder="Select service" />
@@ -111,7 +157,21 @@ export const DefaultPriceFormDialog = ({
             </Select>
           </div>
           <div>
-            <Label htmlFor="category">Category (Sub-service) *</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="category">Category (Sub-service) *</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Kelola Kategori" disabled={!serviceId}>
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setCategoriesDialogOpen(true)} disabled={!serviceId}>
+                    Kelola Kategori
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Select value={subServiceId} onValueChange={setSubServiceId} disabled={!serviceId || !!editingRow}>
               <SelectTrigger id="category" className="mt-1">
                 <SelectValue placeholder="Select category" />
@@ -122,6 +182,17 @@ export const DefaultPriceFormDialog = ({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description"
+              rows={3}
+              className="mt-1 resize-none"
+            />
           </div>
           <div>
             <Label htmlFor="unit_price">Unit Price (Rp) *</Label>
@@ -148,5 +219,17 @@ export const DefaultPriceFormDialog = ({
         </form>
       </DialogContent>
     </Dialog>
+    <ServicesManagementDialog
+      open={servicesDialogOpen}
+      onClose={() => setServicesDialogOpen(false)}
+      onServicesChanged={handleServicesChanged}
+    />
+    <CategoriesManagementDialog
+      open={categoriesDialogOpen}
+      onClose={() => setCategoriesDialogOpen(false)}
+      selectedServiceId={serviceId || undefined}
+      onCategoriesChanged={handleCategoriesChanged}
+    />
+    </>
   );
 };

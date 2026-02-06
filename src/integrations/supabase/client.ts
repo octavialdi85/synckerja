@@ -356,7 +356,5 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
 
   if (typeof window !== 'undefined') {
     window.__SUPABASE_CLIENT_INSTANCE__ = client;
-  }
-
-  return client;
+  }  return client;
 }export const supabase = getSupabaseClient();

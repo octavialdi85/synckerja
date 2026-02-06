@@ -31,7 +31,7 @@ export function TaskListTableHeader() {
         </TableHead>
         <TableHead
           className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"
-          style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}
+          style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}
         >
           PIC
         </TableHead>

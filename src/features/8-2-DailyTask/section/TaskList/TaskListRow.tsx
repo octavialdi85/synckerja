@@ -242,12 +242,14 @@ export function TaskListRow({
           </div>
         </TableCell>
 
-        <TableCell className="px-2 py-3 text-left" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
-          <div className="flex items-center">
+        <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}>
+          <div className="flex items-center min-w-0">
             {task.assigned_to_name ? (
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-gray-900 font-medium">{task.assigned_to_name}</span>
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                <User className="w-4 h-4 flex-shrink-0 text-blue-600" />
+                <span className="text-sm text-gray-900 font-medium truncate" title={task.assigned_to_name}>
+                  {task.assigned_to_name}
+                </span>
               </div>
             ) : (
               <span className="text-sm text-gray-400 italic">Unassigned</span>
@@ -568,7 +570,15 @@ export function TaskListRow({
                       </div>
                     ) : (
                       visibleSteps
-                        .sort((a, b) => a.order - b.order)
+                        .slice()
+                        .sort((a, b) => {
+                          // Completed steps go to the very bottom (after all incomplete, including latest due dates)
+                          if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+                          // Within same completion group: sort by due date ascending (earliest first)
+                          const timeA = a.assigned_due_date ? new Date(a.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
+                          const timeB = b.assigned_due_date ? new Date(b.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
+                          return timeA - timeB;
+                        })
                         .map((step, index) => (
                           <TaskStep
                             key={step.id}

@@ -27,9 +27,10 @@ interface PaymentUpdateModalProps {
   salesActivityId: string;
   clientName?: string;
   viewOnly?: boolean;
+  onFirstPaymentSuccess?: (payload: { title: string; description: string; service_id: string; sub_service_id: string | null }) => void;
 }
 
-export const PaymentUpdateModal = ({ open, onClose, salesActivityId, clientName, viewOnly = false }: PaymentUpdateModalProps) => {
+export const PaymentUpdateModal = ({ open, onClose, salesActivityId, clientName, viewOnly = false, onFirstPaymentSuccess }: PaymentUpdateModalProps) => {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [salesActivity, setSalesActivity] = useState<any>(null);
   const [paymentSummary, setPaymentSummary] = useState<any>(null);
@@ -109,6 +110,7 @@ export const PaymentUpdateModal = ({ open, onClose, salesActivityId, clientName,
           income_type_id, 
           income_category_id,
           activity_type,
+          description,
           services:service_id(name),
           sub_services:sub_service_id(name)
         `)
@@ -314,6 +316,22 @@ export const PaymentUpdateModal = ({ open, onClose, salesActivityId, clientName,
       });
       setInvoiceFile(null);
       setShowAddPaymentForm(false);
+
+      // First payment: notify parent to open Create New Task dialog (only once per activity)
+      if (existingPayments?.length === 0 && onFirstPaymentSuccess && salesActivity) {
+        const servicesObj = Array.isArray(salesActivity?.services) ? salesActivity?.services?.[0] : salesActivity?.services;
+        const subServicesObj = Array.isArray(salesActivity?.sub_services) ? salesActivity?.sub_services?.[0] : salesActivity?.sub_services;
+        const serviceName = (servicesObj as any)?.name ?? salesActivity?.service_id ?? '';
+        const subServiceName = (subServicesObj as any)?.name ?? salesActivity?.sub_service_id ?? '';
+        const title = `${clientName ?? ''}-${serviceName}-${subServiceName}`;
+        const description = salesActivity?.description ?? '';
+        onFirstPaymentSuccess({
+          title,
+          description,
+          service_id: salesActivity?.service_id ?? '',
+          sub_service_id: salesActivity?.sub_service_id ?? null,
+        });
+      }
       
       // Reload all data
       await loadData();

@@ -31,6 +31,7 @@ import MobileClientVisit from "./mobile/pages/home/ClientVisit";
 import MobileReports from "./mobile/pages/home/Reports";
 import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
 import DesktopDailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
+import { DailyTaskProvider } from "./features/8-2-DailyTask/DailyTaskContext";
 import MobileDailyTaskPage from "./mobile/pages/daily task/DailyTaskPage";
 import DesktopMeetingNotesPage from "./features/8-1-meeting-notes/MeetingNotesPage";
 import SocialMediaDashboardPage from "./features/6-1-dashboard/SocialMediaDashboardPage";
@@ -566,7 +567,9 @@ const App = () => (
               } />
               <Route path="/operations/sales/activities" element={
                 <ProtectedRoute>
-                  <SalesOperationsPage />
+                  <DailyTaskProvider>
+                    <SalesOperationsPage />
+                  </DailyTaskProvider>
                 </ProtectedRoute>
               } />
               <Route path="/operations/sales/jadwal-kunjungan" element={

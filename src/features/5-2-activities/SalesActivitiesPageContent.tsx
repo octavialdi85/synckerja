@@ -6,7 +6,10 @@ import { SalesActivitiesOverview } from './SalesActivitiesOverview';
 import { SalesActivitiesSidebarFooter } from './SalesActivitiesSidebarFooter';
 import { SalesActivityDialog } from './SalesActivityDialog';
 import { PaymentUpdateModal } from '@/features/5-2-jadwal-kunjungan/PaymentUpdateModal';
+import { CreateTaskDialog, type TaskFormData } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
+import { SopSelectionPopup } from './components/SopSelectionPopup';
 import { useSalesActivities } from '@/hooks/organized/sales';
+import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { Button } from '@/features/ui/button';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/features/1-login/hooks/use-toast';
@@ -19,6 +22,17 @@ export const SalesActivitiesPageContent = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedActivityForPayment, setSelectedActivityForPayment] = useState<any>(null);
   const [paymentModalViewOnly, setPaymentModalViewOnly] = useState(false);
+  const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+  const [createTaskPrefill, setCreateTaskPrefill] = useState<{
+    title: string;
+    description: string;
+    service_id: string;
+    sub_service_id: string | null;
+  } | null>(null);
+  const [createTaskFromPayment, setCreateTaskFromPayment] = useState(false);
+  const [sopPopupOpen, setSopPopupOpen] = useState(false);
+  const [pendingTaskFormData, setPendingTaskFormData] = useState<TaskFormData | null>(null);
+  const { refetchTasks } = useDailyTask();
   const [filters, setFilters] = useState({
     search: '',
     status: 'all',
@@ -69,6 +83,44 @@ export const SalesActivitiesPageContent = () => {
     setShowPaymentModal(false);
     setSelectedActivityForPayment(null);
     setPaymentModalViewOnly(false);
+  };
+
+  const handleFirstPaymentSuccess = (payload: {
+    title: string;
+    description: string;
+    service_id: string;
+    sub_service_id: string | null;
+  }) => {
+    setCreateTaskPrefill(payload);
+    setCreateTaskFromPayment(true);
+    setShowCreateTaskDialog(true);
+  };
+
+  const handleSubmitWithSop = (formData: TaskFormData) => {
+    setPendingTaskFormData(formData);
+    setSopPopupOpen(true);
+  };
+
+  const handleSopSuccess = () => {
+    setShowCreateTaskDialog(false);
+    setCreateTaskPrefill(null);
+    setCreateTaskFromPayment(false);
+    setPendingTaskFormData(null);
+    setSopPopupOpen(false);
+    refetchTasks?.();
+  };
+
+  const handleSopCancel = () => {
+    setSopPopupOpen(false);
+    setPendingTaskFormData(null);
+  };
+
+  const handleCreateTaskDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      setShowCreateTaskDialog(false);
+      setCreateTaskPrefill(null);
+      setCreateTaskFromPayment(false);
+    }
   };
 
   const handleDelete = async (activity: any) => {
@@ -129,6 +181,27 @@ export const SalesActivitiesPageContent = () => {
         salesActivityId={selectedActivityForPayment?.id || ''}
         clientName={selectedActivityForPayment?.client_name || ''}
         viewOnly={paymentModalViewOnly}
+        onFirstPaymentSuccess={handleFirstPaymentSuccess}
+      />
+
+      {/* Create New Task (from first payment) - same component as /tools/daily-task */}
+      <CreateTaskDialog
+        open={showCreateTaskDialog}
+        onOpenChange={handleCreateTaskDialogOpenChange}
+        defaultTitle={createTaskPrefill?.title ?? ''}
+        defaultDescription={createTaskPrefill?.description ?? ''}
+        dismissible={!createTaskFromPayment}
+        onSubmitWithSop={createTaskFromPayment ? handleSubmitWithSop : undefined}
+      />
+
+      <SopSelectionPopup
+        open={sopPopupOpen}
+        onClose={() => setSopPopupOpen(false)}
+        formData={pendingTaskFormData}
+        serviceId={createTaskPrefill?.service_id ?? null}
+        subServiceId={createTaskPrefill?.sub_service_id ?? null}
+        onSuccess={handleSopSuccess}
+        onCancel={handleSopCancel}
       />
 
       {/* Grid Layout: 12 columns (9-3) */}

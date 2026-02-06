@@ -4,7 +4,7 @@ import { PricingToolsHeaderAndTab } from '@/features/8_2_pricing-tools/component
 import { Button } from '@/features/ui/button';
 import { Plus } from 'lucide-react';
 import { useDefaultPrices } from '../hooks';
-import { DefaultPricesTable, DefaultPriceFormDialog } from '../components';
+import { DefaultPricesTable, DefaultPriceFormDialog, SopWorkflowModal } from '../components';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import type { DefaultPriceRow, DefaultPriceCreate, DefaultPriceUpdate } from '../types';
 
@@ -12,6 +12,7 @@ const DefaultPricesPage = () => {
   const [activeTab, setActiveTab] = useState('default-prices');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<DefaultPriceRow | null>(null);
+  const [sopModalRow, setSopModalRow] = useState<DefaultPriceRow | null>(null);
 
   const { organizationId } = useCurrentOrg();
   const {
@@ -38,10 +39,17 @@ const DefaultPricesPage = () => {
     setDialogOpen(true);
   }, []);
 
+  const handleOpenSop = useCallback((row: DefaultPriceRow) => {
+    setSopModalRow(row);
+  }, []);
+
   const handleSubmit = useCallback(
     async (payload: DefaultPriceCreate) => {
       if (editingRow) {
-        await update({ id: editingRow.id, payload: { unit_price: payload.unit_price } as DefaultPriceUpdate });
+        await update({
+          id: editingRow.id,
+          payload: { unit_price: payload.unit_price, description: payload.description ?? null } as DefaultPriceUpdate,
+        });
       } else {
         await create(payload);
       }
@@ -67,7 +75,7 @@ const DefaultPricesPage = () => {
                     <div className="h-full overflow-y-auto seamless-scroll px-4 py-6 max-h-[calc(100vh-120px)]">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
-                          <h2 className="text-lg font-semibold text-gray-900">Default Prices</h2>
+                          <h2 className="text-lg font-semibold text-gray-900">Product & Service</h2>
                           <p className="text-sm text-gray-500 mt-0.5">
                             Set default unit price per Service + Category. Used to auto-fill amount when a lead is converted (Leads Management).
                           </p>
@@ -82,6 +90,7 @@ const DefaultPricesPage = () => {
                         isLoading={isLoading}
                         onEdit={handleEdit}
                         onDelete={deleteRow}
+                        onOpenSop={handleOpenSop}
                       />
                     </div>
                   </div>
@@ -97,6 +106,12 @@ const DefaultPricesPage = () => {
         onOpenChange={setDialogOpen}
         onSubmit={handleSubmit}
         editingRow={editingRow}
+      />
+
+      <SopWorkflowModal
+        open={sopModalRow != null}
+        onOpenChange={(open) => !open && setSopModalRow(null)}
+        defaultPriceRow={sopModalRow}
       />
     </StandardLayout>
   );

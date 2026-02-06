@@ -14,7 +14,7 @@ export const PricingToolsHeaderAndTab = ({ activeTab, onTabChange }: PricingTool
   const tabs = [
     {
       id: 'default-prices',
-      label: 'Default Prices',
+      label: 'Product & Service',
       icon: Tag,
       description: 'Set default price per Service + Category for lead conversion',
       route: '/tools/default-prices'

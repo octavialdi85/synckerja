@@ -34,15 +34,31 @@ import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
 import { ObjectiveHierarchyDialog as MobileObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MonthPicker } from '@/features/share/calendar';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { startOfMonth } from 'date-fns';
+
+export interface TaskFormData {
+  title: string;
+  description: string;
+  priority: string;
+  objective_id: string | null;
+  plan_date: string | null;
+  due_date: string | null;
+  assigned_to: string | null;
+  status: string;
+}
 
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTitle?: string;
   defaultPlanDate?: Date | null; // Optional: for auto-create from social media dashboard
+  defaultDescription?: string; // Optional: e.g. from sales_activities.description
+  dismissible?: boolean; // When false, dialog cannot be closed by overlay/Escape/X until "Create Task" is clicked
+  /** When set (e.g. from sales first payment), submit calls this instead of addTask; parent opens SOP popup then creates task+steps. */
+  onSubmitWithSop?: (formData: TaskFormData) => void;
 }
 
 export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
@@ -50,7 +66,11 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   onOpenChange,
   defaultTitle,
   defaultPlanDate,
+  defaultDescription,
+  dismissible = true,
+  onSubmitWithSop,
 }) => {
+  const { t } = useAppTranslation();
   const isMobile = useIsMobile();
   const { addTask } = useDailyTask();
   const { data: employees = [] } = useAvailableEmployees();
@@ -171,10 +191,11 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   });
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  // Prefill title and plan date when dialog opens
+  // Prefill title, description, and plan date when dialog opens
   React.useEffect(() => {
     if (open) {
       setTitle(defaultTitle || '');
+      setDescription(defaultDescription || '');
       // Set plan date from defaultPlanDate if provided, otherwise null (user must select)
       if (defaultPlanDate) {
         setPlanDate(startOfMonth(defaultPlanDate));
@@ -182,7 +203,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         setPlanDate(null);
       }
     }
-  }, [open, defaultTitle, defaultPlanDate]);
+  }, [open, defaultTitle, defaultPlanDate, defaultDescription]);
 
   const handleAssign = (newAssignment: { employeeId: string | null; deadline: string | null }) => {
     setAssignment(newAssignment);
@@ -207,21 +228,36 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 
     setIsSubmitting(true);
     try {
-      // Format plan_date as YYYY-MM-01 (first day of month)
       const planDateFormatted = format(startOfMonth(planDate), 'yyyy-MM-dd');
-      
-      await addTask({
+      const formData: TaskFormData = {
         title: title.trim(),
         description: description.trim(),
-        priority: priority as 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented',
+        priority,
+        objective_id: objectiveId || null,
+        plan_date: planDateFormatted,
         due_date: assignment.deadline || null,
         assigned_to: assignment.employeeId || null,
-        objective_id: objectiveId,
-        plan_date: planDateFormatted,
-        status: 'pending'
+        status: 'pending',
+      };
+
+      if (onSubmitWithSop) {
+        onSubmitWithSop(formData);
+        setTitle('');
+        setDescription('');
+        setPriority('medium');
+        setObjectiveId('');
+        setObjectiveContext(null);
+        setPlanDate(null);
+        setAssignment({ employeeId: null, deadline: null });
+        setIsSubmitting(false);
+        return;
+      }
+
+      await addTask({
+        ...formData,
+        priority: formData.priority as 'low' | 'medium' | 'high' | 'urgent' | 'needs_to_be_presented',
       } as any);
 
-      // Reset form and close dialog
       setTitle('');
       setDescription('');
       setPriority('medium');
@@ -254,21 +290,30 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       <Dialog
         open={open}
         onOpenChange={(value) => {
-          if (!value) {
+          if (!value && dismissible) {
             handleClose();
           }
         }}
       >
-        <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
+        <DialogContent
+          className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col"
+          hideCloseButton={!dismissible}
+          onInteractOutside={(e) => {
+            if (!dismissible) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (!dismissible) e.preventDefault();
+          }}
+        >
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
                 <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-semibold">Create New Task</DialogTitle>
+                <DialogTitle className="text-xl font-semibold">{t('dailyTask.createTask.title', 'Create New Task')}</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground mt-1">
-                  Create a new task and link it to an individual objective. Fill in all required fields to save.
+                  {t('dailyTask.createTask.description', 'Create a new task and link it to an individual objective. Fill in all required fields to save.')}
                 </DialogDescription>
               </div>
             </div>
