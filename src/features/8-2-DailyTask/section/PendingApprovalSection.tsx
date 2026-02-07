@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle, XCircle, User, Loader2, ClipboardCheck } from 'lucide-react';
+import { CheckCircle, XCircle, User, Loader2, ClipboardCheck, Eye } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import {
@@ -15,6 +15,19 @@ import { useDailyTask } from '../DailyTaskContext';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useToast } from '@/features/ui/use-toast';
 import type { CompletionApprovalRow } from '../services/completionApprovalService';
+import { supabase } from '@/integrations/supabase/client';
+import GoogleDriveLinkDialog from '@/features/6-1-dashboard/modal/GoogleDriveLinkDialog';
+
+/** Minimal plan shape for preview modal (fetched when user clicks View Content). */
+interface PlanForPreview {
+  id: string;
+  title: string | null;
+  google_drive_link: string | null;
+  production_approved: boolean | null;
+  production_status: string | null;
+  post_date: string | null;
+  content_type?: { id: string; name: string } | null;
+}
 
 function getDisplayTitle(row: CompletionApprovalRow): string {
   const taskTitle = row.daily_tasks?.title ?? 'Task';
@@ -42,6 +55,11 @@ export const PendingApprovalSection = () => {
     reason: '',
   });
   const [actingId, setActingId] = useState<string | null>(null);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewRow, setPreviewRow] = useState<CompletionApprovalRow | null>(null);
+  const [previewPlan, setPreviewPlan] = useState<PlanForPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const handleApprove = async (row: CompletionApprovalRow) => {
     setActingId(row.id);
@@ -106,6 +124,60 @@ export const PendingApprovalSection = () => {
     }
   };
 
+  const handleViewContent = async (row: CompletionApprovalRow) => {
+    const planId = row.entity_type === 'step' ? row.task_steps?.social_media_plan_id : null;
+    if (!planId) return;
+    setPreviewRow(row);
+    setPreviewLoading(true);
+    setPreviewPlan(null);
+    try {
+      const { data, error } = await supabase
+        .from('social_media_plans')
+        .select('id, title, google_drive_link, production_approved, production_status, post_date, content_type:content_types(id, name)')
+        .eq('id', planId)
+        .single();
+      if (error) throw error;
+      setPreviewPlan(data as PlanForPreview);
+      setPreviewOpen(true);
+    } catch (e) {
+      toast({
+        title: t('dailyTask.approval.error', 'Error'),
+        description: e instanceof Error ? e.message : 'Failed to load content.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handlePreviewClose = () => {
+    setPreviewOpen(false);
+    setPreviewRow(null);
+    setPreviewPlan(null);
+  };
+
+  const handleRejectFromPopup = async (row: CompletionApprovalRow) => {
+    setActingId(row.id);
+    const { error } = await reject(row.id, 'Request Revision');
+    setActingId(null);
+    if (error) {
+      toast({ title: t('dailyTask.approval.error', 'Error'), description: error.message, variant: 'destructive' });
+      return;
+    }
+    uncheckCompletionLocally({
+      entityType: row.entity_type,
+      dailyTaskId: row.daily_task_id,
+      taskStepId: row.task_step_id ?? undefined,
+      taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
+    });
+    toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
+    refresh();
+    await refetchTasks();
+  };
+
+  const showViewContent = (row: CompletionApprovalRow) =>
+    row.entity_type === 'step' && !!row.task_steps?.social_media_plan_id;
+
   return (
     <>
       {/* Pending Approval card (same style as Task Summary cards) */}
@@ -160,6 +232,22 @@ export const PendingApprovalSection = () => {
                     <span>{getEntityTypeLabel(row.entity_type, t)}</span>
                   </div>
                   <div className="flex gap-2 mt-2">
+                    {showViewContent(row) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-gray-700 border-gray-200 hover:bg-gray-50"
+                        onClick={() => handleViewContent(row)}
+                        disabled={previewLoading}
+                      >
+                        {previewLoading && previewRow?.id === row.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Eye className="h-4 w-4 mr-1" />
+                        )}
+                        {t('dailyTask.approval.viewContent', 'View Content')}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -240,6 +328,26 @@ export const PendingApprovalSection = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {previewOpen && previewPlan && previewRow && (
+        <GoogleDriveLinkDialog
+          isOpen={previewOpen}
+          onClose={handlePreviewClose}
+          googleDriveLink={previewPlan.google_drive_link ?? ''}
+          productionApproved={previewPlan.production_approved ?? false}
+          socialMediaPlanId={previewPlan.id}
+          contentTitle={previewPlan.title ?? undefined}
+          contentType={previewPlan.content_type?.name}
+          postDate={previewPlan.post_date ?? undefined}
+          onSave={() => {}}
+          onApprove={() => {
+            void handleApprove(previewRow).then(() => refresh());
+          }}
+          onRevision={() => {
+            void handleRejectFromPopup(previewRow);
+          }}
+        />
+      )}
     </>
   );
 };

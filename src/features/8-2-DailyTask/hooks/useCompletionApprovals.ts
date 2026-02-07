@@ -20,6 +20,16 @@ function getRejectionKeyForRow(row: CompletionApprovalRow): string {
   return '';
 }
 
+/** Exclude steps whose linked social_media_plan is already Prod Approved on dashboard (no need to show in pending). */
+function filterPendingExcludingProdApproved(rows: CompletionApprovalRow[]): CompletionApprovalRow[] {
+  return rows.filter((row) => {
+    if (row.entity_type !== 'step') return true;
+    if (!row.task_steps?.social_media_plan_id) return true;
+    if (row.task_steps?.social_media_plans?.production_approved === true) return false;
+    return true;
+  });
+}
+
 export function useCompletionApprovals(refreshDeps: unknown[] = []) {
   const { organizationId } = useCurrentOrg();
   const { data: currentEmployee } = useCurrentEmployee();
@@ -43,7 +53,7 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
       fetchPendingApprovalsForAssigner(organizationId, currentEmployee.id),
       fetchRejectedForAssignee(organizationId, currentEmployee.id),
     ]);
-    if (!pendingRes.error) setPending(pendingRes.data);
+    if (!pendingRes.error) setPending(filterPendingExcludingProdApproved(pendingRes.data));
     else console.warn('[useCompletionApprovals] Fetch pending approvals failed:', pendingRes.error.message);
     if (!rejectedRes.error) {
       const raw = rejectedRes.data ?? [];
