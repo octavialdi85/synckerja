@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { computeStepDueDate } from '../utils/sopDateUtils';
+import { computeStepDueDate, parseLocalDateString } from '../utils/sopDateUtils';
 import type { SopTemplateStep } from '../types';
 
 export interface TaskFormDataForSop {
@@ -24,7 +24,7 @@ export interface CreateTaskFromSopParams {
 }
 
 function startOfMonth(isoDate: string): string {
-  const d = new Date(isoDate);
+  const d = parseLocalDateString(isoDate);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}-01`;
@@ -45,12 +45,13 @@ export async function createTaskFromSop(params: CreateTaskFromSopParams): Promis
     tanggalHariH,
   } = params;
 
-  const hariHDate = new Date(tanggalHariH);
+  // Parse as local date so timezone does not shift the day (new Date('YYYY-MM-DD') is UTC midnight).
+  const hariHDate = parseLocalDateString(tanggalHariH);
   const planDate = startOfMonth(tanggalHariH);
 
   const stepDates: string[] = [];
   for (const step of steps) {
-    const due = computeStepDueDate(hariHDate, step.schedule_type, step.schedule_value);
+    const due = computeStepDueDate(hariHDate, step.schedule_type, step.schedule_value ?? null);
     stepDates.push(due);
   }
   const lastStepDate = stepDates.length ? stepDates.reduce((a, b) => (a > b ? a : b)) : tanggalHariH;
@@ -97,16 +98,20 @@ export async function createTaskFromSop(params: CreateTaskFromSopParams): Promis
     const step = steps[i];
     const stepDueDate = stepDates[i];
 
+    const stepPayload: Record<string, unknown> = {
+      task_id: taskId,
+      title: step.title,
+      description: step.description ?? null,
+      is_completed: false,
+      order: i + 1,
+      created_by: createdByUserId,
+      schedule_type: step.schedule_type ?? null,
+      schedule_value: step.schedule_value ?? null,
+    };
+
     const { data: newStep, error: stepError } = await supabase
       .from('task_steps')
-      .insert({
-        task_id: taskId,
-        title: step.title,
-        description: step.description ?? null,
-        is_completed: false,
-        order: i + 1,
-        created_by: createdByUserId,
-      })
+      .insert(stepPayload)
       .select('id')
       .single();
 
@@ -127,12 +132,14 @@ export async function createTaskFromSop(params: CreateTaskFromSopParams): Promis
         .select('id')
         .single();
 
-      if (!assignError && assignmentRecord && stepDueDate) {
-        await supabase.from('task_steps_assigned_duedate').insert({
+      if (assignError) throw assignError;
+      if (assignmentRecord && stepDueDate) {
+        const { error: duedateError } = await supabase.from('task_steps_assigned_duedate').insert({
           organization_id: organizationId,
           task_steps_assigned_id: (assignmentRecord as { id: string }).id,
           due_date: stepDueDate,
         });
+        if (duedateError) throw duedateError;
       }
     }
   }

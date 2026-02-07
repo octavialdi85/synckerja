@@ -15,6 +15,7 @@ import { DeadlineExtensionDialog } from '../DeadlineExtensionDialog';
 import { DeadlineHistoryDialog } from '../DeadlineHistoryDialog';
 import { EditTaskDialog } from '../EditTaskDialog';
 import { ModalAddTaskStep } from '../ModalAddTaskStep';
+import { AddTemplateModal } from '../AddTemplateModal';
 import type { Task } from '../../types';
 
 export interface TaskListDialogsProps {
@@ -27,6 +28,8 @@ export interface TaskListDialogsProps {
   setEditingTask: (v: string | null) => void;
   addStepDialog: { isOpen: boolean; taskId: string | null; taskTitle: string };
   setAddStepDialog: (v: { isOpen: boolean; taskId: string | null; taskTitle: string }) => void;
+  addTemplateDialog: { isOpen: boolean; taskId: string | null; taskTitle: string };
+  setAddTemplateDialog: (v: { isOpen: boolean; taskId: string | null; taskTitle: string }) => void;
   deleteDialog: { isOpen: boolean; taskId: string | null; taskTitle: string };
   handleCancelDelete: () => void;
   handleConfirmDelete: () => void;
@@ -46,6 +49,8 @@ export function TaskListDialogs({
   setEditingTask,
   addStepDialog,
   setAddStepDialog,
+  addTemplateDialog,
+  setAddTemplateDialog,
   deleteDialog,
   handleCancelDelete,
   handleConfirmDelete,
@@ -92,6 +97,15 @@ export function TaskListDialogs({
           taskId={addStepDialog.taskId}
           taskTitle={addStepDialog.taskTitle}
           onSuccess={() => {}}
+        />
+      )}
+
+      {addTemplateDialog.taskId && (
+        <AddTemplateModal
+          open={addTemplateDialog.isOpen}
+          onOpenChange={(open) => !open && setAddTemplateDialog({ isOpen: false, taskId: null, taskTitle: '' })}
+          taskId={addTemplateDialog.taskId}
+          taskTitle={addTemplateDialog.taskTitle ?? ''}
         />
       )}
 

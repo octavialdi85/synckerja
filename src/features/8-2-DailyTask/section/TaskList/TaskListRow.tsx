@@ -16,6 +16,7 @@ import {
   Trash2,
   Plus,
   Flag,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { TableCell, TableRow } from '@/features/ui/table';
@@ -81,6 +82,7 @@ export interface TaskListRowProps {
   setDeadlineDialog: (v: { isOpen: boolean; taskId: string | null }) => void;
   setEditingTask: (v: string | null) => void;
   setAddStepDialog: (v: { isOpen: boolean; taskId: string | null; taskTitle: string }) => void;
+  setAddTemplateDialog: (v: { isOpen: boolean; taskId: string | null; taskTitle: string }) => void;
   userId: string | undefined;
 }
 
@@ -110,6 +112,7 @@ export function TaskListRow({
   setDeadlineDialog,
   setEditingTask,
   setAddStepDialog,
+  setAddTemplateDialog,
   userId,
 }: TaskListRowProps) {
   const { t } = useAppTranslation();
@@ -534,26 +537,40 @@ export function TaskListRow({
                 <div className="flex items-center justify-between mb-3 w-full">
                   <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                     <CheckSquare className="w-4 h-4 text-blue-600" />
-                    Steps (
+                    {t('dailyTask.workflow') ?? 'Workflow'} (
                     {`${visibleSteps.filter((s) => s.is_completed).length}/${visibleSteps.length}`})
                   </h4>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (creatorCanEdit) setAddStepDialog({ isOpen: true, taskId: task.id, taskTitle: task.title });
-                    }}
-                    disabled={!creatorCanEdit}
-                    className={`${
-                      creatorCanEdit
-                        ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer'
-                        : 'text-gray-400 opacity-50 cursor-not-allowed'
-                    }`}
-                    title={creatorCanEdit ? 'Add a new step to this task' : '🔒 Only task creator can add steps'}
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add Step
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {creatorCanEdit && !task.daily_template_id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAddTemplateDialog({ isOpen: true, taskId: task.id, taskTitle: task.title })}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer"
+                        title={t('dailyTask.template.addTemplate') ?? 'Add template to this task'}
+                      >
+                        <Layers className="w-4 h-4 mr-1" />
+                        {t('dailyTask.template.addTemplate') ?? 'Add Template'}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (creatorCanEdit) setAddStepDialog({ isOpen: true, taskId: task.id, taskTitle: task.title });
+                      }}
+                      disabled={!creatorCanEdit}
+                      className={`${
+                        creatorCanEdit
+                          ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer'
+                          : 'text-gray-400 opacity-50 cursor-not-allowed'
+                      }`}
+                      title={creatorCanEdit ? 'Add a new step to this task' : '🔒 Only task creator can add steps'}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Step
+                    </Button>
+                  </div>
                 </div>
                 <SortableContext
                   items={task.steps.map((step) => `step-${step.id}`)}
@@ -572,12 +589,25 @@ export function TaskListRow({
                       visibleSteps
                         .slice()
                         .sort((a, b) => {
-                          // Completed steps go to the very bottom (after all incomplete, including latest due dates)
+                          // Completed steps go to the very bottom (after all incomplete)
                           if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
-                          // Within same completion group: sort by due date ascending (earliest first)
-                          const timeA = a.assigned_due_date ? new Date(a.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
-                          const timeB = b.assigned_due_date ? new Date(b.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
-                          return timeA - timeB;
+                          // If all steps have due date: sort by due date ascending, then by step_priority (same date = urutan by prioritas)
+                          const allHaveDueDate = visibleSteps.every((s) => s.assigned_due_date);
+                          if (allHaveDueDate) {
+                            const timeA = a.assigned_due_date ? new Date(a.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
+                            const timeB = b.assigned_due_date ? new Date(b.assigned_due_date).getTime() : Number.MAX_SAFE_INTEGER;
+                            if (timeA !== timeB) return timeA - timeB;
+                            // Same date: sort by step_priority (lower = top), then by order
+                            const priA = a.step_priority ?? 999;
+                            const priB = b.step_priority ?? 999;
+                            if (priA !== priB) return priA - priB;
+                            return (a.order ?? 0) - (b.order ?? 0);
+                          }
+                          // Else: sort by step_priority then order
+                          const priA = a.step_priority ?? 999;
+                          const priB = b.step_priority ?? 999;
+                          if (priA !== priB) return priA - priB;
+                          return (a.order ?? 0) - (b.order ?? 0);
                         })
                         .map((step, index) => (
                           <TaskStep

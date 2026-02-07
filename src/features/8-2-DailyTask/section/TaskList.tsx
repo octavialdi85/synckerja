@@ -65,6 +65,11 @@ export const TaskList = () => {
     taskId: string | null;
     taskTitle: string;
   }>({ isOpen: false, taskId: null, taskTitle: '' });
+  const [addTemplateDialog, setAddTemplateDialog] = useState<{
+    isOpen: boolean;
+    taskId: string | null;
+    taskTitle: string;
+  }>({ isOpen: false, taskId: null, taskTitle: '' });
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
     taskId: string | null;
@@ -293,6 +298,7 @@ export const TaskList = () => {
                       setDeadlineDialog={setDeadlineDialog}
                       setEditingTask={setEditingTask}
                       setAddStepDialog={setAddStepDialog}
+                      setAddTemplateDialog={setAddTemplateDialog}
                       userId={user?.id}
                     />
                   ))
@@ -311,6 +317,8 @@ export const TaskList = () => {
             setEditingTask={setEditingTask}
             addStepDialog={addStepDialog}
             setAddStepDialog={setAddStepDialog}
+            addTemplateDialog={addTemplateDialog}
+            setAddTemplateDialog={setAddTemplateDialog}
             deleteDialog={deleteDialog}
             handleCancelDelete={handleCancelDelete}
             handleConfirmDelete={handleConfirmDelete}

@@ -9,6 +9,7 @@ import TaskInitiative, { InitiativeStats } from './section/TaskInitiative';
 import { TaskListFooter } from './section/TaskListFooter';
 import { TaskSidebarFooter } from './section/TaskSidebarFooter';
 import { TaskInitiativeFooter } from './section/TaskInitiativeFooter';
+import { CreateDailyTemplateModal } from './section/CreateDailyTemplateModal';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
 import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
@@ -32,6 +33,7 @@ const DailyTaskContent = () => {
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
   const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
+  const [createTemplateSheetOpen, setCreateTemplateSheetOpen] = useState(false);
   const appliedNavParamsRef = useRef(false);
 
   // Very short loading only when organizationId not ready yet (avoids flash)
@@ -119,6 +121,7 @@ const DailyTaskContent = () => {
                         <TaskListFooter 
                           totalTasks={tasks.length}
                           filteredTasks={filteredTasks.length}
+                          onOpenCreateTemplate={() => setCreateTemplateSheetOpen(true)}
                         />
                       </div>
                     </div>
@@ -194,6 +197,11 @@ const DailyTaskContent = () => {
             </div>
           </div>
         </div>
+        <CreateDailyTemplateModal
+          open={createTemplateSheetOpen}
+          onOpenChange={setCreateTemplateSheetOpen}
+          onSuccess={() => setCreateTemplateSheetOpen(false)}
+        />
       </div>
     </StandardLayout>
   );

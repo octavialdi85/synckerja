@@ -544,6 +544,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           objective_id,
           has_substeps,
           has_reminder,
+          has_steps,
+          daily_template_id,
           created_at,
           updated_at
         `)
@@ -601,6 +603,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   order,
                   status,
                   priority,
+                  schedule_type,
+                  schedule_value,
+                  step_priority,
                   created_at,
                   updated_at,
                   completed_at,

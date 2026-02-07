@@ -75,6 +75,12 @@ export interface TaskStep {
   completion_date_from_history?: string | null; // Completion date from task_step_history (accurate), or fallback to updated_at
   status?: string;
   priority?: string;
+  /** From daily template Hari H: days_before_h, hari_h, working_days_after_h. */
+  schedule_type?: string | null;
+  /** From daily template Hari H; used with schedule_type. */
+  schedule_value?: number | null;
+  /** From template; untuk mengurutkan step di tanggal yang sama (angka kecil = atas). */
+  step_priority?: number | null;
 }
 
 export interface TaskFile {
@@ -130,6 +136,8 @@ export interface Task {
   has_reminder?: boolean;
   has_steps?: boolean;
   has_substeps?: boolean;
+  /** Template used for this task; one template per task. */
+  daily_template_id?: string | null;
   steps: TaskStep[];
   files: TaskFile[];
   deadline_history: DeadlineHistory[];

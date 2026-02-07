@@ -32,11 +32,29 @@ function addWorkingDaysAfter(startDate: Date, n: number): Date {
   return d;
 }
 
+/** Format date as YYYY-MM-DD in local time (avoid UTC shift). */
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Parse YYYY-MM-DD string as local date (midnight local time).
+ * Avoids new Date(iso) which treats "YYYY-MM-DD" as UTC and can shift the day in some timezones.
+ */
+export function parseLocalDateString(isoDate: string): Date {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /**
  * Compute step due date from Hari H and template step schedule.
  * - days_before_h: Hari H minus schedule_value calendar days.
  * - hari_h: Hari H.
  * - working_days_after_h: schedule_value working days after the first working day on or after Hari H.
+ * Uses local date so timezone does not shift the day.
  */
 export function computeStepDueDate(
   hariHDate: Date,
@@ -51,17 +69,17 @@ export function computeStepDueDate(
       const v = scheduleValue ?? 0;
       const d = new Date(h);
       d.setDate(d.getDate() - v);
-      return d.toISOString().split('T')[0];
+      return toLocalDateString(d);
     }
     case 'hari_h':
-      return h.toISOString().split('T')[0];
+      return toLocalDateString(h);
     case 'working_days_after_h': {
       const v = scheduleValue ?? 0;
       const firstWorking = nextWorkingDay(h);
       const due = addWorkingDaysAfter(firstWorking, v);
-      return due.toISOString().split('T')[0];
+      return toLocalDateString(due);
     }
     default:
-      return h.toISOString().split('T')[0];
+      return toLocalDateString(h);
   }
 }
