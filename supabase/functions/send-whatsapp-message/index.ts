@@ -114,9 +114,20 @@ Deno.serve(async (req: Request) => {
     if (conversationId) {
       const { data: convRow } = await supabaseAdmin
         .from("whatsapp_conversations")
-        .select("organization_id, phone_number_id")
+        .select("organization_id, phone_number_id, channel")
         .eq("id", conversationId)
         .maybeSingle();
+      const convChannel = (convRow?.channel ?? "").toString().toLowerCase();
+      if (convChannel === "instagram") {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Percakapan ini dari Instagram. Pengiriman pesan dari inbox ini hanya untuk WhatsApp. Gunakan percakapan WhatsApp.",
+            code: "INSTAGRAM_CONVERSATION",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       if (convRow?.organization_id) {
         const pnId = convRow.phone_number_id != null ? String(convRow.phone_number_id).trim() || null : null;
         const current = pnId
@@ -230,10 +241,11 @@ Deno.serve(async (req: Request) => {
       const subcode = metaError?.error_subcode;
       console.error("Meta API error:", metaRes.status, metaData);
 
-      // Meta code 100 + subcode 33 = object doesn't exist / missing permissions / unsupported operation (Phone Number ID or token)
+      // Meta code 100 + subcode 33 = object doesn't exist / missing permissions / unsupported operation
+      // Sering terjadi jika ID yang dipakai adalah Instagram Business Account ID / Page ID, bukan WhatsApp Phone Number ID
       const userHint =
         code === 100 && (subcode === 33 || /does not exist|missing permissions|does not support/i.test(metaMsg))
-          ? "Periksa di Meta: Phone Number ID dan Access Token harus dari App & WABA yang sama. Generate token baru (System User) dan pastikan nomor terdaftar di WhatsApp → API Setup."
+          ? "ID yang dipakai bukan WhatsApp Phone Number ID (mungkin ID Instagram/Page). Di WhatsApp Connect, pastikan Anda memasukkan Phone Number ID dari Meta: WhatsApp → API Setup, bukan Instagram Business Account ID. Periksa juga: token dan Phone Number ID harus dari App & WABA yang sama."
           : metaMsg;
 
       return new Response(

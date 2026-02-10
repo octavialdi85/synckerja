@@ -168,4 +168,4 @@ CREATE TRIGGER trigger_organization_whatsapp_accounts_updated_at
   BEFORE UPDATE ON public.organization_whatsapp_accounts
   FOR EACH ROW EXECUTE FUNCTION update_organization_whatsapp_accounts_updated_at();
 
-COMMENT ON TABLE public.organization_whatsapp_accounts IS 'WhatsApp Business API accounts per organization. Max 3 per org (enforced in app).';
+COMMENT ON TABLE public.organization_whatsapp_accounts IS 'WhatsApp Business API accounts per organization. Max 5 per org (enforced in app).';

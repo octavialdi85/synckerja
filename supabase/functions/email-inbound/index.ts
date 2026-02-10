@@ -116,54 +116,6 @@ async function fetchReceivedEmailContent(emailId: string): Promise<{ html?: stri
   }
 }
 
-/** Insert a lead row when a new email conversation is created. Link by ticket_id (EMAIL-xxx). */
-async function ensureLeadForNewEmailConversation(
-  supabase: ReturnType<typeof createClient>,
-  orgId: string,
-  conversationId: string,
-  client: string,
-  title: string
-): Promise<void> {
-  const ticketId = "EMAIL-" + String(conversationId).replace(/-/g, "").slice(0, 8).toUpperCase();
-  const { data: existing } = await supabase.from("leads").select("id").eq("ticket_id", ticketId).maybeSingle();
-  if (existing) return;
-
-  const { data: unreadStatus } = await supabase
-    .from("lead_statuses")
-    .select("id")
-    .eq("name", "Unread")
-    .limit(1)
-    .maybeSingle();
-  const statusId = unreadStatus?.id ?? null;
-  if (!statusId) {
-    console.warn("ensureLeadForNewEmailConversation: no Unread status in lead_statuses, skip lead insert");
-    return;
-  }
-
-  const safeClient = (client && String(client).trim()) || "Email";
-  const safeTitle = (title && String(title).trim().slice(0, 100)) || "Email";
-
-  const { error } = await supabase.from("leads").insert({
-    ticket_id: ticketId,
-    client: safeClient,
-    title: safeTitle,
-    category: "",
-    created_by: "00000000-0000-0000-0000-000000000000",
-    created_by_name: "System",
-    assignee: "",
-    status_id: statusId,
-    organization_id: orgId,
-    source: "Email",
-    services: null,
-    followup: 0,
-  });
-  if (error) {
-    console.error("ensureLeadForNewEmailConversation: insert error", error);
-    return;
-  }
-  console.log("email-inbound: lead created", { ticket_id: ticketId });
-}
-
 /** Extract Gmail confirmation code from text (e.g. "Kode konfirmasi: 106074202" or "Confirmation code: 106074202"). */
 function extractConfirmationCode(text: string | null | undefined): string | null {
   if (!text || typeof text !== "string") return null;
@@ -322,15 +274,6 @@ Deno.serve(async (req: Request) => {
           continue;
         }
         conversationId = newConv.id;
-        const leadClient = (fromDisplayName?.trim() || fromEmail) ?? fromEmailNormalized ?? "Email";
-        const leadTitle = (subject ?? "").trim().slice(0, 100) || "Email";
-        await ensureLeadForNewEmailConversation(
-          supabase,
-          conn.organization_id,
-          conversationId,
-          leadClient,
-          leadTitle
-        );
       }
 
       const { error: msgError } = await supabase.from("email_messages").insert({

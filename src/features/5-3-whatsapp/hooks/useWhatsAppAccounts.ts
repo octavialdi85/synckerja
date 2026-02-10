@@ -4,7 +4,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { toast } from 'sonner';
 import type { WhatsAppAccount, WhatsAppAccountUpsert } from '../types';
 
-const MAX_ACCOUNTS_PER_ORG = 3;
+const MAX_ACCOUNTS_PER_ORG = 5;
 
 export function useWhatsAppAccounts() {
   const { organizationId } = useCurrentOrg();
@@ -59,7 +59,10 @@ export function useWhatsAppAccounts() {
         if (existing) throw new Error('Akun ini sudah terhubung.');
       }
 
-      const row = {
+      const verifyToken =
+        'wa_' + organizationId.replace(/-/g, '').slice(0, 8) + '_' + Math.random().toString(36).slice(2, 18);
+
+      const baseRow = {
         organization_id: organizationId,
         whatsapp_business_account_id: wabaId,
         phone_number_id: pnId,
@@ -71,9 +74,19 @@ export function useWhatsAppAccounts() {
       };
 
       if (accountId) {
+        const { data: current } = await supabase
+          .from('organization_whatsapp_accounts')
+          .select('verify_token')
+          .eq('id', accountId)
+          .single();
+        const currentToken = (current as { verify_token?: string | null } | null)?.verify_token;
+        const updateRow =
+          currentToken != null && String(currentToken).trim() !== ''
+            ? baseRow
+            : { ...baseRow, verify_token: verifyToken };
         const { data, error } = await supabase
           .from('organization_whatsapp_accounts')
-          .update(row)
+          .update(updateRow)
           .eq('id', accountId)
           .select()
           .single();
@@ -81,9 +94,10 @@ export function useWhatsAppAccounts() {
         return data as WhatsAppAccount;
       }
 
+      const insertRow = { ...baseRow, verify_token: verifyToken };
       const { data, error } = await supabase
         .from('organization_whatsapp_accounts')
-        .insert(row)
+        .insert(insertRow)
         .select()
         .single();
       if (error) throw error;

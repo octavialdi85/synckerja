@@ -39,7 +39,7 @@ export interface WhatsAppConfigUpsert {
   whatsapp_business_name?: string | null;
 }
 
-/** Single WhatsApp Business API account (multi-account: max 3 per org). DB: organization_whatsapp_accounts.phone_number_id is NOT NULL. */
+/** Single WhatsApp Business API account (multi-account: max 5 per org). DB: organization_whatsapp_accounts.phone_number_id is NOT NULL. */
 export interface WhatsAppAccount {
   id: string;
   organization_id: string;

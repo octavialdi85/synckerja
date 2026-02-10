@@ -82,7 +82,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
-  const { updateLead } = useLeads();
+  const { updateLead, deleteLead } = useLeads();
   const [updateDetails, setUpdateDetails] = useState('');
   const [prospectStatus, setProspectStatus] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,6 +95,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   const [dialogServiceName, setDialogServiceName] = useState<string>('');
   const [dialogCategoryName, setDialogCategoryName] = useState<string>('');
   const [dialogDescription, setDialogDescription] = useState<string>('');
+  const [isMarkUnmarkLeadLoading, setIsMarkUnmarkLeadLoading] = useState(false);
 
   const { data: servicesList = [] } = useServices();
   const { data: subServicesList = [] } = useSubServices();
@@ -151,14 +152,16 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
               || 'WhatsApp';
           const title = (conversation as { last_message_body?: string }).last_message_body?.slice(0, 100) || 'Lead';
           const source = conversation?.source === 'email' ? 'Email' : (conversation as { channel?: string }).channel === 'instagram' ? 'Instagram' : 'WhatsApp';
-          const { data: openStatus } = await supabase
+          // Same as Status dropdown: no organization_id so RLS / shared statuses apply
+          const { data: defaultStatusRows } = await supabase
             .from('lead_statuses')
             .select('id')
-            .eq('organization_id', organizationId)
-            .eq('name', 'Open')
-            .maybeSingle();
-          if (!openStatus?.id) {
-            toast.error(t('whatsappInbox.noOpenStatus', 'Open status not found'));
+            .eq('is_active', true)
+            .order('sort_order')
+            .limit(1);
+          const defaultStatusId = defaultStatusRows?.[0]?.id ?? null;
+          if (!defaultStatusId) {
+            toast.error(t('whatsappInbox.noOpenStatus', 'No lead status found'));
             return;
           }
           const { error: insertErr } = await supabase.from('leads').insert({
@@ -169,7 +172,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
             created_by: '00000000-0000-0000-0000-000000000000',
             created_by_name: 'System',
             assignee: '',
-            status_id: openStatus.id,
+            status_id: defaultStatusId,
             organization_id: organizationId,
             source,
             services: serviceName || null,
@@ -207,10 +210,75 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
 
   const handleCategoryChange = (value: string) => {
     setSelectedCategoryName(value);
-    if (value && selectedServiceName) {
+    // For email without a lead, do not create lead on category pick; only when user clicks "Mark as lead"
+    const isEmailNoLead = conversation?.source === 'email' && !leadRow?.id;
+    if (value && selectedServiceName && !isEmailNoLead) {
       updateLeadServicesCategory(selectedServiceName, value);
     }
   };
+
+  const handleMarkAsLead = useCallback(async () => {
+    if (!organizationId || !ticketId || !conversation || conversation.source !== 'email') return;
+    if (!selectedServiceName?.trim() || !selectedCategoryName?.trim()) return;
+    setIsMarkUnmarkLeadLoading(true);
+    try {
+      const clientName = (conversation as { from_display_name?: string; from_email?: string }).from_display_name
+        || (conversation as { from_email?: string }).from_email
+        || 'Email';
+      const title = (conversation as { last_message_body?: string }).last_message_body?.slice(0, 100) || 'Email';
+      // Same query as Status dropdown: no organization_id so RLS / shared statuses apply
+      const { data: defaultStatusRows } = await supabase
+        .from('lead_statuses')
+        .select('id')
+        .eq('is_active', true)
+        .order('sort_order')
+        .limit(1);
+      const defaultStatusId = defaultStatusRows?.[0]?.id ?? null;
+      if (!defaultStatusId) {
+        toast.error(t('whatsappInbox.noOpenStatus', 'No lead status found'));
+        return;
+      }
+      const { error: insertErr } = await supabase.from('leads').insert({
+        ticket_id: ticketId,
+        client: clientName,
+        title,
+        category: selectedCategoryName || '',
+        created_by: '00000000-0000-0000-0000-000000000000',
+        created_by_name: 'System',
+        assignee: '',
+        status_id: defaultStatusId,
+        organization_id: organizationId,
+        source: 'Email',
+        services: selectedServiceName || null,
+        followup: 0,
+      });
+      if (insertErr) throw insertErr;
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
+      toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
+    } catch (err) {
+      console.error('Mark as lead:', err);
+      toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
+    } finally {
+      setIsMarkUnmarkLeadLoading(false);
+    }
+  }, [organizationId, ticketId, conversation, selectedServiceName, selectedCategoryName, queryClient, t]);
+
+  const handleUnmarkAsLead = useCallback(async () => {
+    if (!leadRow?.id) return;
+    setIsMarkUnmarkLeadLoading(true);
+    try {
+      await deleteLead(leadRow.id);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
+      toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
+    } catch (err) {
+      console.error('Unmark as lead:', err);
+      toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
+    } finally {
+      setIsMarkUnmarkLeadLoading(false);
+    }
+  }, [leadRow?.id, organizationId, ticketId, deleteLead, queryClient, t]);
 
   // Opsi dropdown Status = dari DB (lead_statuses); tampilan pakai getLeadStatusDisplayName (Open→Unread, In Progress→On going, Closed→Resolve)
   const { data: leadStatuses = [] } = useQuery({
@@ -609,6 +677,41 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
           </SelectContent>
         </Select>
       </div>
+
+      {/* Email only: Mark as lead / Unmark as lead in Quick Action */}
+      {isEmail && (
+        <div className="space-y-2">
+          {leadRow?.id ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isMarkUnmarkLeadLoading}
+              onClick={handleUnmarkAsLead}
+            >
+              {isMarkUnmarkLeadLoading ? '...' : t('whatsappInbox.unmarkAsLead', 'Unmark as lead')}
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="block w-full">
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={!selectedServiceName?.trim() || !selectedCategoryName?.trim() || isMarkUnmarkLeadLoading}
+                    onClick={handleMarkAsLead}
+                  >
+                    {isMarkUnmarkLeadLoading ? '...' : t('whatsappInbox.markAsLead', 'Mark as lead')}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('whatsappInbox.markAsLeadRequireServiceCategory', 'Select Service and Category first.')}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      )}
 
       {/* Update Follow Up - expand/collapse */}
       <div className="rounded-lg border border-gray-200 bg-slate-50/80 shadow-sm overflow-hidden">

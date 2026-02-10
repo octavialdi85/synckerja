@@ -1261,42 +1261,8 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         leadsWithStatus = [...leadsWithStatus, ...whatsappAsLeads];
       }
 
-      if (!emailError && emailConvs && emailConvs.length > 0) {
-        const emailConvsWithoutLead = (emailConvs as any[]).filter((c: any) => {
-          const ticketId = 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
-          return !ticketIdsInLeadsTable.has(ticketId);
-        });
-        const emailAsLeads = emailConvsWithoutLead.map((c: any) => {
-          const statusId = c.lead_status_id ?? defaultStatusId;
-          const leadStatus = statusId ? statusMap.get(normId(statusId)) ?? null : null;
-          const ticketId = 'EMAIL-' + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
-          const leadRow = leadByTicketMap.get(ticketId);
-          const lastBody = (c.last_message_body ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
-          return {
-            id: 'email-' + c.id,
-            client: c.from_email || c.email_connection_display || 'Email',
-            title: lastBody || 'Email',
-            services: leadRow?.services ?? null,
-            category: leadRow?.category ?? '-',
-            assignee: null as string | null,
-            assignee_id: null as string | null,
-            fu_priority: c.fu_priority ?? null,
-            status_id: statusId,
-            source: 'Email',
-            followup: c.followup ?? 0,
-            converted_at: null,
-            created_at: c.created_at ?? c.last_message_at,
-            updated_at: c.updated_at ?? c.created_at,
-            created_by: '',
-            created_by_name: '',
-            organization_id: c.organization_id,
-            ticket_id: ticketId,
-            lead_status: leadStatus,
-            _fromEmail: true as const,
-          };
-        });
-        leadsWithStatus = [...leadsWithStatus, ...emailAsLeads];
-      }
+      // Email: only show in leads list if they have a row in leads table (user clicked "Mark as lead" in livechat).
+      // Do not merge email conversations without a lead as virtual leads.
 
       return filterLeadsByScope(leadsWithStatus, effectiveScope, currentEmployeeId);
     },
@@ -1495,10 +1461,15 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           .eq('id', convId)
           .maybeSingle();
         const ticketId = (convRow?.ticket_id as string) ?? `WA-${convId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
-        if (orgId && lead.status_id) {
+        if (orgId) {
+          const leadUpdatePayload: { status_id?: string; assignee_id: string | null; updated_at: string } = {
+            assignee_id: lead.assignee_id ?? null,
+            updated_at: new Date().toISOString(),
+          };
+          if (lead.status_id != null) leadUpdatePayload.status_id = lead.status_id;
           await supabase
             .from('leads')
-            .update({ status_id: lead.status_id, updated_at: new Date().toISOString() })
+            .update(leadUpdatePayload)
             .eq('organization_id', orgId)
             .eq('ticket_id', ticketId);
         }
@@ -1604,6 +1575,19 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       if (error) {
         console.error('Error updating lead:', error);
         throw error;
+      }
+
+      const updatedLead = data as { ticket_id?: string; assignee_id?: string | null; organization_id?: string };
+      const ticketId = updatedLead?.ticket_id;
+      if (ticketId && (ticketId.startsWith('WA-') || ticketId.startsWith('IG-')) && organizationIdForHistory) {
+        await supabase
+          .from('whatsapp_conversations')
+          .update({
+            assignee_id: updatedLead.assignee_id ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('organization_id', organizationIdForHistory)
+          .eq('ticket_id', ticketId);
       }
 
       // Catat perubahan status ke lead_status_history (agar Status History modal berisi data)

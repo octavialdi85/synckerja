@@ -67,3 +67,28 @@ Meta **hanya mengirim** event pesan masuk (POST) ke server kita kalau **Webhook*
 
 - **Development**: Hanya nomor yang Anda tambahkan di **WhatsApp → API Setup → "To"** yang bisa mengirim pesan ke nomor bisnis. Cocok untuk tes.
 - **Live**: Setelah app disetujui dan nomor bisnis aktif, pesan dari pengguna biasa akan memicu webhook. Pastikan webhook sudah di-set sebelum switch ke Live.
+
+---
+
+## Dua nomor (multi-account): satu terima pesan, yang lain tidak
+
+Jika **satu nomor** (mis. Vialdi Wedding) sudah menerima inbound di Live Chat tapi **nomor kedua** (mis. Integrasi Visual Digital Indonesia) tidak:
+
+1. **Pastikan kedua nomor di App yang sama**
+   - Di Meta Developer → **WhatsApp** → **API Setup** (atau **Configuration**).
+   - Di dropdown **"From"** harus ada **kedua** nomor. Jika hanya satu yang muncul, nomor kedua mungkin ada di **WhatsApp Business Account (WABA)** atau **App** lain. Webhook hanya menerima event untuk nomor yang ada di App yang webhook-nya Anda set.
+
+2. **Tes kirim pesan ke nomor yang belum jalan**
+   - Dari HP pribadi, kirim chat ke **nomor yang belum terima** (mis. +62 811-1889-1308).
+   - Catat waktu persis (mis. 19:45:00).
+
+3. **Cek log Edge Function**
+   - Supabase → **Edge Functions** → **whatsapp-webhook** → **Logs** → filter waktu tes.
+   - Cari:
+     - **`[whatsapp-webhook] ENTRY ... POST`** → Ada request dari Meta.
+     - **`POST first phone_number_id from payload: 995961063601234`** (ganti dengan Phone Number ID nomor kedua) → Meta mengirim event untuk nomor itu.
+     - **`Integrasi Visual Digital Indonesia: inbound message being processed`** → Backend memproses pesan untuk akun tersebut.
+   - **Jika tidak ada POST** untuk waktu itu → Meta **tidak mengirim** webhook untuk nomor kedua. Solusi: di Meta pastikan nomor itu benar-benar di **App yang sama** yang webhook-nya dipakai, dan status nomor **Active** / bisa terima pesan.
+
+4. **Filter di Live Chat**
+   - Jika log menunjukkan pesan diproses tapi tidak tampil: di halaman Live Chat pilih filter akun **"Integrasi Visual Digital Indonesia"** (atau nama akun nomor kedua), lalu refresh.

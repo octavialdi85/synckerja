@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
+import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppConfig } from '../../hooks/useWhatsAppConfig';
 import { useWhatsAppAccounts } from '../../hooks/useWhatsAppAccounts';
 import type { WhatsAppAccount } from '../../types';
@@ -50,6 +52,7 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
     setMetaBusinessManagerId('');
   };
 
+  /** Returns profile if pnId is a valid WhatsApp Phone Number ID; otherwise throws with a user-friendly message. */
   const fetchPhoneNumberProfileFromMeta = async (
     pnId: string,
     token: string
@@ -59,15 +62,32 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
     const data = (await res.json()) as {
       verified_name?: string;
       display_phone_number?: string | number;
-      error?: { message?: string };
+      error?: { message?: string; code?: number };
     };
-    if (!res.ok) return { verified_name: null, display_phone_number: null };
+    if (!res.ok) {
+      const errMsg = (data?.error?.message ?? '').toLowerCase();
+      if (
+        errMsg.includes('does not exist') ||
+        errMsg.includes('does not support') ||
+        errMsg.includes('missing permissions')
+      ) {
+        throw new Error(
+          'ID ini bukan WhatsApp Phone Number ID (mungkin ID Instagram atau Page). Ambil Phone Number ID dari Meta: App → WhatsApp → API Setup.'
+        );
+      }
+      return { verified_name: null, display_phone_number: null };
+    }
     const name = typeof data.verified_name === 'string' ? data.verified_name.trim() : null;
     let num: string | null = null;
     if (data.display_phone_number != null) {
       const raw = data.display_phone_number;
       num = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : null;
       if (num && /^\d+$/.test(num)) num = `+${num}`;
+    }
+    if (name == null && num == null) {
+      throw new Error(
+        'Response dari Meta tidak berisi verified_name/display_phone_number. Pastikan ID adalah WhatsApp Phone Number ID dari App → WhatsApp → API Setup.'
+      );
     }
     return { verified_name: name || null, display_phone_number: num };
   };
@@ -101,12 +121,13 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
     }
     if (!editingAccount && !canAddMore) return;
 
-    if (!orgConfig?.verify_token?.trim()) {
-      await ensureOrgMetaConfig({
-        verify_token: null,
-        meta_business_manager_id: metaBusinessManagerId.trim() || null,
-        meta_access_token: tokenToUse,
-      });
+    // Validasi ke Meta: pastikan pnId adalah WhatsApp Phone Number ID (bukan Instagram/Page ID)
+    try {
+      await fetchPhoneNumberProfileFromMeta(pnId, tokenToUse);
+    } catch (validateErr) {
+      const msg = validateErr instanceof Error ? validateErr.message : 'Phone Number ID tidak valid.';
+      toast.error(msg);
+      return;
     }
 
     const saved = await upsert({
@@ -120,6 +141,20 @@ export function WhatsAppConnectForm({ editingAccount = null, onClearEdit, onAfte
       },
       sharedToken,
     });
+
+    if (saved) {
+      const updatedConfig = await ensureOrgMetaConfig({
+        verify_token: null,
+        meta_business_manager_id: metaBusinessManagerId.trim() || null,
+        meta_access_token: tokenToUse,
+      });
+      if (updatedConfig?.verify_token?.trim() && saved.id) {
+        await supabase
+          .from('organization_whatsapp_accounts')
+          .update({ verify_token: updatedConfig.verify_token.trim(), updated_at: new Date().toISOString() })
+          .eq('id', saved.id);
+      }
+    }
 
     if (tokenToUse && pnId && saved) {
       try {
