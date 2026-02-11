@@ -65,7 +65,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({})) as { code?: string; redirect_uri?: string; token?: string };
     const directToken = typeof body.token === "string" ? body.token.trim() : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
-    const redirectUri = typeof body.redirect_uri === "string" ? body.redirect_uri.trim() : "";
+    const redirectUriRaw = typeof body.redirect_uri === "string" ? body.redirect_uri.trim() : "";
+    const redirectUri = redirectUriRaw.replace(/\/+$/, "");
 
     if (!directToken && (!appId?.trim() || !appSecret?.trim())) {
       return new Response(

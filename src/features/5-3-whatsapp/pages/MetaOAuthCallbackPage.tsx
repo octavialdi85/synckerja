@@ -56,11 +56,13 @@ export function MetaOAuthCallbackPage() {
     const error = query.get('error');
     const errorReason = query.get('error_reason') ?? undefined;
     const errorDescription = query.get('error_description') ?? undefined;
+    // Exact redirect_uri Meta used (no query/hash) so token exchange matches
+    const redirectUriUsed = `${window.location.origin}${window.location.pathname}`;
 
     const payload =
       error != null
         ? { type: 'meta-oauth' as const, error: error || 'unknown', error_reason: errorReason, error_description: errorDescription }
-        : { type: 'meta-oauth' as const, code: code ?? '', state: state ?? '' };
+        : { type: 'meta-oauth' as const, code: code ?? '', state: state ?? '', redirect_uri: redirectUriUsed };
 
     if (window.opener) {
       window.opener.postMessage(payload, window.location.origin);

@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic,business_management';
 const META_OAUTH_VERSION = 'v21.0';
 const META_OAUTH_EXTRAS = '{"setup":{"channel":"IG_API_ONBOARDING"}}';
+const INSTAGRAM_OAUTH_SCOPE = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights';
 
 export function InstagramConnectPage() {
   const { t } = useAppTranslation();
@@ -22,11 +23,33 @@ export function InstagramConnectPage() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<InstagramAccountFromApi[]>([]);
   const oauthStateRef = useRef<string>('');
+  const isInstagramDirectTestRef = useRef(false);
 
   const metaAppId = (import.meta.env.VITE_META_APP_ID as string)?.trim() || '';
+  const metaOAuthConfigId = (import.meta.env.VITE_META_OAUTH_CONFIG_ID as string)?.trim() || '';
+  const metaInstagramAppId = (import.meta.env.VITE_META_INSTAGRAM_APP_ID as string)?.trim() || '';
   const hasOAuth = !!metaAppId;
   const hasMetaConfig = !!config?.meta_access_token?.trim();
   const redirectUri = typeof window !== 'undefined' ? `${window.location.origin}/auth/meta/callback` : '';
+
+  const openInstagramDirectTest = useCallback(() => {
+    if (!redirectUri || !metaInstagramAppId) {
+      toast.error(t('instagramConnect.instagramAppIdNotSet', 'Set VITE_META_INSTAGRAM_APP_ID (e.g. 1601615241168538) to test Instagram redirect directly.'));
+      return;
+    }
+    isInstagramDirectTestRef.current = true;
+    const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    oauthStateRef.current = state;
+    const params = new URLSearchParams({
+      client_id: metaInstagramAppId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: INSTAGRAM_OAUTH_SCOPE,
+      state,
+    });
+    const url = `https://www.instagram.com/oauth/authorize?${params.toString()}`;
+    window.open(url, 'instagram-oauth-test', 'width=600,height=700,scrollbars=yes');
+  }, [metaInstagramAppId, redirectUri, t]);
 
   const openOAuthPopup = useCallback(
     (useBusinessLogin: boolean) => {
@@ -34,6 +57,11 @@ export function InstagramConnectPage() {
         toast.error(t('instagramConnect.oauthNotConfigured', 'VITE_META_APP_ID not set.'));
         return;
       }
+      if (useBusinessLogin && !metaOAuthConfigId) {
+        toast.error(t('instagramConnect.configIdNotSet', 'Set VITE_META_OAUTH_CONFIG_ID to your Business Login Configuration ID (e.g. from Meta Developer → Business login → Configurations).'));
+        return;
+      }
+      isInstagramDirectTestRef.current = false;
       const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       oauthStateRef.current = state;
       const params = new URLSearchParams({
@@ -46,6 +74,7 @@ export function InstagramConnectPage() {
         params.set('display', 'page');
         params.set('extras', META_OAUTH_EXTRAS);
         params.set('response_type', 'token');
+        if (metaOAuthConfigId) params.set('config_id', metaOAuthConfigId);
       } else {
         params.set('response_type', 'code');
       }
@@ -53,7 +82,7 @@ export function InstagramConnectPage() {
       const w = window.open(url, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
       if (!w) toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
     },
-    [hasOAuth, metaAppId, redirectUri, t]
+    [hasOAuth, metaAppId, metaOAuthConfigId, redirectUri, t]
   );
 
   useEffect(() => {
@@ -62,6 +91,7 @@ export function InstagramConnectPage() {
       const data = event.data as {
         code?: string;
         state?: string;
+        redirect_uri?: string;
         long_lived_token?: string;
         access_token?: string;
         error?: string;
@@ -119,6 +149,12 @@ export function InstagramConnectPage() {
         return;
       }
       if (code && data.state === oauthStateRef.current) {
+        if (isInstagramDirectTestRef.current) {
+          isInstagramDirectTestRef.current = false;
+          setOauthLoading(false);
+          toast.success(t('instagramConnect.redirectTestOk', 'Redirect test OK. Instagram accepted the redirect URI. Use "Connect with Facebook" to get a token.'));
+          return;
+        }
         setOauthLoading(true);
         (async () => {
           try {
@@ -130,10 +166,11 @@ export function InstagramConnectPage() {
               setOauthLoading(false);
               return;
             }
+            const exchangeRedirectUri = (typeof data.redirect_uri === 'string' && data.redirect_uri.trim()) ? data.redirect_uri.trim() : redirectUri;
             const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth-exchange`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-              body: JSON.stringify({ code, redirect_uri: redirectUri }),
+              body: JSON.stringify({ code, redirect_uri: exchangeRedirectUri }),
             });
             const resData = await res.json().catch(() => ({}));
             if (!res.ok) {
@@ -230,10 +267,33 @@ export function InstagramConnectPage() {
                                   </Button>
                                   <p className="text-xs text-gray-500">Business Login (recommended)</p>
                                   {redirectUri && (
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2">
                                       <p className="font-medium mb-1">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
-                                      <p className="font-mono text-[11px] break-all">{redirectUri}</p>
-                                      <p className="mt-1.5 text-amber-700">{t('instagramConnect.redirectUriHint', 'Add this exact URL in: (1) Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs, and (2) Instagram / Business Login for Instagram → Redirect URIs.')}</p>
+                                      <p className="font-mono text-[11px] break-all select-all bg-white px-1 py-0.5 rounded">{redirectUri}</p>
+                                      {metaOAuthConfigId ? (
+                                        <p className="text-green-700">{t('instagramConnect.configIdInUse', 'Using Configuration ID:')} <span className="font-mono">{metaOAuthConfigId}</span></p>
+                                      ) : (
+                                        <p className="text-amber-700">{t('instagramConnect.configIdRequired', 'Set VITE_META_OAUTH_CONFIG_ID to your Configuration ID (e.g. 757396134100532) so Meta uses the correct redirect URI.')}</p>
+                                      )}
+                                      <div className="rounded border border-amber-200 bg-amber-50/60 p-2 text-amber-800 space-y-2">
+                                        <p className="font-medium mb-1">{t('instagramConnect.invalidRedirectTitle', 'If you see "Invalid redirect URI" on instagram.com:')}</p>
+                                        <ul className="list-disc list-inside space-y-0.5">
+                                          <li>{t('instagramConnect.invalidRedirectStep1', 'Open the Instagram app (e.g. Vialdi ID-IG), not the Facebook app.')}</li>
+                                          <li>{t('instagramConnect.invalidRedirectStep2', 'Go to: Instagram → API setup with Instagram business login → Business login settings.')}</li>
+                                          <li>{t('instagramConnect.invalidRedirectStep3', 'In OAuth redirect URIs add exactly the URL above (no space, no trailing slash). Save.')}</li>
+                                          <li>{t('instagramConnect.invalidRedirectStep4', 'Also add the same URL in the Facebook app: Use cases → Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs.')}</li>
+                                          <li>{t('instagramConnect.invalidRedirectStep5', 'In the Facebook app: Business login → Configurations → Edit your configuration (e.g. Vialdi ID) → if there is a Redirect URI / OAuth redirect URIs field, add the same URL there and Save.')}</li>
+                                        </ul>
+                                        {metaInstagramAppId && (
+                                          <p className="pt-1 border-t border-amber-300">
+                                            <button type="button" onClick={openInstagramDirectTest} className="text-blue-600 underline font-medium">
+                                              {t('instagramConnect.testInstagramRedirect', 'Test redirect (open Instagram login directly)')}
+                                            </button>
+                                            {' — '}
+                                            {t('instagramConnect.testInstagramRedirectHint', 'If this works but Connect with Facebook fails, add the redirect URI in the Configuration (step 5 above).')}
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </>
@@ -264,6 +324,14 @@ export function InstagramConnectPage() {
                           <div className="border-t border-slate-200 pt-4 mt-4">
                             <WebhookInfoDisplay embedded variant="instagram" />
                           </div>
+                          {hasOAuth && metaInstagramAppId && redirectUri && (
+                            <div className="border-t border-slate-200 pt-4 mt-4 text-sm">
+                              <button type="button" onClick={openInstagramDirectTest} className="text-blue-600 hover:text-blue-800 underline font-medium">
+                                {t('instagramConnect.testInstagramRedirect', 'Test redirect (open Instagram login directly)')}
+                              </button>
+                              <span className="text-slate-600 ml-1">— {t('instagramConnect.testInstagramRedirectHint', 'If this works but Connect with Facebook fails, add the redirect URI in the Configuration (step 5 above).')}</span>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
 
