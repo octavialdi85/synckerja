@@ -229,6 +229,13 @@ export function InstagramConnectPage() {
                                     {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
                                   </Button>
                                   <p className="text-xs text-gray-500">Business Login (recommended)</p>
+                                  {redirectUri && (
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                                      <p className="font-medium mb-1">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
+                                      <p className="font-mono text-[11px] break-all">{redirectUri}</p>
+                                      <p className="mt-1.5 text-amber-700">{t('instagramConnect.redirectUriHint', 'Add this exact URL in: (1) Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs, and (2) Instagram / Business Login for Instagram → Redirect URIs.')}</p>
+                                    </div>
+                                  )}
                                 </>
                               )}
                               <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800">
