@@ -137,6 +137,17 @@ Deno.serve(async (req: Request) => {
           config = current.config;
           resolvedOrgId = current.orgId;
         }
+        // Jangan pakai akun organisasi lain: jika org percakapan tidak punya akun WhatsApp, tolak kirim.
+        if (!config || !resolvedOrgId) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "WhatsApp not configured for this organization. Connect WhatsApp in Operations → Consultant → WhatsApp Connect.",
+              code: "WHATSAPP_NOT_CONFIGURED",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     }
 

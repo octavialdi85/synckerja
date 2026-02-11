@@ -27,6 +27,10 @@ const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
 
 interface ChatThreadProps {
   conversation: WhatsAppConversation | null;
+  /** Phone number IDs of currently connected WhatsApp accounts. If conversation.phone_number_id is not in this list, show "disconnected account" banner. */
+  connectedPhoneNumberIds?: string[];
+  /** When true, organisation has no connected WhatsApp account – disable send and show notice. */
+  hasNoConnectedWhatsAppAccount?: boolean;
   /** When set, after messages load scroll to first message whose body contains this text (e.g. from search popup). */
   scrollToTextInChat?: string | null;
   /** Called after scroll-to-text is done so parent can clear scrollToTextInChat. */
@@ -318,7 +322,7 @@ type PendingMedia = {
   previewUrl?: string;
 };
 
-export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone }: ChatThreadProps) {
+export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnectedWhatsAppAccount, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone }: ChatThreadProps) {
   const [text, setText] = useState('');
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
@@ -404,6 +408,9 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
   const effectiveStatusName = statusNameFromQuery ?? conversation?.lead_status_name ?? null;
 
   const isResolved = isResolvedStatus(effectiveStatusName);
+  const isWhatsAppConversation = (conversation?.channel ?? '').toLowerCase() === 'whatsapp';
+  const sendDisabledByNoAccount = Boolean(hasNoConnectedWhatsAppAccount && isWhatsAppConversation);
+  const sendDisabled = isResolved || sendDisabledByNoAccount;
 
   const isInstagramConversation =
     (conversation?.channel ?? '').toLowerCase() === 'instagram' ||
@@ -617,8 +624,12 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
 
   const handleSend = async () => {
     if (!conversation) return;
-    if (isResolved) {
-      toast.error(t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.'));
+    if (sendDisabled) {
+      if (sendDisabledByNoAccount) {
+        toast.error(t('whatsappInbox.noWhatsAppAccountCannotSend', 'Tidak ada akun WhatsApp terhubung untuk organisasi ini. Hubungkan akun di Connect WhatsApp untuk mengirim pesan.'));
+      } else {
+        toast.error(t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.'));
+      }
       return;
     }
     const trimmed = text.trim();
@@ -764,6 +775,27 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
           </Button>
         </div>
       )}
+      {conversation?.channel === 'whatsapp' &&
+        conversation.phone_number_id &&
+        Array.isArray(connectedPhoneNumberIds) &&
+        connectedPhoneNumberIds.length > 0 &&
+        !connectedPhoneNumberIds.includes(conversation.phone_number_id) && (
+          <div className="flex-shrink-0 px-3 py-2 border-b border-amber-200 bg-amber-50 text-sm text-amber-900" role="alert">
+            <p className="font-medium">{t('whatsappInbox.disconnectedAccountBannerTitle', 'Percakapan dari akun yang sudah diputus')}</p>
+            <p className="mt-0.5 text-amber-800">
+              {t(
+                'whatsappInbox.disconnectedAccountBannerBody',
+                'Pesan masuk (inbound) di thread ini dari akun WhatsApp yang sudah Anda disconnect di Connect WhatsApp. Pesan baru dari customer tidak akan muncul di sini. Untuk menerima pesan masuk, pastikan customer mengirim ke nomor akun yang saat ini terhubung.'
+              )}
+            </p>
+            <p className="mt-1 text-amber-800 text-xs">
+              {t(
+                'whatsappInbox.disconnectedAccountSendNote',
+                'Pesan yang Anda kirim dari thread ini akan dikirim dari nomor akun yang saat ini terhubung (bukan dari akun yang sudah diputus).'
+              )}
+            </p>
+          </div>
+        )}
       <div className="flex-1 overflow-y-auto seamless-scroll p-4 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1">
         {isLoading ? (
           <p className="text-sm text-gray-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
@@ -1064,7 +1096,21 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
         )}
       </div>
       <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-[#f0f2f5]">
-        {isResolved && (
+        {sendDisabledByNoAccount && (
+          <div
+            className="text-sm font-medium text-slate-800 bg-slate-100 border-2 border-slate-300 rounded-lg px-3 py-2.5 mb-2 flex items-center gap-2"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-500 flex items-center justify-center text-white text-xs" aria-hidden>
+              !
+            </span>
+            <span>
+              {t('whatsappInbox.noWhatsAppAccountCannotSend', 'Tidak ada akun WhatsApp terhubung untuk organisasi ini. Hubungkan akun di Connect WhatsApp untuk mengirim pesan.')}
+            </span>
+          </div>
+        )}
+        {isResolved && !sendDisabledByNoAccount && (
           <div
             className="text-sm font-medium text-amber-800 bg-amber-100 border-2 border-amber-400 rounded-lg px-3 py-2.5 mb-2 flex items-center gap-2"
             role="alert"
@@ -1152,12 +1198,12 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
             </Button>
           </div>
         )}
-        <div className={`flex rounded-lg border border-input bg-background min-h-[44px] overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${isResolved ? 'opacity-70' : ''}`}>
+        <div className={`flex rounded-lg border border-input bg-background min-h-[44px] overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${sendDisabled ? 'opacity-70' : ''}`}>
           <button
             type="button"
             className="shrink-0 p-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50 self-center"
-            disabled={isSending || isUploading || isResolved}
-            onClick={() => !isResolved && fileInputRef.current?.click()}
+            disabled={isSending || isUploading || sendDisabled}
+            onClick={() => !sendDisabled && fileInputRef.current?.click()}
             title={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
             aria-label={t('whatsappInbox.attachMedia', 'Attach image, video, or document')}
           >
@@ -1166,21 +1212,21 @@ export function ChatThread({ conversation, scrollToTextInChat, onScrollToTextDon
           <Textarea
             placeholder={pendingMedia ? t('whatsappInbox.writeCaption', 'Write caption (optional)...') : t('whatsappInbox.typeMessage', 'Type a message...')}
             value={text}
-            onChange={(e) => !isResolved && setText(e.target.value)}
+            onChange={(e) => !sendDisabled && setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isResolved) handleSend();
+                if (!sendDisabled) handleSend();
               }
             }}
             rows={2}
-            readOnly={isResolved}
+            readOnly={sendDisabled}
             className="resize-none min-h-[44px] flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none bg-transparent py-2 pr-1 pl-0"
           />
           <button
             type="button"
             onClick={handleSend}
-            disabled={isResolved || (!text.trim() && !pendingMedia) || isSending || isUploading}
+            disabled={sendDisabled || (!text.trim() && !pendingMedia) || isSending || isUploading}
             title={t('whatsappInbox.send', 'Send')}
             aria-label={t('whatsappInbox.send', 'Send')}
             className="shrink-0 self-center mr-1.5 w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white"

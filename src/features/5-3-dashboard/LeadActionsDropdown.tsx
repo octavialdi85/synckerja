@@ -1,80 +1,54 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/features/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/features/ui/dropdown-menu";
-import { MoreHorizontal, Edit, Eye, Trash2, MessageCircle } from "lucide-react";
+import { Edit, MessageCircle } from "lucide-react";
 import { NewLead } from '@/types/leads';
+
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 
 interface LeadActionsDropdownProps {
   lead: NewLead & { _fromWhatsApp?: boolean; _fromEmail?: boolean };
   onEdit: (lead: NewLead) => void;
-  onViewDetail: (lead: NewLead) => void;
-  onDelete: (leadId: string) => void;
+  onViewDetail?: (lead: NewLead) => void;
+  onDelete?: (leadId: string) => void;
 }
 
+/** Lead from channel: one button = Open in Live Chat (by conversation id or ticket_id). Manual lead: one button = Edit. No Delete, no View Detail. */
 export const LeadActionsDropdown = ({ lead, onEdit, onViewDetail, onDelete }: LeadActionsDropdownProps) => {
-  const [isDeleting, setIsDeleting] = useState(false);
   const fromWhatsApp = (lead as any)._fromWhatsApp === true;
   const fromEmail = (lead as any)._fromEmail === true || (typeof lead.id === 'string' && lead.id.startsWith('email-'));
-  const fromChat = fromWhatsApp || fromEmail;
+  const hasConversationId = fromWhatsApp || fromEmail;
+  const ticketId = (lead.ticket_id ?? '').trim();
+  const hasTicketId = /^(WA-|IG-|EMAIL-)/i.test(ticketId);
+  const canOpenChat = hasConversationId || hasTicketId;
+  const isManualLead = (lead.created_by ?? '').trim() !== '' && lead.created_by !== ZERO_UUID;
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this lead?')) return;
+  if (canOpenChat) {
+    const url = hasConversationId
+      ? `/operations/consultant/all/livechat?conversation=${String(lead.id).replace(/^wa-/, '').replace(/^email-/, '')}`
+      : `/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(ticketId)}`;
+    return (
+      <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs font-medium" asChild>
+        <Link to={url}>
+          <MessageCircle className="h-4 w-4" />
+          Open Chat
+        </Link>
+      </Button>
+    );
+  }
 
-    setIsDeleting(true);
-    try {
-      await onDelete(lead.id);
-    } catch (error) {
-      console.error('Error deleting lead:', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  if (isManualLead) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 text-xs font-medium"
+        onClick={() => onEdit(lead)}
+      >
+        <Edit className="h-4 w-4" />
+        Edit
+      </Button>
+    );
+  }
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        {fromChat ? (
-          <DropdownMenuItem asChild>
-            <Link
-              to={`/operations/consultant/all/livechat?conversation=${lead.id.replace(/^wa-/, '').replace(/^email-/, '')}`}
-              className="flex items-center cursor-pointer"
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              Open Chat
-            </Link>
-          </DropdownMenuItem>
-        ) : (
-          <>
-            <DropdownMenuItem onClick={() => onEdit(lead)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onViewDetail(lead)}>
-              <Eye className="mr-2 h-4 w-4" />
-              View Detail
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  return null;
 };

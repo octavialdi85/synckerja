@@ -6,6 +6,22 @@ Meta **hanya mengirim** event pesan masuk (POST) ke server kita kalau **Webhook*
 
 ---
 
+## Pesan masuk ke Meta Business Suite, tidak ke tabel Supabase / Live Chat
+
+Jika pesan yang dikirim ke nomor Anda (mis. +62 811-1889-1308) **muncul di Inbox Meta Business Suite** tetapi **tidak muncul di Live Chat** (tabel Supabase):
+
+- **Penyebab:** Callback URL webhook di Meta App untuk nomor tersebut mengarah ke **Meta Business Suite** (atau URL lain), bukan ke Supabase. Satu nomor/App hanya bisa mengirim event ke **satu** URL webhook.
+- **Solusi:** Di **Meta Developer** → pilih **App** yang punya nomor +62 811-1889-1308 → **WhatsApp** → **Configuration** → **Webhook**:
+  1. Ganti **Callback URL** menjadi: `https://<PROJECT_REF>.supabase.co/functions/v1/whatsapp-webhook` (copy dari halaman Connect WhatsApp).
+  2. **Verify Token** isi sama dengan yang di halaman Connect WhatsApp.
+  3. Klik **Verify and Save**.
+  4. Subscribe field **messages**.
+  5. Simpan.
+
+Setelah itu, Meta akan mengirim event pesan masuk ke Supabase. Pesan baru akan masuk ke tabel dan tampil di Live Chat. (Inbox Meta Business Suite untuk nomor yang sama tidak akan lagi menerima event jika webhook dialihkan ke Supabase.)
+
+---
+
 ## Checklist: Supaya Bisa Menerima Pesan Inbound
 
 | # | Cek | Keterangan |
@@ -16,6 +32,7 @@ Meta **hanya mengirim** event pesan masuk (POST) ke server kita kalau **Webhook*
 | 4 | Verify Token sama | Verify Token di Meta **harus sama persis** dengan yang di halaman Connect (atau di DB: `organization_meta_config.verify_token`). |
 | 5 | Subscribe "messages" | Di Meta, field yang di-subscribe harus **messages** (untuk pesan masuk/keluar dan status). |
 | 6 | Mode App | **Development**: hanya nomor yang ditambahkan sebagai "To" di WhatsApp → API Setup yang bisa mengirim. **Live**: nomor bisnis bisa terima dari siapa saja (setelah disetujui Meta). |
+| 7 | **WhatsApp Business Account ID (WABA ID)** | Saat connect di halaman Connect WhatsApp, isi **WhatsApp Business Account ID** dan **Phone Number ID**. Webhook kita memvalidasi keduanya: pesan hanya diproses jika `phone_number_id` dan `whatsapp_business_account_id` (dari payload Meta `entry.id`) cocok dengan yang tersimpan. Jadi jika nomor yang sama dipakai di **Meta Business Suite** (WABA lain), pesan ke sana tidak akan masuk ke tabel kita—hanya payload untuk WABA yang Anda connect yang disimpan. |
 
 ---
 
@@ -49,8 +66,8 @@ Meta **hanya mengirim** event pesan masuk (POST) ke server kita kalau **Webhook*
 
 3. Lihat log sekitar waktu kirim pesan:
    - **"Webhook POST: object= whatsapp_business_account"** → Meta sudah mengirim.
-   - **"WhatsApp account not found for phone_number_id: ..."** → Phone Number ID dari Meta tidak cocok dengan yang tersimpan di **organization_whatsapp_accounts**. Pastikan di Connect, **Phone Number ID** untuk akun itu = yang dipakai di Meta (WhatsApp → API Setup).
-   - Jika **tidak ada POST** sama sekali → Meta belum memanggil URL kita; cek Callback URL, Verify Token, subscribe **messages**, dan mode App (Development vs Live).
+   - **"Config not found for phone_number_id: ..."** → Phone Number ID (dan jika ada, WhatsApp Business Account ID) dari payload tidak cocok dengan yang tersimpan. Pastikan di Connect, **Phone Number ID** dan **WhatsApp Business Account ID** untuk akun itu = yang dipakai di Meta (WhatsApp → API Setup; WABA ID ada di URL atau di API Setup).
+   - Jika **tidak ada POST** sama sekali → Meta belum memanggil URL kita. Pastikan **Callback URL** di Meta mengarah ke Supabase (bukan hanya ke Meta Business Suite). Satu WABA/nomor hanya bisa mengirim webhook ke **satu** URL; jika saat ini ter-set ke Business Suite, ganti ke URL Supabase agar inbound masuk ke tabel kita.
 
 ---
 

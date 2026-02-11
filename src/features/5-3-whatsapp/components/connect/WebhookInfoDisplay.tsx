@@ -2,6 +2,7 @@ import React from 'react';
 import { Label } from '@/features/ui/label';
 import { Button } from '@/features/ui/button';
 import { useWhatsAppConfig } from '../../hooks/useWhatsAppConfig';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { SUPABASE_URL } from '@/integrations/supabase/client';
 import { Link2, Key } from 'lucide-react';
 
@@ -18,13 +19,20 @@ function copyToClipboard(text: string) {
 
 export function WebhookInfoDisplay({ embedded }: WebhookInfoDisplayProps) {
   const { config } = useWhatsAppConfig();
+  const { t } = useAppTranslation();
 
   return (
     <div className={embedded ? 'pt-0' : 'pt-4 border-t border-dashed border-gray-300'}>
       {/* Section: Webhook configuration */}
       <div className="flex items-center gap-2 mb-4">
         <Link2 className="w-4 h-4 text-slate-600 shrink-0" aria-hidden />
-        <h3 className="text-sm font-semibold text-slate-800">Webhook configuration</h3>
+        <h3 className="text-sm font-semibold text-slate-800">{t('whatsappConnect.webhookConfigTitle', 'Webhook configuration')}</h3>
+      </div>
+      <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 mb-4 text-sm text-amber-900">
+        <p className="font-medium mb-1">{t('whatsappConnect.webhookInboundToSupabaseTitle', 'Agar pesan masuk masuk ke Live Chat (tabel Supabase)')}</p>
+        <p className="text-amber-800 text-xs">
+          {t('whatsappConnect.webhookInboundToSupabaseBody', 'Di Meta Developer (App yang punya nomor ini) → WhatsApp → Configuration → Webhook: set Callback URL ke URL di bawah ini, lalu Verify and Save dan subscribe "messages". Jika saat ini ter-set ke Meta Business Suite, pesan akan masuk ke Inbox Meta saja, bukan ke aplikasi ini.')}
+        </p>
       </div>
       <div className="space-y-5">
         {/* Webhook Callback URL */}

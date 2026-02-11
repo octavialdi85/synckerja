@@ -19,6 +19,7 @@ export function useWhatsAppMessages(conversationId: string | null) {
       channelRef.current = null;
     }
 
+    // Realtime: any INSERT/UPDATE (inbound from webhook or outbound from send) triggers refetch
     channelRef.current = supabase
       .channel(channelName)
       .on(
@@ -65,6 +66,7 @@ export function useWhatsAppMessages(conversationId: string | null) {
     enabled: !!conversationId,
     queryFn: async (): Promise<WhatsAppMessage[]> => {
       if (!conversationId) return [];
+      // Fetch ALL messages (inbound + outbound); no direction filter — UI shows both
       const { data, error } = await supabase
         .from('whatsapp_messages')
         .select('*')
@@ -73,6 +75,7 @@ export function useWhatsAppMessages(conversationId: string | null) {
       if (error) throw error;
       return (data ?? []) as WhatsAppMessage[];
     },
-    refetchInterval: 30000,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 }

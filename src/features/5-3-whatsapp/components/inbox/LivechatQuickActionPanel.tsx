@@ -59,6 +59,21 @@ function getLeadTitle(conv: LiveChatConversation, t: (key: string, fallback?: st
   return conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown';
 }
 
+/** Created By display name for auto-created leads: account name or fallback by channel. */
+function createdByDisplayName(conv: LiveChatConversation | null): string {
+  if (!conv) return 'WhatsApp';
+  if (conv.source === 'email') {
+    const s = (conv as { email_connection_display?: string }).email_connection_display?.trim();
+    return s || 'Email';
+  }
+  if ((conv as { channel?: string }).channel === 'instagram') {
+    const s = (conv as { whatsapp_account_display_name?: string }).whatsapp_account_display_name?.trim();
+    return s || 'Instagram';
+  }
+  const s = (conv as { whatsapp_account_display_name?: string }).whatsapp_account_display_name?.trim();
+  return s || 'WhatsApp';
+}
+
 interface LeadStatus {
   id: string;
   name: string;
@@ -164,13 +179,14 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
             toast.error(t('whatsappInbox.noOpenStatus', 'No lead status found'));
             return;
           }
+          const createdByName = createdByDisplayName(conversation);
           const { error: insertErr } = await supabase.from('leads').insert({
             ticket_id: ticketId,
             client: clientName,
             title,
             category: categoryName || '',
             created_by: '00000000-0000-0000-0000-000000000000',
-            created_by_name: 'System',
+            created_by_name: createdByName,
             assignee: '',
             status_id: defaultStatusId,
             organization_id: organizationId,
@@ -238,13 +254,14 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         toast.error(t('whatsappInbox.noOpenStatus', 'No lead status found'));
         return;
       }
+      const createdByName = createdByDisplayName(conversation);
       const { error: insertErr } = await supabase.from('leads').insert({
         ticket_id: ticketId,
         client: clientName,
         title,
         category: selectedCategoryName || '',
         created_by: '00000000-0000-0000-0000-000000000000',
-        created_by_name: 'System',
+        created_by_name: createdByName,
         assignee: '',
         status_id: defaultStatusId,
         organization_id: organizationId,

@@ -212,6 +212,15 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   return colors[source as keyof typeof colors] || colors.Website;
   };
 
+  // Created By: same chip style as Source; known channels get channel color, else neutral
+  const getCreatedByColor = (createdByName?: string | null) => {
+    const name = (createdByName ?? '').trim();
+    if (/whatsapp/i.test(name)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (/email/i.test(name)) return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (/instagram/i.test(name)) return 'bg-amber-50 text-amber-700 border-amber-200';
+    return 'bg-slate-50 text-slate-700 border-slate-200';
+  };
+
   // Client Status Icon Component with better aesthetics
   const ClientStatusIcon = ({ leadId }: { leadId: string }) => {
     const { status, loading } = useClientProfileStatus(leadId);
@@ -241,11 +250,11 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     { key: 'services', label: 'Services', width: 'w-[120px]' },
     { key: 'category', label: 'Category', width: 'w-[120px]' },
     { key: 'created_by', label: 'Created By', width: 'w-[120px]' },
+    { key: 'source', label: 'Source', width: 'w-[100px]' },
     { key: 'assignee', label: 'Assignee', width: 'w-[120px]' },
     { key: 'followup', label: 'Follow Up', width: 'w-[100px]' },
     { key: 'fu_priority', label: 'FU Priority', width: 'w-[120px]' },
     { key: 'status', label: 'Status', width: 'w-[120px]' },
-    { key: 'source', label: 'Source', width: 'w-[100px]' },
     { key: 'actions', label: 'Actions', width: 'w-[100px]' },
   ], []);
 
@@ -311,7 +320,18 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                     <span className="text-sm">{lead.category}</span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="text-sm">{lead.created_by_name}</span>
+                    <Badge
+                      className={`${getCreatedByColor(lead.created_by_name)} text-xs px-3 py-1 rounded-sm font-medium border max-w-[140px] inline-flex items-center justify-center`}
+                      title={lead.created_by_name ?? ''}
+                    >
+                      <span className="whitespace-nowrap truncate block min-w-0">{lead.created_by_name || '—'}</span>
+                    </Badge>
+                  </TableCell>
+                  {/* Source Column - right after Created By */}
+                  <TableCell className="whitespace-nowrap">
+                    <Badge className={`${getSourceColor(lead.source)} text-xs px-3 py-1 rounded-sm font-medium border w-32 justify-center`}>
+                      {lead.source || 'Website'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Select
@@ -380,12 +400,6 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
                         <Clock className="h-3 w-3 text-gray-600" />
                       </Button>
                     </div>
-                  </TableCell>
-                  {/* Source Column - Fixed width rectangular style */}
-                  <TableCell className="whitespace-nowrap">
-                    <Badge className={`${getSourceColor(lead.source)} text-xs px-3 py-1 rounded-sm font-medium border w-32 justify-center`}>
-                      {lead.source || 'Website'}
-                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <LeadActionsDropdown

@@ -1,0 +1,82 @@
+-- Add Instagram account display name from organization_meta_config to get_whatsapp_conversations_with_preview.
+-- WhatsApp: keep organization_whatsapp_accounts; Instagram: use organization_meta_config (instagram_username / instagram_name).
+
+DROP FUNCTION IF EXISTS public.get_whatsapp_conversations_with_preview(UUID);
+
+CREATE FUNCTION public.get_whatsapp_conversations_with_preview(p_organization_id UUID)
+RETURNS TABLE (
+  id UUID,
+  organization_id UUID,
+  customer_wa_id TEXT,
+  customer_name TEXT,
+  last_message_at TIMESTAMPTZ,
+  last_message_body TEXT,
+  last_message_direction TEXT,
+  last_message_status TEXT,
+  lead_status_id UUID,
+  lead_status_name TEXT,
+  channel TEXT,
+  phone_number_id TEXT,
+  whatsapp_account_display_name TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    c.id,
+    c.organization_id,
+    c.customer_wa_id,
+    c.customer_name,
+    m.created_at AS last_message_at,
+    LEFT(m.body, 200) AS last_message_body,
+    m.direction AS last_message_direction,
+    m.status AS last_message_status,
+    c.lead_status_id,
+    ls.name AS lead_status_name,
+    COALESCE(c.channel, 'whatsapp') AS channel,
+    c.phone_number_id,
+    (
+      CASE WHEN COALESCE(c.channel, 'whatsapp') = 'instagram' THEN
+        COALESCE(
+          CASE WHEN meta.instagram_username IS NOT NULL AND TRIM(meta.instagram_username) <> '' THEN '@' || TRIM(meta.instagram_username) END,
+          NULLIF(TRIM(COALESCE(meta.instagram_name, '')), '')
+        )
+      ELSE
+        COALESCE(
+          NULLIF(TRIM(a.whatsapp_business_name), ''),
+          NULLIF(TRIM(a.display_phone_number), ''),
+          a.phone_number_id
+        )
+      END
+    )::TEXT AS whatsapp_account_display_name,
+    c.created_at,
+    c.updated_at
+  FROM whatsapp_conversations c
+  LEFT JOIN lead_statuses ls ON ls.id = c.lead_status_id
+  LEFT JOIN organization_meta_config meta ON meta.organization_id = c.organization_id AND meta.is_active = true
+  LEFT JOIN organization_whatsapp_accounts a
+    ON a.organization_id = c.organization_id
+   AND a.phone_number_id = c.phone_number_id
+   AND a.is_active = true
+  LEFT JOIN LATERAL (
+    SELECT created_at, body, direction, status
+    FROM whatsapp_messages
+    WHERE conversation_id = c.id
+    ORDER BY created_at DESC
+    LIMIT 1
+  ) m ON true
+  WHERE c.organization_id = p_organization_id
+  AND (
+    (SELECT ur.role FROM user_roles ur WHERE ur.user_id = auth.uid() AND ur.organization_id = p_organization_id LIMIT 1) IN ('owner', 'admin')
+    OR (
+      (SELECT e.id FROM employees e WHERE e.user_id = auth.uid() AND e.organization_id = p_organization_id LIMIT 1) IS NOT NULL
+      AND c.assignee_id = (SELECT e.id FROM employees e WHERE e.user_id = auth.uid() AND e.organization_id = p_organization_id LIMIT 1)
+    )
+  )
+  ORDER BY m.created_at DESC NULLS LAST;
+$$;
+
+COMMENT ON FUNCTION public.get_whatsapp_conversations_with_preview(UUID) IS 'WhatsApp/Instagram conversations with preview. WhatsApp account from organization_whatsapp_accounts; Instagram from organization_meta_config. Owner/Admin see all; Employee see only assigned.';

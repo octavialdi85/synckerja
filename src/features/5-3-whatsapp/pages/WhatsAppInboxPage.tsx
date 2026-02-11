@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getConversationTicketId } from '../components/inbox/ConversationList';
 import { useQueryClient } from '@tanstack/react-query';
 import { PanelRightOpen, PanelRightClose, Search } from 'lucide-react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
@@ -24,7 +25,7 @@ type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string
 export function WhatsAppInboxPage() {
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
 
   // Prefetch lead-statuses so outbound send can optimistically set In Progress (useSendWhatsAppMessage reads from cache).
@@ -49,6 +50,7 @@ export function WhatsAppInboxPage() {
   const [scrollToTextInChat, setScrollToTextInChat] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
   const initialConversationId = searchParams.get('conversation');
+  const initialTicketId = searchParams.get('ticket_id');
 
   const allConversations: LiveChatConversation[] = useMemo(() => {
     const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));
@@ -119,6 +121,7 @@ export function WhatsAppInboxPage() {
 
   const handleSelectConversation = (conv: LiveChatConversation) => {
     setSelectedId(conv.id);
+    setSearchParams({ ticket_id: getConversationTicketId(conv) }, { replace: true });
   };
 
   return (
@@ -130,6 +133,12 @@ export function WhatsAppInboxPage() {
               <div className="flex-shrink-0">
                 <HeaderAndTab />
               </div>
+              {waAccounts.length === 0 && (
+                <div className="flex-shrink-0 mx-4 mb-2 px-3 py-2 rounded-lg bg-slate-100 border border-slate-300 text-sm text-slate-800 flex items-center gap-2" role="alert">
+                  <span className="font-medium">{t('whatsappInbox.noAccountBannerTitle', 'Tidak ada akun WhatsApp terhubung')}</span>
+                  <span>{t('whatsappInbox.noAccountBannerBody', 'Percakapan yang tampil adalah riwayat lama. Untuk mengirim pesan, hubungkan akun di Connect WhatsApp.')}</span>
+                </div>
+              )}
               <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-row max-w-full rounded-lg border border-gray-200 shadow-sm bg-white max-h-[calc(100vh-120px)]">
                 {/* Kiri: daftar conversation - sidebar */}
                 <aside className="flex-shrink-0 border-r border-gray-200 flex flex-col min-h-0 bg-white" style={{ width: '20rem', minWidth: '20rem' }} aria-label="Conversations">
@@ -168,13 +177,13 @@ export function WhatsAppInboxPage() {
                         searchQuery={conversationSearch}
                         onSearchChange={setConversationSearch}
                         onSelectConversation={(conv) => {
-                          setSelectedId(conv.id);
+                          handleSelectConversation(conv);
                           setSearchPopupOpen(false);
                           setScrollToTextInChat(conversationSearch.trim() || null);
                           setScrollToMessageId(null);
                         }}
                         onSelectMessageResult={(conv, messageId) => {
-                          setSelectedId(conv.id);
+                          handleSelectConversation(conv);
                           setSearchPopupOpen(false);
                           setScrollToMessageId(messageId);
                           setScrollToTextInChat(null);
@@ -192,7 +201,10 @@ export function WhatsAppInboxPage() {
                       selectedId={selectedId}
                       onSelect={handleSelectConversation}
                       initialConversationId={initialConversationId}
+                      initialTicketId={initialTicketId}
                       searchQuery={conversationSearch.trim()}
+                      accountFilter={accountFilter || undefined}
+                      waAccountsForHint={waAccounts.map((a) => ({ display_phone_number: a.display_phone_number, phone_number_id: a.phone_number_id }))}
                     />
                   </div>
                 </aside>
@@ -203,6 +215,8 @@ export function WhatsAppInboxPage() {
                   ) : selectedConversation ? (
                     <ChatThread
                       conversation={selectedConversation}
+                      connectedPhoneNumberIds={waAccounts.map((a) => a.phone_number_id)}
+                      hasNoConnectedWhatsAppAccount={waAccounts.length === 0}
                       scrollToTextInChat={scrollToTextInChat}
                       onScrollToTextDone={() => setScrollToTextInChat(null)}
                       scrollToMessageId={scrollToMessageId}

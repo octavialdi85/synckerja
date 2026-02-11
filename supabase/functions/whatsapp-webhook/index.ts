@@ -139,7 +139,8 @@ async function ensureLeadForNewConversation(
   channel: "whatsapp",
   client: string,
   title: string,
-  customerWaId?: string | null
+  customerWaId: string | null | undefined,
+  createdByDisplayName: string
 ): Promise<void> {
   const ticketId = "WA-" + String(convId).replace(/-/g, "").slice(0, 8).toUpperCase();
   const { data: existing } = await supabase.from("leads").select("id").eq("ticket_id", ticketId).maybeSingle();
@@ -168,7 +169,7 @@ async function ensureLeadForNewConversation(
     title: safeTitle,
     category: "",
     created_by: "00000000-0000-0000-0000-000000000000",
-    created_by_name: "System",
+    created_by_name: createdByDisplayName,
     assignee: "",
     status_id: statusId,
     organization_id: orgId,
@@ -275,6 +276,10 @@ Deno.serve(async (req: Request) => {
       if (body.object === "whatsapp_business_account") {
         const entries = body.entry ?? [];
         for (const entry of entries) {
+          // Meta sends WhatsApp Business Account ID (WABA ID) in entry.id – validate so we only process for the correct WABA
+          const rawWabaId = entry.id != null ? String(entry.id).trim() || null : null;
+          const whatsappBusinessAccountId = rawWabaId && rawWabaId.length > 0 ? rawWabaId : null;
+
           const changes = entry.changes ?? [];
           for (const change of changes) {
             if (change.field === "messages") {
@@ -284,6 +289,10 @@ Deno.serve(async (req: Request) => {
               const contacts = value.contacts ?? [];
               const messages = value.messages ?? [];
               const statuses = value.statuses ?? [];
+
+              if (whatsappBusinessAccountId) {
+                console.log("[whatsapp-webhook] POST entry whatsapp_business_account_id=", whatsappBusinessAccountId, "phone_number_id=", phoneNumberId ?? "(none)");
+              }
 
               // Handle status updates (delivered, read)
               for (const st of statuses) {
@@ -304,44 +313,49 @@ Deno.serve(async (req: Request) => {
                 continue;
               }
 
-              // Resolve all orgs that have this phone_number_id. One number can be connected to multiple orgs;
-              // one org can receive from up to 5 different WhatsApp accounts (each with its own phone_number_id).
-              type OrgAccount = { organization_id: string; meta_access_token: string };
+              // Resolve orgs by phone_number_id from organization_whatsapp_accounts only (no fallback to organization_meta_config).
+              type OrgAccount = { organization_id: string; meta_access_token: string; created_by_display_name: string };
               let accountsList: OrgAccount[] = [];
 
               const { data: accountRows, error: accountError } = await supabase
                 .from("organization_whatsapp_accounts")
-                .select("organization_id, meta_access_token")
+                .select("organization_id, meta_access_token, whatsapp_business_account_id, whatsapp_business_name, display_phone_number, phone_number_id")
                 .eq("phone_number_id", phoneNumberId)
                 .eq("is_active", true);
 
               if (!accountError && accountRows?.length) {
-                accountsList = accountRows
-                  .map((r) => ({
-                    organization_id: r.organization_id,
-                    meta_access_token: (r.meta_access_token ?? "").trim(),
-                  }))
+                let rows = accountRows as Array<{
+                  organization_id: string;
+                  meta_access_token: string | null;
+                  whatsapp_business_account_id: string | null;
+                  whatsapp_business_name: string | null;
+                  display_phone_number: string | null;
+                  phone_number_id: string | null;
+                }>;
+                if (whatsappBusinessAccountId) {
+                  const wabaMatched = rows.filter((r) => (r.whatsapp_business_account_id ?? "").trim() === whatsappBusinessAccountId);
+                  const wabaNull = rows.filter((r) => !(r.whatsapp_business_account_id ?? "").trim());
+                  rows = wabaMatched.length > 0 ? wabaMatched : wabaNull;
+                }
+                accountsList = rows
+                  .map((r) => {
+                    const name = (r.whatsapp_business_name ?? "").trim() || (r.display_phone_number ?? "").trim() || (r.phone_number_id ?? "").trim() || "WhatsApp";
+                    return {
+                      organization_id: r.organization_id,
+                      meta_access_token: (r.meta_access_token ?? "").trim(),
+                      created_by_display_name: name,
+                    };
+                  })
                   .filter((a) => a.meta_access_token && a.organization_id);
               }
 
               if (accountsList.length === 0) {
-                const { data: metaRows, error: metaError } = await supabase
-                  .from("organization_meta_config")
-                  .select("organization_id, meta_access_token")
-                  .eq("phone_number_id", phoneNumberId)
-                  .eq("is_active", true);
-                if (!metaError && metaRows?.length) {
-                  accountsList = metaRows
-                    .map((r) => ({
-                      organization_id: r.organization_id,
-                      meta_access_token: (r.meta_access_token ?? "").trim(),
-                    }))
-                    .filter((a) => a.meta_access_token && a.organization_id);
-                }
-              }
-
-              if (accountsList.length === 0) {
-                console.error("Config not found for phone_number_id:", phoneNumberId, accountError ?? null);
+                console.error(
+                  "Config not found for phone_number_id:",
+                  phoneNumberId,
+                  whatsappBusinessAccountId ? "whatsapp_business_account_id:" + whatsappBusinessAccountId : "",
+                  accountError ?? null
+                );
                 continue;
               }
 
@@ -353,7 +367,15 @@ Deno.serve(async (req: Request) => {
                 return true;
               });
 
-              console.log("Webhook: resolved accounts for phone_number_id=", phoneNumberId, "org_count=", accountsList.length, "messages_count=", messages.length);
+              console.log(
+                "Webhook: resolved accounts for phone_number_id=",
+                phoneNumberId,
+                whatsappBusinessAccountId ? "waba_id=" + whatsappBusinessAccountId : "",
+                "org_count=",
+                accountsList.length,
+                "messages_count=",
+                messages.length
+              );
 
               const contactMap: Record<string, string> = {};
               for (const c of contacts) {
@@ -365,16 +387,8 @@ Deno.serve(async (req: Request) => {
               const blockContactRequests = Deno.env.get("WHATSAPP_BLOCK_CONTACT_REQUESTS") !== "false";
 
               for (const account of accountsList) {
-                let orgId = account.organization_id;
-                let accessToken = account.meta_access_token;
-                if (!accessToken) {
-                  const { data: orgConfig } = await supabase
-                    .from("organization_meta_config")
-                    .select("meta_access_token")
-                    .eq("organization_id", orgId)
-                    .maybeSingle();
-                  accessToken = (orgConfig?.meta_access_token ?? "").trim();
-                }
+                const orgId = account.organization_id;
+                const accessToken = account.meta_access_token;
                 if (!accessToken) {
                   console.error("No token for org/phone_number_id:", orgId, phoneNumberId);
                   continue;
@@ -423,6 +437,7 @@ Deno.serve(async (req: Request) => {
                 };
                 if (customerName) convPayload.customer_name = customerName;
 
+                // One conversation per (org, channel, customer, phone_number_id) – list and messages separated by account (Synckerja, Vialdi Wedding, etc.).
                 const { data: existingConv } = await supabase
                   .from("whatsapp_conversations")
                   .select("id")
@@ -465,7 +480,8 @@ Deno.serve(async (req: Request) => {
                     "whatsapp",
                     customerName ?? customerWaId ?? "WhatsApp",
                     lastBody ?? "WhatsApp",
-                    customerWaId
+                    customerWaId,
+                    account.created_by_display_name
                   );
                 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadByConversation';
 import { useEmailUnreadByConversation } from '../../hooks/useEmailUnreadByConversation';
@@ -85,6 +85,9 @@ function LivechatAvatar({
   );
 }
 
+/** One WhatsApp account for empty-state hint (display_phone_number, phone_number_id). */
+export type WhatsAppAccountForHint = { display_phone_number?: string | null; phone_number_id: string };
+
 interface ConversationListProps {
   /** Unified list (WhatsApp + Email). */
   conversations: LiveChatConversation[];
@@ -92,8 +95,14 @@ interface ConversationListProps {
   onSelect: (conv: LiveChatConversation) => void;
   /** When set, select this conversation once the list has loaded (e.g. from Leads "Open Chat" link). */
   initialConversationId?: string | null;
+  /** When set (e.g. WA-xxx, EMAIL-xxx from Leads), select the conversation whose ticket_id matches. */
+  initialTicketId?: string | null;
   /** Filter conversations by name or phone or email. */
   searchQuery?: string;
+  /** Current account filter (e.g. 'wa:956884617514241'). When conversations are empty, show hint with this account's number. */
+  accountFilter?: string;
+  /** WhatsApp accounts (for empty-state: show "message this number" when filter is one account). */
+  waAccountsForHint?: WhatsAppAccountForHint[];
   isLoading?: boolean;
   error?: Error | null;
 }
@@ -156,6 +165,16 @@ function emailToDisplayLabel(email: string | null | undefined): string {
   return titleCase.trim() || email;
 }
 
+/** Derive ticket_id for a conversation (same logic as leads table). Exported for URL sync. */
+export function getConversationTicketId(conv: LiveChatConversation): string {
+  if (conv.source === 'email') {
+    return 'EMAIL-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+  }
+  const wa = conv as WhatsAppConversation;
+  const prefix = (wa.channel ?? 'whatsapp') === 'instagram' ? 'IG-' : 'WA-';
+  return prefix + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
 export function ConversationList({
   conversations,
   isLoading = false,
@@ -163,7 +182,10 @@ export function ConversationList({
   selectedId,
   onSelect,
   initialConversationId,
+  initialTicketId,
   searchQuery = '',
+  accountFilter = '',
+  waAccountsForHint = [],
 }: ConversationListProps) {
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
@@ -187,9 +209,29 @@ export function ConversationList({
     });
   }, [conversations, searchQuery]);
 
+  const initialSelectionApplied = useRef(false);
+  const lastInitialKey = useRef<string>('');
   useEffect(() => {
-    if (conversations.length === 0 || !initialConversationId) return;
-    const conv = conversations.find((c) => c.id === initialConversationId);
+    const key = `${initialConversationId ?? ''}|${(initialTicketId ?? '').trim()}`;
+    if (key !== lastInitialKey.current) {
+      lastInitialKey.current = key;
+      initialSelectionApplied.current = false;
+    }
+  }, [initialConversationId, initialTicketId]);
+
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    if (initialSelectionApplied.current) return;
+    const hasInitial = initialConversationId || (initialTicketId && initialTicketId.trim());
+    if (!hasInitial) return;
+
+    let conv: LiveChatConversation | undefined;
+    if (initialConversationId) {
+      conv = conversations.find((c) => c.id === initialConversationId);
+    } else if (initialTicketId && initialTicketId.trim()) {
+      const tid = initialTicketId.trim().toUpperCase();
+      conv = conversations.find((c) => getConversationTicketId(c) === tid);
+    }
     if (conv) {
       if (conv.source === 'whatsapp') {
         supabase
@@ -204,8 +246,9 @@ export function ConversationList({
           .catch(() => {});
       }
       onSelect(conv);
+      initialSelectionApplied.current = true;
     }
-  }, [conversations, initialConversationId, onSelect, organizationId, queryClient]);
+  }, [conversations, initialConversationId, initialTicketId, onSelect, organizationId, queryClient]);
 
   const handleSelect = (conv: LiveChatConversation) => {
     if (conv.source === 'whatsapp') {
@@ -243,11 +286,26 @@ export function ConversationList({
       </div>
     );
   }
+  const waAccountHint =
+    accountFilter.startsWith('wa:') && waAccountsForHint.length > 0
+      ? waAccountsForHint.find((a) => a.phone_number_id === accountFilter.slice(3))
+      : null;
+  const hintNumber = (waAccountHint?.display_phone_number ?? '').trim() || null;
+
   if (conversations.length === 0) {
     return (
       <div className="p-4 text-sm text-gray-500 flex flex-col items-center justify-center h-32 text-center">
         <MessageCircle className="w-8 h-8 text-gray-300 mb-2" />
-        <span>No conversations yet. Messages will appear when customers message WhatsApp or when verification emails arrive.</span>
+        {hintNumber ? (
+          <>
+            <span>{t('whatsappInbox.noConversationsYet', 'No conversations yet.')}</span>
+            <span className="mt-1.5 text-gray-600">
+              {t('whatsappInbox.messageThisNumberToStart', 'Have customers send a message to {{number}} and conversations will appear here.', { number: hintNumber })}
+            </span>
+          </>
+        ) : (
+          <span>{t('whatsappInbox.noConversationsYetFull', 'No conversations yet. Messages will appear when customers message WhatsApp or when verification emails arrive.')}</span>
+        )}
       </div>
     );
   }
@@ -256,7 +314,18 @@ export function ConversationList({
     return (
       <div className="p-4 text-sm text-gray-500 flex flex-col items-center justify-center h-32 text-center">
         <MessageCircle className="w-8 h-8 text-gray-300 mb-2" />
-        <span>{searchQuery ? 'No conversations match your search.' : 'No conversations yet.'}</span>
+        {searchQuery ? (
+          <span>{t('whatsappInbox.noSearchResults', 'No conversations or contacts match your search.')}</span>
+        ) : hintNumber ? (
+          <>
+            <span>{t('whatsappInbox.noConversationsForThisAccount', 'No conversations for this account yet.')}</span>
+            <span className="mt-1.5 text-gray-600">
+              {t('whatsappInbox.messageThisNumberToStart', 'Have customers send a message to {{number}} and conversations will appear here.', { number: hintNumber })}
+            </span>
+          </>
+        ) : (
+          <span>{t('whatsappInbox.noConversationsYet', 'No conversations yet.')}</span>
+        )}
       </div>
     );
   }
