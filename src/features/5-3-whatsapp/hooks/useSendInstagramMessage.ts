@@ -37,9 +37,9 @@ export function useSendInstagramMessage() {
           (typeof json?.error === 'string' ? json.error : null) ??
           (typeof json?.details?.error?.message === 'string' ? json.details.error.message : null) ??
           (res.status === 400
-            ? 'Permintaan tidak valid. Pastikan Instagram sudah terhubung di halaman Connect Instagram.'
+            ? 'Permintaan tidak valid. Pastikan Instagram sudah terhubung dan token masih berlaku di Connect Instagram.'
             : res.status === 502
-              ? 'Gagal kirim (502). Cek: 1) Token di Connect WhatsApp/Connect Instagram harus User access token dengan permission pages_show_list. 2) Pengguna harus mengirim pesan dalam 24 jam terakhir. 3) Log di Supabase → Edge Functions → send-instagram-message.'
+              ? 'Gagal kirim. Cek: 1) Token di Connect Instagram (coba Connect with Facebook only lagi). 2) Pengguna harus mengirim pesan dalam 24 jam terakhir. 3) Log di Supabase → Edge Functions → send-instagram-message.'
               : 'Gagal mengirim pesan.');
         throw new Error(msg);
       }

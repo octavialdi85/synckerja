@@ -242,10 +242,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const metaUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${pageId}/messages`;
-    console.log("send-instagram-message: calling Meta API", { url: metaUrl, recipientId: to.slice(0, 8) + "..." });
+    console.log("send-instagram-message: calling Meta API", { pageId: pageId.slice(0, 8) + "...", recipientId: to.slice(0, 8) + "..." });
 
     let metaRes: Response;
-    let metaData: { recipient_id?: string; message_id?: string; error?: { message?: string; code?: number; error_subcode?: number } };
+    let metaData: { recipient_id?: string; message_id?: string; error?: { message?: string; code?: number; error_subcode?: number; type?: string } };
     try {
       metaRes = await fetch(metaUrl, {
         method: "POST",
@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
       })();
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : "Meta API request failed";
-      console.error("send-instagram-message: Meta fetch error", msg);
+      console.error("send-instagram-message: Meta fetch error", msg, fetchErr);
       return new Response(
         JSON.stringify({
           error: "Gagal menghubungi Meta API. Cek koneksi atau token di Connect Instagram.",
@@ -280,25 +280,30 @@ Deno.serve(async (req: Request) => {
       status: metaRes.status,
       message_id: metaData?.message_id ?? null,
       error: metaData?.error?.message ?? null,
+      error_code: metaData?.error?.code ?? null,
     });
 
     if (!metaRes.ok) {
       const rawMsg = metaData?.error?.message ?? "Meta API error";
       const code = metaData?.error?.code;
       const subcode = metaData?.error?.error_subcode;
+      const errorType = metaData?.error?.type ?? "";
       // 551 = outside 24h messaging window (freeform only within 24h of user message)
       const errMsg =
         code === 551 || subcode === 551
           ? "Tidak bisa mengirim: percakapan di luar jendela 24 jam. Pengguna harus mengirim pesan dalam 24 jam terakhir agar Anda bisa membalas pesan bebas (bukan template)."
           : rawMsg;
-      console.log("send-instagram-message: Meta API error", { code, subcode, message: rawMsg });
+      // Log full Meta error for debugging (no PII)
+      console.error("send-instagram-message: Meta API error full", JSON.stringify({ code, subcode, type: errorType, message: rawMsg }));
+      // Use 400 for Meta client errors (invalid request, token, permission) so client can show message; 502 for rate limit / server-side
+      const statusFromMeta = metaRes.status >= 400 && metaRes.status < 500 ? 400 : 502;
       return new Response(
         JSON.stringify({
           error: errMsg,
           details: metaData,
           code: code ?? undefined,
         }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: statusFromMeta, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
