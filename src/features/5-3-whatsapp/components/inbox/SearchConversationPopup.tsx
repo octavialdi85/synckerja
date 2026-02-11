@@ -8,7 +8,7 @@ import { useWhatsAppUnreadByConversation } from '../../hooks/useWhatsAppUnreadBy
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
-import type { WhatsAppConversation } from '../../types';
+import type { LiveChatConversation, WhatsAppConversation } from '../../types';
 
 /** WhatsApp icon for platform label */
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -88,10 +88,12 @@ function HighlightSnippet({ text, query }: { text: string; query: string }) {
 export interface SearchConversationPopupProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  onSelectConversation: (conv: WhatsAppConversation) => void;
+  onSelectConversation: (conv: LiveChatConversation) => void;
   /** When user clicks a message result (WhatsApp-style), open chat and highlight this message */
-  onSelectMessageResult?: (conv: WhatsAppConversation, messageId: string) => void;
+  onSelectMessageResult?: (conv: LiveChatConversation, messageId: string) => void;
   selectedId?: string | null;
+  /** Optional merged list (WhatsApp + Instagram + Email). When provided, used instead of useWhatsAppConversations so search includes all channels. */
+  conversations?: LiveChatConversation[];
 }
 
 export function SearchConversationPopup({
@@ -100,18 +102,20 @@ export function SearchConversationPopup({
   onSelectConversation,
   onSelectMessageResult,
   selectedId = null,
+  conversations: conversationsProp,
 }: SearchConversationPopupProps) {
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
-  const { data: conversations = [], isLoading, error } = useWhatsAppConversations();
+  const { data: waConversations = [], isLoading, error } = useWhatsAppConversations();
+  const conversations: LiveChatConversation[] = conversationsProp ?? waConversations;
   const { data: messageResults = [], isLoading: isSearchingMessages } = useWhatsAppMessageSearch(searchQuery);
   const { config: whatsappConfig } = useWhatsAppConfig();
   const { unreadByConversation, markConversationRead } = useWhatsAppUnreadByConversation();
   const businessName = whatsappConfig?.whatsapp_business_name ?? whatsappConfig?.display_phone_number ?? null;
 
   const convById = useMemo(() => {
-    const m: Record<string, WhatsAppConversation> = {};
+    const m: Record<string, LiveChatConversation> = {};
     conversations.forEach((c) => { m[c.id] = c; });
     return m;
   }, [conversations]);
@@ -121,8 +125,12 @@ export function SearchConversationPopup({
     if (!q) return conversations;
     return conversations.filter((conv) => {
       const name = (conv.customer_name ?? '').toLowerCase();
-      const waId = (conv.customer_wa_id ?? '').toLowerCase();
       const lastBody = (conv.last_message_body ?? '').toLowerCase();
+      if (conv.source === 'instagram') {
+        const igId = (conv as { customer_ig_id?: string }).customer_ig_id ?? '';
+        return name.includes(q) || igId.toLowerCase().includes(q) || lastBody.includes(q);
+      }
+      const waId = (conv.customer_wa_id ?? '').toLowerCase();
       return name.includes(q) || waId.includes(q) || lastBody.includes(q);
     });
   }, [conversations, searchQuery]);
@@ -140,16 +148,18 @@ export function SearchConversationPopup({
   const hasContactOnlyMatches = contactMatchesNotInMessageResults.length > 0;
   const showConversationListOnly = !searchQuery.trim() || (!hasMessageResults && !hasContactOnlyMatches && filteredConversations.length > 0);
 
-  const handleSelectConv = (conv: WhatsAppConversation) => {
-    if (unreadByConversation[conv.id] > 0) markConversationRead(conv.id).catch(() => {});
-    supabase
-      .from('whatsapp_conversations')
-      .update({ last_opened_at: new Date().toISOString() })
-      .eq('id', conv.id)
-      .then(() => {
-        if (organizationId) queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
-      })
-      .catch(() => {});
+  const handleSelectConv = (conv: LiveChatConversation) => {
+    if (conv.source === 'whatsapp') {
+      if (unreadByConversation[conv.id] > 0) markConversationRead(conv.id).catch(() => {});
+      supabase
+        .from('whatsapp_conversations')
+        .update({ last_opened_at: new Date().toISOString() })
+        .eq('id', conv.id)
+        .then(() => {
+          if (organizationId) queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
+        })
+        .catch(() => {});
+    }
     onSelectConversation(conv);
   };
 
@@ -172,7 +182,7 @@ export function SearchConversationPopup({
     <ul className="divide-y divide-gray-100 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[min(50vh,320px)] min-h-0">
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
-        const displayName = conv ? (conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown')) : '—';
+        const displayName = conv ? (conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown')) : '—';
         const body = row.body ?? '';
         const isOutbound = row.direction === 'outbound';
         return (
@@ -218,7 +228,7 @@ export function SearchConversationPopup({
       ) : (
         filteredConversations.map((conv) => {
           const unread = unreadByConversation[conv.id] ?? 0;
-          const displayName = conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
+          const displayName = conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown');
           const isSelected = selectedId === conv.id;
           const lastBody = conv.last_message_body ?? '';
           const showHighlight = searchQuery.trim() && lastBody.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -284,7 +294,7 @@ export function SearchConversationPopup({
     <ul className="divide-y divide-gray-100 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[min(50vh,320px)] min-h-0">
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
-        const displayName = conv ? (conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown')) : '—';
+        const displayName = conv ? (conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown')) : '—';
         const body = row.body ?? '';
         const isOutbound = row.direction === 'outbound';
         return (

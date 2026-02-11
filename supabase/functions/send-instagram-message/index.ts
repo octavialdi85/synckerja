@@ -9,7 +9,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-const META_GRAPH_VERSION = "v18.0";
+const META_GRAPH_VERSION = "v21.0";
 
 Deno.serve(async (req: Request) => {
   console.log("send-instagram-message: request received", { method: req.method });
@@ -99,147 +99,139 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", user.id);
     const orgIds = (userOrgs ?? []).map((r: { organization_id: string }) => r.organization_id);
 
-    const tryOrg = async (oid: string) => {
-      const { data, error } = await supabase
-        .from("organization_meta_config")
-        .select("organization_id, meta_access_token, meta_business_manager_id, instagram_business_account_id, facebook_page_id")
-        .eq("organization_id", oid)
-        .eq("is_active", true)
-        .not("instagram_business_account_id", "is", null)
-        .maybeSingle();
-      if (!error && data?.meta_access_token?.trim()) return { config: data, orgId: oid };
-      return null;
-    };
-
-    type ConfigRow = {
+    type ResolvedConfig = {
       organization_id: string;
-      meta_access_token: string;
-      meta_business_manager_id: string | null;
-      instagram_business_account_id: string | null;
-      facebook_page_id: string | null;
+      pageId: string;
+      tokenToUse: string;
     };
-    let config: ConfigRow | null = null;
-    if (orgId) {
-      config = (await tryOrg(orgId))?.config ?? null;
-    }
-    if (!config && orgIds.length > 0) {
-      for (const oid of orgIds) {
-        if (oid === orgId) continue;
-        const r = await tryOrg(oid);
-        if (r) {
-          config = r.config;
-          orgId = r.orgId;
-          break;
+
+    let resolved: ResolvedConfig | null = null;
+
+    // 1) Prefer organization_instagram_accounts when conversation_id is provided (instagram_conversations)
+    if (conversationId) {
+      const { data: conv } = await supabase
+        .from("instagram_conversations")
+        .select("organization_id, instagram_business_account_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (conv?.organization_id && conv?.instagram_business_account_id) {
+        const { data: igAcc } = await supabase
+          .from("organization_instagram_accounts")
+          .select("facebook_page_id, page_access_token")
+          .eq("organization_id", conv.organization_id)
+          .eq("instagram_business_account_id", conv.instagram_business_account_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        const pageToken = (igAcc?.page_access_token ?? "").trim();
+        const pageId = (igAcc?.facebook_page_id ?? "").trim() || null;
+        if (pageToken && pageId) {
+          resolved = { organization_id: conv.organization_id, pageId, tokenToUse: pageToken };
+          orgId = conv.organization_id;
         }
       }
     }
 
-    if (!config) {
-      console.log("send-instagram-message: no org config with Instagram", {
-        activeOrgId: orgId ?? null,
-        orgIdsTried: orgIds?.length ?? 0,
-      });
-      return new Response(
-        JSON.stringify({
-          error: "Instagram belum terhubung untuk organisasi ini. Buka halaman Connect Instagram dan sambungkan akun Instagram bisnis.",
-          code: "INSTAGRAM_NOT_CONFIGURED",
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    orgId = config.organization_id;
-    const storedToken = config.meta_access_token.trim();
-    const igAccountId = (config.instagram_business_account_id ?? "").trim();
-    const businessId = (config.meta_business_manager_id ?? "").trim() || null;
-
-    // Send API requires Page access token. Resolve pageId + token: User token → /me/accounts; System User → /{businessId}/owned_pages.
-    let pageId: string | null = (config.facebook_page_id ?? "").trim() || null;
-    let tokenToUse: string = storedToken;
-    let pageTokenResolved = false;
-
-    const fields = "id,instagram_business_account{id},access_token";
-
-    function pickPage(
-      pages: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string } }>
-    ): void {
-      const page = pages.find((p) => String(p?.instagram_business_account?.id ?? "") === igAccountId);
-      if (page?.id) {
-        pageId = String(page.id);
-        if (typeof page?.access_token === "string" && page.access_token.trim()) {
-          tokenToUse = page.access_token.trim();
-          pageTokenResolved = true;
-          console.log("send-instagram-message: using Page token", { pageId: pageId.slice(0, 8) + "..." });
-        }
-      }
-    }
-
-    if (igAccountId) {
-      // 1) User token: GET /me/accounts (returns Pages + access_token per Page)
-      const meUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/me/accounts?fields=${encodeURIComponent(fields)}`;
-      const accRes = await fetch(meUrl, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${storedToken}` },
-      });
-      const accData = await accRes.json().catch(() => ({})) as {
-        data?: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string } }>;
-        error?: { message?: string; code?: number };
+    // 2) Fallback: organization_meta_config + /me/accounts
+    if (!resolved) {
+      const tryOrg = async (oid: string) => {
+        const { data, error } = await supabase
+          .from("organization_meta_config")
+          .select("organization_id, meta_access_token, meta_business_manager_id, instagram_business_account_id, facebook_page_id")
+          .eq("organization_id", oid)
+          .eq("is_active", true)
+          .not("instagram_business_account_id", "is", null)
+          .maybeSingle();
+        if (!error && data?.meta_access_token?.trim()) return { config: data, orgId: oid };
+        return null;
       };
-      console.log("send-instagram-message: /me/accounts", {
-        ok: accRes.ok,
-        status: accRes.status,
-        dataLength: Array.isArray(accData?.data) ? accData.data.length : 0,
-        error: accData?.error?.message ?? null,
-      });
-      if (Array.isArray(accData?.data)) pickPage(accData.data);
 
-      // 2) System User (Business Manager): GET /{businessId}/owned_pages when /me/accounts empty or no token
-      if (!pageTokenResolved && businessId) {
-        const ownedUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(businessId)}/owned_pages?fields=${encodeURIComponent(fields)}`;
-        const ownedRes = await fetch(ownedUrl, {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${storedToken}` },
-        });
-        const ownedData = await ownedRes.json().catch(() => ({})) as {
+      type ConfigRow = {
+        organization_id: string;
+        meta_access_token: string;
+        meta_business_manager_id: string | null;
+        instagram_business_account_id: string | null;
+        facebook_page_id: string | null;
+      };
+      let config: ConfigRow | null = null;
+      if (orgId) config = (await tryOrg(orgId))?.config ?? null;
+      if (!config && orgIds.length > 0) {
+        for (const oid of orgIds) {
+          if (oid === orgId) continue;
+          const r = await tryOrg(oid);
+          if (r) {
+            config = r.config;
+            orgId = r.orgId;
+            break;
+          }
+        }
+      }
+
+      if (!config) {
+        console.log("send-instagram-message: no org config with Instagram", { activeOrgId: orgId ?? null, orgIdsTried: orgIds?.length ?? 0 });
+        return new Response(
+          JSON.stringify({
+            error: "Instagram belum terhubung untuk organisasi ini. Buka halaman Connect Instagram dan sambungkan akun Instagram bisnis.",
+            code: "INSTAGRAM_NOT_CONFIGURED",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      orgId = config.organization_id;
+      const storedToken = config.meta_access_token.trim();
+      const igAccountId = (config.instagram_business_account_id ?? "").trim();
+      const businessId = (config.meta_business_manager_id ?? "").trim() || null;
+      let pageId: string | null = (config.facebook_page_id ?? "").trim() || null;
+      let tokenToUse = storedToken;
+      const fields = "id,instagram_business_account{id},access_token";
+
+      function pickPage(
+        pages: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string } }>
+      ): void {
+        const page = pages.find((p) => String(p?.instagram_business_account?.id ?? "") === igAccountId);
+        if (page?.id) {
+          pageId = String(page.id);
+          if (typeof page?.access_token === "string" && page.access_token.trim()) {
+            tokenToUse = page.access_token.trim();
+          }
+        }
+      }
+
+      if (igAccountId) {
+        const meUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/me/accounts?fields=${encodeURIComponent(fields)}`;
+        const accRes = await fetch(meUrl, { method: "GET", headers: { "Authorization": `Bearer ${storedToken}` } });
+        const accData = await accRes.json().catch(() => ({})) as {
           data?: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string } }>;
           error?: { message?: string; code?: number };
         };
-        console.log("send-instagram-message: /owned_pages (System User)", {
-          ok: ownedRes.ok,
-          status: ownedRes.status,
-          dataLength: Array.isArray(ownedData?.data) ? ownedData.data.length : 0,
-          error: ownedData?.error?.message ?? null,
-        });
-        if (Array.isArray(ownedData?.data)) pickPage(ownedData.data);
+        if (Array.isArray(accData?.data)) pickPage(accData.data);
+        if (!pageId && businessId) {
+          const ownedUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(businessId)}/owned_pages?fields=${encodeURIComponent(fields)}`;
+          const ownedRes = await fetch(ownedUrl, { method: "GET", headers: { "Authorization": `Bearer ${storedToken}` } });
+          const ownedData = await ownedRes.json().catch(() => ({})) as {
+            data?: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string } }>;
+          };
+          if (Array.isArray(ownedData?.data)) pickPage(ownedData.data);
+        }
+      }
+
+      if (pageId && tokenToUse) {
+        resolved = { organization_id: orgId, pageId, tokenToUse };
       }
     }
 
-    if (!pageId) {
-      console.log("send-instagram-message: no page ID (set facebook_page_id di Connect Instagram atau pastikan token punya akses Page)");
+    if (!resolved) {
       return new Response(
         JSON.stringify({
-          error: businessId
-            ? "Tidak dapat mengambil Page/Instagram. Pastikan System User di Business Manager punya akses ke Page & Instagram, dan Meta Business Manager ID sudah diisi di Connect WhatsApp."
-            : "Tidak dapat mengambil Page/Instagram. Pastikan token di Connect WhatsApp/Connect Instagram adalah User access token dari akun yang mengelola Page & Instagram, atau gunakan System User + isi Meta Business Manager ID.",
+          error: "Tidak dapat mengambil Page/Instagram. Sambungkan akun Instagram di halaman Connect Instagram dan pastikan Page access token tersedia.",
           code: "MISSING_PAGE_ID",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const hadPageIdFromConfig = ((config.facebook_page_id ?? "").trim() || null) !== null;
-    if (igAccountId && !pageTokenResolved && !hadPageIdFromConfig) {
-      console.log("send-instagram-message: no Page token resolved; send would fail with 190");
-      return new Response(
-        JSON.stringify({
-          error: businessId
-            ? "System User token tidak mengembalikan access_token untuk Page. Di Business Manager pastikan System User punya role yang mengizinkan akses Page & Instagram, dan generate token dengan permission pages_show_list / instagram_manage_messages."
-            : "Token harus User access token dengan permission pages_show_list, atau gunakan System User + Meta Business Manager ID.",
-          code: "PAGE_TOKEN_REQUIRED",
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const pageId = resolved.pageId;
+    const tokenToUse = resolved.tokenToUse;
 
     const metaPayload: Record<string, unknown> = {
       recipient: { id: to },
@@ -314,49 +306,39 @@ Deno.serve(async (req: Request) => {
 
     if (conversationId && messageId) {
       const now = new Date().toISOString();
+      const lastBody = text.slice(0, 200);
       const insertPayload: Record<string, unknown> = {
         conversation_id: conversationId,
         direction: "outbound",
-        wa_message_id: messageId,
         platform_message_id: messageId,
-        channel: "instagram",
         body: text,
         message_type: "text",
         raw_metadata: metaData,
         status: "sent",
+        status_updated_at: now,
         created_at: now,
       };
-      if (replyToMid) insertPayload.reply_to_wa_message_id = replyToMid;
+      if (replyToMid) insertPayload.reply_to_platform_message_id = replyToMid;
 
-      let insertResult = await supabase
-        .from("whatsapp_messages")
+      const insertResult = await supabase
+        .from("instagram_messages")
         .insert(insertPayload)
         .select()
         .single();
 
-      if (insertResult.error && /column|does not exist/i.test(insertResult.error.message ?? "")) {
-        const fallbackPayload: Record<string, unknown> = {
-          conversation_id: conversationId,
-          direction: "outbound",
-          wa_message_id: messageId,
-          body: text,
-          message_type: "text",
-          raw_metadata: metaData,
-          status: "sent",
-          created_at: now,
-        };
-        if (replyToMid) fallbackPayload.reply_to_wa_message_id = replyToMid;
-        insertResult = await supabase
-          .from("whatsapp_messages")
-          .insert(fallbackPayload)
-          .select()
-          .single();
-      }
-
       if (insertResult.error) {
-        console.error("send-instagram-message: whatsapp_messages insert error", insertResult.error);
+        console.error("send-instagram-message: instagram_messages insert error", insertResult.error);
       } else {
-        await supabase.rpc("sync_conversation_last_message", { p_conversation_id: conversationId });
+        await supabase
+          .from("instagram_conversations")
+          .update({
+            last_message_at: now,
+            last_message_body: lastBody,
+            last_message_direction: "outbound",
+            last_message_status: "sent",
+            updated_at: now,
+          })
+          .eq("id", conversationId);
       }
 
       return new Response(

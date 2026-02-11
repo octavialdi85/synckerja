@@ -16,6 +16,8 @@ interface InstagramBusinessAccount {
   name: string | null;
   /** Facebook Page ID linked to this Instagram account; required for Send API (avoids "me" with User token). */
   page_id: string | null;
+  /** Page access token for this Page; required for Instagram Messaging API and webhook. */
+  access_token: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -119,14 +121,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const fields = "id,name,instagram_business_account{id,username,name}";
+    const fields = "id,name,access_token,instagram_business_account{id,username,name}";
     const accounts: InstagramBusinessAccount[] = [];
     const seenIgIds = new Set<string>();
 
-    function collectFromPages(pages: Array<{ id?: string; instagram_business_account?: { id?: string; username?: string; name?: string } }>) {
+    function collectFromPages(pages: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string; username?: string; name?: string } }>) {
       for (const page of pages) {
         const ig = page?.instagram_business_account;
         const pageId = page?.id ? String(page.id) : null;
+        const pageAccessToken = typeof page?.access_token === "string" ? page.access_token.trim() || null : null;
         if (ig?.id) {
           const igId = String(ig.id);
           if (seenIgIds.has(igId)) continue;
@@ -136,6 +139,7 @@ Deno.serve(async (req: Request) => {
             username: typeof ig.username === "string" ? ig.username : null,
             name: typeof ig.name === "string" ? ig.name : null,
             page_id: pageId,
+            access_token: pageAccessToken,
           });
         }
       }
@@ -152,6 +156,7 @@ Deno.serve(async (req: Request) => {
       data?: Array<{
         id?: string;
         name?: string;
+        access_token?: string;
         instagram_business_account?: { id?: string; username?: string; name?: string };
       }>;
       error?: { message?: string };
@@ -181,6 +186,7 @@ Deno.serve(async (req: Request) => {
         data?: Array<{
           id?: string;
           name?: string;
+          access_token?: string;
           instagram_business_account?: { id?: string; username?: string; name?: string };
         }>;
         error?: { message?: string };

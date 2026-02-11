@@ -14,11 +14,13 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useWhatsAppConversations } from '../hooks/useWhatsAppConversations';
+import { useInstagramConversations } from '../hooks/useInstagramConversations';
 import { useEmailConversations } from '../hooks/useEmailConversations';
 import { useWhatsAppAccounts } from '../hooks/useWhatsAppAccounts';
+import { useInstagramAccounts } from '../hooks/useInstagramAccounts';
 import { useEmailConnections } from '../hooks/useEmailConnections';
 import { supabase } from '@/integrations/supabase/client';
-import type { LiveChatConversation, WhatsAppConversation } from '../types';
+import type { LiveChatConversation, WhatsAppConversation, InstagramConversation } from '../types';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
@@ -27,8 +29,8 @@ export function WhatsAppInboxPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
+  const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
 
-  // Prefetch lead-statuses so outbound send can optimistically set In Progress (useSendWhatsAppMessage reads from cache).
   useEffect(() => {
     void queryClient.prefetchQuery({
       queryKey: ['lead-statuses'],
@@ -41,6 +43,7 @@ export function WhatsAppInboxPage() {
   }, [queryClient]);
   const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
   const { accounts: waAccounts } = useWhatsAppAccounts();
+  const { accounts: igAccounts } = useInstagramAccounts();
   const { connections: emailConnections } = useEmailConnections();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isQuickActionExpanded, setIsQuickActionExpanded] = useState(true);
@@ -54,15 +57,16 @@ export function WhatsAppInboxPage() {
 
   const allConversations: LiveChatConversation[] = useMemo(() => {
     const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));
+    const ig: LiveChatConversation[] = (igConversations as InstagramConversation[]).map((c) => ({ ...c, source: 'instagram' as const }));
     const email: LiveChatConversation[] = emailConversations.map((c) => ({ ...c, source: 'email' as const }));
-    const merged = [...wa, ...email];
+    const merged = [...wa, ...ig, ...email];
     merged.sort((a, b) => {
       const aAt = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const bAt = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return bAt - aAt;
     });
     return merged;
-  }, [waConversations, emailConversations]);
+  }, [waConversations, igConversations, emailConversations]);
 
   const accountOptions = useMemo(() => {
     const opts: { value: string; label: string }[] = [
@@ -72,39 +76,29 @@ export function WhatsAppInboxPage() {
       const name = acc.whatsapp_business_name?.trim() || acc.display_phone_number?.trim() || acc.phone_number_id || t('whatsappInbox.whatsApp', 'WhatsApp');
       opts.push({ value: `wa:${acc.phone_number_id}` as const, label: `WhatsApp - ${name}` });
     });
-    // Instagram: phone_number_id is NULL in DB; group by whatsapp_account_display_name (e.g. @octa.vialdi)
-    const igFromConvs = new Map<string, string>();
-    (waConversations as WhatsAppConversation[]).forEach((c) => {
-      if (c.channel === 'instagram') {
-        const name = c.whatsapp_account_display_name?.trim() || t('whatsappInbox.instagram', 'Instagram');
-        const key = name || 'instagram';
-        if (!igFromConvs.has(key)) igFromConvs.set(key, name);
-      }
-    });
-    igFromConvs.forEach((name, key) => {
-      opts.push({ value: `ig:${encodeURIComponent(key)}`, label: `Instagram - ${name}` });
+    igAccounts.forEach((acc) => {
+      const name = acc.instagram_username?.trim() ? `@${acc.instagram_username}` : acc.instagram_name?.trim() || acc.instagram_business_account_id || t('whatsappInbox.instagram', 'Instagram');
+      opts.push({ value: `ig:${acc.instagram_business_account_id}` as const, label: `Instagram - ${name}` });
     });
     emailConnections.forEach((conn) => {
       opts.push({ value: `email:${conn.id}` as const, label: `Email - ${conn.email_address}` });
     });
     return opts;
-  }, [waAccounts, waConversations, emailConnections, t]);
+  }, [waAccounts, igAccounts, emailConnections, t]);
 
   const conversations = useMemo(() => {
     if (!accountFilter) return allConversations;
     if (accountFilter.startsWith('wa:')) {
       const pnid = accountFilter.slice(3);
       return allConversations.filter(
-        (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).channel !== 'instagram' && (c as WhatsAppConversation).phone_number_id === pnid
+        (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).phone_number_id === pnid
       );
     }
     if (accountFilter.startsWith('ig:')) {
-      const key = decodeURIComponent(accountFilter.slice(3));
+      const igAccountId = accountFilter.slice(3);
       return allConversations.filter((c) => {
-        if (c.source !== 'whatsapp' || (c as WhatsAppConversation).channel !== 'instagram') return false;
-        const displayName = (c as WhatsAppConversation).whatsapp_account_display_name?.trim() || '';
-        const convKey = displayName || 'instagram';
-        return convKey === key;
+        if (c.source !== 'instagram') return false;
+        return (c as InstagramConversation).instagram_business_account_id === igAccountId;
       });
     }
     if (accountFilter.startsWith('email:')) {
@@ -176,6 +170,7 @@ export function WhatsAppInboxPage() {
                       <SearchConversationPopup
                         searchQuery={conversationSearch}
                         onSearchChange={setConversationSearch}
+                        conversations={conversations}
                         onSelectConversation={(conv) => {
                           handleSelectConversation(conv);
                           setSearchPopupOpen(false);
@@ -196,8 +191,8 @@ export function WhatsAppInboxPage() {
                   <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
                     <ConversationList
                       conversations={conversations}
-                      isLoading={waLoading || emailLoading}
-                      error={waError ?? emailError}
+                      isLoading={waLoading || igLoading || emailLoading}
+                      error={waError ?? igError ?? emailError}
                       selectedId={selectedId}
                       onSelect={handleSelectConversation}
                       initialConversationId={initialConversationId}

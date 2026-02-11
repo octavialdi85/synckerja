@@ -6,122 +6,185 @@ import { Button } from '@/features/ui/button';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
+import { useInstagramAccounts, type InstagramAccountFromApi } from '../hooks/useInstagramAccounts';
 import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
 import { Instagram, CheckCircle2, Unplug, Loader2, Facebook } from 'lucide-react';
 import { toast } from 'sonner';
 
 const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic,business_management';
-const META_OAUTH_VERSION = 'v18.0';
+const META_OAUTH_VERSION = 'v21.0';
+const META_OAUTH_EXTRAS = '{"setup":{"channel":"IG_API_ONBOARDING"}}';
 
 export function InstagramConnectPage() {
   const { t } = useAppTranslation();
-  const { config, isLoading, refetch, updateInstagram, isUpdatingInstagram } = useWhatsAppConfig();
+  const { config, isLoading: configLoading, refetch: refetchConfig } = useWhatsAppConfig();
+  const { accounts: connectedAccounts, isLoading: accountsLoading, refetch: refetchAccounts, connectAccount, disconnectAccount, isConnecting, isDisconnecting } = useInstagramAccounts();
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [availableAccounts, setAvailableAccounts] = useState<InstagramAccountFromApi[]>([]);
   const oauthStateRef = useRef<string>('');
 
   const metaAppId = (import.meta.env.VITE_META_APP_ID as string)?.trim() || '';
   const hasOAuth = !!metaAppId;
-
   const hasMetaConfig = !!config?.meta_access_token?.trim();
-  const connectedId = config?.instagram_business_account_id?.trim() || null;
-  const isConnected = !!connectedId;
-  const instagramDisplayName =
-    config?.instagram_username?.trim() ||
-    config?.instagram_name?.trim() ||
-    connectedId;
-
   const redirectUri = typeof window !== 'undefined' ? `${window.location.origin}/auth/meta/callback` : '';
 
-  const openOAuthPopup = useCallback(() => {
-    if (!hasOAuth || !redirectUri) {
-      toast.error(t('instagramConnect.oauthNotConfigured', 'VITE_META_APP_ID not set.'));
-      return;
-    }
-    const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    oauthStateRef.current = state;
-    const url = `https://www.facebook.com/${META_OAUTH_VERSION}/dialog/oauth?client_id=${encodeURIComponent(metaAppId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(META_OAUTH_SCOPE)}&state=${encodeURIComponent(state)}&response_type=code`;
-    const w = window.open(url, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
-    if (!w) toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
-  }, [hasOAuth, metaAppId, redirectUri, t]);
+  const openOAuthPopup = useCallback(
+    (useBusinessLogin: boolean) => {
+      if (!hasOAuth || !redirectUri) {
+        toast.error(t('instagramConnect.oauthNotConfigured', 'VITE_META_APP_ID not set.'));
+        return;
+      }
+      const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      oauthStateRef.current = state;
+      const params = new URLSearchParams({
+        client_id: metaAppId,
+        redirect_uri: redirectUri,
+        scope: META_OAUTH_SCOPE,
+        state,
+      });
+      if (useBusinessLogin) {
+        params.set('display', 'page');
+        params.set('extras', META_OAUTH_EXTRAS);
+        params.set('response_type', 'token');
+      } else {
+        params.set('response_type', 'code');
+      }
+      const url = `https://www.facebook.com/${META_OAUTH_VERSION}/dialog/oauth?${params.toString()}`;
+      const w = window.open(url, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
+      if (!w) toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
+    },
+    [hasOAuth, metaAppId, redirectUri, t]
+  );
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.data?.type !== 'meta-oauth') return;
-      const { code, state, error: err, error_description } = event.data as { code?: string; state?: string; error?: string; error_description?: string };
-      if (err) {
+      const data = event.data as {
+        code?: string;
+        state?: string;
+        long_lived_token?: string;
+        access_token?: string;
+        error?: string;
+        error_description?: string;
+      };
+      if (data.error) {
         setOauthLoading(false);
-        toast.error(error_description || err || t('instagramConnect.oauthDenied', 'Login cancelled or denied.'));
+        toast.error(data.error_description || data.error || t('instagramConnect.oauthDenied', 'Login cancelled or denied.'));
         return;
       }
-      if (!code || state !== oauthStateRef.current) {
-        setOauthLoading(false);
-        return;
-      }
-      setOauthLoading(true);
-      (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) {
-            toast.error(t('instagramConnect.notAuthenticated', 'Please sign in again.'));
-            setOauthLoading(false);
-            return;
-          }
-          const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth-exchange`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-            body: JSON.stringify({ code, redirect_uri: redirectUri }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            toast.error(data?.error || t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
-            setOauthLoading(false);
-            return;
-          }
-          await refetch();
-          // Setelah token tersimpan, ambil daftar akun Instagram dan auto-connect yang pertama (jika ada)
+      const token = data.long_lived_token || data.access_token;
+      const code = data.code;
+      if (token) {
+        if (data.state !== oauthStateRef.current) {
+          setOauthLoading(false);
+          return;
+        }
+        setOauthLoading(true);
+        (async () => {
           try {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              toast.error(t('instagramConnect.notAuthenticated', 'Please sign in again.'));
+              setOauthLoading(false);
+              return;
+            }
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth-exchange`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ token }),
+            });
+            const resData = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              toast.error(resData?.error || t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
+              setOauthLoading(false);
+              return;
+            }
+            await refetchConfig();
             const listRes = await fetch(`${SUPABASE_URL}/functions/v1/list-instagram-accounts`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
             });
             const listData = await listRes.json().catch(() => ({}));
             const accounts = Array.isArray(listData?.accounts) ? listData.accounts : [];
-            if (accounts.length >= 1) {
-              const first = accounts[0];
-              await updateInstagram({
-                id: first.id,
-                username: first.username ?? null,
-                name: first.name ?? null,
-                page_id: first.page_id ?? null,
-              });
-              await refetch();
-              toast.success(t('instagramConnect.oauthSuccess', 'Connected. Instagram account linked.'));
-            } else {
-              toast.success(t('instagramConnect.oauthSuccessNoAccount', 'Token saved. No Instagram Business account found—link a Page to Instagram in Meta Business Suite.'));
-            }
+            setAvailableAccounts(accounts);
+            toast.success(t('instagramConnect.oauthSuccess', 'Token saved. Connect Instagram accounts below.'));
           } catch {
-            toast.success(t('instagramConnect.oauthSuccess', 'Connected. You can now load Instagram accounts.'));
+            toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
+          } finally {
+            setOauthLoading(false);
           }
-        } catch {
-          toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
-        } finally {
-          setOauthLoading(false);
-        }
-      })();
+        })();
+        return;
+      }
+      if (code && data.state === oauthStateRef.current) {
+        setOauthLoading(true);
+        (async () => {
+          try {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              toast.error(t('instagramConnect.notAuthenticated', 'Please sign in again.'));
+              setOauthLoading(false);
+              return;
+            }
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth-exchange`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ code, redirect_uri: redirectUri }),
+            });
+            const resData = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              toast.error(resData?.error || t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
+              setOauthLoading(false);
+              return;
+            }
+            await refetchConfig();
+            const listRes = await fetch(`${SUPABASE_URL}/functions/v1/list-instagram-accounts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            });
+            const listData = await listRes.json().catch(() => ({}));
+            const accounts = Array.isArray(listData?.accounts) ? listData.accounts : [];
+            setAvailableAccounts(accounts);
+            toast.success(t('instagramConnect.oauthSuccess', 'Token saved. Connect Instagram accounts below.'));
+          } catch {
+            toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
+          } finally {
+            setOauthLoading(false);
+          }
+        })();
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refetch, redirectUri, t]);
+  }, [refetchConfig, redirectUri, t]);
 
-  const handleDisconnect = async () => {
+  const handleConnect = async (account: InstagramAccountFromApi) => {
     try {
-      await updateInstagram({ id: null });
-      await refetch();
-      toast.success('Disconnected');
+      await connectAccount(account);
+      setAvailableAccounts((prev) => prev.filter((a) => a.id !== account.id));
+      await refetchAccounts();
+      toast.success(t('instagramConnect.oauthSuccess', 'Connected.'));
+    } catch (e) {
+      toast.error((e as Error)?.message ?? 'Failed to connect');
+    }
+  };
+
+  const handleDisconnect = async (accountId: string) => {
+    try {
+      await disconnectAccount(accountId);
+      await refetchAccounts();
+      toast.success(t('instagramConnect.disconnect', 'Disconnected'));
     } catch (e) {
       toast.error((e as Error)?.message ?? 'Failed to disconnect');
     }
   };
+
+  const connectedIds = new Set(connectedAccounts.map((a) => a.instagram_business_account_id));
+  const availableToConnect = availableAccounts.filter((a) => !connectedIds.has(a.id));
 
   return (
     <StandardLayout>
@@ -136,7 +199,6 @@ export function InstagramConnectPage() {
                 <div className="min-h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4">
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_3fr] gap-6">
-                      {/* Left sidebar: Connect button + list of available accounts */}
                       <Card>
                         <CardHeader className="space-y-3">
                           <div className="flex items-center gap-3">
@@ -153,21 +215,21 @@ export function InstagramConnectPage() {
                           {!hasMetaConfig ? (
                             <div className="space-y-3">
                               {hasOAuth && (
-                                <Button
-                                  type="button"
-                                  onClick={() => { setOauthLoading(true); openOAuthPopup(); }}
-                                  disabled={oauthLoading}
-                                  className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
-                                >
-                                  {oauthLoading ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <Facebook className="w-4 h-4 mr-2" />
-                                  )}
-                                  {oauthLoading
-                                    ? t('instagramConnect.oauthConnecting', 'Connecting…')
-                                    : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
-                                </Button>
+                                <>
+                                  <Button
+                                    type="button"
+                                    onClick={() => {
+                                      setOauthLoading(true);
+                                      openOAuthPopup(true);
+                                    }}
+                                    disabled={oauthLoading}
+                                    className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
+                                  >
+                                    {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
+                                    {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
+                                  </Button>
+                                  <p className="text-xs text-gray-500">Business Login (recommended)</p>
+                                </>
                               )}
                               <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800">
                                 {hasOAuth
@@ -180,85 +242,97 @@ export function InstagramConnectPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => { setOauthLoading(true); openOAuthPopup(); }}
+                                onClick={() => {
+                                  setOauthLoading(true);
+                                  openOAuthPopup(true);
+                                }}
                                 disabled={oauthLoading}
                                 className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
                               >
-                                {oauthLoading ? (
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Facebook className="w-4 h-4 mr-2" />
-                                )}
-                                {oauthLoading
-                                  ? t('instagramConnect.oauthConnecting', 'Connecting…')
-                                  : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
+                                {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
+                                {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
                               </Button>
                             )
                           )}
                           <div className="border-t border-slate-200 pt-4 mt-4">
-                            <WebhookInfoDisplay embedded />
+                            <WebhookInfoDisplay embedded variant="instagram" />
                           </div>
                         </CardContent>
                       </Card>
 
-                      {/* Right sidebar: List of connected accounts */}
                       <Card>
                         <CardHeader>
                           <CardTitle>{t('instagramConnect.rightTitle', 'Connected accounts')}</CardTitle>
                           <CardDescription>{t('instagramConnect.rightDescription', 'List of connected Instagram Business accounts.')}</CardDescription>
                         </CardHeader>
                         <CardContent>
-                          {isLoading ? (
+                          {configLoading || accountsLoading ? (
                             <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
                               <Loader2 className="w-6 h-6 animate-spin mr-2" />
                               {t('instagramConnect.loadingAccounts', 'Loading...')}
                             </div>
-                          ) : !isConnected ? (
-                            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <Instagram className="w-12 h-12 text-slate-300 mb-3" />
-                              <p className="text-sm text-slate-600">
-                                {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook to authorize.')}
-                              </p>
-                            </div>
                           ) : (
-                            <>
                             <div className="space-y-4">
-                              <div className="rounded-xl border border-purple-200/70 bg-purple-50/60 p-5 shadow-sm">
-                                <div className="flex items-center justify-between gap-3 flex-wrap">
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-11 h-11 rounded-xl bg-[#E4405F]/15 flex items-center justify-center shrink-0">
-                                      <Instagram className="w-6 h-6 text-[#E4405F]" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <h3 className="font-semibold text-slate-900 truncate">
-                                        {instagramDisplayName}
-                                      </h3>
-                                      {config?.instagram_username && (
-                                        <p className="text-xs text-slate-500 truncate mt-0.5">
-                                          @{config.instagram_username}
-                                        </p>
-                                      )}
-                                      <span className="inline-flex items-center gap-1.5 text-purple-600 text-sm font-medium mt-0.5">
-                                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                                        {t('instagramConnect.connected', 'Connected')}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                                    onClick={handleDisconnect}
-                                    disabled={isUpdatingInstagram}
-                                  >
-                                    <Unplug className="w-4 h-4 mr-2" />
-                                    {t('instagramConnect.disconnect', 'Disconnect')}
-                                  </Button>
+                              {connectedAccounts.length === 0 && availableToConnect.length === 0 && (
+                                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                  <Instagram className="w-12 h-12 text-slate-300 mb-3" />
+                                  <p className="text-sm text-slate-600">
+                                    {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook to authorize.')}
+                                  </p>
                                 </div>
-                              </div>
+                              )}
+                              {connectedAccounts.map((acc) => (
+                                <div key={acc.id} className="rounded-xl border border-purple-200/70 bg-purple-50/60 p-5 shadow-sm">
+                                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-11 h-11 rounded-xl bg-[#E4405F]/15 flex items-center justify-center shrink-0">
+                                        <Instagram className="w-6 h-6 text-[#E4405F]" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h3 className="font-semibold text-slate-900 truncate">
+                                          {acc.instagram_username ? `@${acc.instagram_username}` : acc.instagram_name || acc.instagram_business_account_id}
+                                        </h3>
+                                        <span className="inline-flex items-center gap-1.5 text-purple-600 text-sm font-medium mt-0.5">
+                                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                          {t('instagramConnect.connected', 'Connected')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                      onClick={() => handleDisconnect(acc.id)}
+                                      disabled={isDisconnecting}
+                                    >
+                                      <Unplug className="w-4 h-4 mr-2" />
+                                      {t('instagramConnect.disconnect', 'Disconnect')}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                              {availableToConnect.length > 0 && (
+                                <div className="pt-4 border-t border-slate-200">
+                                  <p className="text-sm font-medium text-slate-700 mb-2">Available to connect</p>
+                                  {availableToConnect.map((acc) => (
+                                    <div key={acc.id} className="flex items-center justify-between gap-3 py-2">
+                                      <span className="text-sm text-slate-600">
+                                        {acc.username ? `@${acc.username}` : acc.name || acc.id}
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => handleConnect(acc)}
+                                        disabled={isConnecting}
+                                      >
+                                        Connect
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            </>
                           )}
                         </CardContent>
                       </Card>

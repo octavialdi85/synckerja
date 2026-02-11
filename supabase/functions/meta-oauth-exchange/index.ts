@@ -9,7 +9,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-const META_GRAPH_VERSION = "v18.0";
+const META_GRAPH_VERSION = "v21.0";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -26,13 +26,6 @@ Deno.serve(async (req: Request) => {
   try {
     const appId = Deno.env.get("META_APP_ID");
     const appSecret = Deno.env.get("META_APP_SECRET");
-    if (!appId?.trim() || !appSecret?.trim()) {
-      console.error("meta-oauth-exchange: META_APP_ID or META_APP_SECRET not set");
-      return new Response(
-        JSON.stringify({ error: "Meta OAuth not configured (META_APP_ID / META_APP_SECRET)." }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -69,55 +62,70 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const body = await req.json().catch(() => ({})) as { code?: string; redirect_uri?: string };
+    const body = await req.json().catch(() => ({})) as { code?: string; redirect_uri?: string; token?: string };
+    const directToken = typeof body.token === "string" ? body.token.trim() : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
     const redirectUri = typeof body.redirect_uri === "string" ? body.redirect_uri.trim() : "";
 
-    if (!code) {
+    if (!directToken && (!appId?.trim() || !appSecret?.trim())) {
       return new Response(
-        JSON.stringify({ error: "Missing code (OAuth authorization code)." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    if (!redirectUri) {
-      return new Response(
-        JSON.stringify({ error: "Missing redirect_uri (must match Meta app callback URL)." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Meta OAuth not configured (META_APP_ID / META_APP_SECRET)." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const tokenUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
-    const tokenRes = await fetch(tokenUrl, { method: "GET" });
-    const tokenData = await tokenRes.json().catch(() => ({})) as {
-      access_token?: string;
-      token_type?: string;
-      expires_in?: number;
-      error?: { message?: string; code?: number };
-    };
+    let accessToken = "";
 
-    if (!tokenRes.ok || tokenData?.error) {
-      const errMsg = tokenData?.error?.message ?? "Meta token exchange failed";
-      console.error("meta-oauth-exchange: token exchange failed", errMsg);
-      return new Response(
-        JSON.stringify({ error: errMsg, code: tokenData?.error?.code }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (directToken) {
+      // Business Login flow: token (long_lived_token) sent from client; save directly
+      accessToken = directToken;
+    } else {
+      if (!code) {
+        return new Response(
+          JSON.stringify({ error: "Missing code (OAuth authorization code) or token (Business Login)." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!redirectUri) {
+        return new Response(
+          JSON.stringify({ error: "Missing redirect_uri (must match Meta app callback URL)." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-    let accessToken = tokenData?.access_token?.trim() ?? "";
-    if (!accessToken) {
-      return new Response(
-        JSON.stringify({ error: "No access_token in Meta response." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      const tokenUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
+      const tokenRes = await fetch(tokenUrl, { method: "GET" });
+      const tokenData = await tokenRes.json().catch(() => ({})) as {
+        access_token?: string;
+        token_type?: string;
+        expires_in?: number;
+        error?: { message?: string; code?: number };
+      };
 
-    // Exchange for long-lived token (60 days) if short-lived
-    const exchangeUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(accessToken)}`;
-    const longRes = await fetch(exchangeUrl, { method: "GET" });
-    const longData = await longRes.json().catch(() => ({})) as { access_token?: string; expires_in?: number };
-    if (longRes.ok && longData?.access_token?.trim()) {
-      accessToken = longData.access_token.trim();
+      if (!tokenRes.ok || tokenData?.error) {
+        const errMsg = tokenData?.error?.message ?? "Meta token exchange failed";
+        console.error("meta-oauth-exchange: token exchange failed", errMsg);
+        return new Response(
+          JSON.stringify({ error: errMsg, code: tokenData?.error?.code }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      accessToken = tokenData?.access_token?.trim() ?? "";
+      if (!accessToken) {
+        return new Response(
+          JSON.stringify({ error: "No access_token in Meta response." }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Exchange for long-lived token (60 days) if short-lived
+      const exchangeUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(accessToken)}`;
+      const longRes = await fetch(exchangeUrl, { method: "GET" });
+      const longData = await longRes.json().catch(() => ({})) as { access_token?: string; expires_in?: number };
+      if (longRes.ok && longData?.access_token?.trim()) {
+        accessToken = longData.access_token.trim();
+      }
     }
 
     const { data: existing, error: selectErr } = await supabaseAdmin

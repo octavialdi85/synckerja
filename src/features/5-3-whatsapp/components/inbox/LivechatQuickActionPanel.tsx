@@ -20,12 +20,17 @@ import type { LiveChatConversation } from '../../types';
 import { isResolvedStatus } from '../../constants/leadStatus';
 import { computeFollowUpAndPriority } from '@/features/5-3-leads-management/utils/fuPriorityFromUpdates';
 
-/** Ticket ID for lead lookup: WA-xxx from conversation id (WhatsApp/Instagram), EMAIL-xxx for email. */
+/** Ticket ID for lead lookup: WA-xxx, IG-xxx, EMAIL-xxx. */
 function getTicketIdForConversation(conv: LiveChatConversation): string {
   if (conv.source === 'email') {
     return 'EMAIL-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
   }
-  const c = conv as { ticket_id?: string; id: string; channel?: string };
+  if (conv.source === 'instagram') {
+    const c = conv as { ticket_id?: string; id: string };
+    if (c.ticket_id) return c.ticket_id;
+    return 'IG-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+  }
+  const c = conv as { ticket_id?: string; id: string };
   if (c.ticket_id) return c.ticket_id;
   return 'WA-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
 }
@@ -53,10 +58,11 @@ function getLeadTitle(conv: LiveChatConversation, t: (key: string, fallback?: st
   if (conv.source === 'email') {
     return conv.from_display_name || emailToDisplayLabel(conv.from_email) || conv.from_email || conv.email_connection_display || 'Email';
   }
-  if (conv.channel === 'instagram' && !conv.customer_name?.trim()) {
+  if (conv.source === 'instagram' && !conv.customer_name?.trim()) {
     return t('whatsappInbox.instagramContact', 'Kontak Instagram');
   }
-  return conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown';
+  const customerId = conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : (conv as { customer_wa_id?: string }).customer_wa_id;
+  return conv.customer_name || (customerId ? maskPhoneLast4(customerId) : '') || 'Unknown';
 }
 
 /** Created By display name for auto-created leads: account name or fallback by channel. */
@@ -66,8 +72,8 @@ function createdByDisplayName(conv: LiveChatConversation | null): string {
     const s = (conv as { email_connection_display?: string }).email_connection_display?.trim();
     return s || 'Email';
   }
-  if ((conv as { channel?: string }).channel === 'instagram') {
-    const s = (conv as { whatsapp_account_display_name?: string }).whatsapp_account_display_name?.trim();
+  if (conv.source === 'instagram') {
+    const s = (conv as { instagram_account_display_name?: string }).instagram_account_display_name?.trim();
     return s || 'Instagram';
   }
   const s = (conv as { whatsapp_account_display_name?: string }).whatsapp_account_display_name?.trim();
@@ -162,11 +168,15 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
             ? (conversation as { from_display_name?: string; from_email?: string }).from_display_name
               || (conversation as { from_email?: string }).from_email
               || 'Email'
-            : (conversation as { customer_name?: string; customer_wa_id?: string }).customer_name
-              || (conversation as { customer_wa_id?: string }).customer_wa_id
-              || 'WhatsApp';
+            : conversation?.source === 'instagram'
+              ? ((conversation as { customer_name?: string; customer_ig_id?: string }).customer_name
+                || (conversation as { customer_ig_id?: string }).customer_ig_id
+                || 'Instagram')
+              : ((conversation as { customer_name?: string; customer_wa_id?: string }).customer_name
+                || (conversation as { customer_wa_id?: string }).customer_wa_id
+                || 'WhatsApp');
           const title = (conversation as { last_message_body?: string }).last_message_body?.slice(0, 100) || 'Lead';
-          const source = conversation?.source === 'email' ? 'Email' : (conversation as { channel?: string }).channel === 'instagram' ? 'Instagram' : 'WhatsApp';
+          const source = conversation?.source === 'email' ? 'Email' : conversation?.source === 'instagram' ? 'Instagram' : 'WhatsApp';
           // Same as Status dropdown: no organization_id so RLS / shared statuses apply
           const { data: defaultStatusRows } = await supabase
             .from('lead_statuses')

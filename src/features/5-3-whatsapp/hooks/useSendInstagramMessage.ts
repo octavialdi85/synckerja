@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { SUPABASE_URL } from '@/integrations/supabase/client';
-import type { WhatsAppMessage } from '../types';
+import type { InstagramMessage } from '../types';
 
 export interface SendInstagramMessageParams {
   to: string;
@@ -45,11 +45,11 @@ export function useSendInstagramMessage() {
       }
       return json;
     },
-    onSuccess: (data: { success?: boolean; message?: WhatsAppMessage | null; lead_status_id?: string | null }, variables) => {
+    onSuccess: (data: { success?: boolean; message?: InstagramMessage | null; lead_status_id?: string | null }, variables) => {
       const conversationId = variables.conversation_id;
       if (conversationId && data?.message) {
-        queryClient.setQueryData<WhatsAppMessage[]>(
-          ['whatsapp-messages', conversationId],
+        queryClient.setQueryData<InstagramMessage[]>(
+          ['instagram-messages', conversationId],
           (prev = []) => {
             if (prev.some((m) => m.id === data.message!.id)) return prev;
             return [...prev, data.message!].sort(
@@ -60,9 +60,9 @@ export function useSendInstagramMessage() {
       }
       if (conversationId) {
         if (!data?.message) {
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversationId] });
+          queryClient.invalidateQueries({ queryKey: ['instagram-messages', conversationId] });
         }
-        const statusQueryKey = ['whatsapp-conversation-status', conversationId] as const;
+        const statusQueryKey = ['instagram-conversation-status', conversationId] as const;
         const statusIdFromBackend = data?.lead_status_id ?? null;
         if (statusIdFromBackend) {
           queryClient.setQueryData(statusQueryKey, statusIdFromBackend);
@@ -74,7 +74,7 @@ export function useSendInstagramMessage() {
           }
         }
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          queryClient.invalidateQueries({ queryKey: ['instagram-conversations'] });
           void queryClient.refetchQueries({ queryKey: statusQueryKey });
         }, 1500);
       }

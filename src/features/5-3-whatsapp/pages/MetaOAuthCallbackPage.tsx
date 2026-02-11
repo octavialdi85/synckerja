@@ -2,17 +2,60 @@ import React, { useEffect } from 'react';
 
 /**
  * OAuth callback page for Meta (Facebook) Login.
- * Loaded in a popup after user authorizes. Reads ?code= & ?state= (or ?error=),
- * sends to opener via postMessage, then closes.
+ * - Business Login: Meta redirects with fragment #access_token=...&long_lived_token=... (or #error=...).
+ * - Standard OAuth: Meta redirects with ?code=...&state=... (or ?error=...).
+ * Sends to opener via postMessage, then closes.
  */
+function parseHashParams(hash: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const trimmed = hash.startsWith('#') ? hash.slice(1) : hash;
+  trimmed.split('&').forEach((part) => {
+    const i = part.indexOf('=');
+    if (i === -1) return;
+    const key = decodeURIComponent(part.slice(0, i).replace(/\+/g, ' '));
+    const value = decodeURIComponent(part.slice(i + 1).replace(/\+/g, ' '));
+    out[key] = value;
+  });
+  return out;
+}
+
 export function MetaOAuthCallbackPage() {
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    const error = params.get('error');
-    const errorReason = params.get('error_reason') ?? undefined;
-    const errorDescription = params.get('error_description') ?? undefined;
+    const query = new URLSearchParams(window.location.search);
+    const hashParams = parseHashParams(window.location.hash || '');
+
+    // Business Login: token in fragment
+    const hashToken = hashParams.long_lived_token || hashParams.access_token;
+    const hashError = hashParams.error;
+    if (hashToken || hashError != null) {
+      const payload = hashError != null
+        ? {
+            type: 'meta-oauth' as const,
+            error: hashError || 'unknown',
+            error_reason: hashParams.error_reason,
+            error_description: hashParams.error_description,
+          }
+        : {
+            type: 'meta-oauth' as const,
+            long_lived_token: hashParams.long_lived_token || hashParams.access_token || '',
+            access_token: hashParams.access_token || '',
+            state: query.get('state') ?? '',
+          };
+      if (window.opener) {
+        window.opener.postMessage(payload, window.location.origin);
+        setTimeout(() => window.close(), 150);
+      } else {
+        window.close();
+      }
+      return;
+    }
+
+    // Standard OAuth: code in query
+    const code = query.get('code');
+    const state = query.get('state');
+    const error = query.get('error');
+    const errorReason = query.get('error_reason') ?? undefined;
+    const errorDescription = query.get('error_description') ?? undefined;
 
     const payload =
       error != null
@@ -21,7 +64,6 @@ export function MetaOAuthCallbackPage() {
 
     if (window.opener) {
       window.opener.postMessage(payload, window.location.origin);
-      // Beri waktu agar parent sempat menerima postMessage sebelum popup ditutup
       setTimeout(() => window.close(), 150);
     } else {
       window.close();

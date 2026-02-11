@@ -41,8 +41,9 @@ function LivechatAvatar({
   displayName: string;
 }) {
   const isEmail = conv.source === 'email';
+  const isInstagram = conv.source === 'instagram';
   const waConv = conv as WhatsAppConversation;
-  const channel = waConv.channel ?? 'whatsapp';
+  const channel = isInstagram ? 'instagram' : (waConv.channel ?? 'whatsapp');
 
   const { profileUrl } = useLivechatProfilePhoto(conv.id, {
     source: conv.source,
@@ -170,9 +171,10 @@ export function getConversationTicketId(conv: LiveChatConversation): string {
   if (conv.source === 'email') {
     return 'EMAIL-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
   }
-  const wa = conv as WhatsAppConversation;
-  const prefix = (wa.channel ?? 'whatsapp') === 'instagram' ? 'IG-' : 'WA-';
-  return prefix + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+  if (conv.source === 'instagram') {
+    return 'IG-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+  }
+  return 'WA-' + String(conv.id).replace(/-/g, '').slice(0, 8).toUpperCase();
 }
 
 export function ConversationList({
@@ -202,6 +204,11 @@ export function ConversationList({
         const display = (conv.email_connection_display ?? '').toLowerCase();
         const fromName = (conv.from_display_name ?? '').toLowerCase();
         return from.includes(q) || display.includes(q) || fromName.includes(q);
+      }
+      if (conv.source === 'instagram') {
+        const name = (conv.customer_name ?? '').toLowerCase();
+        const igId = (conv.customer_ig_id ?? '').toLowerCase();
+        return name.includes(q) || igId.includes(q);
       }
       const name = (conv.customer_name ?? '').toLowerCase();
       const waId = (conv.customer_wa_id ?? '').toLowerCase();
@@ -337,9 +344,9 @@ export function ConversationList({
         const unread = isEmail ? (emailUnreadByConversation[conv.id] ?? 0) : (unreadByConversation[conv.id] ?? 0);
         const displayName = isEmail
           ? (conv.from_display_name || emailToDisplayLabel(conv.from_email) || conv.from_email || conv.email_connection_display || 'Email')
-          : (conv.channel === 'instagram' && !conv.customer_name?.trim()
-            ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-            : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown'));
+          : conv.source === 'instagram'
+            ? (conv.customer_name || maskPhoneLast4(conv.customer_ig_id) || t('whatsappInbox.instagramContact', 'Kontak Instagram'))
+            : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
         return (
           <li
             key={conv.id}
@@ -389,11 +396,17 @@ export function ConversationList({
                 <span className="flex items-center gap-1.5 shrink-0 min-w-0" title="Email">
                   <ChannelIcon channel="email" className="w-4 h-4 text-blue-600" />
                 </span>
-              ) : (conv.whatsapp_account_display_name ?? conv.channel) ? (
-                <span className="text-xs text-gray-400 truncate max-w-[100px] shrink-0 min-w-0" title={conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
-                  {conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
-                </span>
-              ) : null}
+              ) : conv.source === 'instagram'
+                ? (conv.instagram_account_display_name ? (
+                    <span className="text-xs text-gray-400 truncate max-w-[100px] shrink-0 min-w-0" title={conv.instagram_account_display_name}>
+                      {conv.instagram_account_display_name}
+                    </span>
+                  ) : null)
+                : (conv.whatsapp_account_display_name ?? conv.channel) ? (
+                    <span className="text-xs text-gray-400 truncate max-w-[100px] shrink-0 min-w-0" title={conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : undefined)}>
+                      {conv.whatsapp_account_display_name ?? (conv.channel === 'instagram' ? 'Instagram' : '')}
+                    </span>
+                  ) : null}
             </div>
               </div>
             </div>

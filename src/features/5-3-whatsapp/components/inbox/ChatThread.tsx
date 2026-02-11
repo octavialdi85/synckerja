@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppMessages } from '../../hooks/useWhatsAppMessages';
+import { useInstagramMessages } from '../../hooks/useInstagramMessages';
 import { useResolveWhatsAppMedia } from '../../hooks/useResolveWhatsAppMedia';
 import { useSendWhatsAppMessage } from '../../hooks/useSendWhatsAppMessage';
 import { useSendInstagramMessage } from '../../hooks/useSendInstagramMessage';
-import type { WhatsAppConversation, WhatsAppMessage } from '../../types';
+import type { LiveChatConversation, WhatsAppConversation, WhatsAppMessage, InstagramConversation, InstagramMessage } from '../../types';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
@@ -26,7 +27,7 @@ import { isResolvedStatus } from '../../constants/leadStatus';
 const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
 
 interface ChatThreadProps {
-  conversation: WhatsAppConversation | null;
+  conversation: LiveChatConversation | null;
   /** Phone number IDs of currently connected WhatsApp accounts. If conversation.phone_number_id is not in this list, show "disconnected account" banner. */
   connectedPhoneNumberIds?: string[];
   /** When true, organisation has no connected WhatsApp account – disable send and show notice. */
@@ -366,17 +367,37 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   }, []);
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
-  const { data: messages = [], isLoading } = useWhatsAppMessages(conversation?.id ?? null);
+  const isInstagram = (conversation as LiveChatConversation)?.source === 'instagram';
+  const waMessagesQuery = useWhatsAppMessages(!isInstagram ? conversation?.id ?? null : null);
+  const igMessagesQuery = useInstagramMessages(isInstagram ? conversation?.id ?? null : null);
+  const waMessages = waMessagesQuery.data ?? [];
+  const igMessages = igMessagesQuery.data ?? [];
+  const messages: Array<WhatsAppMessage | (InstagramMessage & { wa_message_id?: string | null; reply_to_wa_message_id?: string | null })> = isInstagram
+    ? (igMessages as InstagramMessage[]).map((m) => ({
+        ...m,
+        wa_message_id: m.platform_message_id,
+        reply_to_wa_message_id: m.reply_to_platform_message_id ?? undefined,
+      }))
+    : waMessages;
+  const isLoading = isInstagram ? igMessagesQuery.isLoading : waMessagesQuery.isLoading;
   const { send, isSending: isSendingWhatsApp } = useSendWhatsAppMessage();
   const { send: sendInstagram, isSending: isSendingInstagram } = useSendInstagramMessage();
-  const { resolve: resolveMedia, isResolving: isResolvingMedia, resolvingMessageId } = useResolveWhatsAppMedia(conversation?.id ?? null);
+  const { resolve: resolveMedia, isResolving: isResolvingMedia, resolvingMessageId } = useResolveWhatsAppMedia(!isInstagram ? conversation?.id ?? null : null);
 
-  // Status from list can be stale; use dedicated query so Resolve blocks send for both WhatsApp and Instagram
   const hasConversationId = !!conversation?.id;
   const { data: conversationStatusId } = useQuery({
-    queryKey: ['whatsapp-conversation-status', conversation?.id],
+    queryKey: isInstagram ? ['instagram-conversation-status', conversation?.id] : ['whatsapp-conversation-status', conversation?.id],
     queryFn: async () => {
       if (!conversation?.id) return null;
+      if (isInstagram) {
+        const { data, error } = await supabase
+          .from('instagram_conversations')
+          .select('lead_status_id')
+          .eq('id', conversation.id)
+          .maybeSingle();
+        if (error) throw error;
+        return (data?.lead_status_id as string) ?? null;
+      }
       const { data, error } = await supabase
         .from('whatsapp_conversations')
         .select('lead_status_id')
@@ -408,14 +429,13 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const effectiveStatusName = statusNameFromQuery ?? conversation?.lead_status_name ?? null;
 
   const isResolved = isResolvedStatus(effectiveStatusName);
-  const isWhatsAppConversation = (conversation?.channel ?? '').toLowerCase() === 'whatsapp';
+  const isWhatsAppConversation = !isInstagram && (conversation?.channel ?? '').toLowerCase() === 'whatsapp';
   const sendDisabledByNoAccount = Boolean(hasNoConnectedWhatsAppAccount && isWhatsAppConversation);
   const sendDisabled = isResolved || sendDisabledByNoAccount;
 
-  const isInstagramConversation =
-    (conversation?.channel ?? '').toLowerCase() === 'instagram' ||
-    isLikelyInstagramId(conversation?.customer_wa_id);
+  const isInstagramConversation = isInstagram;
   const isSending = isSendingWhatsApp || isSendingInstagram;
+  const customerId = isInstagram ? (conversation as InstagramConversation)?.customer_ig_id : (conversation as WhatsAppConversation)?.customer_wa_id;
 
   const optimisticEntry = optimisticMessage || optimisticMedia;
 
@@ -561,7 +581,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       replyToMessageType?: string | null,
       replyToSender?: string | null
     ) => {
-      if (!conversation?.customer_wa_id) {
+      if (!customerId) {
         toast.error('Penerima tidak tersedia.');
         return;
       }
@@ -569,7 +589,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         toast.error(t('whatsappInbox.instagramMediaNotSupported', 'Pengiriman media ke Instagram belum tersedia. Kirim pesan teks saja.'));
         return;
       }
-      if (!conversation.customer_wa_id.replace(/\D/g, '')) {
+      if (!customerId.replace(/\D/g, '')) {
         toast.error('Nomor WhatsApp penerima tidak tersedia.');
         return;
       }
@@ -595,7 +615,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         const publicUrl = urlData.publicUrl;
         setOptimisticMedia((prev) => (prev ? { ...prev, media_url: publicUrl } : null));
         await send({
-          to: conversation.customer_wa_id,
+          to: customerId,
           text: '',
           conversation_id: conversation.id,
           media_type: mediaType,
@@ -615,7 +635,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       }
       // Optimistic media dihapus saat pesan asli ada di list (useEffect hasMatchingRealMessage)
     },
-    [conversation, send, isInstagramConversation, t]
+    [conversation, customerId, send, isInstagramConversation, t]
   );
 
   /** Blokir pesan yang meminta kontak. Default ON; set VITE_WHATSAPP_BLOCK_CONTACT_REQUESTS=false untuk nonaktifkan. */
@@ -643,9 +663,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
 
     const replySender =
       replyTo?.direction === 'inbound'
-        ? (conversation?.channel === 'instagram' && !conversation?.customer_name?.trim()
+        ? (isInstagramConversation && !conversation?.customer_name?.trim()
           ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-          : (conversation?.customer_name || maskPhoneLast4(conversation?.customer_wa_id) || ''))
+          : (conversation?.customer_name || (customerId ? maskPhoneLast4(customerId) : '') || ''))
         : replyTo?.direction === 'outbound'
           ? t('whatsappInbox.you', 'You')
           : '';
@@ -678,7 +698,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     try {
       if (isInstagramConversation) {
         const sendPromise = sendInstagram({
-          to: conversation.customer_wa_id,
+          to: customerId!,
           text: trimmed,
           conversation_id: conversation.id,
           reply_to_wa_message_id: replyWaId ?? undefined,
@@ -689,7 +709,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         await Promise.race([sendPromise, timeoutPromise]);
       } else {
         const sendPromise = send({
-          to: conversation.customer_wa_id,
+          to: customerId!,
           text: trimmed,
           conversation_id: conversation.id,
           reply_to_wa_message_id: replyWaId ?? undefined,
@@ -745,12 +765,12 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 min-h-[60px] border-b border-gray-200 bg-[#f0f2f5]">
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-gray-900 truncate">
-            {conversation.channel === 'instagram' && !conversation.customer_name?.trim()
+            {isInstagramConversation && !conversation.customer_name?.trim()
               ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-              : (conversation.customer_name || maskPhoneLast4(conversation.customer_wa_id) || 'Unknown')}
+              : (conversation.customer_name || (customerId ? maskPhoneLast4(customerId) : '') || 'Unknown')}
           </h3>
-          {conversation.customer_name && conversation.channel !== 'instagram' && (
-            <p className="text-xs text-gray-500 truncate">{maskPhoneLast4(conversation.customer_wa_id)}</p>
+          {conversation.customer_name && !isInstagramConversation && customerId && (
+            <p className="text-xs text-gray-500 truncate">{maskPhoneLast4(customerId)}</p>
           )}
         </div>
         <Button
@@ -832,14 +852,20 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             const handleDeleteMsg = async () => {
               const confirmed = window.confirm(t('whatsappInbox.confirmDelete', 'Are you sure you want to delete this message?'));
               if (!confirmed) return;
-              const { error } = await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+              const table = isInstagramConversation ? 'instagram_messages' : 'whatsapp_messages';
+              const { error } = await supabase.from(table).delete().eq('id', msg.id);
               if (error) {
                 toast.error(t('whatsappInbox.deleteFailed', 'Failed to delete message.'));
                 return;
               }
               if (conversation?.id) {
-                queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversation.id] });
-                queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+                if (isInstagramConversation) {
+                  queryClient.invalidateQueries({ queryKey: ['instagram-messages', conversation.id] });
+                  queryClient.invalidateQueries({ queryKey: ['instagram-conversations'] });
+                } else {
+                  queryClient.invalidateQueries({ queryKey: ['whatsapp-messages', conversation.id] });
+                  queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+                }
               }
               toast.success(t('whatsappInbox.messageDeleted', 'Message deleted.'));
             };
@@ -1147,9 +1173,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-[#128C7E]">
                 {replyTo.direction === 'inbound'
-                  ? (conversation?.channel === 'instagram' && !conversation?.customer_name?.trim()
+                  ? (isInstagramConversation && !conversation?.customer_name?.trim()
                     ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-                    : (conversation?.customer_name ?? maskPhoneLast4(conversation?.customer_wa_id) ?? 'Contact'))
+                    : (conversation?.customer_name ?? (customerId ? maskPhoneLast4(customerId) : null) ?? 'Contact'))
                   : t('whatsappInbox.you', 'You')}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 text-sm text-gray-700 min-w-0">

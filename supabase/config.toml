@@ -7,5 +7,7 @@
 resolve-whatsapp-media.verify_jwt = false
 # whatsapp-webhook: Meta (WhatsApp/Instagram) memanggil GET/POST tanpa JWT. Verifikasi via hub.verify_token.
 whatsapp-webhook.verify_jwt = false
+# instagram-webhook: Meta memanggil GET/POST tanpa JWT. Verifikasi via hub.verify_token.
+instagram-webhook.verify_jwt = false
 # email-inbound: Resend memanggil POST tanpa JWT. Verifikasi via svix-signature (RESEND_WEBHOOK_SECRET).
 email-inbound.verify_jwt = false

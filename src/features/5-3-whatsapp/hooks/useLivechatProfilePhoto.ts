@@ -10,7 +10,7 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
  */
 export function useLivechatProfilePhoto(
   conversationId: string | null | undefined,
-  options: { source?: 'whatsapp' | 'email'; channel?: string } = {}
+  options: { source?: 'whatsapp' | 'email' | 'instagram'; channel?: string } = {}
 ) {
   const { source = 'whatsapp', channel } = options;
   const isWhatsApp = source === 'whatsapp' && channel !== 'instagram';

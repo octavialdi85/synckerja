@@ -219,6 +219,28 @@ export function useWhatsAppConfig() {
     },
   });
 
+  /** Ensure org has instagram_verify_token (ig_xxx) for Instagram webhook. Creates token if missing. */
+  const ensureInstagramVerifyTokenMutation = useMutation({
+    mutationFn: async (): Promise<string> => {
+      if (!organizationId) throw new Error('No organization selected');
+      const igToken = `ig_${organizationId.replace(/-/g, '').slice(0, 8)}_${Math.random().toString(36).slice(2, 14)}`;
+      const { data, error } = await supabase
+        .from('organization_meta_config')
+        .update({
+          instagram_verify_token: igToken,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('organization_id', organizationId)
+        .select('instagram_verify_token')
+        .maybeSingle();
+      if (error) throw error;
+      return (data as { instagram_verify_token?: string } | null)?.instagram_verify_token ?? igToken;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config', organizationId] });
+    },
+  });
+
   /** Ensure org has meta_config row and verify_token on first WhatsApp account. For multi-account connect page. */
   const ensureOrgMetaConfigMutation = useMutation({
     mutationFn: async (payload: { verify_token?: string | null; meta_business_manager_id?: string | null; meta_access_token?: string | null }) => {
@@ -293,5 +315,6 @@ export function useWhatsAppConfig() {
     updateInstagram: updateInstagramMutation.mutateAsync,
     isUpdatingInstagram: updateInstagramMutation.isPending,
     ensureOrgMetaConfig: ensureOrgMetaConfigMutation.mutateAsync,
+    ensureInstagramVerifyToken: ensureInstagramVerifyTokenMutation.mutateAsync,
   };
 }
