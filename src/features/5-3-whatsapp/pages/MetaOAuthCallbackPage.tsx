@@ -39,13 +39,14 @@ export function MetaOAuthCallbackPage() {
             type: 'meta-oauth' as const,
             long_lived_token: hashParams.long_lived_token || hashParams.access_token || '',
             access_token: hashParams.access_token || '',
-            state: query.get('state') ?? '',
+            state: hashParams.state ?? query.get('state') ?? '',
           };
       if (window.opener) {
         window.opener.postMessage(payload, window.location.origin);
         setTimeout(() => window.close(), 150);
       } else {
-        window.close();
+        // Redirect opened in main tab: send user back to Connect Instagram so session is preserved
+        window.location.replace(`${window.location.origin}/operations/instagram-connect`);
       }
       return;
     }
@@ -68,13 +69,15 @@ export function MetaOAuthCallbackPage() {
       window.opener.postMessage(payload, window.location.origin);
       setTimeout(() => window.close(), 150);
     } else {
-      window.close();
+      // Redirect opened in main tab: send user back to Connect Instagram so they stay in app
+      window.location.replace(`${window.location.origin}/operations/instagram-connect`);
     }
   }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <p className="text-sm text-gray-600">Closing window…</p>
+      <p className="text-xs text-gray-500 mt-2">If this does not close, you will be redirected back to the app.</p>
     </div>
   );
 }

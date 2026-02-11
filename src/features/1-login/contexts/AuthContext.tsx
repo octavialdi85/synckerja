@@ -52,11 +52,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return;
         }
 
+        // When Supabase emits SIGNED_OUT during Meta OAuth popup (e.g. token refresh failed in background), restore session
+        if (event === 'SIGNED_OUT') {
+          const popupOpenRaw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('metaOAuthPopupOpen') : null;
+          const savedRaw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('metaOAuthPopupSession') : null;
+          const popupOpenAt = popupOpenRaw ? parseInt(popupOpenRaw, 10) : 0;
+          const isRecent = Number.isFinite(popupOpenAt) && (Date.now() - popupOpenAt < 120000);
+          if (isRecent && savedRaw) {
+            try {
+              const saved = JSON.parse(savedRaw) as { access_token?: string; refresh_token?: string };
+              if (saved?.access_token && saved?.refresh_token) {
+                await supabase.auth.setSession({
+                  access_token: saved.access_token,
+                  refresh_token: saved.refresh_token,
+                });
+                if (mounted) {
+                  if (import.meta.env.DEV) {
+                    console.log('AuthContext: Restored session after SIGNED_OUT during Meta OAuth popup');
+                  }
+                  return; // don't clear keys here; postMessage handler clears them when OAuth completes
+                }
+              }
+            } catch (_) {}
+          }
+        }
+
         // Debounce auth logging to prevent spam
         const eventKey = `${event}-${session?.user?.id || 'null'}`;
         if (lastAuthEventRef.current !== eventKey) {
           lastAuthEventRef.current = eventKey;
-          
           // Clear existing timeout
           if (authDebounceRef.current) {
             clearTimeout(authDebounceRef.current);
@@ -88,13 +112,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // This catches errors from Supabase's internal token refresh mechanism
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const error = event.reason;
-      // Check if this is a Supabase auth error related to refresh tokens
       const isAuthError = error?.message?.includes('Invalid Refresh Token') ||
                          error?.message?.includes('Refresh Token Not Found') ||
                          (error?.name === 'AuthApiError' && 
                           (error?.message?.includes('refresh_token') || 
                            error?.status === 400));
-      
       if (isAuthError) {
         console.warn('AuthContext: Unhandled refresh token error detected, cleaning up');
         event.preventDefault(); // Prevent console error spam
@@ -111,7 +133,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const handleSessionExpired = (event: Event) => {
       const customEvent = event as CustomEvent;
       const { code, status } = customEvent.detail || {};
-      
       if (status === 403 && code === 'session_not_found') {
         console.warn('⚠️ AuthContext: Session expired (403), forcing logout');
         if (mounted) {
@@ -125,7 +146,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const handleAuthTimeout = (event: Event) => {
       const customEvent = event as CustomEvent;
       const { status } = customEvent.detail || {};
-      
       // Don't redirect if already on login page (avoid overwriting URL with ?reason=session_expired)
       const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
       if (pathname === '/login' || pathname === '/login/') {

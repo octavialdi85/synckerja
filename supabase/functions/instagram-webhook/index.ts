@@ -143,8 +143,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
+    const bodyObject = body?.object ?? "(missing)";
+    console.log("[instagram-webhook] POST body object:", bodyObject, "entries:", Array.isArray(body?.entry) ? body.entry.length : 0);
     if (body?.object !== "instagram") {
-      console.log("[instagram-webhook] POST: object is not instagram, ignoring");
+      console.log("[instagram-webhook] POST: object is not instagram, ignoring. Set webhook under Meta Developer → App → Instagram → Configuration → Webhook and subscribe to 'messages'.");
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

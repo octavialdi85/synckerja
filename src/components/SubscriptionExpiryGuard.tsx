@@ -30,6 +30,9 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
   // Hook will handle conditional setup internally based on organizationId
   useSubscriptionExpiryRealtime();
 
+  // Routes that must render immediately without waiting for auth/subscription (e.g. OAuth popup callback)
+  const IMMEDIATE_ROUTES = ['/auth/meta/callback'];
+
   // Routes that should be accessible even when expired (to allow renewal)
   const ALLOWED_EXPIRED_ROUTES = [
     '/login',
@@ -99,6 +102,11 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     expiryStatus.subscriptionEndDate,
     location.pathname
   ]);
+
+  // OAuth callback etc.: render immediately so popup can postMessage and close without waiting for auth/subscription
+  if (IMMEDIATE_ROUTES.some(route => location.pathname === route || location.pathname.startsWith(route + '/'))) {
+    return <>{children}</>;
+  }
 
   // Unified loading state - combine all loading checks into one simple message
   const isAnyLoading = authLoading || isLoading || isChecking;

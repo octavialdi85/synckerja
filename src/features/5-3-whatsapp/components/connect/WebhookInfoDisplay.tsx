@@ -39,6 +39,10 @@ export function WebhookInfoDisplay({ embedded, variant = 'whatsapp' }: WebhookIn
   useEffect(() => {
     if (!isInstagram || hasEnsuredIgToken.current || verifyToken) return;
     if (!config || (config.instagram_verify_token ?? '').trim() !== '') return;
+    // Only ensure when a meta_config row exists (has meta_access_token or id); otherwise upsert/update can 406
+    if (!('meta_access_token' in config) && !('id' in config)) {
+      return;
+    }
     hasEnsuredIgToken.current = true;
     ensureInstagramVerifyToken().catch(() => {
       hasEnsuredIgToken.current = false;
@@ -53,12 +57,24 @@ export function WebhookInfoDisplay({ embedded, variant = 'whatsapp' }: WebhookIn
         <h3 className="text-sm font-semibold text-slate-800">{t('whatsappConnect.webhookConfigTitle', 'Webhook configuration')}</h3>
       </div>
       <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 mb-4 text-sm text-amber-900">
-        <p className="font-medium mb-1">{t('whatsappConnect.webhookInboundToSupabaseTitle', 'Agar pesan masuk masuk ke Live Chat (tabel Supabase)')}</p>
-        <p className="text-amber-800 text-xs">
-          {isInstagram
-            ? t('instagramConnect.webhookInboundBody', 'Di Meta Developer → Instagram → Configuration → Webhook: set Callback URL ke URL di bawah ini, lalu Verify and Save dan subscribe "messages". Verify Token bisa pakai nilai dari akun Instagram yang sudah di-connect di bawah.')
-            : t('whatsappConnect.webhookInboundToSupabaseBody', 'Di Meta Developer (App yang punya nomor ini) → WhatsApp → Configuration → Webhook: set Callback URL ke URL di bawah ini, lalu Verify and Save dan subscribe "messages". Jika saat ini ter-set ke Meta Business Suite, pesan akan masuk ke Inbox Meta saja, bukan ke aplikasi ini.')}
-        </p>
+        <p className="font-medium mb-1">{t('whatsappConnect.webhookInboundToSupabaseTitle', 'Agar pesan masuk ke Live Chat (tabel Supabase)')}</p>
+        {isInstagram ? (
+          <>
+            <p className="text-amber-800 text-xs mb-2">
+              {t('instagramConnect.webhookInboundBody', 'Di Meta Developer → App (Vialdi ID) → Instagram → Configuration → Webhook: isi Callback URL dan Verify Token di bawah, lalu Verify and Save. Lalu subscribe field "messages". Tanpa ini, DM ke akun Instagram tidak akan masuk ke aplikasi dan tidak ada log di instagram-webhook.')}
+            </p>
+            <ul className="text-amber-800 text-xs list-disc list-inside space-y-0.5">
+              <li>{t('instagramConnect.webhookStep1', 'Callback URL = URL di bawah (copy-paste)')}</li>
+              <li>{t('instagramConnect.webhookStep2', 'Verify Token = token di bawah (harus sama persis)')}</li>
+              <li>{t('instagramConnect.webhookStep3', 'Klik Verify and Save')}</li>
+              <li>{t('instagramConnect.webhookStep4', 'Subscribe ke "messages"')}</li>
+            </ul>
+          </>
+        ) : (
+          <p className="text-amber-800 text-xs">
+            {t('whatsappConnect.webhookInboundToSupabaseBody', 'Di Meta Developer (App yang punya nomor ini) → WhatsApp → Configuration → Webhook: set Callback URL ke URL di bawah ini, lalu Verify and Save dan subscribe "messages". Jika saat ini ter-set ke Meta Business Suite, pesan akan masuk ke Inbox Meta saja, bukan ke aplikasi ini.')}
+          </p>
+        )}
       </div>
       <div className="space-y-5">
         {/* Webhook Callback URL */}

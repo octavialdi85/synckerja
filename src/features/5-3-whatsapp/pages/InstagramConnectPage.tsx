@@ -52,12 +52,12 @@ export function InstagramConnectPage() {
   }, [metaInstagramAppId, redirectUri, t]);
 
   const openOAuthPopup = useCallback(
-    (useBusinessLogin: boolean) => {
+    async (useBusinessLogin: boolean, facebookOnly?: boolean) => {
       if (!hasOAuth || !redirectUri) {
         toast.error(t('instagramConnect.oauthNotConfigured', 'VITE_META_APP_ID not set.'));
         return;
       }
-      if (useBusinessLogin && !metaOAuthConfigId) {
+      if (useBusinessLogin && !facebookOnly && !metaOAuthConfigId) {
         toast.error(t('instagramConnect.configIdNotSet', 'Set VITE_META_OAUTH_CONFIG_ID to your Business Login Configuration ID (e.g. from Meta Developer → Business login → Configurations).'));
         return;
       }
@@ -70,7 +70,10 @@ export function InstagramConnectPage() {
         scope: META_OAUTH_SCOPE,
         state,
       });
-      if (useBusinessLogin) {
+      if (facebookOnly) {
+        params.set('display', 'page');
+        params.set('response_type', 'token');
+      } else if (useBusinessLogin) {
         params.set('display', 'page');
         params.set('extras', META_OAUTH_EXTRAS);
         params.set('response_type', 'token');
@@ -79,13 +82,32 @@ export function InstagramConnectPage() {
         params.set('response_type', 'code');
       }
       const url = `https://www.facebook.com/${META_OAUTH_VERSION}/dialog/oauth?${params.toString()}`;
+      // Mark Meta OAuth popup open so AuthContext can avoid signing out on spurious SIGNED_OUT (e.g. refresh failure in background)
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          sessionStorage.setItem('metaOAuthPopupOpen', Date.now().toString());
+          sessionStorage.setItem('metaOAuthPopupSession', JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          }));
+        }
+      } catch (_) {}
       const w = window.open(url, 'meta-oauth', 'width=600,height=700,scrollbars=yes');
-      if (!w) toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
+      if (!w) {
+        sessionStorage.removeItem('metaOAuthPopupOpen');
+        sessionStorage.removeItem('metaOAuthPopupSession');
+        toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
+      }
     },
     [hasOAuth, metaAppId, metaOAuthConfigId, redirectUri, t]
   );
 
   useEffect(() => {
+    const clearMetaOAuthPopupFlag = () => {
+      sessionStorage.removeItem('metaOAuthPopupOpen');
+      sessionStorage.removeItem('metaOAuthPopupSession');
+    };
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.data?.type !== 'meta-oauth') return;
       const data = event.data as {
@@ -98,6 +120,7 @@ export function InstagramConnectPage() {
         error_description?: string;
       };
       if (data.error) {
+        clearMetaOAuthPopupFlag();
         setOauthLoading(false);
         toast.error(data.error_description || data.error || t('instagramConnect.oauthDenied', 'Login cancelled or denied.'));
         return;
@@ -106,16 +129,21 @@ export function InstagramConnectPage() {
       const code = data.code;
       if (token) {
         if (data.state !== oauthStateRef.current) {
+          clearMetaOAuthPopupFlag();
           setOauthLoading(false);
           return;
         }
         setOauthLoading(true);
         (async () => {
           try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
+            // Restore may run after SIGNED_OUT; retry getSession so we don't fail on race
+            let session: { access_token?: string } | null = (await supabase.auth.getSession()).data.session;
             if (!session?.access_token) {
+              await new Promise((r) => setTimeout(r, 600));
+              session = (await supabase.auth.getSession()).data.session;
+            }
+            if (!session?.access_token) {
+              clearMetaOAuthPopupFlag();
               toast.error(t('instagramConnect.notAuthenticated', 'Please sign in again.'));
               setOauthLoading(false);
               return;
@@ -143,6 +171,7 @@ export function InstagramConnectPage() {
           } catch {
             toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
           } finally {
+            clearMetaOAuthPopupFlag();
             setOauthLoading(false);
           }
         })();
@@ -151,6 +180,7 @@ export function InstagramConnectPage() {
       if (code && data.state === oauthStateRef.current) {
         if (isInstagramDirectTestRef.current) {
           isInstagramDirectTestRef.current = false;
+          clearMetaOAuthPopupFlag();
           setOauthLoading(false);
           toast.success(t('instagramConnect.redirectTestOk', 'Redirect test OK. Instagram accepted the redirect URI. Use "Connect with Facebook" to get a token.'));
           return;
@@ -158,10 +188,13 @@ export function InstagramConnectPage() {
         setOauthLoading(true);
         (async () => {
           try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
+            let session = (await supabase.auth.getSession()).data.session;
             if (!session?.access_token) {
+              await new Promise((r) => setTimeout(r, 600));
+              session = (await supabase.auth.getSession()).data.session;
+            }
+            if (!session?.access_token) {
+              clearMetaOAuthPopupFlag();
               toast.error(t('instagramConnect.notAuthenticated', 'Please sign in again.'));
               setOauthLoading(false);
               return;
@@ -174,6 +207,7 @@ export function InstagramConnectPage() {
             });
             const resData = await res.json().catch(() => ({}));
             if (!res.ok) {
+              clearMetaOAuthPopupFlag();
               toast.error(resData?.error || t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
               setOauthLoading(false);
               return;
@@ -190,6 +224,7 @@ export function InstagramConnectPage() {
           } catch {
             toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
           } finally {
+            clearMetaOAuthPopupFlag();
             setOauthLoading(false);
           }
         })();
@@ -257,15 +292,29 @@ export function InstagramConnectPage() {
                                     type="button"
                                     onClick={() => {
                                       setOauthLoading(true);
-                                      openOAuthPopup(true);
+                                      openOAuthPopup(true, true);
                                     }}
                                     disabled={oauthLoading}
                                     className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
                                   >
                                     {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
+                                    {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
+                                  </Button>
+                                  <p className="text-xs text-gray-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setOauthLoading(true);
+                                      openOAuthPopup(true);
+                                    }}
+                                    disabled={oauthLoading}
+                                    className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
+                                  >
+                                    {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
                                     {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
                                   </Button>
-                                  <p className="text-xs text-gray-500">Business Login (recommended)</p>
+                                  <p className="text-xs text-gray-500">Business Login (may open Instagram)</p>
                                   {redirectUri && (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2">
                                       <p className="font-medium mb-1">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
@@ -306,19 +355,34 @@ export function InstagramConnectPage() {
                             </div>
                           ) : (
                             hasOAuth && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                  setOauthLoading(true);
-                                  openOAuthPopup(true);
-                                }}
-                                disabled={oauthLoading}
-                                className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
-                              >
-                                {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
-                                {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
-                              </Button>
+                              <div className="space-y-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    setOauthLoading(true);
+                                    openOAuthPopup(true, true);
+                                  }}
+                                  disabled={oauthLoading}
+                                  className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
+                                >
+                                  {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
+                                  {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
+                                </Button>
+                                <p className="text-xs text-slate-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setOauthLoading(true);
+                                    openOAuthPopup(true);
+                                  }}
+                                  disabled={oauthLoading}
+                                  className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
+                                >
+                                  {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
+                                  {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
+                                </Button>
+                              </div>
                             )
                           )}
                           <div className="border-t border-slate-200 pt-4 mt-4">
