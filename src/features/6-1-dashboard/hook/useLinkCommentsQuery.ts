@@ -8,9 +8,11 @@ export interface LinkComment {
   social_media_plan_id: string;
   link_url: string;
   comment_text: string | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
+  video_timestamp_seconds?: number | null;
+  annotation_data?: Record<string, unknown> | null;
   creator?: {
     full_name: string;
     email: string;
@@ -46,7 +48,9 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
           comment_text,
           created_by,
           created_at,
-          updated_at
+          updated_at,
+          video_timestamp_seconds,
+          annotation_data
         `)
         .eq('social_media_plan_id', socialMediaPlanId)
         .eq('link_url', effectiveLinkUrl)
@@ -57,11 +61,15 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
         throw error;
       }
 
-      // Reduced logging for better performance
-
-      // Fetch creator information separately to avoid join issues
+      // Public comments have created_by null -> show as Anonim; internal fetch profile
       const commentsWithCreators = await Promise.all(
         (data || []).map(async (comment) => {
+          if (comment.created_by == null) {
+            return {
+              ...comment,
+              creator: { full_name: 'Anonim', email: '' }
+            } as LinkComment;
+          }
           try {
             const { data: profileData } = await supabase
               .from('profiles')
@@ -74,7 +82,6 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
               creator: profileData || undefined
             } as LinkComment;
           } catch (err) {
-            // Silent fail for creator info
             return {
               ...comment,
               creator: undefined

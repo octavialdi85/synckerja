@@ -39,6 +39,7 @@ import ContentCalendarPage from "./features/6-1-ContentCalendar/ContentCalendarP
 import ProductKnowledgePage from "./features/6-1-ProductKnowledge/ProductKnowledgePage";
 import ScriptGeneratorPage from "./features/6-1-ScriptGenerator/ScriptGeneratorPage";
 import SettingsPage from "./features/6-1-Settings/SettingsPage";
+import PublicContentReviewPage from "./features/6-1-dashboard/pages/PublicContentReviewPage";
 import { KOLDashboardPage } from "./features/6_4_1_dashboard";
 import UserSettingsPage from "./features/Settings/SettingsPage";
 import ManagementTabPageDesktop from "./features/10-management/pages/ManagementTabPage";
@@ -335,6 +336,12 @@ const App = () => (
               <Route path="/apply/preview/:token" element={
                 <PublicRoute>
                   <JobPreview />
+                </PublicRoute>
+              } />
+              {/* Public content review (QC) - no login */}
+              <Route path="/review/:token" element={
+                <PublicRoute>
+                  <PublicContentReviewPage />
                 </PublicRoute>
               } />
               {/* Public Candidate Profile Route */}

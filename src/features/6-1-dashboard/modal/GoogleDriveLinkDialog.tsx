@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
-import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock } from 'lucide-react';
+import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2 } from 'lucide-react';
 import { OptimizedCommentPanel } from './OptimizedCommentPanel';
 import GoogleDriveFolderCarousel from './GoogleDriveFolderCarousel';
 import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthButton';
@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { usePublicReviewToken } from '../hook/usePublicReviewToken';
 
 // Helper function to get embed URL (defined before component)
 const getEmbedUrl = (url: string) => {
@@ -167,6 +168,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   const [canShowApprovalButtons, setCanShowApprovalButtons] = useState(false);
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
+  const { getOrCreate, isPending: isPublicLinkPending } = usePublicReviewToken();
   
   // Check approval access for prod_approved column based on configuration
   const checkApprovalAccess = async () => {
@@ -657,6 +659,22 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     });
   };
 
+  const handleSharePublicLink = async () => {
+    const linkToUse = currentLink?.trim() || googleDriveLink?.trim();
+    if (!linkToUse) {
+      toast.error('Tambahkan Google Drive link terlebih dahulu');
+      return;
+    }
+    try {
+      const { publicReviewUrl } = await getOrCreate({ socialMediaPlanId, linkUrl: linkToUse });
+      await navigator.clipboard.writeText(publicReviewUrl);
+      toast.success('Link review publik disalin ke clipboard');
+    } catch (e) {
+      devLog.debug('Share public link failed:', e);
+      toast.error('Gagal membuat atau menyalin link review publik');
+    }
+  };
+
   return <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-[98vw] w-[98vw] max-h-[95vh] h-[95vh] overflow-hidden flex flex-col bg-white border-0 shadow-2xl rounded-2xl">
         <DialogHeader>
@@ -779,6 +797,16 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
             {/* Right side - Action buttons */}
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSharePublicLink}
+                disabled={!(currentLink?.trim() || googleDriveLink?.trim()) || isPublicLinkPending}
+                className="h-9 px-4 border-gray-200 hover:bg-gray-50 rounded-lg"
+                title="Buat / Bagikan link publik untuk review tanpa login"
+              >
+                <Share2 className="h-4 w-4 mr-1" />
+                {isPublicLinkPending ? '...' : 'Bagikan link review'}
+              </Button>
               <Button variant="outline" onClick={handleClose} className="h-9 px-4 border-gray-200 hover:bg-gray-50 rounded-lg">
                 Close
               </Button>

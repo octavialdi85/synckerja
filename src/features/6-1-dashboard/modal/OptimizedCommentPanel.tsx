@@ -115,32 +115,45 @@ const CommentItem = React.memo<{
   linkUrl
 }) => {
   const isEditing = editingCommentId === comment.id;
+  const isPublicComment = comment.created_by == null;
+  const displayName = comment.creator?.full_name || 'Anonim';
+  const formatTimestamp = (seconds: number | null | undefined) => {
+    if (seconds == null) return null;
+    const m = Math.floor(Number(seconds) / 60);
+    const s = Math.floor(Number(seconds) % 60);
+    return `Di ${m}:${s.toString().padStart(2, '0')}`;
+  };
   return <div className="border rounded-lg p-4 bg-white shadow-sm">
       <div className="flex items-start gap-3 mb-2">
         <Avatar className="h-8 w-8">
           <AvatarFallback className="text-sm">
-            {comment.creator?.full_name?.[0] || 'U'}
+            {displayName[0] || 'A'}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-900 truncate">
-                {comment.creator?.full_name || 'Unknown User'}
+                {displayName}
               </span>
               <Badge variant="outline" className="text-xs px-2 py-1 h-5 text-blue-600 border-blue-200">
                 <MessageSquare className="h-3 w-3 mr-1" />
                 Comment
               </Badge>
+              {comment.video_timestamp_seconds != null && (
+                <span className="text-xs text-blue-600">{formatTimestamp(comment.video_timestamp_seconds)}</span>
+              )}
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => onEditComment(comment)} disabled={isEditing}>
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => onDeleteComment(comment.id)} disabled={isDeletingComment}>
-                {isDeletingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
-            </div>
+            {!isPublicComment && (
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => onEditComment(comment)} disabled={isEditing}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => onDeleteComment(comment.id)} disabled={isDeletingComment}>
+                  {isDeletingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">
@@ -170,6 +183,9 @@ const CommentItem = React.memo<{
             </Button>
           </div>
         </div> : <div>
+          {comment.annotation_data != null && (
+            <p className="text-xs text-gray-500 mb-1">Anotasi pada frame</p>
+          )}
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
             {comment.comment_text || 'No comment text'}
           </p>
