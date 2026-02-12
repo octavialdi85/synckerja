@@ -5,6 +5,23 @@ import { ContentPlan } from '../types/social-media';
 import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
 
+/** Allowed columns for social_media_plans table (no link_url - that column does not exist). */
+const SOCIAL_MEDIA_PLANS_UPDATE_KEYS = new Set([
+  'organization_id', 'post_date', 'content_type_id', 'pic_id', 'service_id', 'sub_service_id',
+  'title', 'content_pillar_id', 'brief', 'status', 'revision_count', 'approved', 'completion_date',
+  'pic_production_id', 'pic_production_source', 'google_drive_link', 'production_status',
+  'production_revision_count', 'production_completion_date', 'production_approved', 'production_approved_date',
+  'post_link', 'post_link_created_by', 'done', 'actual_post_date', 'on_time_status', 'status_content',
+  'created_at', 'updated_at',
+]);
+
+/** Only send allowed columns; never send link_url (table has google_drive_link only). */
+function sanitizePlanPayload<T extends Record<string, unknown>>(payload: T): Partial<ContentPlan> {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([key]) => key !== 'link_url' && SOCIAL_MEDIA_PLANS_UPDATE_KEYS.has(key))
+  ) as Partial<ContentPlan>;
+}
+
 export const useOptimizedSocialMediaMutations = () => {
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
@@ -31,10 +48,17 @@ export const useOptimizedSocialMediaMutations = () => {
         }
       }
 
+      // Only send columns that exist on social_media_plans (use google_drive_link, never link_url)
+      const safeUpdates = sanitizePlanPayload(updates as Record<string, unknown>);
+      // Defensive: ensure link_url is never sent (column does not exist on social_media_plans)
+      if ('link_url' in safeUpdates) {
+        delete (safeUpdates as Record<string, unknown>).link_url;
+      }
+
       // Use select with all fields to ensure we get complete updated data
       const { data, error } = await (supabase as any)
         .from('social_media_plans')
-        .update(updates)
+        .update(safeUpdates)
         .eq('id', id)
         .select('*')
         .single();
@@ -123,9 +147,11 @@ export const useOptimizedSocialMediaMutations = () => {
         status_content: newPlan.status_content || ''
       };
       
-      // Remove any undefined values that might cause issues
-      const cleanPlanData = Object.fromEntries(
-        Object.entries(planData).filter(([_, value]) => value !== undefined)
+      // Remove any undefined values and link_url (social_media_plans uses google_drive_link only)
+      const cleanPlanData = sanitizePlanPayload(
+        Object.fromEntries(
+          Object.entries(planData).filter(([_, value]) => value !== undefined)
+        ) as Record<string, unknown>
       );
       
       console.log('Inserting content plan with data:', cleanPlanData);
@@ -198,8 +224,8 @@ export const useOptimizedSocialMediaMutations = () => {
   });
 
   return {
-    updateContentPlan: (id: string, updates: Partial<ContentPlan>) => 
-      updateContentPlanMutation.mutate({ id, updates }),
+    updateContentPlan: (id: string, updates: Partial<ContentPlan>) =>
+      updateContentPlanMutation.mutate({ id, updates: sanitizePlanPayload(updates as Record<string, unknown>) as Partial<ContentPlan> }),
     addContentPlan: (newPlan: Partial<ContentPlan>) => 
       addContentPlanMutation.mutate(newPlan),
     deleteContentPlan: (id: string) => 

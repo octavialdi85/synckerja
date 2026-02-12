@@ -5,10 +5,9 @@ import { toast } from 'sonner';
 import { LinkComment } from './useLinkCommentsQuery';
 import { devLog } from '@/config/logger';
 
-export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) => {
+export const useAddLinkComment = (socialMediaPlanId: string, _linkUrl?: string) => {
   const queryClient = useQueryClient();
-  const effectiveLinkUrl = linkUrl || 'default-link';
-  const queryKey = ['link-comments', socialMediaPlanId, effectiveLinkUrl];
+  const queryKey = ['link-comments', socialMediaPlanId];
 
   return useMutation({
     mutationFn: async ({
@@ -30,8 +29,6 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
 
       devLog.debug('💬 Adding comment:', {
         socialMediaPlanId,
-        linkUrl,
-        effectiveLinkUrl,
         commentTextLength: commentText.length
       });
 
@@ -76,7 +73,6 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
 
       const insertData = {
         social_media_plan_id: socialMediaPlanId,
-        link_url: linkUrl || 'default-link',
         comment_text: commentText.trim(),
         created_by: user.id
       };
@@ -163,9 +159,9 @@ export const useAddLinkComment = (socialMediaPlanId: string, linkUrl: string) =>
   });
 };
 
-export const useUpdateLinkComment = (socialMediaPlanId: string, linkUrl: string) => {
+export const useUpdateLinkComment = (socialMediaPlanId: string, _linkUrl?: string) => {
   const queryClient = useQueryClient();
-  const queryKey = ['link-comments', socialMediaPlanId, linkUrl];
+  const queryKey = ['link-comments', socialMediaPlanId];
 
   return useMutation({
     mutationFn: async ({
@@ -227,9 +223,9 @@ export const useUpdateLinkComment = (socialMediaPlanId: string, linkUrl: string)
   });
 };
 
-export const useDeleteLinkComment = (socialMediaPlanId: string, linkUrl: string) => {
+export const useDeleteLinkComment = (socialMediaPlanId: string, _linkUrl?: string) => {
   const queryClient = useQueryClient();
-  const queryKey = ['link-comments', socialMediaPlanId, linkUrl];
+  const queryKey = ['link-comments', socialMediaPlanId];
 
   return useMutation({
     mutationFn: async (commentId: string) => {

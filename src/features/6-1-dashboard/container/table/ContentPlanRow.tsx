@@ -1130,17 +1130,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           planId: plan.id,
           link: normalizedLink
         });
-        // Always call onFieldChange for google_drive_link - this will trigger auto-populate/clear logic in SocialMedia.tsx
-        // handleFieldChange in SocialMedia.tsx will handle clearing pic_production_id, production_completion_date, and production_status
-        // Use normalizedLink to ensure consistency (null instead of empty string)
+        // onFieldChange for google_drive_link: when value is set, parent sends ONE update with
+        // google_drive_link + production_status 'Need Review' + production_completion_date (so DB trigger allows it).
+        // When cleared, parent clears link and production_status in one update.
         onFieldChange(plan.id, 'google_drive_link', normalizedLink);
-        if (normalizedLink) {
-          // Set production status to Need Review when link is added (only if link is not empty)
-          onProductionStatusChange(plan.id, 'Need Review');
-        } else {
-          // Clear production status when link is removed or empty
-          // handleFieldChange in SocialMediaDashboardPage will handle resetting production_status to null
-          // This ensures production_status is not "Need Review" when google_drive_link is empty
+        if (!normalizedLink) {
           onProductionStatusChange(plan.id, null);
         }
     }} socialMediaPlanId={plan.id} planTitle={plan.title} contentTitle={plan.title} contentType={contentTypeName} postDate={plan.post_date}

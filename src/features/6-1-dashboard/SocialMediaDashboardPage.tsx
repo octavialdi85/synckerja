@@ -786,44 +786,43 @@ const SocialMediaContent = () => {
       }
 
       // Auto-assign PIC Production when Google Drive link is added
+      // IMPORTANT: Always send google_drive_link + production_status + production_completion_date in ONE update
+      // so the DB trigger (Need Review requires google_drive_link) sees the link and allows the update.
       if (field === 'google_drive_link' && value && value.length > 0) {
-        // Check if pic_production_id already exists from task_steps_assigned
         const plan = contentPlans.find(p => p.id === id);
-        
+        const completionDate = new Date().toISOString();
+        const linkWithNeedReview = {
+          google_drive_link: value,
+          production_status: 'Need Review' as const,
+          production_completion_date: completionDate,
+        };
+
         if (plan?.pic_production_source === 'task_steps_assigned') {
-          // Prioritas: task_steps_assigned > Google Drive Link
-          // Jika sudah ada assignment, jangan override dengan Google Drive Link
           devLog.debug('🔗 Google Drive link added, but PIC Production already set from task_steps_assigned:', {
             planId: id,
             link: value,
             currentPicProductionId: plan.pic_production_id
           });
-          
-          // Update google_drive_link saja, jangan ubah pic_production_id
-          updateContentPlan(id, { [field]: value });
+          updateContentPlan(id, { ...linkWithNeedReview });
           return;
         }
-        
-        // Jika belum ada assignment, baru auto-assign dari Google Drive Link
+
         const employeeId = currentEmployee?.id;
-        
+
         if (!employeeId) {
           devLog.debug('⚠️ Cannot auto-assign PIC Production: Employee ID not found');
-          // Still update google_drive_link, but don't set pic_production_id
-          updateContentPlan(id, { [field]: value });
+          updateContentPlan(id, { ...linkWithNeedReview });
           toast.warning('Google Drive link saved, but could not auto-assign PIC Production (employee not found)');
           return;
         }
-        
+
         devLog.debug('🔗 Google Drive link added, auto-assigning PIC Production:', {
           planId: id,
           link: value,
           employeeId: employeeId
         });
-        
-        // Update google_drive_link, pic_production_id, and pic_production_source
-        updateContentPlan(id, { 
-          [field]: value,
+        updateContentPlan(id, {
+          ...linkWithNeedReview,
           pic_production_id: employeeId,
           pic_production_source: 'google_drive_link'
         });

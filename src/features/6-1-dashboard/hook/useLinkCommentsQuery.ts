@@ -6,7 +6,6 @@ import { useMemo } from 'react';
 export interface LinkComment {
   id: string;
   social_media_plan_id: string;
-  link_url: string;
   comment_text: string | null;
   created_by: string | null;
   created_at: string;
@@ -19,22 +18,16 @@ export interface LinkComment {
   };
 }
 
-export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string) => {
-  // Memoize query key to prevent unnecessary re-renders
-  const effectiveLinkUrl = linkUrl || 'default-link';
+export const useLinkCommentsQuery = (socialMediaPlanId: string, _linkUrl?: string) => {
+  // Comments are per-plan; linkUrl kept for backward compatibility but not used (revisions keep comments)
   const queryKey = useMemo(() => 
-    ['link-comments', socialMediaPlanId, effectiveLinkUrl], 
-    [socialMediaPlanId, effectiveLinkUrl]
+    ['link-comments', socialMediaPlanId], 
+    [socialMediaPlanId]
   );
-
-  // Reduced logging for better performance
 
   return useQuery({
     queryKey,
     queryFn: async (): Promise<LinkComment[]> => {
-      // Use default link if linkUrl is empty
-      const effectiveLinkUrl = linkUrl || 'default-link';
-      
       if (!socialMediaPlanId) {
         return [];
       }
@@ -44,7 +37,6 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
         .select(`
           id,
           social_media_plan_id,
-          link_url,
           comment_text,
           created_by,
           created_at,
@@ -53,7 +45,6 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, linkUrl: string)
           annotation_data
         `)
         .eq('social_media_plan_id', socialMediaPlanId)
-        .eq('link_url', effectiveLinkUrl)
         .order('created_at', { ascending: true });
 
       if (error) {

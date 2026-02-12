@@ -5,7 +5,7 @@ import { useAddLinkComment, useUpdateLinkComment, useDeleteLinkComment } from '.
 
 export { type LinkComment } from './useLinkCommentsQuery';
 
-export const useLinkComments = (socialMediaPlanId: string, linkUrl: string) => {
+export const useLinkComments = (socialMediaPlanId: string, linkUrl?: string) => {
   const {
     data: comments = [],
     isLoading,
