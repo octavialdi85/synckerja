@@ -71,10 +71,12 @@ export const useAddLinkComment = (socialMediaPlanId: string, _linkUrl?: string) 
         throw new Error('User not authorized for this organization');
       }
 
+      const commenterDisplayName = (profileData.full_name || user.email || 'Team').trim();
       const insertData = {
         social_media_plan_id: socialMediaPlanId,
         comment_text: commentText.trim(),
-        created_by: user.id
+        created_by: user.id,
+        commenter_display_name: commenterDisplayName || null
       };
 
       const { data, error } = await supabase

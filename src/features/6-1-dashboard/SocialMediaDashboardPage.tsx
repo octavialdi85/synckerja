@@ -23,6 +23,8 @@ import { DashboardLoadingWrapper } from './container/DashboardLoadingWrapper';
 import BriefDialog from './modal/BriefDialog';
 import TitleDialog from './modal/TitleDialog';
 import EditTargetDialog from './modal/EditTargetDialog';
+import GoogleDriveLinkDialog from './modal/GoogleDriveLinkDialog';
+import type { ContentPlan } from './types/social-media';
 
 // Import optimized hooks
 import { useSocialMediaData, useSocialMediaMutations } from "./hook/useOptimizedSocialMediaState";
@@ -169,6 +171,35 @@ const SocialMediaContent = () => {
     title: null,
     approved: undefined
   });
+
+  // Notification bell: open preview modal for this plan id (instead of public page)
+  const [notificationPreviewPlanId, setNotificationPreviewPlanId] = useState<string | null>(null);
+
+  // Fetch single plan when opening preview from notification (plan may not be in current table filter)
+  const PLAN_SELECT = `
+    id, organization_id, post_date, content_type_id, pic_id, service_id, sub_service_id, title, content_pillar_id, brief, status, revision_count, approved, completion_date, pic_production_id, pic_production_source, google_drive_link, production_status, production_revision_count, production_completion_date, production_approved, production_approved_date, post_link, post_link_created_by, done, actual_post_date, on_time_status, status_content, created_at, updated_at,
+    content_type:content_types(id, name), service:services(id, name), sub_service:sub_services(id, name), content_pillar:content_pillars(id, name, color), pic:employees!social_media_plans_pic_id_fkey(id, full_name), pic_production:employees!social_media_plans_pic_production_id_fkey(id, full_name), post_link_creator:employees!social_media_plans_post_link_created_by_fkey(id, full_name)
+  `;
+  const { data: notificationPreviewPlanFetched } = useQuery({
+    queryKey: ['social-media-plan', notificationPreviewPlanId],
+    enabled: !!notificationPreviewPlanId && !!organizationId,
+    queryFn: async (): Promise<ContentPlan | null> => {
+      if (!notificationPreviewPlanId || !organizationId) return null;
+      const { data, error } = await supabase
+        .from('social_media_plans')
+        .select(PLAN_SELECT)
+        .eq('id', notificationPreviewPlanId)
+        .eq('organization_id', organizationId)
+        .single();
+      if (error || !data) return null;
+      return data as unknown as ContentPlan;
+    },
+    staleTime: 10000,
+  });
+
+  const notificationPreviewPlan: ContentPlan | null = notificationPreviewPlanId
+    ? (contentPlans.find((p) => p.id === notificationPreviewPlanId) as ContentPlan | undefined) ?? notificationPreviewPlanFetched ?? null
+    : null;
 
   // Define tab configurations
   const tabs = [
@@ -1101,6 +1132,7 @@ const SocialMediaContent = () => {
                                     onDeleteSelected={handleDeleteSelected}
                                     selectedMonth={selectedMonth}
                                     setSelectedMonth={setSelectedMonth}
+                                    onNotificationPreviewRequest={(planId) => setNotificationPreviewPlanId(planId)}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
@@ -1182,6 +1214,39 @@ const SocialMediaContent = () => {
             employeeName={editingManager?.name}
             targetType={targetType}
           />
+
+          {/* Preview modal when user clicks a comment notification (opens here instead of public page) */}
+          {notificationPreviewPlan && (
+            <GoogleDriveLinkDialog
+              isOpen={true}
+              onClose={() => setNotificationPreviewPlanId(null)}
+              googleDriveLink={notificationPreviewPlan.google_drive_link || ''}
+              productionApproved={notificationPreviewPlan.production_approved || false}
+              onSave={(link) => {
+                const normalized = link?.trim() ? link : null;
+                handleFieldChange(notificationPreviewPlan.id, 'google_drive_link', normalized);
+                if (!normalized) handleFieldChange(notificationPreviewPlan.id, 'production_status', null);
+              }}
+              socialMediaPlanId={notificationPreviewPlan.id}
+              planTitle={notificationPreviewPlan.title ?? undefined}
+              contentTitle={notificationPreviewPlan.title ?? undefined}
+              contentType={notificationPreviewPlan.content_type?.name}
+              postDate={notificationPreviewPlan.post_date ?? undefined}
+              onApprove={() => {
+                handleFieldChange(notificationPreviewPlan.id, 'production_approved', true);
+                handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', new Date().toISOString());
+                handleFieldChange(notificationPreviewPlan.id, 'production_status', 'Approved');
+              }}
+              onRevision={() => {
+                const count = (notificationPreviewPlan.production_revision_count ?? 0) + 1;
+                handleFieldChange(notificationPreviewPlan.id, 'production_status', 'Request Revision');
+                handleFieldChange(notificationPreviewPlan.id, 'production_revision_count', count);
+                handleFieldChange(notificationPreviewPlan.id, 'production_completion_date', null);
+                handleFieldChange(notificationPreviewPlan.id, 'production_approved', false);
+                handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', null);
+              }}
+            />
+          )}
 
           {/* Daily Task Selector Dialog for Approval */}
           {pendingApproval && (

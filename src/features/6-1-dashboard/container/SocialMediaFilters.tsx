@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { MonthPicker } from '@/features/share/calendar';
 import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import { ReviewCommentNotificationBell } from './ReviewCommentNotificationBell';
 
 interface Service {
   id: string;
@@ -26,6 +27,8 @@ interface SocialMediaFiltersProps {
   onDeleteSelected: () => void;
   selectedMonth: Date;
   setSelectedMonth: (month: Date) => void;
+  /** When user clicks a comment notification, open this plan in the preview modal (dashboard only) */
+  onNotificationPreviewRequest?: (planId: string) => void;
 }
 
 export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
@@ -40,7 +43,8 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
   onAddContent,
   onDeleteSelected,
   selectedMonth,
-  setSelectedMonth
+  setSelectedMonth,
+  onNotificationPreviewRequest
 }) => {
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   
@@ -131,6 +135,7 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
             className="pl-10" 
           />
         </div>
+        <ReviewCommentNotificationBell onOpenPreview={onNotificationPreviewRequest} />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-48 h-9">
             <Filter className="h-4 w-4 mr-2" />
