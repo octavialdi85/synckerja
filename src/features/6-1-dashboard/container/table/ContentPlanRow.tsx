@@ -15,15 +15,13 @@ import { validateRequiredFields } from './cells/ValidationHelper';
 import GoogleDriveLinkDialog from '../../modal/GoogleDriveLinkDialog';
 import SocialMediaLinksDialog from '../../modal/SocialMediaLinksDialog';
 import BriefDialog from '../../modal/BriefDialog';
-import { useDigitalMarketingEmployees } from '../../hook/useDigitalMarketingEmployees';
-import { useCreativeEmployees } from '../../hook/useCreativeEmployees';
-import { useCurrentUserRole } from '../../hook/useCurrentUserRole';
+import type { DigitalMarketingEmployee } from '../../hook/useDigitalMarketingEmployees';
+import type { CreativeEmployee } from '../../hook/useCreativeEmployees';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useSocialMediaLinks } from '@/features/6-1-dashboard/hook/useSocialMediaLinks';
 import { supabase } from '@/integrations/supabase/client';
 import { devLog, logger } from '@/config/logger';
 import { CreateTaskDialog } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
-import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
@@ -57,6 +55,9 @@ interface ContentPlanRowProps {
   formatDateTime: (date: string | Date) => string;
   formatDateOnly: (date: string | Date) => string;
   approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
+  digitalEmployees?: DigitalMarketingEmployee[];
+  creativeEmployees?: CreativeEmployee[];
+  currentUserRole?: string | null;
 }
 export const ContentPlanRow = memo<ContentPlanRowProps>(({
   plan,
@@ -77,14 +78,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   getFilteredSubServices,
   formatDateTime,
   formatDateOnly,
-  approvalAccess
+  approvalAccess,
+  digitalEmployees = [],
+  creativeEmployees = [],
+  currentUserRole = null
 }) => {
-  const {
-    data: digitalEmployees = []
-  } = useDigitalMarketingEmployees();
-  const {
-    data: creativeEmployees = []
-  } = useCreativeEmployees();
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
   const [isSocialLinksDialogOpen, setIsSocialLinksDialogOpen] = useState(false);
   const [isBriefDialogOpen, setIsBriefDialogOpen] = useState(false);
@@ -237,8 +235,6 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     checkApprovalVisibility();
   }, [approvalAccess]);
 
-  // Get current user role
-  const { data: currentUserRole } = useCurrentUserRole();
   const isAdmin = currentUserRole === 'admin' || currentUserRole === 'owner';
 
   // Fast approval access using batched result from parent (no awaits for instant UX)
@@ -1176,23 +1172,21 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       {/* Brief Dialog - NOW WITH REAL-TIME STATUS UPDATE */}
       <BriefDialog isOpen={isBriefDialogOpen} onClose={() => setIsBriefDialogOpen(false)} brief={plan.brief} onSave={handleBriefSave} socialMediaPlanId={plan.id} onStatusUpdate={handleBriefStatusUpdate} />
 
-      {/* Auto-create Branding Plan task when approved toggled ON and not exists */}
-      <DailyTaskProvider>
-        <CreateTaskDialog
-          open={isCreateTaskOpen}
-          onOpenChange={(open) => {
-            setIsCreateTaskOpen(open);
-            if (!open) {
-              // Immediate visual rollback to reflect cancellation
-              setApprovedInstant(false);
-              // After dialog closed, recheck existence; rollback toggle if task still not found
-              void recheckOrRollbackAfterCreateClose();
-            }
-          }}
-          defaultTitle={createPrefillTitle}
-          defaultPlanDate={plan.post_date ? new Date(plan.post_date) : null}
-        />
-      </DailyTaskProvider>
+      {/* Auto-create Branding Plan task when approved toggled ON and not exists - uses DailyTaskProvider from dashboard */}
+      <CreateTaskDialog
+        open={isCreateTaskOpen}
+        onOpenChange={(open) => {
+          setIsCreateTaskOpen(open);
+          if (!open) {
+            // Immediate visual rollback to reflect cancellation
+            setApprovedInstant(false);
+            // After dialog closed, recheck existence; rollback toggle if task still not found
+            void recheckOrRollbackAfterCreateClose();
+          }
+        }}
+        defaultTitle={createPrefillTitle}
+        defaultPlanDate={plan.post_date ? new Date(plan.post_date) : null}
+      />
     </>;
 });
 ContentPlanRow.displayName = 'ContentPlanRow';

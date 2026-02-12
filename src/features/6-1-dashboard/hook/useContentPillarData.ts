@@ -6,9 +6,12 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 
 export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: string) => {
   const { organizationId } = useCurrentOrg();
+  // Normalize key so same calendar month + filter = same cache (avoids duplicate fetches when reference changes)
+  const normalizedMonthTs = selectedMonth != null ? startOfMonth(selectedMonth).getTime() : undefined;
+  const normalizedServiceFilter = serviceFilter ?? 'all';
 
   return useQuery({
-    queryKey: ['contentPillarData', organizationId, selectedMonth?.getTime(), serviceFilter],
+    queryKey: ['contentPillarData', organizationId, normalizedMonthTs, normalizedServiceFilter],
     queryFn: async (): Promise<PillarData[]> => {
       try {
         // Starting content pillar data fetch
@@ -46,7 +49,7 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
         let prevUsageData: any[] = [];
 
         if (organizationId) {
-          const filterDate = selectedMonth || new Date();
+          const filterDate = selectedMonth != null ? selectedMonth : new Date();
           const filterMonthStart = startOfMonth(filterDate);
           const filterMonthEnd = endOfMonth(filterDate);
           

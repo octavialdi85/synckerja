@@ -6,6 +6,7 @@ import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from 'date-fns';
 import { ContentManager } from '../../types/social-media';
+import type { DigitalMarketingEmployee } from '../../hook/useDigitalMarketingEmployees';
 import { useDigitalMarketingEmployees } from '../../hook/useDigitalMarketingEmployees';
 import { usePICFilter } from '../../PICFilterContext';
 import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
@@ -16,11 +17,13 @@ import { devLog } from '@/config/logger';
 
 interface ContentPlannerTabProps {
   contentManagers: ContentManager[];
+  digitalEmployees?: DigitalMarketingEmployee[];
   handleEditTarget: (manager: ContentManager) => void;
 }
 
 const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
   contentManagers,
+  digitalEmployees: digitalEmployeesProp,
   handleEditTarget
 }) => {
   const [dailyTargetDate, setDailyTargetDate] = useState<Date>(new Date());
@@ -34,8 +37,8 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
   const dailyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const monthlyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get Digital Marketing employees based on filter
-  const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
+  const { data: digitalEmployeesFromHook = [] } = useDigitalMarketingEmployees();
+  const digitalEmployees = digitalEmployeesProp?.length ? digitalEmployeesProp : digitalEmployeesFromHook;
   const { selectedJobPositionId } = usePICFilter();
   const { contentPlans } = useOptimizedSocialMedia();
   const { targets } = useEmployeeTargets();

@@ -3,6 +3,8 @@ import { ContentPlan, ContentType, Service, SubService, ContentPillar } from '..
 import { TableHeader } from './table/TableHeader';
 import { ContentPlanRow } from './table/ContentPlanRow';
 import { LoadingDots } from '@/components/LoadingDots';
+import type { DigitalMarketingEmployee } from '../hook/useDigitalMarketingEmployees';
+import type { CreativeEmployee } from '../hook/useCreativeEmployees';
 
 interface ApprovalAccess {
   approved: boolean;
@@ -16,6 +18,9 @@ interface ContentPlanTableProps {
   services: Service[];
   subServices: SubService[];
   contentPillars: ContentPillar[];
+  digitalEmployees?: DigitalMarketingEmployee[];
+  creativeEmployees?: CreativeEmployee[];
+  currentUserRole?: string | null;
   onSelectItem: (id: string, checked: boolean) => void;
   selectedItems: string[];
   onFieldChange: (id: string, field: string, value: any) => void | Promise<void>;
@@ -36,6 +41,9 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   services,
   subServices,
   contentPillars,
+  digitalEmployees = [],
+  creativeEmployees = [],
+  currentUserRole = null,
   onSelectItem,
   selectedItems,
   onFieldChange,
@@ -241,6 +249,9 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
               services={services}
               subServices={subServices}
               contentPillars={contentPillars}
+              digitalEmployees={digitalEmployees}
+              creativeEmployees={creativeEmployees}
+              currentUserRole={currentUserRole}
               selectedItems={selectedItems}
               onSelectItem={onSelectItem}
               onFieldChange={onFieldChange}

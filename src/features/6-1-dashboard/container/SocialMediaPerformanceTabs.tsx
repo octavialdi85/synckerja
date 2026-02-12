@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/features/ui/tabs';
 import { ContentManager } from '../types/social-media';
+import type { DigitalMarketingEmployee } from '../hook/useDigitalMarketingEmployees';
 import ContentPlannerTab from './EmployeeTarget/ContentPlannerTab';
 import ProductionTab from './EmployeeTarget/ProductionTab';
 import ContentPostTab from './EmployeeTarget/ContentPostTab';
@@ -19,6 +19,7 @@ interface SocialMediaPerformanceTabsProps {
   setIsMonthSelectorOpen: React.Dispatch<React.SetStateAction<boolean>>;
   contentPlanners: ContentManager[];
   creativeProductionMembers: ContentManager[];
+  digitalEmployees?: DigitalMarketingEmployee[];
   handleEditTarget: (manager: ContentManager) => void;
   handlePreviousMonth: () => void;
   handleNextMonth: () => void;
@@ -37,6 +38,7 @@ export const SocialMediaPerformanceTabs: React.FC<SocialMediaPerformanceTabsProp
   setIsMonthSelectorOpen,
   contentPlanners,
   creativeProductionMembers,
+  digitalEmployees = [],
   handleEditTarget,
   handlePreviousMonth,
   handleNextMonth
@@ -52,6 +54,7 @@ export const SocialMediaPerformanceTabs: React.FC<SocialMediaPerformanceTabsProp
       <TabsContent value="content-planner" className="mt-0">
         <ContentPlannerTab
           contentManagers={contentPlanners}
+          digitalEmployees={digitalEmployees}
           handleEditTarget={handleEditTarget}
         />
       </TabsContent>
@@ -59,6 +62,7 @@ export const SocialMediaPerformanceTabs: React.FC<SocialMediaPerformanceTabsProp
       <TabsContent value="production" className="mt-0">
         <ProductionTab
           contentManagers={creativeProductionMembers}
+          digitalEmployees={digitalEmployees}
           handleEditTarget={handleEditTarget}
         />
       </TabsContent>

@@ -32,11 +32,13 @@ import { useOptimizedFiltering } from "./hook/useOptimizedFiltering";
 import { useUserData } from "./hook/useUserData";
 import { useDigitalMarketingEmployees } from "./hook/useDigitalMarketingEmployees";
 import { useCreativeEmployees } from "./hook/useCreativeEmployees";
+import { useCurrentUserRole } from "./hook/useCurrentUserRole";
 import { useCurrentEmployee } from "@/features/share/hooks/useCurrentEmployee";
 import { useBatchApprovalAccess } from "./hook/useBatchApprovalAccess";
 import { useSyncPicProduction } from "./hook/useSyncPicProduction";
 import { useApprovalTaskStepCreation } from "./hook/useApprovalTaskStepCreation";
 import DailyTaskSelectorDialog from "./modal/DailyTaskSelectorDialog";
+import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
 
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
@@ -72,7 +74,8 @@ const SocialMediaContent = () => {
   const { data: currentEmployee } = useCurrentEmployee(); // Get employee ID for pic_production_id
   const { data: digitalEmployees = [] } = useDigitalMarketingEmployees();
   const { data: creativeEmployees = [] } = useCreativeEmployees();
-  
+  const { data: currentUserRole } = useCurrentUserRole();
+
   // Sync PIC Production hook
   const { syncPicProduction, syncAllExistingPlans } = useSyncPicProduction();
   
@@ -1028,8 +1031,9 @@ const SocialMediaContent = () => {
 
   return (
     <StandardLayout>
-      <SocialMediaErrorBoundary>
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <DailyTaskProvider>
+        <SocialMediaErrorBoundary>
+          <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
           <div className="flex flex-1 min-h-0">
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
@@ -1060,6 +1064,7 @@ const SocialMediaContent = () => {
                             setIsMonthSelectorOpen={setIsMonthSelectorOpen} 
                             contentPlanners={contentPlanners || []} 
                             creativeProductionMembers={creativeProductionMembers || []} 
+                            digitalEmployees={digitalEmployees}
                             handleEditTarget={handleEditTarget} 
                             handlePreviousMonth={handlePreviousMonth} 
                             handleNextMonth={handleNextMonth} 
@@ -1068,7 +1073,7 @@ const SocialMediaContent = () => {
                       </div>
 
                       {/* Main Grid Layout - Metrics, Table, and Sidebar */}
-                      <DashboardLoadingWrapper isLoading={loading}>
+                      <DashboardLoadingWrapper isLoading={loading || (!organizationId && contentPlans.length === 0)}>
                         <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
                           {/* Left Section - Main Content (75% width / 9 cols) */}
                           <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full">
@@ -1110,6 +1115,9 @@ const SocialMediaContent = () => {
                                     services={Array.isArray(services) ? services : []} 
                                     subServices={Array.isArray(subServices) ? subServices : []} 
                                     contentPillars={Array.isArray(contentPillars) ? contentPillars : []} 
+                                    digitalEmployees={digitalEmployees}
+                                    creativeEmployees={creativeEmployees}
+                                    currentUserRole={currentUserRole ?? null}
                                     onSelectItem={handleSelectItem} 
                                     selectedItems={selectedItems} 
                                     onFieldChange={handleFieldChange} 
@@ -1192,7 +1200,8 @@ const SocialMediaContent = () => {
             </div>
           </div>
         </div>
-      </SocialMediaErrorBoundary>
+        </SocialMediaErrorBoundary>
+      </DailyTaskProvider>
     </StandardLayout>
   );
 }
