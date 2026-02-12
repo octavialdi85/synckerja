@@ -197,7 +197,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
           <LoadingDots size="lg" />
-          <p className="text-sm text-gray-600">Memuat halaman...</p>
+          <p className="text-sm text-gray-600">Loading page...</p>
           {showSlowConnectionWarning && (
             <div className="flex flex-col items-center space-y-2 mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <WifiOff className="h-6 w-6 text-yellow-600" />
@@ -259,7 +259,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
           <LoadingDots size="lg" />
-          <p className="text-sm text-gray-600">Memuat halaman...</p>
+          <p className="text-sm text-gray-600">Loading page...</p>
         </div>
       </div>
     );

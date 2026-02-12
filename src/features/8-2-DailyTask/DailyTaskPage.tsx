@@ -68,7 +68,7 @@ const DailyTaskContent = () => {
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="flex flex-col items-center space-y-4">
             <LoadingDots size="lg" />
-            <p className="text-sm text-gray-600">Memuat halaman...</p>
+            <p className="text-sm text-gray-600">Loading page...</p>
           </div>
         </div>
       </StandardLayout>

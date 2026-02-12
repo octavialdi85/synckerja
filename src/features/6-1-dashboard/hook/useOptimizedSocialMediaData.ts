@@ -161,22 +161,19 @@ export const useOptimizedSocialMediaData = () => {
   });
 
   // Combine loading states efficiently
-  // Use isPending for initial load (smooth loading), isFetching for background updates
-  const isPending = contentPlansQuery.isPending || masterDataQuery.isPending;
   const isFetching = contentPlansQuery.isFetching || masterDataQuery.isFetching;
-  
-  // More strict loading check - only show loading if BOTH queries are pending AND no data exists
-  // This prevents flicker when one query completes but the other is still loading
+
   const hasContentPlans = contentPlansQuery.data && contentPlansQuery.data.length > 0;
   const hasMasterData = masterDataQuery.data && 
     (masterDataQuery.data.contentTypes?.length > 0 || 
      masterDataQuery.data.services?.length > 0 || 
      masterDataQuery.data.contentPillars?.length > 0);
   
-  // Both queries have settled (success or error) -> stop showing loading immediately
-  const bothSettled = contentPlansQuery.status !== 'pending' && masterDataQuery.status !== 'pending';
-  // Only show loading if we're truly in initial load state (pending and no data); stop as soon as both have settled
-  const isLoading = !bothSettled && isPending && !hasContentPlans && !hasMasterData;
+  // Show loading whenever either query is still pending and we don't have that query's data yet.
+  // This prevents a flash of empty table when master data resolves first (e.g. from cache) while content plans are still fetching.
+  const isLoading =
+    (contentPlansQuery.isPending && !hasContentPlans) ||
+    (masterDataQuery.isPending && !hasMasterData);
   const error = contentPlansQuery.error || masterDataQuery.error;
 
   // Return optimized data structure

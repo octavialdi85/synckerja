@@ -4,7 +4,7 @@ import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StandardLayout } from "@/features/1-layouts/StandardLayout";
 import { SocialMediaErrorBoundary } from "./hook/ErrorBoundary";
 import { RealtimeSocialMediaProvider } from "./hook/RealtimeSocialMediaProvider";
@@ -200,6 +200,12 @@ const SocialMediaContent = () => {
   const notificationPreviewPlan: ContentPlan | null = notificationPreviewPlanId
     ? (contentPlans.find((p) => p.id === notificationPreviewPlanId) as ContentPlan | undefined) ?? notificationPreviewPlanFetched ?? null
     : null;
+
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!notificationPreviewPlanId) return;
+    queryClient.invalidateQueries({ queryKey: ['link-comments', notificationPreviewPlanId] });
+  }, [notificationPreviewPlanId, queryClient]);
 
   // Define tab configurations
   const tabs = [

@@ -55,7 +55,7 @@ const DailyTaskContent = () => {
       <div className="flex items-center justify-center py-16 h-full">
         <div className="flex flex-col items-center space-y-3">
           <LoadingDots size="lg" />
-          <p className="text-sm text-muted-foreground">Memuat halaman...</p>
+          <p className="text-sm text-muted-foreground">Loading page...</p>
         </div>
       </div>
     );
