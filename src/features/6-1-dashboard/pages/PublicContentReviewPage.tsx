@@ -2,16 +2,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { Input } from '@/features/ui/input';
 import { Alert, AlertDescription } from '@/features/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
-import { ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Pencil, X } from 'lucide-react';
+import { ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { getEmbedUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
 import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
-import { AnnotationCanvas, type AnnotationData as AnnotationDataValue } from '../components/AnnotationCanvas';
 
 interface PublicReviewContent {
   social_media_plan_id: string;
@@ -20,6 +17,8 @@ interface PublicReviewContent {
   post_date: string | null;
   google_drive_link: string | null;
   content_type_name: string | null;
+  service_name: string | null;
+  sub_service_name: string | null;
 }
 
 interface PublicReviewComment {
@@ -32,11 +31,11 @@ interface PublicReviewComment {
   annotation_data: Record<string, unknown> | null;
 }
 
-function formatTimestamp(seconds: number | null): string {
-  if (seconds == null) return '';
-  const m = Math.floor(Number(seconds) / 60);
-  const s = Math.floor(Number(seconds) % 60);
-  return `Di ${m}:${s.toString().padStart(2, '0')}`;
+/** Portrait-oriented content types (Reel, Story, Shorts, etc.) use 9/16 aspect ratio */
+function isPortraitContent(contentTypeName: string | null): boolean {
+  if (!contentTypeName) return false;
+  const n = contentTypeName.toLowerCase();
+  return n.includes('reel') || n.includes('story') || n.includes('shorts') || n.includes('tiktok') || n.includes('vertical');
 }
 
 const PublicContentReviewPage: React.FC = () => {
@@ -46,10 +45,7 @@ const PublicContentReviewPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
-  const [videoTimestampSeconds, setVideoTimestampSeconds] = useState<number | null>(null);
-  const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showAnnotationModal, setShowAnnotationModal] = useState(false);
 
   const loadContent = useCallback(async () => {
     if (!token) return;
@@ -101,6 +97,46 @@ const PublicContentReviewPage: React.FC = () => {
     };
   }, [token, loadContent, loadComments]);
 
+  // Set document title and og/twitter meta for link preview when content is loaded
+  useEffect(() => {
+    if (!content) return;
+    const title = (content.title && content.title.trim()) ? content.title.trim() : 'Review konten';
+    const description =
+      [content.content_type_name, content.service_name, content.post_date ? format(new Date(content.post_date), 'dd MMM yyyy') : null]
+        .filter(Boolean)
+        .join(' · ') || 'Review dan beri masukan untuk konten ini.';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const imageUrl = origin ? `${origin}/favicon.svg` : '/favicon.svg';
+    const pageUrl = origin && typeof window !== 'undefined' ? window.location.href : '';
+
+    document.title = title;
+
+    const setMeta = (attr: string, value: string, isProperty = true) => {
+      const key = isProperty ? 'property' : 'name';
+      let el = document.querySelector(`meta[${key}="${attr}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(key, attr);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', value);
+    };
+
+    setMeta('og:title', title);
+    setMeta('og:description', description);
+    setMeta('og:image', imageUrl);
+    setMeta('og:url', pageUrl);
+    setMeta('og:type', 'website');
+    setMeta('twitter:card', 'summary_large_image', false);
+    setMeta('twitter:title', title, false);
+    setMeta('twitter:description', description, false);
+    setMeta('twitter:image', imageUrl, false);
+
+    return () => {
+      document.title = 'Profitloop';
+    };
+  }, [content]);
+
   const handleSubmitComment = async () => {
     const text = commentText?.trim();
     if (!text || !token) {
@@ -112,14 +148,12 @@ const PublicContentReviewPage: React.FC = () => {
       const { error: rpcError } = await supabase.rpc('insert_public_review_comment', {
         token_param: token,
         comment_text: text,
-        video_timestamp_seconds: videoTimestampSeconds ?? null,
-        annotation_data: annotationData ?? null,
+        video_timestamp_seconds: null,
+        annotation_data: null,
       });
       if (rpcError) throw rpcError;
       toast.success('Komentar terkirim');
       setCommentText('');
-      setVideoTimestampSeconds(null);
-      setAnnotationData(null);
       await loadComments();
     } catch (e) {
       toast.error('Gagal mengirim komentar');
@@ -162,7 +196,19 @@ const PublicContentReviewPage: React.FC = () => {
           <h1 className="font-semibold text-gray-900 truncate pr-2">
             {content.title || 'Tanpa judul'}
           </h1>
-          <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-600">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs text-gray-600">
+            {content.service_name != null && content.service_name !== '' && (
+              <span className="flex items-center gap-1">
+                <Briefcase className="h-3 w-3" />
+                {content.service_name}
+              </span>
+            )}
+            {content.sub_service_name != null && content.sub_service_name !== '' && (
+              <span className="flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                {content.sub_service_name}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <Tag className="h-3 w-3" />
               {content.content_type_name || '—'}
@@ -174,48 +220,56 @@ const PublicContentReviewPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Preview - top, mobile-first */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[280px]">
-          <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-            <h4 className="font-medium text-sm text-gray-900">Preview</h4>
-          </div>
-          <div className="flex-1 min-h-[240px] p-4 flex items-center justify-center bg-white">
-            {!link ? (
-              <div className="text-center text-gray-500 text-sm">Tidak ada link</div>
-            ) : isFolderLink(link) ? (
-              <div className="w-full h-full min-h-[240px]">
-                <GoogleDriveFolderCarousel folderUrl={link} />
+        {/* Preview - orientasi mengikuti konten: portrait (Reel/Story) atau landscape */}
+        {(() => {
+          const portrait = isPortraitContent(content.content_type_name);
+          const aspectClass = portrait
+            ? 'aspect-[9/16] max-w-[min(100%,320px)] mx-auto w-full'
+            : 'aspect-video w-full';
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                <h4 className="font-medium text-sm text-gray-900">Preview</h4>
               </div>
-            ) : isYouTubeLink(link) ? (
-              <div className="text-center">
-                <p className="text-sm text-gray-700 mb-4">Preview YouTube tidak tersedia di sini.</p>
-                <Button variant="outline" size="sm" onClick={() => window.open(link, '_blank')}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Buka di YouTube
-                </Button>
+              <div className={`flex-1 p-4 flex items-center justify-center bg-white ${portrait ? 'flex' : ''}`}>
+                {!link ? (
+                  <div className="text-center text-gray-500 text-sm">Tidak ada link</div>
+                ) : isFolderLink(link) ? (
+                  <div className="w-full min-h-[200px] rounded-lg overflow-hidden">
+                    <GoogleDriveFolderCarousel folderUrl={link} />
+                  </div>
+                ) : isYouTubeLink(link) ? (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-700 mb-4">Preview YouTube tidak tersedia di sini.</p>
+                    <Button variant="outline" size="sm" onClick={() => window.open(link, '_blank')}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Buka di YouTube
+                    </Button>
+                  </div>
+                ) : isFileLink(link) && embedUrl ? (
+                  <div className={`rounded-lg overflow-hidden bg-black ${aspectClass}`}>
+                    <iframe
+                      src={embedUrl}
+                      className="w-full h-full border-0 rounded-lg"
+                      title="Preview"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <LinkIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-700 mb-4">Preview tidak tersedia</p>
+                    <Button variant="outline" size="sm" onClick={() => window.open(link, '_blank')}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Buka link
+                    </Button>
+                  </div>
+                )}
               </div>
-            ) : isFileLink(link) && embedUrl ? (
-              <div className="w-full h-full min-h-[240px] rounded-lg overflow-hidden">
-                <iframe
-                  src={embedUrl}
-                  className="w-full h-full min-h-[240px] border-0 rounded-lg"
-                  title="Preview"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                  loading="lazy"
-                />
-              </div>
-            ) : (
-              <div className="text-center">
-                <LinkIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-700 mb-4">Preview tidak tersedia</p>
-                <Button variant="outline" size="sm" onClick={() => window.open(link, '_blank')}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Buka link
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
+          );
+        })()}
 
         {/* Comments - below */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col flex-1 min-h-0">
@@ -232,59 +286,13 @@ const PublicContentReviewPage: React.FC = () => {
                   <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
                     <span className="font-medium text-gray-800">{c.creator_display_name}</span>
                     <span>{c.created_at ? format(new Date(c.created_at), 'dd MMM yyyy, HH:mm') : ''}</span>
-                    {c.video_timestamp_seconds != null && (
-                      <span className="text-blue-600">{formatTimestamp(c.video_timestamp_seconds)}</span>
-                    )}
                   </div>
-                  {c.annotation_data && (
-                    <p className="text-xs text-gray-500 mb-1">Anotasi pada frame</p>
-                  )}
                   <p className="text-sm text-gray-900 whitespace-pre-wrap">{c.comment_text ?? ''}</p>
                 </div>
               ))
             )}
           </div>
           <div className="p-4 border-t border-gray-200 flex-shrink-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="text-xs text-gray-600">Timestamp (detik, opsional):</label>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                placeholder="Contoh: 85"
-                className="w-24 h-8 text-sm"
-                value={videoTimestampSeconds ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setVideoTimestampSeconds(v === '' ? null : Math.max(0, Number(v)));
-                }}
-                disabled={submitting}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAnnotationModal(true)}
-                disabled={submitting}
-                className="gap-1"
-              >
-                <Pencil className="h-3 w-3" />
-                Tandai dengan anotasi
-              </Button>
-              {annotationData != null && (
-                <span className="text-xs text-green-600 flex items-center gap-1">
-                  Anotasi ditambahkan
-                  <button
-                    type="button"
-                    onClick={() => setAnnotationData(null)}
-                    className="p-0.5 rounded hover:bg-gray-200"
-                    aria-label="Hapus anotasi"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-            </div>
             <Textarea
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
@@ -305,22 +313,6 @@ const PublicContentReviewPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <Dialog open={showAnnotationModal} onOpenChange={setShowAnnotationModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Tandai bagian (anotasi)</DialogTitle>
-          </DialogHeader>
-          <AnnotationCanvas
-            initialData={annotationData as AnnotationDataValue | null}
-            onSave={(data) => {
-              setAnnotationData(data as unknown as Record<string, unknown>);
-              setShowAnnotationModal(false);
-            }}
-            onCancel={() => setShowAnnotationModal(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
