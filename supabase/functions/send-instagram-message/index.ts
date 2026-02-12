@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
 
     let resolved: ResolvedConfig | null = null;
 
-    // 1) Prefer organization_instagram_accounts when conversation_id is provided (instagram_conversations)
+    // 1) When conversation_id is provided we MUST use the same Page that owns the conversation (avoids Meta #100 "No matching user found")
     if (conversationId) {
       const { data: conv } = await supabase
         .from("instagram_conversations")
@@ -127,11 +127,40 @@ Deno.serve(async (req: Request) => {
         if (pageToken && pageId) {
           resolved = { organization_id: conv.organization_id, pageId, tokenToUse: pageToken };
           orgId = conv.organization_id;
+          console.log("send-instagram-message: using conversation Page", {
+            conversation_id: conversationId.slice(0, 8) + "...",
+            organization_id: conv.organization_id.slice(0, 8) + "...",
+            instagram_business_account_id: conv.instagram_business_account_id.slice(0, 8) + "...",
+            page_id_prefix: pageId.slice(0, 8) + "...",
+            recipient_id_prefix: to.slice(0, 8) + "...",
+          });
+        } else {
+          // Do NOT fall back to meta_config: recipient ID is scoped to this conversation's Page
+          console.error("send-instagram-message: conversation has no matching org Instagram account", {
+            conversation_id: conversationId,
+            organization_id: conv.organization_id,
+            instagram_business_account_id: conv.instagram_business_account_id,
+          });
+          return new Response(
+            JSON.stringify({
+              error: "Akun Instagram untuk percakapan ini tidak ditemukan atau token hilang. Buka Connect Instagram, disconnect lalu connect lagi akun @ yang dipakai untuk percakapan ini.",
+              code: "CONVERSATION_ACCOUNT_MISMATCH",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
+      } else {
+        return new Response(
+          JSON.stringify({
+            error: "Percakapan tidak valid. Pilih percakapan yang masih ada.",
+            code: "INVALID_CONVERSATION",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
-    // 2) Fallback: organization_meta_config + /me/accounts
+    // 2) Fallback only when no conversation_id: organization_meta_config + /me/accounts
     if (!resolved) {
       const tryOrg = async (oid: string) => {
         const { data, error } = await supabase
@@ -242,7 +271,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const metaUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${pageId}/messages`;
-    console.log("send-instagram-message: calling Meta API", { pageId: pageId.slice(0, 8) + "...", recipientId: to.slice(0, 8) + "..." });
+    console.log("send-instagram-message: calling Meta API", {
+      conversation_id: conversationId ? conversationId.slice(0, 8) + "..." : null,
+      page_id_prefix: pageId.slice(0, 8) + "...",
+      recipient_id_prefix: to.slice(0, 8) + "...",
+    });
 
     let metaRes: Response;
     let metaData: { recipient_id?: string; message_id?: string; error?: { message?: string; code?: number; error_subcode?: number; type?: string } };

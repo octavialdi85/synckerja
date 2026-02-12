@@ -94,7 +94,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const tokenUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
+      const tokenUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?client_id=${encodeURIComponent(appId ?? "")}&client_secret=${encodeURIComponent(appSecret ?? "")}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
       const tokenRes = await fetch(tokenUrl, { method: "GET" });
       const tokenData = await tokenRes.json().catch(() => ({})) as {
         access_token?: string;
@@ -121,7 +121,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Exchange for long-lived token (60 days) if short-lived
-      const exchangeUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(accessToken)}`;
+      const exchangeUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId ?? "")}&client_secret=${encodeURIComponent(appSecret ?? "")}&fb_exchange_token=${encodeURIComponent(accessToken)}`;
       const longRes = await fetch(exchangeUrl, { method: "GET" });
       const longData = await longRes.json().catch(() => ({})) as { access_token?: string; expires_in?: number };
       if (longRes.ok && longData?.access_token?.trim()) {
@@ -129,69 +129,73 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { data: existing, error: selectErr } = await supabaseAdmin
-      .from("organization_meta_config")
-      .select("id")
-      .eq("organization_id", orgId)
-      .maybeSingle();
+    // All data to organization_instagram_accounts only (no organization_meta_config).
+    // Fetch Pages with Instagram and upsert into organization_instagram_accounts.
+    // so /operations/consultant/instagram/connect shows connected accounts without extra "Connect" click
+    const fields = "id,name,access_token,instagram_business_account{id,username,name}";
+    const pagesWithIg: Array<{ pageId: string; pageToken: string; igId: string; username: string | null; name: string | null }> = [];
 
-    const rowExists = !selectErr && existing != null;
-
-    if (rowExists) {
-      const { error: updateErr } = await supabaseAdmin
-        .from("organization_meta_config")
-        .update({
-          meta_access_token: accessToken,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("organization_id", orgId);
-
-      if (updateErr) {
-        console.error("meta-oauth-exchange: update failed", updateErr);
-        return new Response(
-          JSON.stringify({ error: "Failed to save token." }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    } else {
-      const verifyToken = crypto.randomUUID().replace(/-/g, "");
-      const insertPayload: Record<string, unknown> = {
-        organization_id: orgId,
-        meta_access_token: accessToken,
-        verify_token: verifyToken,
-        created_by: user.id,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: insertErr } = await supabaseAdmin.from("organization_meta_config").insert(insertPayload);
-
-      if (insertErr) {
-        if (insertErr.code === "23505") {
-          const { error: updateErr } = await supabaseAdmin
-            .from("organization_meta_config")
-            .update({
-              meta_access_token: accessToken,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("organization_id", orgId);
-          if (updateErr) {
-            console.error("meta-oauth-exchange: update after conflict failed", updateErr);
-            return new Response(
-              JSON.stringify({ error: "Failed to save token." }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          console.error("meta-oauth-exchange: insert failed", insertErr);
-          return new Response(
-            JSON.stringify({ error: "Failed to save token." }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+    function collectPages(pages: Array<{ id?: string; access_token?: string; instagram_business_account?: { id?: string; username?: string; name?: string } }>) {
+      for (const page of pages) {
+        const ig = page?.instagram_business_account;
+        const pageId = page?.id ? String(page.id) : "";
+        const pageToken = typeof page?.access_token === "string" ? page.access_token.trim() : "";
+        if (ig?.id && pageId && pageToken) {
+          pagesWithIg.push({
+            pageId,
+            pageToken,
+            igId: String(ig.id),
+            username: typeof ig.username === "string" ? ig.username : null,
+            name: typeof ig.name === "string" ? ig.name : null,
+          });
         }
       }
     }
 
+    const meUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/me/accounts?fields=${encodeURIComponent(fields)}`;
+    const meRes = await fetch(meUrl, { method: "GET", headers: { Authorization: `Bearer ${accessToken}` } });
+    const meData = await meRes.json().catch(() => ({})) as {
+      data?: Array<{ id?: string; name?: string; access_token?: string; instagram_business_account?: { id?: string; username?: string; name?: string } }>;
+      error?: { message?: string };
+    };
+    if (meRes.ok && Array.isArray(meData?.data)) {
+      collectPages(meData.data);
+    }
+
+    for (const row of pagesWithIg) {
+      const { data: existingIg } = await supabaseAdmin
+        .from("organization_instagram_accounts")
+        .select("verify_token")
+        .eq("organization_id", orgId)
+        .eq("instagram_business_account_id", row.igId)
+        .maybeSingle();
+      const verifyToken =
+        (existingIg as { verify_token?: string } | null)?.verify_token?.trim() ||
+        `ig_${orgId.replace(/-/g, "").slice(0, 8)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+      await supabaseAdmin
+        .from("organization_instagram_accounts")
+        .upsert(
+          {
+            organization_id: orgId,
+            instagram_business_account_id: row.igId,
+            facebook_page_id: row.pageId,
+            page_access_token: row.pageToken,
+            instagram_username: row.username,
+            instagram_name: row.name,
+            verify_token: verifyToken,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "organization_id,instagram_business_account_id", ignoreDuplicates: false }
+        );
+    }
+
     return new Response(
-      JSON.stringify({ success: true, message: "Token saved. You can now load Instagram accounts." }),
+      JSON.stringify({
+        success: true,
+        message: "Instagram accounts synced to organization_instagram_accounts.",
+        accounts_synced: pagesWithIg.length,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

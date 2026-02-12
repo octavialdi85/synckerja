@@ -13,8 +13,6 @@ import { toast } from 'sonner';
 
 const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic,business_management';
 const META_OAUTH_VERSION = 'v21.0';
-const META_OAUTH_EXTRAS = '{"setup":{"channel":"IG_API_ONBOARDING"}}';
-const INSTAGRAM_OAUTH_SCOPE = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights';
 
 export function InstagramConnectPage() {
   const { t } = useAppTranslation();
@@ -23,45 +21,20 @@ export function InstagramConnectPage() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<InstagramAccountFromApi[]>([]);
   const oauthStateRef = useRef<string>('');
-  const isInstagramDirectTestRef = useRef(false);
 
   const metaAppId = (import.meta.env.VITE_META_APP_ID as string)?.trim() || '';
   const metaOAuthConfigId = (import.meta.env.VITE_META_OAUTH_CONFIG_ID as string)?.trim() || '';
-  const metaInstagramAppId = (import.meta.env.VITE_META_INSTAGRAM_APP_ID as string)?.trim() || '';
   const hasOAuth = !!metaAppId;
   const hasMetaConfig = !!config?.meta_access_token?.trim();
   const redirectUri = typeof window !== 'undefined' ? `${window.location.origin}/auth/meta/callback` : '';
 
-  const openInstagramDirectTest = useCallback(() => {
-    if (!redirectUri || !metaInstagramAppId) {
-      toast.error(t('instagramConnect.instagramAppIdNotSet', 'Set VITE_META_INSTAGRAM_APP_ID (e.g. 1601615241168538) to test Instagram redirect directly.'));
-      return;
-    }
-    isInstagramDirectTestRef.current = true;
-    const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    oauthStateRef.current = state;
-    const params = new URLSearchParams({
-      client_id: metaInstagramAppId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: INSTAGRAM_OAUTH_SCOPE,
-      state,
-    });
-    const url = `https://www.instagram.com/oauth/authorize?${params.toString()}`;
-    window.open(url, 'instagram-oauth-test', 'width=600,height=700,scrollbars=yes');
-  }, [metaInstagramAppId, redirectUri, t]);
-
+  // Facebook Login for Business only: redirect_uri must match Valid OAuth Redirect URIs in Meta Developer → Facebook Login for Business → Configurations
   const openOAuthPopup = useCallback(
-    async (useBusinessLogin: boolean, facebookOnly?: boolean) => {
+    async () => {
       if (!hasOAuth || !redirectUri) {
         toast.error(t('instagramConnect.oauthNotConfigured', 'VITE_META_APP_ID not set.'));
         return;
       }
-      if (useBusinessLogin && !facebookOnly && !metaOAuthConfigId) {
-        toast.error(t('instagramConnect.configIdNotSet', 'Set VITE_META_OAUTH_CONFIG_ID to your Business Login Configuration ID (e.g. from Meta Developer → Business login → Configurations).'));
-        return;
-      }
-      isInstagramDirectTestRef.current = false;
       const state = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       oauthStateRef.current = state;
       const params = new URLSearchParams({
@@ -70,17 +43,8 @@ export function InstagramConnectPage() {
         scope: META_OAUTH_SCOPE,
         state,
       });
-      if (facebookOnly) {
-        params.set('display', 'page');
-        params.set('response_type', 'token');
-      } else if (useBusinessLogin) {
-        params.set('display', 'page');
-        params.set('extras', META_OAUTH_EXTRAS);
-        params.set('response_type', 'token');
-        if (metaOAuthConfigId) params.set('config_id', metaOAuthConfigId);
-      } else {
-        params.set('response_type', 'code');
-      }
+      params.set('display', 'page');
+      params.set('response_type', 'token');
       const url = `https://www.facebook.com/${META_OAUTH_VERSION}/dialog/oauth?${params.toString()}`;
       // Mark Meta OAuth popup open so AuthContext can avoid signing out on spurious SIGNED_OUT (e.g. refresh failure in background)
       try {
@@ -100,7 +64,7 @@ export function InstagramConnectPage() {
         toast.error(t('instagramConnect.popupBlocked', 'Popup blocked. Allow popups for this site.'));
       }
     },
-    [hasOAuth, metaAppId, metaOAuthConfigId, redirectUri, t]
+    [hasOAuth, metaAppId, redirectUri, t]
   );
 
   useEffect(() => {
@@ -159,14 +123,8 @@ export function InstagramConnectPage() {
               setOauthLoading(false);
               return;
             }
-            await refetchConfig();
-            const listRes = await fetch(`${SUPABASE_URL}/functions/v1/list-instagram-accounts`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-            });
-            const listData = await listRes.json().catch(() => ({}));
-            const accounts = Array.isArray(listData?.accounts) ? listData.accounts : [];
-            setAvailableAccounts(accounts);
+            await refetchAccounts();
+            setAvailableAccounts([]);
             toast.success(t('instagramConnect.oauthSuccess', 'Token saved. Connect Instagram accounts below.'));
           } catch {
             toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
@@ -178,13 +136,6 @@ export function InstagramConnectPage() {
         return;
       }
       if (code && data.state === oauthStateRef.current) {
-        if (isInstagramDirectTestRef.current) {
-          isInstagramDirectTestRef.current = false;
-          clearMetaOAuthPopupFlag();
-          setOauthLoading(false);
-          toast.success(t('instagramConnect.redirectTestOk', 'Redirect test OK. Instagram accepted the redirect URI. Use "Connect with Facebook" to get a token.'));
-          return;
-        }
         setOauthLoading(true);
         (async () => {
           try {
@@ -212,14 +163,8 @@ export function InstagramConnectPage() {
               setOauthLoading(false);
               return;
             }
-            await refetchConfig();
-            const listRes = await fetch(`${SUPABASE_URL}/functions/v1/list-instagram-accounts`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-            });
-            const listData = await listRes.json().catch(() => ({}));
-            const accounts = Array.isArray(listData?.accounts) ? listData.accounts : [];
-            setAvailableAccounts(accounts);
+            await refetchAccounts();
+            setAvailableAccounts([]);
             toast.success(t('instagramConnect.oauthSuccess', 'Token saved. Connect Instagram accounts below.'));
           } catch {
             toast.error(t('instagramConnect.oauthExchangeFailed', 'Failed to save token.'));
@@ -232,7 +177,7 @@ export function InstagramConnectPage() {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refetchConfig, redirectUri, t]);
+  }, [refetchAccounts, redirectUri, t]);
 
   const handleConnect = async (account: InstagramAccountFromApi) => {
     try {
@@ -279,7 +224,7 @@ export function InstagramConnectPage() {
                             </div>
                             <div>
                               <h2 className="text-xl font-bold text-[#E4405F]">{t('instagramConnect.leftTitle', 'Connect Instagram')}</h2>
-                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescription', 'Connect with Facebook to authorize, or use token from Connect WhatsApp.')}</p>
+                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescription', 'Use Connect with Facebook only to authorize, or use token from Connect WhatsApp.')}</p>
                             </div>
                           </div>
                         </CardHeader>
@@ -292,7 +237,7 @@ export function InstagramConnectPage() {
                                     type="button"
                                     onClick={() => {
                                       setOauthLoading(true);
-                                      openOAuthPopup(true, true);
+                                      openOAuthPopup();
                                     }}
                                     disabled={oauthLoading}
                                     className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
@@ -301,20 +246,6 @@ export function InstagramConnectPage() {
                                     {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
                                   </Button>
                                   <p className="text-xs text-gray-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setOauthLoading(true);
-                                      openOAuthPopup(true);
-                                    }}
-                                    disabled={oauthLoading}
-                                    className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
-                                  >
-                                    {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
-                                    {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
-                                  </Button>
-                                  <p className="text-xs text-gray-500">Business Login (may open Instagram)</p>
                                   {redirectUri && (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2">
                                       <p className="font-medium mb-1">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
@@ -333,15 +264,6 @@ export function InstagramConnectPage() {
                                           <li>{t('instagramConnect.invalidRedirectStep4', 'Also add the same URL in the Facebook app: Use cases → Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs.')}</li>
                                           <li>{t('instagramConnect.invalidRedirectStep5', 'In the Facebook app: Business login → Configurations → Edit your configuration (e.g. Vialdi ID) → if there is a Redirect URI / OAuth redirect URIs field, add the same URL there and Save.')}</li>
                                         </ul>
-                                        {metaInstagramAppId && (
-                                          <p className="pt-1 border-t border-amber-300">
-                                            <button type="button" onClick={openInstagramDirectTest} className="text-blue-600 underline font-medium">
-                                              {t('instagramConnect.testInstagramRedirect', 'Test redirect (open Instagram login directly)')}
-                                            </button>
-                                            {' — '}
-                                            {t('instagramConnect.testInstagramRedirectHint', 'If this works but Connect with Facebook fails, add the redirect URI in the Configuration (step 5 above).')}
-                                          </p>
-                                        )}
                                       </div>
                                     </div>
                                   )}
@@ -360,7 +282,7 @@ export function InstagramConnectPage() {
                                   type="button"
                                   onClick={() => {
                                     setOauthLoading(true);
-                                    openOAuthPopup(true, true);
+                                    openOAuthPopup();
                                   }}
                                   disabled={oauthLoading}
                                   className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white"
@@ -369,33 +291,12 @@ export function InstagramConnectPage() {
                                   {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
                                 </Button>
                                 <p className="text-xs text-slate-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setOauthLoading(true);
-                                    openOAuthPopup(true);
-                                  }}
-                                  disabled={oauthLoading}
-                                  className="w-full border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10"
-                                >
-                                  {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
-                                  {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebook', 'Connect with Facebook')}
-                                </Button>
                               </div>
                             )
                           )}
                           <div className="border-t border-slate-200 pt-4 mt-4">
                             <WebhookInfoDisplay embedded variant="instagram" />
                           </div>
-                          {hasOAuth && metaInstagramAppId && redirectUri && (
-                            <div className="border-t border-slate-200 pt-4 mt-4 text-sm">
-                              <button type="button" onClick={openInstagramDirectTest} className="text-blue-600 hover:text-blue-800 underline font-medium">
-                                {t('instagramConnect.testInstagramRedirect', 'Test redirect (open Instagram login directly)')}
-                              </button>
-                              <span className="text-slate-600 ml-1">— {t('instagramConnect.testInstagramRedirectHint', 'If this works but Connect with Facebook fails, add the redirect URI in the Configuration (step 5 above).')}</span>
-                            </div>
-                          )}
                         </CardContent>
                       </Card>
 
@@ -416,7 +317,7 @@ export function InstagramConnectPage() {
                                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                                   <Instagram className="w-12 h-12 text-slate-300 mb-3" />
                                   <p className="text-sm text-slate-600">
-                                    {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook to authorize.')}
+                                    {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook only to authorize.')}
                                   </p>
                                 </div>
                               )}

@@ -142,31 +142,72 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch((e) => {
+      console.error("[instagram-webhook] POST body parse error", e);
+      return {};
+    });
     const bodyObject = body?.object ?? "(missing)";
-    console.log("[instagram-webhook] POST body object:", bodyObject, "entries:", Array.isArray(body?.entry) ? body.entry.length : 0);
+    const entryCount = Array.isArray(body?.entry) ? body.entry.length : 0;
+    console.log("[instagram-webhook] POST received — object:", bodyObject, "entries:", entryCount);
     if (body?.object !== "instagram") {
-      console.log("[instagram-webhook] POST: object is not instagram, ignoring. Set webhook under Meta Developer → App → Instagram → Configuration → Webhook and subscribe to 'messages'.");
+      console.log("[instagram-webhook] POST: object is not 'instagram', ignoring. Payload object:", bodyObject);
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const entries = body?.entry ?? [];
+    if (entries.length > 0) {
+      const first = entries[0] as Record<string, unknown>;
+      const keys = first ? Object.keys(first) : [];
+      const hasChanges = Array.isArray(first?.changes) && (first.changes as unknown[]).length > 0;
+      const hasMessaging = Array.isArray(first?.messaging) && (first.messaging as unknown[]).length > 0;
+      console.log("[instagram-webhook] first entry keys:", keys.join(", "), "id:", first?.id, "messaging?:", hasMessaging ? (first.messaging as unknown[]).length : "none", "changes?:", hasChanges ? (first.changes as unknown[]).length : "none");
+      if (hasChanges && !hasMessaging) {
+        console.log("[instagram-webhook] Payload punya 'changes' bukan 'messaging' — ini bukan event DM. Untuk tes: kirim pesan nyata dari app Instagram ke akun bisnis (@octa.vialdi), jangan pakai tombol Test di Meta.");
+      }
+    }
     for (const entry of entries) {
-      const igAccountId = entry?.id != null ? String(entry.id).trim() : null;
-      const messaging = entry?.messaging ?? [];
-      if (!igAccountId || !Array.isArray(messaging) || messaging.length === 0) continue;
+      const igAccountId = entry?.id != null && entry?.id !== "" ? String(entry.id).trim() : null;
+      let messaging = entry?.messaging ?? [];
+      if ((!igAccountId || igAccountId === "0" || !Array.isArray(messaging) || messaging.length === 0) && Array.isArray((entry as Record<string, unknown>)?.changes)) {
+        const changes = (entry as Record<string, unknown>).changes as Array<Record<string, unknown>>;
+        for (const ch of changes) {
+          const val = ch?.value as Record<string, unknown> | undefined;
+          if (val && (val.messaging_event || (val.sender && val.message))) {
+            messaging = [val.messaging_event ?? val] as typeof messaging;
+            console.log("[instagram-webhook] using message from entry.changes");
+            break;
+          }
+        }
+      }
+      if (!Array.isArray(messaging) || messaging.length === 0) continue;
+      let effectiveId = igAccountId && igAccountId !== "0" ? igAccountId : null;
+      console.log("[instagram-webhook] entry id:", effectiveId ?? "(from changes)", "messaging events:", messaging.length);
+      if (!effectiveId && messaging.length > 0) {
+        const { data: singleAccount } = await supabase
+          .from("organization_instagram_accounts")
+          .select("instagram_business_account_id")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        if (singleAccount?.instagram_business_account_id) {
+          effectiveId = String(singleAccount.instagram_business_account_id).trim();
+          console.log("[instagram-webhook] using single account fallback id:", effectiveId);
+        }
+      }
+      if (!effectiveId) continue;
 
       const { data: accountRows, error: accError } = await supabase
         .from("organization_instagram_accounts")
         .select("organization_id, page_access_token, instagram_username, instagram_name")
-        .eq("instagram_business_account_id", igAccountId)
+        .eq("instagram_business_account_id", effectiveId)
         .eq("is_active", true);
 
       if (accError || !accountRows?.length) {
-        console.error("[instagram-webhook] config not found for instagram_business_account_id:", igAccountId, accError ?? "");
+        console.error("[instagram-webhook] config not found for instagram_business_account_id:", effectiveId, "— pastikan akun Instagram ini yang di-connect di halaman Connect Instagram. Error:", accError ?? "");
         continue;
       }
 
+      console.log("[instagram-webhook] account found for ig id:", effectiveId, "org:", accountRows[0]?.organization_id);
       const account = accountRows[0] as {
         organization_id: string;
         page_access_token: string | null;
@@ -180,20 +221,31 @@ Deno.serve(async (req: Request) => {
         (account.instagram_name ?? "").trim() ||
         "Instagram";
 
+      type MessagingEvt = { message?: { is_echo?: boolean; mid?: string }; sender?: { id?: unknown }; recipient?: { id?: unknown }; timestamp?: unknown };
       for (const evt of messaging) {
-        if (evt.message?.is_echo) continue;
-        const senderId = evt.sender?.id != null ? String(evt.sender.id) : null;
-        const recipientId = evt.recipient?.id != null ? String(evt.recipient.id) : null;
-        if (!senderId || recipientId !== igAccountId) continue;
+        const e = evt as MessagingEvt;
+        if (e.message?.is_echo) {
+          console.log("[instagram-webhook] skip: is_echo");
+          continue;
+        }
+        const senderId = e.sender?.id != null ? String(e.sender.id) : null;
+        const recipientId = e.recipient?.id != null ? String(e.recipient.id) : null;
+        if (!senderId) {
+          console.log("[instagram-webhook] skip: no senderId");
+          continue;
+        }
+        if (recipientId && recipientId !== effectiveId) {
+          console.log("[instagram-webhook] recipientId differs from entry id (continuing anyway)", { recipientId, effectiveId });
+        }
 
-        const mid = evt.message?.mid != null ? String(evt.message.mid) : null;
-        const ts = evt.timestamp != null ? new Date(Number(evt.timestamp)).toISOString() : new Date().toISOString();
+        const mid = e.message?.mid != null ? String(e.message.mid) : null;
+        const ts = e.timestamp != null ? new Date(Number(e.timestamp)).toISOString() : new Date().toISOString();
         const { body: bodyText, messageType } = getMessageBody(evt as Record<string, unknown>);
         const lastBody = bodyText.slice(0, 200);
 
         const convPayload = {
           organization_id: orgId,
-          instagram_business_account_id: igAccountId,
+          instagram_business_account_id: effectiveId,
           customer_ig_id: senderId,
           customer_external_id: senderId,
           last_message_at: ts,
@@ -209,7 +261,7 @@ Deno.serve(async (req: Request) => {
           .from("instagram_conversations")
           .select("id, first_inbound_at")
           .eq("organization_id", orgId)
-          .eq("instagram_business_account_id", igAccountId)
+          .eq("instagram_business_account_id", effectiveId)
           .eq("customer_ig_id", senderId)
           .maybeSingle();
 
@@ -260,9 +312,12 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        if (!conv || !mid) continue;
+        if (!conv || !mid) {
+          console.log("[instagram-webhook] skip save: no conv or mid", { conv: !!conv, mid: !!mid });
+          continue;
+        }
 
-        await supabase.from("instagram_messages").insert({
+        const { error: msgErr } = await supabase.from("instagram_messages").insert({
           conversation_id: conv.id,
           direction: "inbound",
           platform_message_id: mid,
@@ -271,6 +326,10 @@ Deno.serve(async (req: Request) => {
           raw_metadata: evt,
           created_at: ts,
         });
+        if (msgErr) {
+          console.error("[instagram-webhook] instagram_messages insert error", msgErr);
+          continue;
+        }
 
         if (!existingConv?.first_inbound_at && conv.first_inbound_at) {
           await supabase
