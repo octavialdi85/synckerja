@@ -635,6 +635,7 @@ const JobPreview = () => {
               companyName={company.company_name}
               recruitmentLinkId={jobData.id}
               recruitmentToken={jobData.token}
+              organizationId={jobData.organization_id}
               requiredSkills={requiredSkills}
               onClose={() => setShowApplicationForm(false)}
             />

@@ -238,24 +238,26 @@ export const JobOpeningModal = ({ open, onClose, onSave, editData, saving }: Job
                       Previous
                     </Button>
                   )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={handleClose}>
+                    Cancel
+                  </Button>
                   {activeTab !== 'benefits' && (
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={handleNextTab}
                       disabled={!canProceedToNext(activeTab)}
                     >
                       Next
                     </Button>
                   )}
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={handleClose}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={saving || !isBasicInfoValid() || !isDetailsValid()}>
-                    {saving ? 'Saving...' : editData ? 'Update' : 'Create'}
-                  </Button>
+                  {activeTab === 'benefits' && (
+                    <Button type="submit" disabled={saving || !isBasicInfoValid() || !isDetailsValid()}>
+                      {saving ? 'Saving...' : editData ? 'Update' : 'Create'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

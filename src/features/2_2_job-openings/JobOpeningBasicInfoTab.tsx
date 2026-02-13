@@ -3,6 +3,20 @@ import { Label } from '@/features/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { JobOpeningFormData } from './hooks/jobOpeningTypes';
 
+/** Format number with dot as thousand separator (e.g. 8000000 -> "8.000.000") */
+function formatSalaryDisplay(value: number | undefined | null): string {
+  if (value === undefined || value === null || isNaN(value)) return '';
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/** Parse display string back to number (e.g. "8.000.000" -> 8000000) */
+function parseSalaryInput(raw: string): number | undefined {
+  const digits = raw.replace(/\D/g, '');
+  if (digits === '') return undefined;
+  const num = parseInt(digits, 10);
+  return isNaN(num) ? undefined : num;
+}
+
 interface JobOpeningBasicInfoTabProps {
   formData: JobOpeningFormData;
   onInputChange: (field: keyof JobOpeningFormData, value: any) => void;
@@ -134,20 +148,22 @@ export const JobOpeningBasicInfoTab = ({
           <Label htmlFor="salary_min">Minimum Salary</Label>
           <Input
             id="salary_min"
-            type="number"
-            value={formData.salary_min || ''}
-            onChange={(e) => onInputChange('salary_min', e.target.value ? parseInt(e.target.value) : undefined)}
-            placeholder="e.g., 8000000"
+            type="text"
+            inputMode="numeric"
+            value={formatSalaryDisplay(formData.salary_min)}
+            onChange={(e) => onInputChange('salary_min', parseSalaryInput(e.target.value))}
+            placeholder="e.g., 8.000.000"
           />
         </div>
         <div>
           <Label htmlFor="salary_max">Maximum Salary</Label>
           <Input
             id="salary_max"
-            type="number"
-            value={formData.salary_max || ''}
-            onChange={(e) => onInputChange('salary_max', e.target.value ? parseInt(e.target.value) : undefined)}
-            placeholder="e.g., 15000000"
+            type="text"
+            inputMode="numeric"
+            value={formatSalaryDisplay(formData.salary_max)}
+            onChange={(e) => onInputChange('salary_max', parseSalaryInput(e.target.value))}
+            placeholder="e.g., 15.000.000"
           />
         </div>
         <div>

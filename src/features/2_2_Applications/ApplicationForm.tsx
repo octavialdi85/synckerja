@@ -8,6 +8,43 @@ import { JobApplicationSkill } from '@/features/2_2_job-openings/hooks/recruitme
 import { ApplicationFormData, ApplicationFormProps } from './components/application-form/types';
 import { useToast } from '@/features/ui/use-toast';
 
+function formatSalaryDisplay(value: string): string {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function parseSalaryInput(raw: string): string {
+  return raw.replace(/\D/g, '');
+}
+
+function isoToDdMmYyyy(iso: string): string {
+  if (!iso || iso.length < 10) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+}
+
+function ddMmYyyyToIso(display: string): string {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length !== 8) return '';
+  const d = digits.slice(0, 2);
+  const m = digits.slice(2, 4);
+  const y = digits.slice(4, 8);
+  const day = parseInt(d, 10);
+  const month = parseInt(m, 10);
+  const year = parseInt(y, 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return '';
+  return `${y}-${m}-${d}`;
+}
+
+function formatBirthDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
 export function ApplicationForm({
   jobId,
   jobTitle,
@@ -15,6 +52,7 @@ export function ApplicationForm({
   onClose,
   recruitmentLinkId,
   recruitmentToken,
+  organizationId,
   requiredSkills = []
 }: ApplicationFormProps) {
   const { toast } = useToast();
@@ -57,6 +95,7 @@ export function ApplicationForm({
   const [skills, setSkills] = useState<JobApplicationSkill[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [profileLink, setProfileLink] = useState<string>('');
+  const [birthDateDisplay, setBirthDateDisplay] = useState<string>('');
 
   const { submitting, submitApplication } = useApplicationSubmission();
 
@@ -89,6 +128,13 @@ export function ApplicationForm({
       errors.push('Phone number is required');
     }
 
+    if (formData.nik.trim()) {
+      const nikDigits = formData.nik.replace(/\D/g, '');
+      if (nikDigits.length !== 16) {
+        errors.push('NIK (ID Number) must be exactly 16 digits');
+      }
+    }
+
     // Check required skills
     if (requiredSkills.length > 0) {
       const requiredSkillsToCheck = requiredSkills.filter(skill => skill.is_required);
@@ -118,8 +164,9 @@ export function ApplicationForm({
       skills,
       jobId,
       recruitmentLinkId,
-      requiredSkills,
       recruitmentToken,
+      organizationId,
+      requiredSkills,
       onSuccess: (generatedProfileLink) => {
         console.log('✅ Application successful, profile link:', generatedProfileLink);
         if (generatedProfileLink) {
@@ -226,12 +273,25 @@ export function ApplicationForm({
                 Birth Date
               </label>
               <input
-                type="date"
+                type="text"
                 id="birth_date"
-                value={formData.birth_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, birth_date: e.target.value }))}
+                inputMode="numeric"
+                value={birthDateDisplay !== '' ? birthDateDisplay : (formData.birth_date ? isoToDdMmYyyy(formData.birth_date) : '')}
+                onChange={(e) => {
+                  const formatted = formatBirthDateInput(e.target.value);
+                  setBirthDateDisplay(formatted);
+                  const iso = ddMmYyyyToIso(formatted);
+                  if (iso) setFormData(prev => ({ ...prev, birth_date: iso }));
+                  else if (!formatted) setFormData(prev => ({ ...prev, birth_date: '' }));
+                }}
+                onBlur={() => {
+                  const iso = ddMmYyyyToIso(birthDateDisplay);
+                  if (iso) setFormData(prev => ({ ...prev, birth_date: iso }));
+                  setBirthDateDisplay('');
+                }}
                 disabled={submitting}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="dd/mm/yyyy"
               />
             </div>
 
@@ -258,13 +318,21 @@ export function ApplicationForm({
               </label>
               <input
                 type="text"
+                inputMode="numeric"
                 id="nik"
                 value={formData.nik}
-                onChange={(e) => setFormData(prev => ({ ...prev, nik: e.target.value }))}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 16);
+                  setFormData(prev => ({ ...prev, nik: digits }));
+                }}
                 disabled={submitting}
+                maxLength={16}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                placeholder="Enter your NIK"
+                placeholder="16 digit NIK"
               />
+              {formData.nik.length > 0 && formData.nik.length !== 16 && (
+                <p className="text-sm text-amber-600 mt-1">NIK must be exactly 16 digits</p>
+              )}
             </div>
           </div>
         </div>
@@ -321,12 +389,13 @@ export function ApplicationForm({
             </label>
             <input
               type="text"
+              inputMode="numeric"
               id="expectedSalary"
-              value={formData.expectedSalary}
-              onChange={(e) => setFormData(prev => ({ ...prev, expectedSalary: e.target.value }))}
+              value={formatSalaryDisplay(formData.expectedSalary)}
+              onChange={(e) => setFormData(prev => ({ ...prev, expectedSalary: parseSalaryInput(e.target.value) }))}
               disabled={submitting}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              placeholder="e.g., Rp 8,000,000"
+              placeholder="e.g., 8.000.000"
             />
           </div>
         </div>

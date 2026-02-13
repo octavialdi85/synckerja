@@ -196,6 +196,7 @@ export const IntervieweeTab = () => {
         const scoreData = profile ? candidateScores[(profile as any).id] : null;
         return {
           ...(application as object),
+          candidate_profile_id: (profile as any)?.id ?? (application as any).candidate_profile_id,
           // Use profile data as primary source
           applicant_name: (profile as any)?.full_name || (application as any).applicant_name,
           applicant_email: (profile as any)?.email || (application as any).applicant_email,
@@ -263,7 +264,13 @@ export const IntervieweeTab = () => {
   const handleViewProfile = (candidate: InterviewCandidate) => {
     if (candidate.candidate_profile_id) {
       navigate(`/recruitment/candidates/${candidate.candidate_profile_id}`);
+      return;
     }
+    toast({
+      title: "Profile not available",
+      description: "This candidate does not have a profile yet. Profile will be available after the candidate completes their profile.",
+      variant: "destructive"
+    });
   };
 
   const handleAddAsEmployee = (candidate: InterviewCandidate) => {

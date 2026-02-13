@@ -5,9 +5,11 @@ import { useToast } from '@/features/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Button } from '@/features/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
+import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import { CandidateProfileTabs, CandidateProfileSidebar } from '@/features/2_2_Applications/components/application-form';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
-import { Loader2, User, CheckCircle, ArrowLeft, UserPlus } from 'lucide-react';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { Loader2, User, CheckCircle, ArrowLeft, UserPlus, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CandidateProfile {
@@ -48,6 +50,7 @@ const CandidateProfile = () => {
   const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const isMobile = useIsMobile();
 
   // Detect if using the new clean layout route
   const isCleanLayout = location.pathname.startsWith('/candidate/profile');
@@ -328,6 +331,36 @@ const CandidateProfile = () => {
           </div>
         </div>
       </StandardLayout>;
+  }
+
+  // Block mobile on /candidate/profile?token= — show desktop-only warning
+  if (isCleanLayout && isMobile) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <Dialog open={true}>
+          <DialogContent className="w-full max-w-[400px] rounded-xl border-2 border-slate-300 shadow-xl bg-white p-0 overflow-hidden" hideCloseButton overlayClassName="bg-slate-100/90">
+            <div className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 px-6 pt-8 pb-6">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-5 ring-4 ring-slate-100/80">
+                <Monitor className="h-8 w-8 text-slate-600" strokeWidth={1.5} />
+              </div>
+              <DialogTitle className="text-xl font-semibold text-slate-900 text-center tracking-tight">
+                Desktop only
+              </DialogTitle>
+            </div>
+            <div className="px-6 py-5 text-center">
+              <p className="text-slate-600 text-[15px] leading-relaxed">
+                This page is designed for desktop or laptop. Please open the same link on your computer to complete your profile.
+              </p>
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <p className="text-xs text-slate-500">
+                  Keep this link and open it on a desktop browser.
+                </p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
   }
 
   // Clean layout for new route with sidebar - COMPACT VERSION

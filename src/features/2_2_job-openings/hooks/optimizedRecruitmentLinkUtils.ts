@@ -107,7 +107,6 @@ async function getJobByTokenFallback(token: string): Promise<RecruitmentLink | n
       .select(selectQuery)
       .eq('token', token)
       .eq('status', 'active')
-      .in('job_openings.status', ['active', 'draft'])
       .maybeSingle();
 
     if (queryResult.error || !queryResult.data) {

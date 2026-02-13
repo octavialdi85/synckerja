@@ -3,6 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { getCurrentOrganizationId } from '@/features/1-login/hooks/useCurrentOrg';
 import { JobOpening, JobOpeningFormData, JobBenefit } from './jobOpeningTypes';
 
+const UUID_FIELDS = ['department_id', 'job_position_id', 'job_level_id', 'employment_status_id'] as const;
+
+function sanitizeUuidFields<T extends Record<string, any>>(obj: T): T {
+  const out = { ...obj };
+  for (const key of UUID_FIELDS) {
+    if (key in out && (out[key] === '' || out[key] === undefined)) {
+      (out as any)[key] = null;
+    }
+  }
+  return out;
+}
+
 // Helper function to safely convert Json to JobBenefit[]
 const parseJobBenefits = (benefits: any): JobBenefit[] => {
   if (!benefits) return [];
@@ -21,12 +33,15 @@ const parseJobBenefits = (benefits: any): JobBenefit[] => {
 export const createJobOpening = async (data: JobOpeningFormData): Promise<JobOpening> => {
   const { organizationId } = await getCurrentOrganizationId();
   
-  // Convert benefits array to Json for Supabase
-  const insertData = {
+  const base = sanitizeUuidFields({
     ...data,
     organization_id: organizationId,
     created_by: (await supabase.auth.getUser()).data.user?.id,
     benefits: data.benefits ? JSON.stringify(data.benefits) : JSON.stringify([])
+  });
+  const insertData = {
+    ...base,
+    benefits: base.benefits ?? JSON.stringify([])
   };
 
   const { data: jobOpening, error } = await supabase
@@ -51,11 +66,11 @@ export const createJobOpening = async (data: JobOpeningFormData): Promise<JobOpe
 };
 
 export const updateJobOpening = async (id: string, data: Partial<JobOpeningFormData>): Promise<JobOpening> => {
-  // Convert benefits array to Json for Supabase
-  const updateData = {
+  const raw = {
     ...data,
     benefits: data.benefits ? JSON.stringify(data.benefits) : undefined
   };
+  const updateData = sanitizeUuidFields(raw);
 
   const { data: jobOpening, error } = await supabase
     .from('job_openings')

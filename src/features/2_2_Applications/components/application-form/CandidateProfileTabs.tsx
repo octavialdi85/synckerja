@@ -9,9 +9,10 @@ import { InformalEducationTab } from './InformalEducationTab';
 import { WorkExperienceTab } from './WorkExperienceTab';
 import { FamilyMembersTab } from './FamilyMembersTab';
 import { CandidateReviewsTab } from './CandidateReviewsTab';
-import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/features/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 
@@ -62,6 +63,7 @@ export const CandidateProfileTabs = ({
 }: CandidateProfileTabsProps) => {
   const [activeTab, setActiveTab] = useState('personal');
   const [stepValidations, setStepValidations] = useState<Record<string, boolean>>({});
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const { toast } = useToast();
   
   // Use ref to store onStepValidation callback to prevent infinite loops
@@ -268,21 +270,13 @@ export const CandidateProfileTabs = ({
       
       if (error) throw error;
       
-      toast({
-        title: "Profile Berhasil Disubmit!",
-        description: "Terima kasih telah melengkapi profile. Profile Anda telah berhasil disubmit. Tim HR akan menghubungi Anda segera.",
-        duration: 5000
-      });
-      
-      // Update local candidate state
       onUpdate({
         ...candidate,
         profile_completed: true,
         submitted_at: new Date().toISOString()
       });
       
-      // Don't redirect - candidate should stay on the same page
-      // The profile is now read-only and shows success message
+      setShowSuccessModal(true);
       
       if (onFinalSubmit) {
         onFinalSubmit();
@@ -381,6 +375,7 @@ export const CandidateProfileTabs = ({
   }, [activeTab, tabs, validateStep, toast]);
 
   return (
+    <>
     <div className="w-full h-full">
       <Tabs 
         value={activeTab} 
@@ -714,5 +709,23 @@ export const CandidateProfileTabs = ({
         </div>
       </Tabs>
     </div>
+
+    <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+      <DialogContent className="sm:max-w-md">
+        <div className="text-center py-4">
+          <CheckCircle className="h-14 w-14 text-green-500 mx-auto mb-3" />
+          <DialogTitle className="text-xl font-semibold text-gray-900 mb-2">
+            Congratulations!
+          </DialogTitle>
+          <p className="text-gray-600 text-sm mb-6">
+            Your profile has been submitted successfully.
+          </p>
+          <Button onClick={() => setShowSuccessModal(false)} className="min-w-[120px]">
+            OK
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

@@ -19,6 +19,7 @@ export const useApplicationSubmission = () => {
       recruitmentLinkId,
       requiredSkills,
       recruitmentToken,
+      organizationId: organizationIdParam,
       onSuccess
     } = params;
 
@@ -84,16 +85,20 @@ export const useApplicationSubmission = () => {
     setSubmitting(true);
 
     try {
-      console.log('🔍 Getting organization for job:', jobId);
-      
-      toast({
-        title: "Getting Job Information",
-        description: "Retrieving job details...",
-      });
-
-      const jobOrgData = await getJobOrganization(jobId);
-      const organizationId = jobOrgData.organization_id;
-      console.log('✅ Using organization_id:', organizationId);
+      let organizationId: string;
+      if (organizationIdParam) {
+        organizationId = organizationIdParam;
+        console.log('✅ Using organization_id from link:', organizationId);
+      } else {
+        console.log('🔍 Getting organization for job:', jobId);
+        toast({
+          title: "Getting Job Information",
+          description: "Retrieving job details...",
+        });
+        const jobOrgData = await getJobOrganization(jobId);
+        organizationId = jobOrgData.organization_id;
+        console.log('✅ Using organization_id:', organizationId);
+      }
 
       // Upload CV if provided
       let cvFilePath = '';

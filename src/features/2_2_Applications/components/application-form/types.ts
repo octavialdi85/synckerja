@@ -41,6 +41,7 @@ export interface ApplicationFormProps {
   onClose: () => void;
   recruitmentLinkId?: string;
   recruitmentToken?: string;
+  organizationId?: string;
   requiredSkills?: Array<{ title: string; skill_level: string; is_required: boolean }>;
 }
 
@@ -50,7 +51,8 @@ export interface SubmissionParams {
   skills: Array<{ title: string; level: string; experience_years?: number }>;
   jobId: string;
   recruitmentLinkId?: string;
-  requiredSkills: Array<{ title: string; skill_level: string; is_required: boolean }>;
   recruitmentToken?: string;
+  organizationId?: string;
+  requiredSkills: Array<{ title: string; skill_level: string; is_required: boolean }>;
   onSuccess: (profileLink: string) => void;
 }

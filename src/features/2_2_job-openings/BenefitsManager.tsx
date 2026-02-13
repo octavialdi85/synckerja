@@ -3,7 +3,7 @@ import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Textarea } from '@/features/ui/textarea';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { JobBenefit } from './hooks/jobOpeningTypes';
 
 interface BenefitsManagerProps {
@@ -13,17 +13,27 @@ interface BenefitsManagerProps {
 
 export const BenefitsManager = ({ benefits, onChange }: BenefitsManagerProps) => {
   const [localBenefits, setLocalBenefits] = useState<JobBenefit[]>(benefits || []);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [snapshotForCancel, setSnapshotForCancel] = useState<JobBenefit | null>(null);
 
   const handleAddBenefit = () => {
     const newBenefits = [...localBenefits, { title: '', description: '' }];
     setLocalBenefits(newBenefits);
     onChange(newBenefits);
+    setEditingIndex(localBenefits.length);
+    setSnapshotForCancel({ title: '', description: '' });
   };
 
   const handleRemoveBenefit = (index: number) => {
     const newBenefits = localBenefits.filter((_, i) => i !== index);
     setLocalBenefits(newBenefits);
     onChange(newBenefits);
+    if (editingIndex === index) {
+      setEditingIndex(null);
+      setSnapshotForCancel(null);
+    } else if (editingIndex !== null && editingIndex > index) {
+      setEditingIndex(editingIndex - 1);
+    }
   };
 
   const handleUpdateBenefit = (index: number, field: 'title' | 'description', value: string) => {
@@ -37,10 +47,33 @@ export const BenefitsManager = ({ benefits, onChange }: BenefitsManagerProps) =>
     onChange(newBenefits);
   };
 
-  // Sync with external changes
+  const handleStartEdit = (index: number) => {
+    setEditingIndex(index);
+    setSnapshotForCancel({ ...localBenefits[index] });
+  };
+
+  const handleSaveEdit = () => {
+    setEditingIndex(null);
+    setSnapshotForCancel(null);
+  };
+
+  const handleCancelEdit = () => {
+    if (editingIndex === null || snapshotForCancel === null) return;
+    const newBenefits = localBenefits.map((benefit, i) =>
+      i === editingIndex ? { ...snapshotForCancel } : benefit
+    );
+    setLocalBenefits(newBenefits);
+    onChange(newBenefits);
+    setEditingIndex(null);
+    setSnapshotForCancel(null);
+  };
+
+  // Sync with external changes (e.g. modal opened with different data)
   useEffect(() => {
     if (benefits !== localBenefits) {
       setLocalBenefits(benefits || []);
+      setEditingIndex(null);
+      setSnapshotForCancel(null);
     }
   }, [benefits]);
 
@@ -66,43 +99,107 @@ export const BenefitsManager = ({ benefits, onChange }: BenefitsManagerProps) =>
         </div>
       ) : (
         <div className="space-y-4">
-          {localBenefits.map((benefit, index) => (
-            <div key={index} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Benefit {index + 1}</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRemoveBenefit(index)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+          {localBenefits.map((benefit, index) => {
+            const isEditing = editingIndex === index;
+            return (
+              <div
+                key={index}
+                className={`rounded-lg border ${isEditing ? 'p-4 space-y-3 border-input' : 'p-3 border-border/60 bg-muted/30'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  {!isEditing ? (
+                    <>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="font-medium text-foreground">
+                          {benefit.title || '—'}
+                        </p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {benefit.description || 'No description'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => handleStartEdit(index)}
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleRemoveBenefit(index)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 space-y-3 min-w-0">
+                        <div className="space-y-2">
+                          <Label htmlFor={`benefit-title-${index}`}>Title</Label>
+                          <Input
+                            id={`benefit-title-${index}`}
+                            placeholder="e.g., Health Insurance"
+                            value={benefit.title}
+                            onChange={(e) => handleUpdateBenefit(index, 'title', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`benefit-description-${index}`}>Description</Label>
+                          <Textarea
+                            id={`benefit-description-${index}`}
+                            placeholder="Enter benefit description..."
+                            value={benefit.description}
+                            onChange={(e) => handleUpdateBenefit(index, 'description', e.target.value)}
+                            className="min-h-[80px]"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          className="flex items-center gap-1.5"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                          className="flex items-center gap-1.5"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveBenefit(index)}
+                          className="text-red-600 hover:text-red-700 justify-start"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`benefit-title-${index}`}>Title</Label>
-                <Input
-                  id={`benefit-title-${index}`}
-                  placeholder="e.g., Health Insurance"
-                  value={benefit.title}
-                  onChange={(e) => handleUpdateBenefit(index, 'title', e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`benefit-description-${index}`}>Description</Label>
-                <Textarea
-                  id={`benefit-description-${index}`}
-                  placeholder="Enter benefit description..."
-                  value={benefit.description}
-                  onChange={(e) => handleUpdateBenefit(index, 'description', e.target.value)}
-                  className="min-h-[80px]"
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
