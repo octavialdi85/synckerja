@@ -19,6 +19,7 @@ import { ContentPlanTable } from './container/ContentPlanTable';
 import { TableFooter } from './container/TableFooter';
 import { SidebarContainer } from './container/RightSection/SidebarContainer';
 import { DashboardLoadingWrapper } from './container/DashboardLoadingWrapper';
+import { DashboardDataPreloader } from './container/DashboardDataPreloader';
 
 import BriefDialog from './modal/BriefDialog';
 import TitleDialog from './modal/TitleDialog';
@@ -1276,15 +1277,17 @@ const SocialMediaContent = () => {
   );
 }
 
-// Main export with providers
+// Main export with providers: one prefetch then smooth render
 export default function SocialMediaDashboardPage() {
   return (
     <OptimizedErrorBoundary>
-      <RealtimeSocialMediaProvider>
-        <PICFilterProvider>
-          <SocialMediaContent />
-        </PICFilterProvider>
-      </RealtimeSocialMediaProvider>
+      <DashboardDataPreloader>
+        <RealtimeSocialMediaProvider>
+          <PICFilterProvider>
+            <SocialMediaContent />
+          </PICFilterProvider>
+        </RealtimeSocialMediaProvider>
+      </DashboardDataPreloader>
     </OptimizedErrorBoundary>
   );
 }

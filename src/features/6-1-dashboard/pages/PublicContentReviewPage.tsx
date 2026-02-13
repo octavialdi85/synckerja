@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -6,12 +6,12 @@ import { Textarea } from '@/features/ui/textarea';
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, Trash2, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { defaultTranslations, applyVariables } from '@/features/share/i18n/translations';
-import { getEmbedUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
+import { getEmbedUrl, getDirectVideoUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
 import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
 
 const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
@@ -25,6 +25,7 @@ interface PublicReviewContent {
   content_type_name: string | null;
   service_name: string | null;
   sub_service_name: string | null;
+  pic_production_name: string | null;
 }
 
 interface PublicReviewComment {
@@ -70,6 +71,9 @@ const PublicContentReviewPage: React.FC = () => {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [videoUseIframe, setVideoUseIframe] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const loadContent = useCallback(async () => {
     if (!token) return;
@@ -136,6 +140,12 @@ const PublicContentReviewPage: React.FC = () => {
       // ignore invalid JSON
     }
   }, [token]);
+
+  // Reset video state when link changes
+  useEffect(() => {
+    setVideoUseIframe(false);
+    setVideoPlaying(false);
+  }, [content?.google_drive_link, content?.link_url]);
 
   // Set document title and og/twitter meta for link preview when content is loaded
   useEffect(() => {
@@ -304,6 +314,11 @@ const PublicContentReviewPage: React.FC = () => {
 
   const link = content?.google_drive_link ?? content?.link_url ?? '';
   const embedUrl = getEmbedUrl(link);
+  const directVideoUrl = isFileLink(link) ? getDirectVideoUrl(link) : '';
+
+  const handleVideoPlay = useCallback(() => {
+    videoRef.current?.play();
+  }, []);
 
   if (loading) {
     return (
@@ -375,36 +390,7 @@ const PublicContentReviewPage: React.FC = () => {
         </DialogContent>
       </Dialog>
       <div className="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col gap-2">
-        {/* Header / metadata */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <h1 className="font-semibold text-gray-900 truncate pr-2">
-            {content.title || t('publicReview.content.noTitle', 'Untitled')}
-          </h1>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs text-gray-600">
-            {content.service_name != null && content.service_name !== '' && (
-              <span className="flex items-center gap-1">
-                <Briefcase className="h-3 w-3" />
-                {content.service_name}
-              </span>
-            )}
-            {content.sub_service_name != null && content.sub_service_name !== '' && (
-              <span className="flex items-center gap-1">
-                <Layers className="h-3 w-3" />
-                {content.sub_service_name}
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <Tag className="h-3 w-3" />
-              {content.content_type_name || '—'}
-            </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {formatDisplayDate(content.post_date)}
-            </span>
-          </div>
-        </div>
-
-        {/* Preview - orientasi mengikuti konten: portrait (Reel/Story) atau landscape. touch-pan-y agar scroll halaman tetap jalan di mobile saat jari di atas media. */}
+        {/* Preview with header (title + metadata) in the section header, no separate "Preview" label */}
         {(() => {
           const portrait = isPortraitContent(content.content_type_name);
           const aspectClass = portrait
@@ -413,7 +399,37 @@ const PublicContentReviewPage: React.FC = () => {
           return (
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y">
               <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <h4 className="font-medium text-sm text-gray-900">{t('publicReview.preview.title', 'Preview')}</h4>
+                <h1 className="font-semibold text-gray-900 truncate pr-2 text-base">
+                  {content.title || t('publicReview.content.noTitle', 'Untitled')}
+                </h1>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs text-gray-600">
+                  {content.service_name != null && content.service_name !== '' && (
+                    <span className="flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" />
+                      {content.service_name}
+                    </span>
+                  )}
+                  {content.sub_service_name != null && content.sub_service_name !== '' && (
+                    <span className="flex items-center gap-1">
+                      <Layers className="h-3 w-3" />
+                      {content.sub_service_name}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    {content.content_type_name || '—'}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {formatDisplayDate(content.post_date)}
+                  </span>
+                  {content.pic_production_name != null && content.pic_production_name.trim() !== '' && (
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      PIC Production: {content.pic_production_name}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className={`flex-1 p-4 flex items-center justify-center bg-white touch-pan-y ${portrait ? 'flex' : ''}`}>
                 {!link ? (
@@ -431,15 +447,51 @@ const PublicContentReviewPage: React.FC = () => {
                     </Button>
                   </div>
                 ) : isFileLink(link) && embedUrl ? (
-                  <div className={`rounded-lg overflow-hidden bg-black touch-pan-y ${aspectClass}`}>
-                    <iframe
-                      src={embedUrl}
-                      className="w-full h-full border-0 rounded-lg touch-pan-y"
-                      title="Preview"
-                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                      loading="lazy"
-                    />
-                  </div>
+                  (() => {
+                    const useIframe = videoUseIframe || !directVideoUrl;
+                    if (useIframe) {
+                      return (
+                        <div className={`rounded-lg overflow-hidden bg-black touch-pan-y ${aspectClass}`}>
+                          <iframe
+                            src={embedUrl}
+                            className="w-full h-full border-0 rounded-lg touch-pan-y"
+                            title="Preview"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            loading="lazy"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div
+                        className={`rounded-lg overflow-hidden bg-black touch-pan-y ${aspectClass} ${!videoPlaying ? 'cursor-pointer' : ''}`}
+                        onClick={() => {
+                          if (!videoPlaying) handleVideoPlay();
+                        }}
+                        role={!videoPlaying ? 'button' : undefined}
+                        tabIndex={!videoPlaying ? 0 : undefined}
+                        onKeyDown={!videoPlaying ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleVideoPlay();
+                          }
+                        } : undefined}
+                        aria-label={!videoPlaying ? t('publicReview.preview.play', 'Play video') : undefined}
+                      >
+                        <video
+                          ref={videoRef}
+                          src={directVideoUrl}
+                          className={cn('w-full h-full object-contain object-left', !videoPlaying && 'pointer-events-none')}
+                          controls
+                          playsInline
+                          onError={() => setVideoUseIframe(true)}
+                          onPlay={() => setVideoPlaying(true)}
+                          onPause={() => setVideoPlaying(false)}
+                          onEnded={() => setVideoPlaying(false)}
+                        />
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="text-center">
                     <LinkIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />

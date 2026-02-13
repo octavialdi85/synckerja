@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
 import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { OptimizedCommentPanel } from './OptimizedCommentPanel';
 import GoogleDriveFolderCarousel from './GoogleDriveFolderCarousel';
 import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthButton';
@@ -13,31 +14,52 @@ import { devLog } from '@/config/logger';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { usePublicReviewToken } from '../hook/usePublicReviewToken';
+import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
 
-// Helper function to get embed URL (defined before component)
 const getEmbedUrl = (url: string) => {
-  if (!url) return '';
-  if (url.includes('drive.google.com/file/d/')) {
-    const fileId = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/)?.[1];
-    if (fileId) {
-      return `https://drive.google.com/file/d/${fileId}/preview`;
-    }
-  }
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    return null;
-  }
-  return url;
+  const u = getEmbedUrlFromUtils(url);
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return null;
+  return u || null;
 };
 
-// Component to handle Google Drive file preview with CSP error fallback
+// Component to handle Google Drive file preview: try HTML5 video (one-click play), fallback to iframe
 const GoogleDriveFilePreview: React.FC<{ link: string }> = ({ link }) => {
   const [iframeError, setIframeError] = useState(false);
+  const [videoUseIframe, setVideoUseIframe] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const embedUrl = getEmbedUrl(link);
+  const directVideoUrl = isFileLink(link) ? getDirectVideoUrl(link) : '';
+  const useIframe = videoUseIframe || !directVideoUrl;
 
-  const handleIframeError = () => {
+  const handleVideoPlay = useCallback(() => {
+    videoRef.current?.play();
+  }, []);
+
+  const handleIframeError = useCallback(() => {
     devLog.debug('⚠️ Google Drive iframe failed to load (CSP error), showing fallback');
     setIframeError(true);
-  };
+  }, []);
+
+  // Always call hooks in the same order (Rules of Hooks). Only run CSP check when actually using iframe.
+  React.useEffect(() => {
+    if (!useIframe || !embedUrl) return;
+    const timer = setTimeout(() => {
+      try {
+        const iframe = document.querySelector(`iframe[data-embed-url="${embedUrl}"]`) as HTMLIFrameElement;
+        if (iframe) {
+          try {
+            iframe.contentWindow?.location;
+          } catch (e) {
+            handleIframeError();
+          }
+        }
+      } catch (e) {
+        handleIframeError();
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [embedUrl, useIframe, handleIframeError]);
 
   if (iframeError || !embedUrl) {
     return (
@@ -63,33 +85,30 @@ const GoogleDriveFilePreview: React.FC<{ link: string }> = ({ link }) => {
     );
   }
 
-  // Use useEffect to detect CSP errors immediately
-  // Note: CSP errors are browser security violations that cannot be suppressed
-  // They are expected from Google Drive and don't affect functionality
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      // If iframe hasn't loaded after 1 second, likely CSP blocked it
-      // Check for CSP errors by trying to access iframe
-      try {
-        const iframe = document.querySelector(`iframe[data-embed-url="${embedUrl}"]`) as HTMLIFrameElement;
-        if (iframe) {
-          // Try to access contentWindow - will throw if CSP blocked
-          try {
-            iframe.contentWindow?.location; // This will throw if CSP blocked
-          } catch (e) {
-            // CSP error detected - show fallback UI silently
-            // Don't log as this is expected behavior from Google Drive
-            handleIframeError();
-          }
-        }
-      } catch (e) {
-        // CSP error detected - show fallback UI silently
-        handleIframeError();
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [embedUrl]);
+  if (!useIframe) {
+    return (
+      <div
+        className={cn('w-full h-full relative min-h-[200px]', !videoPlaying && 'cursor-pointer')}
+        onClick={() => { if (!videoPlaying) handleVideoPlay(); }}
+        role={!videoPlaying ? 'button' : undefined}
+        tabIndex={!videoPlaying ? 0 : undefined}
+        onKeyDown={!videoPlaying ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleVideoPlay(); } } : undefined}
+        aria-label={!videoPlaying ? 'Play video' : undefined}
+      >
+        <video
+          ref={videoRef}
+          src={directVideoUrl}
+          className={cn('w-full h-full object-contain object-left rounded-lg', !videoPlaying && 'pointer-events-none')}
+          controls
+          playsInline
+          onError={() => setVideoUseIframe(true)}
+          onPlay={() => setVideoPlaying(true)}
+          onPause={() => setVideoPlaying(false)}
+          onEnded={() => setVideoPlaying(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full relative">
@@ -101,12 +120,8 @@ const GoogleDriveFilePreview: React.FC<{ link: string }> = ({ link }) => {
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups" 
         loading="lazy"
         onError={handleIframeError}
-        onLoad={() => {
-          // Iframe loaded successfully
-          devLog.debug('✅ Google Drive iframe loaded successfully');
-        }}
+        onLoad={() => { devLog.debug('✅ Google Drive iframe loaded successfully'); }}
       />
-      {/* Error overlay - will show if CSP blocks */}
       {iframeError && (
         <div className="absolute inset-0 bg-gray-50 rounded-lg flex items-center justify-center z-10">
           <div className="text-center p-8">
