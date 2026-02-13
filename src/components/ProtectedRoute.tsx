@@ -230,7 +230,7 @@ export const PublicRoute = ({ children }: { children: ReactNode }) => {
   }
 
   // If user is authenticated, redirect to home EXCEPT for login page with emailJustVerified flag
-  // This allows the login page to handle the emailJustVerified flow before redirect
+  // and EXCEPT for review link: send to dashboard with preview modal instead of home
   if (user) {
     const isEmailJustVerified = sessionStorage.getItem('emailJustVerified') === 'true';
     const isLoginPage = location.pathname === '/login';
@@ -238,6 +238,15 @@ export const PublicRoute = ({ children }: { children: ReactNode }) => {
     // Allow authenticated user to stay on login page if they just verified email
     if (isLoginPage && isEmailJustVerified) {
       return <>{children}</>;
+    }
+
+    // Review link: redirect to dashboard so preview opens in modal (same content as public page)
+    const isReviewPage = location.pathname.startsWith('/review/');
+    if (isReviewPage) {
+      const token = location.pathname.replace(/^\/review\//, '').replace(/\/$/, '').trim();
+      if (token) {
+        return <Navigate to={`/digital-marketing/social-media/dashboard?review=${encodeURIComponent(token)}`} replace />;
+      }
     }
     
     return <Navigate to="/" replace />;

@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 import { ContentPlan, ContentType, Service, SubService, ContentPillar } from '../types/social-media';
 import { TableHeader } from './table/TableHeader';
 import { ContentPlanRow } from './table/ContentPlanRow';
@@ -123,6 +125,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
         // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
         handleUnapproval(id).catch((error) => {
           console.error('Error during unapproval task step deletion (table):', error);
+          toast.error('Failed to remove approval task');
         });
       }
 
@@ -153,12 +156,10 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
             ? (currentPlan.production_revision_count || 0) + 1
             : (currentPlan.production_revision_count || 0);
           
-          console.log('🔄 handleProductionStatusChange: Setting to Request Revision', {
+          devLog.debug('handleProductionStatusChange: Request Revision', {
             planId: id,
-            currentStatus: currentPlan.production_status,
-            currentApproved: currentPlan.production_approved,
             newRevisionCount: newProductionRevisionCount,
-            shouldIncrement
+            shouldIncrement,
           });
           
           // Update all fields - these will be batched together (30ms debounce)
@@ -178,7 +179,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
           onFieldChange(id, 'production_approved', false);
           onFieldChange(id, 'production_approved_date', null);
           
-          console.log('✅ All fields queued for update (will be batched in 30ms)');
+          devLog.debug('All fields queued for update (batched in 30ms)');
         } else {
           // Regular production status change (can be null for "No Status")
           onFieldChange(id, 'production_status', value);

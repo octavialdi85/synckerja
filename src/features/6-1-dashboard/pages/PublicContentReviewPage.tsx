@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { defaultTranslations, applyVariables } from '@/features/share/i18n/translations';
+import { devLog } from '@/config/logger';
 import { getEmbedUrl, getDirectVideoUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
 import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
 
@@ -284,7 +285,7 @@ const PublicContentReviewPage: React.FC = () => {
       setEditingText('');
       await loadComments();
     } catch (e) {
-      console.warn('Update comment error:', e);
+      devLog.warn('Update comment error', e);
       toast.error(t('publicReview.toast.updateError', 'Failed to update comment'));
     } finally {
       setActionLoading(false);
@@ -305,7 +306,7 @@ const PublicContentReviewPage: React.FC = () => {
       toast.success(t('publicReview.toast.deleted', 'Comment deleted'));
       await loadComments();
     } catch (e) {
-      console.warn('Delete comment error:', e);
+      devLog.warn('Delete comment error', e);
       toast.error(t('publicReview.toast.deleteError', 'Failed to delete comment'));
     } finally {
       setActionLoading(false);

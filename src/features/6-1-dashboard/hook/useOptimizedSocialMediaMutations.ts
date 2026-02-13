@@ -56,11 +56,11 @@ export const useOptimizedSocialMediaMutations = () => {
       }
 
       // Use select with all fields to ensure we get complete updated data
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('social_media_plans')
-        .update(safeUpdates)
+        .update(safeUpdates as Record<string, unknown>)
         .eq('id', id)
-        .select('*')
+        .select()
         .single();
 
       if (error) {
@@ -154,23 +154,19 @@ export const useOptimizedSocialMediaMutations = () => {
         ) as Record<string, unknown>
       );
       
-      console.log('Inserting content plan with data:', cleanPlanData);
+      devLog.debug('Inserting content plan with data:', cleanPlanData);
       
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('social_media_plans')
-        .insert(cleanPlanData)
+        .insert(cleanPlanData as Record<string, unknown>)
         .select()
         .single();
 
       if (error) {
-        console.error('Error inserting content plan:', error);
-        console.error('Plan data:', cleanPlanData);
-        console.error('Organization ID:', organizationId);
-        console.error('Error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
+        devLog.error('Error inserting content plan:', error?.message, {
+          code: error?.code,
+          organizationId,
+          planKeys: Object.keys(cleanPlanData),
         });
         throw error;
       }
@@ -189,7 +185,7 @@ export const useOptimizedSocialMediaMutations = () => {
           }
         );
         
-        console.log('✅ New data added to cache without reload');
+        devLog.debug('New data added to cache without reload');
       }
     },
   });
@@ -197,7 +193,7 @@ export const useOptimizedSocialMediaMutations = () => {
   // Delete content plan mutation
   const deleteContentPlanMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('social_media_plans')
         .delete()
         .eq('id', id);
@@ -218,7 +214,7 @@ export const useOptimizedSocialMediaMutations = () => {
           }
         );
         
-        console.log('✅ Data removed from cache without reload');
+        devLog.debug('Data removed from cache without reload');
       }
     },
   });

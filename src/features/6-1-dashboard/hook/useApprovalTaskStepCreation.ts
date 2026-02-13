@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 import { ContentPlan } from '../types/social-media';
 
 interface UseApprovalTaskStepCreationProps {
@@ -38,12 +39,12 @@ export const useApprovalTaskStepCreation = ({
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
-        console.warn('Invalid date for formatting:', dateString);
+        devLog.warn('Invalid date for formatting', dateString);
         return '';
       }
       return format(date, 'dd-MM-yyyy');
     } catch (error) {
-      console.error('Error formatting date:', error);
+      devLog.error('Error formatting date', error);
       return '';
     }
   }, []);
@@ -73,7 +74,7 @@ export const useApprovalTaskStepCreation = ({
       // mengharuskan created_by merujuk ke users.id
       return employeeData ? user.id : null;
     } catch (error) {
-      console.error('Error getting user ID:', error);
+      devLog.error('Error getting user ID', error);
       return null;
     }
   }, [currentEmployee?.user_id]);

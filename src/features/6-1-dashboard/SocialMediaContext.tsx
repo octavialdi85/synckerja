@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { devLog } from '@/config/logger';
 import { useOptimizedSocialMediaData } from './hook/useOptimizedSocialMediaData';
 import { useOptimizedSocialMediaMutations } from './hook/useOptimizedSocialMediaMutations';
 // import { useMeetingPointsData } from '@/hooks/social-media/useMeetingPointsData'; // Commented out - not available
@@ -126,7 +127,7 @@ export const SocialMediaProvider: React.FC<{ children: React.ReactNode }> = ({ c
   
   // Smart refresh functions
   const refreshAll = useCallback(async () => {
-    console.log('🔄 Refreshing all social media data');
+    devLog.debug('Refreshing all social media data');
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['social-media-plans', organizationId] }),
       queryClient.invalidateQueries({ queryKey: ['social-media-master', organizationId] }),
@@ -136,12 +137,12 @@ export const SocialMediaProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [queryClient, organizationId]);
   
   const refreshContentPlans = useCallback(async () => {
-    console.log('🔄 Refreshing content plans');
+    devLog.debug('Refreshing content plans');
     await invalidateContentPlans();
   }, [invalidateContentPlans]);
   
   const refreshMeetingPoints = useCallback(async () => {
-    console.log('🔄 Refreshing meeting points');
+    devLog.debug('Refreshing meeting points');
     await Promise.all([
       invalidateMeetingPoints(),
       invalidateMeetingPointUpdates()
@@ -149,7 +150,7 @@ export const SocialMediaProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [invalidateMeetingPoints, invalidateMeetingPointUpdates]);
   
   const refreshMasterData = useCallback(async () => {
-    console.log('🔄 Refreshing master data (content types, services, etc.)');
+    devLog.debug('Refreshing master data (content types, services, etc.)');
     await invalidateMasterData();
   }, [invalidateMasterData]);
   

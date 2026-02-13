@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { devLog } from '@/config/logger';
 import { PillarData } from '../types/social-media';
 import { startOfMonth, endOfMonth } from 'date-fns';
 
@@ -26,7 +27,7 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           .order('name', { ascending: true });
 
         if (pillarsError) {
-          console.error('Error fetching pillars:', pillarsError);
+          devLog.error('Error fetching pillars', pillarsError?.message);
           throw pillarsError;
         }
 
@@ -70,10 +71,10 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           const { data: currentUsage, error: usageError } = await currentUsageQuery;
 
           if (usageError) {
-            console.error('Error fetching usage data:', usageError);
+            devLog.error('Error fetching usage data', usageError?.message);
           } else {
             usageData = currentUsage || [];
-            console.log('Selected month usage data:', usageData);
+            devLog.debug('Selected month usage data', usageData?.length ?? 0);
           }
 
           // Previous month usage for comparison
@@ -81,7 +82,7 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
           const prevMonthEnd = endOfMonth(prevMonthStart);
           
-          console.log('Fetching usage for previous month:', prevMonthStart, prevMonthEnd);
+          devLog.debug('Fetching usage for previous month');
 
           let prevUsageQuery = supabase
             .from('social_media_plans')
@@ -99,10 +100,10 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           const { data: prevUsage, error: prevUsageError } = await prevUsageQuery;
 
           if (prevUsageError) {
-            console.error('Error fetching previous usage data:', prevUsageError);
+            devLog.error('Error fetching previous usage data', prevUsageError?.message);
           } else {
             prevUsageData = prevUsage || [];
-            console.log('Previous month usage data:', prevUsageData);
+            devLog.debug('Previous month usage data', prevUsageData?.length ?? 0);
           }
         }
 
@@ -136,7 +137,7 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
         
         return result;
       } catch (error) {
-        console.error('Error in contentPillarData fetch:', error);
+        devLog.error('Error in contentPillarData fetch', error);
         throw error;
       }
     },

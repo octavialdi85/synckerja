@@ -271,7 +271,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   // Check approval access when dialog opens
   useEffect(() => {
     if (isOpen) {
-      checkApprovalAccess().then(setCanShowApprovalButtons);
+      checkApprovalAccess().then(setCanShowApprovalButtons).catch(() => setCanShowApprovalButtons(false));
     }
   }, [isOpen]);
 
@@ -471,7 +471,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         updateData.production_revision_count = newProductionRevisionCount;
       }
 
-      console.log('📝 Updating database with:', updateData);
+      devLog.debug('Updating database (revision)', updateData);
       const { error, data } = await supabase
         .from('social_media_plans')
         .update(updateData)
@@ -485,20 +485,10 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         return;
       }
       
-      // Verify the update was successful
-      console.log('✅ Database update successful, verifying saved values:', {
-        production_status: data?.production_status,
-        production_approved: data?.production_approved,
-        production_completion_date: data?.production_completion_date,
-        production_revision_count: data?.production_revision_count
-      });
-      
-      // Double-check: If production_status is not "Request Revision", log a warning
       if (data?.production_status !== 'Request Revision') {
-        console.warn('⚠️ WARNING: production_status was not saved as "Request Revision"!', {
+        devLog.warn('production_status was not saved as Request Revision', {
           expected: 'Request Revision',
           actual: data?.production_status,
-          updateData
         });
       }
 
@@ -509,15 +499,9 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         wasIncremented: shouldIncrement
       });
 
-      // Call onRevision callback FIRST to update parent state immediately (before refetch)
-      // This ensures UI updates immediately through onFieldChange mutations
-      // Note: onRevision callback uses onProductionStatusChange which batches updates (30ms debounce)
-      console.log('🔄 Calling onRevision callback for plan:', socialMediaPlanId);
       if (onRevision) {
         onRevision();
-        console.log('✅ onRevision callback executed');
-      } else {
-        console.warn('⚠️ onRevision callback is not provided');
+        devLog.debug('onRevision callback executed', { planId: socialMediaPlanId });
       }
 
       // Optimistic update cache immediately for instant UI feedback

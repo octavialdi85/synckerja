@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useDeferredValue } from "react";
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent } from "@/features/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +46,7 @@ import { DailyTaskProvider } from '@/features/8-2-DailyTask/DailyTaskContext';
 const SocialMediaContent = () => {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Get data from context
   const {
@@ -55,6 +56,7 @@ const SocialMediaContent = () => {
     subServices,
     contentPillars,
     isLoading: loading,
+    error: dataError,
     organizationId,
     formatDisplayDate,
     getFilteredSubServices,
@@ -110,8 +112,10 @@ const SocialMediaContent = () => {
   // Fetch all social media links for Content Post metrics (same logic as ContentPostTab)
   // Disabled polling - rely on realtime updates instead of refetchInterval
   const { data: allSocialMediaLinks = [] } = useQuery({
-    queryKey: ['all-social-media-links'],
+    queryKey: ['all-social-media-links', organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
+      if (!organizationId) return [];
       const { data, error } = await supabase
         .from('social_media_links')
         .select('*');
@@ -148,7 +152,7 @@ const SocialMediaContent = () => {
 
   // Edit Target Dialog States
   const [isEditTargetOpen, setIsEditTargetOpen] = useState(false);
-  const [editingManager, setEditingManager] = useState<any>(null);
+  const [editingManager, setEditingManager] = useState<{ id: string; name: string } | null>(null);
   const [targetType, setTargetType] = useState<'content_planning' | 'content_production' | 'content_posting'>('content_planning');
 
   // Brief and Title Dialog States
@@ -208,6 +212,39 @@ const SocialMediaContent = () => {
     queryClient.invalidateQueries({ queryKey: ['link-comments', notificationPreviewPlanId] });
   }, [notificationPreviewPlanId, queryClient]);
 
+  // When user opens /review/:token while logged in, they are redirected here with ?review=TOKEN — resolve token and open preview modal
+  const reviewTokenFromUrl = searchParams.get('review');
+  useEffect(() => {
+    if (!reviewTokenFromUrl?.trim()) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('get_public_review_content_by_token', {
+        token_param: reviewTokenFromUrl.trim(),
+      });
+      if (cancelled) return;
+      if (error || !data || typeof data !== 'object') {
+        toast.error('Invalid or expired review link');
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('review');
+          return next;
+        }, { replace: true });
+        return;
+      }
+      const payload = data as { social_media_plan_id?: string };
+      const planId = payload?.social_media_plan_id;
+      if (planId) {
+        setNotificationPreviewPlanId(planId);
+      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('review');
+        return next;
+      }, { replace: true });
+    })();
+    return () => { cancelled = true; };
+  }, [reviewTokenFromUrl, setSearchParams]);
+
   // Define tab configurations
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', path: '/digital-marketing/social-media/dashboard' },
@@ -241,9 +278,8 @@ const SocialMediaContent = () => {
     const timeoutId = setTimeout(() => {
       syncAllExistingPlans().catch(error => {
         console.error('Error syncing existing plans:', error);
-        // Reset flag on error so it can retry
         hasSyncedRef.current = false;
-        // Don't show error to user, just log it
+        toast.warning('Background sync failed. Refresh the page to retry.');
       });
     }, 1000); // 1 second delay to ensure data is loaded
     
@@ -769,6 +805,7 @@ const SocialMediaContent = () => {
           // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
           handleUnapproval(id).catch((error) => {
             console.error('Error during unapproval task step deletion (status):', error);
+            toast.error('Failed to remove approval task');
           });
         }
       }
@@ -783,6 +820,7 @@ const SocialMediaContent = () => {
           // Only Concept steps will be deleted (Content steps remain)
           handleUnapproval(id).catch((error) => {
             console.error('Error during unapproval Concept task step deletion:', error);
+            toast.error('Failed to remove approval task');
           });
         }
       }
@@ -939,7 +977,7 @@ const SocialMediaContent = () => {
       
       // Use the employee ID from the employees table, not the profile ID
       validEmployeeId = (employeeData as any)?.id || profile.id;
-      console.log('✅ Valid employee found:', { profileId: profile.id, employeeId: validEmployeeId, userId: profile.user_id });
+      devLog.debug('Valid employee found', { profileId: profile.id, employeeId: validEmployeeId });
     } catch (validationError) {
       console.error('Error validating employee:', validationError);
       toast.error("Error validating employee data");
@@ -1071,6 +1109,18 @@ const SocialMediaContent = () => {
       <DailyTaskProvider>
         <SocialMediaErrorBoundary>
           <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+          {dataError && (
+            <div className="flex-shrink-0 px-4 py-2 bg-red-50 border-b border-red-200 flex items-center justify-between gap-2">
+              <span className="text-sm text-red-800">Failed to load dashboard data. Please try again.</span>
+              <button
+                type="button"
+                onClick={() => refreshAll()}
+                className="text-sm font-medium text-red-700 hover:text-red-900 underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <div className="flex flex-1 min-h-0">
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">

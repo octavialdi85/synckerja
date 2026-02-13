@@ -116,7 +116,10 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     if (createTriggeredOnce) return;
     try {
       const serviceName = getServiceName();
-      if (!serviceName || !plan.post_date || !(plan as any).organization_id) return;
+      if (!serviceName || !plan.post_date || !(plan as any).organization_id) {
+        devLog.debug('maybeOpenBrandingPlanCreate: missing plan data (service, post_date or organization_id)');
+        return;
+      }
       const d = new Date(plan.post_date);
       if (isNaN(d.getTime())) return;
 
@@ -155,7 +158,10 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   const recheckOrRollbackAfterCreateClose = async () => {
     try {
       const serviceName = getServiceName();
-      if (!serviceName || !plan.post_date || !(plan as any).organization_id) return;
+      if (!serviceName || !plan.post_date || !(plan as any).organization_id) {
+        devLog.debug('recheckOrRollbackAfterCreateClose: missing plan data (service, post_date or organization_id)');
+        return;
+      }
       const d = new Date(plan.post_date);
       if (isNaN(d.getTime())) return;
 
@@ -1152,12 +1158,8 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       // - production_approved: false
       // - production_approved_date: null
       // So we just need to call it once
-      console.log('🔄 onRevision callback called for plan:', plan.id, {
-        currentStatus: plan.production_status,
-        currentApproved: plan.production_approved
-      });
+      devLog.debug('onRevision callback called', { planId: plan.id, value: 'Request Revision' });
       onProductionStatusChange(plan.id, 'Request Revision');
-      console.log('✅ onProductionStatusChange called with "Request Revision"');
     }} />
 
       {/* Social Media Links Dialog */}

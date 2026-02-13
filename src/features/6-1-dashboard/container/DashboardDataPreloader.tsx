@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { LoadingDots } from '@/components/LoadingDots';
+import { toast } from 'sonner';
 import {
   getContentPlansQueryOptions,
   getMasterDataQueryOptions,
@@ -42,7 +43,10 @@ export const DashboardDataPreloader: React.FC<DashboardDataPreloaderProps> = ({ 
         if (!cancelled) setReady(true);
       })
       .catch(() => {
-        if (!cancelled) setReady(true);
+        if (!cancelled) {
+          setReady(true);
+          toast.error('Failed to load dashboard data. Refresh the page to retry.');
+        }
       });
     return () => {
       cancelled = true;
