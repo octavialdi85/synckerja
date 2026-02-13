@@ -21,15 +21,8 @@ interface ReviewCommentNotificationBellProps {
 export function ReviewCommentNotificationBell({ onOpenPreview }: ReviewCommentNotificationBellProps) {
   const [open, setOpen] = useState(false);
   const { t, dateLocale } = useAppTranslation();
-  const { notifications, unreadCount, markAllRead } = useReviewCommentNotifications();
-
-  const handleMarkAllRead = async () => {
-    try {
-      await markAllRead();
-    } catch {
-      // ignore
-    }
-  };
+  const { notifications, unreadCount, markOneRead } = useReviewCommentNotifications();
+  const unreadNotifications = notifications.filter((n) => n.read_at == null);
 
   return (
     <>
@@ -54,19 +47,14 @@ export function ReviewCommentNotificationBell({ onOpenPreview }: ReviewCommentNo
             <SheetTitle>{t('reviewCommentNotifications.title', 'Comment notifications')}</SheetTitle>
           </SheetHeader>
           <div className="mt-4 flex flex-1 flex-col gap-4 overflow-hidden">
-            {unreadCount > 0 && (
-              <Button variant="outline" size="sm" onClick={handleMarkAllRead} className="w-fit">
-                {t('reviewCommentNotifications.markAllRead', 'Mark all as read')}
-              </Button>
-            )}
             <div className="seamless-scroll max-h-[calc(100vh-120px)] flex-1 overflow-y-auto pr-2">
-              {notifications.length === 0 ? (
+              {unreadNotifications.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('reviewCommentNotifications.empty', 'No notifications')}
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {notifications.map((n) => (
+                  {unreadNotifications.map((n) => (
                     <NotificationItem
                       key={n.id}
                       item={n}
@@ -74,6 +62,7 @@ export function ReviewCommentNotificationBell({ onOpenPreview }: ReviewCommentNo
                       t={t}
                       onNavigate={() => setOpen(false)}
                       onOpenPreview={onOpenPreview}
+                      onMarkAsRead={markOneRead}
                     />
                   ))}
                 </ul>
@@ -92,12 +81,14 @@ function NotificationItem({
   t,
   onNavigate,
   onOpenPreview,
+  onMarkAsRead,
 }: {
   item: ReviewCommentNotificationRow;
   locale: Locale;
   t: (key: string, fallback: string, vars?: Record<string, string | number>) => string;
   onNavigate: () => void;
   onOpenPreview?: (planId: string) => void;
+  onMarkAsRead: (id: string) => Promise<void>;
 }) {
   const name = (item.commenter_display_name && item.commenter_display_name.trim()) || 'Someone';
   const planTitle = (item.plan_title && item.plan_title.trim()) || 'plan';
@@ -105,7 +96,9 @@ function NotificationItem({
     name,
     planTitle,
   });
+  const commentText = (item.comment_text && item.comment_text.trim()) || null;
   const timeAgo = formatDistanceToNow(new Date(item.created_at), { addSuffix: true, locale });
+  const isUnread = item.read_at == null;
 
   const handleClick = () => {
     onNavigate();
@@ -116,16 +109,40 @@ function NotificationItem({
     }
   };
 
+  const handleMarkAsRead = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onMarkAsRead(item.id);
+  };
+
   return (
     <li>
-      <button
-        type="button"
-        onClick={handleClick}
-        className="block w-full rounded-lg border border-transparent p-2 text-left text-sm transition-colors hover:border-border hover:bg-muted/50"
-      >
-        <span className="font-medium text-foreground">{label}</span>
-        <span className="mt-1 block text-xs text-muted-foreground">{timeAgo}</span>
-      </button>
+      <div className="rounded-lg border border-border bg-muted/50 p-2 transition-colors hover:bg-muted/70">
+        <button
+          type="button"
+          onClick={handleClick}
+          className="block w-full text-left text-sm"
+        >
+          <span className="font-medium text-foreground">{label}</span>
+          {commentText && (
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{commentText}</p>
+          )}
+        </button>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">{timeAgo}</span>
+          {isUnread && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 border-input text-xs"
+              onClick={handleMarkAsRead}
+            >
+              {t('reviewCommentNotifications.markAsRead', 'Mark as read')}
+            </Button>
+          )}
+        </div>
+      </div>
     </li>
   );
 }

@@ -13,6 +13,8 @@ export interface ReviewCommentNotificationRow {
   commenter_display_name: string | null;
   read_at: string | null;
   created_at: string;
+  /** Comment message text (from link_comments join) */
+  comment_text: string | null;
 }
 
 const QUERY_KEY = ['review-comment-notifications'] as const;
@@ -60,12 +62,28 @@ export function useReviewCommentNotifications() {
       if (!userId) return [];
       const { data, error } = await supabase
         .from('review_comment_notifications')
-        .select('id, user_id, link_comment_id, social_media_plan_id, review_token, plan_title, commenter_display_name, read_at, created_at')
+        .select('id, user_id, link_comment_id, social_media_plan_id, review_token, plan_title, commenter_display_name, read_at, created_at, link_comments(comment_text)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
       if (error) throw error;
-      return (data ?? []) as unknown as ReviewCommentNotificationRow[];
+      const rows = (data ?? []) as unknown as Array<Record<string, unknown> & { link_comments?: { comment_text: string | null } | Array<{ comment_text: string | null }> | null }>;
+      return rows.map((row) => {
+        const lc = row.link_comments;
+        const commentText = Array.isArray(lc) ? lc[0]?.comment_text ?? null : (lc as { comment_text: string | null } | undefined)?.comment_text ?? null;
+        return {
+          id: row.id,
+          user_id: row.user_id,
+          link_comment_id: row.link_comment_id,
+          social_media_plan_id: row.social_media_plan_id,
+          review_token: row.review_token,
+          plan_title: row.plan_title ?? null,
+          commenter_display_name: row.commenter_display_name ?? null,
+          read_at: row.read_at ?? null,
+          created_at: row.created_at,
+          comment_text: commentText,
+        };
+      }) as ReviewCommentNotificationRow[];
     },
   });
 
@@ -86,8 +104,15 @@ export function useReviewCommentNotifications() {
 
   const markAllRead = useCallback(async () => {
     if (!userId) return;
-    // RPC added in migration; not yet in generated Database types
     const { error } = await (supabase as unknown as { rpc: (fn: string, args: { notification_ids: null }) => Promise<{ error: { message: string } | null }> }).rpc('mark_review_comment_notifications_read', { notification_ids: null });
+    if (error) throw error;
+    queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId] });
+    queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId] });
+  }, [userId, queryClient]);
+
+  const markOneRead = useCallback(async (notificationId: string) => {
+    if (!userId) return;
+    const { error } = await (supabase as unknown as { rpc: (fn: string, args: { notification_ids: string[] }) => Promise<{ error: { message: string } | null }> }).rpc('mark_review_comment_notifications_read', { notification_ids: [notificationId] });
     if (error) throw error;
     queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId] });
     queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId] });
@@ -145,6 +170,7 @@ export function useReviewCommentNotifications() {
     unreadCount: count,
     isLoading: unreadCountQuery.isLoading,
     markAllRead,
+    markOneRead,
     refetch,
   };
 }
