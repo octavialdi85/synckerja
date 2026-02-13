@@ -239,7 +239,7 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:max-w-2xl md:max-h-[80vh] md:w-auto border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
+      <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin] border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
         <DialogHeader className="flex-shrink-0 p-4 md:p-0">
           <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
             <Button

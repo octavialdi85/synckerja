@@ -16,6 +16,7 @@ const defaultFilters: TaskFilters = {
   pic: '',
   myTask: 'all', // Default to "All" so users see all org tasks; switch to "My Task" to filter
   department: undefined, // Default "All Departments" so list shows all; user can filter by department if needed
+  objectiveLink: 'all', // 'unlinked' = only tasks with no Individual Objective
 };
 
 /**
@@ -38,6 +39,9 @@ export const useTaskFilterState = () => {
             ? parsed.myTask
             : defaultFilters.myTask,
           picLevel: parsed.picLevel === 'all' ? 'task' : (parsed.picLevel || undefined),
+          objectiveLink: parsed.objectiveLink === 'all' || parsed.objectiveLink === 'unlinked'
+            ? parsed.objectiveLink
+            : defaultFilters.objectiveLink,
         };
       }
     } catch (error) {

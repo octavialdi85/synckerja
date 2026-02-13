@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/mobile/components/ui/dropdown-menu";
 import { ProfilePhotoUpload } from "@/mobile/components/ProfilePhotoUpload";
+import { clearCurrentOrgCacheForUser } from "@/features/1-login/hooks/useCurrentOrg";
 const ProfileSkeleton = () => <div className="p-2 space-y-2">
     {/* Profile Info Skeleton */}
     <Card className="bg-gradient-card border border-border">
@@ -176,6 +177,14 @@ const Profile = () => {
         active_organization_id: organizationId
       }).eq('user_id', user.id);
       if (error) throw error;
+
+      // CRITICAL: Clear useCurrentOrg memory + localStorage cache so Daily Task, Initiative, etc. use the new org
+      try {
+        clearCurrentOrgCacheForUser(user.id);
+        window.dispatchEvent(new CustomEvent('organization-switched', { detail: { organizationId } }));
+      } catch (e) {
+        console.warn('Failed to clear org cache on switch:', e);
+      }
 
       // Wait for fade animation
       await new Promise(resolve => setTimeout(resolve, 300));

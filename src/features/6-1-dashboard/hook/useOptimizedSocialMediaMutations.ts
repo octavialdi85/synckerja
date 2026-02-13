@@ -1,6 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import {
+  completeStepAndCreateApprovalFromDriveLink,
+  revertStepCompletionFromDriveLinkRemovalWithRpc,
+} from '@/features/8-2-DailyTask/services/completionApprovalService';
 import { ContentPlan } from '../types/social-media';
 import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
@@ -25,6 +30,7 @@ function sanitizePlanPayload<T extends Record<string, unknown>>(payload: T): Par
 export const useOptimizedSocialMediaMutations = () => {
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
+  const { data: currentEmployee } = useCurrentEmployee();
 
   // Update content plan mutation
   const updateContentPlanMutation = useMutation({
@@ -114,6 +120,47 @@ export const useOptimizedSocialMediaMutations = () => {
             queryClient.invalidateQueries({ 
               queryKey: ['all-social-media-links'],
               refetchType: 'active' // Force refetch for active queries
+            });
+          }
+
+          // When Google Drive link is set: auto-complete linked step and create pending approval for assigner
+          const linkValue = updates.google_drive_link;
+          if (
+            organizationId &&
+            typeof linkValue === 'string' &&
+            linkValue.trim().length > 0
+          ) {
+            completeStepAndCreateApprovalFromDriveLink({
+              organizationId,
+              socialMediaPlanId: variables.id,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('completeStepAndCreateApprovalFromDriveLink failed', {
+                  planId: variables.id,
+                  message: error.message,
+                });
+              }
+            });
+          }
+
+          // When Google Drive link is removed: uncomplete linked step and reject pending approval so it disappears
+          const linkCleared =
+            updates.google_drive_link !== undefined &&
+            (updates.google_drive_link == null ||
+              (typeof updates.google_drive_link === 'string' &&
+                updates.google_drive_link.trim() === ''));
+          if (organizationId && linkCleared) {
+            revertStepCompletionFromDriveLinkRemovalWithRpc({
+              organizationId,
+              socialMediaPlanId: variables.id,
+              rejectedByEmployeeId: currentEmployee?.id ?? undefined,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+                  planId: variables.id,
+                  message: error.message,
+                });
+              }
             });
           }
           

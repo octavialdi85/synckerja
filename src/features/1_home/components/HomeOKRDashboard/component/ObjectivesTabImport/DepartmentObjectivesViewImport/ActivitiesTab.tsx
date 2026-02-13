@@ -335,6 +335,10 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
     return Math.round((completedSteps / steps.length) * 100);
   };
 
+  /** Task counts as "completed" for display only when all steps are done (progress 100%). */
+  const isTaskFullyCompleteBySteps = (task: DailyTask) =>
+    task.steps.length > 0 && task.progress_percentage === 100;
+
   const createTask = async () => {
     if (!newTaskTitle.trim() || !organizationId || !currentEmployee) return;
 
@@ -761,18 +765,12 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
           </div>
         </div>
       ) : (
-        <div className="h-full flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col">
           <DndContext 
             collisionDetection={closestCenter} 
             onDragEnd={onDragEnd}
           >
-            <div 
-              className="flex-1 min-h-0 seamless-scroll overflow-auto"
-              style={{ 
-                maxHeight: 'calc(100vh - 520px)',
-                minHeight: '200px'
-              }}
-            >
+            <div className="flex-1 min-h-0 seamless-scroll overflow-auto min-h-[200px]">
               <table className="w-full caption-bottom text-sm task-list-table">
               <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
                 <TableRow className="hover:bg-transparent">
@@ -828,13 +826,13 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                           </Button>
                         </TableCell>
 
-                        {/* Checkbox */}
+                        {/* Checkbox - green only when all steps are done (progress 100%) */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                           <button
                             onClick={() => handleStatusToggle(task.id, task.status)}
                             className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
                           >
-                            {task.status === 'completed' ? (
+                            {isTaskFullyCompleteBySteps(task) ? (
                               <CheckSquare className="w-5 h-5 text-green-600" />
                             ) : (
                               <Square className="w-5 h-5" />
@@ -842,11 +840,11 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                           </button>
                         </TableCell>
 
-                        {/* Task Title */}
+                        {/* Task Title - strikethrough only when all steps are done */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '250px', minWidth: '250px', maxWidth: '250px' }}>
                           <div 
                             className={`text-sm font-medium cursor-pointer hover:text-blue-600 ${
-                              task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
+                              isTaskFullyCompleteBySteps(task) ? 'line-through text-gray-500' : 'text-gray-900'
                             }`}
                             onClick={() => toggleTaskExpansion(task.id)}
                             title="Click to expand"
@@ -916,7 +914,7 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                           {getPriorityBadge(task.priority)}
                         </TableCell>
                         <TableCell className="px-2 py-3 text-left" style={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}>
-                          {getStatusBadge(task.status)}
+                          {getStatusBadge(isTaskFullyCompleteBySteps(task) ? 'completed' : (task.progress_percentage > 0 ? 'in_progress' : task.status))}
                         </TableCell>
                         {/* Progress */}
                         <TableCell className="px-2 py-3 text-left" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>

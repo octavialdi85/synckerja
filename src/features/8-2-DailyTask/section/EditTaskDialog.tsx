@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Flag, User, Calendar, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Flag, User, Calendar, Building2, Target, Unlink } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -30,6 +30,10 @@ import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
+import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
+import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface EditTaskDialogProps {
   isOpen: boolean;
@@ -38,6 +42,7 @@ interface EditTaskDialogProps {
 }
 
 export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose, taskId }) => {
+  const { t } = useAppTranslation();
   const { tasks, updateTask } = useDailyTask();
   const { data: employees = [] } = useAvailableEmployees();
   const { organizationId } = useCurrentOrg();
@@ -50,8 +55,72 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
   const [isPlanDatePickerOpen, setIsPlanDatePickerOpen] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
+  const [objectiveId, setObjectiveId] = useState<string>('');
+  const [objectiveContext, setObjectiveContext] = useState<{
+    companyTitle?: string;
+    departmentTitle?: string;
+    individualTitle: string;
+  } | null>(null);
+  const [isObjectiveDialogOpen, setIsObjectiveDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  const { data: cycles = [] } = useOkrCycles(organizationId);
+  const activeCycleIds = useMemo(() => {
+    if (planDate) {
+      const planDateObj = new Date(planDate);
+      const planYear = planDateObj.getFullYear();
+      const planMonth = planDateObj.getMonth() + 1;
+      const planMonthStart = new Date(planYear, planMonth - 1, 1, 0, 0, 0, 0);
+      const planMonthEnd = new Date(planYear, planMonth, 0, 23, 59, 59, 999);
+      let expectedQuarter: string | null = null;
+      let expectedQuarterLower: string | null = null;
+      if (planMonth >= 1 && planMonth <= 3) {
+        expectedQuarter = 'Q1';
+        expectedQuarterLower = 'q1';
+      } else if (planMonth >= 4 && planMonth <= 6) {
+        expectedQuarter = 'Q2';
+        expectedQuarterLower = 'q2';
+      } else if (planMonth >= 7 && planMonth <= 9) {
+        expectedQuarter = 'Q3';
+        expectedQuarterLower = 'q3';
+      } else if (planMonth >= 10 && planMonth <= 12) {
+        expectedQuarter = 'Q4';
+        expectedQuarterLower = 'q4';
+      }
+      const filteredCycles = cycles
+        .filter((cycle: any) => {
+          const cyclePeriodType = cycle.period_type;
+          const cycleQuarter = cycle.quarter;
+          const cycleYear = cycle.year;
+          const cycleStartStr = cycle.start_date;
+          const cycleEndStr = cycle.end_date;
+          if (!cycleStartStr || !cycleEndStr) return false;
+          const [startYear, startMonth, startDay] = cycleStartStr.split('-').map(Number);
+          const [endYear, endMonth, endDay] = cycleEndStr.split('-').map(Number);
+          const cycleStart = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+          const cycleEnd = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+          const overlaps = cycleStart <= planMonthEnd && cycleEnd >= planMonthStart;
+          if (cyclePeriodType === 'quarterly' || cycleQuarter) {
+            const quarterMatches = cycleQuarter && (
+              cycleQuarter.toLowerCase() === expectedQuarterLower ||
+              cycleQuarter.toUpperCase() === expectedQuarter
+            );
+            return cycleYear === planYear && quarterMatches && overlaps;
+          }
+          if (cyclePeriodType === 'yearly') return overlaps;
+          return !!cyclePeriodType ? false : overlaps;
+        })
+        .map((c: any) => c.id);
+      return filteredCycles;
+    }
+    const currentYear = new Date().getFullYear();
+    return cycles
+      .filter((c: any) => c.is_active === true || (c.year === currentYear || c.year === currentYear + 1))
+      .map((c: any) => c.id);
+  }, [cycles, planDate]);
+
+  const { data: individualObjectives = [] } = useIndividualObjectives(organizationId, activeCycleIds);
 
   // Fetch departments
   const { data: departments = [] } = useQuery({
@@ -111,11 +180,26 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
             }
           }
         };
-        
+
         loadDepartment();
+        setObjectiveId((task as any).objective_id || '');
+        setObjectiveContext(null); // Will be resolved by next effect when individualObjectives loads
       }
     }
   }, [isOpen, taskId, tasks]);
+
+  // Resolve objective context for display when we have objectiveId but no context yet (e.g. loaded from task)
+  useEffect(() => {
+    if (!objectiveId) {
+      setObjectiveContext(null);
+      return;
+    }
+    setObjectiveContext((prev) => {
+      if (prev?.individualTitle) return prev; // Keep user selection from picker
+      const obj = individualObjectives.find((o: any) => o.id === objectiveId);
+      return obj ? { individualTitle: obj.title } : null;
+    });
+  }, [objectiveId, individualObjectives]);
 
   // Auto-select department when employee is selected
   useEffect(() => {
@@ -158,6 +242,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         due_date: dueDate || null,
         plan_date: planDateFormatted,
         assigned_to: assignedTo || null,
+        objective_id: objectiveId || null,
       });
 
       // Update department_id in daily_tasks_assigned
@@ -185,6 +270,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
   };
 
   return (
+    <>
     <Dialog
       open={isOpen}
       onOpenChange={(value) => {
@@ -307,6 +393,63 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          {/* Individual Objective */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Individual Objective
+            </label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsObjectiveDialogOpen(true)}
+                disabled={isSubmitting}
+                className="flex-1 justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+              >
+                {objectiveId && objectiveContext ? (
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <div className="flex flex-col min-w-0 flex-1 text-left">
+                      <span className="text-sm truncate font-medium text-gray-900">
+                        {objectiveContext.individualTitle}
+                      </span>
+                      {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
+                        <span className="text-xs text-gray-500 truncate">
+                          {objectiveContext.companyTitle && objectiveContext.departmentTitle
+                            ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
+                            : objectiveContext.companyTitle || objectiveContext.departmentTitle}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 min-w-0 w-full">
+                    <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <span className="text-gray-500 text-sm truncate text-left">
+                      Select Individual Objective
+                    </span>
+                  </div>
+                )}
+              </Button>
+              {objectiveId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setObjectiveId('');
+                    setObjectiveContext(null);
+                  }}
+                  disabled={isSubmitting}
+                  className="shrink-0 text-gray-500 hover:text-red-600 hover:border-red-200"
+                  title={t('dailyTask.objective.unlink', 'Unlink')}
+                >
+                  <Unlink className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
 
@@ -488,6 +631,21 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         </div>
       </DialogContent>
     </Dialog>
+
+    <ObjectiveHierarchyDialog
+      open={isObjectiveDialogOpen}
+      onOpenChange={setIsObjectiveDialogOpen}
+      onSelect={(individualObjectiveId, context) => {
+        setObjectiveId(individualObjectiveId);
+        setObjectiveContext(context);
+        setIsObjectiveDialogOpen(false);
+      }}
+      selectedObjectiveId={objectiveId || undefined}
+      organizationId={organizationId || ''}
+      cycleIds={activeCycleIds}
+      planDate={planDate}
+    />
+    </>
   );
 };
 

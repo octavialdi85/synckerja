@@ -18,6 +18,8 @@ export interface TaskFilters {
   picLevel?: 'task' | 'step' | 'sub_step' | 'all'; // Level filter untuk PIC: task, step, sub_step, atau semua
   myTask?: 'all' | 'my_task';
   department?: string;
+  /** When 'unlinked', only show tasks with no Individual Objective. */
+  objectiveLink?: 'all' | 'unlinked';
 }
 
 interface UseTaskFiltersProps {
@@ -425,6 +427,13 @@ export const useTaskFilters = ({
       if (filters.department) {
         const taskDepartment = departmentMap?.[task.id];
         if (taskDepartment && taskDepartment.id !== filters.department) {
+          return false;
+        }
+      }
+
+      // Early exit 9: Objective link filter – show only tasks with no Individual Objective
+      if (filters.objectiveLink === 'unlinked') {
+        if (task.objective_id) {
           return false;
         }
       }

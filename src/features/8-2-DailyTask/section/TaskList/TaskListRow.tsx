@@ -57,6 +57,8 @@ import { Badge } from '@/features/ui/badge';
 
 export interface TaskListRowProps {
   task: Task;
+  /** Resolved Individual Objective title for display; null when unlinked. */
+  objectiveTitle: string | null;
   isExpanded: boolean;
   isHighlighted: boolean;
   /** When true, use amber highlight (from pending approval click). */
@@ -88,6 +90,7 @@ export interface TaskListRowProps {
 
 export function TaskListRow({
   task,
+  objectiveTitle,
   isExpanded,
   isHighlighted,
   isHighlightedFromPendingApproval = false,
@@ -228,6 +231,18 @@ export function TaskListRow({
               </div>
             )}
           </div>
+        </TableCell>
+
+        <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}>
+          {task.objective_id ? (
+            <Badge variant="secondary" className="text-[10px] font-normal bg-blue-50 text-blue-700 border border-blue-200 truncate max-w-full inline-block" title={objectiveTitle || undefined}>
+              {t('dailyTask.objective.linkedTo', 'Linked to')}: {objectiveTitle || '…'}
+            </Badge>
+          ) : (
+            <span className="text-[10px] text-gray-400 italic">
+              {t('dailyTask.objective.notLinked', 'Not linked')}
+            </span>
+          )}
         </TableCell>
 
         <TableCell className="px-2 py-3 text-left overflow-hidden" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
@@ -509,7 +524,7 @@ export function TaskListRow({
       {isExpanded && (
         <TableRow className="w-full">
           <TableCell
-            colSpan={13}
+            colSpan={14}
             className={`w-full px-4 py-4 border-t transition-all duration-300 ${
               isHighlightedFromPendingApproval
                 ? 'bg-amber-50 border-l-4 border-l-amber-500 border-amber-200'

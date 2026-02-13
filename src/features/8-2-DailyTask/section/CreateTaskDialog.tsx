@@ -213,12 +213,6 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     e.preventDefault();
     
     if (!title.trim()) return;
-    
-    // Validate that Individual Objective is selected
-    if (!objectiveId) {
-      alert('Please select an Individual Objective before creating the task.');
-      return;
-    }
 
     // Validate that Plan date is selected (required)
     if (!planDate) {
@@ -412,7 +406,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">
-                      Individual Objective <span className="text-red-500">*</span>
+                      Individual Objective
                     </Label>
                     <Button
                       type="button"
@@ -534,7 +528,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!title.trim() || !objectiveId || !planDate || isSubmitting}
+                  disabled={!title.trim() || !planDate || isSubmitting}
                   className="min-w-[140px] flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (

@@ -850,7 +850,7 @@ export const ObjectiveCheckinForm = ({
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-5xl max-h-[95vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[70vmin] h-[70vmin] max-w-[70vmin] max-h-[70vmin] overflow-hidden flex flex-col">
         <DialogHeader className="shrink-0 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Target className="h-5 w-5 text-purple-600" />
@@ -953,11 +953,11 @@ export const ObjectiveCheckinForm = ({
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="checkins" className="flex-1 min-h-0">
+          <TabsContent value="checkins" className="flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden">
             {/* Scrollable Content with Fixed Headers */}
-            <div className="flex-1 min-h-0 relative bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex-1 min-h-0 flex flex-col relative bg-white rounded-lg border border-gray-200 shadow-sm">
               {/* Fixed Header Row */}
-              <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 rounded-t-lg">
+              <div className="shrink-0 z-10 bg-gray-50 border-b border-gray-200 rounded-t-lg">
             <div className="flex gap-4 text-sm font-semibold text-gray-700 p-4">
               <div className="w-44 shrink-0">Week Period</div>
               <div className="w-24 shrink-0">Progress</div>
@@ -967,14 +967,8 @@ export const ObjectiveCheckinForm = ({
             </div>
               </div>
               
-              {/* Scrollable Content */}
-              <div 
-                className="overflow-y-auto overflow-x-hidden"
-                style={{ 
-                  maxHeight: 'calc(100vh - 520px)',
-                  minHeight: '200px'
-                }}
-              >
+              {/* Scrollable Content - fills remaining space so footer stays visible */}
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                 <div className="divide-y divide-gray-100">
               {weeklyPeriods.map(period => {
                   const weekKey = getWeekKey(period.weekStart);
@@ -1106,22 +1100,24 @@ export const ObjectiveCheckinForm = ({
             </div>
           </TabsContent>
           
-          <TabsContent value="activities" className="flex-1 min-h-0">
+          <TabsContent value="activities" className="flex-1 min-h-0 flex flex-col mt-0 overflow-hidden data-[state=inactive]:hidden">
             <DailyTaskProvider>
-              <ActivitiesTab 
-                objectiveId={objectiveId}
-                objectiveTitle={objectiveTitle}
-              />
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <ActivitiesTab 
+                  objectiveId={objectiveId}
+                  objectiveTitle={objectiveTitle}
+                />
+              </div>
             </DailyTaskProvider>
           </TabsContent>
         </Tabs>
 
-        {/* Fixed Footer */}
-        <div className="shrink-0 flex justify-between items-center pt-4 border-t mt-4">
+        {/* Fixed Footer - always visible at bottom of modal */}
+        <footer className="flex-shrink-0 flex justify-between items-center py-4 px-6 border-t bg-gray-50/80 mt-auto">
           <div className="text-sm text-muted-foreground">
             {hasUnsavedChanges && <span className="text-orange-600">You have unsaved changes</span>}
           </div>
-          <div className="flex space-x-2">
+          <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={hasUnsavedChanges}>
               {hasUnsavedChanges ? 'Save First' : 'Close'}
             </Button>
@@ -1132,7 +1128,7 @@ export const ObjectiveCheckinForm = ({
               </Button>
             )}
           </div>
-        </div>
+        </footer>
       </DialogContent>
     </Dialog>;
 };

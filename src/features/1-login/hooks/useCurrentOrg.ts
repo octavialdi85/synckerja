@@ -300,7 +300,6 @@ export const useCurrentOrg = () => {
       }
 
       const orgId = profile?.active_organization_id;
-      
       // Cache the result (both memory and localStorage)
       const cacheData = orgId || null;
       orgCache.set(cacheKey, {
@@ -488,42 +487,40 @@ export const useCurrentOrg = () => {
     }
   };
 
-  const refetch = () => {
+  const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
-    // Re-run the effect
-    const fetchCurrentOrg = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          setOrganizationId(null);
-          setLoading(false);
-          return;
-        }
-
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('active_organization_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          setError('Failed to fetch organization');
-        } else {
-          setOrganizationId(profile?.active_organization_id || null);
-        }
-        
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setOrganizationId(null);
         setLoading(false);
-      } catch (error) {
-        console.error('Refetch error:', error);
-        setError('Failed to fetch organization');
-        setLoading(false);
+        return;
       }
-    };
-    
-    fetchCurrentOrg();
-  };
+      // Force fresh read from DB: clear cache so all useCurrentOrg instances can sync
+      clearCurrentOrgCacheForUser(user.id);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('active_organization_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (profileError) {
+        setError('Failed to fetch organization');
+        setOrganizationId(null);
+      } else {
+        const newOrgId = profile?.active_organization_id ?? null;
+        setOrganizationId(newOrgId);
+        if (newOrgId) {
+          window.dispatchEvent(new CustomEvent('organization-switched', { detail: { organizationId: newOrgId } }));
+        }
+      }
+    } catch (error) {
+      console.error('Refetch error:', error);
+      setError('Failed to fetch organization');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Optimized logging - only log significant changes in development
   // Don't log session missing errors - they're expected during initial load
@@ -541,6 +538,21 @@ export const useCurrentOrg = () => {
     currentOrg: organizationId ? { id: organizationId } : null
   };
 };
+
+/**
+ * Clear in-memory and localStorage org cache for a user.
+ * Call this when switching organization from a place that does not use useCurrentOrg
+ * (e.g. mobile Profile), so that the next useCurrentOrg() read fetches from DB.
+ */
+export function clearCurrentOrgCacheForUser(userId: string): void {
+  const cacheKey = `org-${userId}`;
+  orgCache.delete(cacheKey);
+  try {
+    localStorage.removeItem(`org-cache-${userId}`);
+  } catch {
+    // ignore
+  }
+}
 
 // Export utility function for backward compatibility
 export const getCurrentOrganizationId = async (): Promise<{ organizationId: string }> => {

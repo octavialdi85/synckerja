@@ -117,7 +117,6 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
   // Function to fetch uncompleted items (can be called to refresh)
   const fetchUncompletedItems = useCallback(async () => {
     if (!organizationId) return;
-    
     setIsLoading(true);
     try {
       const items: UncompletedItem[] = [];

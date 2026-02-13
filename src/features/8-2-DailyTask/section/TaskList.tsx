@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { CheckSquare } from 'lucide-react';
 import { Table, TableBody, TableCell, TableRow } from '@/features/ui/table';
 import { TooltipProvider } from '@/features/ui/tooltip';
@@ -16,6 +16,9 @@ import {
 } from './TaskList/index';
 import { useTaskListBlockers } from '../hooks/useTaskListBlockers';
 import { useTaskListDepartments } from '../hooks/useTaskListDepartments';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
+import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import './TaskList.css';
 
 export const TaskList = () => {
@@ -37,6 +40,27 @@ export const TaskList = () => {
   const requestDeadlineExtension = (context as any).requestDeadlineExtension;
   const { user } = useCurrentUser();
   const { toast } = useToast();
+
+  const { organizationId } = useCurrentOrg();
+  const { data: cycles = [] } = useOkrCycles(organizationId);
+  const activeCycleIds = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return cycles
+      .filter(
+        (c: { is_active?: boolean; year?: number }) =>
+          (c as { is_active?: boolean }).is_active === true ||
+          ((c as { year?: number }).year === currentYear || (c as { year?: number }).year === currentYear + 1)
+      )
+      .map((c: { id: string }) => c.id);
+  }, [cycles]);
+  const { data: individualObjectives = [] } = useIndividualObjectives(organizationId, activeCycleIds);
+  const objectiveIdToTitle = useMemo(() => {
+    const map: Record<string, string> = {};
+    individualObjectives.forEach((obj: { id: string; title: string }) => {
+      map[obj.id] = obj.title;
+    });
+    return map;
+  }, [individualObjectives]);
 
   const departmentMap = useTaskListDepartments(tasks);
   const {
@@ -241,7 +265,7 @@ export const TaskList = () => {
                 {effectiveFilteredTasks.length === 0 ? (
                   <TableRow className="w-full">
                     <TableCell
-                      colSpan={13}
+                      colSpan={14}
                       className="text-center py-8 text-gray-500 w-full"
                       style={{ width: '100%' }}
                     >
@@ -255,7 +279,7 @@ export const TaskList = () => {
                             </p>
                             <button
                               type="button"
-                              onClick={() => setFilters((prev) => ({ ...prev, myTask: 'all', pic: '', search: '', status: '', priority: '', dateRange: undefined, planDateRange: undefined }))}
+                              onClick={() => setFilters((prev) => ({ ...prev, myTask: 'all', pic: '', search: '', status: '', priority: '', dateRange: undefined, planDateRange: undefined, objectiveLink: 'all' }))}
                               className="text-sm text-primary hover:underline"
                             >
                               Show all tasks
@@ -272,6 +296,7 @@ export const TaskList = () => {
                     <TaskListRow
                       key={task.id}
                       task={task}
+                      objectiveTitle={task.objective_id ? (objectiveIdToTitle[task.objective_id] ?? null) : null}
                       isExpanded={expandedTasks.has(task.id)}
                       isHighlighted={highlightedTask === task.id}
                       isHighlightedFromPendingApproval={highlightFromPendingApproval && highlightedTask === task.id}

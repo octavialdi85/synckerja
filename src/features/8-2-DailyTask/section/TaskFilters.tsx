@@ -92,6 +92,10 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     setFilters(prev => ({ ...prev, priority: value }));
   };
 
+  const handleObjectiveLinkChange = (value: string) => {
+    setFilters(prev => ({ ...prev, objectiveLink: value === 'unlinked' ? 'unlinked' : 'all' }));
+  };
+
   const handleDepartmentChange = (value: string) => {
     setFilters(prev => ({ ...prev, department: value === "all" ? undefined : value }));
   };
@@ -391,6 +395,17 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           <SelectItem value="high">High</SelectItem>
           <SelectItem value="urgent">Urgent</SelectItem>
           <SelectItem value="needs_to_be_presented">Presentation</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* Objective link: All / Unlinked tasks */}
+      <Select value={filters.objectiveLink || 'all'} onValueChange={handleObjectiveLinkChange}>
+        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+          <SelectValue placeholder={t('dailyTask.filters.objectiveLink', 'Objective link')} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t('dailyTask.filters.all', 'All')}</SelectItem>
+          <SelectItem value="unlinked">{t('dailyTask.filters.unlinkedTasks', 'Unlinked tasks')}</SelectItem>
         </SelectContent>
       </Select>
 

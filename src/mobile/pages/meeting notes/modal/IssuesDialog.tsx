@@ -279,7 +279,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-6xl md:max-h-[90vh] border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%] overflow-hidden">
+      <DialogContent className="max-w-none w-screen h-screen md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin] border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%] overflow-hidden">
         <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-foreground break-words">
             <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />

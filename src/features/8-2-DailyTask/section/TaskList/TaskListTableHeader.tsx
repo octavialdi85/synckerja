@@ -25,6 +25,12 @@ export function TaskListTableHeader() {
         </TableHead>
         <TableHead
           className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"
+          style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}
+        >
+          Individual Objective
+        </TableHead>
+        <TableHead
+          className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"
           style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}
         >
           Department

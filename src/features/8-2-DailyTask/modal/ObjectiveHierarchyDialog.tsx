@@ -417,7 +417,7 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="w-[70vmin] h-[70vmin] max-w-[70vmin] max-h-[70vmin] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Select Individual Objective</DialogTitle>
           <DialogDescription>

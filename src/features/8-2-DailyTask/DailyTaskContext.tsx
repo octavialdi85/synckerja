@@ -383,7 +383,6 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       setIsLoading(false);
       return;
     }
-
     try {
       const isDev = import.meta.env.DEV;
       if (isDev) {
@@ -569,7 +568,6 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         logger.query('✅ Fetched tasks (basic data):', data);
         logger.query('📊 Task count:', data?.length || 0);
       }
-      
       // Debug: Log if no tasks found
       if (!data || data.length === 0) {
         console.warn('⚠️ No tasks found for organization:', organizationId);

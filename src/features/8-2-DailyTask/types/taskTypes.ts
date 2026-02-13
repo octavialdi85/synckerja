@@ -138,6 +138,10 @@ export interface Task {
   has_substeps?: boolean;
   /** Template used for this task; one template per task. */
   daily_template_id?: string | null;
+  /** Individual objective this task is linked to; null = unlinked. */
+  objective_id?: string | null;
+  /** Resolved title for display (e.g. from useIndividualObjectives). */
+  objective_title?: string | null;
   steps: TaskStep[];
   files: TaskFile[];
   deadline_history: DeadlineHistory[];
