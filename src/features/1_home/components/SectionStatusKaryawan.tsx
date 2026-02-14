@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { id, enUS } from 'date-fns/locale';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { applyVariables } from '@/features/share/i18n/translations';
+import { useToast } from '@/features/ui/use-toast';
 
 interface SectionStatusKaryawanProps {
   statusCreatedTrigger?: number;
@@ -19,6 +20,7 @@ interface SectionStatusKaryawanProps {
 
 export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKaryawanProps) => {
   const { t, dateLocale } = useAppTranslation();
+  const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusCreatedCount, setStatusCreatedCount] = useState(0);
   const [editingStatus, setEditingStatus] = useState<EmployeeStatus | null>(null);
@@ -57,7 +59,12 @@ export const SectionStatusKaryawan = ({ statusCreatedTrigger }: SectionStatusKar
         refetch();
       }
     } catch {
-      // Delete failed; refetch not called
+      refetch();
+      toast({
+        title: t('common.error', 'Error'),
+        description: t('status.failedToDelete', 'Failed to delete status'),
+        variant: 'destructive',
+      });
     } finally {
       setIsDeleting(false);
     }

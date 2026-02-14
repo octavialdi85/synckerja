@@ -15,10 +15,10 @@ export const IntervieweesPage = () => {
   return (
     <StandardLayout>
       <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
-        <div className="flex flex-1 min-h-0">
-          {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+        <div className="flex flex-1 min-h-0 min-w-0">
+          {/* Main Content - min-w-0 so table horizontal scroll stays inside section */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4 overflow-hidden">
+            <div className="h-full flex flex-col min-h-0 min-w-0">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <HeaderAndTab 
@@ -27,9 +27,9 @@ export const IntervieweesPage = () => {
                 />
               </div>
 
-              {/* Content Area - Scrollable */}
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
-                <div className="min-h-full">
+              {/* Content Area - Scrollable; overflow-x-hidden keeps table from escaping section */}
+              <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[calc(100vh-120px)]">
+                <div className="min-h-full min-w-0">
                   <IntervieweeTab />
                 </div>
               </div>

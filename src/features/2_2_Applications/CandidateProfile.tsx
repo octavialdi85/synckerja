@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import { CandidateProfileTabs, CandidateProfileSidebar } from '@/features/2_2_Applications/components/application-form';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Loader2, User, CheckCircle, ArrowLeft, UserPlus, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,9 +45,8 @@ const CandidateProfile = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
+  const { t } = useAppTranslation();
   const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -205,37 +205,14 @@ const CandidateProfile = () => {
     }
   };
 
-  const handleFinalSubmit = async () => {
-    if (!candidate?.id) return;
-    setSubmitting(true);
-    try {
-      const {
-        error
-      } = await supabase.from('candidate_profiles').update({
-        profile_completed: true,
-        submitted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }).eq('id', candidate.id);
-      if (error) throw error;
-      setCandidate(prev => prev ? {
-        ...prev,
-        profile_completed: true,
-        submitted_at: new Date().toISOString()
-      } : null);
-      toast({
-        title: "Profile Berhasil Disubmit!",
-        description: "Terima kasih telah melengkapi profile. HR akan menghubungi Anda segera."
-      });
-    } catch (error) {
-      console.error('Error submitting profile:', error);
-      toast({
-        title: "Error",
-        description: "Gagal submit profile. Silakan coba lagi.",
-        variant: "destructive"
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  // Called by CandidateProfileTabs after successful submit (Tabs perform the DB update).
+  const handleFinalSubmit = () => {
+    const token = searchParams.get('token') ?? paramToken ?? '';
+    toast({
+      title: t('candidateProfile.submitSuccess.toastTitle', 'Profil Berhasil Disubmit!'),
+      description: t('candidateProfile.submitSuccess.toastDescription', 'Terima kasih telah melengkapi profil. HR akan menghubungi Anda segera.')
+    });
+    navigate(`/candidate/profile/thank-you${token ? `?token=${encodeURIComponent(token)}` : ''}`);
   };
 
   const getInitials = (name: string) => {
@@ -305,7 +282,7 @@ const CandidateProfile = () => {
                 <div className="flex items-center gap-3">
                   {candidate.profile_completed && <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-full">
                       <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm font-medium">Complete</span>
+                      <span className="text-sm font-medium">{t('candidateProfile.header.completed', 'Completed')}</span>
                     </div>}
                   
                 </div>
@@ -344,16 +321,16 @@ const CandidateProfile = () => {
                 <Monitor className="h-8 w-8 text-slate-600" strokeWidth={1.5} />
               </div>
               <DialogTitle className="text-xl font-semibold text-slate-900 text-center tracking-tight">
-                Desktop only
+                {t('candidateProfile.mobile.desktopOnly', 'Desktop only')}
               </DialogTitle>
             </div>
             <div className="px-6 py-5 text-center">
               <p className="text-slate-600 text-[15px] leading-relaxed">
-                This page is designed for desktop or laptop. Please open the same link on your computer to complete your profile.
+                {t('candidateProfile.mobile.desktopMessage', 'This page is designed for desktop or laptop. Please open the same link on your computer to complete your profile.')}
               </p>
               <div className="mt-5 pt-4 border-t border-slate-100">
                 <p className="text-xs text-slate-500">
-                  Keep this link and open it on a desktop browser.
+                  {t('candidateProfile.mobile.keepLink', 'Keep this link and open it on a desktop browser.')}
                 </p>
               </div>
             </div>
@@ -379,17 +356,17 @@ const CandidateProfile = () => {
                 </Avatar>
                 <div>
                   <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Complete Your Profile
+                    {t('candidateProfile.header.completeYourProfile', 'Complete Your Profile')}
                   </h1>
                   <p className="text-sm text-gray-600">
-                    {candidate.full_name || 'Welcome'}
+                    {candidate.full_name || t('candidateProfile.header.welcome', 'Welcome')}
                   </p>
                 </div>
               </div>
               
               {candidate.profile_completed && <div className="flex items-center space-x-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
                   <CheckCircle className="h-4 w-4" />
-                  <span className="text-xs font-medium">Completed</span>
+                  <span className="text-xs font-medium">{t('candidateProfile.header.completed', 'Completed')}</span>
                 </div>}
             </div>
           </div>
@@ -435,17 +412,17 @@ const CandidateProfile = () => {
               </Avatar>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">
-                  Profile Kandidat
+                  {t('candidateProfile.header.profileKandidat', 'Profile Kandidat')}
                 </h1>
                 <p className="text-sm text-gray-600">
-                  {candidate.full_name || 'Mohon lengkapi nama Anda'}
+                  {candidate.full_name || t('candidateProfile.header.completeNamePlaceholder', 'Mohon lengkapi nama Anda')}
                 </p>
               </div>
             </div>
             
             {candidate.profile_completed && <div className="flex items-center space-x-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />
-                <span className="text-sm font-medium">Profile Completed</span>
+                <span className="text-sm font-medium">{t('candidateProfile.header.profileCompleted', 'Profile Completed')}</span>
               </div>}
           </div>
         </div>

@@ -5,6 +5,31 @@ import { Label } from '@/features/ui/label';
 import { Pencil, Check, X } from 'lucide-react';
 import { JobOpeningFormData } from './hooks/jobOpeningTypes';
 
+/** Split by newlines, strip leading "1. " style numbering, return list for consistent display numbering */
+function parseTextToList(text: string | undefined): string[] {
+  if (!text?.trim()) return [];
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^\d+\.\s*/, ''));
+}
+
+/** Renders text as paragraph or ordered list so numbering is always 1, 2, 3... */
+function DetailsListDisplay({ text }: { text: string | undefined }) {
+  const items = parseTextToList(text);
+  if (!text?.trim()) return <p className="text-sm text-foreground">—</p>;
+  if (items.length === 0) return <p className="text-sm text-foreground whitespace-pre-wrap">{text}</p>;
+  if (items.length === 1) return <p className="text-sm text-foreground">{items[0]}</p>;
+  return (
+    <ol className="list-decimal list-outside pl-5 space-y-1.5 text-sm text-foreground">
+      {items.map((item, index) => (
+        <li key={index} className="pl-0.5">{item}</li>
+      ))}
+    </ol>
+  );
+}
+
 interface JobOpeningDetailsTabProps {
   formData: JobOpeningFormData;
   onInputChange: (field: keyof JobOpeningFormData, value: any) => void;
@@ -88,25 +113,19 @@ export const JobOpeningDetailsTab = ({
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
               Job Description
             </p>
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {formData.job_description?.trim() || '—'}
-            </p>
+            <DetailsListDisplay text={formData.job_description} />
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
               Requirements
             </p>
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {formData.requirements?.trim() || '—'}
-            </p>
+            <DetailsListDisplay text={formData.requirements} />
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
               Responsibilities
             </p>
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {formData.responsibilities?.trim() || '—'}
-            </p>
+            <DetailsListDisplay text={formData.responsibilities} />
           </div>
         </div>
       ) : (

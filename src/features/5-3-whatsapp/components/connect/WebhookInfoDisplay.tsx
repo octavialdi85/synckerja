@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Label } from '@/features/ui/label';
 import { Button } from '@/features/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import { useWhatsAppConfig } from '../../hooks/useWhatsAppConfig';
 import { useInstagramAccounts } from '../../hooks/useInstagramAccounts';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { SUPABASE_URL } from '@/integrations/supabase/client';
-import { Link2, Key } from 'lucide-react';
+import { Link2, Key, Info } from 'lucide-react';
 
 const WHATSAPP_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
 const INSTAGRAM_WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/instagram-webhook`;
@@ -55,12 +56,21 @@ export function WebhookInfoDisplay({ embedded, variant = 'whatsapp' }: WebhookIn
       <div className="flex items-center gap-2 mb-4">
         <Link2 className="w-4 h-4 text-slate-600 shrink-0" aria-hidden />
         <h3 className="text-sm font-semibold text-slate-800">{t('whatsappConnect.webhookConfigTitle', 'Webhook configuration')}</h3>
+        {isInstagram && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex text-slate-400 hover:text-slate-600 cursor-help" aria-label="Info">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <p className="text-xs">
+                {t('instagramConnect.webhookReceiveHint', 'Agar DM masuk ke aplikasi: di Meta Developer → App Anda → Instagram → Configuration → Webhook, isi Callback URL dan Verify Token di bawah, klik Verify and Save, lalu subscribe ke "messages".')}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
-      {isInstagram && (
-        <p className="text-xs text-slate-600 mb-3">
-          {t('instagramConnect.webhookReceiveHint', 'Agar DM masuk ke aplikasi: di Meta Developer → App Anda → Instagram → Configuration → Webhook, isi Callback URL dan Verify Token di bawah, klik Verify and Save, lalu subscribe ke "messages".')}
-        </p>
-      )}
       <div className="space-y-5">
         {/* Webhook Callback URL */}
         <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">

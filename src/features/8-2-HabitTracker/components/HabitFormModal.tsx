@@ -278,7 +278,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: 'Please select at least one day for weekly habit',
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
       if (weeklyDays.length > targetCount) {
@@ -287,7 +286,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: `You can only select up to ${targetCount} day${targetCount > 1 ? 's' : ''} for this habit. Please deselect ${weeklyDays.length - targetCount} day${weeklyDays.length - targetCount > 1 ? 's' : ''}`,
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
       if (targetCount > 1 && weeklyDays.length < targetCount) {
@@ -296,7 +294,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: `Please select at least ${targetCount} days for this habit`,
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
     }
@@ -309,7 +306,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: 'Please select at least one date for monthly habit',
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
       if (monthlyDates.length > targetCount) {
@@ -318,7 +314,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: `You can only select up to ${targetCount} date${targetCount > 1 ? 's' : ''} for this habit. Please deselect ${monthlyDates.length - targetCount} date${monthlyDates.length - targetCount > 1 ? 's' : ''}`,
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
       if (targetCount > 1 && monthlyDates.length < targetCount) {
@@ -327,7 +322,6 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
           description: `Please select at least ${targetCount} dates for this habit`,
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
     }

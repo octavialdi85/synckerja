@@ -165,6 +165,11 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
         }
       } catch (error) {
         console.error('Error fetching current employee:', error);
+        toast({
+          title: 'Error',
+          description: 'Could not load your profile',
+          variant: 'destructive',
+        });
       }
     };
 

@@ -19,6 +19,8 @@ import { useClientProfileStatus } from '@/hooks/organized/sales';
 import { LoadingDots } from '@/components/LoadingDots';
 import { supabase } from "@/integrations/supabase/client";
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 interface LeadStatus {
   id: string;
@@ -36,6 +38,8 @@ interface LeadsTableNewProps {
 
 export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRefreshLeads, loading = false }: LeadsTableNewProps) {
   const { t } = useAppTranslation();
+  const { toast } = useToast();
+  const { organizationId } = useCurrentOrg();
 
   const [selectedLead, setSelectedLead] = useState<NewLead | null>(null);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
@@ -45,7 +49,6 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   const [leadToView, setLeadToView] = useState<NewLead | null>(null);
   const [isClientProfileOpen, setIsClientProfileOpen] = useState(false);
   const [selectedClientLead, setSelectedClientLead] = useState<NewLead | null>(null);
-  const [organizationId, setOrganizationId] = useState<string>('');
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
   const [isStatusHistoryOpen, setIsStatusHistoryOpen] = useState(false);
   const [statusHistoryLead, setStatusHistoryLead] = useState<NewLead | null>(null);
@@ -69,7 +72,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     fetchLeadStatuses();
   }, []);
 
-  const handleFieldUpdate = (leadId: string, field: string, value: string) => {
+  const handleFieldUpdate = async (leadId: string, field: string, value: string) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
     let updatedLead: NewLead & { assignee_id?: string | null };
@@ -96,7 +99,15 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
       updatedLead = { ...lead, [field]: value };
     }
 
-    onUpdateLead(updatedLead as NewLead);
+    try {
+      await onUpdateLead(updatedLead as NewLead);
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Gagal memperbarui lead',
+        description: (e as Error)?.message ?? 'Silakan coba lagi.',
+      });
+    }
   };
 
   const handleFollowUpClick = (lead: NewLead) => {
@@ -115,7 +126,15 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   };
 
   const handleDelete = async (leadId: string) => {
-    await onDeleteLead(leadId);
+    try {
+      await onDeleteLead(leadId);
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Gagal menghapus lead',
+        description: (e as Error)?.message ?? 'Silakan coba lagi.',
+      });
+    }
   };
 
   const handleStatusHistoryClick = (lead: NewLead) => {
@@ -123,29 +142,7 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
     setIsStatusHistoryOpen(true);
   };
 
-  const handleClientClick = async (lead: NewLead) => {
-    // Get organization ID from leads if we have one, or from user profile
-    if (leads.length > 0 && leads[0].organization_id) {
-      setOrganizationId(leads[0].organization_id);
-    } else {
-      // Fallback: get organization from user profile
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('active_organization_id')
-            .eq('user_id', user.id)
-            .single();
-          if (profile?.active_organization_id) {
-            setOrganizationId(profile.active_organization_id);
-          }
-        }
-      } catch (error) {
-        console.error('Error getting organization ID:', error);
-      }
-    }
-
+  const handleClientClick = (lead: NewLead) => {
     setSelectedClientLead(lead);
     setIsClientProfileOpen(true);
   };
@@ -468,8 +465,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
         lead={leadToView}
       />
       
-      {/* Client Profile Popup */}
-      {selectedClientLead && (
+      {/* Client Profile Popup - only when organizationId is available */}
+      {selectedClientLead && organizationId && (
         <ClientProfilePopup
           open={isClientProfileOpen}
           onClose={() => {

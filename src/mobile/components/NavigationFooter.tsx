@@ -1,5 +1,6 @@
 import { Home, Calendar, BarChart3, User, MapPin } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { usePrefetchHomeData } from "@/hooks/useParallelHomeData";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/" },
@@ -12,17 +13,25 @@ const navItems = [
 export const NavigationFooter = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const prefetchHomeData = usePrefetchHomeData();
+
+  const handleNavClick = (path: string) => {
+    if (path === "/") {
+      prefetchHomeData().catch(() => {});
+    }
+    navigate(path);
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
       <div className="grid grid-cols-5 max-w-md mx-auto">
         {navItems.map(({ icon: Icon, label, path }) => {
           const isActive = location.pathname === path;
-          
+
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => handleNavClick(path)}
               className={`flex flex-col items-center py-2 px-1 transition-colors ${
                 isActive 
                   ? 'text-primary' 

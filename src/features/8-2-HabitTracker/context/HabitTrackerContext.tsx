@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { useCurrentUser } from '@/features/2-1-employees/hooks/useCurrentUser';
+import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
+import { useToast } from '@/features/ui/use-toast';
 import { Habit, HabitEntry, HabitStats, HabitFilter } from '../types';
 
 interface HabitTrackerContextType {
@@ -11,7 +12,7 @@ interface HabitTrackerContextType {
   stats: HabitStats[];
   loading: boolean;
   filters: HabitFilter;
-  updateFilter: (key: keyof HabitFilter, value: any) => void;
+  updateFilter: <K extends keyof HabitFilter>(key: K, value: HabitFilter[K]) => void;
   addHabit: (habit: Omit<Habit, 'id' | 'created_at' | 'updated_at' | 'organization_id' | 'employee_id' | 'created_by'>) => Promise<void>;
   updateHabit: (id: string, updates: Partial<Habit>) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
@@ -34,6 +35,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
   const { organizationId } = useCurrentOrg();
   const { user } = useCurrentUser();
   const { data: employee } = useCurrentEmployee();
+  const { toast } = useToast();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [entries, setEntries] = useState<HabitEntry[]>([]);
   const [stats, setStats] = useState<HabitStats[]>([]);
@@ -121,8 +123,14 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       setHabits(parsedHabits);
     } catch (error) {
       console.error('Error fetching habits:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat habits. Silakan refresh.',
+        variant: 'destructive',
+      });
+      setHabits([]);
     }
-  }, [organizationId, employee?.id]);
+  }, [organizationId, employee?.id, toast]);
 
   const fetchEntries = useCallback(async () => {
     if (!organizationId || !employee?.id) return;
@@ -139,8 +147,14 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       setEntries(data || []);
     } catch (error) {
       console.error('Error fetching entries:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat data entri. Silakan refresh.',
+        variant: 'destructive',
+      });
+      setEntries([]);
     }
-  }, [organizationId, employee?.id]);
+  }, [organizationId, employee?.id, toast]);
 
   const calculateStats = useCallback(() => {
     const habitStats: HabitStats[] = habits.map((habit) => {
@@ -149,7 +163,8 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       
       // Calculate completion rate
       const targetDays = habit.frequency === 'daily' ? 30 : habit.frequency === 'weekly' ? 4 : 1;
-      const expectedEntries = targetDays * habit.target_count;
+      const tc = habit.target_count ?? 0;
+      const expectedEntries = targetDays * tc;
       const completion_rate = expectedEntries > 0 ? (totalEntries / expectedEntries) * 100 : 0;
 
       // Calculate streaks
@@ -203,10 +218,16 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
     setLoading(true);
     try {
       await Promise.all([fetchHabits(), fetchEntries()]);
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Gagal me-refresh data.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  }, [fetchHabits, fetchEntries]);
+  }, [fetchHabits, fetchEntries, toast]);
 
   useEffect(() => {
     if (organizationId && employee?.id) {
@@ -218,7 +239,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
     calculateStats();
   }, [calculateStats]);
 
-  const updateFilter = useCallback((key: keyof HabitFilter, value: any) => {
+  const updateFilter = useCallback(<K extends keyof HabitFilter>(key: K, value: HabitFilter[K]) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -254,9 +275,13 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       await refreshData();
     } catch (error) {
       console.error('Error adding habit:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal menyimpan habit.',
+        variant: 'destructive',
+      });
     }
-  }, [organizationId, employee?.id, user?.id, refreshData]);
+  }, [organizationId, employee?.id, user?.id, refreshData, toast]);
 
   const updateHabit = useCallback(async (id: string, updates: Partial<Habit>) => {
     try {
@@ -287,9 +312,13 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       await refreshData();
     } catch (error) {
       console.error('Error updating habit:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal mengubah habit.',
+        variant: 'destructive',
+      });
     }
-  }, [refreshData]);
+  }, [refreshData, toast]);
 
   const deleteHabit = useCallback(async (id: string) => {
     try {
@@ -302,9 +331,13 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       await refreshData();
     } catch (error) {
       console.error('Error deleting habit:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal menghapus habit.',
+        variant: 'destructive',
+      });
     }
-  }, [refreshData]);
+  }, [refreshData, toast]);
 
   const addEntry = useCallback(async (habitId: string, date: string, count: number, notes?: string) => {
     if (!organizationId || !employee?.id || !user?.id) return;
@@ -339,9 +372,13 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       }
     } catch (error) {
       console.error('Error adding entry:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal menambah entri.',
+        variant: 'destructive',
+      });
     }
-  }, [organizationId, employee?.id, user?.id]);
+  }, [organizationId, employee?.id, user?.id, toast]);
 
   const updateEntry = useCallback(async (id: string, updates: Partial<HabitEntry>) => {
     try {
@@ -357,9 +394,13 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       await refreshData();
     } catch (error) {
       console.error('Error updating entry:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal mengubah entri.',
+        variant: 'destructive',
+      });
     }
-  }, [refreshData]);
+  }, [refreshData, toast]);
 
   const deleteEntry = useCallback(async (id: string) => {
     try {
@@ -374,13 +415,17 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       setEntries((prev) => prev.filter((entry) => entry.id !== id));
     } catch (error) {
       console.error('Error deleting entry:', error);
-      throw error;
+      toast({
+        title: 'Error',
+        description: 'Gagal menghapus entri.',
+        variant: 'destructive',
+      });
     }
-  }, []);
+  }, [toast]);
 
   const filteredHabits = React.useMemo(() => {
     return habits.filter((habit) => {
-      if (filters.search && !habit.name.toLowerCase().includes(filters.search.toLowerCase())) {
+      if (filters.search && !(habit.name ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
         return false;
       }
       if (filters.frequency !== 'all' && habit.frequency !== filters.frequency) {

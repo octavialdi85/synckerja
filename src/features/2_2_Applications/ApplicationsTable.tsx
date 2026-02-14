@@ -4,7 +4,6 @@ import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { MoreHorizontal, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useJobApplications, JobApplication } from './hooks/useJobApplications';
 import { format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -154,16 +153,27 @@ export const ApplicationsTable = () => {
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
+        return 'bg-yellow-100 text-yellow-800';
       case 'reviewed':
-        return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+        return 'bg-blue-100 text-blue-800';
+      case 'scheduled':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'contacted':
+        return 'bg-green-100 text-green-800';
+      case 'confirmed':
+        return 'bg-emerald-100 text-emerald-800';
       case 'accepted':
-        return 'bg-green-100 text-green-800 hover:bg-green-200';
+        return 'bg-green-100 text-green-800';
       case 'rejected':
-        return 'bg-red-100 text-red-800 hover:bg-red-200';
+        return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+        return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    const s = (status || 'pending').toLowerCase();
+    return s.charAt(0).toUpperCase() + s.slice(1);
   };
 
   if (isLoading) {
@@ -301,21 +311,9 @@ export const ApplicationsTable = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Select 
-                    value={application.status || 'pending'}
-                    onValueChange={(value) => handleStatusChange(application.id, value)}
-                    disabled={updateStatusMutation.isPending}
-                  >
-                    <SelectTrigger className={`w-28 h-8 text-xs border-0 ${getStatusColor(application.status || 'pending')}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="reviewed">Reviewed</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Badge className={`text-xs font-medium ${getStatusColor(application.status || 'pending')}`} variant="secondary">
+                    {getStatusLabel(application.status || 'pending')}
+                  </Badge>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div>

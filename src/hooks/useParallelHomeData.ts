@@ -11,8 +11,9 @@
  * - Smart caching strategy
  */
 
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
@@ -42,6 +43,9 @@ export const useParallelHomeData = () => {
             supabase.from('profiles').select('*').eq('user_id', user.id).single(),
             supabase.rpc('get_user_role_in_active_org')
           ]);
+
+          if (profileResult.error) throw profileResult.error;
+          if (roleResult.error) throw roleResult.error;
 
           return {
             profile: profileResult.data,
@@ -134,28 +138,17 @@ export const useParallelHomeData = () => {
 
           if (!employee) return null;
 
-          // Get task counts
-          const [assignedTasks, completedTasks, pendingTasks] = await Promise.all([
-            supabase
-              .from('task_steps_assigned')
-              .select('task_id', { count: 'exact', head: true })
-              .eq('employee_id', employee.id),
-            supabase
-              .from('task_steps_assigned')
-              .select('task_id', { count: 'exact', head: true })
-              .eq('employee_id', employee.id)
-              .eq('status', 'completed'),
-            supabase
-              .from('task_steps_assigned')
-              .select('task_id', { count: 'exact', head: true })
-              .eq('employee_id', employee.id)
-              .in('status', ['pending', 'in_progress'])
-          ]);
+          // Get task count (task_steps_assigned has no status column; total only)
+          const { count } = await supabase
+            .from('task_steps_assigned')
+            .select('task_id', { count: 'exact', head: true })
+            .eq('employee_id', employee.id);
 
+          const total = count ?? 0;
           return {
-            total: assignedTasks.count || 0,
-            completed: completedTasks.count || 0,
-            pending: pendingTasks.count || 0
+            total,
+            completed: 0,
+            pending: total
           };
         },
         enabled: !!user,
@@ -183,7 +176,7 @@ export const useParallelHomeData = () => {
   });
 
   if (import.meta.env?.DEV && queries.data) {
-    console.log('⚡ Parallel data loaded:', {
+    logger.debug('Parallel data loaded', {
       profile: !!queries.data.profile,
       attendance: !!queries.data.attendance,
       objectives: queries.data.objectives?.length || 0,
@@ -201,10 +194,9 @@ export const useParallelHomeData = () => {
 export const usePrefetchHomeData = () => {
   const { user } = useAuth();
   const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
 
   return async () => {
-    const queryClient = (await import('@tanstack/react-query')).useQueryClient();
-
     // Prefetch all home data
     await Promise.all([
       queryClient.prefetchQuery({
@@ -226,7 +218,7 @@ export const usePrefetchHomeData = () => {
     ]);
 
     if (import.meta.env?.DEV) {
-      console.log('✅ Home data prefetched successfully');
+      logger.debug('Home data prefetched successfully');
     }
   };
 };

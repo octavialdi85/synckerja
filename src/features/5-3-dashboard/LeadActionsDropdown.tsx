@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from "@/features/ui/button";
-import { Edit, MessageCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/features/ui/dropdown-menu";
+import { Edit, MessageCircle, MoreHorizontal, Eye, Trash2 } from "lucide-react";
 import { NewLead } from '@/types/leads';
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
@@ -12,7 +13,7 @@ interface LeadActionsDropdownProps {
   onDelete?: (leadId: string) => void;
 }
 
-/** Lead from channel: one button = Open in Live Chat (by conversation id or ticket_id). Manual lead: one button = Edit. No Delete, no View Detail. */
+/** Lead from channel: Open in Live Chat. Manual lead: dropdown with Edit, View Detail, Delete. */
 export const LeadActionsDropdown = ({ lead, onEdit, onViewDetail, onDelete }: LeadActionsDropdownProps) => {
   const fromWhatsApp = (lead as any)._fromWhatsApp === true;
   const fromEmail = (lead as any)._fromEmail === true || (typeof lead.id === 'string' && lead.id.startsWith('email-'));
@@ -38,15 +39,38 @@ export const LeadActionsDropdown = ({ lead, onEdit, onViewDetail, onDelete }: Le
 
   if (isManualLead) {
     return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 text-xs font-medium"
-        onClick={() => onEdit(lead)}
-      >
-        <Edit className="h-4 w-4" />
-        Edit
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs font-medium">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onEdit(lead)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </DropdownMenuItem>
+          {onViewDetail && (
+            <DropdownMenuItem onClick={() => onViewDetail(lead)}>
+              <Eye className="h-4 w-4 mr-2" />
+              View Detail
+            </DropdownMenuItem>
+          )}
+          {onDelete && (
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600"
+              onClick={() => {
+                if (window.confirm('Yakin ingin menghapus lead ini?')) {
+                  onDelete(lead.id);
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 

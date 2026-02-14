@@ -23,7 +23,7 @@ export interface FilteredData {
   };
 }
 
-export const generateLeadsPDF = (data: FilteredData) => {
+export const generateLeadsPDF = async (data: FilteredData): Promise<void> => {
   const doc = new jsPDF();
   
   // Page settings

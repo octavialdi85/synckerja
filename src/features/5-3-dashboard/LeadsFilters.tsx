@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Button } from '@/features/ui/button';
-import { Search, Plus, MoreVertical, Download, RefreshCw } from 'lucide-react';
+import { Search, Plus, MoreVertical, Download, RefreshCw, Loader2 } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { StatusManagement } from './StatusManagement';
@@ -12,6 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
 import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { NewLead } from '@/types/leads';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 interface LeadStatus {
   id: string;
@@ -58,7 +59,10 @@ interface LeadsFiltersProps {
 
 export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = [], filters: externalFilters }: LeadsFiltersProps) => {
   const { data: employees = [] } = useAvailableEmployees();
+  const { toast } = useToast();
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [filtersLoadError, setFiltersLoadError] = useState<string | null>(null);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
   const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -82,7 +86,9 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
       .eq('is_active', true)
       .order('sort_order');
 
-    if (!error && data) {
+    if (error) {
+      setFiltersLoadError('Gagal memuat data filter');
+    } else if (data) {
       setLeadStatuses(data);
     }
   };
@@ -94,7 +100,9 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
       .eq('is_active', true)
       .order('name');
 
-    if (!error && data) {
+    if (error) {
+      setFiltersLoadError('Gagal memuat data filter');
+    } else if (data) {
       setLeadSources(data);
     }
   };
@@ -106,7 +114,9 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
       .eq('is_active', true)
       .order('name');
 
-    if (!error && data) {
+    if (error) {
+      setFiltersLoadError('Gagal memuat data filter');
+    } else if (data) {
       setServices(data);
     }
   };
@@ -118,7 +128,9 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
       .eq('is_active', true)
       .order('name');
 
-    if (!error && data) {
+    if (error) {
+      setFiltersLoadError('Gagal memuat data filter');
+    } else if (data) {
       setSubServices(data);
     }
   };
@@ -146,6 +158,7 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
   };
 
   useEffect(() => {
+    setFiltersLoadError(null);
     fetchLeadStatuses();
     fetchLeadSources();
     fetchServices();
@@ -160,6 +173,9 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
 
   return (
     <>
+      {filtersLoadError && (
+        <div className="w-full text-xs text-amber-600 mb-1.5">{filtersLoadError}</div>
+      )}
       <div className="flex flex-wrap gap-1.5 items-center">
         {/* Search Input */}
         <div className="relative flex-1 min-w-[150px]">
@@ -314,12 +330,35 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
 
         {/* Download PDF Button */}
         <Button 
-          onClick={() => generateLeadsPDF({ leads: filteredLeads, filters })}
+          onClick={async () => {
+            setIsGeneratingPDF(true);
+            try {
+              generateLeadsPDF({ leads: filteredLeads, filters });
+            } catch (e) {
+              toast({
+                variant: 'destructive',
+                title: 'Gagal membuat PDF',
+                description: (e as Error)?.message ?? 'Silakan coba lagi.',
+              });
+            } finally {
+              setIsGeneratingPDF(false);
+            }
+          }}
+          disabled={isGeneratingPDF}
           variant="outline"
           className="h-9 px-3 text-sm"
         >
-          <Download className="h-4 w-4 mr-1" />
-          Download PDF
+          {isGeneratingPDF ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF
+            </>
+          )}
         </Button>
 
         {/* New Lead Button */}

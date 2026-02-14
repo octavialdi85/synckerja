@@ -9,6 +9,7 @@ import { NewLead } from '@/types/leads';
 import { supabase } from '@/integrations/supabase/client';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 interface LeadStatus {
   id: string;
@@ -30,6 +31,7 @@ export const EditLeadDialog = ({
   onUpdateLead
 }: EditLeadDialogProps) => {
   const { t } = useAppTranslation();
+  const { toast } = useToast();
   const [formData, setFormData] = useState<Partial<NewLead>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leadStatuses, setLeadStatuses] = useState<LeadStatus[]>([]);
@@ -39,14 +41,8 @@ export const EditLeadDialog = ({
   useEffect(() => {
     const fetchLeadStatuses = async () => {
       try {
-        console.log('🔄 Fetching lead statuses...');
-        
-        // Get user profile to get organization_id
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.error('❌ No authenticated user');
-          return;
-        }
+        if (!user) return;
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -54,12 +50,7 @@ export const EditLeadDialog = ({
           .eq('user_id', user.id)
           .single();
 
-        if (!profile?.active_organization_id) {
-          console.error('❌ No active organization found');
-          return;
-        }
-
-        console.log('👤 User organization:', profile.active_organization_id);
+        if (!profile?.active_organization_id) return;
 
         const { data, error } = await supabase
           .from('lead_statuses')
@@ -68,14 +59,11 @@ export const EditLeadDialog = ({
           .eq('organization_id', profile.active_organization_id)
           .order('sort_order');
 
-        if (error) {
-          console.error('❌ Error fetching lead statuses:', error);
-        } else {
-          console.log('✅ Lead statuses fetched:', data);
-          setLeadStatuses(data || []);
+        if (!error && data) {
+          setLeadStatuses(data);
         }
-      } catch (err) {
-        console.error('❌ Exception in fetchLeadStatuses:', err);
+      } catch {
+        // Silent fail; dropdown will be empty
       }
     };
 
@@ -119,6 +107,11 @@ export const EditLeadDialog = ({
       onClose();
     } catch (error) {
       console.error('Error updating lead:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Gagal memperbarui lead',
+        description: (error as Error)?.message ?? 'Silakan coba lagi.',
+      });
     } finally {
       setIsSubmitting(false);
     }

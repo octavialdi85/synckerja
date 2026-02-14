@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { useDepartmentAccess } from './useDepartmentAccess';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { usePrefetchHomeData } from '@/hooks/useParallelHomeData';
 import { menuItems } from './menuItems';
 
 export const useSmartNavigation = () => {
   const navigate = useNavigate();
+  const prefetchHomeData = usePrefetchHomeData();
   const { canAccessPage } = useDepartmentAccess();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
 
@@ -35,8 +37,11 @@ export const useSmartNavigation = () => {
 
   // Smart navigate with auto-redirect to first accessible page
   const smartNavigate = (targetPath: string) => {
+    if (targetPath === '/') {
+      prefetchHomeData().catch(() => {});
+    }
     console.log('🚀 SmartNavigate called for:', targetPath);
-    
+
     // OWNER/ADMIN OVERRIDE - Direct navigation without permission check
     if (isOwner || userRole === 'owner' || isAdmin || userRole === 'admin') {
       console.log('🔑 SMART NAVIGATE OVERRIDE: Owner/Admin direct access to:', targetPath);

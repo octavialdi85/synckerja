@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 export interface ReviewCommentNotificationRow {
   id: string;
@@ -52,18 +53,20 @@ export function useReviewCommentNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const { organizationId } = useCurrentOrg();
 
   const userId = user?.id ?? null;
 
   const { data: notifications = [], refetch } = useQuery({
-    queryKey: [...QUERY_KEY, userId],
-    enabled: !!userId,
+    queryKey: [...QUERY_KEY, userId, organizationId],
+    enabled: !!userId && !!organizationId,
     queryFn: async (): Promise<ReviewCommentNotificationRow[]> => {
-      if (!userId) return [];
+      if (!userId || !organizationId) return [];
       const { data, error } = await supabase
         .from('review_comment_notifications')
-        .select('id, user_id, link_comment_id, social_media_plan_id, review_token, plan_title, commenter_display_name, read_at, created_at, link_comments(comment_text)')
+        .select('id, user_id, link_comment_id, social_media_plan_id, review_token, plan_title, commenter_display_name, read_at, created_at, link_comments(comment_text), social_media_plans!inner(organization_id)')
         .eq('user_id', userId)
+        .eq('social_media_plans.organization_id', organizationId)
         .order('created_at', { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -88,15 +91,16 @@ export function useReviewCommentNotifications() {
   });
 
   const unreadCountQuery = useQuery({
-    queryKey: [...QUERY_KEY, 'unread', userId],
-    enabled: !!userId,
+    queryKey: [...QUERY_KEY, 'unread', userId, organizationId],
+    enabled: !!userId && !!organizationId,
     queryFn: async (): Promise<number> => {
-      if (!userId) return 0;
+      if (!userId || !organizationId) return 0;
       const { count, error } = await supabase
         .from('review_comment_notifications')
-        .select('*', { count: 'exact', head: true })
+        .select('id, social_media_plans!inner(organization_id)', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .is('read_at', null);
+        .is('read_at', null)
+        .eq('social_media_plans.organization_id', organizationId);
       if (error) throw error;
       return count ?? 0;
     },
@@ -136,8 +140,8 @@ export function useReviewCommentNotifications() {
           filter: `user_id=eq.${userId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId] });
-          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId] });
+          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId, organizationId ?? ''] });
+          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId, organizationId ?? ''] });
           playNotificationSound();
         }
       )
@@ -150,8 +154,8 @@ export function useReviewCommentNotifications() {
           filter: `user_id=eq.${userId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId] });
-          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId] });
+          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, userId, organizationId ?? ''] });
+          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'unread', userId, organizationId ?? ''] });
         }
       )
       .subscribe();
@@ -161,7 +165,7 @@ export function useReviewCommentNotifications() {
         channelRef.current = null;
       }
     };
-  }, [userId, queryClient]);
+  }, [userId, organizationId, queryClient]);
 
   const count = unreadCountQuery.data ?? 0;
 

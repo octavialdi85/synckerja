@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApplicationSubmission } from './components/application-form/useApplicationSubmission';
 import { CVUploadSection } from './components/application-form/CVUploadSection';
 import { ApplicationSuccess } from './components/application-form/ApplicationSuccess';
@@ -7,6 +8,7 @@ import { JobApplicationSkillsInput } from './JobApplicationSkillsInput';
 import { JobApplicationSkill } from '@/features/2_2_job-openings/hooks/recruitmentSkillsTypes';
 import { ApplicationFormData, ApplicationFormProps } from './components/application-form/types';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 function formatSalaryDisplay(value: string): string {
   if (!value) return '';
@@ -56,6 +58,8 @@ export function ApplicationForm({
   requiredSkills = []
 }: ApplicationFormProps) {
   const { toast } = useToast();
+  const { t } = useAppTranslation();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<ApplicationFormData>({
     // Personal Information
     applicantName: '',
@@ -111,7 +115,7 @@ export function ApplicationForm({
       recruitmentToken
     });
 
-    // Enhanced client-side validation
+    // All fields required on /apply/preview
     const errors: string[] = [];
 
     if (!formData.applicantName.trim()) {
@@ -128,11 +132,37 @@ export function ApplicationForm({
       errors.push('Phone number is required');
     }
 
-    if (formData.nik.trim()) {
+    if (!formData.birth_date?.trim()) {
+      errors.push('Birth date is required');
+    }
+
+    if (!formData.gender?.trim()) {
+      errors.push('Gender is required');
+    }
+
+    if (!formData.nik.trim()) {
+      errors.push('NIK (ID Number) is required');
+    } else {
       const nikDigits = formData.nik.replace(/\D/g, '');
       if (nikDigits.length !== 16) {
-        errors.push('NIK (ID Number) must be exactly 16 digits');
+        errors.push('NIK must be exactly 16 digits');
       }
+    }
+
+    if (!cvFile) {
+      errors.push('CV/Resume upload is required');
+    }
+
+    if (!formData.coverLetter?.trim()) {
+      errors.push('Cover letter is required');
+    }
+
+    if (!formData.experienceYears?.trim()) {
+      errors.push('Years of experience is required');
+    }
+
+    if (!formData.expectedSalary?.trim()) {
+      errors.push('Expected salary is required');
     }
 
     // Check required skills
@@ -179,6 +209,7 @@ export function ApplicationForm({
 
   const handleCloseSuccess = () => {
     setShowSuccess(false);
+    navigate('/apply/thank-you');
     onClose();
   };
 
@@ -270,7 +301,7 @@ export function ApplicationForm({
 
             <div>
               <label htmlFor="birth_date" className="block text-sm font-medium text-gray-700 mb-2">
-                Birth Date
+                Birth Date *
               </label>
               <input
                 type="text"
@@ -289,6 +320,7 @@ export function ApplicationForm({
                   if (iso) setFormData(prev => ({ ...prev, birth_date: iso }));
                   setBirthDateDisplay('');
                 }}
+                required
                 disabled={submitting}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 placeholder="dd/mm/yyyy"
@@ -297,12 +329,13 @@ export function ApplicationForm({
 
             <div>
               <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-2">
-                Gender
+                Gender *
               </label>
               <select
                 id="gender"
                 value={formData.gender}
                 onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value }))}
+                required
                 disabled={submitting}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
@@ -314,7 +347,7 @@ export function ApplicationForm({
 
             <div>
               <label htmlFor="nik" className="block text-sm font-medium text-gray-700 mb-2">
-                NIK (ID Number)
+                NIK (ID Number) *
               </label>
               <input
                 type="text"
@@ -325,6 +358,7 @@ export function ApplicationForm({
                   const digits = e.target.value.replace(/\D/g, '').slice(0, 16);
                   setFormData(prev => ({ ...prev, nik: digits }));
                 }}
+                required
                 disabled={submitting}
                 maxLength={16}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -353,16 +387,17 @@ export function ApplicationForm({
         {/* Cover Letter */}
         <div>
           <label htmlFor="coverLetter" className="block text-sm font-medium text-gray-700 mb-2">
-            Cover Letter (Optional)
+            {t('applicationForm.coverLetter.label', 'Cover Letter')} *
           </label>
           <textarea
             id="coverLetter"
             value={formData.coverLetter}
             onChange={(e) => setFormData(prev => ({ ...prev, coverLetter: e.target.value }))}
             rows={4}
+            required
             disabled={submitting}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            placeholder="Tell us why you're interested in this position..."
+            placeholder={t('applicationForm.coverLetter.placeholder', "Why should we be interested in calling you? Briefly share your motivation and relevance for this role.")}
           />
         </div>
 
@@ -370,13 +405,14 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="experienceYears" className="block text-sm font-medium text-gray-700 mb-2">
-              Years of Experience (Optional)
+              Years of Experience *
             </label>
             <input
               type="text"
               id="experienceYears"
               value={formData.experienceYears}
               onChange={(e) => setFormData(prev => ({ ...prev, experienceYears: e.target.value }))}
+              required
               disabled={submitting}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               placeholder="e.g., 2-3 years"
@@ -385,7 +421,7 @@ export function ApplicationForm({
 
           <div>
             <label htmlFor="expectedSalary" className="block text-sm font-medium text-gray-700 mb-2">
-              Expected Salary (Optional)
+              Expected Salary *
             </label>
             <input
               type="text"
@@ -393,6 +429,7 @@ export function ApplicationForm({
               id="expectedSalary"
               value={formatSalaryDisplay(formData.expectedSalary)}
               onChange={(e) => setFormData(prev => ({ ...prev, expectedSalary: parseSalaryInput(e.target.value) }))}
+              required
               disabled={submitting}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               placeholder="e.g., 8.000.000"

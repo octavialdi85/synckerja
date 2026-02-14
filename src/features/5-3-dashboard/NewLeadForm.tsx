@@ -10,6 +10,7 @@ import { ServicesManagementDialog } from './ServicesManagementDialog';
 import { CategoriesManagementDialog } from './CategoriesManagementDialog';
 import { useLeadSources } from '@/hooks/organized/salesources';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 import { MoreVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -38,6 +39,7 @@ interface LeadStatus {
 }
 
 export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: NewLeadFormProps) => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState<CreateLeadData>({
     client: '',
     title: '',
@@ -140,6 +142,14 @@ export const NewLeadForm = ({ open, onClose, onSubmit, isSubmitting = false }: N
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.assignee?.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validasi',
+        description: 'Assignee wajib diisi.',
+      });
+      return;
+    }
     try {
       await onSubmit(formData);
       // Reset form on successful submission

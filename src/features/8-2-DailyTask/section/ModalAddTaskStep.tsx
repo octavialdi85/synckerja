@@ -12,7 +12,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Separator } from '@/features/ui/separator';
 import { ListChecks } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 // import { useTranslation } from 'react-i18next';
 
 export interface ModalAddTaskStepProps {

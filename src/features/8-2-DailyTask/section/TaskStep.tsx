@@ -29,7 +29,7 @@ import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/MobileAssignStepDialog';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface TaskFile {
@@ -134,6 +134,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingCompletionState, setPendingCompletionState] = useState<boolean | null>(null);
   const [currentCompletionState, setCurrentCompletionState] = useState<boolean | null>(null);
+  const [deleteStepDialogOpen, setDeleteStepDialogOpen] = useState(false);
 
   // Use optimistic state if available, otherwise use step prop (for immediate UI feedback)
   const isCompleted = optimisticCompleted !== null ? optimisticCompleted : step.is_completed;
@@ -643,9 +644,16 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     setIsEditModalOpen(true);
   };
 
-  const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this step?')) {
+  const handleDelete = () => {
+    setDeleteStepDialogOpen(true);
+  };
+
+  const handleConfirmDeleteStep = async () => {
+    setDeleteStepDialogOpen(false);
+    try {
       await deleteTaskStep(step.id);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to delete step', variant: 'destructive' });
     }
   };
 
@@ -655,7 +663,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
 
     // Check file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+      toast({ title: 'File too large', description: 'File size must be less than 10MB', variant: 'destructive' });
       return;
     }
 
@@ -1256,6 +1264,22 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
           <AlertDialogAction onClick={confirmToggleComplete}>
             {currentCompletionState ? 'Ya, Buka Kembali' : 'Ya, Selesaikan'}
           </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Delete Step Confirmation */}
+    <AlertDialog open={deleteStepDialogOpen} onOpenChange={setDeleteStepDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Step</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this step? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDeleteStep}>Delete</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

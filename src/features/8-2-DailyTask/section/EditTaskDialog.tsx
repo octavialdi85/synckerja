@@ -34,6 +34,7 @@ import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hook
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useToast } from '@/features/ui/use-toast';
 
 interface EditTaskDialogProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ interface EditTaskDialogProps {
 
 export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose, taskId }) => {
   const { t } = useAppTranslation();
+  const { toast } = useToast();
   const { tasks, updateTask } = useDailyTask();
   const { data: employees = [] } = useAvailableEmployees();
   const { organizationId } = useCurrentOrg();
@@ -264,6 +266,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
       onClose();
     } catch (error) {
       console.error('Error updating task:', error);
+      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }

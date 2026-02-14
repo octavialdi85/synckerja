@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader } from '@/features/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
 import { Badge } from '@/features/ui/badge';
@@ -6,6 +5,7 @@ import { User, Mail, Phone, Calendar, MapPin, Briefcase } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 // Layout constants - COMPACT VERSION
 const LAYOUT_CONSTANTS = {
@@ -69,6 +69,7 @@ interface CandidateProfileSidebarProps {
 }
 
 export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSidebarProps) => {
+  const { t } = useAppTranslation();
   const [documents, setDocuments] = useState<any[]>([]);
   const [education, setEducation] = useState<any[]>([]);
   const [workExperience, setWorkExperience] = useState<any[]>([]);
@@ -208,17 +209,17 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
             </AvatarFallback>
           </Avatar>
           <h3 className={cn("text-base font-semibold", PROFESSIONAL_COLORS.text.heading)}>
-            {candidateData?.full_name || 'Lengkapi Nama Anda'}
+            {candidateData?.full_name || t('candidateProfile.sidebar.completeName', 'Lengkapi Nama Anda')}
           </h3>
           <Badge className={cn(
             "inline-flex items-center px-2 py-1 text-xs font-medium rounded-full",
             getStatusColor(candidateData?.employment_status || 'pending')
           )}>
             <Briefcase className="h-3 w-3 mr-1" />
-            {candidateData?.profile_completed ? 'Complete' :
-             candidateData?.employment_status === 'pending' ? 'Pending' : 
-             candidateData?.employment_status === 'approved' ? 'Approved' :
-             candidateData?.employment_status === 'rejected' ? 'Rejected' : 'Draft'}
+            {candidateData?.profile_completed ? t('candidateProfile.sidebar.complete', 'Complete') :
+             candidateData?.employment_status === 'pending' ? t('candidateProfile.sidebar.pending', 'Pending') :
+             candidateData?.employment_status === 'approved' ? t('candidateProfile.sidebar.approved', 'Approved') :
+             candidateData?.employment_status === 'rejected' ? t('candidateProfile.sidebar.rejected', 'Rejected') : t('candidateProfile.sidebar.draft', 'Draft')}
           </Badge>
         </CardHeader>
         <CardContent className={LAYOUT_CONSTANTS.card.paddingSmall}>
@@ -258,12 +259,12 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
         LAYOUT_CONSTANTS.card.margin
       )}>
         <CardHeader className={LAYOUT_CONSTANTS.card.paddingSmall}>
-          <h4 className={cn("text-sm font-medium", PROFESSIONAL_COLORS.text.heading)}>Progress</h4>
+          <h4 className={cn("text-sm font-medium", PROFESSIONAL_COLORS.text.heading)}>{t('candidateProfile.sidebar.progress', 'Progress')}</h4>
         </CardHeader>
         <CardContent className={LAYOUT_CONSTANTS.card.paddingSmall}>
           <div className={LAYOUT_CONSTANTS.card.gapSmall}>
             <div className="flex items-center justify-between">
-              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>Personal</span>
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.personal', 'Personal')}</span>
               <div className="h-1.5 w-14 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-300", {
@@ -276,7 +277,7 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>Education</span>
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.education', 'Education')}</span>
               <div className="h-1.5 w-14 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-300", {
@@ -289,7 +290,7 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>Experience</span>
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.experience', 'Experience')}</span>
               <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-300", {
@@ -302,7 +303,7 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>Family</span>
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.family', 'Family')}</span>
               <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-300", {
@@ -315,7 +316,7 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>Documents</span>
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.documents', 'Documents')}</span>
               <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-300", {
@@ -331,9 +332,9 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
           
           <div className={cn("mt-4 p-3 bg-primary/10 rounded")}>
             <div className="text-sm text-primary">
-              <div className="font-medium">{getOverallProgress()}% Complete</div>
+              <div className="font-medium">{getOverallProgress()}% {t('candidateProfile.sidebar.percentComplete', 'Complete')}</div>
               <div className="mt-1 text-primary/80 text-sm leading-tight">
-                {candidateData?.profile_completed ? 'All done!' : 'Complete all sections'}
+                {candidateData?.profile_completed ? t('candidateProfile.sidebar.allDone', 'All done!') : t('candidateProfile.sidebar.completeAllSections', 'Complete all sections')}
               </div>
             </div>
           </div>
@@ -346,13 +347,13 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
         PROFESSIONAL_COLORS.shadow.sm
       )}>
         <CardHeader className={LAYOUT_CONSTANTS.card.paddingSmall}>
-          <h4 className={cn("text-sm font-medium", PROFESSIONAL_COLORS.text.heading)}>Help</h4>
+          <h4 className={cn("text-sm font-medium", PROFESSIONAL_COLORS.text.heading)}>{t('candidateProfile.sidebar.help', 'Help')}</h4>
         </CardHeader>
         <CardContent className={LAYOUT_CONSTANTS.card.paddingSmall}>
           <div className={cn("text-sm space-y-2", PROFESSIONAL_COLORS.text.secondary)}>
-            <p>Complete all sections to submit.</p>
-            <p>Upload CV, Ijazah, KTP.</p>
-            <p>Contact HR for help.</p>
+            <p>{t('candidateProfile.sidebar.helpCompleteSections', 'Complete all sections to submit.')}</p>
+            <p>{t('candidateProfile.sidebar.helpUploadDocs', 'Upload CV, Ijazah, KTP.')}</p>
+            <p>{t('candidateProfile.sidebar.helpContactHR', 'Contact HR for help.')}</p>
           </div>
         </CardContent>
       </Card>

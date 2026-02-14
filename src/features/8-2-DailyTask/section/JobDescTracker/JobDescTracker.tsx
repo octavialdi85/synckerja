@@ -23,6 +23,12 @@ const formatRangeLabel = (range: DateRangeValue) => {
   }
 };
 
+const getErrorMessage = (e: unknown): string => {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  return "Unknown";
+};
+
 const sortSummaries = (summaries: JobDescEmployeeSummary[]) => {
   return [...summaries].sort((a, b) => {
     if (a.idle !== b.idle) {
@@ -166,7 +172,7 @@ export const JobDescTracker = () => {
               <Alert>
                 <AlertDescription className="text-xs">
                   {t("dailyTask.jobDesc.error", "Tidak dapat memuat data: {{message}}", {
-                    message: (error as Error)?.message ?? "Unknown",
+                    message: getErrorMessage(error),
                   })}
                 </AlertDescription>
               </Alert>

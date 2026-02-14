@@ -264,7 +264,7 @@ Best regards,
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="reviewed">Reviewed</SelectItem>
-                <SelectItem value="shortlisted">Shortlisted</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
                 <SelectItem value="contacted">Contacted</SelectItem>
                 <SelectItem value="scheduled">Scheduled</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
@@ -376,7 +376,7 @@ Best regards,
                           >
                             <option value="pending">Pending</option>
                             <option value="reviewed">Reviewed</option>
-                            <option value="shortlisted">Shortlisted</option>
+                            <option value="scheduled">Scheduled</option>
                             <option value="contacted">Contacted</option>
                             <option value="rejected">Rejected</option>
                             <option value="hired">Hired</option>

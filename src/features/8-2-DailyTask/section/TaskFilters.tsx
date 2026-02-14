@@ -44,7 +44,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
   const planDateSelectTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Fetch departments
-  const { data: departments = [] } = useQuery({
+  const { data: departments = [], isError: departmentsError, refetch: refetchDepartments } = useQuery({
     queryKey: ['departments', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -97,6 +97,10 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
   };
 
   const handleDepartmentChange = (value: string) => {
+    if (value === '__retry__') {
+      refetchDepartments();
+      return;
+    }
     setFilters(prev => ({ ...prev, department: value === "all" ? undefined : value }));
   };
 
@@ -290,27 +294,32 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
   };
 
   return (
-    <div className="w-full">
-      <div className="p-2 bg-white border border-gray-200 rounded-md">
-        <div className="flex flex-wrap gap-1 items-center">
+    <div className="w-full min-w-0">
+      <div className="p-1.5 sm:p-2 bg-white border border-gray-200 rounded-md">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 seamless-scroll">
       {/* Search Input - Hidden when PIC filter is active */}
       {!filters.pic && (
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <div className="relative flex-1 min-w-[140px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
           <Input
             placeholder="Search tasks and steps..."
             value={filters.search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-8 pr-3 h-9 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            className="pl-7 pr-2 h-8 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           />
         </div>
       )}
 
       {/* Department Filter */}
-      <Select value={filters.department || "all"} onValueChange={handleDepartmentChange}>
-        <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
+      <Select
+        value={departmentsError ? 'all' : (filters.department || 'all')}
+        onValueChange={handleDepartmentChange}
+      >
+        <SelectTrigger className="w-[120px] sm:w-32 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden">
           <SelectValue placeholder="All Departments">
-            {filters.department ? (
+            {departmentsError ? (
+              <span className="truncate text-amber-600">Failed to load</span>
+            ) : filters.department ? (
               <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
                 <Building2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
                 <span className="truncate">{departments.find(d => d.id === filters.department)?.name || 'All Departments'}</span>
@@ -325,7 +334,10 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Departments</SelectItem>
-          {departments.map((department) => (
+          {departmentsError && (
+            <SelectItem value="__retry__">Retry</SelectItem>
+          )}
+          {!departmentsError && departments.map((department) => (
             <SelectItem key={department.id} value={department.id}>
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-blue-600" />
@@ -338,8 +350,8 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Combined My Task / All tasks / PIC Filter - "All tasks" shown for everyone so list is not empty by default */}
       <Select value={getCurrentTaskViewValue()} onValueChange={handleTaskViewChange}>
-        <SelectTrigger className="w-full sm:w-36 lg:w-40 h-9 text-sm text-gray-700 text-left">
-          <SelectValue placeholder="All tasks" />
+<SelectTrigger className="w-[100px] sm:w-28 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
+        <SelectValue placeholder="All tasks" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all_pic">All tasks</SelectItem>
@@ -358,7 +370,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           value={filters.picLevel || 'task'} 
           onValueChange={handlePicLevelChange}
         >
-          <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+          <SelectTrigger className="w-[90px] sm:w-24 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
             <SelectValue placeholder="Level" />
           </SelectTrigger>
           <SelectContent>
@@ -371,7 +383,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Status Filter */}
       <Select value={filters.status || "all"} onValueChange={(value) => handleStatusChange(value === "all" ? "" : value)}>
-        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+        <SelectTrigger className="w-[95px] sm:w-28 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
           <SelectValue placeholder="All Status" />
         </SelectTrigger>
         <SelectContent>
@@ -385,7 +397,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Priority Filter */}
       <Select value={filters.priority || "all"} onValueChange={(value) => handlePriorityChange(value === "all" ? "" : value)}>
-        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+        <SelectTrigger className="w-[95px] sm:w-28 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
           <SelectValue placeholder="All Priority" />
         </SelectTrigger>
         <SelectContent>
@@ -400,7 +412,7 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
       {/* Objective link: All / Unlinked tasks */}
       <Select value={filters.objectiveLink || 'all'} onValueChange={handleObjectiveLinkChange}>
-        <SelectTrigger className="w-full sm:w-32 lg:w-36 h-9 text-sm text-gray-700 text-left">
+        <SelectTrigger className="w-[85px] sm:w-24 shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left">
           <SelectValue placeholder={t('dailyTask.filters.objectiveLink', 'Objective link')} />
         </SelectTrigger>
         <SelectContent>
@@ -410,14 +422,14 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
       </Select>
 
       {/* Merged Date & Plan Filter (All Dates + All Plans in one; This Month / Last Month removed from date, use Plan section) */}
-      <div className="relative">
+      <div className="relative shrink-0">
         <Select 
           value={getMergedDatePlanValue()} 
           onValueChange={handleMergedDatePlanChange}
         >
           <SelectTrigger 
             ref={planDateSelectTriggerRef}
-            className="w-auto min-w-[180px] max-w-[240px] h-9 text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden"
+            className="w-auto min-w-[130px] max-w-[200px] shrink-0 h-8 text-xs sm:text-sm text-gray-700 text-left whitespace-nowrap overflow-hidden"
           >
             <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
               <CalendarIcon className="h-4 w-4 text-gray-500" />
@@ -492,20 +504,19 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
           resetFilters();
           await refetchTasks();
         }}
-        className={`h-9 px-3 gap-1.5 ${highlightFromPendingApproval ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''}`}
+        className={`shrink-0 h-8 w-8 p-0 ${highlightFromPendingApproval ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''}`}
         title={highlightFromPendingApproval ? t('dailyTask.filters.refreshShowAll', 'Refresh to show all tasks') : t('dailyTask.filters.refresh', 'Refresh')}
       >
         <RefreshCw className="w-4 h-4" />
-        <span className="hidden sm:inline">{t('dailyTask.filters.refresh', 'Refresh')}</span>
       </Button>
 
       {/* Add Task Button */}
       {showAddTaskButton && (
         <Button
           onClick={() => setIsCreateTaskDialogOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 flex items-center gap-2"
+          className="shrink-0 ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3 h-8 flex items-center gap-1.5 text-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           Add Task
         </Button>
       )}

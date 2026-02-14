@@ -160,7 +160,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
         let subStatus: string | null = null;
 
         if (orgError) {
-          console.error('Error checking organization subscription status:', orgError);
+          logger.error('Error checking organization subscription status:', orgError);
         } else if (orgData) {
           active = orgData.has_active_subscription === true;
           setHasActiveSubscription(active);
@@ -182,7 +182,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
 
         setSubscriptionCache(organization.id, active, subStatus);
       } catch (error) {
-        console.error('Error checking subscription:', error);
+        logger.error('Error checking subscription:', error);
       } finally {
         setLoadingSubscription(false);
       }
@@ -270,7 +270,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // Takes priority over status checks because it's date-based (more accurate)
   if (expiryStatus.isExpired) {
     clearHomeSubscriptionCache(organization?.id);
-    console.warn('HomeAccessGuard: Subscription/Trial expired based on dates, redirecting to create-plan', {
+    logger.warn('HomeAccessGuard: Subscription/Trial expired based on dates, redirecting to create-plan', {
       isTrialExpired: expiryStatus.isTrialExpired,
       isSubscriptionExpired: expiryStatus.isSubscriptionExpired,
       expiredDate: expiryStatus.expiredDate,

@@ -14,8 +14,10 @@ import { Button } from '@/features/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
 import { LoadingDots } from '@/components/LoadingDots';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 export const ConsultantsPageContent = () => {
+  const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -43,6 +45,13 @@ export const ConsultantsPageContent = () => {
     try {
       await createLead(leadData);
       setIsCreateDialogOpen(false);
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Gagal membuat lead',
+        description: (e as Error)?.message ?? 'Silakan coba lagi.',
+      });
+      throw e;
     } finally {
       setIsSubmitting(false);
     }
@@ -101,7 +110,8 @@ export const ConsultantsPageContent = () => {
               statusMap[lead.id] = 'partial';
             }
           }
-        } catch {
+        } catch (error) {
+          console.error('Failed to fetch client profile for lead', lead.id, error);
           statusMap[lead.id] = 'empty';
           profileMap[lead.id] = null;
         }
@@ -122,8 +132,8 @@ export const ConsultantsPageContent = () => {
     if (filters.search && filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(lead => 
-        lead.client.toLowerCase().includes(searchLower) ||
-        lead.title.toLowerCase().includes(searchLower) ||
+        (lead.client ?? '').toLowerCase().includes(searchLower) ||
+        (lead.title ?? '').toLowerCase().includes(searchLower) ||
         lead.ticket_id?.toLowerCase().includes(searchLower)
       );
     }
@@ -210,7 +220,6 @@ export const ConsultantsPageContent = () => {
 
       // Call the PDF generator
       await generateLeadsPDF(pdfData);
-      console.log('✅ PDF generated successfully');
     } catch (error) {
       console.error('❌ Error generating PDF:', error);
       alert('Terjadi kesalahan saat membuat laporan PDF. Silakan coba lagi.');

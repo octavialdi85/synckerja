@@ -17,7 +17,7 @@ import {
 import { Plus, Edit, Trash2, History, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 import { StepHistoryModal } from './StepHistoryModal';
 import { AssignSubStepDialog } from './AssignSubStepDialog';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
@@ -233,7 +233,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
     try {
       const list = steps ?? subSteps;
       const hasAny = (list?.length || 0) > 0;
-      const allCompleted = hasAny && list!.every(s => s.is_completed);
+      const allCompleted = hasAny && (list ?? []).every(s => s.is_completed);
       const payload: any = { is_completed: allCompleted };
       if (allCompleted) {
         payload.updated_at = new Date().toISOString();

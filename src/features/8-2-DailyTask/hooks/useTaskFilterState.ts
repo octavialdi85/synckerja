@@ -19,11 +19,15 @@ const defaultFilters: TaskFilters = {
   objectiveLink: 'all', // 'unlinked' = only tasks with no Individual Objective
 };
 
+export interface UseTaskFilterStateOptions {
+  onStorageError?: (message: string) => void;
+}
+
 /**
  * Custom hook untuk mengelola filter state dengan localStorage persistence
  * Menyimpan preferensi filter user antar session
  */
-export const useTaskFilterState = () => {
+export const useTaskFilterState = (options?: UseTaskFilterStateOptions) => {
   const [filters, setFiltersState] = useState<TaskFilters>(() => {
     // Load from localStorage on initial mount
     try {
@@ -72,13 +76,14 @@ export const useTaskFilterState = () => {
           localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
         } catch (retryError) {
           console.warn('Failed to save filters after retry:', retryError);
-          // Silently fail - filters will still work in memory, just won't persist
+          options?.onStorageError?.('Filter preferences could not be saved.');
         }
       } else {
         console.warn('Failed to save filters to localStorage:', error);
+        options?.onStorageError?.('Filter preferences could not be saved.');
       }
     }
-  }, [filters]);
+  }, [filters, options?.onStorageError]);
 
   /**
    * Update filters with type safety

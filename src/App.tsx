@@ -74,7 +74,9 @@ import { ApplicationsPageWrapper } from "./features/2_2_dashboard/ApplicationsPa
 import { IntervieweesPage } from "./features/2_2_Interviewees/IntervieweesPage";
 import JobApplication from "./features/2_2_Applications/JobApplication";
 import JobPreview from "./features/2_2_Applications/JobPreview";
+import ApplicationThankYou from "./features/2_2_Applications/ApplicationThankYou";
 import CandidateProfile from "./features/2_2_Applications/CandidateProfile";
+import CandidateProfileThankYou from "./features/2_2_Applications/CandidateProfileThankYou";
 import CandidateProfileInterviewees from "./features/2_2_Interviewees/CandidateProfile";
 import { CompanyCompanyAssetsPage } from "@/features/2-8-company-assets";
 import { CompanyFilesPage } from "@/features/2-8-files";
@@ -332,6 +334,12 @@ const App = () => (
                   <JobApplication />
                 </PublicRoute>
               } />
+              {/* Public Job Application Thank You (must be before /apply/preview/:token) */}
+              <Route path="/apply/thank-you" element={
+                <PublicRoute>
+                  <ApplicationThankYou />
+                </PublicRoute>
+              } />
               {/* Public Candidate Application Preview Route */}
               <Route path="/apply/preview/:token" element={
                 <PublicRoute>
@@ -340,6 +348,12 @@ const App = () => (
               } />
               {/* Public content review (QC). Logged-in users redirect to dashboard preview modal via ReviewRouteGate (fast getSession). */}
               <Route path="/review/:token" element={<ReviewRouteGate />} />
+              {/* Public Candidate Profile Thank You (must be before /candidate/profile) */}
+              <Route path="/candidate/profile/thank-you" element={
+                <PublicRoute>
+                  <CandidateProfileThankYou />
+                </PublicRoute>
+              } />
               {/* Public Candidate Profile Route */}
               <Route path="/candidate/profile" element={
                 <PublicRoute>

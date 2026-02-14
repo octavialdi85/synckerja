@@ -73,7 +73,7 @@ export const SectionProfile = () => {
       const result = await syncAvatarAcrossApp(photoUrl);
       toast.dismiss(loadingToast);
       if (result?.success) {
-        setTimeout(() => { refetchEmployee(); }, 500);
+        refetchEmployee();
         toast.success(t('profile.photoUpdatedSuccess', 'Profile photo updated successfully across the app! 🎉'));
       } else {
         toast.error(t('profile.failedToSyncPhoto', 'Failed to sync photo across the app'));

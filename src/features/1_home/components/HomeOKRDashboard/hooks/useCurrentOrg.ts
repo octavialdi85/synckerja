@@ -1,3 +1,11 @@
+/**
+ * useCurrentOrg (Home/OKR dashboard)
+ *
+ * This hook provides organizationId for the OKR and home dashboard sections.
+ * Auth and guard flows use a separate useCurrentOrg from @/features/1-login/hooks/useCurrentOrg.
+ * Both rely on the same source of truth (e.g. active_organization_id / session); keep them
+ * in sync when changing how the active org is determined.
+ */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';

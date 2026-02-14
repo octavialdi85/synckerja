@@ -14,6 +14,7 @@ import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar"
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { useToast } from "@/features/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/config/logger";
 import { useAttendanceData } from "@/mobile/hooks/useAttendanceData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
@@ -76,25 +77,32 @@ const Absensi = () => {
   // Get current user info for presence tracking
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profileData }: any = await (supabase as any)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('full_name, active_organization_id')
           .eq('user_id', user.id)
           .single();
-        
         if (profileData) {
-          setCurrentUser({ 
-            id: user.id, 
-            name: profileData.full_name || user.email || 'Unknown'
+          setCurrentUser({
+            id: user.id,
+            name: profileData.full_name ?? user.email ?? 'Unknown'
           });
-          setOrganizationId(profileData.active_organization_id || '');
+          setOrganizationId(profileData.active_organization_id ?? '');
         }
+      } catch (error) {
+        logger.error('Absensi getCurrentUser:', error);
+        toast({
+          title: 'Error',
+          description: 'Gagal memuat info pengguna',
+          variant: 'destructive',
+        });
       }
     };
     getCurrentUser();
-  }, []);
+  }, [toast]);
 
   // Force refresh data when component mounts or when organization might change
   useEffect(() => {

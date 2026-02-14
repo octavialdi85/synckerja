@@ -250,7 +250,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const taskIdsWithFilesLoadedRef = useRef<Set<string>>(new Set());
 
   // Use custom hook for filter state with localStorage persistence
-  const { filters, setFilters, resetFilters } = useTaskFilterState();
+  const { filters, setFilters, resetFilters } = useTaskFilterState({
+    onStorageError: (msg) =>
+      toast({ title: 'Warning', description: msg, variant: 'destructive' }),
+  });
   const [recentStepFilters, setRecentStepFilters] = useState<RecentStepFilters>({
     dateRange: 'today',
     actionType: 'all'
@@ -1114,6 +1117,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     if (!organizationId) return;
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'You must be signed in to create a task.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       logger.debug('Adding task to database:', { ...data, organization_id: organizationId });
       
       const { data: newTask, error } = await supabase
@@ -1127,7 +1140,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           due_date: data.due_date || null,
           plan_date: (data as any).plan_date || null,
           objective_id: (data as any).objective_id || null,
-          created_by: (await supabase.auth.getUser()).data.user?.id || null
+          created_by: user.id
         })
         .select()
         .single();
@@ -1160,6 +1173,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
           if (assignmentError) {
             console.error('Error creating assignment:', assignmentError);
+            toast({
+              title: 'Error',
+              description: 'Task created but assignment failed.',
+              variant: 'destructive',
+            });
           }
 
           // If deadline is provided, save it to task_steps_assigned_duedate table
@@ -1183,6 +1201,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
             if (deadlineError) {
               console.error('❌ Error saving deadline:', deadlineError);
+              toast({
+                title: 'Warning',
+                description: 'Task assigned; deadline could not be saved.',
+                variant: 'destructive',
+              });
             } else {
               logger.debug('✅ Deadline saved successfully:', deadlineRecord);
             }
@@ -2434,6 +2457,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   // Deadline extension functions
   const requestDeadlineExtension = async (taskId: string, newDeadline: string, reason: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'You must be signed in to perform this action.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const task = tasks.find(t => t.id === taskId);
       if (!task || !task.due_date) {
         throw new Error('Task or due date not found');
@@ -2446,7 +2479,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           original_deadline: task.due_date,
           new_deadline: newDeadline,
           reason: reason,
-          requested_by: (await supabase.auth.getUser()).data.user?.id || null
+          requested_by: user.id
         });
 
       if (error) throw error;
@@ -2470,11 +2503,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const approveDeadlineExtension = async (historyId: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'You must be signed in to perform this action.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('deadline_history')
         .update({
           status: 'approved',
-          approved_by: (await supabase.auth.getUser()).data.user?.id || null,
+          approved_by: user.id,
           approved_at: new Date().toISOString()
         })
         .eq('id', historyId);
@@ -2514,11 +2557,21 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
   const rejectDeadlineExtension = async (historyId: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'You must be signed in to perform this action.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('deadline_history')
         .update({
           status: 'rejected',
-          approved_by: (await supabase.auth.getUser()).data.user?.id || null,
+          approved_by: user.id,
           approved_at: new Date().toISOString()
         })
         .eq('id', historyId);
@@ -2658,7 +2711,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     if (stepId) {
       const task = tasks.find(t => t.id === taskId);
       if (task) {
-        const step = task.steps.find(s => s.id === stepId);
+        const step = task.steps?.find(s => s.id === stepId);
         if (step) {
           setFilters(prev => ({
             ...prev,

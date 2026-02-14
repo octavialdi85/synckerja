@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { LeadsFilters, LeadsFilters as LeadsFiltersType } from '@/components/1_halaman/5_3_leads-management/LeadsFilters';
-import { LeadsMetricsCards } from '@/components/1_halaman/5_3_leads-management/LeadsMetricsCards';
-import LeadsTableNew from '@/components/1_halaman/5_3_leads-management/LeadsTableNew';
-import { LeadsInsights } from '@/components/1_halaman/5_3_leads-management/LeadsInsights';
-import { NewLeadForm } from '@/components/1_halaman/5_3_leads-management/NewLeadForm';
+import { LeadsFilters, LeadsFilters as LeadsFiltersType } from '@/features/5-3-dashboard/LeadsFilters';
+import { LeadsMetricsCards } from '@/features/5-3-dashboard/LeadsMetricsCards';
+import LeadsTableNew from '@/features/5-3-dashboard/LeadsTableNew';
+import { LeadsInsights } from '@/features/5-3-dashboard/LeadsInsights';
+import { NewLeadForm } from '@/features/5-3-dashboard/NewLeadForm';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLeads } from '@/hooks/organized/sales';
 import { NewLead } from '@/types/leads';
@@ -28,7 +28,6 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
     dateRange: null
   });
   const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads();
-  console.log('🔍 ConsultantsTableViewContent - leads:', leads.length, 'loading:', loading);
 
   const handleNewLeadClick = () => {
     setIsCreateDialogOpen(true);
@@ -121,7 +120,6 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
 
   // Filter leads based on selected filters
   const filteredLeads = useMemo(() => {
-    console.log('🔍 Filtering leads - total:', leads.length, 'filters:', filters);
     const filtered = leads.filter(lead => {
       // Data completeness filter
       if (filters.dataCompleteness !== 'all') {

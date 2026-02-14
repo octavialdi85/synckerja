@@ -62,6 +62,40 @@ export const useApplicationSubmission = () => {
       return;
     }
 
+    if (!formData.birth_date?.trim()) {
+      toast({ title: "Birth Date Required", description: "Please enter your birth date.", variant: "destructive" });
+      return;
+    }
+    if (!formData.gender?.trim()) {
+      toast({ title: "Gender Required", description: "Please select your gender.", variant: "destructive" });
+      return;
+    }
+    if (!formData.nik?.trim()) {
+      toast({ title: "NIK Required", description: "Please enter your NIK (16 digits).", variant: "destructive" });
+      return;
+    }
+    const nikDigits = (formData.nik || '').replace(/\D/g, '');
+    if (nikDigits.length !== 16) {
+      toast({ title: "Invalid NIK", description: "NIK must be exactly 16 digits.", variant: "destructive" });
+      return;
+    }
+    if (!params.cvFile) {
+      toast({ title: "CV Required", description: "Please upload your CV/Resume.", variant: "destructive" });
+      return;
+    }
+    if (!formData.coverLetter?.trim()) {
+      toast({ title: "Cover Letter Required", description: "Please fill in the cover letter.", variant: "destructive" });
+      return;
+    }
+    if (!formData.experienceYears?.trim()) {
+      toast({ title: "Experience Required", description: "Please enter years of experience.", variant: "destructive" });
+      return;
+    }
+    if (!formData.expectedSalary?.trim()) {
+      toast({ title: "Expected Salary Required", description: "Please enter your expected salary.", variant: "destructive" });
+      return;
+    }
+
     // Validate required skills if any
     if (requiredSkills && requiredSkills.length > 0) {
       const requiredSkillsToCheck = requiredSkills.filter(skill => skill.is_required);

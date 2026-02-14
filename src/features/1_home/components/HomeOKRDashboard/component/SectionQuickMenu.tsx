@@ -62,13 +62,8 @@ export const SectionQuickMenu = ({
     }
     if (employeeData?.id) {
       setIsNavigating(true);
-      try {
-        navigate(`/my-info/attendance?id=${employeeData.id}`);
-      } catch {
-        toast.error(t('quickMenu.failedToOpenHistory', 'Failed to open attendance history page'));
-      } finally {
-        setIsNavigating(false);
-      }
+      navigate(`/my-info/attendance?id=${employeeData.id}`);
+      setIsNavigating(false);
     } else {
       toast.error(t('quickMenu.employeeDataNotAvailable', 'Employee data is not available. Please refresh the page or contact administrator.'));
     }

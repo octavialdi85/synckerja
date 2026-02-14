@@ -75,12 +75,30 @@ interface SubStepAssignmentRow {
 interface EmployeeRow {
   id: string;
   full_name: string | null;
+  status?: string | null;
+  employee_status_id?: string | null;
+  pending_removal?: boolean | null;
 }
+
+/** Resigned/non-active statuses that should be excluded from Job Desc Tracker. */
+const NON_ACTIVE_STATUSES = new Set(["inactive", "terminated", "pending removal", "pendingremoval"]);
 
 const FALLBACK_RANGE: DateRangeValue = {
   start: startOfWeek(new Date(), { weekStartsOn: 1 }),
   end: endOfWeek(new Date(), { weekStartsOn: 1 }),
 };
+
+/** Filter out resigned/inactive/terminated employees (same logic as /employees active filter). */
+function isActiveEmployee(
+  emp: EmployeeRow,
+  statusNameById: Map<string, string>
+): boolean {
+  if (emp.pending_removal === true) return false;
+  const statusField = (emp.status ?? "").trim().toLowerCase();
+  const fromRelation = emp.employee_status_id ? statusNameById.get(emp.employee_status_id)?.trim().toLowerCase() : "";
+  const effective = statusField || fromRelation || "active";
+  return !NON_ACTIVE_STATUSES.has(effective);
+}
 
 const computeRange = (
   timeframe: JobDescTimeframe,
@@ -441,13 +459,14 @@ const fetchAssignments = async (
   range: DateRangeValue,
   includeOverdue: boolean,
 ) => {
-  const [employeesRes, taskAssignmentsRes, stepAssignmentsRes, subStepAssignmentsRes] =
+  const [employeesRes, statusesRes, taskAssignmentsRes, stepAssignmentsRes, subStepAssignmentsRes] =
     await Promise.all([
       supabase
         .from("employees")
-        .select("id, full_name")
+        .select("id, full_name, status, employee_status_id, pending_removal")
         .eq("organization_id", organizationId)
         .order("full_name", { ascending: true }),
+      supabase.from("employee_statuses").select("id, name"),
       supabase
         .from("daily_tasks_assigned")
         .select(
@@ -482,11 +501,29 @@ const fetchAssignments = async (
   if (stepAssignmentsRes.error) throw stepAssignmentsRes.error;
   if (subStepAssignmentsRes.error) throw subStepAssignmentsRes.error;
 
-  const employees = employeesRes.data ?? [];
-  const taskAssignments = (taskAssignmentsRes.data as TaskAssignmentRow[]) ?? [];
-  const stepAssignments = (stepAssignmentsRes.data as StepAssignmentRow[]) ?? [];
-  const subStepAssignments =
-    (subStepAssignmentsRes.data as SubStepAssignmentRow[]) ?? [];
+  const statusNameById = new Map<string, string>();
+  if (statusesRes.error) {
+    if (import.meta.env.DEV) {
+      console.warn('Job Desc: employee_statuses fetch failed, filtering by employees.status only:', statusesRes.error);
+    }
+  } else {
+    (statusesRes.data ?? []).forEach((s: { id: string; name: string }) => {
+      if (s.id && s.name) statusNameById.set(s.id, s.name);
+    });
+  }
+
+  const allEmployees = (employeesRes.data ?? []) as EmployeeRow[];
+  const employees = allEmployees.filter((emp) => isActiveEmployee(emp, statusNameById));
+  const activeEmployeeIds = new Set(employees.map((e) => e.id));
+  const taskAssignments = ((taskAssignmentsRes.data as TaskAssignmentRow[]) ?? []).filter(
+    (a) => activeEmployeeIds.has(a.employee_id),
+  );
+  const stepAssignments = ((stepAssignmentsRes.data as StepAssignmentRow[]) ?? []).filter(
+    (a) => activeEmployeeIds.has(a.employee_id),
+  );
+  const subStepAssignments = (
+    (subStepAssignmentsRes.data as SubStepAssignmentRow[]) ?? []
+  ).filter((a) => activeEmployeeIds.has(a.employee_id));
 
   const { data: rejectedRows } = await fetchRejectedForOrg(organizationId);
   const rejectionMap = new Map<string, string>();

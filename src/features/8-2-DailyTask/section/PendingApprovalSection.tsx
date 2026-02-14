@@ -181,9 +181,9 @@ export const PendingApprovalSection = () => {
   return (
     <>
       {/* Pending Approval card (same style as Task Summary cards) */}
-      <div className="mt-4">
+      <div className="mt-4 min-w-0">
         <div
-          className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between min-h-[60px]"
+          className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between min-h-[60px] min-w-0"
         >
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-4 h-4 text-amber-600" />
@@ -195,7 +195,7 @@ export const PendingApprovalSection = () => {
         </div>
 
         {/* List of items to approve (seamless vertical scroll) */}
-        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 min-w-0">
           {fetchError ? (
             <p className="text-xs text-red-600 py-2">
               {t('dailyTask.approval.fetchError', 'Failed to load approvals. Please try again.')}
@@ -215,35 +215,35 @@ export const PendingApprovalSection = () => {
               {pending.map((row) => (
                 <li
                   key={row.id}
-                  className="border border-gray-200 rounded-lg p-3 bg-white text-sm"
+                  className="border border-gray-200 rounded-lg p-3 bg-white text-sm overflow-hidden min-w-0"
                 >
                   <button
                     type="button"
                     onClick={() => handleTitleClick(row)}
-                    className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-amber-700 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-400 rounded"
+                    className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-amber-700 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-400 rounded min-w-0"
                     title={getDisplayTitle(row)}
                   >
                     {getDisplayTitle(row)}
                   </button>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                    <User className="w-3 h-3" />
-                    <span>{row.assignee?.full_name ?? t('dailyTask.approval.assignee', 'Assignee')}</span>
-                    <span className="text-gray-400">·</span>
-                    <span>{getEntityTypeLabel(row.entity_type, t)}</span>
+                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 min-w-0">
+                    <User className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{row.assignee?.full_name ?? t('dailyTask.approval.assignee', 'Assignee')}</span>
+                    <span className="text-gray-400 flex-shrink-0">·</span>
+                    <span className="flex-shrink-0">{getEntityTypeLabel(row.entity_type, t)}</span>
                   </div>
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2 min-w-0">
                     {showViewContent(row) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-gray-700 border-gray-200 hover:bg-gray-50"
+                        className="text-gray-700 border-gray-200 hover:bg-gray-50 flex-shrink-0 h-7 px-2 text-xs"
                         onClick={() => handleViewContent(row)}
                         disabled={previewLoading}
                       >
                         {previewLoading && previewRow?.id === row.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                         ) : (
-                          <Eye className="h-4 w-4 mr-1" />
+                          <Eye className="h-3.5 w-3.5 mr-1" />
                         )}
                         {t('dailyTask.approval.viewContent', 'View Content')}
                       </Button>
@@ -251,21 +251,21 @@ export const PendingApprovalSection = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-green-600 border-green-200 hover:bg-green-50"
+                      className="text-green-600 border-green-200 hover:bg-green-50 flex-shrink-0 h-7 px-2 text-xs"
                       onClick={() => handleApprove(row)}
                       disabled={actingId === row.id}
                     >
-                      {actingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                      {actingId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
                       {t('dailyTask.approval.approve', 'Approve')}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      className="text-red-600 border-red-200 hover:bg-red-50 flex-shrink-0 h-7 px-2 text-xs"
                       onClick={() => handleRejectClick(row)}
                       disabled={actingId === row.id}
                     >
-                      <XCircle className="h-4 w-4 mr-1" />
+                      <XCircle className="h-3.5 w-3.5 mr-1" />
                       {t('dailyTask.approval.reject', 'Reject')}
                     </Button>
                   </div>
@@ -285,7 +285,14 @@ export const PendingApprovalSection = () => {
           <ul className="space-y-2">
             {rejected.slice(0, 10).map((row) => (
               <li key={row.id} className="border border-red-100 rounded-lg p-3 bg-red-50/50 text-sm">
-                <div className="font-medium text-gray-900 truncate">{getDisplayTitle(row)}</div>
+                <button
+                  type="button"
+                  onClick={() => handleTitleClick(row)}
+                  className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-red-700 hover:underline focus:outline-none focus:ring-1 focus:ring-red-400 rounded"
+                  title={getDisplayTitle(row)}
+                >
+                  {getDisplayTitle(row)}
+                </button>
                 {row.reject_reason && (
                   <p className="text-xs text-gray-600 mt-1">{row.reject_reason}</p>
                 )}
@@ -341,10 +348,24 @@ export const PendingApprovalSection = () => {
           postDate={previewPlan.post_date ?? undefined}
           onSave={() => {}}
           onApprove={() => {
-            void handleApprove(previewRow).then(() => refresh());
+            void handleApprove(previewRow)
+              .then(() => refresh())
+              .catch((err) => {
+                toast({
+                  title: t('dailyTask.approval.error', 'Error'),
+                  description: err?.message ?? 'Action failed',
+                  variant: 'destructive',
+                });
+              });
           }}
           onRevision={() => {
-            void handleRejectFromPopup(previewRow);
+            void handleRejectFromPopup(previewRow).catch((err) => {
+              toast({
+                title: t('dailyTask.approval.error', 'Error'),
+                description: err?.message ?? 'Action failed',
+                variant: 'destructive',
+              });
+            });
           }}
         />
       )}

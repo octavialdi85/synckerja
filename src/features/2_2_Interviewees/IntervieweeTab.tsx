@@ -5,14 +5,27 @@ import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
-import { Calendar, Clock, MapPin, User, Search, Filter, Star, MoreHorizontal, Eye, UserPlus, Trash2, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Search, Filter, Star, MoreHorizontal, Eye, UserPlus, Trash2, MessageSquare, AlertTriangle, Download } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { InterviewWhatsAppButton } from './InterviewWhatsAppButton';
-import { ScrollArea } from '@/features/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import { CandidateToEmployeeConfirmModal } from './CandidateToEmployeeConfirmModal';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { fetchCandidateApplicationData } from './services/candidateApplicationPdfService';
+import { generateCandidateApplicationPDF } from './utils/candidateApplicationPdfGenerator';
 
 interface InterviewCandidate {
   id: string;
@@ -49,19 +62,25 @@ interface InterviewCandidate {
 interface CandidateActionsDropdownProps {
   candidate: InterviewCandidate;
   onViewProfile: () => void;
+  onDownloadApplication: () => void;
   onAddAsEmployee: () => void;
   onDelete: () => void;
   onWhatsApp: () => void;
   hasReviews: boolean;
+  downloadApplicationLabel: string;
+  /** Only owner role can delete; when false, Delete option is hidden */
+  canDelete?: boolean;
 }
 
 const CandidateActionsDropdown = ({
-  candidate,
   onViewProfile,
+  onDownloadApplication,
   onAddAsEmployee,
   onDelete,
   onWhatsApp,
-  hasReviews
+  hasReviews,
+  downloadApplicationLabel,
+  canDelete = false,
 }: CandidateActionsDropdownProps) => {
   return (
     <DropdownMenu>
@@ -75,6 +94,10 @@ const CandidateActionsDropdown = ({
           <Eye className="mr-2 h-4 w-4" />
           View Profile
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={onDownloadApplication} className="cursor-pointer">
+          <Download className="mr-2 h-4 w-4" />
+          {downloadApplicationLabel}
+        </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={onAddAsEmployee} 
           className={`cursor-pointer ${!hasReviews ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -84,10 +107,12 @@ const CandidateActionsDropdown = ({
           Add As Employee
           {!hasReviews && <AlertTriangle className="ml-2 h-3 w-3 text-amber-500" />}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={onDelete} className="cursor-pointer text-red-600">
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
-        </DropdownMenuItem>
+        {canDelete && (
+          <DropdownMenuItem onClick={onDelete} className="cursor-pointer text-red-600">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={onWhatsApp} className="cursor-pointer">
           <MessageSquare className="mr-2 h-4 w-4" />
           WhatsApp
@@ -107,8 +132,13 @@ export const IntervieweeTab = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<InterviewCandidate | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [candidateToDelete, setCandidateToDelete] = useState<InterviewCandidate | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t, language } = useAppTranslation();
+  const { isOwner } = useCentralizedUserData();
+  const [downloadingPdfForId, setDownloadingPdfForId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInterviewees();
@@ -343,11 +373,112 @@ export const IntervieweeTab = () => {
     }
   };
 
-  const handleDelete = (candidate: InterviewCandidate) => {
+  const handleDeleteClick = (candidate: InterviewCandidate) => {
+    setCandidateToDelete(candidate);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!candidateToDelete) return;
+    setDeleting(true);
+    const profileIdToDelete = candidateToDelete.candidate_profile_id;
+    try {
+      const { error: appError } = await supabase
+        .from('job_applications')
+        .delete()
+        .eq('id', candidateToDelete.id);
+
+      if (appError) throw appError;
+
+      if (profileIdToDelete) {
+        const { data: remainingApps } = await supabase
+          .from('job_applications')
+          .select('id')
+          .eq('candidate_profile_id', profileIdToDelete)
+          .limit(1);
+        if (!remainingApps?.length) {
+          const { error: profileError } = await supabase
+            .from('candidate_profiles')
+            .delete()
+            .eq('id', profileIdToDelete);
+          if (profileError) {
+            console.error('Error deleting candidate profile:', profileError);
+            toast({
+              title: "Warning",
+              description: "Application removed but candidate profile could not be deleted.",
+              variant: "destructive"
+            });
+          }
+        }
+      }
+
+      setCandidateToDelete(null);
+      await fetchInterviewees();
+      toast({
+        title: "Success",
+        description: "Interviewee has been removed."
+      });
+    } catch (error) {
+      console.error('Error deleting interviewee:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove interviewee. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDownloadApplication = async (candidate: InterviewCandidate) => {
+    const profileId = candidate.candidate_profile_id;
+    const token = candidate.recruitment_token;
+    if (!profileId || !token) {
+      toast({
+        title: "Error",
+        description: "Candidate profile or application data is missing. Cannot generate PDF.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setDownloadingPdfForId(candidate.id);
     toast({
-      title: "Feature Coming Soon",
-      description: "Delete functionality will be available soon."
+      title: t('candidateApplicationPdf.generating', 'Generating PDF...'),
+      description: undefined
     });
+    try {
+      const data = await fetchCandidateApplicationData(profileId, token);
+      if (!data.profile) {
+        toast({
+          title: "Error",
+          description: "Candidate profile not found.",
+          variant: "destructive"
+        });
+        return;
+      }
+      const translate = (key: string, fallback: string) => t(key, fallback);
+      const { blob, filename } = await generateCandidateApplicationPDF(data, language, translate);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Success",
+        description: "PDF downloaded successfully."
+      });
+    } catch (err: unknown) {
+      console.error('Error generating application PDF:', err);
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to generate PDF.",
+        variant: "destructive"
+      });
+    } finally {
+      setDownloadingPdfForId(null);
+    }
   };
 
   const handleWhatsApp = (candidate: InterviewCandidate) => {
@@ -383,7 +514,9 @@ Best regards,
       candidate.applicant_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       candidate.job_openings?.job_title.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || candidate.interview_status === statusFilter;
+    const effectiveStatus = (c: InterviewCandidate) =>
+      ((c.average_score != null && c.average_score > 0) || (c.total_reviews != null && c.total_reviews > 0)) ? 'interviewed' : c.interview_status;
+    const matchesStatus = statusFilter === 'all' || effectiveStatus(candidate) === statusFilter;
     
     const matchesScore = scoreFilter === 'all' || 
       (scoreFilter === 'high' && candidate.average_score >= 4) ||
@@ -400,15 +533,22 @@ Best regards,
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      'not_scheduled': { label: 'Not Scheduled', variant: 'secondary' as const },
-      'scheduled': { label: 'Scheduled', variant: 'default' as const },
-      'completed': { label: 'Completed', variant: 'default' as const },
-      'cancelled': { label: 'Cancelled', variant: 'destructive' as const },
-      'rescheduled': { label: 'Rescheduled', variant: 'secondary' as const }
+      'not_scheduled': { label: 'Not Scheduled', variant: 'secondary' as const, className: '' },
+      'scheduled': { label: 'Scheduled', variant: 'default' as const, className: '' },
+      'interviewed': { label: 'Interviewed', variant: 'default' as const, className: 'bg-green-600 text-white border-green-600 hover:bg-green-700' },
+      'completed': { label: 'Completed', variant: 'default' as const, className: '' },
+      'cancelled': { label: 'Cancelled', variant: 'destructive' as const, className: '' },
+      'rescheduled': { label: 'Rescheduled', variant: 'secondary' as const, className: '' }
     };
     
-    const config = statusConfig[status as keyof typeof statusConfig] || { label: status, variant: 'secondary' as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = statusConfig[status as keyof typeof statusConfig] || { label: status, variant: 'secondary' as const, className: '' };
+    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>;
+  };
+
+  /** If candidate has at least one review/score, show as Interviewed. */
+  const getEffectiveInterviewStatus = (candidate: InterviewCandidate): string => {
+    const hasScore = (candidate.average_score != null && candidate.average_score > 0) || (candidate.total_reviews != null && candidate.total_reviews > 0);
+    return hasScore ? 'interviewed' : candidate.interview_status;
   };
 
   const renderScoreStars = (score: number) => {
@@ -460,6 +600,7 @@ Best regards,
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="not_scheduled">Not Scheduled</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
+              <SelectItem value="interviewed">Interviewed</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
@@ -506,127 +647,139 @@ Best regards,
           </div>
         </div>
       ) : (
-        <div className="bg-white border rounded-lg overflow-hidden">
-          <ScrollArea className="w-full">
-            <Table>
+        <div className="w-full max-w-full bg-white border rounded-lg overflow-hidden max-h-[calc(100vh-200px)] flex flex-col min-w-0">
+          <div className="w-full max-w-full flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto seamless-scroll">
+            <Table className="min-w-[1280px]">
               <TableHeader>
                 <TableRow className="bg-gray-50">
-                  <TableHead className="font-semibold min-w-[280px] px-6 py-4">Candidate</TableHead>
-                  <TableHead className="font-semibold min-w-[180px] px-6 py-4">Position</TableHead>
-                  <TableHead className="font-semibold min-w-[120px] px-6 py-4">Score</TableHead>
-                  <TableHead className="font-semibold min-w-[140px] px-6 py-4">Status</TableHead>
-                  <TableHead className="font-semibold min-w-[220px] px-6 py-4">Interview Details</TableHead>
-                  <TableHead className="font-semibold min-w-[100px] px-6 py-4 text-center">Actions</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[160px] px-4 py-3">Name</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[180px] px-4 py-3">Email</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[120px] px-4 py-3">Phone</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Profile</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[160px] px-4 py-3">Position</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Score</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Application Status</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Interview Status</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[110px] px-4 py-3">Interview Date</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[90px] px-4 py-3">Time</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[160px] px-4 py-3">Location</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[120px] px-4 py-3">Interviewer</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[80px] px-4 py-3 text-center sticky right-0 bg-gray-50">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCandidates.map(candidate => (
                   <TableRow key={candidate.id} className="hover:bg-gray-50 border-b border-gray-100">
-                    <TableCell className="px-6 py-4">
-                      <div className="flex items-start space-x-3">
-                        <Avatar className="h-12 w-12 flex-shrink-0">
-                          <AvatarImage 
-                            src={candidate.candidate_profiles?.photo_url || ''} 
-                            alt={candidate.applicant_name} 
-                          />
-                          <AvatarFallback className="bg-blue-100 text-blue-600 text-sm font-medium">
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-9 w-9 flex-shrink-0">
+                          <AvatarImage src={candidate.candidate_profiles?.photo_url || ''} alt={candidate.applicant_name} />
+                          <AvatarFallback className="bg-blue-100 text-blue-600 text-xs font-medium">
                             {candidate.applicant_name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 truncate">{candidate.applicant_name}</p>
-                          <p className="text-sm text-gray-600 truncate">{candidate.applicant_email}</p>
-                          <p className="text-sm text-gray-600">{candidate.applicant_phone}</p>
-                          <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                            <span>✅ Profile Completed</span>
-                          </div>
-                        </div>
+                        <span className="font-medium text-gray-900 truncate">{candidate.applicant_name}</span>
                       </div>
                     </TableCell>
-                    
-                    <TableCell className="px-6 py-4">
-                      <span className="font-medium text-gray-900">
-                        {candidate.job_openings?.job_title || 'Position'}
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      <span className="truncate block max-w-[180px]" title={candidate.applicant_email}>{candidate.applicant_email || '—'}</span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      {candidate.applicant_phone || '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-xs text-green-600 font-medium">✅ Completed</span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      <span className="font-medium text-gray-900 text-sm">
+                        {candidate.job_openings?.job_title || '—'}
                       </span>
                     </TableCell>
-
-                    <TableCell className="px-6 py-4">
-                      <div className="flex flex-col items-start space-y-1">
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex flex-col items-start gap-0.5">
                         {candidate.total_reviews > 0 ? (
                           <>
-                            <div className="flex items-center space-x-1">
+                            <div className="flex items-center space-x-0.5">
                               {renderScoreStars(candidate.average_score || 0)}
                             </div>
-                            <div className="text-xs text-gray-600">
-                              {candidate.average_score?.toFixed(1)} / 5.0
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              ({candidate.total_reviews} review{candidate.total_reviews !== 1 ? 's' : ''})
-                            </div>
+                            <span className="text-xs text-gray-600">
+                              {candidate.average_score?.toFixed(1)} / 5.0 ({candidate.total_reviews})
+                            </span>
                           </>
                         ) : (
-                          <div className="text-xs text-gray-400 text-center">
-                            No reviews yet
-                          </div>
+                          <span className="text-xs text-gray-400">No reviews yet</span>
                         )}
                       </div>
                     </TableCell>
-                    
-                    <TableCell className="px-6 py-4">
-                      <div className="space-y-2">
-                        {getStatusBadge(candidate.interview_status)}
-                        <Badge variant="outline" className="text-xs block w-fit">
-                          {candidate.status}
-                        </Badge>
-                      </div>
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {candidate.status || '—'}
+                      </Badge>
                     </TableCell>
-                    
-                    <TableCell className="px-6 py-4">
-                      <div className="space-y-1 text-sm">
-                        {candidate.interview_date && (
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                            <span>{new Date(candidate.interview_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {candidate.interview_time && (
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                            <span>{candidate.interview_time}</span>
-                          </div>
-                        )}
-                        {candidate.interview_location && (
-                          <div className="flex items-center space-x-1">
-                            <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                            <span className="truncate max-w-32">{candidate.interview_location}</span>
-                          </div>
-                        )}
-                        {candidate.interviewer_name && (
-                          <div className="flex items-center space-x-1">
-                            <User className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                            <span>{candidate.interviewer_name}</span>
-                          </div>
-                        )}
-                      </div>
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      {getStatusBadge(getEffectiveInterviewStatus(candidate))}
                     </TableCell>
-                    
-                    <TableCell className="px-6 py-4 text-center">
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
+                      {candidate.interview_date
+                        ? new Date(candidate.interview_date).toLocaleDateString()
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
+                      {candidate.interview_time || '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 min-w-[160px] max-w-[200px]">
+                      <span className="text-sm text-gray-700 truncate block" title={candidate.interview_location || ''}>
+                        {candidate.interview_location || '—'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
+                      {candidate.interviewer_name || '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-center sticky right-0 bg-white hover:bg-gray-50">
                       <CandidateActionsDropdown
                         candidate={candidate}
                         onViewProfile={() => handleViewProfile(candidate)}
+                        onDownloadApplication={() => handleDownloadApplication(candidate)}
                         onAddAsEmployee={() => handleAddAsEmployee(candidate)}
-                        onDelete={() => handleDelete(candidate)}
+                        onDelete={() => handleDeleteClick(candidate)}
+                        canDelete={isOwner}
                         onWhatsApp={() => handleWhatsApp(candidate)}
                         hasReviews={(candidate.total_reviews || 0) > 0}
+                        downloadApplicationLabel={t('candidateApplicationPdf.downloadApplication', 'Download Application')}
                       />
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
         </div>
       )}
+
+      {/* Delete confirmation dialog - owner only */}
+      <AlertDialog open={!!candidateToDelete} onOpenChange={(open) => !open && setCandidateToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove interviewee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the application record for {candidateToDelete?.applicant_name}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteConfirm();
+              }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmation Modal */}
       {selectedCandidate && (

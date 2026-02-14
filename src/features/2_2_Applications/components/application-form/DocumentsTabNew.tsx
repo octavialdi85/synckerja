@@ -4,6 +4,7 @@ import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { FileText, Upload, Eye, Trash2, Download, CheckCircle, AlertCircle, Edit, Save, X } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Document {
@@ -38,15 +39,21 @@ export const DocumentsTabNew = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   const documentTypes = [
-    { value: 'cv', label: 'CV/Resume', required: true },
-    { value: 'ktp', label: 'KTP/ID Card', required: true },
-    { value: 'ijazah', label: 'Ijazah/Certificate', required: true },
-    { value: 'transcript', label: 'Transkrip Nilai', required: false },
-    { value: 'portfolio', label: 'Portfolio', required: false },
-    { value: 'other', label: 'Lainnya', required: false }
+    { value: 'cv', labelKey: 'candidateProfile.documents.docTypeCv' as const, required: true },
+    { value: 'ktp', labelKey: 'candidateProfile.documents.docTypeKtp' as const, required: true },
+    { value: 'ijazah', labelKey: 'candidateProfile.documents.docTypeIjazah' as const, required: true },
+    { value: 'transcript', labelKey: 'candidateProfile.documents.docTypeTranscript' as const, required: false },
+    { value: 'portfolio', labelKey: 'candidateProfile.documents.docTypePortfolio' as const, required: false },
+    { value: 'other', labelKey: 'candidateProfile.documents.docTypeOther' as const, required: false }
   ];
+
+  const getDocTypeLabel = (value: string) => {
+    const doc = documentTypes.find(dt => dt.value === value);
+    return doc ? t(doc.labelKey, doc.value) : value;
+  };
 
   useEffect(() => {
     if (candidateProfileId) {
@@ -88,7 +95,7 @@ export const DocumentsTabNew = ({
       console.error('Error fetching documents:', error);
       toast({
         title: "Error",
-        description: "Gagal memuat dokumen",
+        description: t('candidateProfile.documents.toastLoadFailed', 'Failed to load documents'),
         variant: "destructive"
       });
     } finally {
@@ -104,7 +111,7 @@ export const DocumentsTabNew = ({
     if (file.size > 2 * 1024 * 1024) {
       toast({
         title: "Error",
-        description: "Ukuran file terlalu besar. Maksimal 2MB.",
+        description: t('candidateProfile.documents.toastFileTooBig', 'File size too large. Maximum 2MB.'),
         variant: "destructive"
       });
       return;
@@ -123,7 +130,7 @@ export const DocumentsTabNew = ({
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Error",
-        description: "Tipe file tidak didukung. Gunakan PDF, DOC, DOCX, atau gambar (JPG, PNG).",
+        description: t('candidateProfile.documents.toastFileTypeNotSupported', 'File type not supported. Use PDF, DOC, DOCX, or image (JPG, PNG).'),
         variant: "destructive"
       });
       return;
@@ -184,8 +191,8 @@ export const DocumentsTabNew = ({
       await fetchDocuments();
       
       toast({
-        title: "Berhasil Upload!",
-        description: `${documentTypes.find(dt => dt.value === documentType)?.label} berhasil disimpan.`,
+        title: "Success",
+        description: t('candidateProfile.documents.toastUploadSuccessDesc', '{{docType}} saved successfully.', { docType: getDocTypeLabel(documentType) }),
       });
 
       event.target.value = '';
@@ -193,8 +200,8 @@ export const DocumentsTabNew = ({
     } catch (error) {
       console.error('Upload error:', error);
       toast({
-        title: "Gagal Upload",
-        description: `Gagal menyimpan ${documentTypes.find(dt => dt.value === documentType)?.label}.`,
+        title: "Error",
+        description: t('candidateProfile.documents.toastUploadFailedDesc', 'Failed to save {{docType}}.', { docType: getDocTypeLabel(documentType) }),
         variant: "destructive"
       });
     } finally {
@@ -227,14 +234,14 @@ export const DocumentsTabNew = ({
       }
       
       toast({
-        title: "Berhasil",
-        description: "Dokumen berhasil dihapus"
+        title: "Success",
+        description: t('candidateProfile.documents.toastDeleted', 'Document deleted successfully')
       });
     } catch (error) {
       console.error('Error deleting document:', error);
       toast({
         title: "Error",
-        description: "Gagal menghapus dokumen",
+        description: t('candidateProfile.documents.toastDeleteFailed', 'Failed to delete document'),
         variant: "destructive"
       });
     }
@@ -275,13 +282,13 @@ export const DocumentsTabNew = ({
 
       toast({
         title: "Success",
-        description: "Document downloaded successfully."
+        description: t('candidateProfile.documents.toastDownloadSuccess', 'Document downloaded successfully.')
       });
     } catch (error) {
       console.error('Error downloading file:', error);
       toast({
         title: "Error",
-        description: "Failed to download document.",
+        description: t('candidateProfile.documents.toastDownloadFailed', 'Failed to download document.'),
         variant: "destructive"
       });
     }
@@ -305,7 +312,7 @@ export const DocumentsTabNew = ({
     setIsEditing(false);
     toast({
       title: "Success",
-      description: "Document changes saved successfully"
+      description: t('candidateProfile.documents.toastSaved', 'Document changes saved successfully')
     });
   };
 
@@ -329,7 +336,7 @@ export const DocumentsTabNew = ({
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
-            <span>Dokumen Pendukung</span>
+            <span>{t('candidateProfile.documents.sectionTitle', 'Supporting Documents')}</span>
           </div>
           <div className="flex items-center space-x-2">
             {!isReadOnly && (
@@ -337,17 +344,17 @@ export const DocumentsTabNew = ({
                 {!isEditing ? (
                   <Button onClick={handleEdit} size="sm" variant="outline">
                     <Edit className="h-4 w-4 mr-1" />
-                    Edit
+                    {t('common.edit', 'Edit')}
                   </Button>
                 ) : (
                   <div className="flex space-x-2">
                     <Button onClick={handleCancel} size="sm" variant="outline">
                       <X className="h-4 w-4 mr-1" />
-                      Cancel
+                      {t('common.cancel', 'Cancel')}
                     </Button>
                     <Button onClick={handleSave} size="sm">
                       <Save className="h-4 w-4 mr-1" />
-                      Save
+                      {t('common.save', 'Save')}
                     </Button>
                   </div>
                 )}
@@ -368,7 +375,7 @@ export const DocumentsTabNew = ({
                 <div key={docType.value} className="p-4 border border-gray-200 rounded-lg bg-white">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-gray-900">{docType.label}</h3>
+                      <h3 className="font-medium text-gray-900">{t(docType.labelKey, docType.value)}</h3>
                       {docType.required && <span className="text-red-500">*</span>}
                       {existingDoc && (
                         <CheckCircle className="h-4 w-4 text-green-600" />
@@ -398,7 +405,7 @@ export const DocumentsTabNew = ({
                           className="flex-1"
                         >
                           <Eye className="h-3 w-3 mr-1" />
-                          Lihat
+                          {t('candidateProfile.documents.view', 'View')}
                         </Button>
                         <Button
                           size="sm"
@@ -407,7 +414,7 @@ export const DocumentsTabNew = ({
                           className="flex-1"
                         >
                           <Download className="h-3 w-3 mr-1" />
-                          Unduh
+                          {t('candidateProfile.documents.download', 'Download')}
                         </Button>
                         {(isEditing || !isReadOnly) && (
                           <Button
@@ -436,7 +443,7 @@ export const DocumentsTabNew = ({
                             className="flex items-center gap-2 px-3 py-2 text-sm border border-dashed border-gray-300 rounded cursor-pointer hover:border-blue-500 transition-colors justify-center"
                           >
                             <Upload className="h-3 w-3" />
-                            <span>Ganti File</span>
+                            <span>{t('candidateProfile.documents.replaceFile', 'Replace File')}</span>
                           </label>
                         </div>
                       )}
@@ -466,19 +473,19 @@ export const DocumentsTabNew = ({
                             {isUploading ? (
                               <>
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                                <span className="text-sm">Mengupload...</span>
+                                <span className="text-sm">{t('candidateProfile.documents.uploading', 'Uploading...')}</span>
                               </>
                             ) : (
                               <>
                                 <Upload className="h-4 w-4" />
-                                <span className="text-sm">Upload File</span>
+                                <span className="text-sm">{t('candidateProfile.documents.uploadFile', 'Upload File')}</span>
                               </>
                             )}
                           </label>
                         </>
                       ) : (
                         <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                          <span className="text-sm text-gray-500">No file uploaded</span>
+                          <span className="text-sm text-gray-500">{t('candidateProfile.documents.noFileUploaded', 'No file uploaded')}</span>
                         </div>
                       )}
                     </div>
@@ -497,7 +504,7 @@ export const DocumentsTabNew = ({
                     <div>
                       <h3 className="font-medium text-gray-900">{selectedDocument.file_name}</h3>
                       <p className="text-sm text-gray-500">
-                        {documentTypes.find(t => t.value === selectedDocument.document_type)?.label}
+                        {getDocTypeLabel(selectedDocument.document_type)}
                       </p>
                     </div>
                     <Button
@@ -506,7 +513,7 @@ export const DocumentsTabNew = ({
                       onClick={() => window.open(previewUrl, '_blank')}
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      Open
+                      {t('candidateProfile.documents.open', 'Open')}
                     </Button>
                   </div>
                 </div>
@@ -522,8 +529,8 @@ export const DocumentsTabNew = ({
               <div className="h-full flex items-center justify-center">
                 <div className="text-center text-gray-500">
                   <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium">No document selected</p>
-                  <p className="text-sm">Click on a document to preview it here</p>
+                  <p className="text-lg font-medium">{t('candidateProfile.documents.noDocumentSelected', 'No document selected')}</p>
+                  <p className="text-sm">{t('candidateProfile.documents.clickToPreview', 'Click on a document to preview it here')}</p>
                 </div>
               </div>
             )}
@@ -536,30 +543,30 @@ export const DocumentsTabNew = ({
             <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-blue-800 mb-2">
-                Status Upload Dokumen:
+                {t('candidateProfile.documents.statusTitle', 'Document Upload Status:')}
               </p>
               {getMissingRequiredDocuments().length === 0 ? (
                 <div className="flex items-center gap-2 text-green-700">
                   <CheckCircle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Semua dokumen wajib sudah diupload!</span>
+                  <span className="text-sm font-medium">{t('candidateProfile.documents.allRequiredUploaded', 'All required documents have been uploaded!')}</span>
                 </div>
               ) : (
                 <div className="p-3 bg-red-50 border border-red-200 rounded">
                   <p className="text-sm font-medium text-red-800 mb-2">
-                    Dokumen wajib yang belum diupload:
+                    {t('candidateProfile.documents.missingRequired', 'Required documents not yet uploaded:')}
                   </p>
                   <ul className="text-sm text-red-700 space-y-1">
                     {getMissingRequiredDocuments().map(type => (
-                      <li key={type}>• {documentTypes.find(dt => dt.value === type)?.label}</li>
+                      <li key={type}>• {getDocTypeLabel(type)}</li>
                     ))}
                   </ul>
                 </div>
               )}
               
               <div className="mt-3 text-sm text-blue-700 space-y-1">
-                <p>• Format yang didukung: PDF, DOC, DOCX, JPG, PNG</p>
-                <p>• Maksimal ukuran file: 2MB per dokumen</p>
-                <p>• File akan tersimpan otomatis setelah upload</p>
+                <p>• {t('candidateProfile.documents.formatSupported', 'Supported formats: PDF, DOC, DOCX, JPG, PNG')}</p>
+                <p>• {t('candidateProfile.documents.maxFileSize', 'Maximum file size: 2MB per document')}</p>
+                <p>• {t('candidateProfile.documents.autoSaveNote', 'Files are saved automatically after upload')}</p>
               </div>
             </div>
           </div>

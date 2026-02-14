@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
 import { Plus, Edit, Save, X, Trash2, MoreVertical, MapPin } from 'lucide-react';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface AddressApplicationTabProps {
   candidate: any;
@@ -25,6 +26,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   // Update formData when candidate changes
   useEffect(() => {
@@ -49,7 +51,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
     if (!formData.address || !formData.citizen_address) {
       toast({
         title: "Validation Error",
-        description: "Alamat Sekarang dan Alamat KTP wajib diisi.",
+        description: t('candidateProfile.address.toastValidation', 'Current Address and ID Card Address are required.'),
         variant: "destructive"
       });
       return;
@@ -61,13 +63,13 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
       setIsEditing(false);
       toast({
         title: "Success",
-        description: "Address information saved successfully.",
+        description: t('candidateProfile.address.toastSaved', 'Address information saved successfully.'),
       });
     } catch (error) {
       console.error('Save error:', error);
       toast({
         title: "Error",
-        description: "Failed to save address information",
+        description: t('candidateProfile.address.toastSaveFailed', 'Failed to save address information.'),
         variant: "destructive"
       });
     } finally {
@@ -89,7 +91,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete the address information?')) {
+    if (window.confirm(t('candidateProfile.address.confirmDelete', 'Are you sure you want to delete the address information?'))) {
       setSaving(true);
       try {
         await onUpdate({
@@ -99,13 +101,13 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
         });
         toast({
           title: "Success",
-          description: "Address information deleted successfully.",
+          description: t('candidateProfile.address.toastDeleted', 'Address information deleted successfully.'),
         });
       } catch (error) {
         console.error('Delete error:', error);
         toast({
           title: "Error",
-          description: "Failed to delete address information",
+          description: t('candidateProfile.address.toastDeleteFailed', 'Failed to delete address information.'),
           variant: "destructive"
         });
       } finally {
@@ -120,8 +122,8 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <MapPin className="h-5 w-5 text-blue-600" />
-            <span>Address Information</span>
-            {saving && <span className="text-sm text-gray-500 ml-2">Saving...</span>}
+            <span>{t('candidateProfile.address.sectionTitle', 'Address Information')}</span>
+            {saving && <span className="text-sm text-gray-500 ml-2">{t('common.saving', 'Saving...')}</span>}
           </div>
           {!isEditing && !isReadOnly && (
             <Button
@@ -132,12 +134,12 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
               {hasAddressData ? (
                 <>
                   <Edit className="h-4 w-4 mr-2" />
-                  Edit Address
+                  {t('candidateProfile.address.editAddress', 'Edit Address')}
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Address
+                  {t('candidateProfile.address.addAddress', 'Add Address')}
                 </>
               )}
             </Button>
@@ -151,7 +153,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>
-                      Alamat Sekarang <span className="text-red-500">*</span>
+                      {t('candidateProfile.address.currentAddress', 'Current Address')} <span className="text-red-500">*</span>
                     </Label>
                     <Textarea
                       value={formData.address}
@@ -159,13 +161,13 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                       disabled={isReadOnly}
                       required
                       rows={3}
-                      placeholder="Masukkan alamat tempat tinggal saat ini"
+                      placeholder={t('candidateProfile.address.placeholderCurrent', 'Enter your current address')}
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label>
-                      Alamat KTP <span className="text-red-500">*</span>
+                      {t('candidateProfile.address.idAddress', 'ID Card Address')} <span className="text-red-500">*</span>
                     </Label>
                     <Textarea
                       value={formData.citizen_address}
@@ -173,17 +175,17 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                       disabled={isReadOnly}
                       required
                       rows={3}
-                      placeholder="Masukkan alamat sesuai KTP"
+                      placeholder={t('candidateProfile.address.placeholderId', 'Enter address as on ID card')}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Kode Pos</Label>
+                    <Label>{t('candidateProfile.address.postalCode', 'Postal Code')}</Label>
                     <Input
                       value={formData.postal_code}
                       onChange={(e) => handleInputChange('postal_code', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Masukkan kode pos"
+                      placeholder={t('candidateProfile.address.placeholderPostal', 'Enter postal code')}
                       maxLength={5}
                     />
                   </div>
@@ -194,14 +196,14 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                     onClick={handleCancel}
                   >
                     <X className="h-4 w-4 mr-2" />
-                    Cancel
+                    {t('common.cancel', 'Cancel')}
                   </Button>
                   <Button
                     onClick={handleSave}
                     disabled={saving || !formData.address || !formData.citizen_address}
                   >
                     <Save className="h-4 w-4 mr-2" />
-                    Save
+                    {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
                   </Button>
                 </div>
               </CardContent>
@@ -210,19 +212,19 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Alamat Sekarang</Label>
+                  <Label className="text-sm font-medium">{t('candidateProfile.address.currentAddress', 'Current Address')}</Label>
                   <div className="p-3 bg-gray-50 rounded-md border min-h-[100px]">
                     <p className="text-sm text-gray-700">{candidate?.address || '-'}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Alamat KTP</Label>
+                  <Label className="text-sm font-medium">{t('candidateProfile.address.idAddress', 'ID Card Address')}</Label>
                   <div className="p-3 bg-gray-50 rounded-md border min-h-[100px]">
                     <p className="text-sm text-gray-700">{candidate?.citizen_address || '-'}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Kode Pos</Label>
+                  <Label className="text-sm font-medium">{t('candidateProfile.address.postalCode', 'Postal Code')}</Label>
                   <div className="p-3 bg-gray-50 rounded-md border min-h-[44px]">
                     <p className="text-sm text-gray-700">{candidate?.postal_code || '-'}</p>
                   </div>
@@ -237,7 +239,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                     onClick={handleEdit}
                   >
                     <Edit className="h-4 w-4 mr-2" />
-                    Edit Address
+                    {t('candidateProfile.address.editAddress', 'Edit Address')}
                   </Button>
                   <Button
                     variant="outline"
@@ -246,7 +248,7 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
                     className="text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
+                    {t('common.delete', 'Delete')}
                   </Button>
                 </div>
               )}
@@ -254,15 +256,15 @@ export const AddressApplicationTab = ({ candidate, onUpdate, isReadOnly = false 
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 min-h-[400px]">
               <MapPin className="h-12 w-12 text-gray-300 mb-4" />
-              <p className="text-base font-medium">No address information found.</p>
-              <p className="text-sm mt-2">Click "Add Address" to get started.</p>
+              <p className="text-base font-medium">{t('candidateProfile.address.noAddressFound', 'No address information found.')}</p>
+              <p className="text-sm mt-2">{t('candidateProfile.address.clickToAdd', 'Click "Add Address" to get started.')}</p>
             </div>
           )}
           
           {/* Spacer to match Personal Info tab height */}
           <div className="mt-4 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
-              <span className="text-red-500">*</span> Alamat Sekarang dan Alamat KTP wajib diisi untuk melengkapi profile.
+              <span className="text-red-500">*</span> {t('candidateProfile.address.requiredNotice', 'Current Address and ID Card Address are required to complete your profile.')}
             </p>
           </div>
         </CardContent>

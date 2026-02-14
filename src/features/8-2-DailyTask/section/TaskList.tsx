@@ -22,7 +22,6 @@ import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDas
 import './TaskList.css';
 
 export const TaskList = () => {
-  const context = useDailyTask();
   const {
     tasks,
     effectiveFilteredTasks,
@@ -36,8 +35,8 @@ export const TaskList = () => {
     setExpandedTasks,
     highlightedTask,
     highlightFromPendingApproval,
-  } = context;
-  const requestDeadlineExtension = (context as any).requestDeadlineExtension;
+    requestDeadlineExtension,
+  } = useDailyTask();
   const { user } = useCurrentUser();
   const { toast } = useToast();
 
@@ -185,17 +184,29 @@ export const TaskList = () => {
       updateData.has_reminder = true;
       setReminderPendingTaskId(null);
     }
-    await updateTask(taskId, updateData);
-    setDatePickerOpen(null);
+    try {
+      await updateTask(taskId, updateData);
+      setDatePickerOpen(null);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
+    }
   };
 
   const handleClearDate = async (taskId: string) => {
-    await updateTask(taskId, { due_date: null });
-    setDatePickerOpen(null);
+    try {
+      await updateTask(taskId, { due_date: null });
+      setDatePickerOpen(null);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
+    }
   };
 
   const handlePriorityChange = async (taskId: string, newPriority: Task['priority']) => {
-    await updateTask(taskId, { priority: newPriority });
+    try {
+      await updateTask(taskId, { priority: newPriority });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
+    }
   };
 
   const handleDeleteClick = (task: Task) => {
@@ -203,9 +214,12 @@ export const TaskList = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (deleteDialog.taskId) {
+    if (!deleteDialog.taskId) return;
+    try {
       await deleteTask(deleteDialog.taskId);
       setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to delete task', variant: 'destructive' });
     }
   };
 
@@ -221,7 +235,11 @@ export const TaskList = () => {
       setDatePickerOpen(task.id);
       return;
     }
-    await updateTask(task.id, { has_reminder: newReminderValue });
+    try {
+      await updateTask(task.id, { has_reminder: newReminderValue });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
+    }
   };
 
   const onDragEnd = (event: DragEndEvent) => {

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
 import { User, ChevronRight, Upload, Camera, Edit, Save, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface PersonalDetailsTabProps {
   candidate: any;
@@ -52,6 +53,7 @@ export const PersonalDetailsTab = ({
     return !isReadOnly && isProfileIncomplete();
   });
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   // Auto-save when formData changes
   useEffect(() => {
@@ -111,13 +113,13 @@ export const PersonalDetailsTab = ({
       setIsEditing(false);
       toast({
         title: "Success",
-        description: "Personal details updated successfully"
+        description: t('candidateProfile.personal.toastSuccess', 'Personal details updated successfully')
       });
     } catch (error) {
       console.error('Save error:', error);
       toast({
         title: "Error",
-        description: "Failed to save changes",
+        description: t('candidateProfile.personal.toastError', 'Failed to save changes'),
         variant: "destructive"
       });
     } finally {
@@ -206,7 +208,7 @@ export const PersonalDetailsTab = ({
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <User className="h-5 w-5" />
-            <span>Informasi Personal</span>
+            <span>{t('candidateProfile.personal.sectionTitle', 'Personal Information')}</span>
             {saving && <span className="text-sm text-gray-500">Saving...</span>}
           </div>
           <div className="flex items-center space-x-2">
@@ -215,17 +217,17 @@ export const PersonalDetailsTab = ({
                 {!isEditing ? (
                   <Button onClick={handleEdit} size="sm" variant="outline">
                     <Edit className="h-4 w-4 mr-1" />
-                    Edit
+                    {t('common.edit', 'Edit')}
                   </Button>
                 ) : (
                   <div className="flex space-x-2">
                     <Button onClick={handleCancel} size="sm" variant="outline">
                       <X className="h-4 w-4 mr-1" />
-                      Cancel
+                      {t('common.cancel', 'Cancel')}
                     </Button>
                     <Button onClick={handleSave} size="sm" disabled={saving}>
                       <Save className="h-4 w-4 mr-1" />
-                      {saving ? 'Saving...' : 'Save'}
+                      {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
                     </Button>
                   </div>
                 )}
@@ -267,19 +269,19 @@ export const PersonalDetailsTab = ({
                     {uploading ? (
                       <>
                         <Upload className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
+                        {t('candidateProfile.personal.uploading', 'Uploading...')}
                       </>
                     ) : (
                       <>
                         <Camera className="h-4 w-4 mr-2" />
-                        Upload Photo
+                        {t('candidateProfile.personal.uploadPhoto', 'Upload Photo')}
                       </>
                     )}
                   </span>
                 </Button>
               </label>
               <p className="text-xs text-gray-500 text-center">
-                <span className="text-red-500">*</span> Foto profil wajib diupload
+                <span className="text-red-500">*</span> {t('candidateProfile.personal.photoRequired', 'Profile photo is required')}
               </p>
             </div>
           )}
@@ -288,7 +290,7 @@ export const PersonalDetailsTab = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="full_name">
-              Nama Lengkap <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.fullName', 'Full Name')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="full_name"
@@ -296,13 +298,13 @@ export const PersonalDetailsTab = ({
               onChange={(e) => handleInputChange('full_name', e.target.value)}
               disabled={!isEditing}
               required
-              placeholder="Masukkan nama lengkap Anda"
+              placeholder={t('candidateProfile.personal.placeholderFullName', 'Enter your full name')}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="email">
-              Email <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.email', 'Email')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="email"
@@ -317,7 +319,7 @@ export const PersonalDetailsTab = ({
 
           <div className="space-y-2">
             <Label htmlFor="mobile_phone">
-              Nomor Telepon <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.phone', 'Phone Number')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="mobile_phone"
@@ -331,7 +333,7 @@ export const PersonalDetailsTab = ({
 
           <div className="space-y-2">
             <Label htmlFor="birth_date">
-              Tanggal Lahir <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.birthDate', 'Date of Birth')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="birth_date"
@@ -345,7 +347,7 @@ export const PersonalDetailsTab = ({
 
           <div className="space-y-2">
             <Label htmlFor="birth_place">
-              Tempat Lahir <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.birthPlace', 'Place of Birth')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="birth_place"
@@ -353,13 +355,13 @@ export const PersonalDetailsTab = ({
               onChange={(e) => handleInputChange('birth_place', e.target.value)}
               disabled={!isEditing}
               required
-              placeholder="Masukkan tempat lahir"
+              placeholder={t('candidateProfile.personal.placeholderBirthPlace', 'Enter place of birth')}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="gender">
-              Jenis Kelamin <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.gender', 'Gender')} <span className="text-red-500">*</span>
             </Label>
             <Select
               value={formData.gender}
@@ -367,18 +369,18 @@ export const PersonalDetailsTab = ({
               disabled={!isEditing}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Pilih jenis kelamin" />
+                <SelectValue placeholder={t('candidateProfile.personal.placeholderGender', 'Select gender')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="male">Laki-laki</SelectItem>
-                <SelectItem value="female">Perempuan</SelectItem>
+                <SelectItem value="male">{t('candidateProfile.personal.genderMale', 'Male')}</SelectItem>
+                <SelectItem value="female">{t('candidateProfile.personal.genderFemale', 'Female')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="nik">
-              NIK <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.nik', 'NIK')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="nik"
@@ -386,14 +388,14 @@ export const PersonalDetailsTab = ({
               onChange={(e) => handleInputChange('nik', e.target.value)}
               disabled={!isEditing}
               required
-              placeholder="16 digit NIK"
+              placeholder={t('candidateProfile.personal.placeholderNik', '16 digit NIK')}
               maxLength={16}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="religion">
-              Agama <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.religion', 'Religion')} <span className="text-red-500">*</span>
             </Label>
             <Select
               value={formData.religion}
@@ -401,23 +403,23 @@ export const PersonalDetailsTab = ({
               disabled={!isEditing}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Pilih agama" />
+                <SelectValue placeholder={t('candidateProfile.personal.placeholderReligion', 'Select religion')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="islam">Islam</SelectItem>
-                <SelectItem value="christian">Kristen</SelectItem>
-                <SelectItem value="catholic">Katolik</SelectItem>
-                <SelectItem value="hindu">Hindu</SelectItem>
-                <SelectItem value="buddha">Buddha</SelectItem>
-                <SelectItem value="konghucu">Konghucu</SelectItem>
-                <SelectItem value="other">Lainnya</SelectItem>
+                <SelectItem value="islam">{t('candidateProfile.personal.religionIslam', 'Islam')}</SelectItem>
+                <SelectItem value="christian">{t('candidateProfile.personal.religionChristian', 'Christian')}</SelectItem>
+                <SelectItem value="catholic">{t('candidateProfile.personal.religionCatholic', 'Catholic')}</SelectItem>
+                <SelectItem value="hindu">{t('candidateProfile.personal.religionHindu', 'Hindu')}</SelectItem>
+                <SelectItem value="buddha">{t('candidateProfile.personal.religionBuddha', 'Buddha')}</SelectItem>
+                <SelectItem value="konghucu">{t('candidateProfile.personal.religionKonghucu', 'Confucianism')}</SelectItem>
+                <SelectItem value="other">{t('candidateProfile.personal.religionOther', 'Other')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="marital_status">
-              Status Pernikahan <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.maritalStatus', 'Marital Status')} <span className="text-red-500">*</span>
             </Label>
             <Select
               value={formData.marital_status}
@@ -425,20 +427,20 @@ export const PersonalDetailsTab = ({
               disabled={!isEditing}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Pilih status pernikahan" />
+                <SelectValue placeholder={t('candidateProfile.personal.placeholderMaritalStatus', 'Select marital status')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="single">Belum Menikah</SelectItem>
-                <SelectItem value="married">Menikah</SelectItem>
-                <SelectItem value="divorced">Cerai</SelectItem>
-                <SelectItem value="widowed">Janda/Duda</SelectItem>
+                <SelectItem value="single">{t('candidateProfile.personal.maritalSingle', 'Single')}</SelectItem>
+                <SelectItem value="married">{t('candidateProfile.personal.maritalMarried', 'Married')}</SelectItem>
+                <SelectItem value="divorced">{t('candidateProfile.personal.maritalDivorced', 'Divorced')}</SelectItem>
+                <SelectItem value="widowed">{t('candidateProfile.personal.maritalWidowed', 'Widowed')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="nationality">
-              Kewarganegaraan <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.nationality', 'Nationality')} <span className="text-red-500">*</span>
             </Label>
             <Input
               id="nationality"
@@ -452,7 +454,7 @@ export const PersonalDetailsTab = ({
 
           <div className="space-y-2">
             <Label htmlFor="blood_type">
-              Golongan Darah <span className="text-red-500">*</span>
+              {t('candidateProfile.personal.bloodType', 'Blood Type')} <span className="text-red-500">*</span>
             </Label>
             <Select
               value={formData.blood_type}
@@ -460,7 +462,7 @@ export const PersonalDetailsTab = ({
               disabled={!isEditing}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Pilih golongan darah" />
+                <SelectValue placeholder={t('candidateProfile.personal.placeholderBloodType', 'Select blood type')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="A">A</SelectItem>
@@ -474,7 +476,7 @@ export const PersonalDetailsTab = ({
 
         <div className="mt-4 p-4 bg-blue-50 rounded-lg">
           <p className="text-sm text-blue-800">
-            <span className="text-red-500">*</span> Semua field wajib diisi untuk melengkapi profile. Foto profil juga wajib diupload.
+            <span className="text-red-500">*</span> {t('candidateProfile.personal.requiredNotice', 'All fields are required to complete your profile. Profile photo must also be uploaded.')}
           </p>
         </div>
       </CardContent>

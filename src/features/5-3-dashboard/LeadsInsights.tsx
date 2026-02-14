@@ -43,7 +43,7 @@ export const LeadsInsights = ({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { data: cycleRows = [] } = useQuery({
+  const { data: cycleRows = [], isError: isCycleMetricsError } = useQuery({
     queryKey: ['whatsapp-cycle-metrics', organizationId],
     enabled: !!organizationId,
     queryFn: async () => {
@@ -54,16 +54,6 @@ export const LeadsInsights = ({
     },
   });
 
-  // Debug: Log the input data (only once per render)
-  React.useEffect(() => {
-    console.log('=== LeadsInsights Debug ===');
-    console.log('Total leads:', leads.length);
-    console.log('Filters:', filters);
-    console.log('Date range filter:', filters?.dateRange);
-    console.log('Client profiles keys:', Object.keys(clientProfiles));
-    console.log('Lead IDs:', leads.map(lead => lead.id));
-    console.log('==========================');
-  }, [leads.length, Object.keys(clientProfiles).length, filters?.dateRange]);
   const totalLeads = leads.length;
 
   // Treat as Converted if status name is "Converted" (trim + case-insensitive, so DB "Converted "/"CONVERTED" still count)
@@ -79,36 +69,20 @@ export const LeadsInsights = ({
   // Calculate "Conversion Deal Periode Ini" based on date filters and lead converted_at field
   const calculateConversionDealPeriode = () => {
     if (!filters?.dateRange?.from || !filters?.dateRange?.to) {
-      // No date filter - use all converted leads
-      console.log('📊 No date filter - using all converted leads:', convertedLeads.length);
       return convertedLeads.length;
     }
 
-    // Convert filter dates to Date objects and normalize to start/end of day
     const filterFrom = new Date(filters.dateRange.from);
     filterFrom.setHours(0, 0, 0, 0);
-    
     const filterTo = new Date(filters.dateRange.to);
     filterTo.setHours(23, 59, 59, 999);
 
-    console.log('📊 Date filter applied:', {
-      from: filterFrom.toISOString(),
-      to: filterTo.toISOString()
-    });
-
-    // Use converted_at field from leads instead of status history to avoid duplicates
     const conversionsInPeriod = convertedLeads.filter(lead => {
       if (!lead.converted_at) return false;
-      
       const convertedDate = new Date(lead.converted_at);
-      const isInRange = convertedDate >= filterFrom && convertedDate <= filterTo;
-      
-      return isInRange;
+      return convertedDate >= filterFrom && convertedDate <= filterTo;
     });
 
-    console.log('📊 Leads converted in period:', conversionsInPeriod.length);
-    console.log('📊 Converted lead IDs in period:', conversionsInPeriod.map(l => l.id));
-    
     return conversionsInPeriod.length;
   };
 
@@ -125,51 +99,14 @@ export const LeadsInsights = ({
     const month = today.getMonth();
     const firstDayOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
     
-    // Set today to end of day for proper comparison
     const endOfToday = new Date(year, month, today.getDate(), 23, 59, 59, 999);
-    
-    console.log('📊 Month-to-Date calculation (independent of filters):', {
-      today: today.toISOString(),
-      year,
-      month: month + 1, // Display as 1-based month
-      firstDayOfMonth: firstDayOfMonth.toISOString(),
-      endOfToday: endOfToday.toISOString(),
-      firstDayLocal: firstDayOfMonth.toLocaleDateString('id-ID'),
-      endOfTodayLocal: endOfToday.toLocaleDateString('id-ID')
-    });
-    
-    console.log('📊 All converted leads data:', convertedLeads.map(lead => ({
-      id: lead.id,
-      status: lead.lead_status?.name,
-      converted_at: lead.converted_at,
-      created_at: lead.created_at,
-      updated_at: lead.updated_at
-    })));
-    
+
     const filteredConversions = convertedLeads.filter(lead => {
-      if (!lead.converted_at) {
-        console.log('📊 Lead without converted_at:', lead.id);
-        return false;
-      }
-      
+      if (!lead.converted_at) return false;
       const convertedDate = new Date(lead.converted_at);
-      const isInRange = convertedDate >= firstDayOfMonth && convertedDate <= endOfToday;
-      
-      console.log('📊 Checking lead conversion:', {
-        leadId: lead.id,
-        convertedAt: lead.converted_at,
-        convertedDate: convertedDate.toISOString(),
-        convertedDateLocal: convertedDate.toLocaleDateString('id-ID'),
-        firstDayOfMonth: firstDayOfMonth.toISOString(),
-        endOfToday: endOfToday.toISOString(),
-        isInRange
-      });
-      
-      return isInRange;
+      return convertedDate >= firstDayOfMonth && convertedDate <= endOfToday;
     });
-    
-    console.log('📊 Month-to-Date filtered conversions:', filteredConversions.length);
-    console.log('📊 Filtered conversion IDs:', filteredConversions.map(l => l.id));
+
     return filteredConversions;
   };
   
@@ -293,12 +230,6 @@ export const LeadsInsights = ({
       .sort((a, b) => b.count - a.count);
     
     // Debug logging
-    console.log('📊 Status Analysis:', {
-      totalLeads: leads.length,
-      statusCount: result.length,
-      statuses: result
-    });
-    
     return result;
   })();
 
@@ -454,7 +385,6 @@ export const LeadsInsights = ({
 
       // Call the PDF generator with proper data structure
       await generateLeadsPDF(pdfData);
-      console.log('✅ PDF generated successfully');
     } catch (error) {
       console.error('❌ Error generating PDF:', error);
       alert('Terjadi kesalahan saat membuat laporan PDF. Silakan coba lagi.');
@@ -747,6 +677,9 @@ export const LeadsInsights = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {isCycleMetricsError && organizationId && (
+                  <div className="text-xs text-amber-600 py-2">Gagal memuat metrik siklus</div>
+                )}
                 {employeeAnalysis.map((employee, index) => {
                   const cycleMetrics = employee.employeeIds?.length
                     ? employee.employeeIds.map((id) => cycleMetricsByAssignee.get(id)).find(Boolean)

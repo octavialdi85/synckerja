@@ -8,8 +8,8 @@ interface LeadsMetricsCardsProps {
 
 export const LeadsMetricsCards = ({ leads }: LeadsMetricsCardsProps) => {
   const totalLeads = leads.length;
-  const openLeads = leads.filter(lead => lead.lead_status?.name === 'Open' || !lead.lead_status).length;
-  const convertedLeads = leads.filter(lead => lead.lead_status?.name === 'Converted').length;
+  const openLeads = leads.filter(lead => (lead.lead_status?.name?.trim().toLowerCase() ?? '') === 'open' || !lead.lead_status).length;
+  const convertedLeads = leads.filter(lead => (lead.lead_status?.name?.trim().toLowerCase() ?? '') === 'converted').length;
   const followUpLeads = leads.filter(lead => lead.followup === 0 || lead.fu_priority === 'Please Follow Up').length;
 
   const statsCards = [

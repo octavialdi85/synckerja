@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';

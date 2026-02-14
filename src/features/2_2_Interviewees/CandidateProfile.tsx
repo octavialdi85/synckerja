@@ -312,8 +312,8 @@ const CandidateProfile = () => {
           {/* Main Layout */}
           <div className="w-full px-4 py-4">
             <div className="flex gap-4">
-              {/* Sidebar */}
-              <div className="flex-shrink-0">
+              {/* Sidebar - narrow width so main content has more space */}
+              <div className="flex-shrink-0 w-64 max-w-[260px]">
                 <CandidateProfileSidebar candidateData={candidate} />
               </div>
               

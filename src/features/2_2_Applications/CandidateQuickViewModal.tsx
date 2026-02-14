@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
 import { Separator } from '@/features/ui/separator';
 import { Input } from '@/features/ui/input';
@@ -102,6 +101,7 @@ export const CandidateQuickViewModal = ({
   const [interviewerEmail, setInterviewerEmail] = useState<string>('');
   const [interviewNotes, setInterviewNotes] = useState<string>('');
   const [savingInterview, setSavingInterview] = useState(false);
+  const hasAutoReviewedRef = useRef(false);
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
@@ -178,6 +178,11 @@ export const CandidateQuickViewModal = ({
     }
   };
 
+  // Reset auto-reviewed ref when modal closes so next open can trigger again
+  React.useEffect(() => {
+    if (!isOpen) hasAutoReviewedRef.current = false;
+  }, [isOpen]);
+
   React.useEffect(() => {
     if (isOpen && application) {
       if (application.candidate_profile_id) {
@@ -186,6 +191,25 @@ export const CandidateQuickViewModal = ({
       }
       loadCvPreview();
       loadCompanyName();
+      // Auto Pending -> Reviewed when Quick View opens (once per open)
+      if (application.status === 'pending' && !hasAutoReviewedRef.current) {
+        hasAutoReviewedRef.current = true;
+        (async () => {
+          try {
+            const { error } = await supabase
+              .from('job_applications')
+              .update({ status: 'reviewed' })
+              .eq('id', application.id);
+            if (error) throw error;
+            await queryClient.invalidateQueries({ queryKey: ['job-applications'] });
+            onStatusUpdate(application.id, 'reviewed');
+            if (onApplicationUpdate) await onApplicationUpdate();
+          } catch (e) {
+            console.error('Auto-update status to reviewed failed:', e);
+            hasAutoReviewedRef.current = false;
+          }
+        })();
+      }
       // Initialize interview form fields - only set if data exists and is valid
       // Check if interview_date exists and is a valid date string
       const hasValidDate = application.interview_date && 
@@ -399,6 +423,9 @@ export const CandidateQuickViewModal = ({
         }
       }
 
+      // When saving schedule with date set, set application status to 'scheduled'
+      const newStatus = interviewDate ? 'scheduled' : application.status || 'pending';
+
       const { error } = await supabase
         .from('job_applications')
         .update({
@@ -408,7 +435,8 @@ export const CandidateQuickViewModal = ({
           interviewer_name: interviewerName || null,
           interviewer_email: interviewerEmail || null,
           interview_notes: interviewNotes || null,
-          interview_status: newInterviewStatus
+          interview_status: newInterviewStatus,
+          status: newStatus
         })
         .eq('id', application.id);
 
@@ -422,8 +450,8 @@ export const CandidateQuickViewModal = ({
         description: "Interview schedule updated successfully.",
       });
 
-      // Refresh application data
-      onStatusUpdate(application.id, application.status || 'pending');
+      // Refresh application data so table and modal show Scheduled
+      onStatusUpdate(application.id, newStatus);
       
       // Call callback to refresh application in parent component
       // This will update the selectedApplication with fresh data
@@ -504,6 +532,13 @@ Interview Details:`;
       }
     }
 
+    if (application.interview_notes?.trim()) {
+      emailBody += `
+
+Additional Notes:
+${application.interview_notes.trim()}`;
+    }
+
     // Add profile completion link if available
     if (profileLink) {
       emailBody += `
@@ -526,6 +561,7 @@ Please reply to confirm your availability`;
     const mailtoUrl = `mailto:${application.applicant_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     
     window.open(mailtoUrl, '_blank');
+    handleStatusChange('contacted');
   };
 
   const handleSendWhatsApp = () => {
@@ -599,6 +635,13 @@ ${profileLink}`;
       }
     }
 
+    if (application.interview_notes?.trim()) {
+      message += `
+
+*Additional Notes:*
+${application.interview_notes.trim()}`;
+    }
+
     message += `
 
 Best regards,
@@ -610,6 +653,7 @@ Please reply to confirm your availability`;
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     
     window.open(whatsappUrl, '_blank');
+    handleStatusChange('contacted');
 
     console.log('🔍 Using recruitment token:', application.recruitment_token);
     console.log('🔗 Profile link used:', profileLink);
@@ -638,6 +682,11 @@ Please reply to confirm your availability`;
   const skills = parseSkills(application.skills);
   const age = application.birth_date ? calculateAge(application.birth_date) : null;
   const positionApplied = application.job_openings?.job_title || 'Position Applied';
+  const scheduleSaved = Boolean(
+    application.interview_date?.trim() &&
+    application.interview_time?.trim() &&
+    application.interview_location?.trim()
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -673,6 +722,7 @@ Please reply to confirm your availability`;
                 variant="outline"
                 size="sm"
                 onClick={handleSendEmail}
+                disabled={loading || !scheduleSaved}
                 className="text-blue-600 border-blue-600 hover:bg-blue-50"
               >
                 <Mail className="h-4 w-4 mr-1" />
@@ -682,6 +732,7 @@ Please reply to confirm your availability`;
                 variant="outline"
                 size="sm"
                 onClick={handleSendWhatsApp}
+                disabled={loading || !scheduleSaved}
                 className="text-green-600 border-green-600 hover:bg-green-50"
               >
                 <Send className="h-4 w-4 mr-1" />
@@ -812,30 +863,10 @@ Please reply to confirm your availability`;
                   </div>
                   <div>
                     <label className="text-sm text-gray-500 mb-1 block">Status</label>
-                    {['scheduled','completed'].includes(application.interview_status || '') ? (
-                      <div>
-                        <Select disabled>
-                          <SelectTrigger className="h-8">
-                            <SelectValue placeholder={application.interview_status === 'scheduled' ? 'Scheduled' : 'Completed'} />
-                          </SelectTrigger>
-                        </Select>
-                        <p className="text-xs text-gray-500 mt-1">Auto-updated by Interview Status</p>
-                      </div>
-                    ) : (
-                      <Select value={application.status} onValueChange={handleStatusChange} disabled={loading}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="reviewed">Reviewed</SelectItem>
-                          <SelectItem value="shortlisted">Shortlisted</SelectItem>
-                          <SelectItem value="contacted">Contacted</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                          <SelectItem value="hired">Hired</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Badge variant="secondary">
+                      {((application.status || 'pending').replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()))}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">Updated by actions in this modal</p>
                   </div>
                 </div>
               </CardContent>
@@ -995,34 +1026,6 @@ Please reply to confirm your availability`;
                   />
                 </div>
 
-                {/* Interview Status (Automatic) */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Interview Status (Automatic)</Label>
-                  <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge 
-                        variant="secondary" 
-                        className={`${
-                          application.interview_status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : application.interview_status === 'scheduled' || interviewDate
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {application.interview_status === 'completed'
-                          ? 'Completed'
-                          : application.interview_status === 'scheduled' || interviewDate
-                          ? 'Scheduled'
-                          : 'Not Scheduled'}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Status automatically updates: 'Scheduled' when date is set, 'Completed' when candidate submits profile.
-                    </p>
-                  </div>
-                </div>
-
                 {/* Additional Interview Notes */}
                 <div className="space-y-2">
                   <Label htmlFor="interview-notes" className="text-sm font-medium">
@@ -1041,7 +1044,12 @@ Please reply to confirm your availability`;
                 {/* Update Button */}
                 <Button
                   onClick={handleUpdateInterviewSchedule}
-                  disabled={savingInterview}
+                  disabled={
+                    savingInterview ||
+                    !interviewDate?.trim() ||
+                    !interviewTime?.trim() ||
+                    !interviewLocation?.trim()
+                  }
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
                   {savingInterview ? (

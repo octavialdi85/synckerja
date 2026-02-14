@@ -12,7 +12,7 @@ import { Label } from '@/features/ui/label';
 import { Plus, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { useToast } from '@/features/1-login/hooks/use-toast';
+import { useToast } from '@/features/ui/use-toast';
 
 interface ModalAddSubStepProps {
   open: boolean;

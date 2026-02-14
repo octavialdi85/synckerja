@@ -1,7 +1,7 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/features/1-login/contexts/AuthContext";
+import { logger } from "@/config/logger";
 
 interface Profile {
   id: string;
@@ -62,17 +62,13 @@ export const useUserData = (): UserData => {
   const fetchUserData = useCallback(async (userId: string) => {
     // Prevent duplicate fetches for the same user
     if (fetchingRef.current) {
-      if (import.meta.env?.DEV) {
-        console.log('🚫 Preventing duplicate fetch for user:', userId);
-      }
+      logger.debug('Preventing duplicate fetch for user:', userId);
       return;
     }
 
     // Check if we already have this user in progress and have data
     if (lastFetchRef.current === userId && profile !== null) {
-      if (import.meta.env?.DEV) {
-        console.log('📋 Using existing fetch for user:', userId);
-      }
+      logger.debug('Using existing fetch for user:', userId);
       return;
     }
 
@@ -92,10 +88,8 @@ export const useUserData = (): UserData => {
       lastFetchRef.current = userId;
       setLoading(true);
       
-      if (import.meta.env?.DEV) {
-        console.log("🔍 useUserData: Starting optimized fetch for user:", userId);
-      }
-      
+      logger.debug('useUserData: Starting optimized fetch for user:', userId);
+
       // Parallel fetch of profile and role data
       const [profileResult, roleResult] = await Promise.all([
         supabase
@@ -109,9 +103,7 @@ export const useUserData = (): UserData => {
       let profileData = profileResult.data;
       
       if (profileResult.error) {
-        if (import.meta.env?.DEV) {
-          console.error("❌ useUserData: Profile error:", profileResult.error);
-        }
+        logger.error('useUserData: Profile error:', profileResult.error);
         // Create fallback profile from auth data with all required fields
         profileData = {
           id: userId,
@@ -124,8 +116,8 @@ export const useUserData = (): UserData => {
           // email_verified field moved to email_verification_tokens table
           organization_created: false
         };
-      } else if (import.meta.env?.DEV) {
-        console.log("✅ useUserData: Profile fetched:", profileData);
+      } else {
+        logger.debug('useUserData: Profile fetched:', profileData);
       }
 
       setProfile(profileData);
@@ -133,11 +125,9 @@ export const useUserData = (): UserData => {
       // Get role data
       const roleData = roleResult.error ? null : roleResult.data as UserRole;
       if (roleResult.error) {
-        if (import.meta.env?.DEV) {
-          console.error("❌ useUserData: Role fetch error:", roleResult.error);
-        }
-      } else if (import.meta.env?.DEV) {
-        console.log("✅ useUserData: Role in active org:", roleData);
+        logger.error('useUserData: Role fetch error:', roleResult.error);
+      } else {
+        logger.debug('useUserData: Role in active org:', roleData);
       }
       setUserRole(roleData);
 
@@ -151,11 +141,9 @@ export const useUserData = (): UserData => {
           .single();
 
         if (orgError) {
-          if (import.meta.env?.DEV) {
-            console.error("❌ useUserData: Organization error:", orgError);
-          }
-        } else if (import.meta.env?.DEV) {
-          console.log("✅ useUserData: Organization fetched:", organizationData);
+          logger.error('useUserData: Organization error:', orgError);
+        } else {
+          logger.debug('useUserData: Organization fetched:', organizationData);
         }
         orgData = organizationData;
       }
@@ -176,10 +164,8 @@ export const useUserData = (): UserData => {
       cleanupCache();
 
     } catch (error) {
-      if (import.meta.env?.DEV) {
-        console.error("❌ useUserData: Unexpected error:", error);
-      }
-      
+      logger.error('useUserData: Unexpected error:', error);
+
       // Even on error, create a basic profile from auth data with all required fields
       const fallbackProfile = {
         id: userId,
@@ -214,9 +200,7 @@ export const useUserData = (): UserData => {
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
-      if (import.meta.env?.DEV) {
-        console.log('🔄 Manual refresh of user data triggered');
-      }
+      logger.debug('Manual refresh of user data triggered');
       lastFetchRef.current = ''; // Reset to allow refetch
       invalidateCache(user.id); // Use cache invalidation utility
       fetchingRef.current = false; // Reset fetching flag

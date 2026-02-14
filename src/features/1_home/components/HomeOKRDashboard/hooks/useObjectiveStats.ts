@@ -46,7 +46,7 @@ export const useObjectiveStats = (
       const { data: objectives, error } = await query;
 
       if (error) {
-        console.error(`❌ [${type}] Error fetching objectives:`, error);
+        logger.error(`[${type}] Error fetching objectives:`, error);
         return { avgProgress: 0, totalObjectives: 0, nextDeadline: 'N/A', active: 0, draft: 0, completed: 0 };
       }
 
@@ -81,7 +81,7 @@ export const useObjectiveStats = (
           .in('individual_objective_id', objectiveIds);
 
         if (krError) {
-          console.error('Error fetching key results for individual objectives:', krError);
+          logger.error('Error fetching key results for individual objectives:', krError);
           // Fallback to using progress_percentage from objectives
           const avgProgress = objectives.reduce((sum, obj) => sum + (obj.progress_percentage || 0), 0) / totalObjectives;
           return {
@@ -168,7 +168,7 @@ export const useObjectiveStats = (
         });
 
         if (deptError) {
-          console.error('❌ [company] Error fetching department objectives for company objectives:', deptError);
+          logger.error('[company] Error fetching department objectives for company objectives:', deptError);
           // Fallback to using progress_percentage from objectives
           const avgProgress = objectives.reduce((sum, obj) => sum + (obj.progress_percentage || 0), 0) / totalObjectives;
           

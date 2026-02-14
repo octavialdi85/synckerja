@@ -123,7 +123,7 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
       // Step Title Click: search dengan stepTitle, tampilkan hanya step spesifik
       setFilters(prev => ({
         ...prev,
-        search: assignment.stepTitle
+        search: assignment.stepTitle ?? ''
       }));
       
       // Query stepId untuk scroll ke step spesifik

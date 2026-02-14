@@ -9,12 +9,23 @@ import { InformalEducationTab } from './InformalEducationTab';
 import { WorkExperienceTab } from './WorkExperienceTab';
 import { FamilyMembersTab } from './FamilyMembersTab';
 import { CandidateReviewsTab } from './CandidateReviewsTab';
-import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2, CheckCircle } from 'lucide-react';
+import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2, CheckCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 // Layout constants - COMPACT VERSION
 const LAYOUT_CONSTANTS = {
@@ -64,7 +75,10 @@ export const CandidateProfileTabs = ({
   const [activeTab, setActiveTab] = useState('personal');
   const [stepValidations, setStepValidations] = useState<Record<string, boolean>>({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { t } = useAppTranslation();
   
   // Use ref to store onStepValidation callback to prevent infinite loops
   const onStepValidationRef = useRef(onStepValidation);
@@ -72,12 +86,12 @@ export const CandidateProfileTabs = ({
     onStepValidationRef.current = onStepValidation;
   }, [onStepValidation]);
 
-  // Memoize tabs array to prevent recreation on every render
+  // Memoize tabs array to prevent recreation on every render (labels use i18n from settings)
   const tabs = useMemo(() => {
     const baseTabs = [
       {
         id: 'personal',
-        label: 'Personal Info',
+        label: t('candidateProfile.tabs.personal', 'Personal Info'),
         icon: User,
         component: PersonalDetailsTab,
         stepNumber: 1,
@@ -85,7 +99,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'address',
-        label: 'Address',
+        label: t('candidateProfile.tabs.address', 'Address'),
         icon: MapPin,
         component: AddressApplicationTab,
         stepNumber: 2,
@@ -93,7 +107,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'documents',
-        label: 'Documents',
+        label: t('candidateProfile.tabs.documents', 'Documents'),
         icon: FileText,
         component: DocumentsTabNew,
         stepNumber: 3,
@@ -101,7 +115,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'education',
-        label: 'Education',
+        label: t('candidateProfile.tabs.education', 'Education'),
         icon: GraduationCap,
         component: EducationTab,
         stepNumber: 4,
@@ -109,7 +123,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'informal-education',
-        label: 'Informal Education',
+        label: t('candidateProfile.tabs.informalEducation', 'Informal Education'),
         icon: Award,
         component: InformalEducationTab,
         stepNumber: 5,
@@ -117,7 +131,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'experience',
-        label: 'Experience',
+        label: t('candidateProfile.tabs.experience', 'Experience'),
         icon: Briefcase,
         component: WorkExperienceTab,
         stepNumber: 6,
@@ -125,7 +139,7 @@ export const CandidateProfileTabs = ({
       },
       {
         id: 'family',
-        label: 'Family',
+        label: t('candidateProfile.tabs.family', 'Family'),
         icon: Users,
         component: FamilyMembersTab,
         stepNumber: 7,
@@ -137,7 +151,7 @@ export const CandidateProfileTabs = ({
     if (!hideReviews) {
       baseTabs.push({
         id: 'reviews',
-        label: 'Reviews',
+        label: t('candidateProfile.tabs.reviews', 'Reviews'),
         icon: Star,
         component: CandidateReviewsTab,
         stepNumber: 8,
@@ -146,7 +160,7 @@ export const CandidateProfileTabs = ({
     }
 
     return baseTabs;
-  }, [hideReviews]);
+  }, [hideReviews, t]);
 
   // State for education, experience, and family validation
   const [hasEducation, setHasEducation] = useState(false);
@@ -257,27 +271,46 @@ export const CandidateProfileTabs = ({
     }
   }, [currentStepIndex, tabs]);
 
-  // Handle final submit
+  // Handle final submit (called after user confirms in dialog)
   const handleSubmit = useCallback(async () => {
     if (!candidate?.id) return;
-    
+    setIsSubmitting(true);
     try {
       const { error } = await supabase.from('candidate_profiles').update({
         profile_completed: true,
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }).eq('id', candidate.id);
-      
+
       if (error) throw error;
-      
+
+      const tokenFromUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token')?.trim() : '';
+      const recruitmentToken = candidate.recruitment_token?.trim() || tokenFromUrl;
+      if (recruitmentToken) {
+        const { error: appError } = await supabase
+          .from('job_applications')
+          .update({ status: 'confirmed' })
+          .eq('recruitment_token', recruitmentToken);
+        if (appError) {
+          console.error('Error updating job_applications status to confirmed:', appError);
+          toast({
+            title: "Peringatan",
+            description: "Profil tersimpan, tetapi status lamaran tidak terupdate. Silakan hubungi HR.",
+            variant: "destructive"
+          });
+        }
+      }
+
       onUpdate({
         ...candidate,
         profile_completed: true,
         submitted_at: new Date().toISOString()
       });
-      
-      setShowSuccessModal(true);
-      
+
+      setShowConfirmDialog(false);
+      if (!onFinalSubmit) {
+        setShowSuccessModal(true);
+      }
       if (onFinalSubmit) {
         onFinalSubmit();
       }
@@ -288,6 +321,8 @@ export const CandidateProfileTabs = ({
         description: "Gagal submit profile. Silakan coba lagi.",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   }, [candidate, toast, onFinalSubmit, onUpdate]);
 
@@ -655,18 +690,18 @@ export const CandidateProfileTabs = ({
                                 }}
                                 className="flex items-center gap-2"
                               >
-                                Previous
+                                {t('candidateProfile.buttons.previous', 'Previous')}
                               </Button>
                             )}
                           </div>
                           
                           <div className="flex items-center gap-2">
                             <Button
-                              onClick={handleSubmit}
-                              disabled={!isCurrentStepValid}
+                              onClick={() => setShowConfirmDialog(true)}
+                              disabled={!isCurrentStepValid || isSubmitting}
                               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              Submit Profile
+                              {t('candidateProfile.buttons.submitProfile', 'Submit Profile')}
                               <CheckCircle2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -683,7 +718,7 @@ export const CandidateProfileTabs = ({
                                 }}
                                 className="flex items-center gap-2"
                               >
-                                Previous
+                                {t('candidateProfile.buttons.previous', 'Previous')}
                               </Button>
                             )}
                           </div>
@@ -694,7 +729,7 @@ export const CandidateProfileTabs = ({
                               disabled={!isCurrentStepValid}
                               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              Next
+                              {t('candidateProfile.buttons.next', 'Next')}
                               <ChevronRight className="h-4 w-4" />
                             </Button>
                           </div>
@@ -710,18 +745,51 @@ export const CandidateProfileTabs = ({
       </Tabs>
     </div>
 
+    <AlertDialog open={showConfirmDialog} onOpenChange={(open) => !isSubmitting && setShowConfirmDialog(open)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('candidateProfile.submitConfirm.title', 'Yakin kirim profil?')}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t('candidateProfile.submitConfirm.description', 'Pastikan semua data (informasi pribadi, alamat, dokumen, pendidikan, pengalaman, keluarga) sudah benar. Setelah submit, data tidak dapat diubah lagi.')}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isSubmitting}>
+            {t('candidateProfile.submitConfirm.reviewAgain', 'Periksa lagi')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              void handleSubmit();
+            }}
+            disabled={isSubmitting}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('candidateProfile.submitConfirm.submitting', 'Mengirim...')}
+              </>
+            ) : (
+              t('candidateProfile.submitConfirm.yesSubmit', 'Ya, submit')
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
       <DialogContent className="sm:max-w-md">
         <div className="text-center py-4">
           <CheckCircle className="h-14 w-14 text-green-500 mx-auto mb-3" />
           <DialogTitle className="text-xl font-semibold text-gray-900 mb-2">
-            Congratulations!
+            {t('candidateProfile.successModal.title', 'Congratulations!')}
           </DialogTitle>
           <p className="text-gray-600 text-sm mb-6">
-            Your profile has been submitted successfully.
+            {t('candidateProfile.successModal.message', 'Your profile has been submitted successfully.')}
           </p>
           <Button onClick={() => setShowSuccessModal(false)} className="min-w-[120px]">
-            OK
+            {t('candidateProfile.buttons.ok', 'OK')}
           </Button>
         </div>
       </DialogContent>

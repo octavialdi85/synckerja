@@ -8,7 +8,9 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useWhatsAppConfig } from '../hooks/useWhatsAppConfig';
 import { useInstagramAccounts, type InstagramAccountFromApi } from '../hooks/useInstagramAccounts';
 import { WebhookInfoDisplay } from '../components/connect/WebhookInfoDisplay';
-import { Instagram, CheckCircle2, Unplug, Loader2, Facebook } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import { Instagram, CheckCircle2, Unplug, Loader2, Facebook, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 const META_OAUTH_SCOPE = 'pages_show_list,pages_read_engagement,instagram_manage_messages,instagram_basic,business_management';
@@ -224,7 +226,7 @@ export function InstagramConnectPage() {
                             </div>
                             <div>
                               <h2 className="text-xl font-bold text-[#E4405F]">{t('instagramConnect.leftTitle', 'Connect Instagram')}</h2>
-                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescription', 'Use Connect with Facebook only to authorize, or use token from Connect WhatsApp.')}</p>
+                              <p className="text-sm text-gray-500">{t('instagramConnect.leftDescriptionShort', 'OAuth via Facebook atau token dari Connect WhatsApp.')}</p>
                             </div>
                           </div>
                         </CardHeader>
@@ -245,35 +247,56 @@ export function InstagramConnectPage() {
                                     {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
                                     {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
                                   </Button>
-                                  <p className="text-xs text-gray-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                                    {t('instagramConnect.connectFacebookOnlyHintShort', 'Login via Facebook only.')}
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex text-slate-400 hover:text-slate-600 cursor-help" aria-label="Info">
+                                          <Info className="w-3.5 h-3.5 shrink-0" />
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-xs">
+                                        <p>{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </p>
                                   {redirectUri && (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2">
-                                      <p className="font-medium mb-1">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="font-medium">{t('instagramConnect.redirectUriLabel', 'Redirect URI (add in Meta Developer):')}</p>
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <span className="inline-flex text-slate-400 hover:text-slate-600 cursor-help" aria-label="Troubleshooting">
+                                              <Info className="w-3.5 h-3.5 shrink-0" />
+                                            </span>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="start" className="w-80 max-w-[90vw] text-xs text-left space-y-2">
+                                            <p className="font-medium text-amber-800">{t('instagramConnect.invalidRedirectTitle', 'If you see "Invalid redirect URI" on instagram.com:')}</p>
+                                            <ul className="list-disc list-inside space-y-0.5 text-slate-700">
+                                              <li>{t('instagramConnect.invalidRedirectStep1', 'Open the Instagram app (e.g. Vialdi ID-IG), not the Facebook app.')}</li>
+                                              <li>{t('instagramConnect.invalidRedirectStep2', 'Go to: Instagram → API setup with Instagram business login → Business login settings.')}</li>
+                                              <li>{t('instagramConnect.invalidRedirectStep3', 'In OAuth redirect URIs add exactly the URL above (no space, no trailing slash). Save.')}</li>
+                                              <li>{t('instagramConnect.invalidRedirectStep4', 'Also add the same URL in the Facebook app: Use cases → Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs.')}</li>
+                                              <li>{t('instagramConnect.invalidRedirectStep5', 'In the Facebook app: Business login → Configurations → Edit your configuration (e.g. Vialdi ID) → if there is a Redirect URI / OAuth redirect URIs field, add the same URL there and Save.')}</li>
+                                            </ul>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </div>
                                       <p className="font-mono text-[11px] break-all select-all bg-white px-1 py-0.5 rounded">{redirectUri}</p>
                                       {metaOAuthConfigId ? (
                                         <p className="text-green-700">{t('instagramConnect.configIdInUse', 'Using Configuration ID:')} <span className="font-mono">{metaOAuthConfigId}</span></p>
                                       ) : (
                                         <p className="text-amber-700">{t('instagramConnect.configIdRequired', 'Set VITE_META_OAUTH_CONFIG_ID to your Configuration ID (e.g. 757396134100532) so Meta uses the correct redirect URI.')}</p>
                                       )}
-                                      <div className="rounded border border-amber-200 bg-amber-50/60 p-2 text-amber-800 space-y-2">
-                                        <p className="font-medium mb-1">{t('instagramConnect.invalidRedirectTitle', 'If you see "Invalid redirect URI" on instagram.com:')}</p>
-                                        <ul className="list-disc list-inside space-y-0.5">
-                                          <li>{t('instagramConnect.invalidRedirectStep1', 'Open the Instagram app (e.g. Vialdi ID-IG), not the Facebook app.')}</li>
-                                          <li>{t('instagramConnect.invalidRedirectStep2', 'Go to: Instagram → API setup with Instagram business login → Business login settings.')}</li>
-                                          <li>{t('instagramConnect.invalidRedirectStep3', 'In OAuth redirect URIs add exactly the URL above (no space, no trailing slash). Save.')}</li>
-                                          <li>{t('instagramConnect.invalidRedirectStep4', 'Also add the same URL in the Facebook app: Use cases → Facebook Login for Business → Client OAuth → Valid OAuth Redirect URIs.')}</li>
-                                          <li>{t('instagramConnect.invalidRedirectStep5', 'In the Facebook app: Business login → Configurations → Edit your configuration (e.g. Vialdi ID) → if there is a Redirect URI / OAuth redirect URIs field, add the same URL there and Save.')}</li>
-                                        </ul>
-                                      </div>
                                     </div>
                                   )}
                                 </>
                               )}
-                              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800">
+                              <p className="text-xs text-amber-700">
                                 {hasOAuth
-                                  ? t('instagramConnect.noMetaConfigOrOAuth', 'Or open Connect WhatsApp first to use a manual token.')
-                                  : t('instagramConnect.noMetaConfig', 'Open Connect WhatsApp first so the Meta token is available, or set VITE_META_APP_ID for OAuth.')}
-                              </div>
+                                  ? t('instagramConnect.noMetaConfigOrOAuthShort', 'Atau gunakan token dari Connect WhatsApp.')
+                                  : t('instagramConnect.noMetaConfigShort', 'Connect WhatsApp dulu atau set VITE_META_APP_ID.')}
+                              </p>
                             </div>
                           ) : (
                             hasOAuth && (
@@ -290,7 +313,19 @@ export function InstagramConnectPage() {
                                   {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Facebook className="w-4 h-4 mr-2" />}
                                   {oauthLoading ? t('instagramConnect.oauthConnecting', 'Connecting…') : t('instagramConnect.connectWithFacebookOnly', 'Connect with Facebook only')}
                                 </Button>
-                                <p className="text-xs text-slate-500">{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                <p className="text-xs text-slate-500 flex items-center gap-1">
+                                  {t('instagramConnect.connectFacebookOnlyHintShort', 'Login via Facebook only.')}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex text-slate-400 hover:text-slate-600 cursor-help" aria-label="Info">
+                                        <Info className="w-3.5 h-3.5 shrink-0" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="max-w-xs">
+                                      <p>{t('instagramConnect.connectFacebookOnlyHint', 'Login only on Facebook, no Instagram step. Use if you get "Invalid redirect URI" on instagram.com.')}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </p>
                               </div>
                             )
                           )}

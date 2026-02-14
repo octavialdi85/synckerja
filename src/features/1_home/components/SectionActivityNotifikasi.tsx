@@ -17,6 +17,7 @@ import { ModalViewSubSteps } from '@/features/8-2-DailyTask/section/ModalViewSub
 import { supabase } from '@/integrations/supabase/client';
 import { id as indonesianLocale } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { logger } from '@/config/logger';
 
 const timeframeOptions: { value: JobDescTimeframe; translationKey: string }[] = [
   { value: "daily", translationKey: "dailyTask.jobDesc.filters.daily" },
@@ -101,7 +102,7 @@ export const SectionActivityNotifikasi = ({ standalone }: SectionActivityNotifik
       setStepIdCache(prev => new Map(prev).set(assignmentId, stepId));
       return stepId;
     } catch (error) {
-      console.error('Error fetching stepId:', error);
+      logger.error('Error fetching stepId:', error);
       return null;
     }
   }, [stepIdCache]);
@@ -131,7 +132,7 @@ export const SectionActivityNotifikasi = ({ standalone }: SectionActivityNotifik
       }
       return null;
     } catch (error) {
-      console.error('Error fetching parentStepId:', error);
+      logger.error('Error fetching parentStepId:', error);
       return null;
     }
   }, [parentStepIdCache]);

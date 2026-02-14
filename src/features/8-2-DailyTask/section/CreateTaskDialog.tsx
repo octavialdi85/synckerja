@@ -35,6 +35,7 @@ import { ObjectiveHierarchyDialog as MobileObjectiveHierarchyDialog } from '@/mo
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MonthPicker } from '@/features/share/calendar';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useToast } from '@/features/ui/use-toast';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { startOfMonth } from 'date-fns';
@@ -72,6 +73,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 }) => {
   const { t } = useAppTranslation();
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   const { addTask } = useDailyTask();
   const { data: employees = [] } = useAvailableEmployees();
   const { data: currentEmployee } = useCurrentEmployee();
@@ -262,6 +264,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       onOpenChange(false);
     } catch (error) {
       console.error('Error adding task:', error);
+      toast({ title: 'Error', description: 'Failed to add task', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }

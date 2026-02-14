@@ -28,7 +28,6 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
     dateRange: null
   });
   const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads();
-  console.log('🔍 ConsultantsTableViewContent - leads:', leads.length, 'loading:', loading);
 
   const handleNewLeadClick = () => {
     setIsCreateDialogOpen(true);
@@ -110,7 +109,6 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
 
   // Filter leads based on selected filters
   const filteredLeads = useMemo(() => {
-    console.log('🔍 Filtering leads - total:', leads.length, 'filters:', filters);
     const filtered = leads.filter(lead => {
       // Data completeness filter
       if (filters.dataCompleteness !== 'all') {
@@ -174,7 +172,6 @@ export const ConsultantsTableViewContent = ({}: ConsultantsTableViewContentProps
 
       return true;
     });
-    console.log('✅ Filtered leads result:', filtered.length, filtered);
     return filtered;
   }, [leads, filters, clientStatuses]);
 

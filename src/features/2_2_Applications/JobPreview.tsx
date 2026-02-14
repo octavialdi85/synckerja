@@ -312,6 +312,7 @@ const JobPreview = () => {
   const requirements = parseTextToList(job.requirements);
   const responsibilities = parseTextToList(job.responsibilities);
   const benefits = getBenefits();
+  const jobDescriptionItems = parseTextToList(job.job_description);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -330,13 +331,13 @@ const JobPreview = () => {
       </div>
 
       {/* Main Content with mobile-optimized spacing and sticky button padding */}
-      <div className={`max-w-7xl mx-auto ${isMobile ? 'px-2 py-2 pb-24' : 'px-2 sm:px-3 lg:px-4 py-6 lg:py-8'}`}>
+      <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4 py-4 pb-24' : 'px-2 sm:px-3 lg:px-4 py-6 lg:py-8'}`}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-2">
             {/* Job Header - Mobile Optimized */}
             <Card className="shadow-sm">
-              <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+              <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                 <div className="space-y-3">
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 leading-tight">
@@ -402,13 +403,23 @@ const JobPreview = () => {
               </CardContent>
             </Card>
 
-            {/* Job Description */}
+            {/* Job Description - parsed list so numbering is always 1, 2, 3... */}
             {job.job_description && (
               <Card className="shadow-sm">
-                <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+                <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">Job Description</h2>
                   <div className="prose prose-sm max-w-none text-gray-700">
-                    <p className="whitespace-pre-wrap leading-relaxed text-base">{job.job_description}</p>
+                    {jobDescriptionItems.length === 0 ? (
+                      <p className="whitespace-pre-wrap leading-relaxed text-base">{job.job_description}</p>
+                    ) : jobDescriptionItems.length === 1 ? (
+                      <p className="leading-relaxed text-base">{jobDescriptionItems[0]}</p>
+                    ) : (
+                      <ol className="list-decimal list-outside pl-5 sm:pl-6 space-y-2 text-base leading-relaxed">
+                        {jobDescriptionItems.map((item, index) => (
+                          <li key={index} className="pl-1">{item}</li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -417,12 +428,12 @@ const JobPreview = () => {
             {/* Requirements */}
             {requirements.length > 0 && (
               <Card className="shadow-sm">
-                <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+                <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">Requirements</h2>
                   <ol className="space-y-2 text-gray-700">
                     {requirements.map((requirement, index) => (
                       <li key={index} className="flex text-base">
-                        <span className="mr-2 font-medium flex-shrink-0">{index + 1}.</span>
+                        <span className="mr-2 flex-shrink-0">{index + 1}.</span>
                         <span>{requirement}</span>
                       </li>
                     ))}
@@ -434,12 +445,12 @@ const JobPreview = () => {
             {/* Responsibilities */}
             {responsibilities.length > 0 && (
               <Card className="shadow-sm">
-                <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+                <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">Responsibilities</h2>
                   <ol className="space-y-2 text-gray-700">
                     {responsibilities.map((responsibility, index) => (
                       <li key={index} className="flex text-base">
-                        <span className="mr-2 font-medium flex-shrink-0">{index + 1}.</span>
+                        <span className="mr-2 flex-shrink-0">{index + 1}.</span>
                         <span>{responsibility}</span>
                       </li>
                     ))}
@@ -451,7 +462,7 @@ const JobPreview = () => {
             {/* Dynamic Benefits Section */}
             {benefits.length > 0 && (
               <Card className="shadow-sm">
-                <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+                <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">Benefits</h2>
                   <div className="space-y-3">
                     {benefits.map((benefit, index) => (
@@ -475,7 +486,7 @@ const JobPreview = () => {
           <div className="space-y-2">
             {/* Company Info - Mobile optimized */}
             <Card className="shadow-sm">
-              <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+              <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                   <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <CompanyLogo companyName={company.company_name} />
@@ -511,7 +522,7 @@ const JobPreview = () => {
 
             {/* About Company Section */}
             <Card className="shadow-sm">
-              <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+              <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                 <h3 className="font-bold text-gray-900 text-base mb-3">About Company</h3>
                 <div className="space-y-3">
                   <div>
@@ -553,7 +564,7 @@ const JobPreview = () => {
 
             {/* Safety Reminder - Mobile adapted */}
             <Card className="bg-blue-50 border-blue-200 shadow-sm">
-              <CardContent className={isMobile ? "p-2" : "p-4 sm:p-6"}>
+              <CardContent className={isMobile ? "p-4" : "p-4 sm:p-6"}>
                 <div className="flex items-start space-x-3">
                   <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
                     <span className="text-white text-sm">✓</span>
@@ -579,7 +590,7 @@ const JobPreview = () => {
 
       {/* Sticky Action Buttons for Mobile */}
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 shadow-lg z-40">
           <div className="max-w-md mx-auto flex gap-2">
             <Button 
               className="bg-blue-600 hover:bg-blue-700 flex-1 h-12 text-base font-medium"

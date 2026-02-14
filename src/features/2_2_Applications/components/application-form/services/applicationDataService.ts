@@ -67,7 +67,9 @@ export const submitApplicationData = async (
 
     console.log('✅ Job application created successfully:', application);
 
-    // Now create or update candidate profile with the SAME token from job_applications
+    // Now create or update candidate profile with the SAME token from job_applications.
+    // profile_completed: false so this candidate does NOT appear in /recruitment/interviewees;
+    // only candidates who submit at /candidate/profile?token=... (after interview schedule) get profile_completed: true.
     const candidateData = {
       full_name: formData.applicantName,
       email: formData.applicantEmail,
@@ -80,6 +82,7 @@ export const submitApplicationData = async (
       expected_salary: formData.expectedSalary || null,
       employment_status: 'pending',
       status: 'submitted',
+      profile_completed: false,
       recruitment_token: recruitmentToken || null // Use the SAME token as job_applications
     };
 
@@ -100,6 +103,7 @@ export const submitApplicationData = async (
           .from('candidate_profiles')
           .update({
             ...candidateData,
+            profile_completed: false,
             updated_at: new Date().toISOString()
           })
           .eq('email', formData.applicantEmail)

@@ -9,7 +9,7 @@ export const HabitStats = () => {
   const totalHabits = habits.length;
   const activeHabits = habits.filter((h) => h.is_active).length;
   const totalCompletionRate = stats.length > 0
-    ? stats.reduce((sum, s) => sum + s.completion_rate, 0) / stats.length
+    ? stats.reduce((sum, s) => sum + (Number.isFinite(s.completion_rate) ? s.completion_rate : 0), 0) / stats.length
     : 0;
   const totalStreak = stats.reduce((sum, s) => sum + s.current_streak, 0);
 
