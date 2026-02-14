@@ -850,7 +850,7 @@ export const ObjectiveCheckinForm = ({
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="w-[70vmin] h-[70vmin] max-w-[70vmin] max-h-[70vmin] overflow-hidden flex flex-col">
+      <DialogContent className="w-[92vw] h-[90vh] max-w-[1400px] max-h-[900px] overflow-hidden flex flex-col p-6 pb-0">
         <DialogHeader className="shrink-0 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Target className="h-5 w-5 text-purple-600" />
@@ -1113,7 +1113,7 @@ export const ObjectiveCheckinForm = ({
         </Tabs>
 
         {/* Fixed Footer - always visible at bottom of modal */}
-        <footer className="flex-shrink-0 flex justify-between items-center py-4 px-6 border-t bg-gray-50/80 mt-auto">
+        <footer className="flex-shrink-0 flex justify-between items-center py-2 px-4 border-t bg-gray-50/80 mt-auto">
           <div className="text-sm text-muted-foreground">
             {hasUnsavedChanges && <span className="text-orange-600">You have unsaved changes</span>}
           </div>
