@@ -7,10 +7,29 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+function getNotificationSoundUrl(): string {
+  if (typeof window === 'undefined') return '/notification-bell.wav';
+  return `${window.location.origin}/notification-bell.wav`;
+}
+
+function playInboundSound(): void {
+  if (typeof document === 'undefined') return;
+  try {
+    if (navigator.vibrate) navigator.vibrate(200);
+    const url = getNotificationSoundUrl();
+    const audio = new Audio(url);
+    audio.volume = 1;
+    audio.play().catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
 function showInboundNotification(title: string, body: string) {
   if (typeof document === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
+    playInboundSound();
     const n = new Notification(title, {
       body,
       tag: 'livechat-inbound',

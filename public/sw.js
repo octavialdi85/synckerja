@@ -1,32 +1,27 @@
 /* Service worker for Live Chat Web Push. Handles push events and notification click. */
+var baseUrl = self.location.origin;
+
 self.addEventListener('push', function (event) {
   if (!event.data) return;
+  var options = {
+    body: 'Ada pesan masuk di Live Chat.',
+    data: { url: '/' },
+    tag: 'livechat-push',
+    renotify: true,
+    icon: baseUrl + '/favicon.svg',
+    badge: baseUrl + '/favicon.svg',
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+  };
   try {
-    const payload = event.data.json();
-    const title = payload.title || 'Pesan baru';
-    const body = payload.body || '';
-    const url = payload.url || '/';
-    event.waitUntil(
-      self.registration.showNotification(title, {
-        body: body,
-        data: { url: url },
-        tag: 'livechat-push',
-        renotify: true,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
-        vibrate: [200, 100, 200],
-      })
-    );
+    var payload = event.data.json();
+    options.body = payload.body || options.body;
+    options.data = { url: payload.url || '/' };
+    if (payload.title) options.title = payload.title;
+    event.waitUntil(self.registration.showNotification(payload.title || 'Pesan baru', options));
   } catch (e) {
-    event.waitUntil(
-      self.registration.showNotification('Pesan baru', {
-        body: 'Ada pesan masuk di Live Chat.',
-        data: { url: '/' },
-        tag: 'livechat-push',
-        icon: '/favicon.svg',
-        vibrate: [200, 100, 200],
-      })
-    );
+    options.title = 'Pesan baru';
+    event.waitUntil(self.registration.showNotification('Pesan baru', options));
   }
 });
 
