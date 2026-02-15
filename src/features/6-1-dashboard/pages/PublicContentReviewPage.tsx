@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { ArrowLeft, ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, Trash2, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -87,8 +87,13 @@ function usePublicReviewT() {
   );
 }
 
-const PublicContentReviewPage: React.FC = () => {
+interface PublicContentReviewPageProps {
+  showBackToHome?: boolean;
+}
+
+const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showBackToHome = false }) => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const t = usePublicReviewT();
   const [content, setContent] = useState<PublicReviewContent | null>(null);
   const [briefExtended, setBriefExtended] = useState<PublicReviewBriefExtended | null>(null);
@@ -459,9 +464,21 @@ const PublicContentReviewPage: React.FC = () => {
           return (
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y min-w-0">
               <div className="p-2 sm:p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <h1 className="font-semibold text-gray-900 truncate pr-2 text-sm sm:text-base">
-                  {content.title || t('publicReview.content.noTitle', 'Untitled')}
-                </h1>
+                <div className="flex items-center gap-2 min-w-0">
+                  {showBackToHome && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/')}
+                      className="flex-shrink-0 p-1 -m-1 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 touch-manipulation"
+                      aria-label="Back to home"
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                    </button>
+                  )}
+                  <h1 className="font-semibold text-gray-900 truncate pr-2 text-sm sm:text-base min-w-0">
+                    {content.title || t('publicReview.content.noTitle', 'Untitled')}
+                  </h1>
+                </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 mt-1.5 sm:mt-2 text-xs text-gray-600">
                   {content.service_name != null && content.service_name !== '' && (
                     <span className="flex items-center gap-1">
