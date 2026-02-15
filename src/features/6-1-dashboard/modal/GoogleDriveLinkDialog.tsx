@@ -14,6 +14,7 @@ import { devLog } from '@/config/logger';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { usePublicReviewToken } from '../hook/usePublicReviewToken';
+import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
 
 const getEmbedUrl = (url: string) => {
@@ -180,100 +181,10 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   productionApproved = false
 }) => {
   const [currentLink, setCurrentLink] = useState(googleDriveLink);
-  const [canShowApprovalButtons, setCanShowApprovalButtons] = useState(false);
+  const { canShowApprovalButtons } = useProdApprovalAccess(isOpen);
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { getOrCreate, isPending: isPublicLinkPending } = usePublicReviewToken();
-  
-  // Check approval access for prod_approved column based on configuration
-  const checkApprovalAccess = async () => {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-
-      // Get user's active organization
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('active_organization_id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError || !profile?.active_organization_id) {
-        console.error('Error fetching user profile:', profileError);
-        return false;
-      }
-
-      // Get user's role in the organization
-      const { data: userRole, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('organization_id', profile.active_organization_id)
-        .single();
-
-      if (roleError || !userRole) {
-        console.error('Error fetching user role:', roleError);
-        return false;
-      }
-
-      // Get user's employee record to check exceptions
-      const { data: employee, error: employeeError } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('organization_id', profile.active_organization_id)
-        .single();
-
-      if (employeeError || !employee) {
-        console.error('Error fetching employee:', employeeError);
-        return false;
-      }
-
-      // Get approval configuration for prod_approved column type
-      const { data: config, error: configError } = await supabase
-        .from('approval_access_configurations')
-        .select('*')
-        .eq('organization_id', profile.active_organization_id)
-        .eq('column_type', 'prod_approved')
-        .eq('is_active', true)
-        .single();
-
-      if (configError || !config) {
-        // If no configuration found, fall back to admin-only access
-        devLog.debug('No prod_approved configuration found, falling back to admin access');
-        return userRole.role === 'owner' || userRole.role === 'admin';
-      }
-
-      // Check if user's role is in the allowed roles
-      const hasRoleAccess = config.allowed_roles?.includes(userRole.role);
-      
-      // Check if user is in the exceptions list
-      const isException = config.exceptions?.includes(employee.id);
-
-      devLog.debug('🔐 Prod approval access check:', {
-        userRole: userRole.role,
-        employeeId: employee.id,
-        allowedRoles: config.allowed_roles,
-        exceptions: config.exceptions,
-        hasRoleAccess,
-        isException,
-        finalAccess: hasRoleAccess || isException
-      });
-
-      return hasRoleAccess || isException;
-    } catch (error) {
-      console.error('Error checking approval access:', error);
-      return false;
-    }
-  };
-
-  // Check approval access when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      checkApprovalAccess().then(setCanShowApprovalButtons).catch(() => setCanShowApprovalButtons(false));
-    }
-  }, [isOpen]);
 
   // Track previous link to only log on actual changes
   const prevLinkRef = useRef<string | undefined>(undefined);

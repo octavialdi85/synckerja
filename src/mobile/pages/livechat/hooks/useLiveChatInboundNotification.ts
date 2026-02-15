@@ -1,10 +1,10 @@
 /**
  * Global realtime subscription for inbound messages.
- * Shows a system notification when an inbound message arrives, so the user
- * gets notified even when on the conversation list or when the app is in background
- * (as long as the realtime connection is still active).
+ * - When app visible (mobile Live Chat): shows in-app toast (WhatsApp-style).
+ * - When app in background: shows system/browser notification.
  */
 import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 function getNotificationSoundUrl(): string {
@@ -41,6 +41,37 @@ function showInboundNotification(title: string, body: string) {
   }
 }
 
+type InboundTable = 'whatsapp_messages' | 'instagram_messages' | 'email_messages';
+
+function getChannelLabel(table: InboundTable): string {
+  if (table === 'whatsapp_messages') return 'WhatsApp';
+  if (table === 'instagram_messages') return 'Instagram';
+  return 'Email';
+}
+
+function getMessagePreview(row: Record<string, unknown>): string {
+  const body = (row.body as string) ?? (row.caption as string) ?? (row.text as string) ?? (row.snippet as string) ?? '';
+  const str = typeof body === 'string' ? body.trim() : '';
+  if (str.length <= 48) return str || 'Pesan baru';
+  return str.slice(0, 45) + '…';
+}
+
+/** Toast bergaya WhatsApp: compact, hijau, nama channel + preview pesan */
+function showInboundToast(channelLabel: string, messagePreview: string) {
+  playInboundSound();
+  toast(channelLabel, {
+    description: messagePreview,
+    duration: 4000,
+    position: 'top-center',
+    classNames: {
+      toast:
+        'border-l-4 border-l-[#25D366] bg-white text-gray-900 shadow-lg max-w-[min(320px,calc(100vw-24px))]',
+      description: 'text-gray-600',
+      title: 'font-semibold',
+    },
+  });
+}
+
 export function useLiveChatInboundNotification(currentConversationId: string | null) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -52,27 +83,24 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
       channelRef.current = null;
     }
 
-    const handleInbound = (payload: { new?: { conversation_id?: string; direction?: string } }) => {
-      const row = payload?.new;
+    const handleInbound = (table: InboundTable) => (payload: { new?: Record<string, unknown> }) => {
+      const row = payload?.new as { conversation_id?: string; direction?: string } | undefined;
       if (!row || row.direction !== 'inbound') return;
       const conversationId = row.conversation_id;
       if (!conversationId) return;
-      // Avoid duplicate: when user is viewing this conversation, ChatThread will show notification
       if (currentConversationId === conversationId) return;
 
-      const isHidden = document.visibilityState === 'hidden';
-      if (isHidden) {
+      const channelLabel = getChannelLabel(table);
+      const messagePreview = getMessagePreview((payload?.new ?? {}) as Record<string, unknown>);
+      // Toast in-app selalu ditampilkan (saat foreground maupun background — saat user kembali akan terlihat)
+      showInboundToast(channelLabel, messagePreview);
+      // Saat tab di background, tambahkan notifikasi sistem agar user bisa diingatkan
+      if (document.visibilityState === 'hidden') {
         showInboundNotification(
           'Pesan baru',
           'Ada pesan masuk di Live Chat. Buka aplikasi untuk melihat.'
         );
-        return;
       }
-      // User is visible but on list or another chat — still show so they notice
-      showInboundNotification(
-        'Pesan baru',
-        'Ada pesan masuk di Live Chat.'
-      );
     };
 
     channelRef.current = supabase
@@ -80,17 +108,17 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' },
-        handleInbound
+        handleInbound('whatsapp_messages')
       )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'instagram_messages' },
-        handleInbound
+        handleInbound('instagram_messages')
       )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'email_messages' },
-        handleInbound
+        handleInbound('email_messages')
       );
 
     channelRef.current.subscribe((status) => {

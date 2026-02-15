@@ -6,7 +6,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, RotateCcw, Trash2, User, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -14,6 +14,9 @@ import { defaultTranslations, applyVariables } from '@/features/share/i18n/trans
 import { devLog } from '@/config/logger';
 import { getEmbedUrl, getDirectVideoUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
 import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
+import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
+import { useAuth } from '@/features/1-login/contexts/AuthContext';
+import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 
 const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
 
@@ -110,7 +113,14 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
   const [actionLoading, setActionLoading] = useState(false);
   const [videoUseIframe, setVideoUseIframe] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const { canShowApprovalButtons } = useProdApprovalAccess(!!showBackToHome);
+  const { user } = useAuth();
+  const { data: profileData } = useUnifiedProfile();
+  const isLoggedIn = !!user;
+  const profileDisplayName = profileData?.fullName?.trim() ?? '';
 
   const loadContent = useCallback(async () => {
     if (!token) return;
@@ -181,21 +191,27 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
     };
   }, [token, loadContent, loadBriefExtended, loadComments]);
 
-  // Load commenter name from localStorage per token (popup won't show again for this token once set)
+  // Nama komentar: user login = dari profile aktif; guest = dari localStorage (atau nanti lewat popup)
   useEffect(() => {
     if (!token) return;
-    try {
-      const raw = localStorage.getItem(REVIEW_COMMENTER_STORAGE_KEY + token);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { displayName?: string };
-        if (parsed?.displayName?.trim()) {
-          setCommenterDisplayName(parsed.displayName.trim());
-        }
-      }
-    } catch {
-      // ignore invalid JSON
+    if (isLoggedIn && profileDisplayName) {
+      setCommenterDisplayName(profileDisplayName);
+      return;
     }
-  }, [token]);
+    if (!isLoggedIn) {
+      try {
+        const raw = localStorage.getItem(REVIEW_COMMENTER_STORAGE_KEY + token);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { displayName?: string };
+          if (parsed?.displayName?.trim()) {
+            setCommenterDisplayName(parsed.displayName.trim());
+          }
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+  }, [token, isLoggedIn, profileDisplayName]);
 
   // Reset video state when link changes
   useEffect(() => {
@@ -249,9 +265,15 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       toast.error(t('publicReview.toast.writeFirst', 'Please write a comment first'));
       return;
     }
-    if (!commenterDisplayName.trim()) {
-      setShowCommenterPopup(true);
-      setPopupNameInput('');
+    // User login: pakai nama dari profile aktif (popup tidak ditampilkan). Guest: wajib isi nama lewat popup.
+    const nameToUse = commenterDisplayName.trim() || (isLoggedIn ? profileDisplayName : '');
+    if (!nameToUse) {
+      if (isLoggedIn) {
+        toast.info(t('publicReview.toast.waitProfile', 'Loading your profile. Please try again in a moment.'));
+      } else {
+        setShowCommenterPopup(true);
+        setPopupNameInput('');
+      }
       return;
     }
     setSubmitting(true);
@@ -259,10 +281,11 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       const payload: Record<string, unknown> = {
         token_param: token,
         comment_text: text,
-        commenter_display_name: commenterDisplayName.trim(),
+        commenter_display_name: nameToUse,
       };
       const { error: rpcError } = await supabase.rpc('insert_public_review_comment', payload);
       if (rpcError) throw rpcError;
+      if (nameToUse && nameToUse !== commenterDisplayName.trim()) setCommenterDisplayName(nameToUse);
       toast.success(t('publicReview.toast.success', 'Comment sent'));
       setCommentText('');
       await loadComments();
@@ -311,6 +334,9 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
 
   const isOwnComment = (c: PublicReviewComment) =>
     !!commenterDisplayName.trim() && c.creator_display_name.trim().toLowerCase() === commenterDisplayName.trim().toLowerCase();
+
+  /** Request Revision hanya boleh setelah user saat ini (nama di kolom comment) sudah mengirim minimal satu komentar */
+  const hasCurrentUserCommented = comments.some(isOwnComment);
 
   const handleStartEdit = (c: PublicReviewComment) => {
     setEditingCommentId(c.id);
@@ -367,6 +393,120 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       setActionLoading(false);
     }
   };
+
+  const handleApprove = useCallback(async () => {
+    if (!canShowApprovalButtons) return;
+    const planId = content?.social_media_plan_id;
+    if (!planId) {
+      toast.error(t('publicReview.toast.planMissing', 'Plan ID is missing'));
+      return;
+    }
+    setApprovalLoading(true);
+    try {
+      const approvedDate = new Date().toISOString();
+      const { error } = await supabase
+        .from('social_media_plans')
+        .update({
+          production_status: 'Approved',
+          production_approved: true,
+          production_approved_date: approvedDate,
+        })
+        .eq('id', planId);
+      if (error) {
+        console.error('Error updating production status for approval:', error);
+        toast.error(t('publicReview.toast.approveFailed', 'Failed to approve production'));
+        return;
+      }
+      toast.success(t('publicReview.toast.approveSuccess', 'Production approved successfully'));
+    } catch (e) {
+      console.error('Error in handleApprove:', e);
+      toast.error(t('publicReview.toast.approveFailed', 'Failed to approve production'));
+    } finally {
+      setApprovalLoading(false);
+    }
+  }, [canShowApprovalButtons, content?.social_media_plan_id, t]);
+
+  const handleRevision = useCallback(async () => {
+    if (!canShowApprovalButtons) return;
+    const displayName = commenterDisplayName.trim();
+    const hasOwnComment =
+      !!displayName && comments.some((c) => c.creator_display_name.trim().toLowerCase() === displayName.toLowerCase());
+    if (!hasOwnComment) {
+      toast.error(
+        t(
+          'publicReview.toast.revisionNeedComment',
+          'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision'
+        )
+      );
+      return;
+    }
+    const planId = content?.social_media_plan_id;
+    if (!planId || !token) {
+      toast.error(t('publicReview.toast.planMissing', 'Plan ID is missing'));
+      return;
+    }
+    setApprovalLoading(true);
+    try {
+      // Verifikasi dari server: pastikan user saat ini (nama di kolom comment) punya minimal satu komentar
+      const { data: latestComments } = await supabase.rpc('get_public_review_comments', {
+        token_param: token,
+      });
+      const commentList = Array.isArray(latestComments) ? (latestComments as { creator_display_name?: string }[]) : [];
+      const hasCurrentUserComment = commentList.some(
+        (c) => (c.creator_display_name ?? '').trim().toLowerCase() === displayName.toLowerCase()
+      );
+      if (!hasCurrentUserComment) {
+        toast.error(
+          t(
+            'publicReview.toast.revisionNeedComment',
+            'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision'
+          )
+        );
+        setApprovalLoading(false);
+        return;
+      }
+      const { data: currentPlan, error: fetchError } = await supabase
+        .from('social_media_plans')
+        .select('production_revision_count, production_status')
+        .eq('id', planId)
+        .single();
+      if (fetchError) {
+        console.error('Error fetching current plan:', fetchError);
+        toast.error(t('publicReview.toast.fetchFailed', 'Failed to fetch current data'));
+        return;
+      }
+      const shouldIncrement = currentPlan.production_status !== 'Request Revision';
+      const newProductionRevisionCount = shouldIncrement
+        ? (currentPlan.production_revision_count || 0) + 1
+        : (currentPlan.production_revision_count || 0);
+      const updateData: Record<string, unknown> = {
+        production_status: 'Request Revision',
+        production_completion_date: null,
+        production_approved: false,
+        production_approved_date: null,
+      };
+      if (shouldIncrement) {
+        updateData.production_revision_count = newProductionRevisionCount;
+      }
+      const { error } = await supabase
+        .from('social_media_plans')
+        .update(updateData)
+        .eq('id', planId)
+        .select('production_status')
+        .single();
+      if (error) {
+        console.error('Error updating production status for revision:', error);
+        toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
+        return;
+      }
+      toast.success(t('publicReview.toast.revisionSuccess', 'Production status updated to Request Revision'));
+    } catch (e) {
+      console.error('Error in handleRevision:', e);
+      toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
+    } finally {
+      setApprovalLoading(false);
+    }
+  }, [canShowApprovalButtons, commenterDisplayName, comments, content?.social_media_plan_id, token, t]);
 
   const link = content?.google_drive_link ?? content?.link_url ?? '';
   const embedUrl = getEmbedUrl(link);
@@ -626,19 +766,20 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 const accent = getCommentAccent(c.id);
                 return (
                   <div key={c.id} className="w-full">
-                    <div className={cn('rounded-lg border border-gray-200/80 px-2 py-2 sm:px-3 w-full max-w-full border-l-4 min-w-0', accent.border, accent.bg)}>
-                      <div className="flex items-center justify-between gap-2 text-xs text-gray-600 mb-1 flex-wrap">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="font-medium text-gray-800 truncate">{c.creator_display_name}</span>
-                          <span className="text-gray-500 shrink-0 whitespace-nowrap">{c.created_at ? format(new Date(c.created_at), 'dd MMM yyyy, HH:mm') : ''}</span>
+                    <div className={cn('relative rounded-lg border border-gray-200/80 px-2 py-2 sm:px-3 w-full max-w-full border-l-4 min-w-0', accent.border, accent.bg)}>
+                      {/* Nama & tanggal kiri-atas; ikon edit & delete menempel di sudut kanan-atas */}
+                      <div className="flex items-start text-xs text-gray-600 mb-1 pr-0">
+                        <div className="min-w-0 flex-1 pr-16">
+                          <span className="font-medium text-gray-800 truncate block">{c.creator_display_name}</span>
+                          <span className="text-gray-500 whitespace-nowrap">{c.created_at ? format(new Date(c.created_at), 'dd MMM yyyy, HH:mm') : ''}</span>
                         </div>
                         {own && !isEditing && (
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="absolute top-0 right-0 flex items-center gap-0 flex-shrink-0 mt-0.5 mr-0.5 sm:mt-1 sm:mr-1">
                             <button
                               type="button"
                               onClick={() => handleStartEdit(c)}
                               disabled={actionLoading}
-                              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-200 touch-manipulation"
+                              className="min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-200 touch-manipulation"
                               aria-label={t('publicReview.comments.edit', 'Edit')}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -647,7 +788,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                               type="button"
                               onClick={() => handleDeleteComment(c)}
                               disabled={actionLoading}
-                              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 touch-manipulation"
+                              className="min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 touch-manipulation"
                               aria-label={t('publicReview.comments.delete', 'Delete')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -682,23 +823,52 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
             )}
           </div>
           <div className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3">
-            <Textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder={t('publicReview.comments.placeholder', 'Write a comment...')}
-              className="min-h-[88px] sm:min-h-[100px] text-sm resize-none w-full min-w-0"
-              disabled={submitting}
-            />
-            <div className="flex justify-end">
+            <div className="relative">
+              <Textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder={t('publicReview.comments.placeholder', 'Write a comment...')}
+                className="min-h-[88px] sm:min-h-[100px] text-sm resize-none w-full min-w-0 pr-11 pb-2"
+                disabled={submitting}
+              />
               <Button
+                type="button"
+                size="icon"
                 onClick={handleSubmitComment}
                 disabled={!commentText.trim() || submitting}
-                className="gap-2 min-h-[44px] touch-manipulation"
+                title={submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}
+                aria-label={submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}
+                className="absolute right-2 bottom-2 h-9 w-9 rounded-lg shrink-0 touch-manipulation"
               >
-                <Send className="h-4 w-4" />
-                {submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
+            {showBackToHome && canShowApprovalButtons && (
+              <div className="flex flex-nowrap justify-center items-center gap-3 pt-2 border-t border-gray-100">
+                <Button
+                  onClick={handleApprove}
+                  disabled={approvalLoading}
+                  className="h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-5 gap-2 min-h-[44px] min-w-[160px] touch-manipulation"
+                >
+                  <Check className="h-4 w-4" />
+                  {t('publicReview.approveContent', 'Approve Content')}
+                </Button>
+                <Button
+                  onClick={handleRevision}
+                  disabled={!hasCurrentUserCommented || approvalLoading}
+                  variant="outline"
+                  title={!hasCurrentUserCommented ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
+                  className="h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-5 gap-2 min-h-[44px] min-w-[160px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {t('publicReview.requestRevision', 'Request Revision')}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

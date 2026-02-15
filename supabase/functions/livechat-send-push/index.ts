@@ -1,4 +1,5 @@
 /// <reference path="../edge-runtime.d.ts" />
+/// <reference path="./webpush.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as webpush from "jsr:@negrel/webpush@0.5.0";

@@ -1,25 +1,7 @@
 /**
- * Type declarations for Supabase Edge Functions (Deno runtime).
- * This file silences IDE/TypeScript errors when editing functions locally.
- * Functions are executed in Deno; these are for editor support only.
+ * Type declarations for JSR @negrel/webpush (Deno runtime).
+ * Supabase Edge Functions resolve this at runtime; this file is for IDE/TypeScript only.
  */
-declare const Deno: {
-  env: { get(key: string): string | undefined };
-  serve(handler: (req: Request) => Promise<Response> | Response): void;
-};
-
-declare module "https://esm.sh/@supabase/supabase-js@2" {
-  export function createClient(
-    url: string,
-    key: string,
-    options?: { global?: { headers?: Record<string, string> } }
-  ): any;
-}
-
-declare module "jsr:@supabase/functions-js/edge-runtime.d.ts" {
-  // Edge runtime types; no exports needed for global Deno
-}
-
 declare module "jsr:@negrel/webpush@0.5.0" {
   export function importVapidKeys(
     exported: { publicKey: JsonWebKey; privateKey: JsonWebKey },
