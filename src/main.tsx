@@ -4,6 +4,18 @@ import "./index.css";
 
 // Suppress expected browser errors (CORS/404 for KOL tables)
 if (typeof window !== 'undefined') {
+  // Register service worker for Live Chat Web Push (so push works when tab is closed)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        if (import.meta.env.DEV) {
+          // Optional: log in dev
+        }
+      })
+      .catch(() => {});
+  }
+
   const originalError = console.error;
   const originalWarn = console.warn;
   const originalLog = console.log;

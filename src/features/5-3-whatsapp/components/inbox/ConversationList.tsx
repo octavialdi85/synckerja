@@ -250,7 +250,9 @@ export function ConversationList({
               queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
             }
           })
-          .catch(() => {});
+          .catch((err) => {
+            console.warn('Failed to update last_opened_at', err);
+          });
       }
       onSelect(conv);
       initialSelectionApplied.current = true;
@@ -260,7 +262,9 @@ export function ConversationList({
   const handleSelect = (conv: LiveChatConversation) => {
     if (conv.source === 'whatsapp') {
       if (unreadByConversation[conv.id] > 0) {
-        markConversationRead(conv.id).catch(() => {});
+        markConversationRead(conv.id).catch((err) => {
+          console.warn('Failed to mark conversation read', err);
+        });
       }
       supabase
         .from('whatsapp_conversations')
@@ -271,10 +275,14 @@ export function ConversationList({
             queryClient.invalidateQueries({ queryKey: ['leads', organizationId] });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn('Failed to update last_opened_at', err);
+        });
     }
     if (conv.source === 'email' && (emailUnreadByConversation[conv.id] ?? 0) > 0) {
-      markEmailConversationRead(conv.id).catch(() => {});
+      markEmailConversationRead(conv.id).catch((err) => {
+        console.warn('Failed to mark conversation read', err);
+      });
     }
     onSelect(conv);
   };

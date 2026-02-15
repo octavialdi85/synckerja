@@ -32,14 +32,18 @@ export function WhatsAppInboxPage() {
   const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
 
   useEffect(() => {
-    void queryClient.prefetchQuery({
-      queryKey: ['lead-statuses'],
-      queryFn: async () => {
-        const { data, error } = await supabase.from('lead_statuses').select('id, name, color').eq('is_active', true).order('sort_order');
-        if (error) throw error;
-        return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
-      },
-    });
+    queryClient
+      .prefetchQuery({
+        queryKey: ['lead-statuses'],
+        queryFn: async () => {
+          const { data, error } = await supabase.from('lead_statuses').select('id, name, color').eq('is_active', true).order('sort_order');
+          if (error) throw error;
+          return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
+        },
+      })
+      .catch((err) => {
+        console.warn('Failed to prefetch lead-statuses', err);
+      });
   }, [queryClient]);
   const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
   const { accounts: waAccounts } = useWhatsAppAccounts();

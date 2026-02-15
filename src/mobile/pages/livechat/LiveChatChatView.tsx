@@ -12,6 +12,24 @@ import type { WhatsAppAccount } from '@/features/5-3-whatsapp/types';
 import { ChatThread } from '@/features/5-3-whatsapp/components/inbox/ChatThread';
 import { EmailChatThread } from '@/features/5-3-whatsapp/components/inbox/EmailChatThread';
 import { MobileLivechatQuickActionPanel } from './components/MobileLivechatQuickActionPanel';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+
+function urlBase64ToUint8Array(base64Url: string): Uint8Array {
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 function ChannelIcon({ channel = 'whatsapp', className }: { channel?: string; className?: string }) {
   const c = (channel || 'whatsapp').toLowerCase();
@@ -53,9 +71,46 @@ export function LiveChatChatView({ selectedConversation, onBack, waAccounts }: L
   );
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
-  const handleRequestNotificationPermission = () => {
+  const handleRequestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
-    Notification.requestPermission().then((p) => setNotificationPermission(p));
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission !== 'granted') return;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      const reg = await navigator.serviceWorker.ready;
+      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+      if (!vapidPublicKey?.trim()) return;
+      const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey.trim());
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const body = {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: arrayBufferToBase64Url(subscription.getKey('p256dh')!),
+          auth: arrayBufferToBase64Url(subscription.getKey('auth')!),
+        },
+      };
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-push-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('livechat-save-push-subscription failed', res.status, err);
+      }
+    } catch (e) {
+      setNotificationPermission('denied');
+      console.error('Push subscribe error', e);
+    }
   };
 
   const isEmail = selectedConversation.source === 'email';
@@ -127,7 +182,7 @@ export function LiveChatChatView({ selectedConversation, onBack, waAccounts }: L
           <h2 className="font-semibold text-foreground truncate">{displayName}</h2>
           {subText && <p className="text-xs text-muted-foreground truncate">{subText}</p>}
         </div>
-        {notificationPermission === 'default' && (
+        {notificationPermission !== 'granted' && (
           <Button
             type="button"
             variant="ghost"

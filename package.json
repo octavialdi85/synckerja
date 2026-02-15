@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-notification-sound": "node scripts/generate-notification-sound.mjs"
+    "generate-notification-sound": "node scripts/generate-notification-sound.mjs",
+    "generate-vapid-keys": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

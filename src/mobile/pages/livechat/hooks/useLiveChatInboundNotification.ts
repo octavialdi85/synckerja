@@ -72,8 +72,13 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'email_messages' },
         handleInbound
-      )
-      .subscribe();
+      );
+
+    channelRef.current.subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn('LiveChat inbound subscription failed', status);
+      }
+    });
 
     return () => {
       if (channelRef.current) {

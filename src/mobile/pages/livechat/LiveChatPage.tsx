@@ -24,6 +24,7 @@ export default function LiveChatPage() {
   const queryClient = useQueryClient();
   const ticketId = searchParams.get('ticket_id');
   const [accountFilter, setAccountFilter] = useState<AccountFilterValue>('');
+  const [showInvalidTicketBanner, setShowInvalidTicketBanner] = useState(false);
 
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
   const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
@@ -33,18 +34,22 @@ export default function LiveChatPage() {
   const { connections: emailConnections } = useEmailConnections();
 
   useEffect(() => {
-    void queryClient.prefetchQuery({
-      queryKey: ['lead-statuses'],
-      queryFn: async () => {
-        const { data, error } = await supabase
-          .from('lead_statuses')
-          .select('id, name, color')
-          .eq('is_active', true)
-          .order('sort_order');
-        if (error) throw error;
-        return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
-      },
-    });
+    queryClient
+      .prefetchQuery({
+        queryKey: ['lead-statuses'],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from('lead_statuses')
+            .select('id, name, color')
+            .eq('is_active', true)
+            .order('sort_order');
+          if (error) throw error;
+          return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
+        },
+      })
+      .catch((err) => {
+        console.warn('Failed to prefetch lead-statuses', err);
+      });
   }, [queryClient]);
 
   const allConversations: LiveChatConversation[] = useMemo(() => {
@@ -109,6 +114,21 @@ export default function LiveChatPage() {
   // Global realtime: show system notification on inbound message (list view or app in background)
   useLiveChatInboundNotification(selectedConversation?.id ?? null);
 
+  const isLoading = waLoading || igLoading || emailLoading;
+  const invalidTicketId = !!(ticketId?.trim() && !isLoading && !selectedConversation);
+
+  useEffect(() => {
+    if (!invalidTicketId) return;
+    setShowInvalidTicketBanner(true);
+    navigate('/operations/consultant/all/livechat', { replace: true });
+  }, [invalidTicketId, navigate]);
+
+  useEffect(() => {
+    if (!showInvalidTicketBanner) return;
+    const tId = window.setTimeout(() => setShowInvalidTicketBanner(false), 4000);
+    return () => window.clearTimeout(tId);
+  }, [showInvalidTicketBanner]);
+
   const handleSelectConversation = (conv: LiveChatConversation) => {
     navigate(`/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(getConversationTicketId(conv))}`);
   };
@@ -130,16 +150,15 @@ export default function LiveChatPage() {
   return (
     <LiveChatListView
       conversations={conversations}
-      isLoading={waLoading || igLoading || emailLoading}
+      isLoading={isLoading}
       error={waError ?? igError ?? emailError}
       waAccounts={waAccounts}
-      igAccounts={igAccounts}
-      emailConnections={emailConnections}
       accountOptions={accountOptions}
       accountFilter={accountFilter}
       setAccountFilter={setAccountFilter}
       initialTicketId={ticketId}
       onSelectConversation={handleSelectConversation}
+      invalidTicketId={showInvalidTicketBanner}
     />
   );
 }

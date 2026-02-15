@@ -18,13 +18,13 @@ interface LiveChatListViewProps {
   isLoading: boolean;
   error: Error | null;
   waAccounts: WhatsAppAccount[];
-  igAccounts: Array<{ instagram_business_account_id: string; instagram_username?: string | null; instagram_name?: string | null }>;
-  emailConnections: Array<{ id: string; email_address?: string | null }>;
   accountOptions: { value: string; label: string }[];
   accountFilter: AccountFilterValue;
   setAccountFilter: (v: AccountFilterValue) => void;
   initialTicketId: string | null;
   onSelectConversation: (conv: LiveChatConversation) => void;
+  /** When true, show banner that the ticket_id in URL was not found. */
+  invalidTicketId?: boolean;
 }
 
 export function LiveChatListView({
@@ -37,6 +37,7 @@ export function LiveChatListView({
   setAccountFilter,
   initialTicketId,
   onSelectConversation,
+  invalidTicketId = false,
 }: LiveChatListViewProps) {
   const { t } = useAppTranslation();
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,6 +111,12 @@ export function LiveChatListView({
                 </SelectContent>
               </Select>
             </div>
+
+            {invalidTicketId && (
+              <div className="flex-shrink-0 px-3 py-2 mx-3 mt-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800" role="alert">
+                {t('whatsappInbox.conversationNotFound', 'Obrolan tidak ditemukan.')}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
               <MobileConversationList

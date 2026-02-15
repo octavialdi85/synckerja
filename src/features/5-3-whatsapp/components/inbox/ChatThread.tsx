@@ -789,8 +789,8 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       replyToMessageType?: string | null,
       replyToSender?: string | null
     ) => {
-      if (!customerId) {
-        toast.error('Penerima tidak tersedia.');
+      if (!customerId?.trim()) {
+        toast.error(t('whatsappInbox.recipientNotAvailable', 'Penerima tidak tersedia.'));
         return;
       }
       if (isInstagramConversation) {
@@ -879,6 +879,11 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
           : '';
     const replyMessageType = replyTo?.message_type ?? undefined;
 
+    if (!customerId?.trim()) {
+      toast.error(t('whatsappInbox.recipientNotAvailable', 'Penerima tidak tersedia.'));
+      return;
+    }
+
     if (pendingMedia) {
       const toSend = pendingMedia;
       const replyWaId = replyTo?.wa_message_id ?? undefined;
@@ -886,7 +891,12 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       clearPendingMedia();
       setText('');
       setReplyTo(null);
-      await sendMediaWithCaption(toSend.file, toSend.mediaType, trimmed, replyWaId, replyBody, replyMessageType || undefined, replySender || undefined);
+      try {
+        await sendMediaWithCaption(toSend.file, toSend.mediaType, trimmed, replyWaId, replyBody, replyMessageType || undefined, replySender || undefined);
+      } catch {
+        toast.error(t('whatsappInbox.sendMediaFailed', 'Gagal mengirim media.'));
+        focusInputToKeepKeyboard();
+      }
       return;
     }
 
@@ -906,7 +916,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     try {
       if (isInstagramConversation) {
         const sendPromise = sendInstagram({
-          to: customerId!,
+          to: customerId,
           text: trimmed,
           conversation_id: conversation.id,
           reply_to_wa_message_id: replyWaId ?? undefined,
@@ -917,7 +927,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         await Promise.race([sendPromise, timeoutPromise]);
       } else {
         const sendPromise = send({
-          to: customerId!,
+          to: customerId,
           text: trimmed,
           conversation_id: conversation.id,
           reply_to_wa_message_id: replyWaId ?? undefined,
