@@ -99,13 +99,16 @@ export const useReprimands = () => {
 
       console.log('📝 Creating reprimand:', reprimandData);
       
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+
       const { data, error } = await supabase
         .from('reprimands')
         .insert([{
           ...reprimandData,
           organization_id: organizationId,
-          created_by: (await supabase.auth.getUser()).data.user?.id,
-          issued_by: (await supabase.auth.getUser()).data.user?.id,
+          created_by: userId,
+          issued_by: userId,
           status: 'active',
           previous_warnings_count: reprimandData.previous_warnings_count || 0,
           acknowledgment_required: reprimandData.acknowledgment_required ?? true,

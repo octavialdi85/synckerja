@@ -74,6 +74,7 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
   const [education, setEducation] = useState<any[]>([]);
   const [workExperience, setWorkExperience] = useState<any[]>([]);
   const [familyMembers, setFamilyMembers] = useState<any[]>([]);
+  const [discTestStatus, setDiscTestStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (candidateData?.id) {
@@ -85,17 +86,19 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
     if (!candidateData?.id) return;
 
     try {
-      const [docsResult, eduResult, workResult, familyResult] = await Promise.all([
+      const [docsResult, eduResult, workResult, familyResult, discResult] = await Promise.all([
         supabase.from('candidate_documents').select('*').eq('candidate_profile_id', candidateData.id),
         supabase.from('candidate_educations').select('*').eq('candidate_profile_id', candidateData.id),
         supabase.from('candidate_work_experiences').select('*').eq('candidate_profile_id', candidateData.id),
-        supabase.from('candidate_family_members').select('*').eq('candidate_profile_id', candidateData.id)
+        supabase.from('candidate_family_members').select('*').eq('candidate_profile_id', candidateData.id),
+        supabase.from('candidate_tests').select('status').eq('candidate_profile_id', candidateData.id).maybeSingle()
       ]);
 
       setDocuments(docsResult.data || []);
       setEducation(eduResult.data || []);
       setWorkExperience(workResult.data || []);
       setFamilyMembers(familyResult.data || []);
+      setDiscTestStatus(discResult.error ? null : ((discResult.data as { status?: string } | null)?.status ?? null));
     } catch (error) {
       console.error('Error fetching progress data:', error);
     }
@@ -177,13 +180,20 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
     return Math.round((completedRequired.length / requiredDocTypes.length) * 100);
   };
 
+  const getDiscTestProgress = () => {
+    if (discTestStatus === 'submitted') return 100;
+    if (discTestStatus === 'in_progress') return 50;
+    return 0;
+  };
+
   const getOverallProgress = () => {
     const progressItems = [
       getPersonalInfoProgress(),
       getEducationProgress(),
       getWorkExperienceProgress(),
       getFamilyMembersProgress(),
-      getDocumentsProgress()
+      getDocumentsProgress(),
+      getDiscTestProgress()
     ];
     return Math.round(progressItems.reduce((sum, progress) => sum + progress, 0) / progressItems.length);
   };
@@ -325,6 +335,19 @@ export const CandidateProfileSidebar = ({ candidateData }: CandidateProfileSideb
                     'bg-red-500': getDocumentsProgress() < 40
                   })}
                   style={{ width: `${getDocumentsProgress()}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className={cn("text-sm", PROFESSIONAL_COLORS.text.secondary)}>{t('candidateProfile.sidebar.test', 'Test')}</span>
+              <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all duration-300", {
+                    'bg-green-500': getDiscTestProgress() >= 80,
+                    'bg-yellow-500': getDiscTestProgress() >= 40 && getDiscTestProgress() < 80,
+                    'bg-red-500': getDiscTestProgress() < 40
+                  })}
+                  style={{ width: `${getDiscTestProgress()}%` }}
                 />
               </div>
             </div>

@@ -15,9 +15,10 @@ import { useToast } from '@/features/ui/use-toast';
 interface EducationTabProps {
   candidateProfileId: string;
   onEducationChange?: () => void;
+  isReadOnly?: boolean;
 }
 
-export function EducationTab({ candidateProfileId, onEducationChange }: EducationTabProps) {
+export function EducationTab({ candidateProfileId, onEducationChange, isReadOnly = false }: EducationTabProps) {
   const [educations, setEducations] = useState<any[]>([]);
   const [informalEducations, setInformalEducations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,14 +324,16 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold">Formal Education</CardTitle>
-            <Button
-              size="sm"
-              onClick={() => setShowAddEducation(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Education
-            </Button>
+            {!isReadOnly && (
+              <Button
+                size="sm"
+                onClick={() => setShowAddEducation(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Education
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
           {showAddEducation && (
@@ -431,7 +434,7 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
                     <TableHead className="w-[120px]">End Date</TableHead>
                     <TableHead className="w-[100px]">GPA</TableHead>
                     <TableHead className="w-[200px]">Description</TableHead>
-                    <TableHead className="w-[50px]">Actions</TableHead>
+                    {!isReadOnly && <TableHead className="w-[50px]">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -496,6 +499,7 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
                               rows={2}
                             />
                           </TableCell>
+                          {!isReadOnly && (
                           <TableCell className="p-2">
                             <div className="flex space-x-1">
                               <Button size="sm" variant="outline" onClick={handleCancelEdit} className="h-6 w-6 p-0">
@@ -506,6 +510,7 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
                               </Button>
                             </div>
                           </TableCell>
+                        )}
                         </>
                       ) : (
                         <>
@@ -541,25 +546,27 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
                               }
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-white border shadow-lg">
-                                <DropdownMenuItem onClick={() => handleEditEducation(education)} className="cursor-pointer">
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDeleteEducationClick(education.id)} className="text-red-600 cursor-pointer">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
+                          {!isReadOnly && (
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-white border shadow-lg">
+                                  <DropdownMenuItem onClick={() => handleEditEducation(education)} className="cursor-pointer">
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDeleteEducationClick(education.id)} className="text-red-600 cursor-pointer">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          )}
                         </>
                       )}
                     </TableRow>
@@ -575,14 +582,16 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold">Certifications & Courses</CardTitle>
-          <Button
-            size="sm"
-            onClick={() => setShowAddInformal(true)}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Certification
-          </Button>
+          {!isReadOnly && (
+            <Button
+              size="sm"
+              onClick={() => setShowAddInformal(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Certification
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {showAddInformal && (
@@ -700,23 +709,25 @@ export function EducationTab({ candidateProfileId, onEducationChange }: Educatio
                           <p className="text-gray-700 mt-2">{informal.description}</p>
                         )}
                       </div>
-                      <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setEditingInformal(informal.id)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => deleteInformalEducation(informal.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingInformal(informal.id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteInformalEducation(informal.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

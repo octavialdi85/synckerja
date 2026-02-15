@@ -17,9 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/features/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
+import { getDiscResultFromScores } from '@/lib/discResultUtils';
+import { getSjtResultFromScores, getDimensionDisplayValue, SJT_DIMENSION_LABELS, type SjtDimensionKey } from '@/lib/sjtResultUtils';
 import { useToast } from '@/features/ui/use-toast';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { InterviewWhatsAppButton } from './InterviewWhatsAppButton';
 import { useNavigate } from 'react-router-dom';
 import { CandidateToEmployeeConfirmModal } from './CandidateToEmployeeConfirmModal';
@@ -57,6 +61,9 @@ interface InterviewCandidate {
   };
   average_score?: number;
   total_reviews?: number;
+  disc_scores?: { score_d: number; score_i: number; score_s: number; score_c: number };
+  cognitive_scores?: { score_total: number; score_verbal?: number; score_numerical?: number; score_logical?: number };
+  sjt_scores?: { score_sjt: number; sjt_dimension_scores?: Record<string, number> };
 }
 
 interface CandidateActionsDropdownProps {
@@ -134,25 +141,49 @@ export const IntervieweeTab = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [candidateToDelete, setCandidateToDelete] = useState<InterviewCandidate | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [discModalCandidate, setDiscModalCandidate] = useState<InterviewCandidate | null>(null);
+  const [sjtModalCandidate, setSjtModalCandidate] = useState<InterviewCandidate | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { t, language } = useAppTranslation();
   const { isOwner } = useCentralizedUserData();
+  const { organizationId } = useCurrentOrg();
   const [downloadingPdfForId, setDownloadingPdfForId] = useState<string | null>(null);
+
+  /** Short dynamic description of cognitive test result (translatable). */
+  const getCognitiveScoreDescription = (scores: InterviewCandidate['cognitive_scores']): string => {
+    if (scores == null) return '';
+    const total = Number(scores.score_total ?? 0);
+    const v = scores.score_verbal ?? 0;
+    const n = scores.score_numerical ?? 0;
+    const l = scores.score_logical ?? 0;
+    const hasBreakdown = v > 0 || n > 0 || l > 0;
+    if (hasBreakdown) {
+      return t('interviewees.cognitiveScoreShort', 'Skor {{total}}/30 — Verbal {{v}} benar, Numerical {{n}} benar, Logical {{l}} benar', { total, v, n, l });
+    }
+    return t('interviewees.cognitiveScoreTotalOnly', 'Skor {{total}}/30', { total });
+  };
 
   useEffect(() => {
     fetchInterviewees();
-  }, []);
+  }, [organizationId]);
 
   const fetchInterviewees = async () => {
     setLoading(true);
     try {
       console.log('🔍 Fetching interviewees...');
       
-      // First, get completed candidate profiles
+      if (!organizationId) {
+        setCandidates([]);
+        setLoading(false);
+        return;
+      }
+
+      // First, get completed candidate profiles for current organization only
       const { data: candidateProfiles, error: profileError } = await supabase
         .from('candidate_profiles')
         .select('*')
+        .eq('organization_id', organizationId)
         .eq('profile_completed', true)
         .not('recruitment_token', 'is', null);
 
@@ -173,7 +204,7 @@ export const IntervieweeTab = () => {
       // Get recruitment tokens
       const recruitmentTokens = candidateProfiles.map(profile => (profile as any).recruitment_token).filter(Boolean);
       
-      // Now get job applications for these candidates
+      // Now get job applications for these candidates (scoped to current organization)
       const { data: jobApplications, error: applicationError } = await supabase
         .from('job_applications')
         .select(`
@@ -182,6 +213,7 @@ export const IntervieweeTab = () => {
             job_title
           )
         `)
+        .eq('organization_id', organizationId)
         .in('recruitment_token', recruitmentTokens)
         .order('created_at', { ascending: false });
 
@@ -220,13 +252,80 @@ export const IntervieweeTab = () => {
         return acc;
       }, {} as Record<string, { average_score: number; total_reviews: number }>);
 
+      // Fetch test IDs for DISC, cognitive, and SJT
+      const { data: testsMeta } = await supabase
+        .from('tests')
+        .select('id, type')
+        .in('type', ['disc', 'cognitive', 'sjt'])
+        .eq('is_active', true);
+      const testList = (testsMeta || []) as { id: string; type: string }[];
+      const discTestId = testList.find(t => t.type === 'disc')?.id;
+      const cognitiveTestId = testList.find(t => t.type === 'cognitive')?.id;
+      const sjtTestId = testList.find(t => t.type === 'sjt')?.id;
+
+      // Fetch DISC test scores (only rows for DISC test)
+      const discByProfile: Record<string, { score_d: number; score_i: number; score_s: number; score_c: number }> = {};
+      if (discTestId) {
+        const { data: discRows } = await supabase
+          .from('candidate_tests')
+          .select('candidate_profile_id, score_d, score_i, score_s, score_c')
+          .in('candidate_profile_id', candidateProfileIds)
+          .eq('test_id', discTestId)
+          .eq('status', 'submitted');
+        (discRows || []).forEach((row: any) => {
+          discByProfile[row.candidate_profile_id] = {
+            score_d: Number(row.score_d ?? 0),
+            score_i: Number(row.score_i ?? 0),
+            score_s: Number(row.score_s ?? 0),
+            score_c: Number(row.score_c ?? 0)
+          };
+        });
+      }
+
+      // Fetch cognitive test scores (only rows for cognitive test)
+      const cognitiveByProfile: Record<string, { score_total: number; score_verbal?: number; score_numerical?: number; score_logical?: number }> = {};
+      if (cognitiveTestId) {
+        const { data: cogRows } = await supabase
+          .from('candidate_tests')
+          .select('candidate_profile_id, score_total, score_verbal, score_numerical, score_logical')
+          .in('candidate_profile_id', candidateProfileIds)
+          .eq('test_id', cognitiveTestId)
+          .eq('status', 'submitted');
+        (cogRows || []).forEach((row: any) => {
+          cognitiveByProfile[row.candidate_profile_id] = {
+            score_total: Number(row.score_total ?? 0),
+            score_verbal: row.score_verbal != null ? Number(row.score_verbal) : undefined,
+            score_numerical: row.score_numerical != null ? Number(row.score_numerical) : undefined,
+            score_logical: row.score_logical != null ? Number(row.score_logical) : undefined
+          };
+        });
+      }
+
+      // Fetch SJT test scores (including dimension scores for candidate description)
+      const sjtByProfile: Record<string, { score_sjt: number; sjt_dimension_scores?: Record<string, number> }> = {};
+      if (sjtTestId) {
+        const { data: sjtRows } = await supabase
+          .from('candidate_tests')
+          .select('candidate_profile_id, score_sjt, sjt_dimension_scores')
+          .in('candidate_profile_id', candidateProfileIds)
+          .eq('test_id', sjtTestId)
+          .eq('status', 'submitted');
+        (sjtRows || []).forEach((row: any) => {
+          sjtByProfile[row.candidate_profile_id] = {
+            score_sjt: Number(row.score_sjt ?? 0),
+            sjt_dimension_scores: row.sjt_dimension_scores ?? undefined
+          };
+        });
+      }
+
       // Merge candidate profile data with job application data and scores
       const mergedData = jobApplications?.map((application: any) => {
         const profile = candidateProfiles.find(p => (p as any).recruitment_token === (application as any).recruitment_token);
         const scoreData = profile ? candidateScores[(profile as any).id] : null;
+        const profileId = (profile as any)?.id ?? (application as any).candidate_profile_id;
         return {
           ...(application as object),
-          candidate_profile_id: (profile as any)?.id ?? (application as any).candidate_profile_id,
+          candidate_profile_id: profileId,
           // Use profile data as primary source
           applicant_name: (profile as any)?.full_name || (application as any).applicant_name,
           applicant_email: (profile as any)?.email || (application as any).applicant_email,
@@ -241,7 +340,10 @@ export const IntervieweeTab = () => {
             photo_url: (profile as any)?.photo_url || null
           },
           average_score: scoreData?.average_score || 0,
-          total_reviews: scoreData?.total_reviews || 0
+          total_reviews: scoreData?.total_reviews || 0,
+          disc_scores: profileId ? discByProfile[profileId] : undefined,
+          cognitive_scores: profileId ? cognitiveByProfile[profileId] : undefined,
+          sjt_scores: profileId ? sjtByProfile[profileId] : undefined
         };
       }) || [];
       
@@ -657,6 +759,9 @@ Best regards,
                   <TableHead className="font-semibold whitespace-nowrap min-w-[120px] px-4 py-3">Phone</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Profile</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap min-w-[160px] px-4 py-3">Position</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[120px] px-4 py-3">DISC</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[90px] px-4 py-3">Kognitif</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap min-w-[80px] px-4 py-3">SJT</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Score</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Application Status</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap min-w-[100px] px-4 py-3">Interview Status</TableHead>
@@ -694,6 +799,48 @@ Best regards,
                       <span className="font-medium text-gray-900 text-sm">
                         {candidate.job_openings?.job_title || '—'}
                       </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                      {candidate.disc_scores ? (
+                        <button
+                          type="button"
+                          onClick={() => setDiscModalCandidate(candidate)}
+                          className="font-mono text-xs text-left hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 -mx-1"
+                          title="Lihat deskripsi & job match"
+                        >
+                          D:{Number(candidate.disc_scores.score_d).toFixed(0)} I:{Number(candidate.disc_scores.score_i).toFixed(0)} S:{Number(candidate.disc_scores.score_s).toFixed(0)} C:{Number(candidate.disc_scores.score_c).toFixed(0)}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">Belum tes</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-gray-600 max-w-[200px]" title={candidate.cognitive_scores != null ? getCognitiveScoreDescription(candidate.cognitive_scores) : undefined}>
+                      {candidate.cognitive_scores != null ? (
+                        <span className="text-xs leading-tight block">
+                          <span className="font-mono font-medium">{candidate.cognitive_scores.score_total}/30</span>
+                          {(candidate.cognitive_scores.score_verbal != null || candidate.cognitive_scores.score_numerical != null || candidate.cognitive_scores.score_logical != null) && (
+                            <span className="text-gray-500 block mt-0.5">
+                              V:{candidate.cognitive_scores.score_verbal ?? 0} N:{candidate.cognitive_scores.score_numerical ?? 0} L:{candidate.cognitive_scores.score_logical ?? 0}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-gray-600" title={candidate.sjt_scores != null && candidate.sjt_scores.sjt_dimension_scores ? getSjtResultFromScores(candidate.sjt_scores.sjt_dimension_scores).description : candidate.sjt_scores != null ? `Skor Situasi Kerja: ${candidate.sjt_scores.score_sjt}/12` : undefined}>
+                      {candidate.sjt_scores != null ? (
+                        <button
+                          type="button"
+                          onClick={() => candidate.sjt_scores && setSjtModalCandidate(candidate)}
+                          className="font-mono text-xs text-left hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 -mx-1"
+                          title="Lihat deskripsi & rekomendasi peran"
+                        >
+                          {candidate.sjt_scores.score_sjt}/12
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col items-start gap-0.5">
@@ -780,6 +927,103 @@ Best regards,
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* DISC result modal: deskripsi & job match */}
+      <Dialog open={!!discModalCandidate} onOpenChange={(open) => !open && setDiscModalCandidate(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Hasil DISC — {discModalCandidate?.applicant_name ?? ''}
+            </DialogTitle>
+          </DialogHeader>
+          {discModalCandidate?.disc_scores && (
+            <div className="space-y-4 pt-2">
+              <div className="flex flex-wrap gap-2 text-sm">
+                <span className="font-mono font-medium px-2 py-1 rounded bg-red-100 text-red-800">D: {Number(discModalCandidate.disc_scores.score_d).toFixed(0)}</span>
+                <span className="font-mono font-medium px-2 py-1 rounded bg-amber-100 text-amber-800">I: {Number(discModalCandidate.disc_scores.score_i).toFixed(0)}</span>
+                <span className="font-mono font-medium px-2 py-1 rounded bg-green-100 text-green-800">S: {Number(discModalCandidate.disc_scores.score_s).toFixed(0)}</span>
+                <span className="font-mono font-medium px-2 py-1 rounded bg-blue-100 text-blue-800">C: {Number(discModalCandidate.disc_scores.score_c).toFixed(0)}</span>
+              </div>
+              {(() => {
+                const { description, jobMatch, level, caveats } = getDiscResultFromScores(discModalCandidate.disc_scores);
+                return (
+                  <>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Rekomendasi Level</h4>
+                      <p className="text-sm text-gray-700">{level}</p>
+                    </div>
+                    <div className="border border-green-200 rounded-md p-3 bg-green-50/50">
+                      <h4 className="font-semibold text-gray-900 mb-1">Deskripsi Kepribadian</h4>
+                      <p className="text-sm text-gray-700 leading-relaxed">{description}</p>
+                    </div>
+                    {caveats && (
+                      <div className="border border-amber-200 rounded-md p-3 bg-amber-50/70">
+                        <h4 className="font-semibold text-amber-900 mb-1">Catatan</h4>
+                        <p className="text-sm text-gray-700 leading-relaxed">{caveats}</p>
+                      </div>
+                    )}
+                    <div className="border border-green-200 rounded-md p-3 bg-green-50/50">
+                      <h4 className="font-semibold text-gray-900 mb-1">Job Match</h4>
+                      <p className="text-sm text-gray-700">{jobMatch}</p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* SJT result modal: deskripsi & rekomendasi peran */}
+      <Dialog open={!!sjtModalCandidate} onOpenChange={(open) => !open && setSjtModalCandidate(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Hasil Tes Situasi Kerja — {sjtModalCandidate?.applicant_name ?? ''}
+            </DialogTitle>
+          </DialogHeader>
+          {sjtModalCandidate?.sjt_scores && (
+            <div className="space-y-4 pt-2">
+              <p className="font-medium text-gray-900">
+                Skor: {sjtModalCandidate.sjt_scores.score_sjt}/12
+              </p>
+              {sjtModalCandidate.sjt_scores.sjt_dimension_scores && (() => {
+                const dims = sjtModalCandidate.sjt_scores.sjt_dimension_scores;
+                const result = getSjtResultFromScores(dims);
+                const dimensionKeys: SjtDimensionKey[] = ['etika', 'komunikasi', 'prioritas', 'konflik', 'prosedur'];
+                return (
+                  <>
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      {dimensionKeys.map((key) => (
+                        <span key={key} className="font-mono font-medium px-2 py-1 rounded bg-gray-100 text-gray-800">
+                          {SJT_DIMENSION_LABELS[key]}: {getDimensionDisplayValue(dims as Record<string, unknown>, key)}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="border border-green-200 rounded-md p-3 bg-green-50/50">
+                      <h4 className="font-semibold text-gray-900 mb-1">Deskripsi Kandidat</h4>
+                      <p className="text-sm text-gray-700 leading-relaxed">{result.description}</p>
+                    </div>
+                    <div className="border border-green-200 rounded-md p-3 bg-green-50/50">
+                      <h4 className="font-semibold text-gray-900 mb-1">Rekomendasi Peran</h4>
+                      <p className="text-sm text-gray-700">{result.jobMatch}</p>
+                    </div>
+                    {result.caveats && (
+                      <div className="border border-amber-200 rounded-md p-3 bg-amber-50/70">
+                        <h4 className="font-semibold text-amber-900 mb-1">Catatan</h4>
+                        <p className="text-sm text-gray-700 leading-relaxed">{result.caveats}</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              {!sjtModalCandidate.sjt_scores.sjt_dimension_scores && (
+                <p className="text-sm text-gray-500">Deskripsi berdasarkan dimensi belum tersedia untuk tes ini.</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Modal */}
       {selectedCandidate && (

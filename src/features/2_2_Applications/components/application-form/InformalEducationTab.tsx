@@ -331,7 +331,7 @@ export const InformalEducationTab = ({
                     <TableHead className="w-[120px]">Start Date</TableHead>
                     <TableHead className="w-[120px]">End Date</TableHead>
                     <TableHead className="w-[200px]">Description</TableHead>
-                    <TableHead className="w-[50px]">Actions</TableHead>
+                    {!isReadOnly && <TableHead className="w-[50px]">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>

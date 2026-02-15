@@ -66,8 +66,10 @@ const formatReprimandType = (type: string) => {
   return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-const formatDate = (dateString: string) => {
+const formatDate = (dateString: string | null | undefined) => {
+  if (dateString == null || dateString === '') return '—';
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('id-ID', {
     year: 'numeric',
     month: 'short',
@@ -75,8 +77,10 @@ const formatDate = (dateString: string) => {
   });
 };
 
-const formatDateTime = (dateString: string) => {
+const formatDateTime = (dateString: string | null | undefined) => {
+  if (dateString == null || dateString === '') return '—';
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('id-ID', {
     year: 'numeric',
     month: 'short',

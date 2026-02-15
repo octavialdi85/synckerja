@@ -386,8 +386,13 @@ export const DocumentsTabNew = ({
                   {existingDoc ? (
                     <div className="space-y-3">
                       <div 
-                        className="p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 transition-colors"
-                        onClick={() => handleViewDocument(existingDoc)}
+                        className={`p-3 border rounded-lg transition-colors ${
+                          isReadOnly 
+                            ? 'bg-green-50/70 border-green-200 cursor-default select-none' 
+                            : 'bg-green-50 border-green-200 cursor-pointer hover:bg-green-100'
+                        }`}
+                        onClick={isReadOnly ? undefined : () => handleViewDocument(existingDoc)}
+                        role={isReadOnly ? undefined : 'button'}
                       >
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-green-600" />
@@ -397,36 +402,38 @@ export const DocumentsTabNew = ({
                         </div>
                       </div>
                       
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewDocument(existingDoc)}
-                          className="flex-1"
-                        >
-                          <Eye className="h-3 w-3 mr-1" />
-                          {t('candidateProfile.documents.view', 'View')}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDownloadDocument(existingDoc.file_path, existingDoc.file_name)}
-                          className="flex-1"
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          {t('candidateProfile.documents.download', 'Download')}
-                        </Button>
-                        {(isEditing || !isReadOnly) && (
+                      {!isReadOnly && (
+                        <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => existingDoc.id && handleDeleteDocument(existingDoc.id, existingDoc.file_path)}
-                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleViewDocument(existingDoc)}
+                            className="flex-1"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Eye className="h-3 w-3 mr-1" />
+                            {t('candidateProfile.documents.view', 'View')}
                           </Button>
-                        )}
-                      </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadDocument(existingDoc.file_path, existingDoc.file_name)}
+                            className="flex-1"
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            {t('candidateProfile.documents.download', 'Download')}
+                          </Button>
+                          {(isEditing || !isReadOnly) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => existingDoc.id && handleDeleteDocument(existingDoc.id, existingDoc.file_path)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                       
                       {(isEditing || !isReadOnly) && (
                         <div>

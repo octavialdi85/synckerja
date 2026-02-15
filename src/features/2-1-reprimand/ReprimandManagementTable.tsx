@@ -60,7 +60,7 @@ export function ReprimandManagementTable({
 
   const renderDepartmentColumn = (deptList: string[]) => {
     return deptList.map((departmentName) => {
-      const departmentEmployees = employeesByDepartment[departmentName];
+      const departmentEmployees = employeesByDepartment[departmentName] ?? [];
       
       return (
         <ReprimandDepartmentCard

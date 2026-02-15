@@ -338,7 +338,7 @@ export const WorkExperienceTab = ({
                     <TableHead className="w-[150px]">Location</TableHead>
                     <TableHead className="w-[200px]">Description</TableHead>
                     <TableHead className="w-[80px]">Current</TableHead>
-                    <TableHead className="w-[50px]">Actions</TableHead>
+                    {!isReadOnly && <TableHead className="w-[50px]">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>

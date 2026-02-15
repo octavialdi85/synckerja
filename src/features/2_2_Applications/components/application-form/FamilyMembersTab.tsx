@@ -31,6 +31,7 @@ interface FamilyMember {
 interface FamilyMembersTabProps {
   candidateProfileId: string;
   onFamilyMembersChange?: () => void;
+  isReadOnly?: boolean;
 }
 
 const relationshipOptions = [
@@ -47,7 +48,7 @@ const genderOptions = [
   { value: 'female', label: 'Female' },
 ];
 
-export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange }: FamilyMembersTabProps) => {
+export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange, isReadOnly = false }: FamilyMembersTabProps) => {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -240,7 +241,7 @@ export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange }: 
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold text-gray-900">Family Members</CardTitle>
-              {!isAddingNew && !editingId && (
+              {!isReadOnly && !isAddingNew && !editingId && (
                 <Button
                   onClick={() => setIsAddingNew(true)}
                   size="sm"
@@ -370,7 +371,7 @@ export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange }: 
                     <TableHead className="w-[120px]">Phone</TableHead>
                     <TableHead className="w-[200px]">Address</TableHead>
                     <TableHead className="w-[80px]">Emergency</TableHead>
-                    <TableHead className="w-[50px]">Actions</TableHead>
+                    {!isReadOnly && <TableHead className="w-[50px]">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -453,16 +454,18 @@ export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange }: 
                               onCheckedChange={(checked) => handleInputChange('is_emergency_contact', checked as boolean)}
                             />
                           </TableCell>
-                          <TableCell className="p-2">
-                            <div className="flex space-x-1">
-                              <Button size="sm" variant="outline" onClick={handleCancel} className="h-6 w-6 p-0">
-                                <X className="h-3 w-3" />
-                              </Button>
-                              <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700">
-                                <Save className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                          {!isReadOnly && (
+                            <TableCell className="p-2">
+                              <div className="flex space-x-1">
+                                <Button size="sm" variant="outline" onClick={handleCancel} className="h-6 w-6 p-0">
+                                  <X className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700">
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </>
                       ) : (
                         <>
@@ -499,25 +502,27 @@ export const FamilyMembersTab = ({ candidateProfileId, onFamilyMembersChange }: 
                               {member.is_emergency_contact ? '✓' : '-'}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-white border shadow-lg">
-                                <DropdownMenuItem onClick={() => handleEdit(member)} className="cursor-pointer">
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDelete(member.id)} className="text-red-600 cursor-pointer">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
+                          {!isReadOnly && (
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-white border shadow-lg">
+                                  <DropdownMenuItem onClick={() => handleEdit(member)} className="cursor-pointer">
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDelete(member.id)} className="text-red-600 cursor-pointer">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          )}
                         </>
                       )}
                     </TableRow>

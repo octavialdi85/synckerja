@@ -1,24 +1,38 @@
 import type { Employee } from '../hooks/useEmployees';
 
+/** Status values that mean the employee is NOT active (resigned, terminated, etc.). */
+const NON_ACTIVE_STATUSES = new Set([
+  'inactive',
+  'terminated',
+  'resigned',
+  'pending removal',
+  'pendingremoval',
+]);
+
 /**
- * Determine if an employee is active based on status fields
- * This matches the logic used in RPC function get_subscription_status
+ * Determine if an employee is active based on status fields.
+ * Uses BOTH employees.status and employee_statuses.name: if either indicates non-active, employee is not active.
+ * This ensures resigned employees (often only employees.status = 'inactive') are excluded.
  */
 export const isEmployeeActive = (employee: {
   employee_status_name?: string | null;
   status?: string | null;
   pending_removal?: boolean | null;
 }): boolean => {
-  // If pending_removal is true, employee is not active
   if (employee.pending_removal === true) {
     return false;
   }
-  
-  // Get status from employee_status_name (preferred) or status field
-  const status = (employee.employee_status_name || employee.status || 'active').toLowerCase();
-  
-  // Consider as active if status is 'active' or null/undefined (default to active)
-  return status === 'active' || (!employee.employee_status_name && !employee.status);
+
+  const statusFromField = (employee.status ?? '').toString().trim().toLowerCase();
+  const statusFromName = (employee.employee_status_name ?? '').toString().trim().toLowerCase();
+
+  if (NON_ACTIVE_STATUSES.has(statusFromField) || NON_ACTIVE_STATUSES.has(statusFromName)) {
+    return false;
+  }
+  if (!statusFromField && !statusFromName) {
+    return true;
+  }
+  return statusFromField === 'active' || statusFromName === 'active';
 };
 
 /**

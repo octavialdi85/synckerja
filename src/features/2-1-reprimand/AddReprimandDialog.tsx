@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useCreateReprimand, CreateReprimandData } from './hooks/useReprimands';
 import { useEmployees } from './hooks/useEmployees';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
+import { toast } from 'sonner';
 
 const reprimandSchema = z.object({
   employee_id: z.string().min(1, 'Please select an employee'),
@@ -72,7 +73,7 @@ export const AddReprimandDialog = () => {
   const onSubmit = async (data: any) => {
     try {
       if (!user?.id) {
-        console.error('No user ID available');
+        toast.error('Sesi tidak valid. Silakan login kembali.');
         return;
       }
       
@@ -121,8 +122,8 @@ export const AddReprimandDialog = () => {
           Add Reprimand
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden" aria-describedby="add-reprimand-description">
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden p-6 pt-4 pb-2.5" aria-describedby="add-reprimand-description">
+        <DialogHeader className="px-6 pt-1 pb-4 border-b">
           <DialogTitle>Add New Reprimand</DialogTitle>
           <p id="add-reprimand-description" className="text-sm text-gray-600 mt-1">
             Create a new disciplinary action record for an employee
@@ -512,7 +513,7 @@ export const AddReprimandDialog = () => {
             </div>
 
             {/* Sticky Footer - Inside container */}
-            <div className="flex-shrink-0 px-6 py-4 border-t bg-background relative z-20">
+            <div className="flex-shrink-0 px-6 pt-3 pb-1 border-t bg-background relative z-20">
               <div className="flex justify-end space-x-3">
                 <Button
                   type="button"

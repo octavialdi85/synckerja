@@ -27,8 +27,8 @@ export const ReprimandManagementPage = () => {
   const [activeTab, setActiveTab] = useState('reprimand');
   
   // Fetch data from Supabase
-  const { employees, isLoading: employeesLoading } = useEmployees();
-  const { reprimands, isLoading: reprimandsLoading } = useReprimands();
+  const { employees, isLoading: employeesLoading, error: employeesError, refetch: refetchEmployees } = useEmployees();
+  const { reprimands, isLoading: reprimandsLoading, error: reprimandsError, refetch: refetchReprimands } = useReprimands();
   
   const [filters, setFilters] = useState<ReprimandFilters>({
     search: '',
@@ -61,10 +61,9 @@ export const ReprimandManagementPage = () => {
       if (filters.search) {
         const employee = employees.find(e => e.id === reprimand.employee_id);
         const searchLower = filters.search.toLowerCase();
-        if (!employee?.full_name.toLowerCase().includes(searchLower) &&
-            !reprimand.violation_description?.toLowerCase().includes(searchLower)) {
-          return false;
-        }
+        const nameMatch = (employee?.full_name ?? '').toLowerCase().includes(searchLower);
+        const descMatch = (reprimand.violation_description ?? '').toLowerCase().includes(searchLower);
+        if (!nameMatch && !descMatch) return false;
       }
 
       // Status filter
@@ -84,7 +83,10 @@ export const ReprimandManagementPage = () => {
 
       // Time period filter
       if (filters.timePeriod !== 'all') {
-        const reprimandDate = new Date(reprimand.created_at || reprimand.incident_date);
+        const raw = reprimand.created_at || reprimand.incident_date;
+        if (raw == null || raw === '') return false;
+        const reprimandDate = new Date(raw);
+        if (Number.isNaN(reprimandDate.getTime())) return false;
         const now = new Date();
         const daysDiff = Math.floor((now.getTime() - reprimandDate.getTime()) / (1000 * 60 * 60 * 24));
         
@@ -147,7 +149,7 @@ export const ReprimandManagementPage = () => {
     return acc;
   }, {} as Record<string, any[]>);
 
-  const departments = [...new Set(employees.map(e => e.departments?.name || 'Unassigned'))];
+  const departments = [...new Set(employees.map(e => e.departments?.name || 'Unassigned'))].sort();
   
   // Get filter options
   const getFilterOptions = () => {
@@ -206,7 +208,41 @@ export const ReprimandManagementPage = () => {
     return boxes;
   };
 
-  if (employeesLoading || reprimandsLoading) {
+  const hasError = employeesError || reprimandsError;
+  const isLoading = employeesLoading || reprimandsLoading;
+
+  if (hasError && !isLoading) {
+    return (
+      <StandardLayout>
+        <div className="h-full bg-gray-100 flex flex-col font-sans relative">
+          <div className="flex flex-1 min-h-0 items-center justify-center p-4">
+            <div className="text-center max-w-md">
+              <p className="text-red-600 font-medium mb-2">Gagal memuat data</p>
+              <p className="text-gray-600 text-sm mb-4">
+                {employeesError && reprimandsError
+                  ? 'Data karyawan dan teguran tidak dapat dimuat.'
+                  : employeesError
+                    ? 'Data karyawan tidak dapat dimuat.'
+                    : 'Data teguran tidak dapat dimuat.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (employeesError) refetchEmployees();
+                  if (reprimandsError) refetchReprimands();
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium"
+              >
+                Coba lagi
+              </button>
+            </div>
+          </div>
+        </div>
+      </StandardLayout>
+    );
+  }
+
+  if (isLoading) {
     return (
       <StandardLayout>
         <div className="h-full bg-gray-100 flex flex-col font-sans relative">

@@ -13,10 +13,12 @@ function ReprimandManagementOverview({ reprimands, employees }: ReprimandManagem
     total: reprimands.length,
     active: reprimands.filter(r => r.status === 'active').length,
     thisMonth: reprimands.filter(r => {
-      const reprimandDate = new Date(r.created_at);
+      const raw = r.created_at;
+      if (raw == null || raw === '') return false;
+      const reprimandDate = new Date(raw);
+      if (Number.isNaN(reprimandDate.getTime())) return false;
       const now = new Date();
-      return reprimandDate.getMonth() === now.getMonth() && 
-             reprimandDate.getFullYear() === now.getFullYear();
+      return reprimandDate.getMonth() === now.getMonth() && reprimandDate.getFullYear() === now.getFullYear();
     }).length,
   };
 
@@ -28,8 +30,13 @@ function ReprimandManagementOverview({ reprimands, employees }: ReprimandManagem
   }, {} as Record<string, number>);
 
   // Get recent activities (last 20, sorted by created_at)
-  const recentActivities = reprimands
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  const recentActivities = [...reprimands]
+    .filter(r => r.created_at != null && r.created_at !== '')
+    .sort((a, b) => {
+      const ta = new Date(a.created_at).getTime();
+      const tb = new Date(b.created_at).getTime();
+      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+    })
     .slice(0, 20);
 
   const getActionIcon = (status: string) => {
@@ -77,20 +84,16 @@ function ReprimandManagementOverview({ reprimands, employees }: ReprimandManagem
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
+    if (dateString == null || dateString === '') return '—';
     const activityDate = new Date(dateString);
+    if (Number.isNaN(activityDate.getTime())) return '—';
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - activityDate.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${diffInHours}h ago`;
-    } else if (diffInHours < 48) {
-      return 'Yesterday';
-    } else {
-      return activityDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 48) return 'Yesterday';
+    return activityDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const formatReprimandType = (type: string) => {

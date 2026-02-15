@@ -8,8 +8,9 @@ import { EducationTab } from './EducationTab';
 import { InformalEducationTab } from './InformalEducationTab';
 import { WorkExperienceTab } from './WorkExperienceTab';
 import { FamilyMembersTab } from './FamilyMembersTab';
+import { TestTabWrapper } from './TestTabWrapper';
 import { CandidateReviewsTab } from './CandidateReviewsTab';
-import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, Star, ChevronRight, CheckCircle2, CheckCircle, Loader2 } from 'lucide-react';
+import { User, MapPin, FileText, GraduationCap, Award, Briefcase, Users, ClipboardList, Star, ChevronRight, CheckCircle2, CheckCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
@@ -144,6 +145,14 @@ export const CandidateProfileTabs = ({
         component: FamilyMembersTab,
         stepNumber: 7,
         requiredFields: [] // Optional but recommended
+      },
+      {
+        id: 'test',
+        label: t('candidateProfile.tabs.test', 'Test'),
+        icon: ClipboardList,
+        component: TestTabWrapper,
+        stepNumber: 8,
+        requiredFields: [] // Validated via hasDiscCompleted
       }
     ];
 
@@ -154,7 +163,7 @@ export const CandidateProfileTabs = ({
         label: t('candidateProfile.tabs.reviews', 'Reviews'),
         icon: Star,
         component: CandidateReviewsTab,
-        stepNumber: 8,
+        stepNumber: 9,
         requiredFields: []
       });
     }
@@ -162,19 +171,22 @@ export const CandidateProfileTabs = ({
     return baseTabs;
   }, [hideReviews, t]);
 
-  // State for education, experience, and family validation
+  // State for education, experience, family, and DISC validation
   const [hasEducation, setHasEducation] = useState(false);
   const [hasExperience, setHasExperience] = useState(false);
   const [requiredDocumentsUploaded, setRequiredDocumentsUploaded] = useState(false);
   const [hasFamilyMember, setHasFamilyMember] = useState(false);
+  const [hasDiscCompleted, setHasDiscCompleted] = useState(false);
+  const [hasCognitiveCompleted, setHasCognitiveCompleted] = useState(false);
+  const [hasSjtCompleted, setHasSjtCompleted] = useState(false);
 
-  // Check education, experience, and required documents
+  // Check education, experience, documents, family, DISC test, Cognitive test, and SJT
   useEffect(() => {
     if (!candidate?.id) return;
 
     const checkData = async () => {
       try {
-        const [eduResult, expResult, docsResult, familyResult] = await Promise.all([
+        const [eduResult, expResult, docsResult, familyResult, testsMetaResult, candidateTestsResult] = await Promise.all([
           supabase
             .from('candidate_educations')
             .select('id')
@@ -193,13 +205,32 @@ export const CandidateProfileTabs = ({
             .from('candidate_family_members')
             .select('id')
             .eq('candidate_profile_id', candidate.id)
-            .limit(1)
+            .limit(1),
+          supabase
+            .from('tests')
+            .select('id, type')
+            .in('type', ['disc', 'cognitive', 'sjt'])
+            .eq('is_active', true),
+          supabase
+            .from('candidate_tests')
+            .select('test_id')
+            .eq('candidate_profile_id', candidate.id)
+            .eq('status', 'submitted')
         ]);
 
         setHasEducation((eduResult.data?.length || 0) > 0);
         setHasExperience((expResult.data?.length || 0) > 0);
         setHasFamilyMember((familyResult.data?.length || 0) > 0);
-        
+
+        const testIds = (testsMetaResult.data || []) as { id: string; type: string }[];
+        const discTestId = testIds.find(t => t.type === 'disc')?.id;
+        const cognitiveTestId = testIds.find(t => t.type === 'cognitive')?.id;
+        const sjtTestId = testIds.find(t => t.type === 'sjt')?.id;
+        const submittedTestIds = (candidateTestsResult.data || []).map((r: { test_id: string }) => r.test_id);
+        setHasDiscCompleted(!!discTestId && submittedTestIds.includes(discTestId));
+        setHasCognitiveCompleted(!!cognitiveTestId && submittedTestIds.includes(cognitiveTestId));
+        setHasSjtCompleted(!!sjtTestId && submittedTestIds.includes(sjtTestId));
+
         // Check if all required documents are uploaded (CV, KTP, Ijazah)
         const requiredDocTypes = ['cv', 'ktp', 'ijazah'];
         const uploadedDocTypes = (docsResult.data || []).map((doc: any) => doc.document_type || '');
@@ -250,10 +281,14 @@ export const CandidateProfileTabs = ({
       // Check if at least one family member exists
       return hasFamilyMember;
     }
-    
+
+    if (stepId === 'test') {
+      return hasDiscCompleted && hasCognitiveCompleted && hasSjtCompleted;
+    }
+
     // Other steps are optional
     return true;
-  }, [candidate, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember]);
+  }, [candidate, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember, hasDiscCompleted, hasCognitiveCompleted, hasSjtCompleted]);
 
   // Check if current step is valid
   const currentStepIndex = tabs.findIndex(tab => tab.id === activeTab);
@@ -348,7 +383,7 @@ export const CandidateProfileTabs = ({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidate?.id, validateStep, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember]);
+  }, [candidate?.id, validateStep, hasEducation, hasExperience, requiredDocumentsUploaded, hasFamilyMember, hasDiscCompleted]);
 
   // Simplified tab change handler - only allow if previous steps are valid
   const handleTabChange = useCallback((tabId: string) => {
@@ -390,6 +425,8 @@ export const CandidateProfileTabs = ({
           errorMessage = "Silakan tambahkan minimal 1 pengalaman kerja sebelum melanjutkan ke step berikutnya.";
         } else if (blockingStep.id === 'family') {
           errorMessage = "Silakan tambahkan minimal 1 anggota keluarga sebelum submit.";
+        } else if (blockingStep.id === 'test') {
+          errorMessage = "Silakan selesaikan Tes DISC, Test Kognitif, dan Tes Situasi Kerja sebelum submit profil.";
         } else if (blockingStep.id === 'documents') {
           errorMessage = "Silakan upload semua dokumen wajib (CV, KTP, Ijazah) sebelum melanjutkan.";
         } else if (blockingStep.id === 'education') {
@@ -424,14 +461,14 @@ export const CandidateProfileTabs = ({
           }
         }}
       >
-        {/* Compact Tab Navigation */}
+        {/* Compact Tab Navigation - scrollable so first/last tabs are fully visible */}
         <div className={cn(
           PROFESSIONAL_COLORS.background.secondary,
           PROFESSIONAL_COLORS.border.default,
-          "border-b px-4 py-3 flex-shrink-0"
+          "border-b px-4 py-3 flex-shrink-0 overflow-x-auto overflow-y-hidden"
         )}>
           <TabsList className={cn(
-            "flex w-full gap-1 h-auto p-1 rounded-md flex-shrink-0 overflow-x-auto",
+            "flex w-max min-w-full gap-1 h-auto p-1 rounded-md flex-shrink-0",
             PROFESSIONAL_COLORS.background.primary,
             PROFESSIONAL_COLORS.border.muted,
             "border"
@@ -604,6 +641,34 @@ export const CandidateProfileTabs = ({
                         }
                       }
                     })}
+                    {...(tab.id === 'test' && {
+                      candidateProfileId: candidate?.id ?? '',
+                      recruitmentToken: (candidate?.recruitment_token ?? typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') ?? '' : '') as string,
+                      hasDiscCompleted,
+                      hasCognitiveCompleted,
+                      onTestCompleted: async () => {
+                        if (candidate?.id) {
+                          try {
+                            const { data: testsMeta } = await supabase.from('tests').select('id, type').in('type', ['disc', 'cognitive', 'sjt']).eq('is_active', true);
+                            const testIds = (testsMeta || []) as { id: string; type: string }[];
+                            const discTestId = testIds.find(t => t.type === 'disc')?.id;
+                            const cognitiveTestId = testIds.find(t => t.type === 'cognitive')?.id;
+                            const sjtTestId = testIds.find(t => t.type === 'sjt')?.id;
+                            const { data: ctData } = await supabase
+                              .from('candidate_tests')
+                              .select('test_id')
+                              .eq('candidate_profile_id', candidate.id)
+                              .eq('status', 'submitted');
+                            const submittedTestIds = (ctData || []).map((r: { test_id: string }) => r.test_id);
+                            setHasDiscCompleted(!!discTestId && submittedTestIds.includes(discTestId));
+                            setHasCognitiveCompleted(!!cognitiveTestId && submittedTestIds.includes(cognitiveTestId));
+                            setHasSjtCompleted(!!sjtTestId && submittedTestIds.includes(sjtTestId));
+                          } catch (error) {
+                            console.error('Error re-checking tests:', error);
+                          }
+                        }
+                      }
+                    })}
                     {...(tab.id === 'experience' && {
                       onWorkExperienceChange: async () => {
                         // Re-check work experiences when work experiences change
@@ -662,6 +727,21 @@ export const CandidateProfileTabs = ({
                                   .eq('candidate_profile_id', candidate.id)
                                   .limit(1);
                                 setHasFamilyMember((familyData?.length || 0) > 0);
+                              } else if (tab.id === 'test') {
+                                const { data: testsMeta } = await supabase.from('tests').select('id, type').in('type', ['disc', 'cognitive', 'sjt']).eq('is_active', true);
+                                const testIds = (testsMeta || []) as { id: string; type: string }[];
+                                const discTestId = testIds.find(t => t.type === 'disc')?.id;
+                                const cognitiveTestId = testIds.find(t => t.type === 'cognitive')?.id;
+                                const sjtTestId = testIds.find(t => t.type === 'sjt')?.id;
+                                const { data: ctData } = await supabase
+                                  .from('candidate_tests')
+                                  .select('test_id')
+                                  .eq('candidate_profile_id', candidate.id)
+                                  .eq('status', 'submitted');
+                                const submittedTestIds = (ctData || []).map((r: { test_id: string }) => r.test_id);
+                                setHasDiscCompleted(!!discTestId && submittedTestIds.includes(discTestId));
+                                setHasCognitiveCompleted(!!cognitiveTestId && submittedTestIds.includes(cognitiveTestId));
+                                setHasSjtCompleted(!!sjtTestId && submittedTestIds.includes(sjtTestId));
                               }
                             } catch (error) {
                               console.error('Error re-checking data:', error);
@@ -673,12 +753,13 @@ export const CandidateProfileTabs = ({
                     }}
                     isReadOnly={isReadOnly}
                     candidateProfileId={candidate?.id}
+                    isHRView={tab.id === 'test' ? isHRView : undefined}
                   />
                   
-                  {/* Navigation Buttons - Submit only on Family tab (and only if not HR view) */}
+                  {/* Navigation Buttons - Submit only on Test tab (and only if not HR view) */}
                   {!isHRView && (
                     <>
-                      {tab.id === 'family' ? (
+                      {tab.id === 'test' ? (
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
                           <div className="flex items-center gap-2">
                             {currentStepIndex > 0 && (
@@ -698,7 +779,7 @@ export const CandidateProfileTabs = ({
                           <div className="flex items-center gap-2">
                             <Button
                               onClick={() => setShowConfirmDialog(true)}
-                              disabled={!isCurrentStepValid || isSubmitting}
+                              disabled={!isCurrentStepValid || isSubmitting || !!candidate?.profile_completed}
                               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {t('candidateProfile.buttons.submitProfile', 'Submit Profile')}
@@ -750,7 +831,7 @@ export const CandidateProfileTabs = ({
         <AlertDialogHeader>
           <AlertDialogTitle>{t('candidateProfile.submitConfirm.title', 'Yakin kirim profil?')}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t('candidateProfile.submitConfirm.description', 'Pastikan semua data (informasi pribadi, alamat, dokumen, pendidikan, pengalaman, keluarga) sudah benar. Setelah submit, data tidak dapat diubah lagi.')}
+            {t('candidateProfile.submitConfirm.description', 'Pastikan semua data (informasi pribadi, alamat, dokumen, pendidikan, pengalaman, keluarga, dan Tes DISC) sudah benar. Setelah submit, data tidak dapat diubah lagi.')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
