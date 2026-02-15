@@ -13,6 +13,7 @@ import type { LiveChatConversation, WhatsAppConversation, InstagramConversation 
 import { getConversationTicketId } from './shared/getConversationTicketId';
 import { LiveChatListView } from './LiveChatListView';
 import { LiveChatChatView } from './LiveChatChatView';
+import { useLiveChatInboundNotification } from './hooks/useLiveChatInboundNotification';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
@@ -104,6 +105,9 @@ export default function LiveChatPage() {
     const tid = ticketId.trim().toUpperCase();
     return conversations.find((c) => getConversationTicketId(c) === tid) ?? null;
   }, [ticketId, conversations]);
+
+  // Global realtime: show system notification on inbound message (list view or app in background)
+  useLiveChatInboundNotification(selectedConversation?.id ?? null);
 
   const handleSelectConversation = (conv: LiveChatConversation) => {
     navigate(`/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(getConversationTicketId(conv))}`);
