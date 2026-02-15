@@ -74,7 +74,29 @@ export function LeadStatusSelect({
   isLoading = false,
 }: LeadStatusSelectProps) {
   const { t } = useAppTranslation();
-  const currentStatus = leadStatuses.find((s) => s.id === value);
+  // Deduplicate by display name so dropdown never shows duplicate labels (e.g. same name, different id from DB)
+  const uniqueStatuses = React.useMemo(() => {
+    const seen = new Set<string>();
+    const result: LeadStatusOption[] = [];
+    for (const s of leadStatuses) {
+      const labelKey = getLeadStatusDisplayName(s.name).trim().toLowerCase();
+      if (labelKey === '') continue;
+      if (seen.has(labelKey)) {
+        // If this is the currently selected status, replace so selection stays visible
+        if (value && s.id === value) {
+          const idx = result.findIndex(
+            (r) => getLeadStatusDisplayName(r.name).trim().toLowerCase() === labelKey
+          );
+          if (idx >= 0) result[idx] = s;
+        }
+        continue;
+      }
+      seen.add(labelKey);
+      result.push(s);
+    }
+    return result;
+  }, [leadStatuses, value]);
+  const currentStatus = uniqueStatuses.find((s) => s.id === value);
   const currentOrder = Math.max(
     getStatusOrder(currentStatusName),
     getStatusOrder(currentStatus?.name ?? '')
@@ -94,7 +116,8 @@ export function LeadStatusSelect({
       </div>
     );
   }
-  if (leadStatuses.length === 0) {
+
+  if (uniqueStatuses.length === 0) {
     return (
       <div className="text-xs text-gray-500">
         {t('whatsappInbox.noStatuses', 'No statuses configured')}
@@ -103,7 +126,7 @@ export function LeadStatusSelect({
   }
 
   const handleValueChange = (newValue: string) => {
-    const newStatus = leadStatuses.find((s) => s.id === newValue);
+    const newStatus = uniqueStatuses.find((s) => s.id === newValue);
     if (newStatus && isOptionDisabled(newStatus.name ?? '')) return;
     onValueChange(newValue);
   };
@@ -117,8 +140,12 @@ export function LeadStatusSelect({
         <SelectValue placeholder={placeholder ?? t('whatsappInbox.selectStatus', 'Select status')} />
       </SelectTrigger>
       <SelectContent>
-        {leadStatuses
-          .filter((s) => (s.name ?? '').trim().toLowerCase() !== 'lost')
+        {uniqueStatuses
+          .filter(
+            (s) =>
+              (s.name ?? '').trim().toLowerCase() !== 'lost' &&
+              (s.name ?? '').trim().toLowerCase() !== 'qualified'
+          )
           .map((status) => {
             const optionDisabled = isOptionDisabled(status.name ?? '');
             return (

@@ -26,6 +26,8 @@ function sanitizeEmailBody(body: string): string {
 
 interface EmailChatThreadProps {
   conversation: EmailConversation;
+  /** When true, hide the in-component header (e.g. for mobile where parent provides back + avatar + name). */
+  hideHeader?: boolean;
 }
 
 function formatTime(iso: string) {
@@ -71,7 +73,7 @@ function normalizeSubjectForDisplay(subject: string | null | undefined): string 
   return withoutRe ? `Re: ${withoutRe}` : s;
 }
 
-export function EmailChatThread({ conversation }: EmailChatThreadProps) {
+export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadProps) {
   const { t } = useAppTranslation();
   const { data: messages = [], isLoading } = useEmailMessages(conversation.id);
   const { sendReply, isSending } = useSendEmailReply();
@@ -151,12 +153,14 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2]">
-      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-white">
-        <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
-        <p className="text-xs text-gray-500 truncate">{conversation.email_connection_display ?? ''}</p>
-      </div>
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 min-h-0 flex flex-col gap-y-3">
+    <div className="flex-1 flex flex-col min-h-0 relative bg-[#efeae2]">
+      {!hideHeader && (
+        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-white">
+          <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
+          <p className="text-xs text-gray-500 truncate">{conversation.email_connection_display ?? ''}</p>
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto seamless-scroll p-4 pb-16 min-h-0 flex flex-col gap-y-3">
         {messages.map((msg) => {
           const senderDisplay = getMessageSenderDisplay(msg, conversation);
           return (
@@ -227,7 +231,7 @@ export function EmailChatThread({ conversation }: EmailChatThreadProps) {
           );
         })}
       </div>
-      <div className="flex-shrink-0 p-3 border-t border-gray-200 bg-white">
+      <div className="flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 p-3 border-t border-gray-200 bg-white">
         <Button
           type="button"
           variant="outline"

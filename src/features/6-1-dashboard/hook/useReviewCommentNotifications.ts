@@ -20,7 +20,7 @@ export interface ReviewCommentNotificationRow {
 
 const QUERY_KEY = ['review-comment-notifications'] as const;
 
-const NOTIFICATION_SOUND_URL = '/notification-bell.mp3';
+const NOTIFICATION_SOUND_URL = '/notification-bell.wav';
 
 function playNotificationSound() {
   if (typeof document === 'undefined') return;

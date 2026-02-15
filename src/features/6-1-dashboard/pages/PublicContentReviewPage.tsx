@@ -39,6 +39,36 @@ interface PublicReviewComment {
   annotation_data: Record<string, unknown> | null;
 }
 
+/** From RPC get_public_review_brief_extended_by_token (token-scoped; no cross-org leak) */
+interface PublicReviewBriefExtended {
+  target_audience: string;
+  caption: string;
+}
+
+/** Warna unik per komentar (berdasarkan id) untuk membedakan tiap caption. */
+const COMMENT_ACCENT_COLORS = [
+  { border: 'border-l-blue-500', bg: 'bg-blue-50/80' },
+  { border: 'border-l-emerald-500', bg: 'bg-emerald-50/80' },
+  { border: 'border-l-amber-500', bg: 'bg-amber-50/80' },
+  { border: 'border-l-violet-500', bg: 'bg-violet-50/80' },
+  { border: 'border-l-rose-500', bg: 'bg-rose-50/80' },
+  { border: 'border-l-cyan-500', bg: 'bg-cyan-50/80' },
+  { border: 'border-l-orange-500', bg: 'bg-orange-50/80' },
+  { border: 'border-l-teal-500', bg: 'bg-teal-50/80' },
+  { border: 'border-l-fuchsia-500', bg: 'bg-fuchsia-50/80' },
+  { border: 'border-l-sky-500', bg: 'bg-sky-50/80' },
+] as const;
+
+function getCommentAccent(commentId: string): (typeof COMMENT_ACCENT_COLORS)[number] {
+  let hash = 0;
+  for (let i = 0; i < commentId.length; i++) {
+    hash = (hash << 5) - hash + commentId.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % COMMENT_ACCENT_COLORS.length;
+  return COMMENT_ACCENT_COLORS[index];
+}
+
 /** Portrait-oriented content types (Reel, Story, Shorts, etc.) use 9/16 aspect ratio */
 function isPortraitContent(contentTypeName: string | null): boolean {
   if (!contentTypeName) return false;
@@ -61,6 +91,7 @@ const PublicContentReviewPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const t = usePublicReviewT();
   const [content, setContent] = useState<PublicReviewContent | null>(null);
+  const [briefExtended, setBriefExtended] = useState<PublicReviewBriefExtended | null>(null);
   const [comments, setComments] = useState<PublicReviewComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +137,25 @@ const PublicContentReviewPage: React.FC = () => {
     setComments(Array.isArray(data) ? (data as PublicReviewComment[]) : []);
   }, [token]);
 
+  /** Token-scoped only; data from brief_target_audiences + brief_captions via RPC (no cross-org leak) */
+  const loadBriefExtended = useCallback(async () => {
+    if (!token) return;
+    const { data, error: rpcError } = await supabase.rpc('get_public_review_brief_extended_by_token', {
+      token_param: token,
+    });
+    if (rpcError) {
+      return;
+    }
+    if (data && typeof data === 'object' && 'target_audience' in data && 'caption' in data) {
+      setBriefExtended({
+        target_audience: String((data as PublicReviewBriefExtended).target_audience ?? ''),
+        caption: String((data as PublicReviewBriefExtended).caption ?? ''),
+      });
+    } else {
+      setBriefExtended(null);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!token) {
       setError(t('publicReview.error.noToken', 'No token'));
@@ -115,7 +165,7 @@ const PublicContentReviewPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      await loadContent();
+      await Promise.all([loadContent(), loadBriefExtended()]);
       if (cancelled) return;
       await loadComments();
       if (cancelled) return;
@@ -124,7 +174,7 @@ const PublicContentReviewPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, loadContent, loadComments]);
+  }, [token, loadContent, loadBriefExtended, loadComments]);
 
   // Load commenter name from localStorage per token (popup won't show again for this token once set)
   useEffect(() => {
@@ -344,8 +394,19 @@ const PublicContentReviewPage: React.FC = () => {
     return format(new Date(date), 'dd MMM yyyy');
   };
 
+  /* GPU layer + containment agar scroll tidak lag (video/iframe tidak repaint tiap frame) */
+  const scrollContainerStyle: React.CSSProperties = { WebkitOverflowScrolling: 'touch' };
+  const videoLayerStyle: React.CSSProperties = {
+    touchAction: 'pan-y',
+    transform: 'translateZ(0)',
+    contain: 'layout paint',
+  };
+
   return (
-    <div className="min-h-screen h-screen max-h-screen bg-gray-50 flex flex-col overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain">
+    <div
+      className="min-h-screen h-screen max-h-screen bg-gray-50 flex flex-col overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain min-w-0"
+      style={scrollContainerStyle}
+    >
       <Dialog open={showCommenterPopup} onOpenChange={setShowCommenterPopup}>
         <DialogContent
           overlayClassName="bg-black/50"
@@ -390,20 +451,18 @@ const PublicContentReviewPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-      <div className="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col gap-2">
+      <div className="flex-1 max-w-2xl w-full mx-auto px-3 py-4 sm:p-4 flex flex-col gap-2 min-w-0 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* Preview with header (title + metadata) in the section header, no separate "Preview" label */}
         {(() => {
-          const portrait = isPortraitContent(content.content_type_name);
-          const aspectClass = portrait
-            ? 'aspect-[9/16] max-w-[min(100%,320px)] mx-auto w-full'
-            : 'aspect-video w-full';
+          /* Portrait 9:16 agar video tidak terpotong; responsive: full width di mobile, max 320px di desktop */
+          const videoBoxClass = 'aspect-[9/16] w-full max-w-[min(100%,320px)] mx-auto min-w-0';
           return (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y">
-              <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <h1 className="font-semibold text-gray-900 truncate pr-2 text-base">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y min-w-0">
+              <div className="p-2 sm:p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                <h1 className="font-semibold text-gray-900 truncate pr-2 text-sm sm:text-base">
                   {content.title || t('publicReview.content.noTitle', 'Untitled')}
                 </h1>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs text-gray-600">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 mt-1.5 sm:mt-2 text-xs text-gray-600">
                   {content.service_name != null && content.service_name !== '' && (
                     <span className="flex items-center gap-1">
                       <Briefcase className="h-3 w-3" />
@@ -432,7 +491,7 @@ const PublicContentReviewPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className={`flex-1 p-4 flex items-center justify-center bg-white touch-pan-y ${portrait ? 'flex' : ''}`}>
+              <div className="flex-1 p-2 sm:p-4 flex items-center justify-center bg-white touch-pan-y min-w-0">
                 {!link ? (
                   <div className="text-center text-gray-500 text-sm">{t('publicReview.preview.noLink', 'No link')}</div>
                 ) : isFolderLink(link) ? (
@@ -452,10 +511,14 @@ const PublicContentReviewPage: React.FC = () => {
                     const useIframe = videoUseIframe || !directVideoUrl;
                     if (useIframe) {
                       return (
-                        <div className={`rounded-lg overflow-hidden bg-black touch-pan-y ${aspectClass}`}>
+                        <div
+                          className={`rounded-lg overflow-hidden bg-black touch-pan-y ${videoBoxClass}`}
+                          style={videoLayerStyle}
+                        >
                           <iframe
                             src={embedUrl}
                             className="w-full h-full border-0 rounded-lg touch-pan-y"
+                            style={{ touchAction: 'pan-y' }}
                             title="Preview"
                             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                             loading="lazy"
@@ -465,7 +528,8 @@ const PublicContentReviewPage: React.FC = () => {
                     }
                     return (
                       <div
-                        className={`rounded-lg overflow-hidden bg-black touch-pan-y ${aspectClass} ${!videoPlaying ? 'cursor-pointer' : ''}`}
+                        className={`rounded-lg overflow-hidden bg-black touch-pan-y ${videoBoxClass} ${!videoPlaying ? 'cursor-pointer' : ''}`}
+                        style={videoLayerStyle}
                         onClick={() => {
                           if (!videoPlaying) handleVideoPlay();
                         }}
@@ -482,7 +546,8 @@ const PublicContentReviewPage: React.FC = () => {
                         <video
                           ref={videoRef}
                           src={directVideoUrl}
-                          className={cn('w-full h-full object-contain object-left', !videoPlaying && 'pointer-events-none')}
+                          className={cn('w-full h-full object-contain object-center touch-pan-y', !videoPlaying && 'pointer-events-none')}
+                          style={{ touchAction: 'pan-y' }}
                           controls
                           playsInline
                           onError={() => setVideoUseIframe(true)}
@@ -508,26 +573,47 @@ const PublicContentReviewPage: React.FC = () => {
           );
         })()}
 
-        {/* Comments - below */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-1 min-h-0">
-          <div className="p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0 flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-gray-600" />
-            <h4 className="font-medium text-sm text-gray-900">{t('publicReview.comments.title', 'Comments')}</h4>
+        {/* Target Audience - fixed height; data from brief_target_audiences via token-scoped RPC */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
+          <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 border-l-4 border-l-blue-500">
+            <h4 className="font-medium text-sm text-blue-900">{t('briefDialog.sectionTargetAudience', 'Target Audience')}</h4>
           </div>
-          <div className="flex-1 overflow-auto p-3 space-y-2 min-h-[200px]">
+          <div className="h-32 sm:h-40 overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+            {briefExtended?.target_audience?.trim() ? briefExtended.target_audience : '—'}
+          </div>
+        </div>
+
+        {/* Caption - below Target Audience; data from brief_captions via token-scoped RPC */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
+          <div className="p-2 sm:p-3 border-b border-emerald-200/80 bg-emerald-50 flex-shrink-0 border-l-4 border-l-emerald-500">
+            <h4 className="font-medium text-sm text-emerald-900">{t('briefDialog.sectionCaption', 'Caption')}</h4>
+          </div>
+          <div className="overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words min-h-[72px] sm:min-h-[80px]">
+            {briefExtended?.caption?.trim() ? briefExtended.caption : '—'}
+          </div>
+        </div>
+
+        {/* Comments - below */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-1 min-h-0 min-w-0">
+          <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 flex items-center gap-2 border-l-4 border-l-blue-500">
+            <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
+            <h4 className="font-medium text-sm text-blue-900 truncate">{t('publicReview.comments.title', 'Comments')}</h4>
+          </div>
+          <div className="flex-1 overflow-auto overflow-x-hidden p-2 sm:p-3 space-y-2 min-h-[160px] sm:min-h-[200px]">
             {comments.length === 0 ? (
               <p className="text-sm text-gray-500">{t('publicReview.comments.empty', 'No comments yet. Be the first.')}</p>
             ) : (
               comments.map((c) => {
                 const own = isOwnComment(c);
                 const isEditing = editingCommentId === c.id;
+                const accent = getCommentAccent(c.id);
                 return (
                   <div key={c.id} className="w-full">
-                    <div className="rounded-lg bg-gray-100 border border-gray-200/80 px-3 py-2 w-full">
-                      <div className="flex items-center justify-between gap-2 text-xs text-gray-600 mb-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium text-gray-800">{c.creator_display_name}</span>
-                          <span className="text-gray-500 shrink-0">{c.created_at ? format(new Date(c.created_at), 'dd MMM yyyy, HH:mm') : ''}</span>
+                    <div className={cn('rounded-lg border border-gray-200/80 px-2 py-2 sm:px-3 w-full max-w-full border-l-4 min-w-0', accent.border, accent.bg)}>
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-600 mb-1 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="font-medium text-gray-800 truncate">{c.creator_display_name}</span>
+                          <span className="text-gray-500 shrink-0 whitespace-nowrap">{c.created_at ? format(new Date(c.created_at), 'dd MMM yyyy, HH:mm') : ''}</span>
                         </div>
                         {own && !isEditing && (
                           <div className="flex items-center gap-1 shrink-0">
@@ -535,7 +621,7 @@ const PublicContentReviewPage: React.FC = () => {
                               type="button"
                               onClick={() => handleStartEdit(c)}
                               disabled={actionLoading}
-                              className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-200 touch-manipulation"
                               aria-label={t('publicReview.comments.edit', 'Edit')}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -544,7 +630,7 @@ const PublicContentReviewPage: React.FC = () => {
                               type="button"
                               onClick={() => handleDeleteComment(c)}
                               disabled={actionLoading}
-                              className="p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50"
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 touch-manipulation"
                               aria-label={t('publicReview.comments.delete', 'Delete')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -578,19 +664,19 @@ const PublicContentReviewPage: React.FC = () => {
               })
             )}
           </div>
-          <div className="p-4 border-t border-gray-200 flex-shrink-0 space-y-3">
+          <div className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3">
             <Textarea
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               placeholder={t('publicReview.comments.placeholder', 'Write a comment...')}
-              className="min-h-[100px] text-sm resize-none"
+              className="min-h-[88px] sm:min-h-[100px] text-sm resize-none w-full min-w-0"
               disabled={submitting}
             />
             <div className="flex justify-end">
               <Button
                 onClick={handleSubmitComment}
                 disabled={!commentText.trim() || submitting}
-                className="gap-2"
+                className="gap-2 min-h-[44px] touch-manipulation"
               >
                 <Send className="h-4 w-4" />
                 {submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}

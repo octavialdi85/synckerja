@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
-import { Separator } from '@/features/ui/separator';
-import { MessageCircle, Send, Trash2, FileText, Globe, RotateCcw, CheckCircle } from 'lucide-react';
+import { MessageCircle, Send, Trash2, FileText, Globe, RotateCcw, CheckCircle, ExternalLink, CircleCheck } from 'lucide-react';
 import { useLinkComments } from '../hook/useLinkComments';
+import { useBriefExtended } from '../hook/useBriefExtended';
 import { formatDistanceToNow } from 'date-fns';
 import { LinkPreviewPanel } from './LinkPreviewPanel';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface BriefDialogProps {
   isOpen: boolean;
@@ -16,7 +18,10 @@ interface BriefDialogProps {
   brief: string | null;
   onSave: (brief: string) => void;
   socialMediaPlanId?: string;
-  onStatusUpdate?: (planId: string, updates: any) => void; // Add callback for status updates
+  onStatusUpdate?: (planId: string, updates: any) => void;
+  targetAudience?: string | null;
+  caption?: string | null;
+  linkReference?: string | null;
 }
 
 const BriefDialog: React.FC<BriefDialogProps> = ({
@@ -25,26 +30,30 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   brief,
   onSave,
   socialMediaPlanId,
-  onStatusUpdate
+  onStatusUpdate,
+  targetAudience: targetAudienceProp,
+  caption: captionProp,
+  linkReference: linkReferenceProp
 }) => {
+  const { t } = useAppTranslation();
   const [briefText, setBriefText] = useState('');
+  const [targetAudienceText, setTargetAudienceText] = useState('');
+  const [captionText, setCaptionText] = useState('');
+  const [linkReferenceText, setLinkReferenceText] = useState('');
   const [newComment, setNewComment] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [accordionOpen, setAccordionOpen] = useState<string>('brief');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
+  const skipNextAutoSaveRef = useRef(false);
 
-  // Reset state when dialog opens/closes or when socialMediaPlanId changes
-  useEffect(() => {
-    if (isOpen) {
-      setBriefText(brief || '');
-      setNewComment('');
-      setShowPreview(false);
-    } else {
-      setBriefText('');
-      setNewComment('');
-      setShowPreview(false);
-    }
-  }, [isOpen, brief, socialMediaPlanId]);
+  const {
+    targetAudience: targetAudienceFetched,
+    caption: captionFetched,
+    linkReference: linkReferenceFetched,
+    isLoading: extendedLoading,
+    invalidate: invalidateExtended
+  } = useBriefExtended(socialMediaPlanId, isOpen);
 
   const {
     comments,
@@ -52,6 +61,44 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     addComment,
     deleteComment
   } = useLinkComments(socialMediaPlanId || '', 'brief');
+
+  // Reset or sync state when dialog opens/closes or data changes
+  useEffect(() => {
+    if (!isOpen) {
+      setBriefText('');
+      setTargetAudienceText('');
+      setCaptionText('');
+      setLinkReferenceText('');
+      setNewComment('');
+      setShowPreview(false);
+      setAccordionOpen('brief');
+      return;
+    }
+    setBriefText(brief || '');
+    setNewComment('');
+    setShowPreview(false);
+    setAccordionOpen('brief');
+    setTargetAudienceText(targetAudienceProp !== undefined ? (targetAudienceProp ?? '') : '');
+    setCaptionText(captionProp !== undefined ? (captionProp ?? '') : '');
+    setLinkReferenceText(linkReferenceProp !== undefined ? (linkReferenceProp ?? '') : '');
+    skipNextAutoSaveRef.current = true;
+  }, [isOpen, brief, socialMediaPlanId]);
+
+  // When extended data finishes loading, populate target audience and caption (if not controlled by props)
+  useEffect(() => {
+    if (!isOpen || extendedLoading || targetAudienceProp !== undefined) return;
+    setTargetAudienceText(targetAudienceFetched ?? '');
+  }, [isOpen, extendedLoading, targetAudienceFetched, targetAudienceProp]);
+
+  useEffect(() => {
+    if (!isOpen || extendedLoading || captionProp !== undefined) return;
+    setCaptionText(captionFetched ?? '');
+  }, [isOpen, extendedLoading, captionFetched, captionProp]);
+
+  useEffect(() => {
+    if (!isOpen || extendedLoading || linkReferenceProp !== undefined) return;
+    setLinkReferenceText(linkReferenceFetched ?? '');
+  }, [isOpen, extendedLoading, linkReferenceFetched, linkReferenceProp]);
 
   // Check approval access on dialog open
   useEffect(() => {
@@ -136,33 +183,86 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     checkApprovalAccess();
   }, [isOpen]);
 
-  const handleSave = async () => {
+  const performSave = async (options: { closeAfter?: boolean } = {}) => {
+    const { closeAfter = false } = options;
     if (!socialMediaPlanId) {
       onSave(briefText.trim());
-      onClose();
+      if (closeAfter) onClose();
       return;
     }
 
     try {
-      // Update the social media plan with brief, completion date, and status
       const now = new Date().toISOString();
-      
-      const { error } = await supabase
+
+      const { error: planError } = await supabase
         .from('social_media_plans')
         .update({
           brief: briefText.trim(),
-          completion_date: now, // Set completion date when saving brief
-          status: 'Need Review' // Auto set status to Need Review
+          completion_date: now,
+          status: 'Need Review'
         })
         .eq('id', socialMediaPlanId);
 
-      if (error) {
-        console.error('Error updating brief:', error);
+      if (planError) {
+        console.error('Error updating brief:', planError);
         toast.error('Failed to save brief');
-      } else {
+        return;
+      }
+
+      const { error: audienceError } = await supabase
+        .from('brief_target_audiences')
+        .upsert(
+          {
+            social_media_plan_id: socialMediaPlanId,
+            description: targetAudienceText.trim() || null,
+            updated_at: now
+          },
+          { onConflict: 'social_media_plan_id' }
+        );
+
+      if (audienceError) {
+        console.error('Error saving target audience:', audienceError);
+        toast.error('Failed to save target audience');
+        return;
+      }
+
+      const { error: captionError } = await supabase
+        .from('brief_captions')
+        .upsert(
+          {
+            social_media_plan_id: socialMediaPlanId,
+            content: captionText.trim() || null,
+            updated_at: now
+          },
+          { onConflict: 'social_media_plan_id' }
+        );
+
+      if (captionError) {
+        console.error('Error saving caption:', captionError);
+        toast.error('Failed to save caption');
+        return;
+      }
+
+      const { error: linkRefError } = await supabase
+        .from('brief_link_references')
+        .upsert(
+          {
+            social_media_plan_id: socialMediaPlanId,
+            content: linkReferenceText.trim() || null,
+            updated_at: now
+          },
+          { onConflict: 'social_media_plan_id' }
+        );
+
+      if (linkRefError) {
+        console.error('Error saving link reference:', linkRefError);
+        toast.error('Failed to save link reference');
+        return;
+      }
+
+      invalidateExtended();
+      if (closeAfter) {
         toast.success('Brief saved successfully');
-        
-        // Update parent component with brief, completion_date, and status
         if (onStatusUpdate) {
           onStatusUpdate(socialMediaPlanId, {
             brief: briefText.trim(),
@@ -170,15 +270,29 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
             status: 'Need Review'
           });
         }
+        onSave(briefText.trim());
+        onClose();
       }
     } catch (error) {
       console.error('Error in handleSave:', error);
       toast.error('Failed to save changes');
     }
-
-    onSave(briefText.trim());
-    onClose();
   };
+
+  const handleSave = () => performSave({ closeAfter: true });
+
+  // Auto-save when accordion fields change (debounced); skip first run after dialog open
+  useEffect(() => {
+    if (!isOpen || !socialMediaPlanId) return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      performSave({ closeAfter: false });
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [isOpen, socialMediaPlanId, briefText, targetAudienceText, captionText, linkReferenceText]);
 
   const handleRequestRevision = async () => {
     if (!socialMediaPlanId) return;
@@ -291,15 +405,21 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   // Check if brief contains Google Docs links
   const hasGoogleDocsLink = briefText.includes('docs.google.com');
 
+  // Extract first URL from link reference text for "View reference" button
+  const firstLinkReferenceUrl = (() => {
+    const match = linkReferenceText.match(/https?:\/\/[^\s]+/i);
+    return match ? match[0].replace(/[.,;:!?)]+$/, '') : null;
+  })();
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden">
+      <DialogContent hideCloseButton className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden">
         <DialogTitle className="sr-only absolute">Content Brief</DialogTitle>
         <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
-        <div className="flex flex-col h-full">
-          <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
             {/* Left Section - Comments (Narrower) */}
-            <div className="w-1/4 border-r border-gray-200 flex flex-col">
+            <div className="w-1/4 border-r border-gray-200 flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-gray-600" />
@@ -378,11 +498,11 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
             </div>
 
             {/* Right Section - Brief Content & Preview (Wider) */}
-            <div className="w-3/4 flex flex-col">
+            <div className="w-3/4 flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-gray-600" />
-                  <span className="font-medium text-sm text-gray-800">Brief Content</span>
+                  <span className="font-medium text-sm text-gray-800">{t('briefDialog.sectionBriefContent', 'Brief Content')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasGoogleDocsLink && (
@@ -394,7 +514,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                         className="h-7 px-3 text-xs"
                       >
                         <FileText className="h-3 w-3 mr-1" />
-                        Edit
+                        {t('briefDialog.edit', 'Edit')}
                       </Button>
                       <Button
                         variant={showPreview ? "default" : "outline"}
@@ -403,24 +523,141 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                         className="h-7 px-3 text-xs"
                       >
                         <Globe className="h-3 w-3 mr-1" />
-                        Preview
+                        {t('briefDialog.preview', 'Preview')}
                       </Button>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {showPreview && hasGoogleDocsLink ? (
                   <LinkPreviewPanel brief={briefText} />
                 ) : (
-                  <div className="h-full p-4">
-                    <Textarea
-                      value={briefText}
-                      onChange={(e) => setBriefText(e.target.value)}
-                      placeholder="Enter brief content here..."
-                      className="w-full h-full resize-none border-gray-200 text-sm"
-                    />
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-4">
+                    <Accordion
+                      type="single"
+                      collapsible
+                      value={accordionOpen}
+                      onValueChange={(v) => setAccordionOpen(v ?? '')}
+                      className="w-full flex-1 flex flex-col min-h-0 gap-1"
+                    >
+                      <AccordionItem value="brief" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
+                        <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
+                          <span className="flex items-center gap-2">
+                            {briefText.trim() ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
+                            ) : (
+                              <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
+                            )}
+                            {t('briefDialog.sectionBriefContent', 'Brief Content')}
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent
+                          primitiveClassName="data-[state=open]:!h-full"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[280px] h-full"
+                        >
+                          <div className="min-h-[260px] flex-1 flex flex-col overflow-hidden h-full">
+                            <Textarea
+                              value={briefText}
+                              onChange={(e) => setBriefText(e.target.value)}
+                              placeholder={t('briefDialog.placeholderBrief', 'Enter brief content here...')}
+                              className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                      <AccordionItem value="targetAudience" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
+                        <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
+                          <span className="flex items-center gap-2">
+                            {targetAudienceText.trim() ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
+                            ) : (
+                              <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
+                            )}
+                            {t('briefDialog.sectionTargetAudience', 'Target Audience')}
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent
+                          primitiveClassName="data-[state=open]:!h-full"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[280px] h-full"
+                        >
+                          <div className="min-h-[260px] flex-1 flex flex-col overflow-hidden h-full">
+                            <Textarea
+                              value={targetAudienceText}
+                              onChange={(e) => setTargetAudienceText(e.target.value)}
+                              placeholder={t('briefDialog.placeholderTargetAudience', 'Target audience description (free-form)...')}
+                              className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                      <AccordionItem value="caption" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
+                        <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
+                          <span className="flex items-center gap-2">
+                            {captionText.trim() ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
+                            ) : (
+                              <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
+                            )}
+                            {t('briefDialog.sectionCaption', 'Caption')}
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent
+                          primitiveClassName="data-[state=open]:!h-full"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[280px] h-full"
+                        >
+                          <div className="min-h-[260px] flex-1 flex flex-col overflow-hidden h-full">
+                            <Textarea
+                              value={captionText}
+                              onChange={(e) => setCaptionText(e.target.value)}
+                              placeholder={t('briefDialog.placeholderCaption', 'Caption and hashtags...')}
+                              className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                      <AccordionItem value="linkReference" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
+                        <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
+                          <span className="flex items-center gap-2">
+                            {linkReferenceText.trim() ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
+                            ) : (
+                              <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
+                            )}
+                            {t('briefDialog.sectionLinkReference', 'Link Reference')}
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent
+                          primitiveClassName="data-[state=open]:!h-full"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[280px] h-full"
+                        >
+                          <div className="flex flex-col flex-1 min-h-0 overflow-hidden h-full">
+                            <div className="flex-shrink-0 mb-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={!firstLinkReferenceUrl}
+                                onClick={() => firstLinkReferenceUrl && window.open(firstLinkReferenceUrl, '_blank', 'noopener,noreferrer')}
+                                className="gap-2"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                {t('briefDialog.viewLinkReference', 'View reference video')}
+                              </Button>
+                            </div>
+                            <div className="min-h-[260px] flex-1 flex flex-col overflow-hidden">
+                              <Textarea
+                                value={linkReferenceText}
+                                onChange={(e) => setLinkReferenceText(e.target.value)}
+                                placeholder={t('briefDialog.placeholderLinkReference', 'Paste link(s) or reference URL(s)...')}
+                                className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
+                              />
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
                   </div>
                 )}
               </div>
@@ -441,7 +678,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                     className="text-orange-600 border-orange-600 hover:bg-orange-50"
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    Request Revision
+                    {t('briefDialog.requestRevision', 'Request Revision')}
                   </Button>
                   <Button
                     variant="outline"
@@ -451,7 +688,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                     className="text-green-600 border-green-600 hover:bg-green-50"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Approved
+                    {t('briefDialog.approved', 'Approved')}
                   </Button>
                 </>
               )}
@@ -460,10 +697,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
             {/* Right side - Cancel and Save buttons */}
             <div className="flex gap-3">
               <Button variant="outline" onClick={onClose} className="px-6">
-                Cancel
+                {t('briefDialog.cancel', 'Cancel')}
               </Button>
               <Button onClick={handleSave} className="px-6">
-                Save Brief
+                {t('briefDialog.saveBrief', 'Save Brief')}
               </Button>
             </div>
           </div>

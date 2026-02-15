@@ -1,5 +1,5 @@
 
-import { Clock, CreditCard, Home, UserCheck } from "lucide-react";
+import { Clock, CreditCard, Home, MessageCircle } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import {
@@ -16,8 +16,9 @@ import { Separator } from "@/mobile/components/ui/separator";
 
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
-  { title: "Subscription", url: "/subscription/overview", icon: CreditCard },
+  { title: "Live Chat", url: "/operations/consultant/all/livechat", icon: MessageCircle },
   { title: "Daily Task", url: "/tools/daily-task", icon: Clock },
+  { title: "Subscription", url: "/subscription/overview", icon: CreditCard },
 ];
 
 export function AppSidebar() {

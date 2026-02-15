@@ -94,6 +94,7 @@ import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTas
 import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
+import MobileLiveChatPage from "./mobile/pages/livechat/LiveChatPage";
 import { CalculatorServicesPage } from "./features/8-3-calculator/services";
 import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
@@ -242,6 +243,11 @@ const SubscriptionPlansRouteElement = () => {
 const SubscriptionManagementRouteElement = () => {
   const isMobile = useMobileDetection();
   return isMobile ? <ManagementTabPageMobile /> : <ManagementTabPageDesktop />;
+};
+
+const LivechatRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <MobileLiveChatPage /> : <WhatsAppInboxPage />;
 };
 
 const App = () => (
@@ -626,7 +632,7 @@ const App = () => (
               } />
               <Route path="/operations/consultant/all/livechat" element={
                 <ProtectedRoute>
-                  <WhatsAppInboxPage />
+                  <LivechatRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/operations/consultant/sales-consultant" element={<Navigate to="/operations/consultant/leads-management" replace />} />

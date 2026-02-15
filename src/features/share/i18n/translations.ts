@@ -203,6 +203,7 @@ const idTranslations: TranslationDictionary = {
   "whatsappInbox.blockContactRequest": "Pesan mengandung permintaan kontak dan tidak dapat dikirim.",
   "whatsappInbox.instagramMediaNotSupported": "Pengiriman media ke Instagram belum tersedia. Kirim pesan teks saja.",
   "whatsappInbox.quickAction": "Quick Action",
+  "whatsappInbox.enableNotifications": "Aktifkan notifikasi",
   "whatsappInbox.collapseQuickAction": "Tutup sidebar",
   "whatsappInbox.expandQuickAction": "Buka Quick Action",
   "whatsappInbox.quickActionSelectConversation": "Pilih percakapan untuk melihat quick action",
@@ -2503,7 +2504,22 @@ const idTranslations: TranslationDictionary = {
   "candidateProfile.sjt.dimension.komunikasi": "Komunikasi & Transparansi",
   "candidateProfile.sjt.dimension.prioritas": "Prioritas & Koordinasi",
   "candidateProfile.sjt.dimension.konflik": "Penanganan Konflik",
-  "candidateProfile.sjt.dimension.prosedur": "Kepatuhan Prosedur"
+  "candidateProfile.sjt.dimension.prosedur": "Kepatuhan Prosedur",
+  "briefDialog.sectionBriefContent": "Brief Content",
+  "briefDialog.sectionTargetAudience": "Target Audience",
+  "briefDialog.sectionCaption": "Caption",
+  "briefDialog.sectionLinkReference": "Link Reference",
+  "briefDialog.placeholderLinkReference": "Paste link(s) or reference URL(s)...",
+  "briefDialog.viewLinkReference": "Lihat referensi video",
+  "briefDialog.edit": "Edit",
+  "briefDialog.preview": "Preview",
+  "briefDialog.placeholderBrief": "Masukkan konten brief di sini...",
+  "briefDialog.placeholderTargetAudience": "Deskripsi target audience (bebas)...",
+  "briefDialog.placeholderCaption": "Caption dan hashtag...",
+  "briefDialog.saveBrief": "Simpan Brief",
+  "briefDialog.cancel": "Batal",
+  "briefDialog.requestRevision": "Request Revision",
+  "briefDialog.approved": "Approved"
 };
 
 const enTranslations: TranslationDictionary = {
@@ -2704,6 +2720,7 @@ const enTranslations: TranslationDictionary = {
   "whatsappInbox.blockContactRequest": "Message contains contact request and cannot be sent.",
   "whatsappInbox.instagramMediaNotSupported": "Sending media to Instagram is not supported yet. Send text only.",
   "whatsappInbox.quickAction": "Quick Action",
+  "whatsappInbox.enableNotifications": "Enable notifications",
   "whatsappInbox.collapseQuickAction": "Collapse sidebar",
   "whatsappInbox.expandQuickAction": "Expand Quick Action",
   "whatsappInbox.quickActionSelectConversation": "Select a conversation to see quick actions",
@@ -5007,7 +5024,22 @@ const enTranslations: TranslationDictionary = {
   "candidateProfile.sjt.dimension.komunikasi": "Communication & Transparency",
   "candidateProfile.sjt.dimension.prioritas": "Priorities & Coordination",
   "candidateProfile.sjt.dimension.konflik": "Conflict Handling",
-  "candidateProfile.sjt.dimension.prosedur": "Procedure Compliance"
+  "candidateProfile.sjt.dimension.prosedur": "Procedure Compliance",
+  "briefDialog.sectionBriefContent": "Brief Content",
+  "briefDialog.sectionTargetAudience": "Target Audience",
+  "briefDialog.sectionCaption": "Caption",
+  "briefDialog.sectionLinkReference": "Link Reference",
+  "briefDialog.placeholderLinkReference": "Paste link(s) or reference URL(s)...",
+  "briefDialog.viewLinkReference": "View reference video",
+  "briefDialog.edit": "Edit",
+  "briefDialog.preview": "Preview",
+  "briefDialog.placeholderBrief": "Enter brief content here...",
+  "briefDialog.placeholderTargetAudience": "Target audience description (free-form)...",
+  "briefDialog.placeholderCaption": "Caption and hashtags...",
+  "briefDialog.saveBrief": "Save Brief",
+  "briefDialog.cancel": "Cancel",
+  "briefDialog.requestRevision": "Request Revision",
+  "briefDialog.approved": "Approved"
 };
 
 export const defaultTranslations: Record<AppLanguage, TranslationDictionary> = {
