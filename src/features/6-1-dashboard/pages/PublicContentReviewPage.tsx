@@ -730,27 +730,31 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           );
         })()}
 
-        {/* Target Audience - fixed height; data from brief_target_audiences via token-scoped RPC */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
-          <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 border-l-4 border-l-blue-500">
-            <h4 className="font-medium text-sm text-blue-900">{t('briefDialog.sectionTargetAudience', 'Target Audience')}</h4>
+        {/* Target Audience - hanya tampil jika ada isi (data dari RPC yang sama, tanpa request tambahan) */}
+        {briefExtended?.target_audience?.trim() ? (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
+            <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 border-l-4 border-l-blue-500">
+              <h4 className="font-medium text-sm text-blue-900">{t('briefDialog.sectionTargetAudience', 'Target Audience')}</h4>
+            </div>
+            <div className="h-32 sm:h-40 overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+              {briefExtended.target_audience}
+            </div>
           </div>
-          <div className="h-32 sm:h-40 overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
-            {briefExtended?.target_audience?.trim() ? briefExtended.target_audience : '—'}
-          </div>
-        </div>
+        ) : null}
 
-        {/* Caption - below Target Audience; data from brief_captions via token-scoped RPC */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
-          <div className="p-2 sm:p-3 border-b border-emerald-200/80 bg-emerald-50 flex-shrink-0 border-l-4 border-l-emerald-500">
-            <h4 className="font-medium text-sm text-emerald-900">{t('briefDialog.sectionCaption', 'Caption')}</h4>
+        {/* Caption - hanya tampil jika ada isi */}
+        {briefExtended?.caption?.trim() ? (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
+            <div className="p-2 sm:p-3 border-b border-emerald-200/80 bg-emerald-50 flex-shrink-0 border-l-4 border-l-emerald-500">
+              <h4 className="font-medium text-sm text-emerald-900">{t('briefDialog.sectionCaption', 'Caption')}</h4>
+            </div>
+            <div className="overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words min-h-[72px] sm:min-h-[80px]">
+              {briefExtended.caption}
+            </div>
           </div>
-          <div className="overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words min-h-[72px] sm:min-h-[80px]">
-            {briefExtended?.caption?.trim() ? briefExtended.caption : '—'}
-          </div>
-        </div>
+        ) : null}
 
-        {/* Comments - below */}
+        {/* Comments - selalu ditampilkan */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-1 min-h-0 min-w-0">
           <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 flex items-center gap-2 border-l-4 border-l-blue-500">
             <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
