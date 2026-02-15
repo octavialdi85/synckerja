@@ -17,7 +17,7 @@ Set in Supabase Dashboard → Edge Functions → livechat-send-push → Secrets 
 | Secret | Description |
 |--------|-------------|
 | `VAPID_KEYS` | JSON string from `exportVapidKeys()` (JWK format). Generate with: `deno run https://raw.githubusercontent.com/negrel/webpush/master/cmd/generate-vapid-keys.ts` — use the printed JSON (both keys). |
-| `LIVECHAT_APP_ORIGIN` | (Optional) Base URL for deep links, e.g. `https://app.example.com`. If unset, defaults to `https://app.synckerja.com`. |
+| `LIVECHAT_APP_ORIGIN` | (Optional) Base URL for deep links, e.g. `https://app.profitloop.id`. If unset, defaults to `https://app.profitloop.id`. |
 | `VAPID_CONTACT_EMAIL` | (Optional) Mailto for VAPID, e.g. `mailto:support@example.com`. |
 
 ## Database Webhooks

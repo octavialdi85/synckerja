@@ -187,10 +187,25 @@ Deno.serve(async (req: Request) => {
       vapidKeys,
     });
 
-    const baseUrl = APP_ORIGIN || "https://app.synckerja.com";
+    const baseUrl = APP_ORIGIN || "https://app.profitloop.id";
     const url = `${baseUrl}/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(ticketId)}`;
     const title = `Pesan baru dari ${senderName}`;
-    const payloadStr = JSON.stringify({ title, body: bodyPreview, url });
+
+    let totalUnread = 0;
+    try {
+      const [waRes, emailRes] = await Promise.all([
+        supabase.rpc("get_whatsapp_unread_counts", { p_organization_id: organizationId }),
+        supabase.rpc("get_email_unread_counts", { p_organization_id: organizationId }),
+      ]);
+      const sum = (rows: { unread_count?: number }[] | null) =>
+        (rows ?? []).reduce((s, r) => s + (Number(r?.unread_count) || 0), 0);
+      totalUnread = sum(waRes.data ?? []) + sum(emailRes.data ?? []);
+      if (totalUnread < 1) totalUnread = 1;
+    } catch {
+      totalUnread = 1;
+    }
+
+    const payloadStr = JSON.stringify({ title, body: bodyPreview, url, badge: totalUnread });
 
     const toDelete: string[] = [];
     for (const sub of subscriptions as { id: string; endpoint: string; p256dh: string; auth: string }[]) {

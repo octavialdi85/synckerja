@@ -14,11 +14,21 @@ import { getConversationTicketId } from './shared/getConversationTicketId';
 import { LiveChatListView } from './LiveChatListView';
 import { LiveChatChatView } from './LiveChatChatView';
 import { useLiveChatInboundNotification } from './hooks/useLiveChatInboundNotification';
+import { LiveChatAppBadgeSync } from '@/features/5-3-whatsapp/components/LiveChatAppBadgeSync';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
 export default function LiveChatPage() {
   const { t } = useAppTranslation();
+  return (
+    <>
+      <LiveChatAppBadgeSync />
+      <LiveChatPageInner t={t} />
+    </>
+  );
+}
+
+function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

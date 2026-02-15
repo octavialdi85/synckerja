@@ -6,6 +6,7 @@ import { useSmartNavigation } from "./useSmartNavigation";
 import { useDepartmentAccess } from "./useDepartmentAccess";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { useWhatsAppUnreadCount } from "@/features/5-3-whatsapp/hooks/useWhatsAppUnreadCount";
+import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
 import { Building2, ChevronRight, X, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
@@ -340,6 +341,7 @@ export function AppSidebar() {
     return false;
   };
   return <div className="relative flex h-full">
+      <LiveChatAppBadgeSync />
       <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className="transition-all duration-300 ease-out group">
         <Sidebar collapsible="icon" className="border-r h-full bg-white shadow-none border-gray-200 transition-all duration-300 ease-out top-16 fixed left-0" style={{
         fontFamily: 'system-ui, -apple-system, sans-serif',

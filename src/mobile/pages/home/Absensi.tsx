@@ -18,6 +18,7 @@ import { logger } from "@/config/logger";
 import { useAttendanceData } from "@/mobile/hooks/useAttendanceData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
+import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
 let confetti: any;
 try {
   // Optional import to avoid build error if package not installed
@@ -722,6 +723,7 @@ const Absensi = () => {
 
   return (
     <DesktopWarning>
+      <LiveChatAppBadgeSync />
       <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />

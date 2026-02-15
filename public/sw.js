@@ -11,14 +11,22 @@ self.addEventListener('push', function (event) {
     icon: baseUrl + '/favicon.svg',
     badge: baseUrl + '/favicon.svg',
     vibrate: [200, 100, 200],
-    requireInteraction: false,
+    requireInteraction: true,
+    silent: false,
   };
   try {
     var payload = event.data.json();
     options.body = payload.body || options.body;
     options.data = { url: payload.url || '/' };
     if (payload.title) options.title = payload.title;
-    event.waitUntil(self.registration.showNotification(payload.title || 'Pesan baru', options));
+    event.waitUntil(
+      Promise.all([
+        self.registration.showNotification(payload.title || 'Pesan baru', options),
+        typeof self.navigator !== 'undefined' && self.navigator.setAppBadge && payload.badge != null
+          ? self.navigator.setAppBadge(Number(payload.badge)).catch(function () {})
+          : Promise.resolve(),
+      ])
+    );
   } catch (e) {
     options.title = 'Pesan baru';
     event.waitUntil(self.registration.showNotification('Pesan baru', options));
