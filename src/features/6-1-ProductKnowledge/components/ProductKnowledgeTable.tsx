@@ -95,6 +95,18 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.subService', 'Sub Service')}
                 </th>
                 <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.feature', 'Feature')}
+                </th>
+                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.solution', 'Solution')}
+                </th>
+                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
+                  {t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
+                </th>
+                <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.targetMarket', 'Target Market')}
                 </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
@@ -118,20 +130,8 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.falseBeliefImpact', 'False Belief Impact')}
                 </th>
-                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?')}
-                </th>
-                <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.solution', 'Solution')}
-                </th>
-                <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.feature', 'Feature')}
-                </th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
-                </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
+                  {t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?')}
                 </th>
               </tr>
             </thead>
@@ -622,6 +622,117 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         </Select>
       </td>
 
+      {/* Fitur */}
+      <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFeatureName ? (
+          <Input
+            defaultValue={item.feature_name || ''}
+            onBlur={(e) => handleFeatureNameBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleFeatureNameBlur(e.currentTarget.value);
+              } else if (e.key === 'Escape') {
+                setIsEditingFeatureName(false);
+              }
+            }}
+            autoFocus
+            className="h-8 text-sm"
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('feature', t('productKnowledge.table.headers.feature', 'Feature'), item.feature_name || '')}
+            onDoubleClick={() => setIsEditingFeatureName(true)}
+            title={item.feature_name || '-'}
+          >
+            {item.feature_name || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Fitur Description */}
+      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingFeatureDescription ? (
+          <textarea
+            defaultValue={item.feature_description || ''}
+            onBlur={(e) => handleFeatureDescriptionBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingFeatureDescription(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
+            rows={3}
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '')}
+            onDoubleClick={() => setIsEditingFeatureDescription(true)}
+            title={item.feature_description || '-'}
+          >
+            {item.feature_description || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Solusi */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingSolution ? (
+          <textarea
+            defaultValue={item.solusi || ''}
+            onBlur={(e) => handleSolutionBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingSolution(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Solution 1: ...&#10;&#10;Solution 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '')}
+            onDoubleClick={() => setIsEditingSolution(true)}
+            title={item.solusi || '-'}
+          >
+            {item.solusi || '-'}
+          </div>
+        )}
+      </td>
+
+      {/* Competitive Advantage */}
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+        {isEditingCompetitiveAdvantage ? (
+          <textarea
+            defaultValue={formatCompetitiveAdvantage(item.competitive_advantage)}
+            onBlur={(e) => handleCompetitiveAdvantageBlur(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setIsEditingCompetitiveAdvantage(false);
+              }
+            }}
+            autoFocus
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
+            rows={5}
+            placeholder="Advantage 1: ...&#10;Advantage 2: ..."
+          />
+        ) : (
+          <div
+            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
+            onClick={() => openViewPopup('competitiveAdvantage', t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'), formatCompetitiveAdvantage(item.competitive_advantage))}
+            onDoubleClick={() => setIsEditingCompetitiveAdvantage(true)}
+            title={formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
+          >
+            {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
+          </div>
+        )}
+      </td>
+
       {/* Target Market */}
       <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingTargetMarket ? (
@@ -847,7 +958,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       </td>
 
       {/* What Makes Them Stop */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1">
         {isEditingWhatMakesThemStop ? (
           <textarea
             defaultValue={item.what_makes_them_stop || ''}
@@ -870,117 +981,6 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             title={item.what_makes_them_stop || '-'}
           >
             {item.what_makes_them_stop || '-'}
-          </div>
-        )}
-      </td>
-
-      {/* Solusi */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingSolution ? (
-          <textarea
-            defaultValue={item.solusi || ''}
-            onBlur={(e) => handleSolutionBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingSolution(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Solution 1: ...&#10;&#10;Solution 2: ..."
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '')}
-            onDoubleClick={() => setIsEditingSolution(true)}
-            title={item.solusi || '-'}
-          >
-            {item.solusi || '-'}
-          </div>
-        )}
-      </td>
-
-      {/* Fitur */}
-      <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureName ? (
-          <Input
-            defaultValue={item.feature_name || ''}
-            onBlur={(e) => handleFeatureNameBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleFeatureNameBlur(e.currentTarget.value);
-              } else if (e.key === 'Escape') {
-                setIsEditingFeatureName(false);
-              }
-            }}
-            autoFocus
-            className="h-8 text-sm"
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('feature', t('productKnowledge.table.headers.feature', 'Feature'), item.feature_name || '')}
-            onDoubleClick={() => setIsEditingFeatureName(true)}
-            title={item.feature_name || '-'}
-          >
-            {item.feature_name || '-'}
-          </div>
-        )}
-      </td>
-
-      {/* Fitur Description */}
-      <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureDescription ? (
-          <textarea
-            defaultValue={item.feature_description || ''}
-            onBlur={(e) => handleFeatureDescriptionBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingFeatureDescription(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '')}
-            onDoubleClick={() => setIsEditingFeatureDescription(true)}
-            title={item.feature_description || '-'}
-          >
-            {item.feature_description || '-'}
-          </div>
-        )}
-      </td>
-
-      {/* Competitive Advantage */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1">
-        {isEditingCompetitiveAdvantage ? (
-          <textarea
-            defaultValue={formatCompetitiveAdvantage(item.competitive_advantage)}
-            onBlur={(e) => handleCompetitiveAdvantageBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingCompetitiveAdvantage(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Advantage 1: ...&#10;Advantage 2: ..."
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('competitiveAdvantage', t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'), formatCompetitiveAdvantage(item.competitive_advantage))}
-            onDoubleClick={() => setIsEditingCompetitiveAdvantage(true)}
-            title={formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
-          >
-            {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
           </div>
         )}
       </td>

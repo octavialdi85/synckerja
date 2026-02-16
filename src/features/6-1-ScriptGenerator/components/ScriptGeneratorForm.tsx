@@ -1498,27 +1498,16 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           <AccordionContent>
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label htmlFor="solution">Solution</Label>
-                <Textarea
-                  id="solution"
-                  value={formData.solution || ''}
-                  onChange={(e) => handleInputChange('solution', e.target.value)}
-                  placeholder="Solusi yang ditawarkan"
-                  rows={3}
+                <Label htmlFor="feature_name">Feature</Label>
+                <Input
+                  id="feature_name"
+                  value={formData.feature_name || ''}
+                  onChange={(e) => handleInputChange('feature_name', e.target.value)}
+                  placeholder="Nama fitur produk/layanan"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="feature_name">Feature</Label>
-                  <Input
-                    id="feature_name"
-                    value={formData.feature_name || ''}
-                    onChange={(e) => handleInputChange('feature_name', e.target.value)}
-                    placeholder="Nama fitur produk/layanan"
-                  />
-                </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="feature_description">Feature Description</Label>
                   <Textarea
@@ -1526,6 +1515,17 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     value={formData.feature_description || ''}
                     onChange={(e) => handleInputChange('feature_description', e.target.value)}
                     placeholder="Deskripsi detail fitur produk/layanan"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="solution">Solution</Label>
+                  <Textarea
+                    id="solution"
+                    value={formData.solution || ''}
+                    onChange={(e) => handleInputChange('solution', e.target.value)}
+                    placeholder="Solusi yang ditawarkan"
                     rows={3}
                   />
                 </div>
