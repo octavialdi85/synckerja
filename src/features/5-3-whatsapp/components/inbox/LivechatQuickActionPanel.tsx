@@ -308,24 +308,32 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
     }
   }, [leadRow?.id, organizationId, ticketId, deleteLead, queryClient, t]);
 
-  // Opsi dropdown Status = dari DB (lead_statuses); tampilan pakai getLeadStatusDisplayName (Open→Unread, In Progress→On going, Closed→Resolve)
+  // Opsi dropdown Status = dari DB (lead_statuses) untuk org aktif; tampilan pakai getLeadStatusDisplayName (Open→Unread, In Progress→On going, Closed→Resolve)
   const { data: leadStatuses = [] } = useQuery({
-    queryKey: ['lead-statuses'],
+    queryKey: ['lead-statuses', organizationId],
+    enabled: !!organizationId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const q = supabase
         .from('lead_statuses')
         .select('id, name, color')
         .eq('is_active', true)
         .order('sort_order');
+      // Filter by current org so dropdown only shows this org's statuses (and value from conversation matches)
+      if (organizationId) {
+        q.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as LeadStatus[];
     },
   });
 
   const isEmail = conversation?.source === 'email';
-  const statusTable = isEmail ? 'email_conversations' : 'whatsapp_conversations';
+  const isInstagram = conversation?.source === 'instagram';
+  const statusTable = isEmail ? 'email_conversations' : isInstagram ? 'instagram_conversations' : 'whatsapp_conversations';
+  const statusQueryKeyBase = isEmail ? 'email-conversation-status' : isInstagram ? 'instagram-conversation-status' : 'whatsapp-conversation-status';
   const { data: conversationStatus, isLoading: statusLoading } = useQuery({
-    queryKey: [isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status', conversation?.id],
+    queryKey: [statusQueryKeyBase, conversation?.id],
     queryFn: async () => {
       if (!conversation?.id) return null;
       const { data, error } = await supabase
@@ -406,10 +414,15 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   // Derived values used by hooks below — must be before any conditional return so hook order is stable
   const leadId = conversation ? (conversation.source === 'email' ? `email-${conversation.id}` : `wa-${conversation.id}`) : '';
   const leadTitle = conversation ? getLeadTitle(conversation, t) : '';
-  const currentStatusId = conversationStatus ?? (leadStatuses.length > 0 ? leadStatuses[0].id : '');
+  // Only use a status id that exists in leadStatuses so Select stays controlled and we never send invalid FK
+  const currentStatusId = (() => {
+    const fromConv = conversationStatus ?? '';
+    if (fromConv && leadStatuses.some((s) => s.id === fromConv)) return fromConv;
+    return leadStatuses.length > 0 ? leadStatuses[0].id : '';
+  })();
   const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
   const isResolved = isResolvedStatus(currentStatus?.name ?? null);
-  const statusQueryKey = isEmail ? 'email-conversation-status' : 'whatsapp-conversation-status';
+  const statusQueryKey = statusQueryKeyBase;
 
   const handleAddUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -501,6 +514,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         lead_status: oldStatusName ? { name: oldStatusName } : undefined,
         conversionDescription,
       });
+      queryClient.setQueryData([statusQueryKey, conversation.id], newStatusId);
       await queryClient.invalidateQueries({ queryKey: [statusQueryKey, conversation.id] });
       await queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success(t('whatsappInbox.statusUpdated', 'Status updated'));

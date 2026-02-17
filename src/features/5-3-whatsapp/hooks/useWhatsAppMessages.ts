@@ -19,35 +19,50 @@ export function useWhatsAppMessages(conversationId: string | null) {
       channelRef.current = null;
     }
 
-    // Realtime: any INSERT/UPDATE (inbound from webhook or outbound from send) triggers refetch
-    channelRef.current = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'whatsapp_messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload: { new?: { direction?: string } }) => {
-          queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, conversationId] });
-          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-          // Hanya refresh status UI ketika pesan INBOUND (customer kirim). Kalau outbound (kita reply),
-          // jangan invalidate status supaya optimistic "In Progress" tidak tertimpa refetch data lama.
-          const isInbound = payload?.new?.direction === 'inbound';
-          if (isInbound) {
+    const channel = supabase.channel(channelName);
+
+    // Realtime: pesan baru (inbound/outbound) → refetch messages + list
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'whatsapp_messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload: { new?: { direction?: string } }) => {
+        queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, conversationId] });
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+        const isInbound = payload?.new?.direction === 'inbound';
+        if (isInbound) {
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+          if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+          fallbackTimeoutRef.current = setTimeout(() => {
+            fallbackTimeoutRef.current = null;
             queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
-            if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
-            fallbackTimeoutRef.current = setTimeout(() => {
-              fallbackTimeoutRef.current = null;
-              queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
-              queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
-            }, 2000);
-          }
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+          }, 2000);
         }
-      )
-      .subscribe();
+      }
+    );
+
+    // Realtime: conversation row di-update (mis. webhook ubah Resolve → Unread) → refresh status sidebar
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'whatsapp_conversations',
+        filter: `id=eq.${conversationId}`,
+      },
+      () => {
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status', conversationId] });
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+      }
+    );
+
+    channelRef.current = channel;
+    channel.subscribe();
 
     return () => {
       if (fallbackTimeoutRef.current) {

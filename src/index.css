@@ -126,6 +126,18 @@
   display: none !important;
 }
 
+/* Search conversation popup: no zoom/slide animation */
+.dialog-search-instant,
+.dialog-search-instant[data-state="open"],
+.dialog-search-instant[data-state="closed"] {
+  animation: none !important;
+}
+.dialog-search-overlay-instant,
+.dialog-search-overlay-instant[data-state="open"],
+.dialog-search-overlay-instant[data-state="closed"] {
+  animation: none !important;
+}
+
 /* Additional force hide for any remaining scrollbars */
 .table-container::-webkit-scrollbar-horizontal {
   display: none !important;

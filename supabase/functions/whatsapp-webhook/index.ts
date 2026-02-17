@@ -541,14 +541,17 @@ Deno.serve(async (req: Request) => {
                     .maybeSingle();
                   leadStatusName = (statusRow?.name as string) ?? null;
                 }
+                // Prefer "Open", fallback "Unread". Include global statuses (organization_id IS NULL) for all tenants.
+                const orgOrGlobal = `organization_id.eq.${orgId},organization_id.is.null`;
                 const { data: openStatus } = await supabase
                   .from("lead_statuses")
                   .select("id")
+                  .or(orgOrGlobal)
                   .eq("name", "Open")
                   .maybeSingle();
                 const { data: unreadStatus } = openStatus?.id
                   ? { data: null }
-                  : await supabase.from("lead_statuses").select("id").eq("name", "Unread").maybeSingle();
+                  : await supabase.from("lead_statuses").select("id").or(orgOrGlobal).eq("name", "Unread").maybeSingle();
                 const openStatusId = openStatus?.id ?? unreadStatus?.id ?? null;
 
                 if (firstInboundAt == null) {
@@ -598,7 +601,7 @@ Deno.serve(async (req: Request) => {
                   });
                   if (cycleErr) console.error("New cycle insert error:", cycleErr);
                 } else if (isResolved && !openStatusId) {
-                  console.warn("Cannot reopen: lead_statuses has no row with name 'Open'. Add Open status in DB.");
+                  console.warn("Cannot reopen: lead_statuses has no row with name 'Open' or 'Unread' (org or global). Add Open or Unread status in DB.");
                 }
               }
               }

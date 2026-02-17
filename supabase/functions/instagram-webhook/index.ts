@@ -338,6 +338,51 @@ Deno.serve(async (req: Request) => {
             .eq("id", conv.id);
         }
 
+        // Resolve-cycle: when existing conversation receives inbound, re-open to Open (Unread) if status is Closed/Resolve or null (same logic as whatsapp-webhook)
+        if (existingConv) {
+          const { data: convRow } = await supabase
+            .from("instagram_conversations")
+            .select("lead_status_id")
+            .eq("id", conv.id)
+            .single();
+          const statusId = convRow?.lead_status_id ?? null;
+          let leadStatusName: string | null = null;
+          if (statusId) {
+            const { data: statusRow } = await supabase
+              .from("lead_statuses")
+              .select("name")
+              .eq("id", statusId)
+              .maybeSingle();
+            leadStatusName = (statusRow?.name as string) ?? null;
+          }
+          // Prefer "Open", fallback "Unread". Include global statuses (organization_id IS NULL) for all tenants.
+          const orgOrGlobal = `organization_id.eq.${orgId},organization_id.is.null`;
+          const { data: openStatus } = await supabase
+            .from("lead_statuses")
+            .select("id")
+            .or(orgOrGlobal)
+            .eq("name", "Open")
+            .maybeSingle();
+          const { data: unreadStatus } = openStatus?.id
+            ? { data: null }
+            : await supabase.from("lead_statuses").select("id").or(orgOrGlobal).eq("name", "Unread").maybeSingle();
+          const openStatusId = openStatus?.id ?? unreadStatus?.id ?? null;
+          const statusNameLower = leadStatusName?.trim().toLowerCase() ?? "";
+          const isResolved = statusNameLower === "closed" || statusNameLower === "resolve";
+          const isNewOrReopen = openStatusId && (statusId == null || isResolved);
+          if (isNewOrReopen) {
+            const { error: updateErr } = await supabase
+              .from("instagram_conversations")
+              .update({ lead_status_id: openStatusId, last_inbound_at: ts, updated_at: ts })
+              .eq("id", conv.id);
+            if (updateErr) {
+              console.error("[instagram-webhook] Reopen to Open (Unread) update error:", updateErr);
+            } else {
+              console.log("[instagram-webhook] Reopened conversation to Open (Unread):", conv.id, { openStatusId, hadStatus: statusId });
+            }
+          }
+        }
+
         console.log("[instagram-webhook] message saved", { convId: conv.id, mid });
       }
     }

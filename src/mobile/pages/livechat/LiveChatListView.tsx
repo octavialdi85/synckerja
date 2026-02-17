@@ -52,7 +52,8 @@ export function LiveChatListView({
   const { t } = useAppTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
-  const { height: viewportHeight } = useVisualViewport();
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const isKeyboardLikelyOpen = typeof window !== 'undefined' && viewportHeight > 0 && viewportHeight < window.innerHeight * 0.85;
 
   const waAccountsForHint = waAccounts.map((a) => ({
     display_phone_number: a.display_phone_number,
@@ -116,8 +117,20 @@ export function LiveChatListView({
 
               <Dialog open={searchPopupOpen} onOpenChange={(open) => { setSearchPopupOpen(open); if (!open) setSearchQuery(''); }}>
                 <DialogContent
-                  className="sm:max-w-md overflow-hidden flex flex-col p-4"
-                  style={viewportHeight > 0 ? { maxHeight: viewportHeight - 48 } : undefined}
+                  className="dialog-search-instant sm:max-w-md overflow-hidden flex flex-col p-4"
+                  overlayClassName="dialog-search-overlay-instant"
+                  style={
+                    viewportHeight > 0
+                      ? isKeyboardLikelyOpen
+                        ? {
+                            top: viewportOffsetTop + 8,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            maxHeight: viewportHeight - 16,
+                          }
+                        : { maxHeight: viewportHeight - 48 }
+                      : undefined
+                  }
                 >
                   <DialogHeader className="flex-shrink-0">
                     <DialogTitle>{t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}</DialogTitle>

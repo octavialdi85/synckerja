@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWhatsAppMessages } from '../../hooks/useWhatsAppMessages';
 import { useInstagramMessages } from '../../hooks/useInstagramMessages';
@@ -510,6 +510,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const touchStartRef = useRef<{ msgId: string; startX: number; thresholdVibrated?: boolean } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<{ msgId: string; translateX: number } | null>(null);
   const knownInboundIdsRef = useRef<Set<string>>(new Set());
+  const hasScrollTargetRef = useRef(false);
 
   const vibrate = useCallback((ms = 50) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms);
@@ -654,18 +655,25 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     knownInboundIdsRef.current = known;
   }, [messages, notificationConversationName]);
 
+  const hasScrollTarget = !!(scrollToMessageId ?? scrollToTextInChat?.trim());
+  hasScrollTargetRef.current = hasScrollTarget;
+
   useEffect(() => {
     if (!hideHeader) return;
+    if (hasScrollTarget) return;
     if (optimisticEntry) {
       requestAnimationFrame(() => scrollMessagesToBottom());
     }
-  }, [hideHeader, optimisticEntry, scrollMessagesToBottom]);
+  }, [hideHeader, hasScrollTarget, optimisticEntry, scrollMessagesToBottom]);
 
   useEffect(() => {
     if (!hideHeader) return;
     const el = messagesScrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => scrollMessagesToBottom());
+    const ro = new ResizeObserver(() => {
+      if (hasScrollTargetRef.current) return;
+      scrollMessagesToBottom();
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, [hideHeader, scrollMessagesToBottom]);
@@ -703,22 +711,21 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const scrollToTextInChatTrimmed = scrollToTextInChat?.trim();
   const onScrollToTextDoneRef = useRef(onScrollToTextDone);
   onScrollToTextDoneRef.current = onScrollToTextDone;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!scrollToTextInChatTrimmed || isLoading || displayMessages.length === 0) return;
     const q = scrollToTextInChatTrimmed.toLowerCase();
-    const firstMatch = displayMessages.find((msg) => {
+    const allMatches = displayMessages.filter((msg) => {
       const body = (msg.body ?? '').toLowerCase();
       const caption = (getMessageCaptionForReply(msg) ?? '').toLowerCase();
       return body.includes(q) || caption.includes(q);
     });
+    const firstMatch = allMatches[0] ?? null;
     const done = () => onScrollToTextDoneRef.current?.();
     if (firstMatch) {
       const el = document.getElementById(`msg-${firstMatch.id}`);
       if (el) {
-        requestAnimationFrame(() => {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          done();
-        });
+        el.scrollIntoView({ behavior: 'auto', block: 'center' });
+        done();
       } else {
         done();
       }
@@ -732,7 +739,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const scrollHighlightTimeoutRef = useRef<number | null>(null);
   const effectiveScrollToMessageId = scrollToMessageId ?? scrollToMessageIdLocal;
   const fromPropRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!effectiveScrollToMessageId || isLoading || displayMessages.length === 0) return;
     const el = document.getElementById(`msg-${effectiveScrollToMessageId}`);
     const fromProp = scrollToMessageId != null && scrollToMessageId === effectiveScrollToMessageId;
@@ -742,15 +749,15 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       else setScrollToMessageIdLocal(null);
     };
     if (el) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
-        scrollHighlightTimeoutRef.current = window.setTimeout(() => {
-          el.classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
-          scrollHighlightTimeoutRef.current = null;
-          done();
-        }, 2500);
-      });
+      const bubble = el.querySelector<HTMLElement>(`[data-msg-bubble="${effectiveScrollToMessageId}"]`);
+      const highlightTarget = bubble ?? el;
+      el.scrollIntoView({ behavior: 'auto', block: 'center' });
+      highlightTarget.classList.add('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+      scrollHighlightTimeoutRef.current = window.setTimeout(() => {
+        highlightTarget.classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+        scrollHighlightTimeoutRef.current = null;
+        done();
+      }, 2500);
     } else {
       done();
     }
@@ -767,7 +774,8 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     if (!effectiveScrollToMessageId) return;
     const el = document.getElementById(`msg-${effectiveScrollToMessageId}`);
     if (el) {
-      el.classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
+      const bubble = el.querySelector<HTMLElement>(`[data-msg-bubble="${effectiveScrollToMessageId}"]`);
+      (bubble ?? el).classList.remove('ring-2', 'ring-[#25D366]', 'bg-[#25D366]/15', 'rounded-lg');
     }
     if (scrollHighlightTimeoutRef.current != null) {
       window.clearTimeout(scrollHighlightTimeoutRef.current);
@@ -1242,6 +1250,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             >
               {msg.direction === 'inbound' && <CheckboxBtn />}
               <div
+                data-msg-bubble={msg.id}
                 className="relative max-w-[80%]"
                 style={
                   hideHeader && swipeOffset?.msgId === msg.id

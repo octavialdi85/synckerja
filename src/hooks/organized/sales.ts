@@ -1341,10 +1341,21 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
       if (lead?.id && String(lead.id).startsWith('email-')) {
         const convId = String(lead.id).replace(/^email-/, '');
         const orgId = lead.organization_id ?? organizationId;
+        // FK: only set lead_status_id if it exists in lead_statuses. Uses same client/RLS as dropdown;
+        // ensure lead_statuses RLS allows global (organization_id IS NULL) statuses so Resolve/Unread are found.
+        let safeStatusId: string | null = null;
+        if (lead.status_id) {
+          const { data: statusExists } = await supabase
+            .from('lead_statuses')
+            .select('id')
+            .eq('id', lead.status_id)
+            .maybeSingle();
+          if (statusExists?.id) safeStatusId = lead.status_id;
+        }
         const { error: updateError } = await supabase
           .from('email_conversations')
           .update({
-            lead_status_id: lead.status_id || null,
+            lead_status_id: safeStatusId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', convId);
@@ -1353,19 +1364,19 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
           throw updateError;
         }
         let newStatusName = '';
-        if (lead.status_id) {
+        if (safeStatusId) {
           const { data: statusRow } = await supabase
             .from('lead_statuses')
             .select('name')
-            .eq('id', lead.status_id)
+            .eq('id', safeStatusId)
             .maybeSingle();
           newStatusName = (statusRow?.name as string) ?? '';
         }
         const ticketId = 'EMAIL-' + convId.replace(/-/g, '').slice(0, 8).toUpperCase();
-        if (orgId && lead.status_id) {
+        if (orgId && safeStatusId) {
           await supabase
             .from('leads')
-            .update({ status_id: lead.status_id, updated_at: new Date().toISOString() })
+            .update({ status_id: safeStatusId, updated_at: new Date().toISOString() })
             .eq('organization_id', orgId)
             .eq('ticket_id', ticketId);
         }
@@ -1428,10 +1439,22 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         const convId = String(lead.id).replace(/^wa-/, '');
         const oldStatusName = lead.lead_status?.name ?? null;
 
+        // FK: only set lead_status_id if it exists in lead_statuses (avoids 23503 when id is stale/deleted).
+        // Uses same client/RLS as dropdown; ensure lead_statuses RLS allows global (organization_id IS NULL) statuses.
+        let safeStatusId: string | null = null;
+        if (lead.status_id) {
+          const { data: statusExists } = await supabase
+            .from('lead_statuses')
+            .select('id')
+            .eq('id', lead.status_id)
+            .maybeSingle();
+          if (statusExists?.id) safeStatusId = lead.status_id;
+        }
+
         const { error: updateError } = await supabase
           .from('whatsapp_conversations')
           .update({
-            lead_status_id: lead.status_id || null,
+            lead_status_id: safeStatusId,
             assignee_id: lead.assignee_id ?? null,
             updated_at: new Date().toISOString(),
           })
@@ -1443,11 +1466,11 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
 
         // Resolve new status name and insert into whatsapp_conversation_status_history
         let newStatusName = '';
-        if (lead.status_id) {
+        if (safeStatusId) {
           const { data: statusRow } = await supabase
             .from('lead_statuses')
             .select('name')
-            .eq('id', lead.status_id)
+            .eq('id', safeStatusId)
             .maybeSingle();
           newStatusName = (statusRow?.name as string) ?? '';
         }
@@ -1485,7 +1508,7 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             assignee_id: lead.assignee_id ?? null,
             updated_at: new Date().toISOString(),
           };
-          if (lead.status_id != null) leadUpdatePayload.status_id = lead.status_id;
+          if (safeStatusId != null) leadUpdatePayload.status_id = safeStatusId;
           await supabase
             .from('leads')
             .update(leadUpdatePayload)
