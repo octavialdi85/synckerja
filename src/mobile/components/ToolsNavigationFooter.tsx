@@ -8,12 +8,19 @@ const navItems = [
   { icon: NotebookPen, label: "Notes", path: "/tools/meeting-notes" },
 ];
 
-export const ToolsNavigationFooter = () => {
+interface ToolsNavigationFooterProps {
+  /** Optional class to e.g. use safe-area-bottom-lower for consistency with other mobile pages */
+  className?: string;
+}
+
+export const ToolsNavigationFooter = ({ className }: ToolsNavigationFooterProps) => {
   const location = useLocation();
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+    <nav
+      className={`fixed left-0 right-0 bottom-0 bg-card border-t border-border z-50 safe-area-bottom ${className ?? ''}`.trim()}
+    >
       <div className="grid grid-cols-4 max-w-md mx-auto">
         {navItems.map(({ icon: Icon, label, path }) => {
           // Check if current path matches

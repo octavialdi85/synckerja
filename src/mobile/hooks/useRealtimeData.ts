@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/mobile/components/ui/use-toast';

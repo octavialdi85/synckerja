@@ -7,6 +7,7 @@ import { Button } from "@/mobile/components/ui/button";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { User, MapPin, Phone, Mail, Calendar, LogOut, ChevronDown, Building2, Check, Loader2 } from "lucide-react";
 import { useProfile } from "@/mobile/hooks/useProfile";
+import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/features/ui/use-toast";
 import { useState, useEffect } from "react";
@@ -87,6 +88,7 @@ const Profile = () => {
       setShowSkeleton(false);
     }
   }, [loading]);
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const handleLogout = async () => {
     try {
       await logout();
@@ -219,49 +221,90 @@ const Profile = () => {
     }
   }, [loading, profile]);
   if (showSkeleton) {
-    return <DesktopWarning>
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          <AppSidebar />
-          <main className="flex-1 bg-background pb-20">
-            <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
-              <SidebarTrigger />
-              <div></div>
-            </div>
-            <ProfileSkeleton />
-            <NavigationFooter />
-          </main>
-      </div>
-    </SidebarProvider>
-    </DesktopWarning>;
+    return (
+      <DesktopWarning>
+        <SidebarProvider>
+          <div className="min-h-screen flex w-full bg-background">
+            <AppSidebar />
+            <main
+              className="flex flex-col bg-background fixed inset-x-0 z-0"
+              style={{
+                top: viewportOffsetTop,
+                height: viewportHeight > 0 ? viewportHeight : undefined,
+                minHeight: viewportHeight > 0 ? undefined : "100dvh",
+              }}
+            >
+              <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
+                <SidebarTrigger />
+                <div></div>
+              </header>
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+                  <ProfileSkeleton />
+                </div>
+              </div>
+              <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
+              <NavigationFooter className="safe-area-bottom-lower" />
+            </main>
+          </div>
+        </SidebarProvider>
+      </DesktopWarning>
+    );
   }
   if (error || !profile) {
-    return <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          <AppSidebar />
-          <main className="flex-1 bg-background flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-destructive mb-4">Gagal memuat profil</p>
-              <Button onClick={() => window.location.reload()}>
-                Coba Lagi
-              </Button>
-            </div>
-          </main>
-        </div>
-      </SidebarProvider>;
-  }
-  return <DesktopWarning>
+    return (
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
-          
-          <main className="flex-1 bg-background pb-20">
-            <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
+          <main
+            className="flex flex-col bg-background fixed inset-x-0 z-0"
+            style={{
+              top: viewportOffsetTop,
+              height: viewportHeight > 0 ? viewportHeight : undefined,
+              minHeight: viewportHeight > 0 ? undefined : "100dvh",
+            }}
+          >
+            <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
               <SidebarTrigger />
               <div></div>
+            </header>
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <p className="text-destructive mb-4">Gagal memuat profil</p>
+                  <Button onClick={() => window.location.reload()}>Coba Lagi</Button>
+                </div>
+              </div>
             </div>
-        
-            <div className={`p-2 space-y-2 transition-all duration-300 ${fadeOut ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
+            <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
+            <NavigationFooter className="safe-area-bottom-lower" />
+          </main>
+        </div>
+      </SidebarProvider>
+    );
+  }
+  return (
+    <DesktopWarning>
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar />
+
+          <main
+            className="flex flex-col bg-background fixed inset-x-0 z-0"
+            style={{
+              top: viewportOffsetTop,
+              height: viewportHeight > 0 ? viewportHeight : undefined,
+              minHeight: viewportHeight > 0 ? undefined : "100dvh",
+            }}
+          >
+            <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
+              <SidebarTrigger />
+              <div></div>
+            </header>
+
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+                <div className={`p-2 space-y-2 transition-all duration-300 ${fadeOut ? "opacity-50 scale-95" : "opacity-100 scale-100"}`}>
               {/* Profile Info */}
               <Card className="bg-gradient-card border border-border">
                 <div className="p-4 text-center">
@@ -407,11 +450,15 @@ const Profile = () => {
                 </Button>
               </div>
             </div>
+            </div>
+          </div>
 
-            <NavigationFooter />
-          </main>
+          <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
+          <NavigationFooter className="safe-area-bottom-lower" />
+        </main>
         </div>
       </SidebarProvider>
-    </DesktopWarning>;
+    </DesktopWarning>
+  );
 };
 export default Profile;

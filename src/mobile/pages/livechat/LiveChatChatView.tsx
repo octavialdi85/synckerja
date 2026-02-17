@@ -84,6 +84,10 @@ export function LiveChatChatView({
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
   );
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const isKeyboardOpen =
+    typeof window !== 'undefined' &&
+    viewportHeight > 0 &&
+    viewportHeight < window.innerHeight * 0.85;
 
   const handleRequestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -176,44 +180,44 @@ export function LiveChatChatView({
         minHeight: viewportHeight > 0 ? undefined : '100dvh',
       }}
     >
-      <header className="flex-shrink-0 sticky top-0 z-20 flex items-center gap-2 px-3 py-2 min-h-[56px] border-b border-border bg-card">
-        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9" onClick={onBack} aria-label={t('common.back', 'Back')}>
+      <header className="flex-shrink-0 sticky top-0 z-20 flex items-center gap-2 px-3 py-2 min-h-[56px] border-b border-slate-700 bg-slate-800 safe-area-top">
+        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white" onClick={onBack} aria-label={t('common.back', 'Back')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="relative shrink-0">
-          <Avatar className="h-10 w-10 rounded-full bg-muted">
+          <Avatar className="h-10 w-10 rounded-full bg-slate-600 border-2 border-slate-600">
             <AvatarImage src={profileUrl ?? undefined} alt={displayName} className="object-cover" />
-            <AvatarFallback className="rounded-full bg-muted text-foreground text-sm font-medium">
+            <AvatarFallback className="rounded-full bg-slate-600 text-white text-sm font-medium">
               {initials || <User className="h-5 w-5" />}
             </AvatarFallback>
           </Avatar>
           <span
-            className={`absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background ${overlayColor} text-white`}
+            className={`absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-slate-800 ${overlayColor} text-white`}
             aria-hidden
           >
             <ChannelIcon channel={isEmail ? 'email' : channel} className="h-2.5 w-2.5" />
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="font-semibold text-foreground truncate">{displayName}</h2>
-          {subText && <p className="text-xs text-muted-foreground truncate">{subText}</p>}
+          <h2 className="font-semibold text-white truncate">{displayName}</h2>
+          {subText && <p className="text-xs text-slate-300 truncate">{subText}</p>}
         </div>
         {notificationPermission !== 'granted' && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="shrink-0 h-9 w-9"
+            className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white"
             onClick={handleRequestNotificationPermission}
             title={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
             aria-label={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
           >
-            <Bell className="h-5 w-5 text-muted-foreground" />
+            <Bell className="h-5 w-5 text-slate-300" />
           </Button>
         )}
         <Sheet open={quickActionOpen} onOpenChange={setQuickActionOpen}>
           <SheetTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9" aria-label={t('whatsappInbox.quickAction', 'Quick Action')}>
+            <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white" aria-label={t('whatsappInbox.quickAction', 'Quick Action')}>
               <SlidersHorizontal className="h-5 w-5" />
             </Button>
           </SheetTrigger>
@@ -237,6 +241,7 @@ export function LiveChatChatView({
             connectedPhoneNumberIds={connectedPhoneNumberIds}
             hasNoConnectedWhatsAppAccount={hasNoConnectedWhatsAppAccount}
             hideHeader
+            keyboardOpen={isKeyboardOpen}
             scrollToTextInChat={scrollToTextInChat}
             scrollToMessageId={scrollToMessageId}
             onScrollToTextDone={onScrollToTextDone}

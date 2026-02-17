@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useClientVisitData } from "@/mobile/hooks/useClientVisitData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
+import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import confetti from "canvas-confetti";
 
 export default function ClientVisit() {
@@ -764,27 +765,35 @@ export default function ClientVisit() {
     </div>
   );
 
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+
   return (
     <DesktopWarning>
       <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        
-        <main className="flex-1 bg-background pb-20">
-          <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
+
+        {/* Same structure as Home/Schedule/LiveChat: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+        <main
+          className="flex flex-col bg-background fixed inset-x-0 z-0"
+          style={{
+            top: viewportOffsetTop,
+            height: viewportHeight > 0 ? viewportHeight : undefined,
+            minHeight: viewportHeight > 0 ? undefined : "100dvh",
+          }}
+        >
+          <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
-              <RealtimeStatusIndicator 
+              <RealtimeStatusIndicator
                 isConnected={realtimeConnected}
                 className="text-xs md:hidden"
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <div className="hidden md:block">
-                <RealtimeStatusIndicator 
-                  isConnected={realtimeConnected}
-                />
+                <RealtimeStatusIndicator isConnected={realtimeConnected} />
               </div>
               <Select value={dateFilter} onValueChange={handleDateFilterChange}>
                 <SelectTrigger className="w-32 h-8 text-xs">
@@ -800,92 +809,98 @@ export default function ClientVisit() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          
-          {loading ? (
-            <div className="p-2">
-              <ClientVisitSkeleton />
-            </div>
-          ) : (
-            <>
-              <TimeDisplay />
+          </header>
 
-              <div className="px-3 py-2">
-                <LocationButton />
-              </div>
-              
-              <div className="px-3 mb-2">
-                <AttendanceStatus 
-                  checkIn={activeVisit?.actual_start_time ? new Date(activeVisit.actual_start_time).toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  }) : undefined} 
-                  checkOut={activeVisit?.actual_end_time ? new Date(activeVisit.actual_end_time).toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  }) : undefined} 
-                  workingHours={calculateVisitDuration()} 
-                />
-              </div>
-              
-              <div className="px-3 mb-2">
-                <ClientVisitActions 
-                  onStartVisit={handleStartVisit} 
-                  onEndVisit={handleEndVisit}
-                  hasActiveVisit={!!activeVisit}
-                />
-              </div>
-              
-              <div className="px-3 mb-2">
-                <VisitNotifications />
-              </div>
-              
-              {todaySchedule && (
-                <div className="px-3 mb-2">
-                  <TodayVisitSchedule visits={filteredTodayVisits} periodLabel={getPeriodLabel()} />
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+              {loading ? (
+                <div className="p-2">
+                  <ClientVisitSkeleton />
                 </div>
+              ) : (
+                <>
+                  <TimeDisplay />
+
+                  <div className="px-3 py-2">
+                    <LocationButton />
+                  </div>
+
+                  <div className="px-3 mb-2">
+                    <AttendanceStatus
+                      checkIn={activeVisit?.actual_start_time ? new Date(activeVisit.actual_start_time).toLocaleTimeString("id-ID", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      }) : undefined}
+                      checkOut={activeVisit?.actual_end_time ? new Date(activeVisit.actual_end_time).toLocaleTimeString("id-ID", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      }) : undefined}
+                      workingHours={calculateVisitDuration()}
+                    />
+                  </div>
+
+                  <div className="px-3 mb-2">
+                    <ClientVisitActions
+                      onStartVisit={handleStartVisit}
+                      onEndVisit={handleEndVisit}
+                      hasActiveVisit={!!activeVisit}
+                    />
+                  </div>
+
+                  <div className="px-3 mb-2">
+                    <VisitNotifications />
+                  </div>
+
+                  {todaySchedule && (
+                    <div className="px-3 mb-2">
+                      <TodayVisitSchedule visits={filteredTodayVisits} periodLabel={getPeriodLabel()} />
+                    </div>
+                  )}
+
+                  <div className="px-3 mb-2">
+                    <VisitAnalyticsCard {...calculateAnalytics} periodLabel={getPeriodLabel()} />
+                  </div>
+                </>
               )}
-              
-              <div className="px-3 mb-2">
-                <VisitAnalyticsCard {...calculateAnalytics} periodLabel={getPeriodLabel()} />
-              </div>
-            </>
-          )}
-          
-          <NavigationFooter />
-          
-          <CameraModal 
-            isOpen={cameraModal.isOpen} 
-            onClose={handleCameraClose} 
-            onCapture={handleCameraCapture} 
-            title={cameraModal.type === 'start' ? 'Foto Mulai Kunjungan' : 'Foto Selesai Kunjungan'} 
-          />
+            </div>
+          </div>
 
-          <LateAttendanceModal
-            isOpen={showLateModal}
-            onClose={() => setShowLateModal(false)}
-            onSubmit={onLateSubmit}
-            lateMinutes={lateMinutes}
-            scheduledTime={scheduledTime}
-          />
-
-          <SalesActivityModal
-            isOpen={showSalesActivityModal}
-            onClose={() => setShowSalesActivityModal(false)}
-            onSubmit={handleSalesActivitySubmit}
-            clientData={clientData}
-          />
-
-          <CustomDatePicker
-            isOpen={showCustomDatePicker}
-            onClose={() => setShowCustomDatePicker(false)}
-            onDateRangeSelect={handleCustomDateRange}
-            initialStartDate={customDateRange?.start}
-            initialEndDate={customDateRange?.end}
-          />
+          {/* Spacer so content doesn't scroll under the fixed footer */}
+          <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
+          <NavigationFooter className="safe-area-bottom-lower" />
         </main>
+
+        <CameraModal
+          isOpen={cameraModal.isOpen}
+          onClose={handleCameraClose}
+          onCapture={handleCameraCapture}
+          title={cameraModal.type === "start" ? "Foto Mulai Kunjungan" : "Foto Selesai Kunjungan"}
+        />
+
+        <LateAttendanceModal
+          isOpen={showLateModal}
+          onClose={() => setShowLateModal(false)}
+          onSubmit={onLateSubmit}
+          lateMinutes={lateMinutes}
+          scheduledTime={scheduledTime}
+        />
+
+        <SalesActivityModal
+          isOpen={showSalesActivityModal}
+          onClose={() => setShowSalesActivityModal(false)}
+          onSubmit={handleSalesActivitySubmit}
+          clientData={clientData}
+        />
+
+        <CustomDatePicker
+          isOpen={showCustomDatePicker}
+          onClose={() => setShowCustomDatePicker(false)}
+          onDateRangeSelect={handleCustomDateRange}
+          initialStartDate={customDateRange?.start}
+          initialEndDate={customDateRange?.end}
+        />
       </div>
     </SidebarProvider>
     </DesktopWarning>

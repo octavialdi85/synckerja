@@ -18,6 +18,7 @@ import { logger } from "@/config/logger";
 import { useAttendanceData } from "@/mobile/hooks/useAttendanceData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
+import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
 let confetti: any;
 try {
@@ -81,11 +82,13 @@ const Absensi = () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data: profileData } = await supabase
+        const { data } = await supabase
           .from('profiles')
           .select('full_name, active_organization_id')
           .eq('user_id', user.id)
           .single();
+        type ProfileSlice = { full_name: string | null; active_organization_id: string | null };
+        const profileData = data as unknown as ProfileSlice | null;
         if (profileData) {
           setCurrentUser({
             id: user.id,
@@ -721,90 +724,106 @@ const Absensi = () => {
     </div>
   );
 
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+
   return (
     <DesktopWarning>
       <LiveChatAppBadgeSync />
       <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        
-        <main className="flex-1 bg-background pb-20">
-          <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
+
+        {/* Same structure as LiveChatListView: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+        <main
+          className="flex flex-col bg-background fixed inset-x-0 z-0"
+          style={{
+            top: viewportOffsetTop,
+            height: viewportHeight > 0 ? viewportHeight : undefined,
+            minHeight: viewportHeight > 0 ? undefined : '100dvh',
+          }}
+        >
+          <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="md:hidden" />
-              <RealtimeStatusIndicator 
-                isConnected={realtimeConnected} 
+              <RealtimeStatusIndicator
+                isConnected={realtimeConnected}
                 onlineUsers={totalOnline}
                 className="text-xs"
               />
             </div>
             <div className="hidden md:block">
-              <RealtimeStatusIndicator 
-                isConnected={realtimeConnected} 
+              <RealtimeStatusIndicator
+                isConnected={realtimeConnected}
                 onlineUsers={totalOnline}
               />
             </div>
-          </div>
-          
-          {showSkeleton ? (
-            <div className="p-2">
-              <AbsensiSkeleton />
-            </div>
-          ) : (
-            <>
-              <TimeDisplay />
-              
-              {/* Location Button - di antara jam atas dan jam check in/out */}
-              {currentOfficeLocation && <LocationButton officeLocation={currentOfficeLocation} />}
-              
-              <AttendanceStatus 
-                checkIn={todayAttendance?.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString('id-ID', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                }) : undefined} 
-                checkOut={todayAttendance?.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString('id-ID', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                }) : undefined} 
-                workingHours={calculateWorkingHours()} 
-              />
-              
-              <AttendanceActions onClockIn={handleClockIn} onClockOut={handleClockOut} />
-              
-              {currentSchedule && workSchedule && (
-                <div className="px-2 mb-2">
-                  <TodaySchedule schedule={currentSchedule} />
+          </header>
+
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+              {showSkeleton ? (
+                <div className="p-2">
+                  <AbsensiSkeleton />
                 </div>
+              ) : (
+                <>
+                  <TimeDisplay />
+
+                  {/* Location Button - di antara jam atas dan jam check in/out */}
+                  {currentOfficeLocation && <LocationButton officeLocation={currentOfficeLocation} />}
+
+                  <AttendanceStatus
+                    checkIn={todayAttendance?.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString('id-ID', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    }) : undefined}
+                    checkOut={todayAttendance?.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString('id-ID', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    }) : undefined}
+                    workingHours={calculateWorkingHours()}
+                  />
+
+                  <AttendanceActions onClockIn={handleClockIn} onClockOut={handleClockOut} />
+
+                  {currentSchedule && workSchedule && (
+                    <div className="px-2 mb-2">
+                      <TodaySchedule schedule={currentSchedule} />
+                    </div>
+                  )}
+
+                  {currentOfficeLocation && <LocationChecker officeLocation={currentOfficeLocation} />}
+                </>
               )}
-              
-              {currentOfficeLocation && <LocationChecker officeLocation={currentOfficeLocation} />}
-            </>
-          )}
-          
-          <NavigationFooter />
-          
-          <CameraModal 
-            isOpen={cameraModal.isOpen} 
-            onClose={handleCameraClose} 
-            onCapture={handleCameraCapture} 
-            title={cameraModal.type === 'clockin' ? 'Foto Clock In' : 'Foto Clock Out'} 
-          />
-          
-          <LateAttendanceModal 
-            isOpen={lateModal.isOpen} 
-            onClose={() => setLateModal({
-              isOpen: false,
-              lateMinutes: 0,
-              scheduledTime: '',
-              pendingClockIn: false
-            })} 
-            onSubmit={handleLateClockIn} 
-            lateMinutes={lateModal.lateMinutes} 
-            scheduledTime={lateModal.scheduledTime} 
-          />
+            </div>
+          </div>
+
+          {/* Spacer so content doesn't scroll under the fixed footer; same as LiveChatListView */}
+          <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
+          <NavigationFooter className="safe-area-bottom-lower" />
         </main>
+
+        <CameraModal
+          isOpen={cameraModal.isOpen}
+          onClose={handleCameraClose}
+          onCapture={handleCameraCapture}
+          title={cameraModal.type === 'clockin' ? 'Foto Clock In' : 'Foto Clock Out'}
+        />
+
+        <LateAttendanceModal
+          isOpen={lateModal.isOpen}
+          onClose={() => setLateModal({
+            isOpen: false,
+            lateMinutes: 0,
+            scheduledTime: '',
+            pendingClockIn: false
+          })}
+          onSubmit={handleLateClockIn}
+          lateMinutes={lateModal.lateMinutes}
+          scheduledTime={lateModal.scheduledTime}
+        />
       </div>
     </SidebarProvider>
     </DesktopWarning>

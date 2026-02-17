@@ -407,7 +407,7 @@ export const TaskList = () => {
             />
           )}
 
-          <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-50 flex justify-end px-6">
+          <div className="pointer-events-none fixed left-0 right-0 z-50 flex justify-end px-6 fixed-above-nav-safe">
             <Button
               onClick={() => setIsCreateTaskDialogOpen(true)}
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"

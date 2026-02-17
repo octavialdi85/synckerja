@@ -11,6 +11,7 @@ import type { LiveChatConversation } from '@/features/5-3-whatsapp/types';
 import type { WhatsAppAccount } from '@/features/5-3-whatsapp/types';
 import { MobileConversationList } from './components/MobileConversationList';
 import { MobileSearchConversationPopup } from './components/MobileSearchConversationPopup';
+import { NavigationFooter } from '@/mobile/components/NavigationFooter';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
@@ -66,13 +67,21 @@ export function LiveChatListView({
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
 
-          <main className="flex-1 bg-background overflow-x-hidden flex flex-col" style={{ height: '100vh' }}>
-            <div className="sticky top-0 z-30 flex flex-col gap-2 p-2 bg-card border-b border-border flex-shrink-0">
+          {/* Same structure as LiveChatChatView: fixed viewport container, header first (sticky + safe-area-top), then scrollable content */}
+          <main
+            className="flex flex-col bg-background fixed inset-x-0 z-0"
+            style={{
+              top: viewportOffsetTop,
+              height: viewportHeight > 0 ? viewportHeight : undefined,
+              minHeight: viewportHeight > 0 ? undefined : '100dvh',
+            }}
+          >
+            <header className="flex-shrink-0 sticky top-0 z-30 flex flex-col gap-2 p-2 bg-slate-800 border-b border-slate-700 safe-area-top">
               <div className="flex items-center gap-2">
-                <SidebarTrigger className="md:hidden" />
+                <SidebarTrigger className="md:hidden text-white hover:bg-slate-700 hover:text-white" />
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-base font-semibold text-foreground">Live Chat</h1>
-                  <p className="text-xs text-muted-foreground truncate">{t('sidebar.operations.livechat.description', 'Inbox dan percakapan WhatsApp')}</p>
+                  <h1 className="text-base font-semibold text-white">Live Chat</h1>
+                  <p className="text-xs text-slate-300 truncate">{t('sidebar.operations.livechat.description', 'Inbox dan percakapan WhatsApp')}</p>
                 </div>
               </div>
 
@@ -161,28 +170,34 @@ export function LiveChatListView({
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
+            </header>
 
-            {invalidTicketId && (
-              <div className="flex-shrink-0 px-3 py-2 mx-3 mt-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800" role="alert">
-                {t('whatsappInbox.conversationNotFound', 'Obrolan tidak ditemukan.')}
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              {invalidTicketId && (
+                <div className="flex-shrink-0 px-3 py-2 mx-3 mt-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800" role="alert">
+                  {t('whatsappInbox.conversationNotFound', 'Obrolan tidak ditemukan.')}
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                <MobileConversationList
+                  conversations={conversations}
+                  isLoading={isLoading}
+                  error={error}
+                  selectedId={null}
+                  onSelect={onSelectConversation}
+                  initialConversationId={null}
+                  initialTicketId={initialTicketId}
+                  searchQuery={searchQuery}
+                  accountFilter={accountFilter || undefined}
+                  waAccountsForHint={waAccountsForHint}
+                />
               </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-              <MobileConversationList
-                conversations={conversations}
-                isLoading={isLoading}
-                error={error}
-                selectedId={null}
-                onSelect={onSelectConversation}
-                initialConversationId={null}
-                initialTicketId={initialTicketId}
-                searchQuery={searchQuery}
-                accountFilter={accountFilter || undefined}
-                waAccountsForHint={waAccountsForHint}
-              />
             </div>
+
+            {/* Spacer so list doesn't scroll under the fixed footer; footer uses safe-area-bottom */}
+            <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
+            <NavigationFooter className="safe-area-bottom-lower" />
           </main>
         </div>
       </SidebarProvider>

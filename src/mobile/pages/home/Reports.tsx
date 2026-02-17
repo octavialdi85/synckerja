@@ -7,6 +7,7 @@ import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { useAttendanceHistory } from "@/mobile/hooks/useAttendanceHistory";
 import { useAttendanceStats } from "@/mobile/hooks/useAttendanceStats";
 import { useAttendanceCalculations } from "@/mobile/hooks/useAttendanceCalculations";
+import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { AttendanceHistoryTable } from "@/mobile/components/AttendanceHistoryTable";
 import { MonthlyStatsCards } from "@/mobile/components/MonthlyStatsCards";
 import { DetailedStatsCard } from "@/mobile/components/DetailedStatsCard";
@@ -221,27 +222,35 @@ const Reports = () => {
     </div>
   );
 
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+
   return (
     <DesktopWarning>
       <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        
-        <main className="flex-1 bg-background pb-20">
-          <div className="sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border">
+
+        {/* Same structure as Home/Schedule/Client Visit/LiveChat: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+        <main
+          className="flex flex-col bg-background fixed inset-x-0 z-0"
+          style={{
+            top: viewportOffsetTop,
+            height: viewportHeight > 0 ? viewportHeight : undefined,
+            minHeight: viewportHeight > 0 ? undefined : "100dvh",
+          }}
+        >
+          <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
-              <RealtimeStatusIndicator 
+              <RealtimeStatusIndicator
                 isConnected={realtimeConnected}
                 className="text-xs md:hidden"
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <div className="hidden md:block">
-                <RealtimeStatusIndicator 
-                  isConnected={realtimeConnected}
-                />
+                <RealtimeStatusIndicator isConnected={realtimeConnected} />
               </div>
               <Select value={dateFilter} onValueChange={handleDateFilterChange}>
                 <SelectTrigger className="w-32 h-8 text-xs">
@@ -257,55 +266,61 @@ const Reports = () => {
                 </SelectContent>
               </Select>
             </div>
+          </header>
+
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+              <div className="p-2 space-y-2">
+                {showSkeleton ? (
+                  <ReportsSkeleton />
+                ) : (
+                  <>
+                    <MonthlyStatsCards
+                      totalWorkingDays={attendanceStats?.total_working_days || 0}
+                      attendancePercentage={attendanceStats?.attendance_percentage || 0}
+                      statsLoading={statsLoading}
+                    />
+
+                    <DetailedStatsCard
+                      presentDays={attendanceStats?.present_days || 0}
+                      lateDays={attendanceStats?.late_days || 0}
+                      absentDays={attendanceStats?.absent_days || 0}
+                      totalOvertime={filteredStats.totalOvertime}
+                      statsLoading={statsLoading}
+                    />
+
+                    <WorkTimeAnalysisCard
+                      avgCheckIn={filteredStats.avgCheckIn}
+                      avgCheckOut={filteredStats.avgCheckOut}
+                      workingHours={filteredStats.workingHours}
+                      workingMinutesRemainder={filteredStats.workingMinutesRemainder}
+                    />
+
+                    <AttendanceHistoryTable
+                      attendanceHistory={filteredAttendanceHistory}
+                      loading={loading}
+                      error={error}
+                    />
+
+                    <AttendanceChart chartData={chartData} />
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-      
-          <div className="p-2 space-y-2">
-            {showSkeleton ? (
-              <ReportsSkeleton />
-            ) : (
-              <>
-                <MonthlyStatsCards 
-                  totalWorkingDays={attendanceStats?.total_working_days || 0} 
-                  attendancePercentage={attendanceStats?.attendance_percentage || 0} 
-                  statsLoading={statsLoading} 
-                />
 
-                <DetailedStatsCard 
-                  presentDays={attendanceStats?.present_days || 0} 
-                  lateDays={attendanceStats?.late_days || 0} 
-                  absentDays={attendanceStats?.absent_days || 0} 
-                  totalOvertime={filteredStats.totalOvertime} 
-                  statsLoading={statsLoading} 
-                />
-
-                <WorkTimeAnalysisCard
-                  avgCheckIn={filteredStats.avgCheckIn}
-                  avgCheckOut={filteredStats.avgCheckOut}
-                  workingHours={filteredStats.workingHours}
-                  workingMinutesRemainder={filteredStats.workingMinutesRemainder}
-                />
-
-                <AttendanceHistoryTable 
-                  attendanceHistory={filteredAttendanceHistory} 
-                  loading={loading} 
-                  error={error} 
-                />
-
-                <AttendanceChart chartData={chartData} />
-              </>
-            )}
-          </div>
-
-          <NavigationFooter />
-
-          <CustomDatePicker
-            isOpen={showCustomDatePicker}
-            onClose={() => setShowCustomDatePicker(false)}
-            onDateRangeSelect={handleCustomDateRange}
-            initialStartDate={customDateRange?.start}
-            initialEndDate={customDateRange?.end}
-          />
+          {/* Spacer so content doesn't scroll under the fixed footer */}
+          <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
+          <NavigationFooter className="safe-area-bottom-lower" />
         </main>
+
+        <CustomDatePicker
+          isOpen={showCustomDatePicker}
+          onClose={() => setShowCustomDatePicker(false)}
+          onDateRangeSelect={handleCustomDateRange}
+          initialStartDate={customDateRange?.start}
+          initialEndDate={customDateRange?.end}
+        />
       </div>
     </SidebarProvider>
     </DesktopWarning>

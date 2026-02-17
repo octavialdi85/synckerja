@@ -7,6 +7,7 @@
   scrollbar-width: none !important; /* Firefox */
   -ms-overflow-style: none !important; /* Internet Explorer 10+ */
   scroll-behavior: smooth;
+  overscroll-behavior: none;
 }
 
 .seamless-scroll::-webkit-scrollbar {
@@ -151,6 +152,33 @@
 All colors MUST be HSL.
 */
 
+/* Safe area insets: set once in NativeSafeAreaWrapper on native; default 0 for web. */
+/* Use .safe-area-top on fixed/sticky headers, .safe-area-bottom on fixed/sticky footers/inputs. */
+:root {
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-bottom: 0px;
+}
+
+/* Use max() so env() from WebView/system is used when plugin value is 0 or missing.
+   Extra 4px so header sits slightly lower and not too close to status bar. */
+.safe-area-top {
+  padding-top: calc(max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px)) + 4px);
+}
+
+.safe-area-bottom {
+  padding-bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+}
+
+/* Slightly less bottom padding so footer sits a bit lower (e.g. on Live Chat). */
+.safe-area-bottom-lower {
+  padding-bottom: max(0px, calc(max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) - 16px));
+}
+
+/* Fixed element above bottom nav: use when nav is ~5rem (80px) + safe area. */
+.fixed-above-nav-safe {
+  bottom: calc(5rem + var(--safe-area-inset-bottom, 0px));
+}
+
 @layer base {
   :root {
     --background: 210 20% 98%;
@@ -248,6 +276,7 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
     scrollbar-width: none !important; /* Firefox */
     -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+    overscroll-behavior: none;
   }
 
   body::-webkit-scrollbar {
@@ -259,6 +288,7 @@ All colors MUST be HSL.
   html {
     scrollbar-width: none !important; /* Firefox */
     -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+    overscroll-behavior: none;
   }
 
   html::-webkit-scrollbar {

@@ -10,7 +10,12 @@ const navItems = [
   { icon: User, label: "Profile", path: "/profile" }
 ];
 
-export const NavigationFooter = () => {
+interface NavigationFooterProps {
+  /** Optional class to e.g. reduce bottom padding (safe-area-bottom-lower) on specific pages */
+  className?: string;
+}
+
+export const NavigationFooter = ({ className }: NavigationFooterProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const prefetchHomeData = usePrefetchHomeData();
@@ -23,7 +28,9 @@ export const NavigationFooter = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+    <nav
+      className={`fixed left-0 right-0 bottom-0 bg-card border-t border-border z-50 safe-area-bottom ${className ?? ""}`.trim()}
+    >
       <div className="grid grid-cols-5 max-w-md mx-auto">
         {navItems.map(({ icon: Icon, label, path }) => {
           const isActive = location.pathname === path;

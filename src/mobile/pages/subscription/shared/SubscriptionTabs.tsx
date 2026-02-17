@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Layers, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,14 +31,14 @@ const useAppTranslation = () => {
   return { t: translate };
 };
 
-export const SubscriptionBottomTabs = memo(
-  ({
-    activeTab,
-    onTabChange,
-  }: {
-    activeTab: SubscriptionTabKey;
-    onTabChange: (tab: SubscriptionTabKey) => void;
-  }) => {
+export interface SubscriptionBottomTabsProps {
+  activeTab: SubscriptionTabKey;
+  onTabChange: (tab: SubscriptionTabKey) => void;
+  /** Optional class to e.g. use safe-area-bottom-lower for consistency with other mobile pages */
+  className?: string;
+}
+
+const SubscriptionBottomTabsComponent: React.FC<SubscriptionBottomTabsProps> = ({ activeTab, onTabChange, className }) => {
     const { t } = useAppTranslation();
 
     const labels: Record<SubscriptionTabKey, string> = useMemo(
@@ -51,7 +51,9 @@ export const SubscriptionBottomTabs = memo(
     );
 
     return (
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+      <nav
+        className={`fixed left-0 right-0 bottom-0 bg-card border-t border-border z-50 safe-area-bottom ${className ?? ""}`.trim()}
+      >
         <div className="grid grid-cols-3 w-full">
           {tabItems.map(({ key, icon: Icon }) => {
             const isActive = activeTab === key;
@@ -73,9 +75,9 @@ export const SubscriptionBottomTabs = memo(
         </div>
       </nav>
     );
-  },
-);
+};
 
+export const SubscriptionBottomTabs = memo(SubscriptionBottomTabsComponent);
 SubscriptionBottomTabs.displayName = "SubscriptionBottomTabs";
 
 const getTabKeyFromPath = (pathname: string): SubscriptionTabKey => {

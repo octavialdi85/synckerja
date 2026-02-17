@@ -95,6 +95,7 @@ import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import MobileLiveChatPage from "./mobile/pages/livechat/LiveChatPage";
+import { NativeSafeAreaWrapper } from "./mobile/components/NativeSafeAreaWrapper";
 import { CalculatorServicesPage } from "./features/8-3-calculator/services";
 import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
@@ -261,9 +262,10 @@ const App = () => (
                 v7_relativeSplatPath: true
               }}
             >
-              <SecurityWrapper>
-                <SubscriptionExpiryGuard>
-                  <Routes>
+              <NativeSafeAreaWrapper>
+                <SecurityWrapper>
+                  <SubscriptionExpiryGuard>
+                    <Routes>
                     {/* ======= PROTECTED ROUTES ======= */}
                     {/* PROTECTION SYSTEM */}
                     <Route 
@@ -937,7 +939,8 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
                   </Routes>
                 </SubscriptionExpiryGuard>
-              </SecurityWrapper>
+                </SecurityWrapper>
+              </NativeSafeAreaWrapper>
             </BrowserRouter>
           </LanguageProvider>
         </CentralizedUserDataProvider>

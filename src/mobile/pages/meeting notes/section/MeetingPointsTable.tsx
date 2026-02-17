@@ -241,7 +241,7 @@ const MeetingPointsTable = () => {
       <div className="bg-card rounded-lg border border-border overflow-hidden h-full flex flex-col">
         <div className="overflow-x-auto overflow-y-auto seamless-scroll flex-1 min-h-0">
           <Table className="meeting-points-table">
-            <TableHeader className="bg-muted/50 sticky top-0 z-20 shadow-sm">
+            <TableHeader className="bg-muted/50 sticky top-0 z-20 shadow-sm safe-area-top">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="px-2 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider bg-muted/50" style={{ width: '96px', minWidth: '96px', maxWidth: '96px' }}>
                   Date

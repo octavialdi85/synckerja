@@ -216,7 +216,9 @@ const Sidebar = React.forwardRef<
                 Use this sidebar to browse the application sections
               </SheetDescription>
             </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col safe-area-top safe-area-bottom">
+              {children}
+            </div>
           </SheetContent>
         </Sheet>
       )

@@ -186,6 +186,8 @@ interface ChatThreadProps {
   onScrollToMessageDone?: () => void;
   /** When true, hide the in-component header (e.g. for mobile where parent provides back + avatar + name). */
   hideHeader?: boolean;
+  /** When true, keyboard is open – use minimal bottom padding so input bar sticks to keyboard; when false, keep safe-area-bottom so position unchanged when keyboard closes. */
+  keyboardOpen?: boolean;
 }
 
 function formatMessageTime(iso: string) {
@@ -469,7 +471,7 @@ type PendingMedia = {
   previewUrl?: string;
 };
 
-export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnectedWhatsAppAccount, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone, hideHeader }: ChatThreadProps) {
+export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnectedWhatsAppAccount, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone, hideHeader, keyboardOpen }: ChatThreadProps) {
   const [text, setText] = useState('');
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
@@ -1049,7 +1051,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         )}
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto seamless-scroll p-4 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? 'pb-[60px]' : 'pb-[84px]'}`}
+        className={`flex-1 overflow-y-auto seamless-scroll p-4 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.25rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)))]') : 'pb-[84px]'}`}
         {...(hideHeader ? { onTouchStart: unlockInboundNotificationAudio } : {})}
       >
         {isLoading ? (
@@ -1413,7 +1415,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       </div>
       <div
         ref={chatInputBarRef}
-        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 border-t border-gray-200 bg-[#f0f2f5] ${hideHeader ? 'p-2' : 'p-4'}`}
+        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 border-t border-slate-700 bg-slate-800 ${keyboardOpen ? 'pb-2' : 'safe-area-bottom'} ${hideHeader ? 'px-1 pt-2' : 'px-4 pt-4'}`}
       >
         {sendDisabledByNoAccount && (
           <div
