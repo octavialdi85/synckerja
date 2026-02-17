@@ -3,6 +3,7 @@ import { DesktopWarning } from '@/mobile/components/DesktopWarning';
 import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar';
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Search } from 'lucide-react';
@@ -26,6 +27,8 @@ interface LiveChatListViewProps {
   statusOptions: { value: string; label: string }[];
   initialTicketId: string | null;
   onSelectConversation: (conv: LiveChatConversation) => void;
+  /** When user selects from search popup: open conversation and optionally highlight text or scroll to message. */
+  onSelectFromSearch?: (conv: LiveChatConversation, opts?: { textQuery?: string; messageId?: string }) => void;
   /** When true, show banner that the ticket_id in URL was not found. */
   invalidTicketId?: boolean;
 }
@@ -43,11 +46,13 @@ export function LiveChatListView({
   statusOptions,
   initialTicketId,
   onSelectConversation,
+  onSelectFromSearch,
   invalidTicketId = false,
 }: LiveChatListViewProps) {
   const { t } = useAppTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
+  const { height: viewportHeight } = useVisualViewport();
 
   const waAccountsForHint = waAccounts.map((a) => ({
     display_phone_number: a.display_phone_number,
@@ -110,19 +115,34 @@ export function LiveChatListView({
               </div>
 
               <Dialog open={searchPopupOpen} onOpenChange={(open) => { setSearchPopupOpen(open); if (!open) setSearchQuery(''); }}>
-                <DialogContent className="sm:max-w-md max-h-[85vh] overflow-hidden flex flex-col p-4">
+                <DialogContent
+                  className="sm:max-w-md overflow-hidden flex flex-col p-4"
+                  style={viewportHeight > 0 ? { maxHeight: viewportHeight - 48 } : undefined}
+                >
                   <DialogHeader className="flex-shrink-0">
                     <DialogTitle>{t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}</DialogTitle>
                   </DialogHeader>
-                  <div className="min-h-0 flex flex-col overflow-hidden flex-1">
+                  <div className="min-h-0 flex flex-col overflow-hidden flex-1 overflow-y-auto">
                     <MobileSearchConversationPopup
                       searchQuery={searchQuery}
                       onSearchChange={setSearchQuery}
                       conversations={conversations}
                       onSelectConversation={(conv) => {
-                        onSelectConversation(conv);
+                        if (onSelectFromSearch) {
+                          onSelectFromSearch(conv, { textQuery: searchQuery.trim() || undefined });
+                        } else {
+                          onSelectConversation(conv);
+                        }
                         setSearchPopupOpen(false);
                       }}
+                      onSelectMessageResult={
+                        onSelectFromSearch
+                          ? (conv, messageId) => {
+                              onSelectFromSearch(conv, { messageId });
+                              setSearchPopupOpen(false);
+                            }
+                          : undefined
+                      }
                       selectedId={null}
                     />
                   </div>

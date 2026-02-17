@@ -36,6 +36,8 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
   const [accountFilter, setAccountFilter] = useState<AccountFilterValue>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showInvalidTicketBanner, setShowInvalidTicketBanner] = useState(false);
+  const [scrollToTextInChat, setScrollToTextInChat] = useState<string | null>(null);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
 
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
   const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
@@ -172,6 +174,15 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
     navigate(`/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(getConversationTicketId(conv))}`);
   };
 
+  const handleSelectFromSearch = (
+    conv: LiveChatConversation,
+    opts?: { textQuery?: string; messageId?: string }
+  ) => {
+    setScrollToTextInChat(opts?.textQuery ?? null);
+    setScrollToMessageId(opts?.messageId ?? null);
+    navigate(`/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(getConversationTicketId(conv))}`);
+  };
+
   const handleBack = () => {
     navigate('/operations/consultant/all/livechat');
   };
@@ -182,6 +193,10 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
         selectedConversation={selectedConversation}
         onBack={handleBack}
         waAccounts={waAccounts}
+        scrollToTextInChat={scrollToTextInChat}
+        scrollToMessageId={scrollToMessageId}
+        onScrollToTextDone={() => setScrollToTextInChat(null)}
+        onScrollToMessageDone={() => setScrollToMessageId(null)}
       />
     );
   }
@@ -200,6 +215,7 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
       statusOptions={statusOptions}
       initialTicketId={ticketId}
       onSelectConversation={handleSelectConversation}
+      onSelectFromSearch={handleSelectFromSearch}
       invalidTicketId={showInvalidTicketBanner}
     />
   );

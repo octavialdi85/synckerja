@@ -63,9 +63,21 @@ interface LiveChatChatViewProps {
   selectedConversation: LiveChatConversation;
   onBack: () => void;
   waAccounts: WhatsAppAccount[];
+  scrollToTextInChat?: string | null;
+  scrollToMessageId?: string | null;
+  onScrollToTextDone?: () => void;
+  onScrollToMessageDone?: () => void;
 }
 
-export function LiveChatChatView({ selectedConversation, onBack, waAccounts }: LiveChatChatViewProps) {
+export function LiveChatChatView({
+  selectedConversation,
+  onBack,
+  waAccounts,
+  scrollToTextInChat,
+  scrollToMessageId,
+  onScrollToTextDone,
+  onScrollToMessageDone,
+}: LiveChatChatViewProps) {
   const { t } = useAppTranslation();
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() =>
@@ -225,6 +237,10 @@ export function LiveChatChatView({ selectedConversation, onBack, waAccounts }: L
             connectedPhoneNumberIds={connectedPhoneNumberIds}
             hasNoConnectedWhatsAppAccount={hasNoConnectedWhatsAppAccount}
             hideHeader
+            scrollToTextInChat={scrollToTextInChat}
+            scrollToMessageId={scrollToMessageId}
+            onScrollToTextDone={onScrollToTextDone}
+            onScrollToMessageDone={onScrollToMessageDone}
           />
         )}
       </div>
