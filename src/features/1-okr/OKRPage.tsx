@@ -105,18 +105,11 @@ const OKRPageContent = () => {
     }
   }, [navigate]);
 
-  // Satu pohon: StandardLayout (header + sidebar) tetap mounted, hanya isi yang ganti loading/content
+  // Satu layout untuk loading dan loaded: cegah layout shift / flicker saat refresh dari URL bar
   return (
     <StandardLayout>
       <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
-        {!pageReady ? (
-          <div className="flex flex-1 min-h-0 items-center justify-center">
-            <LoadingDots size="lg" />
-          </div>
-        ) : (
-        <>
         <div className="flex flex-1 min-h-0">
-          {/* Main Content - semua baru ditampilkan setelah pageReady */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
             <div className="h-full flex flex-col">
               <div className="flex-shrink-0 mb-1">
@@ -135,7 +128,14 @@ const OKRPageContent = () => {
                         <Card className="border border-border flex-1 flex flex-col overflow-hidden">
                           <CardContent className="flex-1 flex flex-col overflow-hidden">
                             <div className="w-full h-full flex flex-col overflow-hidden">
-                              {activeTab === 'company-objectives' ? (
+                              {!pageReady ? (
+                                <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                                  <div className="flex flex-col items-center gap-3">
+                                    <LoadingDots size="lg" />
+                                    <p className="text-sm text-gray-500">Loading objectives...</p>
+                                  </div>
+                                </div>
+                              ) : activeTab === 'company-objectives' ? (
                                 <div className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll max-h-[calc(100vh-120px)]">
                                   <div>
                                     <CompanyObjectivesProgressCard
@@ -218,7 +218,7 @@ const OKRPageContent = () => {
                   </div>
                 </div>
                 
-                {/* Sidebar - 3 columns (single load like social-media dashboard, no blink) */}
+                {/* Sidebar - 3 columns */}
                 <div className="col-span-3 flex flex-col min-h-0">
                   <div className="flex-1 min-h-0">
                     <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-120px)]">
@@ -233,14 +233,20 @@ const OKRPageContent = () => {
 
                       <div className="flex-1 min-h-0 overflow-hidden">
                         <div className="h-full p-4 seamless-scroll overflow-y-auto">
-                          <OKRSidebar 
-                            activeTab={activeTab}
-                            organizationId={organizationId}
-                            companyStats={companyStats.data}
-                            departmentStats={departmentStats.data}
-                            individualStats={individualStats.data}
-                            cycleIds={filteredCycleIds ?? []}
-                          />
+                          {!pageReady ? (
+                            <div className="flex items-center justify-center py-8">
+                              <LoadingDots size="sm" />
+                            </div>
+                          ) : (
+                            <OKRSidebar 
+                              activeTab={activeTab}
+                              organizationId={organizationId}
+                              companyStats={companyStats.data}
+                              departmentStats={departmentStats.data}
+                              individualStats={individualStats.data}
+                              cycleIds={filteredCycleIds ?? []}
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -255,8 +261,6 @@ const OKRPageContent = () => {
             </div>
           </div>
         </div>
-        </>
-        )}
       </div>
     </StandardLayout>
   );

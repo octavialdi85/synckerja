@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { useWhatsAppConversations } from '@/features/5-3-whatsapp/hooks/useWhatsAppConversations';
 import { useInstagramConversations } from '@/features/5-3-whatsapp/hooks/useInstagramConversations';
 import { useEmailConversations } from '@/features/5-3-whatsapp/hooks/useEmailConversations';
@@ -31,9 +32,9 @@ export default function LiveChatPage() {
 function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const ticketId = searchParams.get('ticket_id');
   const [accountFilter, setAccountFilter] = useState<AccountFilterValue>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showInvalidTicketBanner, setShowInvalidTicketBanner] = useState(false);
 
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
@@ -43,24 +44,19 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
   const { accounts: igAccounts } = useInstagramAccounts();
   const { connections: emailConnections } = useEmailConnections();
 
-  useEffect(() => {
-    queryClient
-      .prefetchQuery({
-        queryKey: ['lead-statuses'],
-        queryFn: async () => {
-          const { data, error } = await supabase
-            .from('lead_statuses')
-            .select('id, name, color')
-            .eq('is_active', true)
-            .order('sort_order');
-          if (error) throw error;
-          return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
-        },
-      })
-      .catch((err) => {
-        console.warn('Failed to prefetch lead-statuses', err);
-      });
-  }, [queryClient]);
+  const { data: leadStatuses = [] } = useQuery({
+    queryKey: ['lead-statuses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_statuses')
+        .select('id, name, color')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
+    },
+    staleTime: 60_000,
+  });
 
   const allConversations: LiveChatConversation[] = useMemo(() => {
     const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));
@@ -93,27 +89,60 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
     return opts;
   }, [waAccounts, igAccounts, emailConnections, t]);
 
+  const statusOptions = useMemo(() => {
+    const excluded = leadStatuses.filter((s) => {
+      const name = (s.name?.trim().toLowerCase() ?? '');
+      return name !== 'lost' && name !== 'qualified';
+    });
+    const canonical = ['Open', 'Unread', 'In Progress', 'Converted', 'Qualified', 'Closed', 'Resolve'];
+    const byDisplay = (a: { name: string | null }, b: { name: string | null }) => {
+      const da = getLeadStatusDisplayName(a.name);
+      const db = getLeadStatusDisplayName(b.name);
+      const ia = canonical.indexOf(a.name ?? '');
+      const ib = canonical.indexOf(b.name ?? '');
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return (da || '').localeCompare(db || '');
+    };
+    const sorted = [...excluded].sort(byDisplay);
+    const seen = new Set<string>();
+    const unique = sorted.filter((s) => {
+      const displayName = getLeadStatusDisplayName(s.name);
+      if (seen.has(displayName)) return false;
+      seen.add(displayName);
+      return true;
+    });
+    return [
+      { value: 'all', label: t('whatsappInbox.allStatus', 'All Status') },
+      ...unique.map((s) => ({ value: s.name, label: getLeadStatusDisplayName(s.name) })),
+    ];
+  }, [leadStatuses, t]);
+
   const conversations = useMemo(() => {
-    if (!accountFilter) return allConversations;
-    if (accountFilter.startsWith('wa:')) {
-      const pnid = accountFilter.slice(3);
-      return allConversations.filter(
-        (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).phone_number_id === pnid
-      );
+    let list = allConversations;
+    if (accountFilter) {
+      if (accountFilter.startsWith('wa:')) {
+        const pnid = accountFilter.slice(3);
+        list = list.filter(
+          (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).phone_number_id === pnid
+        );
+      } else if (accountFilter.startsWith('ig:')) {
+        const igAccountId = accountFilter.slice(3);
+        list = list.filter((c) => {
+          if (c.source !== 'instagram') return false;
+          return (c as InstagramConversation).instagram_business_account_id === igAccountId;
+        });
+      } else if (accountFilter.startsWith('email:')) {
+        const connId = accountFilter.slice(6);
+        list = list.filter((c) => c.source === 'email' && (c as { email_connection_id: string }).email_connection_id === connId);
+      }
     }
-    if (accountFilter.startsWith('ig:')) {
-      const igAccountId = accountFilter.slice(3);
-      return allConversations.filter((c) => {
-        if (c.source !== 'instagram') return false;
-        return (c as InstagramConversation).instagram_business_account_id === igAccountId;
-      });
+    if (statusFilter !== 'all') {
+      list = list.filter((c) => (c as { lead_status_name?: string | null }).lead_status_name === statusFilter);
     }
-    if (accountFilter.startsWith('email:')) {
-      const connId = accountFilter.slice(6);
-      return allConversations.filter((c) => c.source === 'email' && (c as { email_connection_id: string }).email_connection_id === connId);
-    }
-    return allConversations;
-  }, [allConversations, accountFilter]);
+    return list;
+  }, [allConversations, accountFilter, statusFilter]);
 
   const selectedConversation = useMemo(() => {
     if (!ticketId?.trim()) return null;
@@ -166,6 +195,9 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
       accountOptions={accountOptions}
       accountFilter={accountFilter}
       setAccountFilter={setAccountFilter}
+      statusFilter={statusFilter}
+      setStatusFilter={setStatusFilter}
+      statusOptions={statusOptions}
       initialTicketId={ticketId}
       onSelectConversation={handleSelectConversation}
       invalidTicketId={showInvalidTicketBanner}

@@ -4,7 +4,6 @@ import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
-import { ScrollArea } from '@/features/ui/scroll-area';
 import { CheckCircle, XCircle, FileText, Clock, Calendar, Filter, Search } from 'lucide-react';
 import { usePurchaseRequests, PurchaseRequest } from '@/features/9_request-form/hooks/usePurchaseRequests';
 
@@ -157,9 +156,9 @@ const PurchaseRequestStatusPanel = () => {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full min-h-0 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="flex-shrink-0 p-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Request Status</h2>
         
         {/* Search and Filters */}
@@ -255,8 +254,8 @@ const PurchaseRequestStatusPanel = () => {
         </div>
       </div>
 
-      {/* Scrollable Content */}
-      <ScrollArea className="flex-1">
+      {/* Scrollable Content - native overflow so Pending Approval list is never cut off */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="p-4 space-y-4">
           {/* Summary Cards */}
           <div className="grid grid-cols-2 gap-3">
@@ -375,7 +374,7 @@ const PurchaseRequestStatusPanel = () => {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 };

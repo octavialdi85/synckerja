@@ -76,6 +76,6 @@ export function useWhatsAppMessages(conversationId: string | null) {
       return (data ?? []) as WhatsAppMessage[];
     },
     refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }

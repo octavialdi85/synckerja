@@ -57,6 +57,6 @@ export function useInstagramMessages(conversationId: string | null) {
       return (data ?? []) as InstagramMessage[];
     },
     refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemo } from 'react';
+import { devLog } from '@/config/logger';
 
 export interface LinkComment {
   id: string;
@@ -82,7 +83,7 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, _linkUrl?: strin
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('❌ Error fetching link comments:', error);
+        devLog.error('Error fetching link comments:', error);
         throw error;
       }
 

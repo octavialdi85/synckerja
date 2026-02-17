@@ -21,6 +21,8 @@ import {
 } from '@/features/ui/select';
 import { useSalesActivityMasterData } from '@/hooks/organized/sales';
 import { CreateSalesActivityItemData } from '@/hooks/organized/sales';
+import { useToast } from '@/features/ui/use-toast';
+import { devLog } from '@/config/logger';
 
 const formSchema = z.object({
   service_id: z.string().optional(),
@@ -44,6 +46,7 @@ interface AddItemDialogProps {
 export const AddItemDialog = ({ open, onOpenChange, onSubmit, editingItem }: AddItemDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [selectedService, setSelectedService] = useState<string>('');
+  const { toast } = useToast();
   
   const {
     services,
@@ -145,7 +148,12 @@ export const AddItemDialog = ({ open, onOpenChange, onSubmit, editingItem }: Add
       // Close dialog after successful item addition
       onOpenChange(false);
     } catch (error) {
-      console.error('Error submitting item:', error);
+      devLog.error('Error submitting item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -165,7 +173,7 @@ export const AddItemDialog = ({ open, onOpenChange, onSubmit, editingItem }: Add
   // Debug: Log services data when dialog opens
   React.useEffect(() => {
     if (open) {
-      console.log('🔍 AddItemDialog - Services data:', {
+      devLog.debug('🔍 AddItemDialog - Services data:', {
         allServicesCount: services.length,
         parentServicesCount: parentServices?.length || 0,
         parentServices: parentServices

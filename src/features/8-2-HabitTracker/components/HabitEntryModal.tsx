@@ -23,6 +23,7 @@ export const HabitEntryModal = ({ isOpen, onClose, habitId }: HabitEntryModalPro
   const [loading, setLoading] = useState(false);
 
   const habit = habits.find((h) => h.id === habitId);
+  const habitNotFound = !habit && habits.length > 0;
   const existingEntry = entries.find(
     (e) => e.habit_id === habitId && e.entry_date === date
   );
@@ -71,7 +72,7 @@ export const HabitEntryModal = ({ isOpen, onClose, habitId }: HabitEntryModalPro
         <DialogHeader>
           <DialogTitle>Log Entry</DialogTitle>
           <DialogDescription>
-            Log your progress for {habit?.name}
+            {habitNotFound ? 'Habit tidak ditemukan.' : `Log your progress for ${habit?.name ?? ''}`}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -115,7 +116,7 @@ export const HabitEntryModal = ({ isOpen, onClose, habitId }: HabitEntryModalPro
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || habitNotFound}>
               {loading ? 'Saving...' : 'Log Entry'}
             </Button>
           </DialogFooter>

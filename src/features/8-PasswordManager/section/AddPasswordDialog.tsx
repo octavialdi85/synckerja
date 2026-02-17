@@ -28,7 +28,7 @@ import { PasswordGenerator } from './PasswordGenerator';
 interface AddPasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (data: PasswordFormData) => void;
+  onSave: (data: PasswordFormData) => void | Promise<void>;
   editPassword?: Password | null;
   categories: Array<{ id: string; name: string }>;
 }
@@ -86,10 +86,17 @@ export const AddPasswordDialog: React.FC<AddPasswordDialogProps> = ({
     }
   }, [open, editPassword, emptyFormData, isInitialized]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
-    onOpenChange(false);
+    try {
+      const result = onSave(formData);
+      if (result instanceof Promise) {
+        await result;
+      }
+      onOpenChange(false);
+    } catch {
+      // Parent/hook shows toast; keep dialog open for retry
+    }
   };
 
   const handleCancel = () => {
@@ -226,7 +233,7 @@ export const AddPasswordDialog: React.FC<AddPasswordDialogProps> = ({
                   id="url"
                   type="url"
                   placeholder="https://example.com"
-                  value={formData.url}
+                  value={formData.url ?? ''}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   autoComplete="off"
                   autoCorrect="off"
@@ -240,7 +247,7 @@ export const AddPasswordDialog: React.FC<AddPasswordDialogProps> = ({
                 <Textarea
                   id="notes"
                   placeholder="Add any additional notes..."
-                  value={formData.notes}
+                  value={formData.notes ?? ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
                   autoComplete="off"

@@ -47,17 +47,17 @@ const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoadi
 
                 {/* Quick Stats Metric Cards */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">Subscription Metrics</h3>
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900 shrink-0">Subscription Metrics</h3>
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                       {subscriptionStatus && (
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-gray-500 truncate" title={subscriptionStatus.plan_name}>
                           Plan: {subscriptionStatus.plan_name}
                         </span>
                       )}
                       <button 
                         onClick={() => refreshSubscriptionStatus()}
-                        className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200 transition-colors"
+                        className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200 transition-colors shrink-0"
                         title="Refresh subscription data"
                       >
                         Refresh Data

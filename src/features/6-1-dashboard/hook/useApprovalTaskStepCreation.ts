@@ -189,7 +189,7 @@ export const useApprovalTaskStepCreation = ({
         
         // Check for foreign key constraint violations
         if (insertError.code === '23503' || insertError.message?.includes('foreign key constraint')) {
-          console.error('Foreign key constraint violation:', {
+          devLog.error('Foreign key constraint violation:', {
             code: insertError.code,
             message: insertError.message,
             details: insertError.details,
@@ -212,7 +212,7 @@ export const useApprovalTaskStepCreation = ({
         }
         
         // Log other errors for debugging
-        console.error('Task step insert error:', {
+        devLog.error('Task step insert error:', {
           code: insertError.code,
           message: insertError.message,
           details: insertError.details,
@@ -265,7 +265,7 @@ export const useApprovalTaskStepCreation = ({
             .single();
 
           if (assignError) {
-            console.error('Error auto-assigning task step from approval:', assignError);
+            devLog.error('Error auto-assigning task step from approval:', assignError);
             // Jangan batalkan approval; task step sudah berhasil dibuat
           } else if (assignmentRecord?.id && plan.post_date) {
             // Simpan due_date dari post_date ke task_steps_assigned_duedate
@@ -286,13 +286,13 @@ export const useApprovalTaskStepCreation = ({
                   });
 
                 if (dueDateError) {
-                  console.error('Error saving auto due date from post_date:', dueDateError);
+                  devLog.error('Error saving auto due date from post_date:', dueDateError);
                 }
               } else {
-                console.warn('Invalid post_date format for due date:', plan.post_date);
+                devLog.warn('Invalid post_date format for due date:', plan.post_date);
               }
             } catch (dateError) {
-              console.error('Error processing post_date for due date:', dateError);
+              devLog.error('Error processing post_date for due date:', dateError);
             }
 
             // IMPORTANT: Jangan auto-populate PIC Production dari flow approval
@@ -307,7 +307,7 @@ export const useApprovalTaskStepCreation = ({
                 })
                 .eq('id', plan.id);
             } catch (revertError) {
-              console.warn('Non-blocking: failed to revert pic_production after approval assignment:', revertError);
+              devLog.warn('Non-blocking: failed to revert pic_production after approval assignment:', revertError);
             }
           }
         }
@@ -317,7 +317,7 @@ export const useApprovalTaskStepCreation = ({
       // The task step creation (plus optional assignment & due date) has completed
       return true;
     } catch (error: any) {
-      console.error('Error creating task step:', {
+      devLog.error('Error creating task step:', {
         error,
         message: error?.message,
         code: error?.code,
@@ -505,7 +505,7 @@ export const useApprovalTaskStepCreation = ({
           .in('id', conceptStepIds);
 
         if (deleteError) {
-          console.error('Error deleting Concept task steps:', {
+          devLog.error('Error deleting Concept task steps:', {
             error: deleteError,
             code: deleteError.code,
             message: deleteError.message,
@@ -522,7 +522,7 @@ export const useApprovalTaskStepCreation = ({
       // Successfully deleted Concept steps
       return true;
     } catch (error: any) {
-      console.error('Error deleting Concept task steps:', {
+      devLog.error('Error deleting Concept task steps:', {
         error,
         message: error?.message,
         code: error?.code,

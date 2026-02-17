@@ -29,7 +29,7 @@ import MobileProfile from "./mobile/pages/home/Profile";
 import MobileSchedule from "./mobile/pages/home/Schedule";
 import MobileClientVisit from "./mobile/pages/home/ClientVisit";
 import MobileReports from "./mobile/pages/home/Reports";
-import PasswordManagerPage from "./features/8-PaswordManager/PasswordManagerPage";
+import PasswordManagerPage from "./features/8-PasswordManager/PasswordManagerPage";
 import DesktopDailyTaskPage from "./features/8-2-DailyTask/DailyTaskPage";
 import { DailyTaskProvider } from "./features/8-2-DailyTask/DailyTaskContext";
 import MobileDailyTaskPage from "./mobile/pages/daily task/DailyTaskPage";
@@ -101,9 +101,6 @@ import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pa
 import { PricingTools as PricingToolsPage } from "./features/8_2_pricing-tools/pages";
 import { DefaultPricesPage } from "./features/8_2_1_default_prices/pages";
 import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
-import { CustomerServicePage } from "./features/5-1-dashboard/CustomerServicePage";
-import { CustomerServiceDashboard } from "./features/5-1-dashboard";
-import { CustomerServiceTicketsPage } from "./features/5-1-tickets";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
@@ -144,7 +141,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false, // Disabled globally to prevent reload when switching windows
-      refetchOnMount: true, // Allow refetch on mount (but not on window focus)
+      refetchOnMount: false, // Disabled to prevent flicker on refresh; opt-in per query where needed
       staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
       gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data for 5 minutes
       retry: 1, // Reduced retry attempts
@@ -570,19 +567,9 @@ const App = () => (
               } />
               
               {/* Operations Routes - PROTECTED */}
-              <Route path="/operations/customer-service" element={
-                <ProtectedRoute>
-                  <CustomerServicePage />
-                </ProtectedRoute>
-              }>
-                <Route index element={<Navigate to="/operations/customer-service/dashboard" replace />} />
-                <Route path="dashboard" element={<CustomerServiceDashboard />} />
-              </Route>
-              <Route path="/operations/customer-service/tickets" element={
-                <ProtectedRoute>
-                  <CustomerServiceTicketsPage />
-                </ProtectedRoute>
-              } />
+              <Route path="/operations/customer-service/dashboard" element={<Navigate to="/operations/consultant/leads-management" replace />} />
+              <Route path="/operations/customer-service/tickets" element={<Navigate to="/operations/consultant/leads-management" replace />} />
+              <Route path="/operations/customer-service" element={<Navigate to="/operations/consultant/leads-management" replace />} />
               <Route path="/operations/sales" element={
                 <ProtectedRoute>
                   <Navigate to="/operations/sales/activities" replace />

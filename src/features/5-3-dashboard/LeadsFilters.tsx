@@ -171,6 +171,34 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
     }
   }, [externalFilters]);
 
+  // Satu opsi per label yang tampil (hindari duplikat: Open+Unread → satu "Unread", Closed+Resolve → satu "Resolve")
+  const uniqueLeadStatuses = React.useMemo(() => {
+    const excluded = leadStatuses.filter((s) => {
+      const name = (s.name?.trim().toLowerCase() ?? '');
+      return name !== 'lost' && name !== 'qualified';
+    });
+    // Urutkan agar nama kanonik (Open, Closed, In Progress) didahulukan, supaya value filter cocok dengan lead_status.name
+    const canonical = ['Open', 'Unread', 'In Progress', 'Converted', 'Qualified', 'Closed', 'Resolve'];
+    const byDisplay = (a: LeadStatus, b: LeadStatus) => {
+      const da = getLeadStatusDisplayName(a.name);
+      const db = getLeadStatusDisplayName(b.name);
+      const ia = canonical.indexOf(a.name ?? '');
+      const ib = canonical.indexOf(b.name ?? '');
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return (da || '').localeCompare(db || '');
+    };
+    const sorted = [...excluded].sort(byDisplay);
+    const seen = new Set<string>();
+    return sorted.filter((s) => {
+      const displayName = getLeadStatusDisplayName(s.name);
+      if (seen.has(displayName)) return false;
+      seen.add(displayName);
+      return true;
+    });
+  }, [leadStatuses]);
+
   return (
     <>
       {filtersLoadError && (
@@ -297,7 +325,7 @@ export const LeadsFilters = ({ onNewLeadClick, onFiltersChange, filteredLeads = 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              {leadStatuses.filter((s) => s.name?.trim().toLowerCase() !== 'lost').map((status) => (
+              {uniqueLeadStatuses.map((status) => (
                 <SelectItem key={status.id} value={status.name}>
                   {getLeadStatusDisplayName(status.name)}
                 </SelectItem>

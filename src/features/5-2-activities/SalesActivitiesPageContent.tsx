@@ -8,19 +8,31 @@ import { SalesActivityDialog } from './SalesActivityDialog';
 import { PaymentUpdateModal } from '@/features/5-2-jadwal-kunjungan/PaymentUpdateModal';
 import { CreateTaskDialog, type TaskFormData } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
 import { SopSelectionPopup } from './components/SopSelectionPopup';
-import { useSalesActivities } from '@/hooks/organized/sales';
+import { useSalesActivities, type SalesActivity } from '@/hooks/organized/sales';
 import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { Button } from '@/features/ui/button';
+import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/features/1-login/hooks/use-toast';
+import { devLog } from '@/config/logger';
+
+// Persist across remounts so we don't show spinner again after first successful load (avoids flicker on refetch/Strict Mode)
+let salesActivitiesLastData: SalesActivity[] = [];
+let salesActivitiesHasLoadedOnce = false;
 
 export const SalesActivitiesPageContent = () => {
-  const { activities, loading, refetch, deleteSalesActivity } = useSalesActivities();
+  const { activities, loading, refetch, error, isError, deleteSalesActivity } = useSalesActivities();
+  if (!loading) {
+    salesActivitiesHasLoadedOnce = true;
+    salesActivitiesLastData = activities;
+  }
+  const effectiveActivities = loading && salesActivitiesHasLoadedOnce ? salesActivitiesLastData : activities;
+  const showLoadingSpinner = loading && !salesActivitiesHasLoadedOnce;
   const { toast } = useToast();
   const [showDialog, setShowDialog] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<any>(null);
+  const [editingActivity, setEditingActivity] = useState<SalesActivity | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedActivityForPayment, setSelectedActivityForPayment] = useState<any>(null);
+  const [selectedActivityForPayment, setSelectedActivityForPayment] = useState<SalesActivity | null>(null);
   const [paymentModalViewOnly, setPaymentModalViewOnly] = useState(false);
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
   const [createTaskPrefill, setCreateTaskPrefill] = useState<{
@@ -41,7 +53,7 @@ export const SalesActivitiesPageContent = () => {
     date: 'all'
   });
 
-  const handleEdit = (activity: any) => {
+  const handleEdit = (activity: SalesActivity) => {
     setEditingActivity(activity);
     setShowDialog(true);
   };
@@ -67,13 +79,13 @@ export const SalesActivitiesPageContent = () => {
     setShowDialog(true);
   };
 
-  const handleUpdatePayment = (activity: any) => {
+  const handleUpdatePayment = (activity: SalesActivity) => {
     setSelectedActivityForPayment(activity);
     setPaymentModalViewOnly(false);
     setShowPaymentModal(true);
   };
 
-  const handleCheckHistory = (activity: any) => {
+  const handleCheckHistory = (activity: SalesActivity) => {
     setSelectedActivityForPayment(activity);
     setPaymentModalViewOnly(true);
     setShowPaymentModal(true);
@@ -123,7 +135,7 @@ export const SalesActivitiesPageContent = () => {
     }
   };
 
-  const handleDelete = async (activity: any) => {
+  const handleDelete = async (activity: SalesActivity) => {
     if (!confirm(`Are you sure you want to delete this sales activity for "${activity.client_name}"?`)) {
       return;
     }
@@ -134,9 +146,8 @@ export const SalesActivitiesPageContent = () => {
         title: "Success",
         description: "Sales activity deleted successfully",
       });
-      refetch();
     } catch (error: any) {
-      console.error('Error deleting sales activity:', error);
+      devLog.error('Error deleting sales activity:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete sales activity",
@@ -145,7 +156,7 @@ export const SalesActivitiesPageContent = () => {
     }
   };
 
-  const filteredActivities = activities.filter(activity => {
+  const filteredActivities = effectiveActivities.filter(activity => {
     if (filters.search && !activity.client_name.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }
@@ -223,13 +234,28 @@ export const SalesActivitiesPageContent = () => {
             <div className="flex-shrink-0 mb-2">
               <SalesActivitiesMetricsCards activities={filteredActivities} />
             </div>
+
+            {isError && (
+              <div className="flex-shrink-0 mb-2">
+                <Alert variant="destructive">
+                  <AlertDescription className="flex items-center justify-between gap-2 flex-wrap">
+                    <span>
+                      {error instanceof Error ? error.message : 'Failed to load sales activities.'}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => refetch()}>
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
             
             {/* Table Section - Main Content */}
             <div className="flex-1 min-h-0 h-full">
               <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
                 <SalesActivitiesTable 
                   activities={filteredActivities}
-                  loading={loading}
+                  loading={showLoadingSpinner}
                   onUpdate={refetch}
                   onEdit={handleEdit}
                   onDelete={handleDelete}

@@ -4,6 +4,7 @@ import { Button } from '@/features/ui/button';
 import { CheckSquare, Target, FileText, Info } from 'lucide-react';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { logger } from '@/config/logger';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
 import { supabase } from '@/integrations/supabase/client';
 import { ObjectiveHierarchyDialog } from '@/features/8-2-DailyTask/modal/ObjectiveHierarchyDialog';
@@ -172,7 +173,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
       if (error) throw error;
       setMeetingPoint(data);
     } catch (error) {
-      console.error('Error fetching meeting point:', error);
+      logger.error('Error fetching meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to load meeting point data',

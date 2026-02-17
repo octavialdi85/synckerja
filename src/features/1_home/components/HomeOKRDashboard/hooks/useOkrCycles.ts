@@ -28,7 +28,10 @@ export const useOkrCycles = (organizationId?: string) => {
         .eq('organization_id', organizationId)
         .order('start_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching OKR cycles:', error);
+        return [];
+      }
       return data || [];
     },
     enabled: !!organizationId,

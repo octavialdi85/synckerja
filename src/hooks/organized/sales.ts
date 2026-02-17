@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
@@ -105,7 +106,7 @@ export const useSalesActivities = () => {
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
 
-  const { data: activities = [], isLoading: loading, refetch } = useQuery({
+  const { data: activities = [], isLoading: loading, refetch, error, isError } = useQuery({
     queryKey: ['sales-activities', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -117,32 +118,36 @@ export const useSalesActivities = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching sales activities:', error);
+        devLog.error('❌ Error fetching sales activities:', error);
         throw error;
       }
+
+      const rows = data || [];
+      const uniqueServiceIds = [...new Set(rows.map((a: { service_id?: string | null }) => a.service_id).filter(Boolean))] as string[];
+      const uniqueSubServiceIds = [...new Set(rows.map((a: { sub_service_id?: string | null }) => a.sub_service_id).filter(Boolean))] as string[];
+
+      const [servicesResult, subServicesResult] = await Promise.all([
+        uniqueServiceIds.length > 0
+          ? supabase.from('services').select('id, name').in('id', uniqueServiceIds)
+          : Promise.resolve({ data: [] }),
+        uniqueSubServiceIds.length > 0
+          ? supabase.from('sub_services').select('id, name').in('id', uniqueSubServiceIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const servicesMap = new Map<string, { id: string; name: string }>();
+      (servicesResult.data || []).forEach((s: { id: string; name: string }) => servicesMap.set(s.id, { id: s.id, name: s.name }));
+      const subServicesMap = new Map<string, { id: string; name: string }>();
+      (subServicesResult.data || []).forEach((s: { id: string; name: string }) => subServicesMap.set(s.id, { id: s.id, name: s.name }));
+
+      const enrichedActivities = rows.map((activity: Record<string, unknown>) => ({
+        ...activity,
+        services: activity.service_id ? servicesMap.get(activity.service_id as string) ?? null : null,
+        sub_services: activity.sub_service_id ? subServicesMap.get(activity.sub_service_id as string) ?? null : null,
+      }));
       
-      // Fetch services and sub_services separately for each activity
-      const enrichedActivities = await Promise.all(
-        (data || []).map(async (activity) => {
-          const [serviceData, subServiceData] = await Promise.all([
-            activity.service_id 
-              ? supabase.from('services').select('id, name').eq('id', activity.service_id).maybeSingle()
-              : Promise.resolve({ data: null }),
-            activity.sub_service_id 
-              ? supabase.from('sub_services').select('id, name').eq('id', activity.sub_service_id).maybeSingle()
-              : Promise.resolve({ data: null })
-          ]);
-          
-          return {
-            ...activity,
-            services: serviceData.data ? { id: serviceData.data.id, name: serviceData.data.name } : null,
-            sub_services: subServiceData.data ? { id: subServiceData.data.id, name: subServiceData.data.name } : null,
-          };
-        })
-      );
-      
-      console.log('📊 Fetched sales activities:', enrichedActivities?.length || 0, 'activities for org:', organizationId);
-      console.log('📊 Sample activity data:', enrichedActivities?.[0] ? {
+      devLog.debug('📊 Fetched sales activities:', enrichedActivities?.length || 0, 'activities for org:', organizationId);
+      devLog.debug('📊 Sample activity data:', enrichedActivities?.[0] ? {
         id: enrichedActivities[0].id,
         client_name: enrichedActivities[0].client_name,
         service_id: enrichedActivities[0].service_id,
@@ -153,12 +158,21 @@ export const useSalesActivities = () => {
       return enrichedActivities;
     },
     enabled: !!organizationId,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    placeholderData: (previousData) => previousData,
   });
 
-  // Delete sales activity mutation - includes deleting related data (Items, Payment History)
+  /**
+   * Deletion is best-effort: we delete items, payments, sales_payments, then the activity.
+   * If a step fails we log and continue; the activity may be deleted while related rows remain.
+   * Consider manual cleanup or future transactional delete.
+   */
   const deleteSalesActivityMutation = useMutation({
     mutationFn: async (activityId: string) => {
-      console.log('🗑️ Starting deletion process for sales activity:', activityId);
+      devLog.debug('🗑️ Starting deletion process for sales activity:', activityId);
 
       // Step 1: Delete Sales Activity Items (sales_activity_items)
       const { error: itemsError } = await supabase
@@ -167,10 +181,10 @@ export const useSalesActivities = () => {
         .eq('sales_activity_id', activityId);
 
       if (itemsError) {
-        console.error('⚠️ Error deleting sales activity items:', itemsError);
+        devLog.error('⚠️ Error deleting sales activity items:', itemsError);
         // Continue deletion even if items delete fails
       } else {
-        console.log('✅ Sales activity items deleted');
+        devLog.debug('✅ Sales activity items deleted');
       }
 
       // Step 2: Delete Payment History (sales_activity_payments)
@@ -180,10 +194,10 @@ export const useSalesActivities = () => {
         .eq('sales_activity_id', activityId);
 
       if (paymentsError) {
-        console.error('⚠️ Error deleting payment history:', paymentsError);
+        devLog.error('⚠️ Error deleting payment history:', paymentsError);
         // Continue deletion even if payment history delete fails
       } else {
-        console.log('✅ Payment history (sales_activity_payments) deleted');
+        devLog.debug('✅ Payment history (sales_activity_payments) deleted');
       }
 
       // Step 2b: Delete Sales Payments (sales_payments) if exists
@@ -193,10 +207,10 @@ export const useSalesActivities = () => {
         .eq('sales_activity_id', activityId);
 
       if (salesPaymentsError) {
-        console.error('⚠️ Error deleting sales payments:', salesPaymentsError);
+        devLog.error('⚠️ Error deleting sales payments:', salesPaymentsError);
         // Continue deletion even if sales payments delete fails
       } else {
-        console.log('✅ Sales payments deleted');
+        devLog.debug('✅ Sales payments deleted');
       }
 
       // Step 3: Delete the sales activity itself
@@ -206,11 +220,11 @@ export const useSalesActivities = () => {
         .eq('id', activityId);
 
       if (activityError) {
-        console.error('❌ Error deleting sales activity:', activityError);
+        devLog.error('❌ Error deleting sales activity:', activityError);
         throw activityError;
       }
 
-      console.log('✅ Sales activity and all related data deleted successfully');
+      devLog.debug('✅ Sales activity and all related data deleted successfully');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activities', organizationId] });
@@ -221,6 +235,8 @@ export const useSalesActivities = () => {
     activities: activities as SalesActivity[],
     loading,
     refetch,
+    error,
+    isError,
     deleteSalesActivity: deleteSalesActivityMutation.mutateAsync,
   };
 };
@@ -231,13 +247,13 @@ export const useSalesActivityMasterData = () => {
   
   // Debug: Log organizationId
   useEffect(() => {
-    console.log('🔍 useSalesActivityMasterData - organizationId:', organizationId);
+    devLog.debug('🔍 useSalesActivityMasterData - organizationId:', organizationId);
   }, [organizationId]);
 
-  const { data: incomeTypes = [], isLoading: incomeTypesLoading } = useQuery({
+  const { data: incomeTypes = [], isLoading: incomeTypesLoading, isError: incomeTypesError } = useQuery({
     queryKey: ['income-types', organizationId],
     queryFn: async () => {
-      console.log('💰 Fetching income types for org:', organizationId);
+      devLog.debug('💰 Fetching income types for org:', organizationId);
       
       // Try to fetch with organization_id first, then fallback to null (global)
       let query = supabase
@@ -256,19 +272,19 @@ export const useSalesActivityMasterData = () => {
       const { data, error } = await query;
 
       if (error) {
-        console.error('❌ Error fetching income types:', error);
+        devLog.error('❌ Error fetching income types:', error);
         throw error;
       }
       
-      console.log('💰 Fetched income types:', data?.length || 0, 'types for org:', organizationId || 'null (global)');
-      console.log('💰 Income types data:', data);
+      devLog.debug('💰 Fetched income types:', data?.length || 0, 'types for org:', organizationId || 'null (global)');
+      devLog.debug('💰 Income types data:', data);
       
       return data || [];
     },
     enabled: true, // Always enabled, will fetch global if no org
   });
 
-  const { data: services = [] } = useQuery({
+  const { data: services = [], isError: servicesError } = useQuery({
     queryKey: ['services', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -281,18 +297,18 @@ export const useSalesActivityMasterData = () => {
         .order('name');
 
       if (error) {
-        console.error('Error fetching services:', error);
+        devLog.error('Error fetching services:', error);
         throw error;
       }
-      console.log('📦 Fetched services:', data?.length || 0, 'services for org:', organizationId);
-      console.log('📦 Services data:', data);
+      devLog.debug('📦 Fetched services:', data?.length || 0, 'services for org:', organizationId);
+      devLog.debug('📦 Services data:', data);
       return data || [];
     },
     enabled: !!organizationId,
   });
 
   // Fetch sub-services separately
-  const { data: subServices = [] } = useQuery({
+  const { data: subServices = [], isError: subServicesError } = useQuery({
     queryKey: ['sub-services', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -305,7 +321,7 @@ export const useSalesActivityMasterData = () => {
         .order('name');
 
       if (error) {
-        console.error('Error fetching sub-services:', error);
+        devLog.error('Error fetching sub-services:', error);
         throw error;
       }
       return data || [];
@@ -314,7 +330,7 @@ export const useSalesActivityMasterData = () => {
   });
 
   // Fetch income categories
-  const { data: incomeCategories = [] } = useQuery({
+  const { data: incomeCategories = [], isError: incomeCategoriesError } = useQuery({
     queryKey: ['income-categories', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -327,10 +343,10 @@ export const useSalesActivityMasterData = () => {
         .order('name');
 
       if (error) {
-        console.error('Error fetching income categories:', error);
+        devLog.error('Error fetching income categories:', error);
         throw error;
       }
-      console.log('📂 Fetched income categories:', data?.length || 0, 'categories for org:', organizationId);
+      devLog.debug('📂 Fetched income categories:', data?.length || 0, 'categories for org:', organizationId);
       return data || [];
     },
     enabled: !!organizationId,
@@ -350,7 +366,7 @@ export const useSalesActivityMasterData = () => {
 
   // Debug logging
   useEffect(() => {
-    console.log('🔍 useSalesActivityMasterData - Master data state:', {
+    devLog.debug('🔍 useSalesActivityMasterData - Master data state:', {
       organizationId,
       incomeTypesCount: incomeTypes.length,
       incomeCategoriesCount: incomeCategories.length,
@@ -359,6 +375,8 @@ export const useSalesActivityMasterData = () => {
       subServicesCount: subServices.length
     });
   }, [organizationId, incomeTypes, incomeCategories, services, parentServices, subServices]);
+
+  const masterDataError = incomeTypesError || servicesError || subServicesError || incomeCategoriesError;
 
   return {
     incomeTypes,
@@ -369,6 +387,7 @@ export const useSalesActivityMasterData = () => {
     parentServices,
     subServices,
     getSubServicesByService,
+    masterDataError,
   };
 };
 
@@ -435,7 +454,7 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
-      syncActivityTotalFromItems();
+      void syncActivityTotalFromItems().catch((e) => devLog.error('syncActivityTotalFromItems failed', e));
     },
   });
 
@@ -463,7 +482,7 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
-      syncActivityTotalFromItems();
+      void syncActivityTotalFromItems().catch((e) => devLog.error('syncActivityTotalFromItems failed', e));
     },
   });
 
@@ -478,7 +497,7 @@ export const useSalesActivityItems = (salesActivityId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-activity-items', salesActivityId] });
-      syncActivityTotalFromItems();
+      void syncActivityTotalFromItems().catch((e) => devLog.error('syncActivityTotalFromItems failed', e));
     },
   });
 

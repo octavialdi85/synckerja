@@ -44,7 +44,11 @@ export const useCurrentUser = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        const newUser = session?.user || null;
+        if (event === 'SIGNED_OUT') {
+          cachedUser = null;
+          userPromise = null;
+        }
+        const newUser = session?.user ?? null;
         cachedUser = newUser;
         setUser(newUser);
         setLoading(false);

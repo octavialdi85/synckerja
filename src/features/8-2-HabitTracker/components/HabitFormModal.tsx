@@ -62,15 +62,17 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
 
   // Load habit data when editing
   useEffect(() => {
+    let isMounted = true;
+
     if (!isOpen) {
       // Reset when modal closes
       setIsInitializing(false);
-      return;
+      return () => { isMounted = false; };
     }
 
     // If editing but habit not found yet, wait for it to load
     if (habitId && !habit) {
-      return;
+      return () => { isMounted = false; };
     }
 
     setIsInitializing(true);
@@ -149,12 +151,14 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
 
       // Use requestAnimationFrame to ensure state updates happen in the right order
       requestAnimationFrame(() => {
+        if (!isMounted) return;
         setChecklistNames(finalChecklistNames);
         setColor(habit.color || '#3b82f6');
         setIsActive(habit.is_active);
         
         // Small delay to ensure state is set before allowing targetCount changes to affect checklistNames
         setTimeout(() => {
+          if (!isMounted) return;
           setIsInitializing(false);
         }, 100);
       });
@@ -171,6 +175,8 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
       setIsActive(true);
       setIsInitializing(false);
     }
+
+    return () => { isMounted = false; };
   }, [habit, isOpen, habitId]);
 
   // Update checklist names when target count changes (only when user manually changes it)
@@ -638,7 +644,7 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                   <p className={`text-xs mb-2 ${
                     monthlyDates.length > targetCount ? 'text-red-600 font-semibold' : 'text-gray-600'
                   }`}>
-                    Terpilih: {monthlyDates.length} dari {targetCount} tanggal ({monthlyDates.sort((a, b) => a - b).join(', ')})
+                    Terpilih: {monthlyDates.length} dari {targetCount} tanggal ({[...monthlyDates].sort((a, b) => a - b).join(', ')})
                   </p>
                 )}
               </div>

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
@@ -32,14 +33,15 @@ export const useHabitTracker = () => {
 };
 
 export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }) => {
-  const { organizationId } = useCurrentOrg();
+  const { organizationId, loading: orgLoading } = useCurrentOrg();
   const { user } = useCurrentUser();
-  const { data: employee } = useCurrentEmployee();
+  const { data: employee, isLoading: employeeLoading } = useCurrentEmployee();
   const { toast } = useToast();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [entries, setEntries] = useState<HabitEntry[]>([]);
   const [stats, setStats] = useState<HabitStats[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [effectSettled, setEffectSettled] = useState(false);
   const [filters, setFilters] = useState<HabitFilter>({
     search: '',
     frequency: 'all',
@@ -49,6 +51,8 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       end: null,
     },
   });
+  const isActiveRef = useRef(true);
+  const employeeLoadingEverTrueRef = useRef(false);
 
   const fetchHabits = useCallback(async () => {
     if (!organizationId || !employee?.id) return;
@@ -73,7 +77,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
               const parsed = JSON.parse(habit.checklist_names);
               checklistNames = Array.isArray(parsed) ? parsed : undefined;
             } catch (e) {
-              console.error('Error parsing checklist_names:', e);
+              logger.warn('Error parsing checklist_names', e);
               checklistNames = undefined;
             }
           }
@@ -90,7 +94,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
                 weeklyDays = parsed.filter((day: any) => typeof day === 'number' && day >= 0 && day <= 6);
               }
             } catch (e) {
-              console.error('Error parsing weekly_days:', e);
+              logger.warn('Error parsing weekly_days', e);
               weeklyDays = undefined;
             }
           }
@@ -107,7 +111,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
                 monthlyDates = parsed.filter((date: any) => typeof date === 'number' && date >= 1 && date <= 31);
               }
             } catch (e) {
-              console.error('Error parsing monthly_dates:', e);
+              logger.warn('Error parsing monthly_dates', e);
               monthlyDates = undefined;
             }
           }
@@ -120,14 +124,16 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
           monthly_dates: monthlyDates,
         };
       });
+      if (!isActiveRef.current) return;
       setHabits(parsedHabits);
     } catch (error) {
-      console.error('Error fetching habits:', error);
+      logger.error('Error fetching habits', error);
       toast({
         title: 'Error',
         description: 'Gagal memuat habits. Silakan refresh.',
         variant: 'destructive',
       });
+      if (!isActiveRef.current) return;
       setHabits([]);
     }
   }, [organizationId, employee?.id, toast]);
@@ -144,21 +150,23 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
         .order('entry_date', { ascending: false });
 
       if (error) throw error;
+      if (!isActiveRef.current) return;
       setEntries(data || []);
     } catch (error) {
-      console.error('Error fetching entries:', error);
+      logger.error('Error fetching entries', error);
       toast({
         title: 'Error',
         description: 'Gagal memuat data entri. Silakan refresh.',
         variant: 'destructive',
       });
+      if (!isActiveRef.current) return;
       setEntries([]);
     }
   }, [organizationId, employee?.id, toast]);
 
   const calculateStats = useCallback(() => {
     const habitStats: HabitStats[] = habits.map((habit) => {
-      const habitEntries = entries.filter((e) => e.habit_id === habit.id);
+      const habitEntries = entries.filter((e) => e.habit_id === habit.id).slice();
       const totalEntries = habitEntries.length;
       
       // Calculate completion rate
@@ -211,11 +219,12 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       };
     });
 
+    if (!isActiveRef.current) return;
     setStats(habitStats);
   }, [habits, entries]);
 
   const refreshData = useCallback(async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       await Promise.all([fetchHabits(), fetchEntries()]);
     } catch {
@@ -225,15 +234,29 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      if (isActiveRef.current) {
+        setDataLoading(false);
+        setEffectSettled(true);
+      }
     }
   }, [fetchHabits, fetchEntries, toast]);
 
   useEffect(() => {
+    if (employeeLoading) employeeLoadingEverTrueRef.current = true;
+    isActiveRef.current = true;
     if (organizationId && employee?.id) {
       refreshData();
+    } else if (!organizationId) {
+      setDataLoading(false);
+      setEffectSettled(true);
+    } else if (!employeeLoading && employeeLoadingEverTrueRef.current) {
+      setDataLoading(false);
+      setEffectSettled(true);
     }
-  }, [organizationId, employee?.id, refreshData]);
+    return () => {
+      isActiveRef.current = false;
+    };
+  }, [organizationId, employee?.id, employeeLoading, refreshData]);
 
   useEffect(() => {
     calculateStats();
@@ -251,11 +274,20 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
 
     try {
       // Get profile id from user_id
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
         .single();
+
+      if (profileError) {
+        toast({
+          title: 'Error',
+          description: 'Gagal memuat profil. Silakan coba lagi.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       const { data, error } = await supabase
         .from('habits')
@@ -274,7 +306,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       if (error) throw error;
       await refreshData();
     } catch (error) {
-      console.error('Error adding habit:', error);
+      logger.error('Error adding habit', error);
       toast({
         title: 'Error',
         description: 'Gagal menyimpan habit.',
@@ -311,7 +343,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       if (error) throw error;
       await refreshData();
     } catch (error) {
-      console.error('Error updating habit:', error);
+      logger.error('Error updating habit', error);
       toast({
         title: 'Error',
         description: 'Gagal mengubah habit.',
@@ -330,7 +362,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       if (error) throw error;
       await refreshData();
     } catch (error) {
-      console.error('Error deleting habit:', error);
+      logger.error('Error deleting habit', error);
       toast({
         title: 'Error',
         description: 'Gagal menghapus habit.',
@@ -344,11 +376,20 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
 
     try {
       // Get profile id from user_id
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
         .single();
+
+      if (profileError) {
+        toast({
+          title: 'Error',
+          description: 'Gagal memuat profil. Silakan coba lagi.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       const { data: newEntry, error } = await supabase
         .from('habit_entries')
@@ -371,7 +412,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
         setEntries((prev) => [...prev, newEntry]);
       }
     } catch (error) {
-      console.error('Error adding entry:', error);
+      logger.error('Error adding entry', error);
       toast({
         title: 'Error',
         description: 'Gagal menambah entri.',
@@ -393,7 +434,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       if (error) throw error;
       await refreshData();
     } catch (error) {
-      console.error('Error updating entry:', error);
+      logger.error('Error updating entry', error);
       toast({
         title: 'Error',
         description: 'Gagal mengubah entri.',
@@ -414,7 +455,7 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       // Optimistic update: remove entry from state without full refresh
       setEntries((prev) => prev.filter((entry) => entry.id !== id));
     } catch (error) {
-      console.error('Error deleting entry:', error);
+      logger.error('Error deleting entry', error);
       toast({
         title: 'Error',
         description: 'Gagal menghapus entri.',
@@ -438,6 +479,8 @@ export const HabitTrackerProvider = ({ children }: { children: React.ReactNode }
       return true;
     });
   }, [habits, filters]);
+
+  const loading = !effectSettled || orgLoading || employeeLoading || dataLoading;
 
   return (
     <HabitTrackerContext.Provider

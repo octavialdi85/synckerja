@@ -60,6 +60,9 @@ interface ReportContextType {
   options: { pics: string[]; tasks: string[]; steps: string[]; subSteps: string[] };
   getBlockersForStep: (stepId: string) => any[];
   formatDateRangeDisplay: () => string;
+  refreshError: string | null;
+  retryRefresh: () => void;
+  refreshReport: () => Promise<void>;
 }
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
@@ -98,6 +101,8 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
   const [completionDateMap, setCompletionDateMap] = useState<Record<string, string>>({});
   const isLoadingOrgRef = useRef(false);
   const inFlightOrgRef = useRef<string | null>(null);
+  const loadRef = useRef<(() => Promise<void>) | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Feature flag untuk gradual rollout (default: true, can disable via env)
   const USE_OPTIMIZED_HISTORY_API = import.meta.env.VITE_USE_OPTIMIZED_HISTORY_API !== 'false';
@@ -153,12 +158,12 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
         // If error but not critical, fall through to old API
         if (error && !error.message?.includes('organization_id is required')) {
-          console.warn('⚠️ Optimized API error, falling back to old API:', error.message);
+          logger.warn('Optimized API error, falling back to old API', error.message);
         }
       } catch (err: any) {
         // Non-critical error, fall back to old API
         if (import.meta.env.DEV) {
-          console.warn('⚠️ Optimized API failed, falling back to old API:', err?.message || err);
+          logger.warn('Optimized API failed, falling back to old API', err?.message || err);
         }
       }
     }
@@ -173,7 +178,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     });
 
     if (error) {
-      console.error('❌ Failed to fetch task_step_history batch', error);
+      logger.error('Failed to fetch task_step_history batch', error);
       throw error;
     }
 
@@ -186,7 +191,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
 
     return data || [];
     } catch (error) {
-      console.error('❌ History fetch failed with both APIs:', error);
+      logger.error('History fetch failed with both APIs', error);
       throw error;
     }
   };
@@ -226,7 +231,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         if (stepBatch.length > 0 || subStepBatch.length > 0) {
           batchPromises.push(
             fetchHistoryBatch(stepBatch, subStepBatch, limit, options).catch((error) => {
-              console.error('❌ Batch fetch error:', error);
+              logger.error('Batch fetch error', error);
               return [];
             })
           );
@@ -270,6 +275,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     let isActive = true;
 
     const load = async () => {
+      setRefreshError(null);
       setLoading(true);
       
       try {
@@ -280,6 +286,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           const cached = getCached<{ rows: AssignmentRow[]; blockers: any[]; recentUpdates: any[] }>(cacheKey, 60000);
           if (cached !== undefined && cached !== null) {
             // Show cached data immediately
+            if (!isActive) return;
             setRows(cached.rows || []);
             setBlockers(cached.blockers || []);
             setRecentUpdates(cached.recentUpdates || []);
@@ -287,18 +294,22 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             
             // Fetch fresh data in background (non-blocking)
             // Continue with normal load but don't block UI
-            loadFreshData().catch(err => console.error('Background refresh failed:', err));
+            loadFreshData().catch(err => {
+              logger.warn('Background refresh failed', err);
+              if (isActive) setRefreshError(err?.message || 'Background refresh failed');
+            });
             return;
           }
         }
       } catch (cacheError) {
         // If cache check fails, continue with normal fetch
-        console.warn('Cache check failed, proceeding with normal fetch:', cacheError);
+        logger.warn('Cache check failed, proceeding with normal fetch', cacheError);
       }
       
       // No cache available - fetch data normally
       await loadFreshData();
     };
+    loadRef.current = load;
     
     const loadFreshData = async () => {
       let finalRows: AssignmentRow[] = [];
@@ -326,14 +337,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         ]);
 
         if (stepAssignsResult.error) {
-          console.error('❌ Error fetching step assignments:', stepAssignsResult.error);
+          logger.error('Error fetching step assignments', stepAssignsResult.error);
           throw stepAssignsResult.error;
         }
 
         if (subStepAssignsResult.error) {
-          console.error('❌ Error fetching sub-step assignments:', subStepAssignsResult.error);
+          logger.error('Error fetching sub-step assignments', subStepAssignsResult.error);
           // Don't throw - continue with step assignments only
-          console.warn('⚠️ Continuing without sub-step assignments');
+          logger.warn('Continuing without sub-step assignments');
         }
 
         // Map step assignments
@@ -533,6 +544,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
           // Combine: step assignments (filtered) + sub-step rows (all with due_date)
           const allMapped = [...filteredStepMapped, ...subStepMappedWithDueDate];
           finalRows = allMapped;
+          if (!isActive) return;
           setRows(allMapped);
           logger.query(`✅ Loaded ${filteredStepMapped.length} step assignments and ${subStepMappedWithDueDate.length} sub-step rows (including unassigned)`);
           
@@ -552,6 +564,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         } else {
           // No sub-steps, use step assignments only
           finalRows = stepMapped;
+          if (!isActive) return;
           setRows(stepMapped);
           logger.query(`✅ Loaded ${stepMapped.length} step assignments (no sub-steps)`);
           
@@ -575,6 +588,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
         
         // Initialize empty maps (will be updated in background)
         let completionDateMap: Record<string, string> = {};
+        if (!isActive) return;
         setCompletionDateMap(completionDateMap);
         let unresolvedStepBlockers: any[] = [];
         
@@ -587,12 +601,13 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
               if (completedStepIds.length > 0) {
                 fetchCompletionDates(completedStepIds)
                   .then(completionDateMap => {
+                    if (!isActive) return;
                     setCompletionDateMap(completionDateMap);
                     logger.query(`📅 Loaded completion dates in background: ${Object.keys(completionDateMap).length} steps`);
                   })
                   .catch(err => {
                     if (err?.status !== 500) {
-                      console.warn('⚠️ Error loading completion dates (non-critical):', err);
+                      logger.warn('Error loading completion dates (non-critical)', err);
                     }
                   });
               }
@@ -626,12 +641,12 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     if (result.data) {
                       allBlockers.push(...result.data);
                     }
-                  } catch (err: any) {
-                    // Skip on timeout/error (non-critical)
-                    if (!err?.message?.includes('timeout')) {
-                      console.warn('⚠️ Error fetching step blockers batch (non-critical):', err);
+                    } catch (err: any) {
+                      // Skip on timeout/error (non-critical)
+                      if (!err?.message?.includes('timeout')) {
+                        logger.warn('Error fetching step blockers batch (non-critical)', err);
+                      }
                     }
-                  }
                   
                   // Small delay between batches to avoid overwhelming database
                   await new Promise(resolve => setTimeout(resolve, 100));
@@ -667,6 +682,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     });
                     
                     // Update blockers in state with enriched data
+                    if (!isActive) return;
                     setBlockers(prevBlockers => {
                       const combined = [...enriched, ...prevBlockers];
                       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -686,8 +702,9 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     setBlockerCountByStep(prev => ({ ...prev, ...countMap }));
                     setBlockersByStep(prev => ({ ...prev, ...byStep }));
                   } catch (enrichErr) {
-                    console.warn('⚠️ Error enriching step blockers (non-critical):', enrichErr);
+                    logger.warn('Error enriching step blockers (non-critical)', enrichErr);
                     // Still update with unenriched data
+                    if (!isActive) return;
                     setBlockers(prevBlockers => {
                       const combined = [...newUnresolvedStepBlockers, ...prevBlockers];
                       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -696,6 +713,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                   }
                 } else {
                   // No blockers to enrich, just update state
+                  if (!isActive) return;
                   setBlockers(prevBlockers => {
                     const combined = [...newUnresolvedStepBlockers, ...prevBlockers];
                     combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -706,9 +724,9 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                 logger.query(`📊 Step blockers loaded in background: ${allBlockers.length} total, ${newUnresolvedStepBlockers.length} unresolved`);
               }
             } catch (error) {
-              console.warn('⚠️ Error loading completion dates/blockers in background (non-critical):', error);
+              logger.warn('Error loading completion dates/blockers in background (non-critical)', error);
             }
-          })().catch(err => console.warn('Background completion/blockers fetch failed:', err));
+          })().catch(err => logger.warn('Background completion/blockers fetch failed', err));
         }
 
         // STEP 3: PARALLEL - Fetch step IDs and sub-step IDs in parallel
@@ -779,7 +797,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     } catch (err: any) {
                       // Skip on timeout/error (non-critical)
                       if (!err?.message?.includes('timeout')) {
-                        console.warn('⚠️ Error fetching sub-step blockers batch (non-critical):', err);
+                        logger.warn('Error fetching sub-step blockers batch (non-critical)', err);
                       }
                     }
                     
@@ -828,6 +846,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       });
                       
                       // Update blockers in state with enriched data
+                      if (!isActive) return;
                       setBlockers(prevBlockers => {
                         const combined = [...enriched, ...prevBlockers];
                         combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -847,8 +866,9 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       setBlockerCountByStep(prev => ({ ...prev, ...countMap }));
                       setBlockersByStep(prev => ({ ...prev, ...byStep }));
                     } catch (enrichErr) {
-                      console.warn('⚠️ Error enriching sub-step blockers (non-critical):', enrichErr);
+                      logger.warn('Error enriching sub-step blockers (non-critical)', enrichErr);
                       // Still update with unenriched data
+                      if (!isActive) return;
                       setBlockers(prevBlockers => {
                         const combined = [...newUnresolvedSubStepBlockers, ...prevBlockers];
                         combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -857,6 +877,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                     }
                   } else {
                     // No blockers to enrich, just update state
+                    if (!isActive) return;
                     setBlockers(prevBlockers => {
                       const combined = [...newUnresolvedSubStepBlockers, ...prevBlockers];
                       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -930,6 +951,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       });
                       
                       // Update recent updates in state with enriched data
+                      if (!isActive) return;
                       setRecentUpdates(prevUpdates => {
                         const combined = [...enriched, ...prevUpdates];
                         combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -941,18 +963,21 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                       logger.query(`📚 History loaded in background: 0 items`);
                     }
                   } catch (err) {
-                    console.warn('⚠️ Error fetching history in background (non-critical):', err);
+                    logger.warn('Error fetching history in background (non-critical)', err);
+                    if (!isActive) return;
+                    setRecentUpdates([]);
                   }
                 }
               } catch (error) {
-                console.warn('⚠️ Error loading sub-step blockers/history in background (non-critical):', error);
+                logger.warn('Error loading sub-step blockers/history in background (non-critical)', error);
               }
-            })().catch(err => console.warn('Background sub-step blockers/history fetch failed:', err));
+            })().catch(err => logger.warn('Background sub-step blockers/history fetch failed', err));
           }
         }
 
         // STEP 5: OPTIMIZED - Enrichment will be done in background after blockers/history are loaded
         // For now, set empty blockers (will be updated in background)
+        if (!isActive) return;
         setBlockers([]);
         setBlockerCountByStep({});
         setBlockersByStep({});
@@ -972,10 +997,10 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
             });
           }
         } catch (cacheError) {
-          console.warn('Failed to save cache:', cacheError);
+          logger.warn('Failed to save cache', cacheError);
         }
       } finally {
-        setLoading(false);
+        if (isActive) setLoading(false);
       }
     };
     load().finally(() => {
@@ -1094,20 +1119,24 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     return formatDate(start);
   };
 
-  const value: ReportContextType = { loading, performance: performance.map(p => ({ ...p, })), filtered: filtered.map(p => ({ ...p, })), blockers, recentUpdates, filteredBlockers, filteredRecentUpdates, filters, updateFilter, getBlockersForStep: (stepId: string) => blockersByStep[stepId] || [], formatDateRangeDisplay };
+  const retryRefresh = () => {
+    setRefreshError(null);
+    void loadRef.current?.();
+  };
+  const refreshReport = async () => {
+    setRefreshError(null);
+    await loadRef.current?.();
+  };
   // Build dependent dropdown options from current dataset
   const base = [...performance];
   const pics = Array.from(new Set(base.map(p => p.employeeName).filter(Boolean))).sort();
-  // Task options independent
   const tasks = Array.from(new Set(base.map(p => p.taskTitle).filter(Boolean))).sort();
-  // Step depends on selected task (if not 'all')
   const steps = Array.from(new Set(
     base
       .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
       .map(p => p.stepTitle)
       .filter(Boolean)
   )).sort();
-  // Sub-step depends on selected task and step
   const subSteps = Array.from(new Set(
     base
       .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
@@ -1115,7 +1144,23 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
       .map(p => p.subStepTitle || '')
       .filter(Boolean)
   )).sort();
-  (value as any).options = { pics, tasks, steps, subSteps };
+  const value: ReportContextType = {
+    loading,
+    performance: performance.map(p => ({ ...p })),
+    filtered: filtered.map(p => ({ ...p })),
+    blockers,
+    recentUpdates,
+    filteredBlockers,
+    filteredRecentUpdates,
+    filters,
+    updateFilter,
+    getBlockersForStep: (stepId: string) => blockersByStep[stepId] || [],
+    formatDateRangeDisplay,
+    refreshError,
+    retryRefresh,
+    refreshReport,
+    options: { pics, tasks, steps, subSteps },
+  };
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;
 };
 

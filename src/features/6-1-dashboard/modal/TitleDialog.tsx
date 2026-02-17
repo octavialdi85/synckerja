@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 import { useSyncPicProduction } from '../hook/useSyncPicProduction';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import {
@@ -168,15 +169,15 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         return null;
       }
 
-      console.log('🔍 Checking duplicate with:', { formattedTitle, oldFormatTitle, organizationId });
+      devLog.debug('🔍 Checking duplicate with:', { formattedTitle, oldFormatTitle, organizationId });
       const { data: existingSteps, error } = await query;
 
       if (error) {
-        console.error('❌ Error checking duplicate:', error);
+        devLog.error('❌ Error checking duplicate:', error);
         return null;
       }
 
-      console.log('📊 Duplicate check result:', { found: existingSteps?.length || 0, steps: existingSteps });
+      devLog.debug('📊 Duplicate check result:', { found: existingSteps?.length || 0, steps: existingSteps });
 
       // If no existing steps found, return null (no duplicate)
       if (!existingSteps || existingSteps.length === 0) {
@@ -426,7 +427,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         .single();
 
       if (stepError) {
-        console.error('Error creating task step:', stepError);
+        devLog.error('Error creating task step:', stepError);
         toast.error('Failed to create task step');
         return;
       }
@@ -450,7 +451,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
         .single();
 
       if (assignError) {
-        console.error('Error assigning task step:', assignError);
+        devLog.error('Error assigning task step:', assignError);
         toast.error('Failed to assign task step');
         return;
       }
@@ -462,7 +463,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
           const postDate = new Date(planData.post_date);
           // Validate date
           if (isNaN(postDate.getTime())) {
-            console.warn('⚠️ Invalid post_date format:', planData.post_date);
+            devLog.warn('⚠️ Invalid post_date format:', planData.post_date);
           } else {
             // Set time to end of day (23:59:59) for deadline
             postDate.setHours(23, 59, 59, 999);
@@ -478,21 +479,21 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
               });
 
             if (dueDateError) {
-              console.error('Error saving deadline:', dueDateError);
+              devLog.error('Error saving deadline:', dueDateError);
               // Don't fail the whole operation if due date save fails
-              console.warn('⚠️ Deadline could not be saved, but step assignment was successful');
+              devLog.warn('⚠️ Deadline could not be saved, but step assignment was successful');
             } else {
-              console.log('✅ Deadline saved from post_date:', planData.post_date, '→', dueDateISO);
+              devLog.debug('✅ Deadline saved from post_date:', planData.post_date, '→', dueDateISO);
             }
           }
         } catch (dateError) {
-          console.error('Error processing post_date:', dateError);
+          devLog.error('Error processing post_date:', dateError);
           // Don't fail the whole operation if date processing fails
-          console.warn('⚠️ Could not process post_date, but step assignment was successful');
+          devLog.warn('⚠️ Could not process post_date, but step assignment was successful');
         }
       } else if (assignmentRecord?.id) {
         // If post_date is not available, log warning but don't fail
-        console.warn('⚠️ Post date not available, deadline not set for this step');
+        devLog.warn('⚠️ Post date not available, deadline not set for this step');
       }
 
       // Sync pic_production_id to social_media_plans after assignment is created
@@ -515,7 +516,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
             );
           }
         } catch (error) {
-          console.error('Error syncing pic_production_id:', error);
+          devLog.error('Error syncing pic_production_id:', error);
           // Don't fail the whole operation if sync fails
         }
       }
@@ -523,7 +524,7 @@ const TitleDialog: React.FC<TitleDialogProps> = ({
       toast.success('Content title added as daily task step successfully');
       setIsDailyTaskDialogOpen(false);
     } catch (error) {
-      console.error('Error adding as daily task:', error);
+      devLog.error('Error adding as daily task:', error);
       toast.error('Failed to add as daily task');
     }
   };

@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 
 function getNotificationSoundUrl(): string {
   if (typeof window === 'undefined') return '/notification-bell.wav';
@@ -121,9 +122,14 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
         handleInbound('email_messages')
       );
 
+    const channelErrorToastShownRef = { current: false };
     channelRef.current.subscribe((status) => {
       if (status === 'CHANNEL_ERROR') {
-        console.warn('LiveChat inbound subscription failed', status);
+        devLog.warn('LiveChat inbound subscription failed', status);
+        if (!channelErrorToastShownRef.current) {
+          channelErrorToastShownRef.current = true;
+          toast.warning('Koneksi notifikasi terganggu');
+        }
       }
     });
 

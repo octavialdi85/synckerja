@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Slider } from '@/features/ui/slider';
 import { RefreshCw, Copy, Check } from 'lucide-react';
+import { useToast } from '../hooks/use-toast';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 
 interface PasswordGeneratorProps {
@@ -12,6 +13,7 @@ interface PasswordGeneratorProps {
 }
 
 export const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({ onUsePassword }) => {
+  const { toast } = useToast();
   const [password, setPassword] = useState('');
   const [length, setLength] = useState(16);
   const [includeUppercase, setIncludeUppercase] = useState(true);
@@ -20,7 +22,7 @@ export const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({ onUsePassw
   const [includeSymbols, setIncludeSymbols] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const generatePassword = () => {
+  const generatePassword = useCallback(() => {
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
@@ -41,19 +43,27 @@ export const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({ onUsePassw
 
     setPassword(generatedPassword);
     setCopied(false);
-  };
+  }, [length, includeUppercase, includeLowercase, includeNumbers, includeSymbols]);
 
   const copyToClipboard = async () => {
     if (password) {
-      await navigator.clipboard.writeText(password);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(password);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        toast({
+          title: 'Error',
+          description: 'Failed to copy to clipboard',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
   React.useEffect(() => {
     generatePassword();
-  }, [length, includeUppercase, includeLowercase, includeNumbers, includeSymbols]);
+  }, [generatePassword]);
 
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-card">

@@ -121,7 +121,7 @@ const SocialMediaContent = () => {
         .select('*');
       
       if (error) {
-        console.error('Error fetching social media links:', error);
+        devLog.error('Error fetching social media links:', error);
         return [];
       }
       
@@ -277,7 +277,7 @@ const SocialMediaContent = () => {
     // Add small delay to ensure data is loaded
     const timeoutId = setTimeout(() => {
       syncAllExistingPlans().catch(error => {
-        console.error('Error syncing existing plans:', error);
+        devLog.error('Error syncing existing plans:', error);
         hasSyncedRef.current = false;
         toast.warning('Background sync failed. Refresh the page to retry.');
       });
@@ -520,13 +520,28 @@ const SocialMediaContent = () => {
       }
     };
 
+    // Helper: get actual post date for a plan (plan.actual_post_date > link date > today only if hasLinks)
+    const getActualPostDateForPlan = (plan: any): string | null => {
+      if (plan.actual_post_date) {
+        const d = getDateString(plan.actual_post_date);
+        if (d) return d;
+      }
+      const planLinks = allSocialMediaLinks.filter((link: { social_media_plan_id?: string; created_at?: string }) => link.social_media_plan_id === plan.id);
+      if (planLinks.length > 0) {
+        const withDate = planLinks
+          .map((l: { created_at?: string }) => l.created_at && getDateString(l.created_at))
+          .filter(Boolean) as string[];
+        if (withDate.length > 0) return withDate.sort()[0];
+        return new Date().toISOString().split('T')[0];
+      }
+      return plan.actual_post_date ? getDateString(plan.actual_post_date) : null;
+    };
+
     // Helper function to calculate on-time status (same logic as ContentPlanRow)
     const calculateOnTimeStatusForPlan = (plan: any): string => {
       if (!plan.post_date) return '';
       
-      // Determine actual post date (same logic as ContentPlanRow)
-      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
-      const actualPostDate = hasLinks ? new Date().toISOString().split('T')[0] : plan.actual_post_date;
+      const actualPostDate = getActualPostDateForPlan(plan);
       
       if (!actualPostDate) return '';
       
@@ -565,9 +580,8 @@ const SocialMediaContent = () => {
         return false;
       }
       
-      // Determine actual post date for month check
-      const hasLinks = allSocialMediaLinks.some(link => link.social_media_plan_id === plan.id);
-      const actualPostDate = hasLinks ? new Date().toISOString().split('T')[0] : plan.actual_post_date;
+      // Determine actual post date for month check (same as calculateOnTimeStatusForPlan)
+      const actualPostDate = getActualPostDateForPlan(plan);
       
       if (!actualPostDate) return false;
       
@@ -710,7 +724,7 @@ const SocialMediaContent = () => {
     try {
       setSelectedItems(prev => checked ? [...prev, id] : prev.filter(item => item !== id));
     } catch (error) {
-      console.error('Error in handleSelectItem:', error);
+      devLog.error('Error in handleSelectItem:', error);
       toast.error('Error selecting item');
     }
   }, []);
@@ -726,7 +740,7 @@ const SocialMediaContent = () => {
         await Promise.all(deletePromises);
         setSelectedItems([]);
       } catch (error) {
-        console.error("Error deleting items:", error);
+        devLog.error("Error deleting items:", error);
         toast.error("Error deleting items");
       }
     }
@@ -804,7 +818,7 @@ const SocialMediaContent = () => {
         if (plan && plan.status === 'Approved') {
           // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
           handleUnapproval(id).catch((error) => {
-            console.error('Error during unapproval task step deletion (status):', error);
+            devLog.error('Error during unapproval task step deletion (status):', error);
             toast.error('Failed to remove approval task');
           });
         }
@@ -819,7 +833,7 @@ const SocialMediaContent = () => {
           // Approved diubah dari true ke false - hapus Concept task_steps di background
           // Only Concept steps will be deleted (Content steps remain)
           handleUnapproval(id).catch((error) => {
-            console.error('Error during unapproval Concept task step deletion:', error);
+            devLog.error('Error during unapproval Concept task step deletion:', error);
             toast.error('Failed to remove approval task');
           });
         }
@@ -916,7 +930,7 @@ const SocialMediaContent = () => {
           try {
             await syncPicProduction(id, null, plan.pic_production_id, plan.pic_production_source);
           } catch (error) {
-            console.error('Error syncing pic_production_id:', error);
+            devLog.error('Error syncing pic_production_id:', error);
             // Continue with update even if sync fails
           }
           
@@ -944,7 +958,7 @@ const SocialMediaContent = () => {
         updateContentPlan(id, { [field]: value });
       }
     } catch (error) {
-      console.error('Error in handleFieldChange:', error);
+      devLog.error('Error in handleFieldChange:', error);
       toast.error('Error updating field');
     }
   }, [updateContentPlan, currentEmployee?.id, contentPlans, syncPicProduction, requestApproval]);
@@ -970,7 +984,7 @@ const SocialMediaContent = () => {
         .single();
       
       if (employeeError || !employeeData) {
-        console.error('Employee validation error:', employeeError);
+        devLog.error('Employee validation error:', employeeError);
         toast.error("Current employee not found in organization");
         return;
       }
@@ -979,7 +993,7 @@ const SocialMediaContent = () => {
       validEmployeeId = (employeeData as any)?.id || profile.id;
       devLog.debug('Valid employee found', { profileId: profile.id, employeeId: validEmployeeId });
     } catch (validationError) {
-      console.error('Error validating employee:', validationError);
+      devLog.error('Error validating employee:', validationError);
       toast.error("Error validating employee data");
       return;
     }
@@ -1015,7 +1029,7 @@ const SocialMediaContent = () => {
       await addContentPlan(newContentData);
       toast.success("Content added successfully");
     } catch (error) {
-      console.error("Error adding new row:", error);
+      devLog.error("Error adding new row:", error);
       toast.error("Error menambahkan baris baru: " + (error as Error).message);
     }
   }, [organizationId, profile?.id, addContentPlan]);
@@ -1024,7 +1038,7 @@ const SocialMediaContent = () => {
     try {
       await refreshMasterData();
     } catch (error) {
-      console.error('Error refreshing master data:', error);
+      devLog.error('Error refreshing master data:', error);
       toast.error('Error refreshing data');
     }
   }, [refreshMasterData]);
@@ -1114,7 +1128,13 @@ const SocialMediaContent = () => {
               <span className="text-sm text-red-800">Failed to load dashboard data. Please try again.</span>
               <button
                 type="button"
-                onClick={() => refreshAll()}
+                onClick={async () => {
+                  try {
+                    await refreshAll();
+                  } catch (e) {
+                    toast.error('Retry failed. Try again.');
+                  }
+                }}
                 className="text-sm font-medium text-red-700 hover:text-red-900 underline"
               >
                 Retry

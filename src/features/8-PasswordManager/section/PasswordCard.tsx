@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Check,
 } from 'lucide-react';
+import { useToast } from '../hooks/use-toast';
 import { Password, Category } from '../types';
 import { cn } from '@/lib/utils';
 import { getPasswordStrength } from './PasswordStrengthMeter';
@@ -31,13 +32,22 @@ export const PasswordCard: React.FC<PasswordCardProps> = ({
   onDelete,
   onToggleFavorite,
 }) => {
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const copyToClipboard = async (text: string, field: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to copy to clipboard',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Get category name from category ID

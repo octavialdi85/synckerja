@@ -117,7 +117,11 @@ export const OverviewCards = () => {
   };
 
   return (
-    <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 mb-2">
+    <div className="w-full mb-2">
+      <p className="text-[10px] text-gray-500 mb-1.5" title={t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}>
+        {t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
       <Card 
         title={t('dailyTaskReport.overview.totalAssignments', 'Total Assignments')} 
         value={total} 
@@ -152,6 +156,7 @@ export const OverviewCards = () => {
         description={applyVariables(t('dailyTaskReport.overview.productivityScore.description', 'Only count: Completed + Overdue ({{count}} tasks)'), { count: String(eligibleTotal) })}
         formula={applyVariables(t('dailyTaskReport.overview.productivityScore.formula', '(On Time × 1.0 + Late × 0.5) ÷ {{count}}'), { count: String(eligibleTotal) })}
       />
+      </div>
     </div>
   );
 };

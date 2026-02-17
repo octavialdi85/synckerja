@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useDailyTaskReport } from '../context/ReportContext';
+import { logger } from '@/config/logger';
 import { BlockerDetailsModal } from './BlockerDetailsModal';
 import { BlockerResolutionModal } from './BlockerResolutionModal';
 import { ReportSidebarFooter } from './ReportSidebarFooter';
@@ -20,7 +21,7 @@ import {
 } from '@/features/ui/alert-dialog';
 
 export const BlockersAndUpdatesPanel = () => {
-  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport() as any;
+  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading, refreshReport } = useDailyTaskReport() as any;
   const [activeTab, setActiveTab] = useState<'blockers' | 'updates'>('blockers');
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
@@ -52,7 +53,7 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', resolutionFor.id);
       
       if (error) {
-        console.error('Error updating blocker resolution status:', error);
+        logger.warn('Error updating blocker resolution status', error);
         toast({
           title: 'Error',
           description: `Failed to mark blocker as resolved: ${error.message}`,
@@ -183,8 +184,7 @@ export const BlockersAndUpdatesPanel = () => {
         description: 'Blocker updated successfully',
       });
 
-      // Trigger re-render by forcing a state update
-      window.location.reload();
+      if (refreshReport) await refreshReport();
     } catch {
       toast({
         title: 'Error',

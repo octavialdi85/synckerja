@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Calendar, Plus, User } from 'lucide-react';
 import { LoadingDots } from '@/components/LoadingDots';
 import { ModalAddIndividualContribution } from '@/features/1_home/components/HomeOKRDashboard/modal/ModalAddIndividualContribution';
 import { FiturTimePeriod, YearQuarterSelection } from './FiturTimePeriod';
+import { useToast } from '@/features/ui/use-toast';
 
 interface SectionIndividualObjectivesProgressOverviewProps {
   enhancedIndividualObjectives: any[];
@@ -41,7 +42,20 @@ export const IndividualObjectivesProgressCard = ({
 }: SectionIndividualObjectivesProgressOverviewProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  
+  const { toast } = useToast();
+
+  const handleOpenAddContribution = () => {
+    if (!cycleId) {
+      toast({
+        title: 'No cycle selected',
+        description: 'Please wait for OKR cycles to load or select a time period.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setShowCreateModal(true);
+  };
+
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth() + 1;
   const currentQuarter = currentMonth <= 3 ? 'Q1' : currentMonth <= 6 ? 'Q2' : currentMonth <= 9 ? 'Q3' : 'Q4';
@@ -104,7 +118,7 @@ export const IndividualObjectivesProgressCard = ({
               
               {/* Add Contribution Button */}
               <button 
-                onClick={() => setShowCreateModal(true)}
+                onClick={handleOpenAddContribution}
                 className="flex items-center space-x-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors h-8"
               >
                 <Plus className="w-4 h-4" />

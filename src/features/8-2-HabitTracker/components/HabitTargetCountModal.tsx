@@ -118,6 +118,7 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
       });
       onClose();
     } catch {
+      await refreshData();
       toast({
         title: 'Error',
         description: 'Failed to save entries. Please try again.',

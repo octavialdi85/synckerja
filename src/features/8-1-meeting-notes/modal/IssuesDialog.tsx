@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/features/ui/table';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useMeetingNotes } from '../MeetingNotesContext';
 import UpdateHistoryDialog from './UpdateHistoryDialog';
 import { AddSolutionAsDailyTaskModal } from './AddSolutionAsDailyTaskModal';
@@ -46,7 +47,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     deleteSolution,
     getUpdateHistory
   } = useMeetingNotes();
-  
+  const { toast } = useToast();
+
   const [issues, setIssues] = useState<any[]>([]);
   const [solutions, setSolutions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,7 +106,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       }
       setSolutionUpdateCounts(updateCounts);
     } catch {
-      // Load failed
+      toast({
+        title: 'Error',
+        description: 'Failed to load issues and solutions',
+        variant: 'destructive'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -119,7 +125,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setNewIssue('');
     } catch {
-      // Add issue failed
+      toast({
+        title: 'Error',
+        description: 'Failed to add issue',
+        variant: 'destructive'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -139,7 +149,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setEditingIssueId(null);
       setEditingIssueText('');
     } catch {
-      // Update issue failed
+      toast({
+        title: 'Error',
+        description: 'Failed to update issue',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -157,7 +171,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await deleteIssue(issueId);
       await loadData();
     } catch {
-      // Delete issue failed
+      toast({
+        title: 'Error',
+        description: 'Failed to delete issue',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -171,7 +189,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNewSolution('');
       setSelectedIssueId('');
     } catch {
-      // Add solution failed
+      toast({
+        title: 'Error',
+        description: 'Failed to add solution',
+        variant: 'destructive'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -191,7 +213,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setEditingSolutionId(null);
       setEditingSolutionText('');
     } catch {
-      // Update solution failed
+      toast({
+        title: 'Error',
+        description: 'Failed to update solution',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -209,7 +235,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await deleteSolution(solutionId);
       await loadData();
     } catch {
-      // Delete solution failed
+      toast({
+        title: 'Error',
+        description: 'Failed to delete solution',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -225,7 +255,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNotesIssueId(null);
       setEditingIssueNotes('');
     } catch {
-      // Save issue notes failed
+      toast({
+        title: 'Error',
+        description: 'Failed to save issue notes',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -246,7 +280,11 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNotesSolutionId(null);
       setEditingSolutionNotes('');
     } catch {
-      // Save solution notes failed
+      toast({
+        title: 'Error',
+        description: 'Failed to save solution notes',
+        variant: 'destructive'
+      });
     }
   };
 

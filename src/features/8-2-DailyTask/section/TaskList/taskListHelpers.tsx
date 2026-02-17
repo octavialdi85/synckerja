@@ -78,9 +78,10 @@ export function isTaskCreator(task: Task, userId: string | undefined): boolean {
 }
 
 export function isTaskFullyCompleteBySteps(task: Task): boolean {
-  if (task.steps.length > 0) {
-    const completedCount = task.steps.filter((s) => s.is_completed).length;
-    return completedCount === task.steps.length;
+  const steps = task.steps ?? [];
+  if (steps.length > 0) {
+    const completedCount = steps.filter((s) => s.is_completed).length;
+    return completedCount === steps.length;
   }
   if (task.has_substeps === false) {
     return task.status === 'completed';

@@ -413,13 +413,13 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         })
         .eq('id', planId);
       if (error) {
-        console.error('Error updating production status for approval:', error);
+        devLog.error('Error updating production status for approval:', error);
         toast.error(t('publicReview.toast.approveFailed', 'Failed to approve production'));
         return;
       }
       toast.success(t('publicReview.toast.approveSuccess', 'Production approved successfully'));
     } catch (e) {
-      console.error('Error in handleApprove:', e);
+      devLog.error('Error in handleApprove:', e);
       toast.error(t('publicReview.toast.approveFailed', 'Failed to approve production'));
     } finally {
       setApprovalLoading(false);
@@ -471,7 +471,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         .eq('id', planId)
         .single();
       if (fetchError) {
-        console.error('Error fetching current plan:', fetchError);
+        devLog.error('Error fetching current plan:', fetchError);
         toast.error(t('publicReview.toast.fetchFailed', 'Failed to fetch current data'));
         return;
       }
@@ -495,13 +495,13 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         .select('production_status')
         .single();
       if (error) {
-        console.error('Error updating production status for revision:', error);
+        devLog.error('Error updating production status for revision:', error);
         toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
         return;
       }
       toast.success(t('publicReview.toast.revisionSuccess', 'Production status updated to Request Revision'));
     } catch (e) {
-      console.error('Error in handleRevision:', e);
+      devLog.error('Error in handleRevision:', e);
       toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
     } finally {
       setApprovalLoading(false);

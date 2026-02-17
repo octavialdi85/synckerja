@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentUser } from './useCurrentUser';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -8,10 +8,13 @@ import type { Password, PasswordFormData, Category } from '../types';
 export const usePasswords = () => {
   const [passwords, setPasswords] = useState<Password[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { user } = useCurrentUser();
-  const { organizationId } = useCurrentOrg();
+  const [passwordsLoading, setPasswordsLoading] = useState(true);
+  const [effectSettled, setEffectSettled] = useState(false); // true only after first effect run has settled (no flash before effect)
+  const { user, loading: userLoading } = useCurrentUser();
+  const { organizationId, loading: orgLoading } = useCurrentOrg();
   const { toast } = useToast();
+  const isActiveRef = useRef(true);
+  const lastFetchedKeyRef = useRef<string | null>(null);
 
   // Fetch categories
   const fetchCategories = async () => {
@@ -30,6 +33,7 @@ export const usePasswords = () => {
         count: 0, // Will be updated when passwords are fetched
       }));
 
+      if (!isActiveRef.current) return;
       setCategories(categoriesWithCount);
     } catch {
       toast({
@@ -40,12 +44,11 @@ export const usePasswords = () => {
     }
   };
 
-  // Fetch passwords
+  // Fetch passwords (loading is set by caller; no setLoading(true) here to avoid flicker)
   const fetchPasswords = async () => {
     if (!user || !organizationId) return;
 
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('passwords')
         .select(`
@@ -70,6 +73,7 @@ export const usePasswords = () => {
         createdAt: new Date(item.created_at),
         updatedAt: new Date(item.updated_at),
       }));
+      if (!isActiveRef.current) return;
       setPasswords(formattedPasswords);
     } catch {
       toast({
@@ -78,7 +82,8 @@ export const usePasswords = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      // Caller (effect) sets passwordsLoading false after both categories + passwords complete
+      if (!isActiveRef.current) return;
     }
   };
 
@@ -113,12 +118,13 @@ export const usePasswords = () => {
       });
 
       await fetchPasswords();
-    } catch {
+    } catch (error) {
       toast({
         title: 'Error',
         description: 'Failed to save password',
         variant: 'destructive',
       });
+      throw error;
     }
   };
 
@@ -151,12 +157,13 @@ export const usePasswords = () => {
       });
 
       await fetchPasswords();
-    } catch {
+    } catch (error) {
       toast({
         title: 'Error',
         description: 'Failed to update password',
         variant: 'destructive',
       });
+      throw error;
     }
   };
 
@@ -219,14 +226,33 @@ export const usePasswords = () => {
     }
   };
 
+  // Single effect: fetch categories and passwords when user + org are ready. Run only once per (user, org). Wait for BOTH before clearing loading to avoid flicker.
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    isActiveRef.current = true;
+    const key = user && organizationId ? `${user.id}-${organizationId}` : null;
 
-  useEffect(() => {
-    if (user && organizationId) {
-      fetchPasswords();
+    if (key) {
+      if (lastFetchedKeyRef.current === key) {
+        return () => { isActiveRef.current = false; };
+      }
+      lastFetchedKeyRef.current = key;
+      setPasswordsLoading(true);
+      Promise.all([fetchCategories(), fetchPasswords()]).finally(() => {
+        if (isActiveRef.current) {
+          setPasswordsLoading(false);
+          setEffectSettled(true);
+        }
+      });
+    } else {
+      lastFetchedKeyRef.current = null;
+      setPasswordsLoading(false);
+      setEffectSettled(true);
     }
+
+    return () => {
+      isActiveRef.current = false;
+      lastFetchedKeyRef.current = null;
+    };
   }, [user, organizationId]);
 
   // Update category counts when passwords change
@@ -236,9 +262,15 @@ export const usePasswords = () => {
         ...cat,
         count: passwords.filter((p) => p.category === cat.id).length,
       }));
+      const hasChange = updatedCategories.some((uc, i) => (categories[i]?.count ?? -1) !== uc.count);
+      if (!hasChange) return;
+      if (!isActiveRef.current) return;
       setCategories(updatedCategories);
     }
-  }, [passwords]);
+  }, [passwords, categories]);
+
+  // No flicker: show loading until effect has settled AND auth + fetch are done (never show content before first effect run)
+  const loading = !effectSettled || userLoading || orgLoading || passwordsLoading;
 
   return {
     passwords,

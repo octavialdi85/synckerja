@@ -282,7 +282,7 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
         const { data: indivData, error } = await query.order('created_at', { ascending: false });
         if (error) {
           console.error('❌ Error fetching individual objectives:', error);
-          throw error;
+          return [];
         }
         
         // console.log('📊 Raw individual objectives data:', {
@@ -381,6 +381,8 @@ export const useObjectives = (organizationId?: string, cycleId?: string, level?:
       return data as Objective[];
     },
     enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   // Memoize the return value to prevent unnecessary re-renders

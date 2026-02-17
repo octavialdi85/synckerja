@@ -14,6 +14,7 @@ import { AssignSocialMediaPlanModal } from './AssignSocialMediaPlanModal';
 import { toast } from 'sonner';
 import { CreateTaskDialog } from '@/features/8-2-DailyTask/section/CreateTaskDialog';
 import { id as idLocale } from 'date-fns/locale';
+import { devLog } from '@/config/logger';
 
 interface DailyTask {
   id: string;
@@ -158,7 +159,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
 
       setDailyTasks(filteredTasks);
     } catch (error) {
-      console.error('Error fetching daily tasks:', error);
+      devLog.error('Error fetching daily tasks:', error);
       toast.error('Failed to load daily tasks');
     } finally {
       setIsLoading(false);
@@ -255,7 +256,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
       }
       // If skipAssignment = true, hook will handle closing and showing success toast
     } catch (error) {
-      console.error('Error selecting task:', error);
+      devLog.error('Error selecting task:', error);
       toast.error('Failed to add as daily task');
       // On error, don't close modal - let user retry or cancel
     } finally {
@@ -283,7 +284,7 @@ const DailyTaskSelectorDialog: React.FC<DailyTaskSelectorDialogProps> = ({
       setPendingAssignment(null);
       onClose();
     } catch (error) {
-      console.error('Error selecting task:', error);
+      devLog.error('Error selecting task:', error);
       toast.error('Failed to add as daily task');
     } finally {
       setIsSubmitting(false);

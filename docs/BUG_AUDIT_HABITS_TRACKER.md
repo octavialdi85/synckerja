@@ -1,101 +1,111 @@
 # Audit Bug: Halaman /tools/habits-tracker
 
-**Tanggal:** 2026-02-14  
-**Scope:** Fitur Habit Tracker (`src/features/8-2-HabitTracker`) dan halaman `/tools/habits-tracker`.
+**Scope:** Fitur Habit Tracker (`src/features/8-2-HabitTracker`) dan halaman `/tools/habits-tracker`.  
+**Tanggal:** 2026-02-16.
 
 ---
 
-## High priority
+## Daftar Bug (file:line)
 
-### 1. **HabitTrackerContext.tsx — fetchHabits: error hanya console, tidak ada toast**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:121-123`
-- **Masalah:** Pada `catch` setelah fetch habits, hanya `console.error`. User tidak dapat feedback saat data habit gagal dimuat; state `habits` bisa tetap kosong atau stale tanpa pesan.
-- **Saran:** Set state error (mis. `setError`) atau gunakan toast/notifikasi: "Gagal memuat habits. Silakan refresh." dan opsional set `habits` ke `[]` agar UI konsisten.
-
-### 2. **HabitTrackerContext.tsx — fetchEntries: error hanya console, tidak ada toast**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:138-140`
-- **Masalah:** Sama seperti fetchHabits; kegagalan fetch entries hanya di-log. User tidak tahu bahwa data entri tidak ter-load.
-- **Saran:** Tambah feedback ke user (toast atau state error) dan pertimbangkan set `entries` ke `[]` pada error.
-
-### 3. **HabitTrackerContext.tsx — refreshData tidak menangani error fetch**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:201-208`
-- **Masalah:** `Promise.all([fetchHabits(), fetchEntries()])` tidak di-catch. Jika salah satu fetch gagal, promise reject tidak tertangkap; `setLoading(false)` tetap di `finally` (OK), tetapi caller (mis. setelah add/update) tidak tahu bahwa refresh gagal.
-- **Saran:** Try/catch di dalam refreshData; pada catch bisa set error state atau toast "Gagal me-refresh data", dan jangan re-throw jika caller sudah menampilkan toast untuk aksi add/update/delete.
-
-### 4. **Context mutations (addHabit, updateHabit, deleteHabit, addEntry, updateEntry, deleteEntry) melempar error**
-- **File:Line:** Berbagai baris di `HabitTrackerContext.tsx` (mis. 253-257, 286-290, 301-305, 334-342, 356-360, 371-377)
-- **Masalah:** Semua fungsi tersebut `throw error` setelah `console.error`. Pemanggil yang tidak membungkus dengan try/catch akan menyebabkan unhandled promise rejection. Saat ini pemanggil (HabitFormModal, HabitSpreadsheetView, HabitTargetCountModal, HabitEntryModal) sudah pakai try/catch, tetapi pemanggil baru atau refactor bisa lupa.
-- **Saran:** (Pilihan A) Di context: tangkap error, toast di sana, dan jangan re-throw; return void. Atau (Pilihan B) dokumentasikan dengan jelas bahwa semua pemanggil wajib try/catch + toast, dan pertahankan throw. Pilihan A mengurangi risiko unhandled rejection.
+### 1. **HabitTrackerContext.tsx (useEffect refreshData)** — setState setelah unmount
+- **Deskripsi:** `useEffect` memanggil `refreshData()` tanpa pengecekan unmount. Jika user pindah halaman sebelum fetch selesai, `fetchHabits`/`fetchEntries` akan memanggil `setHabits`, `setEntries`, dan (lewat `calculateStats`) `setStats` setelah komponen unmount. Menyebabkan warning React dan risiko memory leak.
+- **Prioritas:** High
+- **Saran:** Tambah variabel `let isActive = true` di effect, di cleanup set `isActive = false`. Di `fetchHabits` dan `fetchEntries`, sebelum setiap `setHabits`/`setEntries` cek `if (!isActive) return;`. Di effect yang memanggil `calculateStats`, pastikan `calculateStats` hanya memanggil `setStats` jika `isActive` (bisa dengan mengoper `isActive` ke callback atau memeriksa di dalam setelah async selesai).
 
 ---
 
-## Medium priority
-
-### 5. **HabitTrackerContext.tsx — filteredHabits: habit.name bisa null/undefined dari DB**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:383`
-- **Masalah:** `habit.name.toLowerCase()` — jika kolom `name` di DB null/undefined (mis. migrasi atau data lama), akan throw TypeError.
-- **Saran:** Gunakan optional chaining: `habit.name?.toLowerCase()?.includes(...)` atau filter habit tanpa name: `!(habit.name ?? '').toLowerCase().includes(...)`.
-
-### 6. **HabitTrackerContext.tsx — calculateStats: habit.target_count bisa undefined**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:152`
-- **Masalah:** `expectedEntries = targetDays * habit.target_count` — jika `target_count` undefined (DB/null), hasilnya NaN; `completion_rate` jadi NaN. Type mendefinisikan `target_count: number` tetapi runtime bisa lain.
-- **Saran:** Guard: `const tc = habit.target_count ?? 0; const expectedEntries = targetDays * tc;` dan handle expectedEntries === 0 (sudah ada).
-
-### 7. **HabitTrackerContext.tsx — updateFilter: value bertipe any**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:14`
-- **Masalah:** `updateFilter: (key: keyof HabitFilter, value: any) => void` — `any` menghilangkan type safety untuk value; salah tipe bisa masuk ke state filter.
-- **Saran:** Gunakan union atau mapped type untuk value berdasarkan key, mis. `value: HabitFilter[K]` dengan generic, atau overloads per key.
-
-### 8. **HabitFormModal.tsx — early return tanpa setLoading(false) yang perlu**
-- **File:Line:** `src/features/8-2-HabitTracker/components/HabitFormModal.tsx:279, 288, 297, 310, 319, 328`
-- **Masalah:** Di beberapa branch validasi (weekly/monthly) memanggil `setLoading(false)` padahal `setLoading(true)` baru dipanggil di baris 334. Tidak menyebabkan bug fungsional, tetapi membingungkan dan redundant.
-- **Saran:** Hapus `setLoading(false)` dari branch yang return sebelum `setLoading(true)`; atau pindahkan `setLoading(true)` ke awal handleSubmit (sebelum validasi) jika ingin loading state saat validasi pun konsisten.
-
-### 9. **HabitStats.tsx — stats.reduce tanpa guard array kosong**
-- **File:Line:** `src/features/8-2-HabitTracker/components/HabitStats.tsx:14`
-- **Masalah:** `stats.reduce((sum, s) => sum + s.current_streak, 0)` aman untuk array kosong (return 0). Tetapi `s.completion_rate` bisa NaN jika calculateStats pernah produce NaN (lihat bug #6). Maka `totalCompletionRate` bisa NaN.
-- **Saran:** Setelah perbaikan #6, NaN tidak akan muncul; atau di sini gunakan `Number.isFinite(s.completion_rate) ? s.completion_rate : 0` di reduce.
-
-### 10. **useCurrentUser dari 2-1-employees vs share**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:4`
-- **Masalah:** Import `useCurrentUser` dari `@/features/2-1-employees/hooks/useCurrentUser`; fitur lain (Daily Task, Home) memakai `@/features/share/hooks/useCurrentUser`. Inkonsistensi bisa menyebabkan perbedaan perilaku (mis. source data user) atau duplikasi logika.
-- **Saran:** Seragamkan ke `@/features/share/hooks/useCurrentUser` kecuali ada alasan khusus memakai hook employees; jika perlu employee-specific, pertimbangkan `useCurrentEmployee` (sudah dipakai di file yang sama).
+### 2. **HabitTrackerContext.tsx:76, 91, 108, 124, 125, 149, 274, 313, 331, 368, 396, 417** — Banyak `console.error`
+- **Deskripsi:** Pemanggilan `console.error` di path production untuk parsing JSON dan error fetch/mutation. Tidak konsisten dengan logger terpusat.
+- **Prioritas:** Low (code smell)
+- **Saran:** Ganti dengan `logger.warn` / `logger.error` (import dari `@/config/logger`).
 
 ---
 
-## Low priority
-
-### 11. **HabitTrackerContext.tsx — fetchHabits: parsing checklist_names/weekly_days/monthly_dates error hanya console**
-- **File:Line:** `src/features/8-2-HabitTracker/context/HabitTrackerContext.tsx:72-73, 89-90, 108-109`
-- **Masalah:** Jika `JSON.parse` atau parsing gagal, hanya `console.error`; baris tersebut set variabel ke undefined dan parsing dilanjutkan. Tidak memecah aplikasi, tetapi error parsing tidak terlihat oleh user.
-- **Saran:** Low impact; bisa biarkan atau log ke monitoring. Opsional: tambah flag "partial parse" dan tampilkan toast sekali saja "Beberapa data habit tidak dapat di-parse lengkap."
-
-### 12. **HabitEntryModal.tsx — existingEntry: hanya toast "Entry already exists", tidak update**
-- **File:Line:** `src/features/8-2-HabitTracker/components/HabitEntryModal.tsx:42-47`
-- **Masalah:** Jika entry sudah ada, hanya menampilkan toast "Entry already exists" dan tidak memanggil update. Secara teknis bukan bug jika product requirement memang "tidak bisa edit dari modal ini", tetapi UX bisa membingungkan (user ubah count/notes lalu submit dan hanya dapat info).
-- **Saran:** Jika diinginkan, tambah alur update entry (updateEntry) ketika existingEntry ada; atau ubah copy toast menjadi "Entry for this date already exists. Remove it first to log again." agar jelas.
-
-### 13. **HabitSpreadsheetView.tsx — getEntryForDate / getEntriesForDate: asumsi data dari context**
-- **File:Line:** Berbagai penggunaan `entries` dan `habits` di HabitSpreadsheetView
-- **Masalah:** Tidak ada null check untuk `habit` di beberapa tempat; sebagian sudah dengan optional chaining (mis. `habit?.monthly_dates`). Pastikan semua akses ke `habit` setelah `.find()` di-guard (habit mungkin undefined).
-- **Saran:** Setelah `const habit = filteredHabits.find(...)` pastikan `if (!habit) return null` atau guard sebelum akses `habit.id`, `habit.name`, dll.
-
-### 14. **HabitTrackerPage.tsx — onTabChange kosong**
-- **File:Line:** `src/features/8-2-HabitTracker/pages/HabitTrackerPage.tsx:15`
-- **Masalah:** `HeaderAndTab activeTab="habits-tracker" onTabChange={() => {}}` — callback kosong. Jika tab lain diklik, tidak ada navigasi. Bisa intentional (halaman ini hanya habits), tetapi bisa dianggap bug jika user mengharapkan pindah tab.
-- **Saran:** Jika HeaderAndTab dipakai untuk navigasi antar tools, isi onTabChange dengan navigasi (mis. navigate('/tools/daily-task') untuk tab lain). Jika tidak, bisa abaikan atau sembunyikan tab lain di halaman ini.
+### 3. **HabitTrackerContext.tsx (addHabit, addEntry)** — Fetch `profiles` tanpa penanganan error
+- **Deskripsi:** `const { data: profile } = await supabase.from('profiles').select('id').eq('user_id', user.id).single();` tidak memeriksa `error`. Jika query gagal, `profile` bisa null dan insert tetap jalan dengan `created_by: profile?.id || null`. Data masuk tanpa `created_by`; tidak ada toast atau fallback.
+- **Prioritas:** Medium
+- **Saran:** Cek `error` dari query profiles; jika gagal, tampilkan toast dan return, atau log dan tetap lanjut dengan `created_by: null` (dokumentasikan sebagai sengaja).
 
 ---
 
-## Ringkasan
+### 4. **HabitTrackerContext.tsx (calculateStats)** — Mutasi array dengan `.sort()`
+- **Deskripsi:** `const habitEntries = entries.filter(...).sort(...)` — `.sort()` memutasi array in-place. `entries.filter()` mengembalikan array baru, lalu `.sort()` memutasi array tersebut. Secara teknis tidak memutasi state `entries`, tetapi pola mutasi array bisa menyebabkan bug di lingkungan concurrent. Juga, `habitStats` dihitung dari `habits` yang sama dan memanggil `setStats(habitStats)` di akhir tanpa guard unmount.
+- **Prioritas:** Low (code smell)
+- **Saran:** Gunakan `const habitEntries = [...entries].filter(...).sort(...)` atau `entries.filter(...).slice().sort(...)` agar tidak memutasi. Tambah guard unmount di effect yang memanggil `calculateStats` jika digabung dengan fix #1.
 
-| Prioritas | Jumlah |
-|-----------|--------|
-| High      | 4      |
-| Medium    | 6      |
-| Low       | 4      |
+---
 
-**Rekomendasi perbaikan pertama:**  
-1) Tambah feedback ke user pada fetch error (toast/state error) di HabitTrackerContext (#1, #2, #3).  
-2) Hindari unhandled rejection: either toast di context dan jangan re-throw (#4), atau pastikan semua pemanggil try/catch.  
-3) Defensive null/undefined untuk `habit.name` dan `habit.target_count` (#5, #6).
+### 5. **HabitFormModal.tsx (useEffect load habit)** — requestAnimationFrame + setTimeout tanpa cleanup
+- **Deskripsi:** Di `useEffect` yang load data habit untuk edit, kode memakai `requestAnimationFrame(() => { setChecklistNames(...); ...; setTimeout(() => setIsInitializing(false), 100); })`. Jika user menutup modal sebelum timeout 100ms, callback tetap jalan dan memanggil `setIsInitializing(false)` (dan state lain) setelah modal unmount → setState on unmounted component.
+- **Prioritas:** Medium
+- **Saran:** Simpan handle `requestAnimationFrame` dan `setTimeout`, dan di cleanup effect panggil `cancelAnimationFrame` dan `clearTimeout`. Atau gunakan flag `let isMounted = true` di effect, di cleanup set `false`, dan di dalam rAF/setTimeout cek `if (!isMounted) return` sebelum setState.
+
+---
+
+### 6. **HabitFormModal.tsx:432** — Mutasi state saat render
+- **Deskripsi:** `monthlyDates.sort((a, b) => a - b).join(', ')` — `.sort()` memutasi array `monthlyDates` in-place. Dipanggil di dalam render, sehingga state array termutasi setiap render dan bisa menyebabkan perilaku tidak konsisten atau re-render berlebihan.
+- **Prioritas:** Medium
+- **Saran:** Gunakan `[...monthlyDates].sort((a, b) => a - b).join(', ')` agar tidak memutasi state.
+
+---
+
+### 7. **HabitSpreadsheetView.tsx (handleCheckboxToggle)** — Kemungkinan `habit` undefined
+- **Deskripsi:** `const habit = filteredHabits.find((h) => h.id === habitId);` — jika habit dihapus atau filter berubah, `habit` bisa undefined. Lalu `getEntryForDate(habitId, date)` dan `existingEntry` dipakai; untuk `addEntry`/`deleteEntry` hanya butuh `habitId`, jadi aman. Tetapi untuk branch `habit && habit.frequency === 'daily' && habit.target_count > 1` kita return early. Jika `habit` undefined, kita lanjut ke `getEntryForDate(habitId, date)` dan seterusnya — aman. Tidak ada bug kritis di sini, hanya defensive.
+- **Prioritas:** Low
+- **Saran:** Opsional: tambah early return `if (!habit) return;` di awal handler setelah `find` untuk kejelasan.
+
+---
+
+### 8. **HabitTrackerContext.tsx (refreshData)** — Tidak ada guard unmount
+- **Deskripsi:** `refreshData` memanggil `fetchHabits()` dan `fetchEntries()` lalu di `finally` memanggil `setLoading(false)`. Jika komponen unmount saat fetch masih berjalan, `setLoading(false)` dan setState di dalam fetch tetap dipanggil.
+- **Prioritas:** High (bagian dari #1)
+- **Saran:** Selesaikan bersama #1 dengan `isActive` dan cek sebelum semua setState di `fetchHabits`, `fetchEntries`, dan di `refreshData` (setLoading).
+
+---
+
+### 9. **HabitStats.tsx** — Aman terhadap NaN
+- **Deskripsi:** `stats.reduce(..., 0)` dan `Number.isFinite(s.completion_rate)` sudah dipakai; tidak ada bug null/undefined yang jelas.
+- **Prioritas:** —
+- **Saran:** —
+
+---
+
+### 10. **HabitTrackerPage.tsx** — Scroll container
+- **Deskripsi:** Area konten punya `max-h-[calc(100vh-120px)]` dan `flex-1 min-h-0`. `HabitSpreadsheetView` di dalam punya `seamless-scroll` di scroll container-nya. Sesuai aturan proyek, layout sudah konsisten.
+- **Prioritas:** Low
+- **Saran:** Verifikasi di browser bahwa scroll halus dan tidak ada overflow ganda; jika sudah ok, tidak perlu perubahan.
+
+---
+
+### 11. **HabitTargetCountModal (handleSave)** — Beberapa await dalam loop tanpa rollback
+- **Deskripsi:** `for (const entry of currentEntries) { await deleteEntry(entry.id); }` lalu `for (let i = 0; i < checkedCount; i++) { await addEntry(...); }`. Jika salah satu `deleteEntry` atau `addEntry` gagal di tengah, state bisa tidak konsisten (sebagian terhapus, sebagian belum ditambah). Saat ini error ditangkap di catch dan toast ditampilkan, tetapi tidak ada rollback atau refetch yang eksplisit.
+- **Prioritas:** Medium
+- **Saran:** Di blok catch, panggil `refreshData()` agar UI kembali sinkron dengan server; atau implementasi rollback (lebih rumit). Paling tidak pastikan setelah error user bisa retry dengan state bersih (refreshData di catch sudah cukup).
+
+---
+
+### 12. **HabitEntryModal** — Tidak ada penanganan khusus untuk habit tidak ditemukan
+- **Deskripsi:** `const habit = habits.find((h) => h.id === habitId);` — jika habit belum ter-load atau sudah dihapus, `habit` undefined. Modal tetap render dan `habit?.name` di description aman. Submit memanggil `addEntry(habitId, date, count, notes)` yang valid. Risiko rendah.
+- **Prioritas:** Low
+- **Saran:** Opsional: jika `!habit && habits.length > 0`, tampilkan pesan "Habit not found" dan nonaktifkan submit.
+
+---
+
+## Ringkasan prioritas
+
+| Prioritas | Jumlah | Item |
+|-----------|--------|------|
+| High     | 2      | #1, #8 (setState after unmount / no unmount guard) |
+| Medium   | 4      | #3 (profiles fetch), #5 (rAF/setTimeout cleanup), #6 (sort mutasi), #11 (rollback/refresh on error) |
+| Low      | 4      | #2 (console.error), #4 (sort code smell), #7 (#12 defensive) |
+
+---
+
+## Rekomendasi perbaikan (urutan)
+
+1. Tambah guard unmount (`isActive`) di HabitTrackerContext: effect yang memanggil `refreshData`, dan di dalam `fetchHabits`/`fetchEntries`/`refreshData` cek `isActive` sebelum semua setState (#1, #8).
+2. Penanganan error fetch profiles di addHabit/addEntry: toast + return atau log + lanjut (#3).
+3. Cleanup requestAnimationFrame dan setTimeout di HabitFormModal useEffect (#5).
+4. Hindari mutasi state di render: pakai `[...monthlyDates].sort(...)` di HabitFormModal (#6).
+5. Di HabitTargetCountModal handleSave, di catch panggil `refreshData()` (#11).
+6. Ganti semua `console.error` dengan logger di context (#2); perbaikan code smell `.sort()` di calculateStats (#4).

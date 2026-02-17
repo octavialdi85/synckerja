@@ -46,7 +46,17 @@ export const BlockerResolutionModal: React.FC<Props> = ({ open, onOpenChange, bl
 
       // Trigger callback if provided (to update is_resolved flag)
       if (onResolutionComplete) {
-        await onResolutionComplete();
+        try {
+          await onResolutionComplete();
+        } catch (err) {
+          toast({
+            title: 'Error',
+            description: 'Failed to update blocker status. Resolution was saved.',
+            variant: 'destructive',
+          });
+          setSaving(false);
+          return;
+        }
       }
       
       onOpenChange(false);

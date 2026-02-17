@@ -105,7 +105,11 @@ export const PendingApprovalSection = () => {
     });
     toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
     refresh();
-    await refetchTasks();
+    try {
+      await refetchTasks();
+    } catch {
+      toast({ title: t('dailyTask.approval.error', 'Error'), description: 'Failed to refresh tasks', variant: 'destructive' });
+    }
   };
 
   const handleTitleClick = (row: CompletionApprovalRow) => {
@@ -172,7 +176,11 @@ export const PendingApprovalSection = () => {
     });
     toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
     refresh();
-    await refetchTasks();
+    try {
+      await refetchTasks();
+    } catch {
+      toast({ title: t('dailyTask.approval.error', 'Error'), description: 'Failed to refresh tasks', variant: 'destructive' });
+    }
   };
 
   const showViewContent = (row: CompletionApprovalRow) =>

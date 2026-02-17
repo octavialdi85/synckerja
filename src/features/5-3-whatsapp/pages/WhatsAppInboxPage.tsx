@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getConversationTicketId } from '../components/inbox/ConversationList';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PanelRightOpen, PanelRightClose, Search } from 'lucide-react';
+import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '@/features/5-3-dashboard/HeaderAndTab';
 import { ConversationList } from '../components/inbox/ConversationList';
@@ -31,20 +32,15 @@ export function WhatsAppInboxPage() {
   const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
   const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
 
-  useEffect(() => {
-    queryClient
-      .prefetchQuery({
-        queryKey: ['lead-statuses'],
-        queryFn: async () => {
-          const { data, error } = await supabase.from('lead_statuses').select('id, name, color').eq('is_active', true).order('sort_order');
-          if (error) throw error;
-          return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
-        },
-      })
-      .catch((err) => {
-        console.warn('Failed to prefetch lead-statuses', err);
-      });
-  }, [queryClient]);
+  const { data: leadStatuses = [] } = useQuery({
+    queryKey: ['lead-statuses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('lead_statuses').select('id, name, color').eq('is_active', true).order('sort_order');
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; color: string | null }>;
+    },
+    staleTime: 60_000,
+  });
   const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
   const { accounts: waAccounts } = useWhatsAppAccounts();
   const { accounts: igAccounts } = useInstagramAccounts();
@@ -54,6 +50,7 @@ export function WhatsAppInboxPage() {
   const [conversationSearch, setConversationSearch] = useState('');
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
   const [accountFilter, setAccountFilter] = useState<AccountFilterValue>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [scrollToTextInChat, setScrollToTextInChat] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
   const initialConversationId = searchParams.get('conversation');
@@ -90,27 +87,56 @@ export function WhatsAppInboxPage() {
     return opts;
   }, [waAccounts, igAccounts, emailConnections, t]);
 
+  const uniqueLeadStatusOptions = useMemo(() => {
+    const excluded = leadStatuses.filter((s) => {
+      const name = (s.name?.trim().toLowerCase() ?? '');
+      return name !== 'lost' && name !== 'qualified';
+    });
+    const canonical = ['Open', 'Unread', 'In Progress', 'Converted', 'Qualified', 'Closed', 'Resolve'];
+    const byDisplay = (a: { name: string | null }, b: { name: string | null }) => {
+      const da = getLeadStatusDisplayName(a.name);
+      const db = getLeadStatusDisplayName(b.name);
+      const ia = canonical.indexOf(a.name ?? '');
+      const ib = canonical.indexOf(b.name ?? '');
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return (da || '').localeCompare(db || '');
+    };
+    const sorted = [...excluded].sort(byDisplay);
+    const seen = new Set<string>();
+    return sorted.filter((s) => {
+      const displayName = getLeadStatusDisplayName(s.name);
+      if (seen.has(displayName)) return false;
+      seen.add(displayName);
+      return true;
+    });
+  }, [leadStatuses]);
+
   const conversations = useMemo(() => {
-    if (!accountFilter) return allConversations;
-    if (accountFilter.startsWith('wa:')) {
-      const pnid = accountFilter.slice(3);
-      return allConversations.filter(
-        (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).phone_number_id === pnid
-      );
+    let list = allConversations;
+    if (accountFilter) {
+      if (accountFilter.startsWith('wa:')) {
+        const pnid = accountFilter.slice(3);
+        list = list.filter(
+          (c) => c.source === 'whatsapp' && (c as WhatsAppConversation).phone_number_id === pnid
+        );
+      } else if (accountFilter.startsWith('ig:')) {
+        const igAccountId = accountFilter.slice(3);
+        list = list.filter((c) => {
+          if (c.source !== 'instagram') return false;
+          return (c as InstagramConversation).instagram_business_account_id === igAccountId;
+        });
+      } else if (accountFilter.startsWith('email:')) {
+        const connId = accountFilter.slice(6);
+        list = list.filter((c) => c.source === 'email' && (c as { email_connection_id: string }).email_connection_id === connId);
+      }
     }
-    if (accountFilter.startsWith('ig:')) {
-      const igAccountId = accountFilter.slice(3);
-      return allConversations.filter((c) => {
-        if (c.source !== 'instagram') return false;
-        return (c as InstagramConversation).instagram_business_account_id === igAccountId;
-      });
+    if (statusFilter !== 'all') {
+      list = list.filter((c) => (c as { lead_status_name?: string | null }).lead_status_name === statusFilter);
     }
-    if (accountFilter.startsWith('email:')) {
-      const connId = accountFilter.slice(6);
-      return allConversations.filter((c) => c.source === 'email' && (c as { email_connection_id: string }).email_connection_id === connId);
-    }
-    return allConversations;
-  }, [allConversations, accountFilter]);
+    return list;
+  }, [allConversations, accountFilter, statusFilter]);
 
   const selectedConversation = useMemo(
     () => (selectedId ? conversations.find((c) => c.id === selectedId) ?? null : null),
@@ -140,10 +166,10 @@ export function WhatsAppInboxPage() {
               <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-row max-w-full rounded-lg border border-gray-200 shadow-sm bg-white max-h-[calc(100vh-120px)]">
                 {/* Kiri: daftar conversation - sidebar */}
                 <aside className="flex-shrink-0 border-r border-gray-200 flex flex-col min-h-0 bg-white" style={{ width: '20rem', minWidth: '20rem' }} aria-label="Conversations">
-                  <div className="flex-shrink-0 px-3 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex-shrink-0 px-2 py-2 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <Select value={accountFilter || 'all'} onValueChange={(v) => setAccountFilter((v === 'all' ? '' : v) as AccountFilterValue)}>
-                        <SelectTrigger className="flex-1 min-w-0 h-9 text-sm font-medium text-gray-900 border-gray-200 bg-white" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
+                        <SelectTrigger className="h-8 px-2 min-w-[6rem] max-w-[10rem] flex-1 text-sm font-medium text-gray-900 border-gray-200 bg-white" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
                           <SelectValue placeholder={t('whatsappInbox.filterByAccount', 'Filter menurut akun')} />
                         </SelectTrigger>
                         <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
@@ -154,10 +180,25 @@ export function WhatsAppInboxPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="h-8 px-2 w-[7.5rem] shrink-0 text-sm font-medium text-gray-900 border-gray-200 bg-white" aria-label={t('whatsappInbox.filterByStatus', 'Filter menurut status')}>
+                          <SelectValue placeholder={t('whatsappInbox.status', 'Status')} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
+                          <SelectItem value="all" className="text-sm">
+                            {t('whatsappInbox.allStatus', 'All Status')}
+                          </SelectItem>
+                          {uniqueLeadStatusOptions.map((status) => (
+                            <SelectItem key={status.id} value={status.name} className="text-sm">
+                              {getLeadStatusDisplayName(status.name)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <button
                         type="button"
                         onClick={() => setSearchPopupOpen(true)}
-                        className="shrink-0 p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                        className="shrink-0 h-8 w-8 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
                         title={t('whatsappInbox.searchConversations', 'Search conversation or people')}
                         aria-label={t('whatsappInbox.searchConversations', 'Search conversation or people')}
                       >

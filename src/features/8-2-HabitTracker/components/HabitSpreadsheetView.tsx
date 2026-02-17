@@ -36,6 +36,21 @@ export const HabitSpreadsheetView = () => {
   const { filteredHabits, entries, loading, addEntry, deleteEntry, deleteHabit, updateHabit } = useHabitTracker();
   const { toast } = useToast();
   const { t, dateLocale } = useAppTranslation();
+  const [showContent, setShowContent] = useState(false);
+  const rafRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (loading) {
+      setShowContent(false);
+      return;
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setShowContent(true);
+    });
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [loading]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -379,7 +394,8 @@ export const HabitSpreadsheetView = () => {
   // Handle checkbox toggle
   const handleCheckboxToggle = async (habitId: string, date: Date, checked: boolean) => {
     const habit = filteredHabits.find((h) => h.id === habitId);
-    
+    if (!habit) return;
+
     // If frequency is daily and target_count > 1, show modal instead
     if (habit && habit.frequency === 'daily' && habit.target_count > 1) {
       setTargetCountModal({ habitId, date });
@@ -423,17 +439,9 @@ export const HabitSpreadsheetView = () => {
     setCurrentMonth(addMonths(currentMonth, 1));
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <LoadingDots size="lg" />
-      </div>
-    );
-  }
-
   return (
     <div className="h-full flex flex-col bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
-      {/* Header */}
+      {/* Header - same layout when loading or loaded */}
       <div className="flex-shrink-0 border-b border-gray-300 bg-gray-100 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -471,8 +479,16 @@ export const HabitSpreadsheetView = () => {
         </div>
       </div>
 
-      {/* Unified Scroll Container - Table, Daily Stats, and Chart */}
+      {/* Unified Scroll Container - spinner when loading, table when loaded (one layout, no flicker) */}
       <div ref={unifiedScrollRef} className="flex-1 overflow-x-auto overflow-y-auto seamless-scroll relative flex flex-col">
+        {!showContent ? (
+          <div className="flex-1 flex items-center justify-center min-h-[200px]">
+            <div className="flex flex-col items-center gap-3">
+              <LoadingDots size="lg" />
+              <p className="text-sm text-gray-500">Loading habits...</p>
+            </div>
+          </div>
+        ) : (
         <div className="flex-1 flex flex-col min-h-0" style={{ minWidth: `calc(250px + ${monthDays.length * 45}px + 280px)` }}>
           {/* Habit Table */}
           <div className="flex-shrink-0">
@@ -990,6 +1006,7 @@ export const HabitSpreadsheetView = () => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Modals */}

@@ -10,6 +10,52 @@ import { format } from 'date-fns';
 import { Button } from '@/features/ui/button';
 import { EmailComposePopup } from './EmailComposePopup';
 
+/** Scoped CSS: email body fits viewport; override fixed widths; full-width content tables; collapse spacer columns. */
+const emailBodyResponsiveStyles = `
+  .email-body-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    box-sizing: border-box !important;
+  }
+  .email-body-responsive > * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .email-body-responsive table {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .email-body-responsive td,
+  .email-body-responsive th {
+    box-sizing: border-box !important;
+  }
+  .email-body-responsive th.wrapper-margin,
+  .email-body-responsive td.wrapper-margin,
+  .email-body-responsive th[width="48"],
+  .email-body-responsive td[width="48"] {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: hidden !important;
+    border: none !important;
+  }
+  .email-body-responsive img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  .email-body-responsive input,
+  .email-body-responsive button {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+`;
+
 /** Sanitize email body and make URLs clickable (linkify plain text). */
 function sanitizeEmailBody(body: string): string {
   if (!body?.trim()) return '';
@@ -73,9 +119,27 @@ function normalizeSubjectForDisplay(subject: string | null | undefined): string 
   return withoutRe ? `Re: ${withoutRe}` : s;
 }
 
+/** True only when the message looks like a Gmail/email verification (forwarding) email, so we show the confirmation code box only then. */
+function isVerificationEmail(msg: EmailMessage): boolean {
+  const subj = (msg.subject ?? '').toLowerCase();
+  const body = (msg.body ?? '').toLowerCase();
+  const verificationPhrases = [
+    'confirmation code',
+    'verification code',
+    'paste in gmail',
+    'forwarding and pop/imap',
+    'gmail forwarding',
+    'forwarding address',
+    'kode konfirmasi',
+    'penerusan dan pop/imap',
+  ];
+  const text = `${subj} ${body}`;
+  return verificationPhrases.some((p) => text.includes(p));
+}
+
 export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadProps) {
   const { t } = useAppTranslation();
-  const { data: messages = [], isLoading } = useEmailMessages(conversation.id);
+  const { data: messages = [], isLoading, isError, refetch } = useEmailMessages(conversation.id);
   const { sendReply, isSending } = useSendEmailReply();
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInitialSubject, setComposeInitialSubject] = useState('');
@@ -95,8 +159,19 @@ export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadPro
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2] p-4">
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-100 p-4">
         <p className="text-sm text-slate-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-100 p-4 items-center justify-center gap-3">
+        <p className="text-sm text-red-600">{t('whatsappInbox.failedToLoadMessages', 'Gagal memuat pesan.')}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          {t('common.retry', 'Coba lagi')}
+        </Button>
       </div>
     );
   }
@@ -145,7 +220,7 @@ export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadPro
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-[#efeae2] items-center justify-center p-4">
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-100 items-center justify-center p-4">
         <Mail className="w-12 h-12 text-slate-300 mb-3" />
         <p className="text-sm text-slate-600">{t('emailConnect.noMessages', 'No messages yet.')}</p>
       </div>
@@ -153,85 +228,89 @@ export function EmailChatThread({ conversation, hideHeader }: EmailChatThreadPro
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative bg-[#efeae2]">
+    <div className="flex-1 flex flex-col min-h-0 relative bg-slate-100">
+      <style dangerouslySetInnerHTML={{ __html: emailBodyResponsiveStyles }} />
       {!hideHeader && (
-        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-white">
+        <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 bg-white">
           <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
-          <p className="text-xs text-gray-500 truncate">{conversation.email_connection_display ?? ''}</p>
+          <p className="text-xs text-slate-500 truncate">{conversation.email_connection_display ?? ''}</p>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 pb-16 min-h-0 flex flex-col gap-y-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 min-w-0 flex flex-col pb-2">
         {messages.map((msg) => {
           const senderDisplay = getMessageSenderDisplay(msg, conversation);
+          const isOutbound = msg.direction === 'outbound';
           return (
-          <div
-            key={msg.id}
-            className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 shadow-sm ${
-                msg.direction === 'outbound'
-                  ? 'bg-[#DCF8C6] text-gray-900'
-                  : 'bg-white text-gray-900 border border-gray-200'
-              }`}
+            <article
+              key={msg.id}
+              className="shrink-0 w-full bg-white border-b border-slate-200"
             >
-              {msg.subject ? (
-                <p className="text-xs font-medium text-slate-600 mb-1">
-                  {t('emailConnect.subject', 'Subject')}: {normalizeSubjectForDisplay(msg.subject)}
-                </p>
-              ) : null}
-              {msg.confirmation_code ? (
-                <div className="rounded-md bg-amber-50 border border-amber-200 p-3 mb-2">
-                  <p className="text-xs font-medium text-amber-800 mb-1">
-                    {t('emailConnect.confirmationCodeLabel', 'Kode konfirmasi (tempel di Gmail → Penerusan dan POP/IMAP)')}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-lg font-bold text-amber-900">{msg.confirmation_code}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(msg.confirmation_code!)}
-                      className="p-1.5 rounded hover:bg-amber-100 text-amber-700"
-                      title={t('whatsappInbox.copy', 'Copy')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
+              <div className="px-4 pt-4 pb-2">
+                {msg.subject ? (
+                  <h2 className="text-base font-semibold text-slate-900 mb-2 break-words">
+                    {t('emailConnect.subject', 'Subject')}: {normalizeSubjectForDisplay(msg.subject)}
+                  </h2>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 mb-3">
+                  <span className="break-all">
+                    {isOutbound
+                      ? t('emailConnect.you', 'Anda')
+                      : (senderDisplay || msg.from_email || '—')}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <span className="shrink-0">{formatTime(msg.created_at)}</span>
                 </div>
-              ) : null}
-              {msg.body ? (
-                <>
-                  <p className="text-xs font-medium text-slate-600 mb-0.5">
-                    {t('emailConnect.messageLabel', 'Pesan')}:
-                  </p>
-                  <div
-                    className="text-sm whitespace-pre-wrap break-words prose prose-sm max-w-none prose-a:text-blue-600 prose-a:underline"
-                    dangerouslySetInnerHTML={{ __html: sanitizeEmailBody(msg.body) }}
-                  />
-                </>
-              ) : null}
-              <div className="flex items-center justify-between gap-2 mt-1">
-                <p className="text-xs text-slate-500">
-                  {senderDisplay ? `${senderDisplay} · ${formatTime(msg.created_at)}` : formatTime(msg.created_at)}
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  onClick={() => handleReplyToMessage(msg)}
-                  disabled={isSending}
-                  title={t('emailConnect.replyFromMessage', 'Reply and quote this message')}
-                >
-                  <Reply className="w-3.5 h-3.5 mr-1" />
-                  {t('emailConnect.reply', 'Balas')}
-                </Button>
               </div>
-            </div>
-          </div>
+              <div className="px-4 pb-4 min-w-0">
+                {msg.confirmation_code != null && String(msg.confirmation_code).trim() !== '' && isVerificationEmail(msg) ? (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 mb-4 min-h-0">
+                    <p className="text-sm font-medium text-amber-800 mb-2 leading-normal">
+                      {t('emailConnect.confirmationCodeLabel', 'Kode konfirmasi (tempel di Gmail → Penerusan dan POP/IMAP)')}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xl font-bold text-amber-900 tracking-wide">{msg.confirmation_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(msg.confirmation_code!)}
+                        className="p-1.5 rounded hover:bg-amber-100 text-amber-700"
+                        title={t('whatsappInbox.copy', 'Copy')}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {msg.body ? (
+                  <div className="min-w-0 w-full max-w-full overflow-x-auto">
+                    <p className="text-xs font-medium text-slate-600 mb-2">
+                      {t('emailConnect.messageLabel', 'Pesan')}:
+                    </p>
+                    <div
+                      className="email-body email-body-responsive text-sm text-slate-800 min-w-0 w-full max-w-full leading-relaxed prose prose-sm max-w-none prose-p:my-2 prose-p:leading-relaxed prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-a:text-blue-600 prose-a:underline prose-a:break-words prose-img:max-w-full prose-img:h-auto prose-img:rounded"
+                      dangerouslySetInnerHTML={{ __html: sanitizeEmailBody(msg.body) }}
+                    />
+                  </div>
+                ) : null}
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    onClick={() => handleReplyToMessage(msg)}
+                    disabled={isSending}
+                    title={t('emailConnect.replyFromMessage', 'Reply and quote this message')}
+                  >
+                    <Reply className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    {t('emailConnect.reply', 'Balas')}
+                  </Button>
+                </div>
+              </div>
+            </article>
           );
         })}
       </div>
-      <div className="flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 p-3 border-t border-gray-200 bg-white">
+      <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 z-10 p-3 border-t border-slate-200 bg-white">
         <Button
           type="button"
           variant="outline"

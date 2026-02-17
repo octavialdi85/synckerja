@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { devLog } from '@/config/logger';
+import { toast } from 'sonner';
 import type { WhatsAppConversation } from '../types';
 
 const QUERY_KEY = ['whatsapp-conversations'] as const;
@@ -10,6 +12,7 @@ export function useWhatsAppConversations() {
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelErrorToastShownRef = useRef(false);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -18,6 +21,7 @@ export function useWhatsAppConversations() {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+    channelErrorToastShownRef.current = false;
     channelRef.current = supabase
       .channel(channelName)
       .on(
@@ -42,7 +46,15 @@ export function useWhatsAppConversations() {
           queryClient.invalidateQueries({ queryKey: ['whatsapp-conversation-status'] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          devLog.warn('WhatsApp conversations realtime channel error', status);
+          if (!channelErrorToastShownRef.current) {
+            channelErrorToastShownRef.current = true;
+            toast.warning('Koneksi realtime terganggu');
+          }
+        }
+      });
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
@@ -63,5 +75,6 @@ export function useWhatsAppConversations() {
       return (data ?? []) as WhatsAppConversation[];
     },
     refetchInterval: 10000,
+    staleTime: 30_000,
   });
 }

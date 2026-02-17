@@ -218,7 +218,11 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 
     // Validate that Plan date is selected (required)
     if (!planDate) {
-      alert('Please select a Plan date before creating the task.');
+      toast({
+        title: t('dailyTask.createTask.validationError', 'Validation'),
+        description: t('dailyTask.createTask.planDateRequired', 'Please select a Plan date before creating the task.'),
+        variant: 'destructive',
+      });
       return;
     }
 

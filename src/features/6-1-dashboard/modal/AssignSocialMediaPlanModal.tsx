@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/features/ui/alert-dialog';
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
+import { devLog } from '@/config/logger';
 
 interface AssignSocialMediaPlanModalProps {
   open: boolean;
@@ -149,7 +150,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
       setShowConfirmation(false);
       onOpenChange(false);
     } catch (error) {
-      console.error('Error assigning:', error);
+      devLog.error('Error assigning:', error);
       toast.error('Failed to assign task step');
     } finally {
       setIsAssigning(false);
@@ -177,7 +178,7 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
       
       onOpenChange(false);
     } catch (error) {
-      console.error('Error auto-assigning:', error);
+      devLog.error('Error auto-assigning:', error);
       toast.error('Failed to assign task step');
     } finally {
       setIsAssigning(false);

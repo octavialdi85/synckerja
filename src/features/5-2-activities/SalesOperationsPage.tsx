@@ -4,10 +4,18 @@ import { HeaderAndTab } from './HeaderAndTab';
 import { SalesActivitiesPageContent } from './SalesActivitiesPageContent';
 import { VisitSchedulingPage } from '@/features/5-2-jadwal-kunjungan/VisitSchedulingPage';
 import { ClientVisitsPage } from '@/features/5-2-client_visits/ClientVisitsPage';
+import { useSalesActivities } from '@/hooks/organized/sales';
+
+/** Keeps sales-activities query subscribed so it is not cancelled when content remounts (e.g. Strict Mode). */
+const SalesActivitiesQueryKeeper = () => {
+  useSalesActivities();
+  return null;
+};
 
 export const SalesOperationsPage = () => {
   const location = useLocation();
-  
+  const isActivitiesPath = location.pathname.includes('/operations/sales') && !location.pathname.includes('/jadwal-kunjungan') && !location.pathname.includes('/client-visits');
+
   // Determine which content to show based on route
   const renderContent = () => {
     if (location.pathname.includes('/jadwal-kunjungan')) {
@@ -34,6 +42,7 @@ export const SalesOperationsPage = () => {
 
               {/* Content Area */}
               <div className="flex-1 min-h-0">
+                {isActivitiesPath && <SalesActivitiesQueryKeeper />}
                 {renderContent()}
               </div>
             </div>

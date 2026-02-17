@@ -65,7 +65,7 @@ Menyimpan kategori password.
 ## File Structure
 
 ```
-8-PaswordManager/
+8-PasswordManager/
 ├── PasswordManagerPage.tsx       # Main component
 ├── types.ts                      # TypeScript interfaces
 ├── README.md                     # Documentation (this file)
@@ -95,7 +95,7 @@ Custom hook untuk mengakses dan memanipulasi data password dari Supabase.
 ```typescript
 import { usePasswords } from './hooks/usePasswords';
 // atau
-import { usePasswords } from '@/components/8-PaswordManager/hooks';
+import { usePasswords } from '@/features/8-PasswordManager/hooks';
 ```
 
 ### Usage

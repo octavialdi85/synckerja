@@ -119,7 +119,7 @@ export function useProdApprovalAccess(enabled: boolean): { canShowApprovalButton
 
         setCanShowApprovalButtons(hasRoleAccess || isException);
       } catch (error) {
-        console.error('Error checking approval access:', error);
+        devLog.error('Error checking approval access:', error);
         if (!cancelled) setCanShowApprovalButtons(false);
       } finally {
         if (!cancelled) setLoading(false);

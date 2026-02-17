@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import {
   HeaderAndTab,
@@ -13,6 +13,16 @@ import {
 import { Password, PasswordFormData, Category } from './types';
 import { getPasswordStrength } from './section/PasswordStrengthMeter';
 import { Button } from '@/features/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import { useToast, usePasswords } from './hooks';
 import { LoadingDots } from '@/components/LoadingDots';
 
@@ -33,7 +43,25 @@ const PasswordManagerPage: React.FC = () => {
   const [isShowingFavorites, setIsShowingFavorites] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPassword, setEditingPassword] = useState<Password | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('vault');
+  // Defer showing content by one frame after loading ends to avoid single-frame flash (flicker)
+  const [showContent, setShowContent] = useState(false);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (loading) {
+      setShowContent(false);
+      return;
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setShowContent(true);
+    });
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [loading]);
 
   // Update category counts
   const categoriesWithCounts = useMemo(() => {
@@ -95,17 +123,29 @@ const PasswordManagerPage: React.FC = () => {
   };
 
   const handleSavePassword = async (data: PasswordFormData) => {
-    if (editingPassword) {
-      await updatePassword(editingPassword.id, data);
-    } else {
-      await addPassword(data);
+    try {
+      if (editingPassword) {
+        await updatePassword(editingPassword.id, data);
+      } else {
+        await addPassword(data);
+      }
+      setDialogOpen(false);
+    } catch {
+      // Hook already toasts; dialog stays open for retry
     }
-    setDialogOpen(false);
   };
 
-  const handleDeletePassword = async (id: string) => {
-    if (confirm('Are you sure you want to delete this password?')) {
-      await deletePassword(id);
+  const handleDeletePassword = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deletePassword(deleteConfirmId);
+      setDeleteConfirmId(null);
+    } catch {
+      // Hook shows toast; keep dialog open so user can retry
     }
   };
 
@@ -128,27 +168,13 @@ const PasswordManagerPage: React.FC = () => {
   };
 
 
-  if (loading) {
-    return (
-      <StandardLayout>
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-          <div className="flex flex-col items-center space-y-4">
-            <LoadingDots size="lg" />
-            <p className="text-sm text-gray-500">Loading passwords...</p>
-          </div>
-        </div>
-      </StandardLayout>
-    );
-  }
-
+  // Same layout for loading and loaded to prevent layout shift / flicker on refresh
   return (
     <StandardLayout>
       <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
-          {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
             <div className="h-full flex flex-col overflow-hidden">
-              {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <HeaderAndTab 
                   activeTab={activeTab} 
@@ -156,7 +182,6 @@ const PasswordManagerPage: React.FC = () => {
                 />
               </div>
 
-              {/* Stats */}
               <div className="flex-shrink-0 mb-1">
                 <PasswordStats
                   totalPasswords={stats.total}
@@ -166,30 +191,29 @@ const PasswordManagerPage: React.FC = () => {
                 />
               </div>
 
-              {/* Main Content Area - Grid Layout */}
               <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                {/* Left Column - Filters - 3 columns */}
                 <div className="col-span-3 h-full">
                   <div className="bg-white border rounded-lg shadow-sm h-full flex flex-col max-h-[calc(100vh-180px)]">
-                    {/* Sidebar Header */}
                     <div className="px-4 py-1.5 border-b flex-shrink-0">
                       <h3 className="text-sm font-semibold text-gray-900">Categories</h3>
                       <p className="text-xs text-gray-500 mt-1">Filter by category</p>
                     </div>
-
-                    {/* Scrollable Sidebar Content */}
                     <div className="flex-1 overflow-y-auto seamless-scroll p-3">
-                      <CategoryFilter
-                        categories={categoriesWithCounts}
-                        selectedCategory={selectedCategory}
-                        onSelectCategory={handleCategorySelect}
-                        showFavoritesCount={stats.favorites}
-                        onShowFavorites={handleShowFavorites}
-                        isShowingFavorites={isShowingFavorites}
-                      />
+                      {!showContent ? (
+                        <div className="flex items-center justify-center py-8">
+                          <LoadingDots size="sm" />
+                        </div>
+                      ) : (
+                        <CategoryFilter
+                          categories={categoriesWithCounts}
+                          selectedCategory={selectedCategory}
+                          onSelectCategory={handleCategorySelect}
+                          showFavoritesCount={stats.favorites}
+                          onShowFavorites={handleShowFavorites}
+                          isShowingFavorites={isShowingFavorites}
+                        />
+                      )}
                     </div>
-
-                    {/* Sidebar Footer */}
                     <PasswordSidebarFooter 
                       totalCategories={categoriesWithCounts.length}
                       selectedCategory={selectedCategory}
@@ -198,41 +222,46 @@ const PasswordManagerPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right Column - Password List - 9 columns */}
                 <div className="col-span-9 flex flex-col min-h-0">
                   <div className="flex-1 min-h-0">
                     <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-180px)]">
-                      {/* Search and Filter Section */}
-                      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
-                        <SearchAndFilter
-                          searchQuery={searchQuery}
-                          onSearchChange={setSearchQuery}
-                          selectedCategory={selectedCategory}
-                          onCategoryChange={handleCategorySelect}
-                          categories={categoriesWithCounts}
-                          onAddPassword={handleAddPassword}
-                        />
-                      </div>
-
-                      {/* Scrollable Password List Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
-                        <div className="p-4">
-                          <PasswordList
-                            passwords={filteredPasswords}
-                            categories={categoriesWithCounts}
-                            onEdit={handleEditPassword}
-                            onDelete={handleDeletePassword}
-                            onToggleFavorite={handleToggleFavorite}
-                          />
+                      {!showContent ? (
+                        <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                          <div className="flex flex-col items-center gap-3">
+                            <LoadingDots size="lg" />
+                            <p className="text-sm text-gray-500">Loading passwords...</p>
+                          </div>
                         </div>
-                      </div>
-
-                      {/* List Footer */}
-                      <PasswordListFooter 
-                        totalPasswords={passwords.length}
-                        filteredPasswords={filteredPasswords.length}
-                        selectedCategory={selectedCategory}
-                      />
+                      ) : (
+                        <>
+                          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
+                            <SearchAndFilter
+                              searchQuery={searchQuery}
+                              onSearchChange={setSearchQuery}
+                              selectedCategory={selectedCategory}
+                              onCategoryChange={handleCategorySelect}
+                              categories={categoriesWithCounts}
+                              onAddPassword={handleAddPassword}
+                            />
+                          </div>
+                          <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                            <div className="p-4">
+                              <PasswordList
+                                passwords={filteredPasswords}
+                                categories={categoriesWithCounts}
+                                onEdit={handleEditPassword}
+                                onDelete={handleDeletePassword}
+                                onToggleFavorite={handleToggleFavorite}
+                              />
+                            </div>
+                          </div>
+                          <PasswordListFooter 
+                            totalPasswords={passwords.length}
+                            filteredPasswords={filteredPasswords.length}
+                            selectedCategoryName={selectedCategory === 'all' ? undefined : categories.find(c => c.id === selectedCategory)?.name}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -251,6 +280,24 @@ const PasswordManagerPage: React.FC = () => {
         editPassword={editingPassword}
         categories={categoriesWithCounts}
       />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete password</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this password? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700 text-white">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </StandardLayout>
   );
 };

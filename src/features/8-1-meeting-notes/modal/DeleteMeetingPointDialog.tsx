@@ -39,6 +39,10 @@ const DeleteMeetingPointDialog = ({
     
     try {
       await onDeleteSuccess(meetingPoint.id);
+      onClose();
+    } catch {
+      // Context shows toast; close modal so user can retry from list if needed
+      onClose();
     } finally {
       setIsDeleting(false);
     }

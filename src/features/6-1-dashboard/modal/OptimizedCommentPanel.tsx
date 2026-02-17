@@ -248,7 +248,7 @@ const CommentImages = React.memo<{
       });
       return <div key={image.id} className="cursor-pointer hover:opacity-80 transition-opacity">
             <img src={imageUrl} alt={image.image_name || 'Comment image'} className="w-20 h-20 rounded-lg border object-cover shadow-sm" onClick={() => onImageClick(imageUrl, image.image_name, image.created_at)} loading="lazy" onLoad={() => devLog.debug('✅ Image loaded successfully:', imageUrl)} onError={e => {
-          console.error('❌ Failed to load comment image:', {
+          devLog.error('❌ Failed to load comment image:', {
             imagePath: image.image_path,
             imageUrl,
             error: e
@@ -259,7 +259,7 @@ const CommentImages = React.memo<{
             error
           }) => {
             if (error) {
-              console.error('❌ Image not found in storage:', error);
+              devLog.error('❌ Image not found in storage:', error);
             } else {
               devLog.debug('✅ Image exists in storage but failed to load via URL');
             }
@@ -526,7 +526,7 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
       await addImage(filePath, fileName, 'image/png');
       toast.success('Screenshot added successfully!');
     } catch (error) {
-      console.error('Error saving captured image:', error);
+      devLog.error('Error saving captured image:', error);
       toast.error('Failed to save captured image');
     }
   }, [addImage]);
@@ -569,7 +569,7 @@ export const OptimizedCommentPanel: React.FC<OptimizedCommentPanelProps> = React
       </div>;
   }
   if (error) {
-    console.error('❌ OptimizedCommentPanel error:', error);
+    devLog.error('❌ OptimizedCommentPanel error:', error);
     return <div className="p-6">
         <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg">
           <MessageSquare className="h-4 w-4" />

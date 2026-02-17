@@ -10,6 +10,7 @@ import { LinkPreviewPanel } from './LinkPreviewPanel';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { devLog } from '@/config/logger';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface BriefDialogProps {
@@ -175,7 +176,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
         setShowApprovalButtons(hasRoleAccess || isException);
       } catch (error) {
-        console.error('Error checking approval access in BriefDialog:', error);
+        devLog.error('Error checking approval access in BriefDialog:', error);
         setShowApprovalButtons(false);
       }
     };
@@ -204,7 +205,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         .eq('id', socialMediaPlanId);
 
       if (planError) {
-        console.error('Error updating brief:', planError);
+        devLog.error('Error updating brief:', planError);
         toast.error('Failed to save brief');
         return;
       }
@@ -221,7 +222,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         );
 
       if (audienceError) {
-        console.error('Error saving target audience:', audienceError);
+        devLog.error('Error saving target audience:', audienceError);
         toast.error('Failed to save target audience');
         return;
       }
@@ -238,7 +239,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         );
 
       if (captionError) {
-        console.error('Error saving caption:', captionError);
+        devLog.error('Error saving caption:', captionError);
         toast.error('Failed to save caption');
         return;
       }
@@ -255,7 +256,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         );
 
       if (linkRefError) {
-        console.error('Error saving link reference:', linkRefError);
+        devLog.error('Error saving link reference:', linkRefError);
         toast.error('Failed to save link reference');
         return;
       }
@@ -274,7 +275,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         onClose();
       }
     } catch (error) {
-      console.error('Error in handleSave:', error);
+      devLog.error('Error in handleSave:', error);
       toast.error('Failed to save changes');
     }
   };
@@ -307,7 +308,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         .single();
 
       if (fetchError) {
-        console.error('Error fetching current plan:', fetchError);
+        devLog.error('Error fetching current plan:', fetchError);
         toast.error('Failed to fetch current data');
         return;
       }
@@ -325,7 +326,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         .eq('id', socialMediaPlanId);
 
       if (error) {
-        console.error('Error updating status:', error);
+        devLog.error('Error updating status:', error);
         toast.error('Failed to request revision');
       } else {
         toast.success('Status updated to Request Revision');
@@ -343,7 +344,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         onClose(); // Close popup after successful action
       }
     } catch (error) {
-      console.error('Error in handleRequestRevision:', error);
+      devLog.error('Error in handleRequestRevision:', error);
       toast.error('Failed to request revision');
     } finally {
       setIsUpdatingStatus(false);
@@ -367,7 +368,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         .eq('id', socialMediaPlanId);
 
       if (error) {
-        console.error('Error updating status:', error);
+        devLog.error('Error updating status:', error);
         toast.error('Failed to approve');
       } else {
         toast.success('Status updated to Approved');
@@ -384,7 +385,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         onClose(); // Close popup after successful action
       }
     } catch (error) {
-      console.error('Error in handleApproved:', error);
+      devLog.error('Error in handleApproved:', error);
       toast.error('Failed to approve');
     } finally {
       setIsUpdatingStatus(false);

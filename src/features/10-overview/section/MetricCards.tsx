@@ -58,54 +58,57 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
     }];
   }, [subscriptionStatus]);
 
+  // Responsive grid: 1 col mobile, 2 cols tablet, 4 cols desktop
+  const gridClass = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 min-w-0';
+
   // ENHANCED NULL CHECK with Fallback Data
   if (!subscriptionStatus || quickStats.length === 0) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
+      <div className={gridClass}>
+        <Card className="border-slate-200 shadow-sm min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-600 mb-1">Current Plan</p>
-                <p className="text-2xl font-bold text-gray-400">Loading...</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-400">Loading...</p>
               </div>
-              <CreditCard className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+              <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
+        <Card className="border-slate-200 shadow-sm min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-600 mb-1">Active Members</p>
-                <p className="text-2xl font-bold text-gray-400">- / -</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-400">- / -</p>
               </div>
-              <Users className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+              <Users className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
+        <Card className="border-slate-200 shadow-sm min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-600 mb-1">Days Remaining</p>
-                <p className="text-2xl font-bold text-gray-400">-</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-400">-</p>
               </div>
-              <Calendar className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+              <Calendar className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
+        <Card className="border-slate-200 shadow-sm min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-600 mb-1">Status</p>
-                <p className="text-2xl font-bold text-gray-400">Loading</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-400">Loading</p>
               </div>
-              <AlertCircle className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+              <AlertCircle className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
@@ -115,18 +118,18 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
 
   // Render real subscription data
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+    <div className={gridClass}>
       {quickStats.map((stat, index) => (
-        <Card key={index} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
+        <Card key={index} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow min-w-0">
+          <CardContent className="p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-600 mb-1">{stat.title}</p>
-                <p className={`text-2xl font-bold ${stat.color} truncate`} title={String(stat.value)}>
+                <p className={`text-xl sm:text-2xl font-bold ${stat.color} truncate`} title={String(stat.value)}>
                   {stat.value}
                 </p>
               </div>
-              <stat.icon className={`h-8 w-8 ${stat.color} flex-shrink-0 ml-2`} />
+              <stat.icon className={`h-7 w-7 sm:h-8 sm:w-8 ${stat.color} flex-shrink-0`} />
             </div>
           </CardContent>
         </Card>

@@ -380,8 +380,9 @@ export const useDeleteIndividualObjective = () => {
 
         logger.debug('✅ Individual objective deleted successfully');
       } catch (error) {
-        console.error('❌ Error in delete process:', error);
-        throw error;
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error('❌ Error in delete process:', err);
+        throw err;
       }
     },
     onSuccess: () => {

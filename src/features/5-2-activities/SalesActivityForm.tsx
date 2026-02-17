@@ -16,10 +16,12 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/features/ui/card';
+import { Alert, AlertDescription } from '@/features/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
-import { useSalesActivityMasterData } from '@/hooks/organized/sales';
+import { useSalesActivityMasterData, type SalesActivity } from '@/hooks/organized/sales';
 import { useToast } from '@/features/ui/use-toast';
+import { devLog } from '@/config/logger';
 import { useIncomeTransactions } from '@/hooks/organized/sales';
 import { useSalesActivityPayments } from '@/hooks/organized/sales';
 import { SalesActivityItemsManager } from './SalesActivityItemsManager';
@@ -52,7 +54,7 @@ type FormData = z.infer<typeof formSchema>;
 interface SalesActivityFormProps {
   onSuccess: () => void;
   onCancel: () => void;
-  activity?: any;
+  activity?: SalesActivity | null;
 }
 
 export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivityFormProps) => {
@@ -76,11 +78,12 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
     services,
     parentServices,
     getSubServicesByService,
+    masterDataError,
   } = useSalesActivityMasterData();
 
   // Debug: Log income types
   React.useEffect(() => {
-    console.log('🔍 SalesActivityForm - Income types:', {
+    devLog.debug('🔍 SalesActivityForm - Income types:', {
       count: incomeTypes?.length || 0,
       types: incomeTypes,
       organizationId
@@ -181,7 +184,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
           .upload(filePath, receiptFile);
 
         if (uploadError) {
-          console.error('❌ Error uploading receipt:', uploadError);
+          devLog.error('❌ Error uploading receipt:', uploadError);
           throw new Error('Failed to upload receipt file');
         }
 
@@ -225,11 +228,11 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
           .eq('id', activity.id);
 
         if (error) {
-          console.error('❌ Error updating sales activity:', error);
+          devLog.error('❌ Error updating sales activity:', error);
           throw error;
         }
 
-        console.log('✅ Sales activity updated successfully');
+        devLog.debug('✅ Sales activity updated successfully');
 
         // Handle payment history for updates
         const effectiveReceiptUrl = receiptUrl || submitData.receipt_url || undefined;
@@ -239,7 +242,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         const newDownPayment = data.down_payment_amount || 0;
         const downPaymentIncrease = newDownPayment - oldDownPayment;
         
-        console.log('🔍 Payment update check:', {
+        devLog.debug('🔍 Payment update check:', {
           oldDownPayment,
           newDownPayment,
           downPaymentIncrease,
@@ -248,7 +251,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         });
         
         if (downPaymentIncrease > 0 && data.payment_method) {
-          console.log('💰 Creating additional down payment history for increase:', downPaymentIncrease);
+          devLog.debug('💰 Creating additional down payment history for increase:', downPaymentIncrease);
           
           try {
             // Get current user for created_by
@@ -269,9 +272,9 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
               notes: data.notes || null,
             });
 
-            console.log('✅ Additional down payment history created successfully');
+            devLog.debug('✅ Additional down payment history created successfully');
           } catch (paymentError) {
-            console.error('❌ Error creating additional down payment history:', paymentError);
+            devLog.error('❌ Error creating additional down payment history:', paymentError);
             toast({
               title: "Warning",
               description: "Sales activity updated but failed to create payment history",
@@ -286,7 +289,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         const remainingAmount = data.remaining_amount || 0;
         
         if (!wasPaid && nowPaid && remainingAmount > 0 && data.payment_method) {
-          console.log('💰 Creating final payment history for remaining amount:', remainingAmount);
+          devLog.debug('💰 Creating final payment history for remaining amount:', remainingAmount);
           
           try {
             // Get current user for created_by
@@ -307,9 +310,9 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
               notes: data.notes || null,
             });
 
-            console.log('✅ Final payment history created successfully');
+            devLog.debug('✅ Final payment history created successfully');
           } catch (paymentError) {
-            console.error('❌ Error creating final payment history:', paymentError);
+            devLog.error('❌ Error creating final payment history:', paymentError);
             toast({
               title: "Warning",
               description: "Sales activity updated but failed to create final payment history",
@@ -336,11 +339,11 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
           .single();
  
         if (error) {
-          console.error('❌ Error inserting sales activity:', error);
+          devLog.error('❌ Error inserting sales activity:', error);
           throw error;
         }
 
-        console.log('✅ Sales activity created successfully');
+        devLog.debug('✅ Sales activity created successfully');
         setCurrentActivityId(createdActivity.id);
 
         // Ensure primary service fields are set on the activity from first draft item
@@ -355,16 +358,16 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
                 sub_service_id: primary.sub_service_id || null,
               })
               .eq('id', createdActivity.id);
-            console.log('✅ Set service_id and sub_service_id on activity');
+            devLog.debug('✅ Set service_id and sub_service_id on activity');
           }
         } catch (e) {
-          console.error('❌ Failed to set primary service on activity:', e);
+          devLog.error('❌ Failed to set primary service on activity:', e);
         }
 
         // Handle payment history creation based on payment type
         const effectiveReceiptUrl = receiptUrl || createdActivity?.receipt_url || undefined;
         
-        console.log('🔍 New activity payment check:', {
+        devLog.debug('🔍 New activity payment check:', {
           is_down_payment: data.is_down_payment,
           down_payment_amount: data.down_payment_amount,
           payment_method: data.payment_method,
@@ -374,7 +377,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         
         // If down payment is made
         if (data.is_down_payment && data.down_payment_amount && data.down_payment_amount > 0 && data.payment_method) {
-          console.log('💰 Creating down payment history and income transaction');
+          devLog.debug('💰 Creating down payment history and income transaction');
           
           try {
             // Get current user for created_by
@@ -391,15 +394,15 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
               notes: data.notes || null,
             });
 
-            console.log('✅ Down payment history and income transaction created successfully');
+            devLog.debug('✅ Down payment history and income transaction created successfully');
 
             // If fully paid (remaining amount is 0), also create final payment entry
             if (data.is_paid && data.remaining_amount === 0) {
               // The final payment amount would be 0 in this case, so we skip it
-              console.log('📝 Activity fully paid with down payment only');
+              devLog.debug('📝 Activity fully paid with down payment only');
             }
           } catch (paymentError) {
-            console.error('❌ Error creating down payment history:', paymentError);
+            devLog.error('❌ Error creating down payment history:', paymentError);
             toast({
               title: "Warning",
               description: "Sales activity created but failed to create payment history",
@@ -409,7 +412,7 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         }
         // If activity is marked as fully paid but no down payment (direct full payment)
         else if (data.is_paid && totalAmountFromItems && totalAmountFromItems > 0 && data.payment_method) {
-          console.log('💰 Creating full payment history and income transaction');
+          devLog.debug('💰 Creating full payment history and income transaction');
           
           try {
             // Get current user for created_by
@@ -426,9 +429,9 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
               notes: data.notes || null,
             });
 
-            console.log('✅ Full payment history and income transaction created successfully');
+            devLog.debug('✅ Full payment history and income transaction created successfully');
           } catch (paymentError) {
-            console.error('❌ Error creating full payment history:', paymentError);
+            devLog.error('❌ Error creating full payment history:', paymentError);
             toast({
               title: "Warning",
               description: "Sales activity created but failed to create payment history",
@@ -446,13 +449,10 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
         reset();
       }
       
-      console.log('🎯 Calling onSuccess callback');
-      // Add small delay to ensure database transaction is committed
-      setTimeout(() => {
-        onSuccess();
-      }, 100);
+      devLog.debug('🎯 Calling onSuccess callback');
+      onSuccess();
     } catch (error) {
-      console.error('Error saving sales activity:', error);
+      devLog.error('Error saving sales activity:', error);
       toast({
         title: "Error",
         description: `Failed to ${activity ? 'update' : 'create'} sales activity`,
@@ -467,6 +467,13 @@ export const SalesActivityForm = ({ onSuccess, onCancel, activity }: SalesActivi
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+      {masterDataError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load form options. Please refresh the page.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Items Manager - Moved to top */}
       <SalesActivityItemsManager 
         ref={itemsManagerRef}

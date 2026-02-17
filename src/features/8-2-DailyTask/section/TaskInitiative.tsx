@@ -86,10 +86,8 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
       if (item.taskId) {
         setExpandedTasks(prev => new Set([...prev, item.taskId]));
         navigateToTask(item.taskId);
+        setTimeout(() => scrollToStep(item.id), 250);
       }
-      setTimeout(() => {
-        scrollToStep(item.id);
-      }, 250);
       return;
     }
 
@@ -118,22 +116,20 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
 
   // Get current employee ID
   useEffect(() => {
+    let cancelled = false;
     const fetchCurrentEmployee = async () => {
       try {
         // Get authenticated user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
+        if (cancelled) return;
         if (userError) {
           console.error('Error getting user:', userError);
           return;
         }
-        
         if (!user) {
           console.log('No authenticated user found');
           return;
         }
-
-        // Must have organization ID to fetch employee
         if (!organizationId) {
           console.log('Waiting for organization ID...');
           return;
@@ -146,12 +142,11 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
           .eq('user_id', user.id)
           .eq('organization_id', organizationId)
           .maybeSingle(); // Use maybeSingle() to avoid error if no record found
-
+        if (cancelled) return;
         if (employeeError) {
           console.error('Error fetching employee:', employeeError);
           return;
         }
-
         if (employee) {
           setCurrentEmployeeId(employee.id);
           console.log('✅ Current employee ID loaded:', employee.id);
@@ -164,6 +159,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
           });
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching current employee:', error);
         toast({
           title: 'Error',
@@ -174,6 +170,7 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
     };
 
     fetchCurrentEmployee();
+    return () => { cancelled = true; };
   }, [organizationId, toast]); // Re-fetch when organization changes
 
   // Function to fetch uncompleted items (can be called to refresh)

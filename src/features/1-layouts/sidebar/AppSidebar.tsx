@@ -86,9 +86,6 @@ function SubSidebarInternal({ items, isOpen, title, titleKey, whatsAppUnreadCoun
       ],
       '/operations': [
         '/operations',
-        '/operations/customer-service',
-        '/operations/customer-service/dashboard',
-        '/operations/customer-service/tickets',
         '/operations/sales',
         '/operations/consultant',
         '/operations/consultant/dashboard',

@@ -24,6 +24,7 @@ import {
   TooltipTrigger,
 } from '@/features/ui/tooltip';
 import { useMeetingNotes } from '../MeetingNotesContext';
+import { matchesTimeFilter } from '../utils/meetingNotesFilters';
 import EditMeetingPointDialog from '../modal/EditMeetingPointDialog';
 import DeleteMeetingPointDialog from '../modal/DeleteMeetingPointDialog';
 import UpdateHistoryDialog from '../modal/UpdateHistoryDialog';
@@ -40,29 +41,41 @@ const MeetingPointsTable = () => {
 
   // Load issue counts for all meeting points
   useEffect(() => {
+    let isMounted = true;
+
     const loadIssueCounts = async () => {
       const counts: Record<string, number> = {};
       for (const point of meetingPoints) {
         const issues = await getIssueHistory(point.id);
+        if (!isMounted) return;
         counts[point.id] = issues.length;
       }
+      if (!isMounted) return;
       setIssueCounts(counts);
     };
 
     if (meetingPoints.length > 0) {
       loadIssueCounts();
     }
-  }, [meetingPoints, getIssueHistory]);
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when meetingPoints change; getIssueHistory from context is stable enough
+  }, [meetingPoints]);
 
   // Filter meeting points based on filters
   const filteredPoints = meetingPoints.filter(point => {
-    if (filters.search && !point.discussion_point.toLowerCase().includes(filters.search.toLowerCase())) {
+    if (filters.search && !(point.discussion_point ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }
     if (filters.status && point.status !== filters.status) {
       return false;
     }
     if (filters.requestBy && point.request_by !== filters.requestBy) {
+      return false;
+    }
+    if (!matchesTimeFilter(point.meeting_date, filters.timeFilter)) {
       return false;
     }
     return true;
@@ -170,7 +183,7 @@ const MeetingPointsTable = () => {
                       {formatDate(point.meeting_date)}
                     </TableCell>
                     <TableCell className="px-2 py-3">
-                      {point.discussion_point.length > 80 ? (
+                      {(point.discussion_point ?? '').length > 80 ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div 
@@ -178,7 +191,7 @@ const MeetingPointsTable = () => {
                               onClick={() => handleEdit(point)}
                               title="Click to edit"
                             >
-                              {point.discussion_point}
+                              {point.discussion_point ?? ''}
                             </div>
                           </TooltipTrigger>
                           <TooltipContent 
@@ -187,7 +200,7 @@ const MeetingPointsTable = () => {
                             className="max-w-md p-4 bg-gray-900 text-white shadow-lg border-gray-700"
                           >
                             <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                              {point.discussion_point}
+                              {point.discussion_point ?? ''}
                             </p>
                             <p className="text-xs text-gray-300 mt-2">Click to edit this meeting point</p>
                           </TooltipContent>
@@ -198,7 +211,7 @@ const MeetingPointsTable = () => {
                           onClick={() => handleEdit(point)}
                           title="Click to edit"
                         >
-                          {point.discussion_point}
+                          {point.discussion_point ?? ''}
                         </div>
                       )}
                     </TableCell>

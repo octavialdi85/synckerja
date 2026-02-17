@@ -25,7 +25,7 @@ export interface ModalAddIndividualContributionProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
-  cycleId: string;
+  cycleId?: string;
   departmentId?: string;
   employeeId?: string;
   employeeName?: string;
@@ -137,7 +137,16 @@ export const ModalAddIndividualContribution = ({
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!cycleId) {
+      toast({
+        title: 'Error',
+        description: 'No OKR cycle selected. Please select a time period and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!currentEmployee) {
       toast({
         title: 'Error',

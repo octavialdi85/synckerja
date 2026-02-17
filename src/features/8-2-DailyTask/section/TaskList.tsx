@@ -255,7 +255,7 @@ export const TaskList = () => {
           t.steps.some((s) => s.id === activeStepId) && t.steps.some((s) => s.id === overStepId)
       );
       if (task) {
-        const sortedSteps = task.steps.sort((a, b) => a.order - b.order);
+        const sortedSteps = [...task.steps].sort((a, b) => a.order - b.order);
         const activeIndex = sortedSteps.findIndex((s) => s.id === activeStepId);
         const overIndex = sortedSteps.findIndex((s) => s.id === overStepId);
         if (activeIndex !== -1 && overIndex !== -1) {
@@ -263,7 +263,9 @@ export const TaskList = () => {
           const [removed] = newSteps.splice(activeIndex, 1);
           newSteps.splice(overIndex, 0, removed);
           const stepIds = newSteps.map((step) => step.id);
-          reorderTaskSteps(task.id, stepIds);
+          reorderTaskSteps(task.id, stepIds).catch(() => {
+            toast({ title: 'Error', description: 'Failed to reorder steps', variant: 'destructive' });
+          });
         }
       }
     }
@@ -275,7 +277,7 @@ export const TaskList = () => {
         <div className="h-full flex flex-col">
           <div
             ref={scrollContainerRef}
-            className="flex-1 min-h-0 seamless-scroll overflow-auto"
+            className="flex-1 min-h-0 max-h-[calc(100vh-120px)] seamless-scroll overflow-auto"
           >
             <table className="w-full caption-bottom text-sm task-list-table">
               <TaskListTableHeader />

@@ -87,7 +87,7 @@ export const Filters = () => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All PIC</SelectItem>
-          {options.pics.map((n: string) => (
+          {(options?.pics ?? []).map((n: string) => (
             <SelectItem key={n} value={n}>{n}</SelectItem>
           ))}
         </SelectContent>
@@ -105,7 +105,7 @@ export const Filters = () => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Tasks</SelectItem>
-          {options.tasks.map((t: string) => (
+          {(options?.tasks ?? []).map((t: string) => (
             <SelectItem key={t} value={t}>{t}</SelectItem>
           ))}
         </SelectContent>
@@ -122,7 +122,7 @@ export const Filters = () => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Steps</SelectItem>
-          {options.steps.map((s: string) => (
+          {(options?.steps ?? []).map((s: string) => (
             <SelectItem key={s} value={s}>{s}</SelectItem>
           ))}
         </SelectContent>
@@ -135,7 +135,7 @@ export const Filters = () => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Sub-steps</SelectItem>
-          {options.subSteps.map((s: string) => (
+          {(options?.subSteps ?? []).map((s: string) => (
             <SelectItem key={s} value={s}>{s}</SelectItem>
           ))}
         </SelectContent>

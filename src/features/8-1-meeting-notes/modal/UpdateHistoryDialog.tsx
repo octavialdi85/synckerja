@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { ScrollArea } from '@/features/ui/scroll-area';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -25,6 +26,7 @@ interface UpdateHistoryDialogProps {
 }
 
 const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, solutionId }: UpdateHistoryDialogProps) => {
+  const { toast } = useToast();
   const { getUpdateHistoryByMeetingPoint, getUpdateHistory, addUpdate, updateUpdate, deleteUpdate, getIssueHistory } = useMeetingNotes();
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
@@ -42,8 +44,12 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
   useEffect(() => {
     if (isOpen && meetingPointId) {
       if (!solutionId) {
-        // Only load issues if not called from IssuesDialog (no solutionId)
-        loadIssues();
+        // Only load issues if not called from IssuesDialog (no solutionId); set first issue after load to avoid stale closure
+        loadIssues().then((issuesData) => {
+          if (issuesData && issuesData.length > 0) {
+            setSelectedIssueId(issuesData[0].id);
+          }
+        });
       }
       loadSolutions();
       // Don't load update history here, let the other useEffect handle it after solutions are loaded
@@ -90,17 +96,18 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIssueId, selectedSolutionId, allSolutions.length]);
 
-  const loadIssues = async () => {
+  const loadIssues = async (): Promise<any[] | undefined> => {
     try {
       const issuesData = await getIssueHistory(meetingPointId);
       setIssues(issuesData);
-      
-      // Auto-select first issue if available
-      if (issuesData.length > 0 && !selectedIssueId) {
-        setSelectedIssueId(issuesData[0].id);
-      }
+      return issuesData;
     } catch {
-      // Load issues failed
+      toast({
+        title: 'Error',
+        description: 'Failed to load issues',
+        variant: 'destructive'
+      });
+      return undefined;
     }
   };
 
@@ -130,7 +137,11 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         // Don't auto-select here, let the useEffect handle it
       }
     } catch {
-      // Load solutions failed
+      toast({
+        title: 'Error',
+        description: 'Failed to load solutions',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -167,7 +178,11 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         setUpdateHistory(history);
       }
     } catch {
-      // Load update history failed
+      toast({
+        title: 'Error',
+        description: 'Failed to load update history',
+        variant: 'destructive'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +213,11 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       setNewUpdate('');
       setNewStatus('');
     } catch {
-      // Add update failed
+      toast({
+        title: 'Error',
+        description: 'Failed to add update',
+        variant: 'destructive'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -231,7 +250,11 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       setEditingUpdateId(null);
       setEditingText('');
     } catch {
-      // Update failed
+      toast({
+        title: 'Error',
+        description: 'Failed to update',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -251,7 +274,11 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       // Reload update history
       await loadUpdateHistory();
     } catch {
-      // Delete update failed
+      toast({
+        title: 'Error',
+        description: 'Failed to delete update',
+        variant: 'destructive'
+      });
     }
   };
 

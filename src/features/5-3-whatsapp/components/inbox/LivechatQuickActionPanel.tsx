@@ -11,6 +11,7 @@ import { LeadStatusSelect } from '@/features/5-3-leads-management/LeadStatusSele
 import { useServices } from '@/features/6-1-ProductKnowledge/hooks/useServices';
 import { useSubServices } from '@/features/6-1-ProductKnowledge/hooks/useSubServices';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import { Plus, User, Clock, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
@@ -220,7 +221,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
         toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
       } catch (err) {
-        console.error('Update lead services/category:', err);
+        devLog.error('Update lead services/category:', err);
         toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
       } finally {
         setIsUpdatingLead(false);
@@ -284,7 +285,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
       toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
     } catch (err) {
-      console.error('Mark as lead:', err);
+      devLog.error('Mark as lead:', err);
       toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
     } finally {
       setIsMarkUnmarkLeadLoading(false);
@@ -300,7 +301,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       queryClient.invalidateQueries({ queryKey: ['lead-by-ticket', organizationId, ticketId] });
       toast.success(t('whatsappInbox.serviceCategorySaved', 'Service and category saved'));
     } catch (err) {
-      console.error('Unmark as lead:', err);
+      devLog.error('Unmark as lead:', err);
       toast.error(t('whatsappInbox.serviceCategorySaveFailed', 'Failed to save service and category'));
     } finally {
       setIsMarkUnmarkLeadLoading(false);
@@ -467,7 +468,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       setUpdateDetails('');
       setProspectStatus('');
     } catch (err) {
-      console.error('Error adding follow-up update:', err);
+      devLog.error('Error adding follow-up update:', err);
       toast.error(t('whatsappInbox.followUpAddFailed', 'Failed to add follow-up update'));
     } finally {
       setIsSubmitting(false);
@@ -504,7 +505,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       await queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success(t('whatsappInbox.statusUpdated', 'Status updated'));
     } catch (err) {
-      console.error('Failed to update lead status:', err);
+      devLog.error('Failed to update lead status:', err);
       toast.error(t('whatsappInbox.statusUpdateFailed', 'Failed to update status'));
     }
   };

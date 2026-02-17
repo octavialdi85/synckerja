@@ -134,7 +134,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching monthly daily_tasks:', error);
+        devLog.error('Error fetching monthly daily_tasks:', error);
         return;
       }
 
@@ -150,7 +150,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         setCreateTriggeredOnce(true);
       }
     } catch (e) {
-      console.error('maybeOpenBrandingPlanCreate error:', e);
+      devLog.error('maybeOpenBrandingPlanCreate error:', e);
     }
   };
 
@@ -173,7 +173,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error rechecking daily_tasks:', error);
+        devLog.error('Error rechecking daily_tasks:', error);
         return;
       }
 
@@ -195,7 +195,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         setCreateTriggeredOnce(false);
       }
     } catch (e) {
-      console.error('recheckOrRollbackAfterCreateClose error:', e);
+      devLog.error('recheckOrRollbackAfterCreateClose error:', e);
     }
   };
   // Use batch-checked approval access from parent if available, otherwise fallback to individual checks
@@ -231,7 +231,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         
         setConfigLoaded(true);
       } catch (error) {
-        console.error('Error checking approval visibility:', error);
+        devLog.error('Error checking approval visibility:', error);
         // On error, keep refresh icons hidden
         setRevisionConfigActive(false);
         setProductionRevisionConfigActive(false);
@@ -273,7 +273,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: profileError
       } = await supabase.from('profiles').select('active_organization_id').eq('user_id', user.id).single();
       if (profileError || !profile?.active_organization_id) {
-        console.error('Error fetching user profile:', profileError);
+        devLog.error('Error fetching user profile:', profileError);
         return false;
       }
 
@@ -291,7 +291,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: roleError
       } = await supabase.from('user_roles').select('role').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
       if (roleError || !userRole) {
-        console.error('Error fetching user role:', roleError);
+        devLog.error('Error fetching user role:', roleError);
         return false;
       }
 
@@ -301,7 +301,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: employeeError
       } = await supabase.from('employees').select('id').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
       if (employeeError || !employee) {
-        console.error('Error fetching employee:', employeeError);
+        devLog.error('Error fetching employee:', employeeError);
         return false;
       }
 
@@ -341,7 +341,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       
       return result;
     } catch (error) {
-      console.error('Error checking revision access:', error);
+      devLog.error('Error checking revision access:', error);
       return false;
     }
   };
@@ -363,7 +363,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: profileError
       } = await supabase.from('profiles').select('active_organization_id').eq('user_id', user.id).single();
       if (profileError || !profile?.active_organization_id) {
-        console.error('Error fetching user profile:', profileError);
+        devLog.error('Error fetching user profile:', profileError);
         return false;
       }
 
@@ -381,7 +381,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: roleError
       } = await supabase.from('user_roles').select('role').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
       if (roleError || !userRole) {
-        console.error('Error fetching user role:', roleError);
+        devLog.error('Error fetching user role:', roleError);
         return false;
       }
 
@@ -391,7 +391,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         error: employeeError
       } = await supabase.from('employees').select('id').eq('user_id', user.id).eq('organization_id', profile.active_organization_id).single();
       if (employeeError || !employee) {
-        console.error('Error fetching employee:', employeeError);
+        devLog.error('Error fetching employee:', employeeError);
         return false;
       }
 
@@ -431,7 +431,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       
       return result;
     } catch (error) {
-      console.error('Error checking production revision access:', error);
+      devLog.error('Error checking production revision access:', error);
       return false;
     }
   };
@@ -492,7 +492,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         return `Late ${diffDays} Day${diffDays > 1 ? 's' : ''}`;
       }
     } catch (error) {
-      console.error('Error calculating on-time status:', error);
+      devLog.error('Error calculating on-time status:', error);
       return '';
     }
   };
@@ -684,7 +684,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         onFieldChange(plan.id, 'production_approved_date', batchUpdates.production_approved_date);
       }
     } catch (error) {
-      console.error('Error updating production approved:', error);
+      devLog.error('Error updating production approved:', error);
       toast({
         variant: "destructive",
         title: "Error",

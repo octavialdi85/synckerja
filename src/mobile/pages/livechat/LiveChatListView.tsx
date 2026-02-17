@@ -21,6 +21,9 @@ interface LiveChatListViewProps {
   accountOptions: { value: string; label: string }[];
   accountFilter: AccountFilterValue;
   setAccountFilter: (v: AccountFilterValue) => void;
+  statusFilter: string;
+  setStatusFilter: (v: string) => void;
+  statusOptions: { value: string; label: string }[];
   initialTicketId: string | null;
   onSelectConversation: (conv: LiveChatConversation) => void;
   /** When true, show banner that the ticket_id in URL was not found. */
@@ -35,6 +38,9 @@ export function LiveChatListView({
   accountOptions,
   accountFilter,
   setAccountFilter,
+  statusFilter,
+  setStatusFilter,
+  statusOptions,
   initialTicketId,
   onSelectConversation,
   invalidTicketId = false,
@@ -55,23 +61,51 @@ export function LiveChatListView({
           <AppSidebar />
 
           <main className="flex-1 bg-background overflow-x-hidden flex flex-col" style={{ height: '100vh' }}>
-            <div className="sticky top-0 z-30 flex flex-col gap-2 p-3 bg-card border-b border-border flex-shrink-0">
+            <div className="sticky top-0 z-30 flex flex-col gap-2 p-2 bg-card border-b border-border flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />
                 <div className="flex-1 min-w-0">
                   <h1 className="text-base font-semibold text-foreground">Live Chat</h1>
-                  <p className="text-xs text-muted-foreground">{t('sidebar.operations.livechat.description', 'Inbox dan percakapan WhatsApp')}</p>
+                  <p className="text-xs text-muted-foreground truncate">{t('sidebar.operations.livechat.description', 'Inbox dan percakapan WhatsApp')}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex w-full items-center gap-1.5 min-w-0">
+                <Select
+                  value={accountFilter || 'all'}
+                  onValueChange={(v) => setAccountFilter((v === 'all' ? '' : v) as AccountFilterValue)}
+                >
+                  <SelectTrigger className="h-8 flex-1 min-w-0 px-2 text-sm font-medium border border-input bg-background" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
+                    <SelectValue placeholder={t('whatsappInbox.filterByAccount', 'Filter menurut akun')} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
+                    {accountOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 flex-1 min-w-0 px-2 text-sm font-medium border border-input bg-background" aria-label={t('whatsappInbox.filterByStatus', 'Filter menurut status')}>
+                    <SelectValue placeholder={t('whatsappInbox.status', 'Status')} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
+                    {statusOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <button
                   type="button"
                   onClick={() => setSearchPopupOpen(true)}
-                  className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-input bg-background text-sm text-muted-foreground"
+                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-md border border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title={t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}
+                  aria-label={t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}
                 >
-                  <Search className="h-4 w-4 shrink-0" />
-                  <span>{t('whatsappInbox.searchConversations', 'Cari percakapan atau orang')}</span>
+                  <Search className="h-4 w-4" />
                 </button>
               </div>
 
@@ -94,22 +128,6 @@ export function LiveChatListView({
                   </div>
                 </DialogContent>
               </Dialog>
-
-              <Select
-                value={accountFilter || 'all'}
-                onValueChange={(v) => setAccountFilter((v === 'all' ? '' : v) as AccountFilterValue)}
-              >
-                <SelectTrigger className="w-full h-9 text-sm font-medium border-gray-200 bg-white" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
-                  <SelectValue placeholder={t('whatsappInbox.filterByAccount', 'Filter menurut akun')} />
-                </SelectTrigger>
-                <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
-                  {accountOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             {invalidTicketId && (

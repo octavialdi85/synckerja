@@ -17,9 +17,8 @@ import { ObjectiveCheckinForm } from './CompanyObjectivesDetailViewImport/Object
 import { DeleteIndividualObjectiveDialog } from './DeleteIndividualObjectiveDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/features/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/features/ui/dropdown-menu';
+import { useToast } from '@/features/ui/use-toast';
 interface IndividualObjectivesViewProps {
   organizationId: string;
   cycleId?: string;
@@ -60,7 +59,7 @@ export const IndividualObjectivesView = ({
     data: employees = [],
     isLoading: loadingEmployees
   } = useEmployees();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Filter out terminated employees
   const activeEmployees = useMemo(() => {
@@ -84,55 +83,12 @@ export const IndividualObjectivesView = ({
     data: individualObjectives = [],
     isLoading: loadingObjectives
   } = useObjectives(organizationId, finalCycleId, 'individual');
-  
-  // Memoize debug logging to prevent excessive console output
-  const debugInfo = useMemo(() => ({
-    organizationId,
-    cycleId,
-    cycleIds,
-    finalCycleId,
-    finalCycleIds,
-    individualObjectivesCount: individualObjectives.length,
-    loadingObjectives,
-    individualObjectives: individualObjectives.map(obj => ({
-      id: obj.id,
-      title: obj.title,
-      employee_id: obj.employee_id,
-      cycle_id: obj.cycle_id,
-      hasKeyResults: obj.key_results && obj.key_results.length > 0,
-      keyResultsCount: obj.key_results ? obj.key_results.length : 0
-    }))
-  }), [organizationId, cycleId, cycleIds, finalCycleId, finalCycleIds, individualObjectives, loadingObjectives]);
-
-  // Only log when debug info changes significantly
-  useEffect(() => {
-    // console.log('🔍 IndividualObjectivesView - After useObjectives:', debugInfo);
-  }, [debugInfo]);
 
   // Get department objectives for showing as key results in Department tab
   const {
     data: departmentObjectives = []
   } = useDepartmentObjectives(organizationId, finalCycleIds);
 
-  // Set up real-time subscriptions for instant updates
-  useEffect(() => {
-    if (!organizationId) return;
-    const channels = [
-    // Subscribe to individual objectives changes
-    supabase.channel('individual-objectives-changes').on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'individual_objectives',
-      filter: `organization_id=eq.${organizationId}`
-    }, () => {
-      queryClient.invalidateQueries({
-        queryKey: ['individual-objectives']
-      });
-    }).subscribe()];
-    return () => {
-      channels.forEach(channel => supabase.removeChannel(channel));
-    };
-  }, [organizationId, queryClient]);
   const {
     departments = [],
     isLoading: loadingDepartments
@@ -142,7 +98,15 @@ export const IndividualObjectivesView = ({
     setSelectedEmployee(employeeId);
     setIsCreateModalOpen(true);
   };
-  const handleAddContribution = (departmentId: string) => {
+  const handleAddContribution = (departmentId: string | undefined) => {
+    if (!departmentId) {
+      toast({
+        title: 'Cannot add contribution',
+        description: 'Employee has no department assigned. Please assign a department first.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSelectedDepartmentId(departmentId);
     setShowContributionModal(true);
   };
@@ -199,17 +163,10 @@ export const IndividualObjectivesView = ({
       
       if (keyResult.metric_type === 'number') {
         // For numerical metrics, calculate percentage: (current_value / target_value) * 100
-        const currentValue = keyResult.current_value || 0;
-        const targetValue = keyResult.target_value || 1;
-        const calculatedProgress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
-        
-        // console.log('📊 Numerical Metric Progress:', {
-        //   currentValue,
-        //   targetValue,
-        //   calculatedProgress
-        // });
-        
-        return calculatedProgress;
+        const currentValue = keyResult.current_value ?? 0;
+        const targetValue = keyResult.target_value ?? 0;
+        if (targetValue <= 0) return 0;
+        return (currentValue / targetValue) * 100;
       } else {
         // For percentage metrics, use progress_percentage from key_results
         const progressPercentage = keyResult.progress_percentage || 0;
@@ -285,12 +242,16 @@ export const IndividualObjectivesView = ({
   }, [individualObjectives]);
 
   if (loadingEmployees || loadingObjectives || loadingDepartments) {
-    return <div className="flex items-center justify-center p-6">
-        <div className="text-center flex flex-col items-center gap-2">
-          <LoadingDots size="md" />
-          <p className="text-sm text-gray-600">Loading objectives...</p>
+    return (
+      <div className="flex items-center justify-center p-6">
+        <div className="w-full max-w-md space-y-3 animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-3/4" />
+          <div className="h-20 bg-gray-100 rounded" />
+          <div className="h-20 bg-gray-100 rounded" />
+          <div className="h-20 bg-gray-100 rounded" />
         </div>
-      </div>;
+      </div>
+    );
   }
   const getDepartmentName = (departmentId: string) => {
     const department = departments.find(d => d.id === departmentId);
@@ -318,7 +279,13 @@ export const IndividualObjectivesView = ({
                     </div>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-48 bg-white shadow-lg border z-50">
-                    <DropdownMenuItem className="flex items-center">
+                    <DropdownMenuItem
+                      className="flex items-center"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCreateActivity(objective.id, objective.title, (objective as any).employee_id ?? '');
+                      }}
+                    >
                       <Calendar className="h-4 w-4 mr-2" />
                       Create Activity
                     </DropdownMenuItem>

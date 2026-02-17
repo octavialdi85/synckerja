@@ -10,19 +10,23 @@ import {
   MeetingSidebarFooter
 } from './section';
 import { MeetingNotesProvider, useMeetingNotes } from './MeetingNotesContext';
+import { matchesTimeFilter } from './utils/meetingNotesFilters';
 
 const MeetingNotesContent = () => {
   const { meetingPoints, filters } = useMeetingNotes();
 
   // Filter meeting points based on filters
   const filteredPoints = meetingPoints.filter(point => {
-    if (filters.search && !point.discussion_point.toLowerCase().includes(filters.search.toLowerCase())) {
+    if (filters.search && !(point.discussion_point ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }
     if (filters.status && point.status !== filters.status) {
       return false;
     }
     if (filters.requestBy && point.request_by !== filters.requestBy) {
+      return false;
+    }
+    if (!matchesTimeFilter(point.meeting_date, filters.timeFilter)) {
       return false;
     }
     return true;
@@ -70,8 +74,8 @@ const MeetingNotesContent = () => {
                         </div>
 
                         {/* Scrollable Table Content */}
-                        <div className="flex-1 min-h-0 overflow-hidden">
-                          <div className="h-full p-4">
+                        <div className="flex-1 min-h-0 overflow-hidden max-h-[calc(100vh-120px)]">
+                          <div className="h-full p-4 overflow-y-auto overflow-x-auto seamless-scroll">
                             <MeetingPointsTable />
                           </div>
                         </div>
@@ -95,7 +99,7 @@ const MeetingNotesContent = () => {
                         </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+                      <div className="flex-1 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] p-4">
                         <MeetingSummaryCards />
                       </div>
 

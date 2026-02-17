@@ -12,15 +12,17 @@ import { SalesActivitiesActionsDropdown } from './SalesActivitiesActionsDropdown
 import { SalesActivitiesTableFooter } from './SalesActivitiesTableFooter';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { LoadingDots } from '@/components/LoadingDots';
+import { devLog } from '@/config/logger';
+import type { SalesActivity } from '@/hooks/organized/sales';
 
 interface SalesActivitiesTableProps {
-  activities: any[];
+  activities: SalesActivity[];
   loading: boolean;
   onUpdate: () => void;
-  onEdit: (activity: any) => void;
-  onDelete: (activity: any) => void;
-  onUpdatePayment: (activity: any) => void;
-  onCheckHistory: (activity: any) => void;
+  onEdit: (activity: SalesActivity) => void;
+  onDelete: (activity: SalesActivity) => void;
+  onUpdatePayment: (activity: SalesActivity) => void;
+  onCheckHistory: (activity: SalesActivity) => void;
   selectedStatus?: string;
 }
 
@@ -81,14 +83,14 @@ const ActivityRow = memo(({
   onUpdatePayment,
   onCheckHistory
 }: {
-  activity: any;
-  onEdit: (activity: any) => void;
-  onDelete: (activity: any) => void;
-  onUpdatePayment: (activity: any) => void;
-  onCheckHistory: (activity: any) => void;
+  activity: SalesActivity;
+  onEdit: (activity: SalesActivity) => void;
+  onDelete: (activity: SalesActivity) => void;
+  onUpdatePayment: (activity: SalesActivity) => void;
+  onCheckHistory: (activity: SalesActivity) => void;
 }) => {
   const handleViewDetails = useCallback(() => {
-    console.log('View details:', activity);
+    devLog.debug('View details:', activity);
   }, [activity]);
 
   const handleEdit = useCallback(() => {

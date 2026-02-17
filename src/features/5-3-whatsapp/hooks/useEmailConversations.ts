@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { devLog } from '@/config/logger';
+import { toast } from 'sonner';
 import type { EmailConversation } from '../types';
 
 const QUERY_KEY = ['email-conversations'] as const;
@@ -10,6 +12,7 @@ export function useEmailConversations() {
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelErrorToastShownRef = useRef(false);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -18,6 +21,7 @@ export function useEmailConversations() {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+    channelErrorToastShownRef.current = false;
     channelRef.current = supabase
       .channel(channelName)
       .on(
@@ -41,7 +45,15 @@ export function useEmailConversations() {
           queryClient.invalidateQueries({ queryKey: QUERY_KEY });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          devLog.warn('Email conversations realtime channel error', status);
+          if (!channelErrorToastShownRef.current) {
+            channelErrorToastShownRef.current = true;
+            toast.warning('Koneksi realtime terganggu');
+          }
+        }
+      });
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
@@ -62,5 +74,6 @@ export function useEmailConversations() {
       return (data ?? []) as EmailConversation[];
     },
     refetchInterval: 10000,
+    staleTime: 30_000,
   });
 }

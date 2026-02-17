@@ -18,6 +18,7 @@ import {
 } from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useToast } from '@/features/ui/use-toast';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { format, startOfMonth } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
@@ -35,6 +36,7 @@ interface TaskFiltersProps {
 
 export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFiltersProps = {}) => {
   const { t } = useAppTranslation();
+  const { toast } = useToast();
   const { filters, setFilters, tasks, refetchTasks, resetFilters, highlightFromPendingApproval } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
@@ -502,7 +504,11 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
         size="sm"
         onClick={async () => {
           resetFilters();
-          await refetchTasks();
+          try {
+            await refetchTasks();
+          } catch {
+            toast({ title: 'Error', description: 'Failed to refresh tasks', variant: 'destructive' });
+          }
         }}
         className={`shrink-0 h-8 w-8 p-0 ${highlightFromPendingApproval ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''}`}
         title={highlightFromPendingApproval ? t('dailyTask.filters.refreshShowAll', 'Refresh to show all tasks') : t('dailyTask.filters.refresh', 'Refresh')}

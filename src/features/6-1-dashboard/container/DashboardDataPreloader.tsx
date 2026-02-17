@@ -55,7 +55,7 @@ export const DashboardDataPreloader: React.FC<DashboardDataPreloaderProps> = ({ 
 
   if (!organizationId || !ready) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <LoadingDots size="lg" />
       </div>
     );

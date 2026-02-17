@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 
 // Shared cache for approval access checks
 const approvalCheckCache = new Map<string, { result: boolean; timestamp: number }>();
@@ -37,7 +38,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
           .single();
 
         if (profileError || !profile?.active_organization_id) {
-          console.error('Error fetching user profile:', profileError);
+          devLog.error('Error fetching user profile:', profileError);
           return false;
         }
 
@@ -58,7 +59,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
           .single();
 
         if (roleError || !userRole) {
-          console.error('Error fetching user role:', roleError);
+          devLog.error('Error fetching user role:', roleError);
           return false;
         }
 
@@ -71,7 +72,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
           .single();
 
         if (employeeError || !employee) {
-          console.error('Error fetching employee:', employeeError);
+          devLog.error('Error fetching employee:', employeeError);
           return false;
         }
 
@@ -104,7 +105,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
 
         return result;
       } catch (error) {
-        console.error('Error checking approval access:', error);
+        devLog.error('Error checking approval access:', error);
         return false;
       }
     };
@@ -123,7 +124,7 @@ export const useBatchApprovalAccess = (): ApprovalAccess => {
           loading: false
         });
       } catch (error) {
-        console.error('Error fetching approval access:', error);
+        devLog.error('Error fetching approval access:', error);
         setAccess({
           approved: false,
           prodApproved: false,

@@ -38,21 +38,25 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
   const deferredRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const refresh = useCallback(async () => {
     if (!organizationId || !currentEmployee?.id) {
+      if (!isMountedRef.current) return;
       setPending([]);
       setRejected([]);
       setLoading(false);
       setFetchError(null);
       return;
     }
+    if (!isMountedRef.current) return;
     setLoading(true);
     setFetchError(null);
     const [pendingRes, rejectedRes] = await Promise.all([
       fetchPendingApprovalsForAssigner(organizationId, currentEmployee.id),
       fetchRejectedForAssignee(organizationId, currentEmployee.id),
     ]);
+    if (!isMountedRef.current) return;
     if (!pendingRes.error) setPending(filterPendingExcludingProdApproved(pendingRes.data));
     else console.warn('[useCompletionApprovals] Fetch pending approvals failed:', pendingRes.error.message);
     if (!rejectedRes.error) {
@@ -66,12 +70,14 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
       });
       setRejected(deduped);
     } else console.warn('[useCompletionApprovals] Fetch rejected for assignee failed:', rejectedRes.error.message);
+    if (!isMountedRef.current) return;
     setFetchError(pendingRes.error ?? rejectedRes.error ?? null);
     setLoading(false);
   }, [organizationId, currentEmployee?.id, ...refreshDeps]);
 
   useEffect(() => {
     if (!organizationId || !currentEmployee?.id) return;
+    isMountedRef.current = true;
     if (deferredRef.current) {
       refresh();
       return;
@@ -80,7 +86,10 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
     const t = setTimeout(() => {
       refresh();
     }, DEFER_APPROVAL_FETCH_MS);
-    return () => clearTimeout(t);
+    return () => {
+      isMountedRef.current = false;
+      clearTimeout(t);
+    };
   }, [organizationId, currentEmployee?.id, refresh]);
 
   const approve = useCallback(

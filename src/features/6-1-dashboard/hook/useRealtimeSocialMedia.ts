@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useSyncPicProduction } from './useSyncPicProduction';
 
@@ -48,7 +50,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `social_media_plan_id=in.(select id from social_media_plans where organization_id='${organizationId}')`
         },
         (payload) => {
-          console.log('📡 Social media links changed:', payload.eventType);
+          devLog.debug('Social media links changed:', payload.eventType);
           
           // Smart cache update - invalidate social media plans and all-social-media-links
           queryClient.invalidateQueries({ 
@@ -66,7 +68,7 @@ export const useRealtimeSocialMedia = () => {
             refetchType: 'active' // Force refetch for active calendar queries
           });
           
-          console.log('✅ Links cache invalidated');
+          devLog.debug('Links cache invalidated');
         }
       )
       .on(
@@ -78,7 +80,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Approval configurations changed:', payload.eventType);
+          devLog.debug('Approval configurations changed:', payload.eventType);
           
           // Invalidate approval configurations and related data
           queryClient.invalidateQueries({ 
@@ -99,7 +101,7 @@ export const useRealtimeSocialMedia = () => {
           table: 'employees'
         },
         (payload) => {
-          console.log('📡 Employees changed:', payload.eventType);
+          devLog.debug('Employees changed:', payload.eventType);
           
           // Invalidate employee data and related social media data
           queryClient.invalidateQueries({ 
@@ -121,7 +123,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Content pillars update:', payload.eventType);
+          devLog.debug('Content pillars update:', payload.eventType);
           
           // Invalidate master data and pillar data
           queryClient.invalidateQueries({ 
@@ -143,7 +145,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Meeting points update:', payload.eventType);
+          devLog.debug('Meeting points update:', payload.eventType);
           
           // Smart invalidation for meeting points
           queryClient.invalidateQueries({ 
@@ -161,7 +163,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Meeting point updates update:', payload.eventType);
+          devLog.debug('Meeting point updates update:', payload.eventType);
           
           // Smart invalidation for meeting point updates
           queryClient.invalidateQueries({ 
@@ -179,7 +181,7 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          console.log('📡 Motivations update:', payload.eventType);
+          devLog.debug('Motivations update:', payload.eventType);
           
           // Smart invalidation for motivations
           queryClient.invalidateQueries({ 
@@ -212,19 +214,19 @@ export const useRealtimeSocialMedia = () => {
           table: 'task_steps_assigned'
         },
         async (payload) => {
-          console.log('📡 Task step assignment changed:', payload.eventType);
+          devLog.debug('Task step assignment changed:', payload.eventType);
           
           // IMPORTANT: Jangan auto-sync PIC saat INSERT (flow APPROVED)
           // Flow TITLE akan memanggil syncPicProduction secara eksplisit.
           if (payload.eventType === 'INSERT') {
-            // Tetap invalidate queries agar UI aware, tapi skip sync PIC
+            // Invalidate without forcing refetch to avoid loading flicker
             queryClient.invalidateQueries({ 
               queryKey: ['task-steps-assignments'],
-              refetchType: 'active'
+              refetchType: 'none'
             });
             queryClient.invalidateQueries({ 
               queryKey: ['social-media-plans', organizationId],
-              refetchType: 'active'
+              refetchType: 'none'
             });
             return;
           }
@@ -259,23 +261,23 @@ export const useRealtimeSocialMedia = () => {
                       planData.pic_production_source
                     );
                   } catch (error) {
-                    console.error('Error syncing pic_production_id in realtime:', error);
+                    devLog.error('Error syncing pic_production_id in realtime:', error);
                   }
                 }
               }
             } catch (error) {
-              console.error('Error processing task_steps_assigned change:', error);
+              devLog.error('Error processing task_steps_assigned change:', error);
             }
           }
           
-          // Invalidate queries
+          // Invalidate without forcing refetch
           queryClient.invalidateQueries({ 
             queryKey: ['task-steps-assignments'],
-            refetchType: 'active'
+            refetchType: 'none'
           });
           queryClient.invalidateQueries({ 
             queryKey: ['social-media-plans', organizationId],
-            refetchType: 'active'
+            refetchType: 'none'
           });
         }
       )
@@ -287,7 +289,7 @@ export const useRealtimeSocialMedia = () => {
           table: 'task_steps'
         },
         async (payload) => {
-          console.log('📡 Task step deleted:', payload.eventType);
+          devLog.debug('Task step deleted:', payload.eventType);
           
           // When task_step is deleted, check if we need to update pic_production_id
           if (payload.old?.social_media_plan_id) {
@@ -311,29 +313,29 @@ export const useRealtimeSocialMedia = () => {
                     planData.pic_production_source
                   );
                 } catch (error) {
-                  console.error('Error syncing pic_production_id after step deletion:', error);
+                  devLog.error('Error syncing pic_production_id after step deletion:', error);
                 }
               }
             } catch (error) {
-              console.error('Error processing task_steps deletion:', error);
+              devLog.error('Error processing task_steps deletion:', error);
             }
           }
           
-          // Invalidate queries
+          // Invalidate without forcing refetch
           queryClient.invalidateQueries({ 
             queryKey: ['task-steps-assignments'],
-            refetchType: 'active'
+            refetchType: 'none'
           });
           queryClient.invalidateQueries({ 
             queryKey: ['social-media-plans', organizationId],
-            refetchType: 'active'
+            refetchType: 'none'
           });
         }
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime connection error - attempting to reconnect...');
-          // Auto-reconnect logic
+          devLog.error('Realtime connection error - attempting to reconnect...');
+          toast.warning('Connection lost. Refresh the page to reconnect.');
           setTimeout(() => {
             if (channelRef.current) {
               supabase.removeChannel(channelRef.current);

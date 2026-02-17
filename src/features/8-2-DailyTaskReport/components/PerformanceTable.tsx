@@ -205,7 +205,7 @@ export const PerformanceTable = () => {
       // Update using id as the WHERE clause (primary key - more efficient)
       const { data, error } = await supabase
         .from('task_step_history_blocker_resolved')
-        .update({ description: editResolutionText.trim() })
+        .update({ resolution_description: editResolutionText.trim() })
         .eq('id', editingRow.id)
         .select()
         .single();
@@ -354,7 +354,7 @@ export const PerformanceTable = () => {
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Task</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Step</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ minWidth: '150px' }}>Sub Step</th>
-                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Blocker</th>
+                <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }} title="Blocker data may be temporarily unavailable.">Blocker</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '140px', minWidth: '140px' }}>Assigned At</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '100px', minWidth: '100px' }}>Due Date</th>
                 <th className="text-left px-3 py-2 bg-gray-50" style={{ width: '160px', minWidth: '160px' }}>Finished</th>

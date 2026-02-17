@@ -1,17 +1,15 @@
 interface PasswordListFooterProps {
   totalPasswords: number;
   filteredPasswords: number;
-  selectedCategory?: string;
+  selectedCategoryName?: string | null;
 }
 
 export const PasswordListFooter = ({ 
   totalPasswords, 
   filteredPasswords,
-  selectedCategory 
+  selectedCategoryName 
 }: PasswordListFooterProps) => {
-  const categoryText = selectedCategory && selectedCategory !== 'all' 
-    ? ` in ${selectedCategory}` 
-    : '';
+  const categoryText = selectedCategoryName ? ` in ${selectedCategoryName}` : '';
     
   return (
     <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">

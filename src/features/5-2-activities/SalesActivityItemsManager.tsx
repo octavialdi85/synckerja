@@ -6,6 +6,7 @@ import { AddItemDialog } from './AddItemDialog';
 import { ItemsTable } from './ItemsTable';
 import { useSalesActivityItems, CreateSalesActivityItemData, SalesActivityItem } from '@/hooks/organized/sales';
 import { useToast } from '@/features/ui/use-toast';
+import { devLog } from '@/config/logger';
 
 interface SalesActivityItemsManagerProps {
   salesActivityId?: string;
@@ -77,7 +78,12 @@ export const SalesActivityItemsManager = React.forwardRef<SalesActivityItemsMana
           description: "Draft items have been saved to the database",
         });
       } catch (error) {
-        console.error('Failed to sync draft items:', error);
+        devLog.error('Failed to sync draft items:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save draft items.",
+          variant: "destructive",
+        });
       }
     };
 

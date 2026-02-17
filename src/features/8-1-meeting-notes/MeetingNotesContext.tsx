@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -95,7 +95,6 @@ interface MeetingNotesContextType {
   updateIssue: (issueId: string, issueDescription: string) => Promise<void>;
   updateIssueNotes: (issueId: string, notes: string) => Promise<void>;
   deleteIssue: (issueId: string) => Promise<void>;
-  getIssueCount: (meetingPointId: string) => number;
   getSolutionHistory: (meetingPointId: string) => Promise<MeetingPointSolution[]>;
   addSolution: (issueId: string, meetingPointId: string, solutionDescription: string) => Promise<void>;
   updateSolution: (solutionId: string, solutionDescription: string) => Promise<void>;
@@ -131,6 +130,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
   });
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
+  const isActiveRef = useRef(true);
 
   // Centralized fetch functions
   const fetchMeetingPoints = async () => {
@@ -152,9 +152,11 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (isDev) {
         logger.query('Fetched meeting points:', data);
       }
+      if (!isActiveRef.current) return;
       setMeetingPoints(data || []);
     } catch (error) {
-      console.error('Error fetching meeting points:', error);
+      logger.error('Error fetching meeting points:', error);
+      if (!isActiveRef.current) return;
       toast({
         title: 'Error',
         description: 'Failed to load meeting points',
@@ -176,6 +178,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (solutionsError) throw solutionsError;
 
       if (!solutions || solutions.length === 0) {
+        if (!isActiveRef.current) return;
         setRecentUpdates([]);
         return;
       }
@@ -191,9 +194,15 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         .limit(20);
 
       if (error) throw error;
+      if (!isActiveRef.current) return;
       setRecentUpdates(data || []);
     } catch (error) {
-      console.error('Error fetching recent updates:', error);
+      logger.error('Error fetching recent updates:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load recent updates',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -239,7 +248,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       // Refresh data immediately
       await fetchMeetingPoints();
     } catch (error) {
-      console.error('Error adding meeting point:', error);
+      logger.error('Error adding meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to add meeting point',
@@ -249,6 +258,14 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
   };
 
   const updateMeetingPoint = async (id: string, data: Partial<MeetingPoint>) => {
+    if (!organizationId) {
+      toast({
+        title: 'Error',
+        description: 'Organization not loaded',
+        variant: 'destructive'
+      });
+      return;
+    }
     try {
       const { error } = await supabase
         .from('meeting_points')
@@ -265,7 +282,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       // Refresh data immediately
       await fetchMeetingPoints();
     } catch (error) {
-      console.error('Error updating meeting point:', error);
+      logger.error('Error updating meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to update meeting point',
@@ -275,6 +292,14 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
   };
 
   const deleteMeetingPoint = async (id: string) => {
+    if (!organizationId) {
+      toast({
+        title: 'Error',
+        description: 'Organization not loaded',
+        variant: 'destructive'
+      });
+      return;
+    }
     try {
       const { error } = await supabase
         .from('meeting_points')
@@ -291,7 +316,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       // Refresh data immediately
       await fetchMeetingPoints();
     } catch (error) {
-      console.error('Error deleting meeting point:', error);
+      logger.error('Error deleting meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete meeting point',
@@ -311,7 +336,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching update history:', error);
+      logger.error('Error fetching update history:', error);
       toast({
         title: 'Error',
         description: 'Failed to load update history',
@@ -347,7 +372,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching update history by meeting point:', error);
+      logger.error('Error fetching update history by meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to load update history',
@@ -399,7 +424,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Update added successfully'
       });
     } catch (error) {
-      console.error('Error adding update:', error);
+      logger.error('Error adding update:', error);
       toast({
         title: 'Error',
         description: 'Failed to add update',
@@ -425,7 +450,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       // Refresh updates data
       await fetchRecentUpdates();
     } catch (error) {
-      console.error('Error updating update:', error);
+      logger.error('Error updating update:', error);
       toast({
         title: 'Error',
         description: 'Failed to edit update',
@@ -452,7 +477,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       // Refresh updates data
       await fetchRecentUpdates();
     } catch (error) {
-      console.error('Error deleting update:', error);
+      logger.error('Error deleting update:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete update',
@@ -466,7 +491,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     // Count updates from recentUpdates that belong to solutions of this meeting point
     // This uses the cached recentUpdates data for performance
     return recentUpdates.filter(update => {
-      const solution = (update as any).meeting_point_solutions;
+      const solution = update.meeting_point_solutions;
       return solution?.meeting_point_id === meetingPointId;
     }).length;
   };
@@ -483,7 +508,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching issue history:', error);
+      logger.error('Error fetching issue history:', error);
       toast({
         title: 'Error',
         description: 'Failed to load issue history',
@@ -515,7 +540,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Issue added successfully'
       });
     } catch (error) {
-      console.error('Error adding issue:', error);
+      logger.error('Error adding issue:', error);
       toast({
         title: 'Error',
         description: 'Failed to add issue',
@@ -539,7 +564,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Issue updated successfully'
       });
     } catch (error) {
-      console.error('Error updating issue:', error);
+      logger.error('Error updating issue:', error);
       toast({
         title: 'Error',
         description: 'Failed to update issue',
@@ -563,7 +588,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Issue notes updated successfully'
       });
     } catch (error) {
-      console.error('Error updating issue notes:', error);
+      logger.error('Error updating issue notes:', error);
       toast({
         title: 'Error',
         description: 'Failed to update issue notes',
@@ -587,7 +612,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Issue deleted successfully'
       });
     } catch (error) {
-      console.error('Error deleting issue:', error);
+      logger.error('Error deleting issue:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete issue',
@@ -595,10 +620,6 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       });
       throw error;
     }
-  };
-
-  const getIssueCount = (meetingPointId: string): number => {
-    return issues.filter(issue => issue.meeting_point_id === meetingPointId).length;
   };
 
   // ========== SOLUTIONS FUNCTIONS ==========
@@ -621,7 +642,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         issue: solution.issue ? { issue_description: solution.issue.issue_description } : undefined
       }));
     } catch (error) {
-      console.error('Error fetching solution history:', error);
+      logger.error('Error fetching solution history:', error);
       toast({
         title: 'Error',
         description: 'Failed to load solution history',
@@ -654,7 +675,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Solution added successfully'
       });
     } catch (error) {
-      console.error('Error adding solution:', error);
+      logger.error('Error adding solution:', error);
       toast({
         title: 'Error',
         description: 'Failed to add solution',
@@ -678,7 +699,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Solution updated successfully'
       });
     } catch (error) {
-      console.error('Error updating solution:', error);
+      logger.error('Error updating solution:', error);
       toast({
         title: 'Error',
         description: 'Failed to update solution',
@@ -702,7 +723,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Solution notes updated successfully'
       });
     } catch (error) {
-      console.error('Error updating solution notes:', error);
+      logger.error('Error updating solution notes:', error);
       toast({
         title: 'Error',
         description: 'Failed to update solution notes',
@@ -726,7 +747,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
         description: 'Solution deleted successfully'
       });
     } catch (error) {
-      console.error('Error deleting solution:', error);
+      logger.error('Error deleting solution:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete solution',
@@ -740,10 +761,13 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
   useEffect(() => {
     if (!organizationId) return;
 
+    isActiveRef.current = true;
+
     // Initial data fetch
     const loadData = async () => {
       setIsLoading(true);
       await Promise.all([fetchMeetingPoints(), fetchRecentUpdates()]);
+      if (!isActiveRef.current) return;
       setIsLoading(false);
     };
 
@@ -761,6 +785,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
+          if (!isActiveRef.current) return;
           if (isDev) {
             logger.realtime('Real-time meeting points update:', payload);
           }
@@ -779,6 +804,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
           table: 'meeting_point_updates'
         },
         () => {
+          if (!isActiveRef.current) return;
           fetchRecentUpdates();
           fetchMeetingPoints(); // Also refresh meeting points when updates change
         }
@@ -821,6 +847,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
     // Cleanup subscriptions
     return () => {
+      isActiveRef.current = false;
       supabase.removeChannel(meetingPointsChannel);
       supabase.removeChannel(updatesChannel);
       supabase.removeChannel(issuesChannel);
@@ -850,7 +877,6 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     updateIssue,
     updateIssueNotes,
     deleteIssue,
-    getIssueCount,
     getSolutionHistory,
     addSolution,
     updateSolution,

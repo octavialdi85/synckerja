@@ -115,11 +115,11 @@ export const menuItems: MenuItem[] = [
     hasSubSidebar: true,
     subSidebarItems: [
       {
-        title: "Customer Service",
-        titleKey: "sidebar.operations.customerService.title",
-        url: "/operations/customer-service",
-        description: "Manage customer service tickets and support",
-        descriptionKey: "sidebar.operations.customerService.description",
+        title: "CRM",
+        titleKey: "sidebar.operations.crm.title",
+        url: "/operations/consultant/leads-management",
+        description: "Manage CRM leads and consultant activities",
+        descriptionKey: "sidebar.operations.crm.description",
       },
       {
         title: "Sales",
@@ -127,13 +127,6 @@ export const menuItems: MenuItem[] = [
         url: "/operations/sales/activities",
         description: "Manage sales activities and transactions",
         descriptionKey: "sidebar.operations.sales.description",
-      },
-      {
-        title: "CRM",
-        titleKey: "sidebar.operations.crm.title",
-        url: "/operations/consultant/leads-management",
-        description: "Manage CRM leads and consultant activities",
-        descriptionKey: "sidebar.operations.crm.description",
       },
       {
         title: "Connect WhatsApp",

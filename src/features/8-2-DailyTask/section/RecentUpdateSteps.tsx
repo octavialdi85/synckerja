@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { CheckSquare, Clock, Edit, Plus, RotateCcw, Filter, Calendar, X, FilterX } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckSquare, Clock, Edit, Plus, RotateCcw, Calendar, FilterX } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Badge } from '@/features/ui/badge';
 import { Button } from '@/features/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
@@ -8,15 +9,23 @@ import { Input } from '@/features/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 
 const RecentUpdateSteps = () => {
+  const { t } = useAppTranslation();
   const { filteredTasks, filteredRecentStepUpdates, recentStepFilters, setRecentStepFilters, isLoading, navigateToTask } = useDailyTask();
   const displayUpdates = React.useMemo(() => {
-    const ids = new Set((filteredTasks || []).map((t) => t.id));
+    const ids = new Set((filteredTasks || []).map((task) => task.id));
     return (filteredRecentStepUpdates || []).filter((u) => ids.has(u.task_id));
   }, [filteredTasks, filteredRecentStepUpdates]);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [clickedUpdateId, setClickedUpdateId] = useState<string | null>(null);
 
-  const getActionIcon = (action: string, isCompleted: boolean) => {
+  // Clear click highlight after 2s; cleanup on unmount to avoid setState after unmount
+  useEffect(() => {
+    if (!clickedUpdateId) return;
+    const id = setTimeout(() => setClickedUpdateId(null), 2000);
+    return () => clearTimeout(id);
+  }, [clickedUpdateId]);
+
+  const getActionIcon = (action: string, _isCompleted: boolean) => {
     switch (action) {
       case 'completed':
         return <CheckSquare className="w-3 h-3 text-green-600" />;
@@ -30,17 +39,17 @@ const RecentUpdateSteps = () => {
     }
   };
 
-  const getActionText = (action: string, isCompleted: boolean) => {
+  const getActionText = (action: string, _isCompleted: boolean) => {
     switch (action) {
       case 'completed':
-        return 'Completed';
+        return t('dailyTask.recentUpdates.completed', 'Completed');
       case 'created':
-        return 'Created';
+        return t('dailyTask.recentUpdates.created', 'Created');
       case 'reopened':
-        return 'Reopened';
+        return t('dailyTask.recentUpdates.reopened', 'Reopened');
       case 'updated':
       default:
-        return 'Updated';
+        return t('dailyTask.recentUpdates.updated', 'Updated');
     }
   };
 
@@ -62,16 +71,12 @@ const RecentUpdateSteps = () => {
     const now = new Date();
     const date = new Date(dateString);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
+    if (diffInMinutes < 1) return t('dailyTask.recentUpdates.justNow', 'Just now');
+    if (diffInMinutes < 60) return t('dailyTask.recentUpdates.minutesAgo', '{{count}}m ago', { count: diffInMinutes });
     const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    
+    if (diffInHours < 24) return t('dailyTask.recentUpdates.hoursAgo', '{{count}}h ago', { count: diffInHours });
     const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-    
+    if (diffInDays < 7) return t('dailyTask.recentUpdates.daysAgo', '{{count}}d ago', { count: diffInDays });
     return date.toLocaleDateString();
   };
 
@@ -80,9 +85,9 @@ const RecentUpdateSteps = () => {
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <h4 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
           <Clock className="w-4 h-4" />
-          Recent Step Updates
+          {t('dailyTask.recentUpdates.title', 'Recent Step Updates')}
         </h4>
-        <div className="text-center text-gray-500 text-sm">Loading...</div>
+        <div className="text-center text-gray-500 text-sm">{t('dailyTask.recentUpdates.loading', 'Loading...')}</div>
       </div>
     );
   }
@@ -118,16 +123,8 @@ const RecentUpdateSteps = () => {
   };
 
   const handleStepUpdateClick = (update: any) => {
-    // Set visual feedback
     setClickedUpdateId(update.id);
-    
-    // Navigate to the task and expand it, including specific step if available
     navigateToTask(update.task_id, update.step_id);
-    
-    // Clear visual feedback after 2 seconds
-    setTimeout(() => {
-      setClickedUpdateId(null);
-    }, 2000);
   };
 
   if (displayUpdates.length === 0 && !isLoading) {
@@ -136,10 +133,10 @@ const RecentUpdateSteps = () => {
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
             <Clock className="w-4 h-4" />
-            Recent Step Updates
+            {t('dailyTask.recentUpdates.title', 'Recent Step Updates')}
           </h4>
         </div>
-        <div className="text-center text-gray-500 text-sm">No updates found for selected filters</div>
+        <div className="text-center text-gray-500 text-sm">{t('dailyTask.recentUpdates.noUpdates', 'No updates found for selected filters')}</div>
       </div>
     );
   }
@@ -149,28 +146,25 @@ const RecentUpdateSteps = () => {
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
           <Clock className="w-4 h-4" />
-          Recent Step Updates
+          {t('dailyTask.recentUpdates.title', 'Recent Step Updates')}
         </h4>
       </div>
 
-      {/* Filter Controls */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {/* Date Range Filter */}
         <Select value={recentStepFilters.dateRange} onValueChange={handleDateRangeChange}>
           <SelectTrigger className="h-8 text-xs w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="yesterday">Yesterday</SelectItem>
-            <SelectItem value="this_week">This Week</SelectItem>
-            <SelectItem value="this_month">This Month</SelectItem>
-            <SelectItem value="last_month">Last Month</SelectItem>
-            <SelectItem value="custom">Custom Range</SelectItem>
+            <SelectItem value="today">{t('dailyTask.recentUpdates.today', 'Today')}</SelectItem>
+            <SelectItem value="yesterday">{t('dailyTask.recentUpdates.yesterday', 'Yesterday')}</SelectItem>
+            <SelectItem value="this_week">{t('dailyTask.recentUpdates.thisWeek', 'This Week')}</SelectItem>
+            <SelectItem value="this_month">{t('dailyTask.recentUpdates.thisMonth', 'This Month')}</SelectItem>
+            <SelectItem value="last_month">{t('dailyTask.recentUpdates.lastMonth', 'Last Month')}</SelectItem>
+            <SelectItem value="custom">{t('dailyTask.recentUpdates.customRange', 'Custom Range')}</SelectItem>
           </SelectContent>
         </Select>
 
-        {/* Action Type Filter with Clear Button */}
         <div className="flex items-center gap-1">
           <Select 
             value={recentStepFilters.actionType} 
@@ -180,39 +174,36 @@ const RecentUpdateSteps = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Actions</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="updated">Updated</SelectItem>
-              <SelectItem value="created">Created</SelectItem>
-              <SelectItem value="reopened">Reopened</SelectItem>
+              <SelectItem value="all">{t('dailyTask.recentUpdates.allActions', 'All Actions')}</SelectItem>
+              <SelectItem value="completed">{t('dailyTask.recentUpdates.completed', 'Completed')}</SelectItem>
+              <SelectItem value="updated">{t('dailyTask.recentUpdates.updated', 'Updated')}</SelectItem>
+              <SelectItem value="created">{t('dailyTask.recentUpdates.created', 'Created')}</SelectItem>
+              <SelectItem value="reopened">{t('dailyTask.recentUpdates.reopened', 'Reopened')}</SelectItem>
             </SelectContent>
           </Select>
-          
-          {/* Clear Filters Button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={clearFilters}
             className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
-            title="Clear Filters"
+            title={t('dailyTask.recentUpdates.clearFilters', 'Clear Filters')}
           >
             <FilterX className="w-4 h-4" />
           </Button>
         </div>
 
-        {/* Custom Date Range Picker */}
         {recentStepFilters.dateRange === 'custom' && (
           <Popover open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 text-xs">
                 <Calendar className="w-3 h-3 mr-1" />
-                Custom Range
+                {t('dailyTask.recentUpdates.customRange', 'Custom Range')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-4">
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Start Date</label>
+                  <label className="text-sm font-medium">{t('dailyTask.recentUpdates.startDate', 'Start Date')}</label>
                   <Input
                     type="date"
                     value={recentStepFilters.customStartDate || ''}
@@ -221,7 +212,7 @@ const RecentUpdateSteps = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">End Date</label>
+                  <label className="text-sm font-medium">{t('dailyTask.recentUpdates.endDate', 'End Date')}</label>
                   <Input
                     type="date"
                     value={recentStepFilters.customEndDate || ''}
@@ -239,14 +230,14 @@ const RecentUpdateSteps = () => {
                     }}
                     disabled={!recentStepFilters.customStartDate || !recentStepFilters.customEndDate}
                   >
-                    Apply
+                    {t('dailyTask.recentUpdates.apply', 'Apply')}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setShowCustomDatePicker(false)}
                   >
-                    Cancel
+                    {t('dailyTask.recentUpdates.cancel', 'Cancel')}
                   </Button>
                 </div>
               </div>

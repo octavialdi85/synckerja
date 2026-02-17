@@ -22,7 +22,7 @@ export const EmployeePage = () => {
     search: '',
     department: 'all',
     position: 'all',
-    status: 'all',
+    status: 'active',
     employmentType: 'all',
     timePeriod: 'all'
   });
@@ -71,7 +71,7 @@ export const EmployeePage = () => {
       search: '',
       department: 'all',
       position: 'all',
-      status: 'all',
+      status: 'active',
       employmentType: 'all',
       timePeriod: 'all'
     });

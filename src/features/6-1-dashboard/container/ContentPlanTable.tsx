@@ -124,7 +124,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
       if (isChangingToNeedReview && oldStatus === 'Approved' && handleUnapproval) {
         // Status berubah dari "Approved" ke "Need Review" - hapus task_steps di background
         handleUnapproval(id).catch((error) => {
-          console.error('Error during unapproval task step deletion (table):', error);
+          devLog.error('Error during unapproval task step deletion (table):', error);
           toast.error('Failed to remove approval task');
         });
       }

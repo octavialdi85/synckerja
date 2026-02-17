@@ -270,7 +270,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .single();
         
         if (error) {
-          console.error('Error updating production status:', error);
+          devLog.error('Error updating production status:', error);
           toast.error('Failed to update production status');
         } else {
           devLog.debug('Production status updated to Need Review with completion date');
@@ -290,7 +290,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
           }
         }
       } catch (error) {
-        console.error('Error in handleClose:', error);
+        devLog.error('Error in handleClose:', error);
       }
     } else if (googleDriveLink && (!currentLink || currentLink.trim() === '')) {
       // If link was removed (had link before, but now empty), clear production_completion_date
@@ -309,7 +309,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .single();
         
         if (error) {
-          console.error('Error clearing production completion date:', error);
+          devLog.error('Error clearing production completion date:', error);
         } else {
           devLog.debug('Production completion date cleared when Google Drive link was removed');
           // Update cache with new data using correct query key
@@ -331,7 +331,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
           }
         }
       } catch (error) {
-        console.error('Error in handleClose (clearing date):', error);
+        devLog.error('Error in handleClose (clearing date):', error);
       }
     }
     onClose();
@@ -358,7 +358,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .single();
 
       if (fetchError) {
-        console.error('Error fetching current plan:', fetchError);
+        devLog.error('Error fetching current plan:', fetchError);
         toast.error('Failed to fetch current data');
         return;
       }
@@ -391,7 +391,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .single();
         
       if (error) {
-        console.error('Error updating production status for revision:', error);
+        devLog.error('Error updating production status for revision:', error);
         toast.error('Failed to update production status');
         return;
       }
@@ -478,7 +478,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         });
       }
     } catch (error) {
-      console.error('Error in handleRevision:', error);
+      devLog.error('Error in handleRevision:', error);
       toast.error('Failed to update production status');
     } finally {
       onClose();
@@ -509,14 +509,14 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         .eq('id', socialMediaPlanId);
         
       if (error) {
-        console.error('Error updating production status for approval:', error);
+        devLog.error('Error updating production status for approval:', error);
         toast.error('Failed to update production status');
       } else {
         toast.success('Production approved successfully');
         devLog.debug('Production status set to Approved, production_approved turned ON, and approved date recorded at:', approvedDate);
       }
     } catch (error) {
-      console.error('Error in handleApprove:', error);
+      devLog.error('Error in handleApprove:', error);
       toast.error('Failed to approve production');
     }
 

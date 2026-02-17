@@ -9,7 +9,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/features/ui/avatar';
 import type { LiveChatConversation } from '../../types';
 import type { WhatsAppConversation } from '../../types';
-import { MessageCircle, Check, CheckCheck, Mail, User } from 'lucide-react';
+import { MessageCircle, Check, CheckCheck, Mail, User, ListChecks } from 'lucide-react';
+import { Button } from '@/features/ui/button';
+import { devLog } from '@/config/logger';
+import { isResolvedStatus } from '../../constants/leadStatus';
 
 /** Ikon platform chat (akun terconnect). WhatsApp, Instagram, atau Email. */
 function ChannelIcon({ channel = 'whatsapp', className }: { channel?: string; className?: string }) {
@@ -251,7 +254,7 @@ export function ConversationList({
             }
           })
           .catch((err) => {
-            console.warn('Failed to update last_opened_at', err);
+            devLog.warn('Failed to update last_opened_at', err);
           });
       }
       onSelect(conv);
@@ -263,7 +266,7 @@ export function ConversationList({
     if (conv.source === 'whatsapp') {
       if (unreadByConversation[conv.id] > 0) {
         markConversationRead(conv.id).catch((err) => {
-          console.warn('Failed to mark conversation read', err);
+          devLog.warn('Failed to mark conversation read', err);
         });
       }
       supabase
@@ -276,12 +279,12 @@ export function ConversationList({
           }
         })
         .catch((err) => {
-          console.warn('Failed to update last_opened_at', err);
+          devLog.warn('Failed to update last_opened_at', err);
         });
     }
     if (conv.source === 'email' && (emailUnreadByConversation[conv.id] ?? 0) > 0) {
       markEmailConversationRead(conv.id).catch((err) => {
-        console.warn('Failed to mark conversation read', err);
+        devLog.warn('Failed to mark conversation read', err);
       });
     }
     onSelect(conv);
@@ -295,9 +298,17 @@ export function ConversationList({
     );
   }
   if (error) {
+    const handleRetry = () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['instagram-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['email-conversations'] });
+    };
     return (
-      <div className="p-4 text-sm text-red-600">
-        Failed to load conversations.
+      <div className="p-4 text-sm text-red-600 flex flex-col items-center justify-center gap-3">
+        <span>{t('whatsappInbox.failedToLoadConversations', 'Failed to load conversations.')}</span>
+        <Button variant="outline" size="sm" onClick={handleRetry}>
+          {t('common.retry', 'Coba lagi')}
+        </Button>
       </div>
     );
   }
@@ -349,6 +360,8 @@ export function ConversationList({
     <ul className="divide-y divide-gray-100">
       {filteredConversations.map((conv) => {
         const isEmail = conv.source === 'email';
+        const leadStatusName = (conv as { lead_status_name?: string | null }).lead_status_name ?? null;
+        const isResolved = isResolvedStatus(leadStatusName);
         const unread = isEmail ? (emailUnreadByConversation[conv.id] ?? 0) : (unreadByConversation[conv.id] ?? 0);
         const displayName = isEmail
           ? (conv.from_display_name || emailToDisplayLabel(conv.from_email) || conv.from_email || conv.email_connection_display || 'Email')
@@ -371,6 +384,11 @@ export function ConversationList({
                 {displayName}
               </span>
               <div className="flex items-center gap-2 shrink-0">
+                {isResolved && (
+                  <span className="text-blue-600 shrink-0" title={t('whatsappInbox.chatResolvedNoActions', 'Chat sudah di-resolve')}>
+                    <ListChecks className="w-4 h-4" />
+                  </span>
+                )}
                 {unread > 0 && (
                   <span className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-xs font-medium flex items-center justify-center ${isEmail ? 'bg-blue-600' : 'bg-green-600'}`}>
                     {unread > 99 ? '99+' : unread}
@@ -401,8 +419,8 @@ export function ConversationList({
                 <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
               )}
               {isEmail ? (
-                <span className="flex items-center gap-1.5 shrink-0 min-w-0" title="Email">
-                  <ChannelIcon channel="email" className="w-4 h-4 text-blue-600" />
+                <span className="text-xs text-gray-400 truncate max-w-[140px] shrink-0 min-w-0 text-right" title={conv.email_connection_display ?? undefined}>
+                  {conv.email_connection_display ?? '—'}
                 </span>
               ) : conv.source === 'instagram'
                 ? (conv.instagram_account_display_name ? (

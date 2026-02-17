@@ -49,7 +49,7 @@ const MeetingFilters = () => {
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center gap-2">
         <Calendar className="w-5 h-5 text-blue-600" />
-        <span className="text-lg font-medium text-gray-900">July 6, 2025</span>
+        <span className="text-lg font-medium text-gray-900">{new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
       </div>
       <div className="flex items-center gap-3">
       <div className="relative flex-1 max-w-md">
@@ -102,8 +102,8 @@ const MeetingFilters = () => {
           <DropdownMenuItem onClick={() => handleRequestByFilter('All Request By')}>
             All Request By
           </DropdownMenuItem>
-          {uniqueRequestBy.map((name) => (
-            <DropdownMenuItem key={name} onClick={() => handleRequestByFilter(name!)}>
+          {uniqueRequestBy.map((name, index) => (
+            <DropdownMenuItem key={name ?? `request-by-${index}`} onClick={() => handleRequestByFilter(name!)}>
               {name}
             </DropdownMenuItem>
           ))}

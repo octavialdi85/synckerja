@@ -105,21 +105,20 @@ export const useOptimizedSocialMediaMutations = () => {
             }
           );
           
-          // Also invalidate queries to ensure UI updates immediately
-          // Use 'active' to force refetch for active queries to ensure real-time updates
+          // Invalidate without forcing refetch; UI is already correct from setQueryData above.
           queryClient.invalidateQueries({ 
             queryKey: ['social-media-plans', organizationId],
-            refetchType: 'active' // Force refetch for active queries to ensure real-time updates
+            refetchType: 'none'
           });
           
-          // If done status or actual_post_date changed, also invalidate all-social-media-links for ContentPostTab
+          // If done status or actual_post_date changed, invalidate all-social-media-links (no forced refetch)
           const doneChanged = updates.done !== undefined && (oldPlan?.done !== updates.done);
           const actualPostDateChanged = updates.actual_post_date !== undefined && (oldPlan?.actual_post_date !== updates.actual_post_date);
           
           if (doneChanged || actualPostDateChanged) {
             queryClient.invalidateQueries({ 
               queryKey: ['all-social-media-links'],
-              refetchType: 'active' // Force refetch for active queries
+              refetchType: 'none'
             });
           }
 
@@ -140,6 +139,9 @@ export const useOptimizedSocialMediaMutations = () => {
                   message: error.message,
                 });
               }
+            }).catch((err) => {
+              devLog.error('completeStepAndCreateApprovalFromDriveLink rejected', err);
+              toast.error('Action failed.');
             });
           }
 
@@ -161,6 +163,9 @@ export const useOptimizedSocialMediaMutations = () => {
                   message: error.message,
                 });
               }
+            }).catch((err) => {
+              devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
+              toast.error('Action failed.');
             });
           }
           

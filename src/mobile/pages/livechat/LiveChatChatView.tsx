@@ -13,6 +13,8 @@ import { ChatThread } from '@/features/5-3-whatsapp/components/inbox/ChatThread'
 import { EmailChatThread } from '@/features/5-3-whatsapp/components/inbox/EmailChatThread';
 import { MobileLivechatQuickActionPanel } from './components/MobileLivechatQuickActionPanel';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
+import { toast } from 'sonner';
 
 function urlBase64ToUint8Array(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -105,11 +107,13 @@ export function LiveChatChatView({ selectedConversation, onBack, waAccounts }: L
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        console.error('livechat-save-push-subscription failed', res.status, err);
+        devLog.error('livechat-save-push-subscription failed', res.status, err);
+        toast.error(t('livechat.pushSubscriptionFailed', 'Tidak dapat mengaktifkan notifikasi. Coba lagi nanti.'));
       }
     } catch (e) {
       setNotificationPermission('denied');
-      console.error('Push subscribe error', e);
+      devLog.error('Push subscribe error', e);
+      toast.error(t('livechat.pushSubscribeError', 'Aktivasi notifikasi gagal.'));
     }
   };
 

@@ -68,7 +68,7 @@ const batchQuery = async <T,>(
         }
       }
     }
-    console.error('Batch query failed after retries:', lastError);
+    logger.warn('Batch query failed after retries:', lastError);
     return [];
   }
   
@@ -124,9 +124,8 @@ const batchQuery = async <T,>(
           }
         }
         if (lastError) {
-          // Only log if not timeout (timeout is expected for slow queries)
           if (!lastError?.message?.includes('timeout')) {
-            console.error('Batch query failed after retries:', lastError);
+            logger.warn('Batch query failed after retries:', lastError);
           }
         }
         return [];
@@ -205,6 +204,8 @@ export interface DailyTaskContextType {
   effectiveFilteredTasks: Task[];
   /** Visible steps: when pendingApprovalFocus.stepId set for task, only that step; else getVisibleSteps. */
   getVisibleStepsEffective: (task: Task) => TaskStep[];
+  /** Lazy-load recent step updates (e.g. when Summary tab is opened). */
+  fetchRecentStepUpdates: () => Promise<void>;
 }
 
 const DailyTaskContext = createContext<DailyTaskContextType | undefined>(undefined);
@@ -275,24 +276,15 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     openSubStepModalForStepId?: string;
   } | null>(null);
 
-  // Centralized fetch functions
+  // Centralized fetch functions - only called when Summary tab is mounted (lazy load)
   const fetchRecentStepUpdates = useCallback(async () => {
     if (!organizationId) return;
-
-    // DISABLED: Query causes timeout - not critical for initial load
-    // Can be loaded lazily when user views recent updates section
-    logger.debug('ℹ️ Recent step updates query disabled to prevent timeout');
-    setRecentStepUpdates([]);
-    return;
-    
-    /* COMMENTED OUT: Recent step updates disabled to prevent timeout
     try {
       const recentUpdates = await fetchRecentStepUpdatesService(organizationId);
       setRecentStepUpdates(recentUpdates);
     } catch (error) {
-      console.error('Error fetching recent step updates:', error);
+      logger.warn('Error fetching recent step updates:', error);
     }
-    */
   }, [organizationId]);
 
   // Defer department fetch so initial task list renders first (keeps page load fast)
@@ -857,7 +849,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
               setTasks(prevTasks => 
                 prevTasks.map(task => ({
                   ...task,
-                  steps: task.steps.map(step => {
+                  steps: (task.steps ?? []).map(step => {
                     const dueDate = dueDatesByStepId[step.id];
                     if (dueDate) {
                       return {
@@ -2680,9 +2672,8 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       })();
 
-      // Start fetching immediately - don't wait for cache check
+      // Start fetching immediately - don't wait for cache check (recent step updates loaded lazily when Summary tab is opened)
       fetchTasks().catch(() => {});
-      fetchRecentStepUpdates().catch(() => {});
     };
 
     loadData();
@@ -2896,6 +2887,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     highlightFromPendingApproval,
     effectiveFilteredTasks,
     getVisibleStepsEffective,
+    fetchRecentStepUpdates,
   };
 
   return (

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { useToast } from '@/features/ui/use-toast';
+import { devLog } from '@/config/logger';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import {
@@ -110,7 +111,7 @@ export const SopSelectionPopup = ({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error(err);
+      devLog.error(err);
       toast({ title: 'Error', description: 'Gagal membuat task dari SOP.', variant: 'destructive' });
     } finally {
       setSubmitting(false);

@@ -17,7 +17,7 @@ import {
 } from '@/features/ui/alert-dialog';
 
 export const BlockersPanel = () => {
-  const { filteredBlockers: blockers, loading } = useDailyTaskReport() as any;
+  const { filteredBlockers: blockers, loading, refreshReport } = useDailyTaskReport() as any;
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
   const [resolutionFor, setResolutionFor] = useState<any | null>(null);
@@ -178,8 +178,7 @@ export const BlockersPanel = () => {
         description: 'Blocker updated successfully',
       });
 
-      // Trigger re-render by forcing a state update
-      window.location.reload();
+      if (refreshReport) await refreshReport();
     } catch {
       toast({
         title: 'Error',
