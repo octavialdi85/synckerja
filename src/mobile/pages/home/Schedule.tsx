@@ -10,9 +10,11 @@ import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { useWorkSchedule } from "@/mobile/hooks/useWorkSchedule";
 import { useAttendanceStats } from "@/mobile/hooks/useAttendanceStats";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { Loader2, Calendar, Clock } from "lucide-react";
 
 const Schedule = () => {
+  useStatusBarStyle('light');
   const {
     workSchedule,
     loading: scheduleLoading

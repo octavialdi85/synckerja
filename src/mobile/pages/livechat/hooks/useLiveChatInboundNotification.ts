@@ -57,10 +57,10 @@ function getMessagePreview(row: Record<string, unknown>): string {
   return str.slice(0, 45) + '…';
 }
 
-/** Toast bergaya WhatsApp: compact, hijau, nama channel + preview pesan */
+/** Toast bergaya WhatsApp: eksplisit [Channel] + preview pesan */
 function showInboundToast(channelLabel: string, messagePreview: string) {
   playInboundSound();
-  toast(channelLabel, {
+  toast(`[${channelLabel}] Pesan baru`, {
     description: messagePreview,
     duration: 4000,
     position: 'top-center',
@@ -98,8 +98,8 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
       // Saat tab di background, tambahkan notifikasi sistem agar user bisa diingatkan
       if (document.visibilityState === 'hidden') {
         showInboundNotification(
-          'Pesan baru',
-          'Ada pesan masuk di Live Chat. Buka aplikasi untuk melihat.'
+          `[${channelLabel}] Pesan baru`,
+          messagePreview || 'Ada pesan masuk di Live Chat. Buka aplikasi untuk melihat.'
         );
       }
     };

@@ -1,6 +1,6 @@
 # livechat-send-push
 
-Edge Function invoked by **Database Webhooks** when a new message is inserted into `whatsapp_messages`, `instagram_messages`, or `email_messages`. Sends Web Push notifications to users who have that organization as `active_organization_id` and have subscribed via the Live Chat "Aktifkan notifikasi" button.
+Edge Function invoked by **Database Webhooks** when a new message is inserted into `whatsapp_messages`, `instagram_messages`, or `email_messages`. Sends **Web Push** notifications to browser subscribers and **FCM** notifications to native app (Android/iOS) devices. Notification title format: `[WhatsApp] Sender name` (or Instagram/Email).
 
 ## Deploy
 
@@ -16,7 +16,9 @@ Set in Supabase Dashboard → Edge Functions → livechat-send-push → Secrets 
 
 | Secret | Description |
 |--------|-------------|
-| `VAPID_KEYS` | JSON string from `exportVapidKeys()` (JWK format). Generate with: `deno run https://raw.githubusercontent.com/negrel/webpush/master/cmd/generate-vapid-keys.ts` — use the printed JSON (both keys). |
+| `VAPID_KEYS` | JSON string from `exportVapidKeys()` (JWK format). Required for Web Push. Generate with: `deno run https://raw.githubusercontent.com/negrel/webpush/master/cmd/generate-vapid-keys.ts` — use the printed JSON (both keys). |
+| `FCM_SERVICE_ACCOUNT_JSON` | (Optional) Full JSON string of the Firebase service account key (from Firebase Console → Project Settings → Service accounts → Generate new private key). Required for FCM (native Android/iOS). |
+| `FCM_PROJECT_ID` | (Optional) Firebase project ID. If unset, read from `project_id` inside `FCM_SERVICE_ACCOUNT_JSON`. |
 | `LIVECHAT_APP_ORIGIN` | (Optional) Base URL for deep links, e.g. `https://app.profitloop.id`. If unset, defaults to `https://app.profitloop.id`. |
 | `VAPID_CONTACT_EMAIL` | (Optional) Mailto for VAPID, e.g. `mailto:support@example.com`. |
 

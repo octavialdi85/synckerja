@@ -206,8 +206,7 @@ export const useAttendanceData = () => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'profiles',
-          filter: 'active_organization_id=neq.null'
+          table: 'profiles'
         },
         (payload) => {
           console.log('Profile updated, refetching attendance data:', payload);

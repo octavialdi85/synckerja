@@ -1,7 +1,8 @@
 import { MapPin, Navigation, Clock, CheckCircle2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useToast } from "@/mobile/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getCurrentPosition } from "@/mobile/utils/geolocation";
 
 interface LocationCheckerProps {
   officeLocation?: {
@@ -90,66 +91,45 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
 
   const checkLocation = async () => {
     setIsCheckingLocation(true);
-    
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const userLat = position.coords.latitude;
-          const userLng = position.coords.longitude;
-          setCurrentLocation({ lat: userLat, lng: userLng });
-          
-          // Find nearest office
-          const nearest = await findNearestOffice(userLat, userLng);
-          
-          if (nearest) {
-            setNearestOffice(nearest);
-            setDistance(nearest.distance);
-            const inArea = nearest.distance <= nearest.radius_meters;
-            setIsInOfficeArea(inArea);
-            
-            setIsCheckingLocation(false);
-            
-            toast({
-              title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
-              description: inArea
-                ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
-                : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
-              variant: inArea ? "default" : "destructive",
-              duration: 4000,
-            });
-          } else {
-            setIsCheckingLocation(false);
-            toast({
-              title: "Error",
-              description: "Tidak dapat menemukan data kantor",
-              variant: "destructive",
-              duration: 4000,
-            });
-          }
-        },
-        (error) => {
-          setIsCheckingLocation(false);
-          toast({
-            title: "Error Lokasi",
-            description: "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
-            variant: "destructive",
-            duration: 5000,
-          });
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        }
-      );
-    } else {
-      setIsCheckingLocation(false);
+    try {
+      const pos = await getCurrentPosition();
+      const userLat = pos.latitude;
+      const userLng = pos.longitude;
+      setCurrentLocation({ lat: userLat, lng: userLng });
+
+      const nearest = await findNearestOffice(userLat, userLng);
+
+      if (nearest) {
+        setNearestOffice(nearest);
+        setDistance(nearest.distance);
+        const inArea = nearest.distance <= nearest.radius_meters;
+        setIsInOfficeArea(inArea);
+
+        toast({
+          title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+          description: inArea
+            ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
+            : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+          variant: inArea ? "default" : "destructive",
+          duration: 4000,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Tidak dapat menemukan data kantor",
+          variant: "destructive",
+          duration: 4000,
+        });
+      }
+    } catch (err) {
       toast({
-        title: "GPS Tidak Didukung",
-        description: "Browser tidak mendukung geolokasi",
+        title: "Error Lokasi",
+        description: err instanceof Error ? err.message : "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
         variant: "destructive",
-        duration: 4000,
+        duration: 5000,
       });
+    } finally {
+      setIsCheckingLocation(false);
     }
   };
 
@@ -274,66 +254,45 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
 
   const checkLocation = async () => {
     setIsCheckingLocation(true);
-    
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const userLat = position.coords.latitude;
-          const userLng = position.coords.longitude;
-          setCurrentLocation({ lat: userLat, lng: userLng });
-          
-          // Find nearest office
-          const nearest = await findNearestOffice(userLat, userLng);
-          
-          if (nearest) {
-            setNearestOffice(nearest);
-            setDistance(nearest.distance);
-            const inArea = nearest.distance <= nearest.radius_meters;
-            setIsInOfficeArea(inArea);
-            
-            setIsCheckingLocation(false);
-            
-            toast({
-              title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
-              description: inArea
-                ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
-                : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
-              variant: inArea ? "default" : "destructive",
-              duration: 4000,
-            });
-          } else {
-            setIsCheckingLocation(false);
-            toast({
-              title: "Error",
-              description: "Tidak dapat menemukan data kantor",
-              variant: "destructive",
-              duration: 4000,
-            });
-          }
-        },
-        (error) => {
-          setIsCheckingLocation(false);
-          toast({
-            title: "Error Lokasi",
-            description: "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
-            variant: "destructive",
-            duration: 5000,
-          });
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        }
-      );
-    } else {
-      setIsCheckingLocation(false);
+    try {
+      const pos = await getCurrentPosition();
+      const userLat = pos.latitude;
+      const userLng = pos.longitude;
+      setCurrentLocation({ lat: userLat, lng: userLng });
+
+      const nearest = await findNearestOffice(userLat, userLng);
+
+      if (nearest) {
+        setNearestOffice(nearest);
+        setDistance(nearest.distance);
+        const inArea = nearest.distance <= nearest.radius_meters;
+        setIsInOfficeArea(inArea);
+
+        toast({
+          title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+          description: inArea
+            ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
+            : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+          variant: inArea ? "default" : "destructive",
+          duration: 4000,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Tidak dapat menemukan data kantor",
+          variant: "destructive",
+          duration: 4000,
+        });
+      }
+    } catch (err) {
       toast({
-        title: "GPS Tidak Didukung",
-        description: "Browser tidak mendukung geolokasi",
+        title: "Error Lokasi",
+        description: err instanceof Error ? err.message : "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
         variant: "destructive",
-        duration: 4000,
+        duration: 5000,
       });
+    } finally {
+      setIsCheckingLocation(false);
     }
   };
 

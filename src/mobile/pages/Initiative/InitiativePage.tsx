@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
+import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 import MobileTaskInitiative, { InitiativeStats } from './section/MobileTaskInitiative';
 import { TaskInitiativeFooter } from '@/features/8-2-DailyTask/section/TaskInitiativeFooter';
 import { DailyTaskProvider, useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
@@ -13,6 +14,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 
 /** Waits for org to be synced from DB before rendering DailyTaskProvider, so no task data is fetched with cached org. */
 const InitiativeOrgSyncGate = () => {
+  useStatusBarStyle('light');
   const { refetch } = useCurrentOrg();
   const [synced, setSynced] = useState(false);
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();

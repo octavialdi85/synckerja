@@ -15,7 +15,9 @@ import { getConversationTicketId } from './shared/getConversationTicketId';
 import { LiveChatListView } from './LiveChatListView';
 import { LiveChatChatView } from './LiveChatChatView';
 import { useLiveChatInboundNotification } from './hooks/useLiveChatInboundNotification';
+import { useLiveChatFCM } from './hooks/useLiveChatFCM';
 import { LiveChatAppBadgeSync } from '@/features/5-3-whatsapp/components/LiveChatAppBadgeSync';
+import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 
 type AccountFilterValue = '' | `wa:${string}` | `ig:${string}` | `email:${string}`;
 
@@ -30,6 +32,7 @@ export default function LiveChatPage() {
 }
 
 function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string }) {
+  useStatusBarStyle('dark');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ticketId = searchParams.get('ticket_id');
@@ -154,6 +157,7 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
 
   // Global realtime: show system notification on inbound message (list view or app in background)
   useLiveChatInboundNotification(selectedConversation?.id ?? null);
+  useLiveChatFCM();
 
   const isLoading = waLoading || igLoading || emailLoading;
   const invalidTicketId = !!(ticketId?.trim() && !isLoading && !selectedConversation);

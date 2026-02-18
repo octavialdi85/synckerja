@@ -3,6 +3,7 @@ import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mobile/components/ui/card";
 import { Button } from "@/mobile/components/ui/button";
 import { LoadingDots } from "@/components/LoadingDots";
@@ -17,6 +18,7 @@ const useAppTranslation = () => ({
   t: (_: string, defaultValue: string) => defaultValue,
 });
 const ManagementTabPage = memo(() => {
+  useStatusBarStyle('light');
   useOptimizedPerformanceMonitor("ManagementTabPageMobile");
   const { t } = useAppTranslation();
   const { activeTab, handleTabChange, setActiveTabOnLocationChange } = useSubscriptionTabs("management");

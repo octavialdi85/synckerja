@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "465014107571",
+    "project_id": "profitloop-28c71",
+    "storage_bucket": "profitloop-28c71.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:465014107571:android:9cf5ac980e451c08cbefc6",
+        "android_client_info": {
+          "package_name": "id.synckerja.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5gedgtBWTeJnP2R4kPrx5r7mreDXmI1U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

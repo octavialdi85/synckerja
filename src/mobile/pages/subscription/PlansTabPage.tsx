@@ -2,11 +2,13 @@ import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { SubscriptionBottomTabs, useSubscriptionTabs } from "@/mobile/pages/subscription/shared/SubscriptionTabs";
 import HRISSubscriptionPlansTab from "@/mobile/pages/subscription/section/HRISSubscriptionPlansTab";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 
 const PlansTabPage = () => {
+  useStatusBarStyle('light');
   useOptimizedPerformanceMonitor("PlansTabPageMobile");
   const { activeTab, handleTabChange } = useSubscriptionTabs("plans");
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();

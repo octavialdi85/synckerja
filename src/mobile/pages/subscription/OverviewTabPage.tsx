@@ -3,6 +3,7 @@ import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mobile/components/ui/card";
 import { Button } from "@/mobile/components/ui/button";
 import { LoadingDots } from "@/components/LoadingDots";
@@ -44,6 +45,7 @@ const OverviewTabPage = memo(() => {
     return undefined;
   }, [organizationId, isLoading, subscriptionStatus, statusError, refreshSubscriptionStatus]);
 
+  useStatusBarStyle('light');
   const renderContent = () => {
     if (isInitialLoading) {
       return (

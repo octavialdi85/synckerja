@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
+import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 import { DailyTaskReportProvider, useDailyTaskReport } from '@/features/8-2-DailyTaskReport/context/ReportContext';
 import { OverviewCards } from './components/OverviewCards';
 import { PerformanceTable } from './components/PerformanceTable';
@@ -12,6 +13,7 @@ import { Filters } from './components/Filters';
 import { LoadingDots } from '@/components/LoadingDots';
 
 const DailyTaskReportPage = () => {
+  useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
   return (

@@ -169,9 +169,9 @@ All colors MUST be HSL.
   padding-bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
 }
 
-/* Slightly less bottom padding so footer sits a bit lower (e.g. on Live Chat). */
+/* Slightly less bottom padding so footer sits a bit lower but still above the safe-area wrapper/black layer. */
 .safe-area-bottom-lower {
-  padding-bottom: max(0px, calc(max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) - 16px));
+  padding-bottom: max(0px, calc(max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) - 4px));
 }
 
 /* Fixed element above bottom nav: use when nav is ~5rem (80px) + safe area. */

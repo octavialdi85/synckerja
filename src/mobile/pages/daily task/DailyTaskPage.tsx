@@ -4,12 +4,14 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
+import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 import { TaskList } from './section/TaskList';
 import { DailyTaskProvider, useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
 
 const DailyTaskPage = () => {
+  useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
   return (

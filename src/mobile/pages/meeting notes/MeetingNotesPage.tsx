@@ -4,11 +4,13 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
+import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 import { MeetingNotesProvider, useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
 import { MeetingNotesContent } from './section/MeetingNotesContent';
 
 const MeetingNotesPage = () => {
+  useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
   return (

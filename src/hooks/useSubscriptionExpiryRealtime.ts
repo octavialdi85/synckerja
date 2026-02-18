@@ -37,7 +37,7 @@ export const useSubscriptionExpiryRealtime = () => {
       }
     }
 
-    if (!organizationId) {
+    if (!organizationId || organizationId === 'null' || organizationId === 'undefined') {
       previousOrgIdRef.current = null;
       return;
     }

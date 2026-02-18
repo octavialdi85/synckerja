@@ -8,6 +8,7 @@ import { useAttendanceHistory } from "@/mobile/hooks/useAttendanceHistory";
 import { useAttendanceStats } from "@/mobile/hooks/useAttendanceStats";
 import { useAttendanceCalculations } from "@/mobile/hooks/useAttendanceCalculations";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { AttendanceHistoryTable } from "@/mobile/components/AttendanceHistoryTable";
 import { MonthlyStatsCards } from "@/mobile/components/MonthlyStatsCards";
 import { DetailedStatsCard } from "@/mobile/components/DetailedStatsCard";
@@ -20,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useMemo, useEffect } from "react";
 
 const Reports = () => {
+  useStatusBarStyle('light');
   const {
     attendanceHistory,
     loading,

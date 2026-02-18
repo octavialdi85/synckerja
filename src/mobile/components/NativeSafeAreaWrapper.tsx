@@ -8,17 +8,26 @@ interface NativeSafeAreaWrapperProps {
 function NativeSafeAreaWrapperInner({ children }: NativeSafeAreaWrapperProps) {
   const { top, bottom } = useSafeAreaInsets();
   return (
-    <div
-      className="min-h-[100dvh]"
-      style={{
-        paddingTop: top,
-        paddingBottom: bottom,
-        ["--safe-area-inset-top" as string]: `${top}px`,
-        ["--safe-area-inset-bottom" as string]: `${bottom}px`,
-      }}
-    >
-      {children}
-    </div>
+    <>
+      <div
+        className="min-h-[100dvh]"
+        style={{
+          paddingTop: top,
+          paddingBottom: bottom,
+          ["--safe-area-inset-top" as string]: `${top}px`,
+          ["--safe-area-inset-bottom" as string]: `${bottom}px`,
+        }}
+      >
+        {children}
+      </div>
+      {bottom > 0 && (
+        <div
+          aria-hidden
+          className="bg-black fixed left-0 right-0 bottom-0 z-40"
+          style={{ height: `${bottom}px` }}
+        />
+      )}
+    </>
   );
 }
 

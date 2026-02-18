@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { Camera, X, RotateCcw } from "lucide-react";
 import { Button } from "@/mobile/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/mobile/components/ui/dialog";
+import { useToast } from "@/mobile/components/ui/use-toast";
 
 interface CameraModalProps {
   isOpen: boolean;
@@ -11,47 +12,62 @@ interface CameraModalProps {
 }
 
 export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalProps) => {
+  const { toast } = useToast();
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const startCamera = useCallback(async () => {
     try {
       setIsLoading(true);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "user" } 
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
       });
+      streamRef.current = mediaStream;
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
     } catch (error) {
       console.error("Error accessing camera:", error);
+      toast({
+        title: "Error Kamera",
+        description: "Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.",
+        variant: "destructive",
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+    const current = streamRef.current;
+    if (current) {
+      current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStream(null);
     }
-  }, [stream]);
+  }, []);
 
   const capturePhoto = useCallback(() => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
-      
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      
+
       if (context) {
-        context.drawImage(video, 0, 0);
+        context.save();
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        context.restore();
         const imageData = canvas.toDataURL("image/jpeg", 0.8);
         setCapturedImage(imageData);
       }
@@ -75,7 +91,6 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
     setCapturedImage(null);
   };
 
-  // Start camera when modal opens
   React.useEffect(() => {
     if (isOpen && !stream) {
       startCamera();
@@ -99,7 +114,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
             Ambil foto menggunakan kamera untuk absensi
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
             {!capturedImage ? (
@@ -109,7 +124,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover scale-x-[-1]"
                 />
                 <canvas ref={canvasRef} className="hidden" />
                 {isLoading && (
@@ -126,7 +141,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
               />
             )}
           </div>
-          
+
           <div className="flex gap-2">
             {!capturedImage ? (
               <>

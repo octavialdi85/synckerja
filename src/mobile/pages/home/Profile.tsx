@@ -8,6 +8,7 @@ import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { User, MapPin, Phone, Mail, Calendar, LogOut, ChevronDown, Building2, Check, Loader2 } from "lucide-react";
 import { useProfile } from "@/mobile/hooks/useProfile";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/features/ui/use-toast";
 import { useState, useEffect } from "react";
@@ -88,6 +89,7 @@ const Profile = () => {
       setShowSkeleton(false);
     }
   }, [loading]);
+  useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const handleLogout = async () => {
     try {

@@ -207,8 +207,7 @@ export const useProfile = () => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'profiles',
-          filter: 'active_organization_id=neq.null'
+          table: 'profiles'
         },
         (payload) => {
           if (import.meta.env?.DEV) {

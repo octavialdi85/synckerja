@@ -19,7 +19,9 @@ import { useAttendanceData } from "@/mobile/hooks/useAttendanceData";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
+import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
+import { getCurrentPosition } from "@/mobile/utils/geolocation";
 let confetti: any;
 try {
   // Optional import to avoid build error if package not installed
@@ -28,6 +30,7 @@ try {
 } catch {}
 
 const Absensi = () => {
+  useStatusBarStyle('light');
   const { toast } = useToast();
   const [cameraModal, setCameraModal] = useState<{
     isOpen: boolean;
@@ -312,26 +315,7 @@ const Absensi = () => {
   const getCurrentLocation = (): Promise<{
     latitude: number;
     longitude: number;
-  }> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation tidak didukung browser"));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(position => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        });
-      }, error => {
-        reject(new Error("Gagal mendapatkan lokasi: " + error.message));
-      }, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      });
-    });
-  };
+  }> => getCurrentPosition();
 
   const handleLateClockIn = async (reason: string) => {
     setLateModal({

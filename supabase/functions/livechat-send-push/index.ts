@@ -36,6 +36,106 @@ function previewText(body: string | null | undefined, maxLen: number): string {
   return s.slice(0, maxLen) + "…";
 }
 
+function channelLabelFromTable(table: string): string {
+  if (table === "whatsapp_messages") return "WhatsApp";
+  if (table === "instagram_messages") return "Instagram";
+  if (table === "email_messages") return "Email";
+  return "Live Chat";
+}
+
+async function getFcmAccessToken(serviceAccountJson: string): Promise<string> {
+  const sa = JSON.parse(serviceAccountJson) as {
+    client_email: string;
+    private_key: string;
+    project_id?: string;
+  };
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: sa.client_email,
+    sub: sa.client_email,
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+  };
+  const encoder = new TextEncoder();
+  const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const headerB64 = b64(encoder.encode(JSON.stringify(header)));
+  const payloadB64 = b64(encoder.encode(JSON.stringify(payload)));
+  const signatureInput = `${headerB64}.${payloadB64}`;
+
+  const pem = sa.private_key
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s/g, "");
+  const binaryDer = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    binaryDer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    encoder.encode(signatureInput)
+  );
+  const jwt = `${signatureInput}.${b64(new Uint8Array(sig))}`;
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+    }),
+  });
+  if (!tokenRes.ok) {
+    const err = await tokenRes.text();
+    throw new Error(`FCM token exchange failed: ${tokenRes.status} ${err}`);
+  }
+  const tokenData = (await tokenRes.json()) as { access_token?: string };
+  if (!tokenData.access_token) throw new Error("No access_token in FCM token response");
+  return tokenData.access_token;
+}
+
+async function sendFcmMessage(
+  accessToken: string,
+  projectId: string,
+  fcmToken: string,
+  title: string,
+  body: string,
+  data: Record<string, string>
+): Promise<{ ok: boolean; status?: number }> {
+  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const bodyPayload = {
+    message: {
+      token: fcmToken,
+      notification: { title, body },
+      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+      android: {
+        notification: { channel_id: "livechat", sound: "default" },
+      },
+      apns: {
+        payload: { aps: { sound: "default" } },
+      },
+    },
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(bodyPayload),
+  });
+  if (res.ok) return { ok: true };
+  return { ok: false, status: res.status };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -85,6 +185,7 @@ Deno.serve(async (req: Request) => {
 
     let organizationId: string;
     let senderName: string;
+    let totalUnread: number = 1;
     const ticketId = ticketIdFromConversationId(conversationId, table);
 
     if (table === "whatsapp_messages") {
@@ -137,6 +238,8 @@ Deno.serve(async (req: Request) => {
 
     const bodyText = (record.body as string) ?? (record.caption as string) ?? "";
     const bodyPreview = previewText(bodyText, 72);
+    const channelLabel = channelLabelFromTable(table);
+    const title = `[${channelLabel}] ${senderName}`;
 
     const { data: profiles } = await supabase
       .from("profiles")
@@ -151,48 +254,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const baseUrl = APP_ORIGIN || "https://app.profitloop.id";
+    const url = `${baseUrl}/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(ticketId)}`;
+
     const { data: subscriptions } = await supabase
       .from("push_subscriptions")
       .select("id, user_id, endpoint, p256dh, auth")
       .in("user_id", userIds);
-    if (!subscriptions?.length) {
-      console.log("livechat-send-push: no subscriptions for users", { userIds: userIds.length });
-      return new Response(JSON.stringify({ ok: true, sent: 0 }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const vapidKeysJson = Deno.env.get(VAPID_KEYS_ENV);
-    if (!vapidKeysJson) {
-      console.error("livechat-send-push: VAPID_KEYS secret not set");
-      return new Response(JSON.stringify({ error: "Server configuration error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    let vapidKeys: CryptoKeyPair;
-    try {
-      const exported = JSON.parse(vapidKeysJson) as { publicKey: JsonWebKey; privateKey: JsonWebKey };
-      vapidKeys = await webpush.importVapidKeys(exported, { extractable: false });
-    } catch (e) {
-      console.error("livechat-send-push: invalid VAPID_KEYS", e);
-      return new Response(JSON.stringify({ error: "Invalid VAPID keys" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const appServer = await webpush.ApplicationServer.new({
-      contactInformation: CONTACT_EMAIL,
-      vapidKeys,
-    });
-
-    const baseUrl = APP_ORIGIN || "https://app.profitloop.id";
-    const url = `${baseUrl}/operations/consultant/all/livechat?ticket_id=${encodeURIComponent(ticketId)}`;
-    const title = `Pesan baru dari ${senderName}`;
-
-    let totalUnread = 0;
     try {
       const [waRes, emailRes] = await Promise.all([
         supabase.rpc("get_whatsapp_unread_counts", { p_organization_id: organizationId }),
@@ -206,34 +275,90 @@ Deno.serve(async (req: Request) => {
       totalUnread = 1;
     }
 
-    const payloadStr = JSON.stringify({ title, body: bodyPreview, url, badge: totalUnread });
-
     const toDelete: string[] = [];
-    for (const sub of subscriptions as { id: string; endpoint: string; p256dh: string; auth: string }[]) {
-      try {
-        const subscriber = appServer.subscribe({
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth },
+    const subs = (subscriptions ?? []) as { id: string; endpoint: string; p256dh: string; auth: string }[];
+    if (subs.length > 0) {
+      const vapidKeysJson = Deno.env.get(VAPID_KEYS_ENV);
+      if (!vapidKeysJson) {
+        console.error("livechat-send-push: VAPID_KEYS secret not set");
+        return new Response(JSON.stringify({ error: "Server configuration error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-        await subscriber.pushTextMessage(payloadStr, { urgency: webpush.Urgency.High });
-      } catch (err) {
-        const res = err && typeof err === "object" && "response" in err ? (err as { response: Response }).response : null;
-        if (res && (res.status === 410 || res.status === 404)) {
-          toDelete.push(sub.id);
-        } else {
-          console.error("livechat-send-push: push failed", sub.endpoint?.slice(0, 50), err);
+      }
+      let vapidKeys: CryptoKeyPair;
+      try {
+        const exported = JSON.parse(vapidKeysJson) as { publicKey: JsonWebKey; privateKey: JsonWebKey };
+        vapidKeys = await webpush.importVapidKeys(exported, { extractable: false });
+      } catch (e) {
+        console.error("livechat-send-push: invalid VAPID_KEYS", e);
+        return new Response(JSON.stringify({ error: "Invalid VAPID keys" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const appServer = await webpush.ApplicationServer.new({
+        contactInformation: CONTACT_EMAIL,
+        vapidKeys,
+      });
+      const payloadStr = JSON.stringify({ title, body: bodyPreview, url, badge: totalUnread });
+      for (const sub of subs) {
+        try {
+          const subscriber = appServer.subscribe({
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          });
+          await subscriber.pushTextMessage(payloadStr, { urgency: webpush.Urgency.High });
+        } catch (err) {
+          const res = err && typeof err === "object" && "response" in err ? (err as { response: Response }).response : null;
+          if (res && (res.status === 410 || res.status === 404)) {
+            toDelete.push(sub.id);
+          } else {
+            console.error("livechat-send-push: push failed", sub.endpoint?.slice(0, 50), err);
+          }
         }
+      }
+      if (toDelete.length > 0) {
+        await supabase.from("push_subscriptions").delete().in("id", toDelete);
       }
     }
 
-    if (toDelete.length > 0) {
-      await supabase.from("push_subscriptions").delete().in("id", toDelete);
+    let fcmSent = 0;
+    const fcmServiceAccountJson = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
+    const { data: fcmRows } = await supabase
+      .from("fcm_tokens")
+      .select("id, token")
+      .in("user_id", userIds);
+    const fcmTokensList = (fcmRows ?? []) as { id: string; token: string }[];
+    if (fcmServiceAccountJson && fcmTokensList.length > 0) {
+      try {
+        const sa = JSON.parse(fcmServiceAccountJson) as { project_id?: string };
+        const projectId = sa.project_id ?? Deno.env.get("FCM_PROJECT_ID") ?? "";
+        if (projectId) {
+          const accessToken = await getFcmAccessToken(fcmServiceAccountJson);
+          const fcmToDelete: string[] = [];
+          const dataPayload = { url, ticket_id: ticketId, channel: table === "whatsapp_messages" ? "wa" : table === "instagram_messages" ? "ig" : "email" };
+          for (const row of fcmTokensList) {
+            const result = await sendFcmMessage(accessToken, projectId, row.token, title, bodyPreview, dataPayload);
+            if (result.ok) {
+              fcmSent++;
+            } else if (result.status === 404 || result.status === 400) {
+              fcmToDelete.push(row.id);
+            }
+          }
+          if (fcmToDelete.length > 0) {
+            await supabase.from("fcm_tokens").delete().in("id", fcmToDelete);
+          }
+        }
+      } catch (fcmErr) {
+        console.error("livechat-send-push: FCM error", fcmErr);
+      }
     }
 
-    const sent = subscriptions.length - toDelete.length;
-    console.log("livechat-send-push: done", { table, sent, removed: toDelete.length, title: `Pesan baru dari ${senderName}` });
+    const sent = subs.length - toDelete.length;
+    console.log("livechat-send-push: done", { table, webPushSent: sent, fcmSent, removed: toDelete.length, title });
     return new Response(
-      JSON.stringify({ ok: true, sent, removed: toDelete.length }),
+      JSON.stringify({ ok: true, sent: sent + fcmSent, webPushSent: sent, fcmSent, removed: toDelete.length }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
