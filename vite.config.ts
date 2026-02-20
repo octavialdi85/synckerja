@@ -17,8 +17,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     // Remove console.log/info/debug in production, but keep console.error/warn
     mode === "production" && removeConsole({
-      includes: ['log', 'info', 'debug'], // Only remove these
-      excludes: ['error', 'warn'], // Keep error and warn for production debugging
+      includes: ['log', 'info', 'debug'], // Only remove these; error and warn are kept
     }),
   ].filter(Boolean),
   build: {

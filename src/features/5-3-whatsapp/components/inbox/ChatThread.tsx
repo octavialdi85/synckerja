@@ -5,7 +5,7 @@ import { useInstagramMessages } from '../../hooks/useInstagramMessages';
 import { useResolveWhatsAppMedia } from '../../hooks/useResolveWhatsAppMedia';
 import { useSendWhatsAppMessage } from '../../hooks/useSendWhatsAppMessage';
 import { useSendInstagramMessage } from '../../hooks/useSendInstagramMessage';
-import type { LiveChatConversation, WhatsAppConversation, WhatsAppMessage, InstagramConversation, InstagramMessage } from '../../types';
+import type { LiveChatConversation, WhatsAppConversation, WhatsAppMessage, InstagramConversation, InstagramMessage, EmailConversation } from '../../types';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
@@ -17,11 +17,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/features/ui/dropdown-menu';
-import { Dialog, DialogContent } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import { Check, CheckCheck, Paperclip, FileText, X, Download, ChevronDown, Trash2, Reply, Copy, Image, Video, Music, Send } from 'lucide-react';
 import { messageContainsContactRequest } from '../../constants/contactRequestBlockPhrases';
 import { isLikelyInstagramId } from '../../constants/instagramId';
-import { isResolvedStatus } from '../../constants/leadStatus';
+import { isResolvedStatus, isOutside24hWindow } from '../../constants/leadStatus';
 
 /** Bucket yang sama dipakai untuk kirim (outbound) dan terima (webhook/resolve) media */
 const WHATSAPP_MEDIA_BUCKET = 'whatsapp-media';
@@ -191,7 +191,7 @@ interface ChatThreadProps {
 }
 
 function formatMessageTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 /** Mask 4 digit terakhir nomor telepon untuk privasi di UI. */
@@ -474,24 +474,18 @@ type PendingMedia = {
 export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnectedWhatsAppAccount, scrollToTextInChat, onScrollToTextDone, scrollToMessageId, onScrollToMessageDone, hideHeader, keyboardOpen }: ChatThreadProps) {
   const [text, setText] = useState('');
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
-  const [optimisticMessage, setOptimisticMessage] = useState<{
+  type OptimisticEntry = {
     body: string;
     created_at: string;
-    reply_to_body?: string | null;
-    reply_to_wa_message_id?: string | null;
-    reply_to_message_type?: string | null;
-    reply_to_sender?: string | null;
-  } | null>(null);
-  const [optimisticMedia, setOptimisticMedia] = useState<{
-    body: string;
-    created_at: string;
-    media_url?: string;
     message_type?: string;
+    media_url?: string | null;
     reply_to_body?: string | null;
     reply_to_wa_message_id?: string | null;
     reply_to_message_type?: string | null;
     reply_to_sender?: string | null;
-  } | null>(null);
+  };
+  const [optimisticMessage, setOptimisticMessage] = useState<OptimisticEntry | null>(null);
+  const [optimisticMedia, setOptimisticMedia] = useState<OptimisticEntry | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -554,30 +548,33 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
   const { resolve: resolveMedia, isResolving: isResolvingMedia, resolvingMessageId } = useResolveWhatsAppMedia(!isInstagram ? conversation?.id ?? null : null);
 
   const hasConversationId = !!conversation?.id;
-  const { data: conversationStatusId } = useQuery({
+  const { data: conversationStatusRow } = useQuery({
     queryKey: isInstagram ? ['instagram-conversation-status', conversation?.id] : ['whatsapp-conversation-status', conversation?.id],
     queryFn: async () => {
       if (!conversation?.id) return null;
       if (isInstagram) {
         const { data, error } = await supabase
           .from('instagram_conversations')
-          .select('lead_status_id')
+          .select('lead_status_id, last_inbound_at, created_at')
           .eq('id', conversation.id)
           .maybeSingle();
         if (error) throw error;
-        return (data?.lead_status_id as string) ?? null;
+        return data as { lead_status_id?: string; last_inbound_at?: string | null; created_at?: string } | null;
       }
       const { data, error } = await supabase
         .from('whatsapp_conversations')
-        .select('lead_status_id')
+        .select('lead_status_id, last_inbound_at, created_at')
         .eq('id', conversation.id)
         .maybeSingle();
       if (error) throw error;
-      return (data?.lead_status_id as string) ?? null;
+      return data as { lead_status_id?: string; last_inbound_at?: string | null; created_at?: string } | null;
     },
     enabled: hasConversationId,
     refetchInterval: 5000,
   });
+  const conversationStatusId = conversationStatusRow?.lead_status_id ?? null;
+  const lastInboundAt = conversationStatusRow?.last_inbound_at ?? null;
+  const conversationCreatedAt = conversationStatusRow?.created_at ?? null;
   const { data: leadStatuses = [] } = useQuery({
     queryKey: ['lead-statuses'],
     queryFn: async () => {
@@ -587,7 +584,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         .eq('is_active', true)
         .order('sort_order');
       if (error) throw error;
-      return (data ?? []) as Array<{ id: string; name: string }>;
+      return (data ?? []) as unknown as Array<{ id: string; name: string }>;
     },
     enabled: hasConversationId,
   });
@@ -595,16 +592,25 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     conversationStatusId != null
       ? leadStatuses.find((s) => s.id === conversationStatusId)?.name ?? null
       : null;
-  const effectiveStatusName = statusNameFromQuery ?? conversation?.lead_status_name ?? null;
+  const effectiveStatusName =
+    statusNameFromQuery ??
+    (conversation && conversation.source !== 'email' ? (conversation as WhatsAppConversation | InstagramConversation).lead_status_name ?? null : null);
 
   const isResolved = isResolvedStatus(effectiveStatusName);
-  const isWhatsAppConversation = !isInstagram && (conversation?.channel ?? '').toLowerCase() === 'whatsapp';
+  const isWhatsAppConversation = conversation?.source === 'whatsapp';
   const sendDisabledByNoAccount = Boolean(hasNoConnectedWhatsAppAccount && isWhatsAppConversation);
-  const sendDisabled = isResolved || sendDisabledByNoAccount;
+  const outside24h =
+    (isWhatsAppConversation || isInstagram) &&
+    isOutside24hWindow(lastInboundAt, conversationCreatedAt);
+  const sendDisabled = isResolved || sendDisabledByNoAccount || outside24h;
 
   const isInstagramConversation = isInstagram;
   const isSending = isSendingWhatsApp || isSendingInstagram;
   const customerId = isInstagram ? (conversation as InstagramConversation)?.customer_ig_id : (conversation as WhatsAppConversation)?.customer_wa_id;
+  const displayName =
+    conversation?.source === 'email'
+      ? (conversation as EmailConversation).from_display_name ?? (conversation as EmailConversation).from_email
+      : (conversation as WhatsAppConversation | InstagramConversation).customer_name ?? null;
 
   const optimisticEntry = optimisticMessage || optimisticMedia;
 
@@ -684,8 +690,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     (m) => m.message_type !== 'unsupported' && m.body !== '[unsupported]'
   );
   const showOptimistic = optimisticEntry && !hasMatchingRealMessage(filteredMessages, optimisticEntry);
-  const displayMessages: Array<WhatsAppMessage & { status?: WhatsAppMessage['status'] | 'sending' }> = [
-    ...filteredMessages,
+  type DisplayMessage = (WhatsAppMessage | (InstagramMessage & { wa_message_id?: string | null; reply_to_wa_message_id?: string | null; read_at?: null; reply_to_sender?: string | null })) & { status?: WhatsAppMessage['status'] | 'sending' };
+  const displayMessages: DisplayMessage[] = [
+    ...(filteredMessages as DisplayMessage[]),
     ...(showOptimistic
       ? [
           {
@@ -705,7 +712,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             reply_to_wa_message_id: optimisticEntry.reply_to_wa_message_id ?? null,
             reply_to_message_type: optimisticEntry.reply_to_message_type ?? null,
             reply_to_sender: optimisticEntry.reply_to_sender ?? null,
-          },
+          } as DisplayMessage,
         ]
       : []),
   ];
@@ -865,6 +872,8 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
     if (sendDisabled) {
       if (sendDisabledByNoAccount) {
         toast.error(t('whatsappInbox.noWhatsAppAccountCannotSend', 'Tidak ada akun WhatsApp terhubung untuk organisasi ini. Hubungkan akun di Connect WhatsApp untuk mengirim pesan.'));
+      } else if (outside24h) {
+        toast.error(t('whatsappInbox.outside24hCannotSend', 'Pesan terakhir dari customer sudah lewat 24 jam. Kirim pesan tidak diizinkan sampai customer mengirim pesan lagi.'));
       } else {
         toast.error(t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.'));
       }
@@ -881,9 +890,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
 
     const replySender =
       replyTo?.direction === 'inbound'
-        ? (isInstagramConversation && !conversation?.customer_name?.trim()
+        ? (isInstagramConversation && !displayName?.trim()
           ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-          : (conversation?.customer_name || (customerId ? maskPhoneLast4(customerId) : '') || ''))
+          : (displayName || (customerId ? maskPhoneLast4(customerId) : '') || ''))
         : replyTo?.direction === 'outbound'
           ? t('whatsappInbox.you', 'You')
           : '';
@@ -996,11 +1005,11 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 min-h-[60px] border-b border-gray-200 bg-[#f0f2f5]">
             <div className="min-w-0 flex-1">
               <h3 className="font-medium text-gray-900 truncate">
-                {isInstagramConversation && !conversation.customer_name?.trim()
+                {isInstagramConversation && !displayName?.trim()
                   ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-                  : (conversation.customer_name || (customerId ? maskPhoneLast4(customerId) : '') || 'Unknown')}
+                  : (displayName || (customerId ? maskPhoneLast4(customerId) : '') || 'Unknown')}
               </h3>
-              {conversation.customer_name && !isInstagramConversation && customerId && (
+              {displayName && !isInstagramConversation && customerId && (
                 <p className="text-xs text-gray-500 truncate">{maskPhoneLast4(customerId)}</p>
               )}
             </div>
@@ -1028,11 +1037,11 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
           )}
         </>
       )}
-      {conversation?.channel === 'whatsapp' &&
-        conversation.phone_number_id &&
+      {isWhatsAppConversation &&
+        (conversation as WhatsAppConversation).phone_number_id &&
         Array.isArray(connectedPhoneNumberIds) &&
         connectedPhoneNumberIds.length > 0 &&
-        !connectedPhoneNumberIds.includes(conversation.phone_number_id) && (
+        !connectedPhoneNumberIds.includes((conversation as WhatsAppConversation).phone_number_id!) && (
           <div className="flex-shrink-0 px-3 py-2 border-b border-amber-200 bg-amber-50 text-sm text-amber-900" role="alert">
             <p className="font-medium">{t('whatsappInbox.disconnectedAccountBannerTitle', 'Percakapan dari akun yang sudah diputus')}</p>
             <p className="mt-0.5 text-amber-800">
@@ -1051,13 +1060,21 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         )}
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto seamless-scroll p-4 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.25rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)))]') : 'pb-[84px]'}`}
+        className={`flex-1 overflow-y-auto seamless-scroll pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.75rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
         {...(hideHeader ? { onTouchStart: unlockInboundNotificationAudio } : {})}
       >
         {isLoading ? (
           <p className="text-sm text-gray-500">{t('whatsappInbox.loadingMessages', 'Loading messages...')}</p>
         ) : (
-          [...displayMessages].reverse().map((msg) => {
+          (() => {
+            const reversedMessages = [...displayMessages].reverse();
+            return reversedMessages.map((msg, index) => {
+            const nextMsg = reversedMessages[index + 1];
+            const marginBetween = !nextMsg
+              ? 'mb-0'
+              : msg.direction !== nextMsg.direction
+                ? 'mb-1.5'
+                : 'mb-0';
             const CheckboxBtn = () =>
               selectionMode ? (
                 <button
@@ -1226,7 +1243,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             <div
               id={`msg-${msg.id}`}
               key={msg.id}
-              className={`flex items-start gap-2 ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
+              className={`flex items-start gap-2 ${marginBetween} ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
               onClick={
                 effectiveScrollToMessageId === msg.id
                   ? (e) => {
@@ -1308,10 +1325,10 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                   : {})}
               >
                 <div
-                  className={`relative rounded-lg ${
+                  className={`relative rounded-xl ${
                     msg.media_url && MEDIA_TYPES.includes(msg.message_type ?? '')
                       ? 'px-1 py-1'
-                      : 'px-3 py-2'
+                      : 'px-2.5 py-1.5'
                   } ${
                     msg.direction === 'outbound'
                       ? 'bg-[#128C7E] text-white'
@@ -1345,7 +1362,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); goToRepliedMessage(); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToRepliedMessage(); } }}
-                      className={`flex items-start gap-1.5 mb-2 pb-2 -ml-1 -mr-1 px-1 rounded-r-sm border-l-2 border-r border-b cursor-pointer hover:opacity-95 ${
+                      className={`flex items-start gap-1.5 mb-1.5 pb-1.5 -ml-0.5 -mr-0.5 px-1 rounded-r-sm border-l-2 border-r border-b cursor-pointer hover:opacity-95 ${
                         msg.direction === 'outbound'
                           ? 'bg-[#0a5a4a]/90 border-l-[#7dd3fc] border-r-white/90 border-white/20 text-white/90'
                           : 'bg-gray-100 border-l-[#128C7E] border-r-white border-gray-200 text-gray-700'
@@ -1380,42 +1397,48 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
                     </div>
                     );
                   })()}
-                  <MediaPreview
-                    messageType={msg.message_type ?? 'text'}
-                    mediaUrl={msg.media_url}
-                    body={msg.body}
-                    rawMetadata={msg.raw_metadata}
-                    isOutbound={msg.direction === 'outbound'}
-                    messageId={msg.id}
-                    direction={msg.direction}
-                    onResolve={resolveMedia}
-                    isResolving={isResolvingMedia && resolvingMessageId === msg.id}
-                    topRightAction={isInboundMedia ? inboundDropdown : undefined}
-                    onMediaClick={(url, type) => setMediaViewer({ url, type })}
-                  />
-                  <p
-                    className={`text-xs flex items-center gap-1.5 flex-wrap ${
-                      msg.media_url && MEDIA_TYPES.includes(msg.message_type ?? '') ? 'mt-0.5' : 'mt-1'
-                    } ${msg.direction === 'outbound' ? 'text-white/80' : 'text-gray-500'}`}
-                  >
-                    <span className="shrink-0">{formatMessageTime(msg.created_at)}</span>
-                    {msg.direction === 'outbound' && (
-                      <span className="flex items-center shrink-0 ml-0.5" title={msg.status === 'read' ? 'Dibaca' : msg.status === 'delivered' ? 'Terkirim' : msg.status === 'sending' ? 'Mengirim...' : 'Terkirim'}>
-                        <MessageStatus status={msg.status ?? null} />
-                      </span>
-                    )}
-                  </p>
+                  <div className={`relative pb-1 min-h-[1.25rem] ${msg.direction === 'outbound' ? 'pr-16' : 'pr-12'}`}>
+                    <MediaPreview
+                      messageType={msg.message_type ?? 'text'}
+                      mediaUrl={msg.media_url}
+                      body={msg.body}
+                      rawMetadata={msg.raw_metadata}
+                      isOutbound={msg.direction === 'outbound'}
+                      messageId={msg.id}
+                      direction={msg.direction}
+                      onResolve={resolveMedia}
+                      isResolving={isResolvingMedia && resolvingMessageId === msg.id}
+                      topRightAction={isInboundMedia ? inboundDropdown : undefined}
+                      onMediaClick={(url, type) => setMediaViewer({ url, type })}
+                    />
+                    <p
+                      className={`absolute right-2 bottom-0 text-[10px] flex items-center gap-1 shrink-0 ${
+                        msg.direction === 'outbound' ? 'text-white/80' : 'text-gray-500'
+                      }`}
+                    >
+                      <span>{formatMessageTime(msg.created_at)}</span>
+                      {msg.direction === 'outbound' && (() => {
+                        const msgStatus = (msg as { status?: string | null }).status ?? null;
+                        return (
+                          <span className="flex items-center" title={msgStatus === 'read' ? 'Dibaca' : msgStatus === 'delivered' ? 'Terkirim' : msgStatus === 'sending' ? 'Mengirim...' : 'Terkirim'}>
+                            <MessageStatus status={msgStatus as WhatsAppMessage['status'] | 'sending' | null} />
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  </div>
                 </div>
               </div>
               {msg.direction === 'outbound' && <CheckboxBtn />}
             </div>
             );
-          })
+          });
+          })()
         )}
       </div>
       <div
         ref={chatInputBarRef}
-        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 border-t border-slate-700 bg-slate-800 ${keyboardOpen ? 'pb-2' : 'safe-area-bottom'} ${hideHeader ? 'px-1 pt-2' : 'px-4 pt-4'}`}
+        className={`flex-shrink-0 absolute bottom-0 left-0 right-0 z-10 bg-transparent ${keyboardOpen ? 'pb-2' : 'pb-[max(1.25rem,calc(env(safe-area-inset-bottom,0px)+0.5rem))]'} ${hideHeader ? 'px-1 pt-2' : 'px-4 pt-4'}`}
       >
         {sendDisabledByNoAccount && (
           <div
@@ -1431,7 +1454,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             </span>
           </div>
         )}
-        {isResolved && !sendDisabledByNoAccount && (
+        {(isResolved || outside24h) && !sendDisabledByNoAccount && (
           <div
             className="text-sm font-medium text-amber-800 bg-amber-100 border-2 border-amber-400 rounded-lg px-3 py-2.5 mb-2 flex items-center gap-2"
             role="alert"
@@ -1441,7 +1464,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
               !
             </span>
             <span>
-              {t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.')}
+              {outside24h
+                ? t('whatsappInbox.outside24hCannotSend', 'Pesan terakhir dari customer sudah lewat 24 jam. Kirim pesan tidak diizinkan sampai customer mengirim pesan lagi.')
+                : t('whatsappInbox.conversationResolvedCannotSend', 'Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.')}
             </span>
           </div>
         )}
@@ -1468,9 +1493,9 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-[#128C7E]">
                 {replyTo.direction === 'inbound'
-                  ? (isInstagramConversation && !conversation?.customer_name?.trim()
+                  ? (isInstagramConversation && !displayName?.trim()
                     ? t('whatsappInbox.instagramContact', 'Kontak Instagram')
-                    : (conversation?.customer_name ?? (customerId ? maskPhoneLast4(customerId) : null) ?? 'Contact'))
+                    : (displayName ?? (customerId ? maskPhoneLast4(customerId) : null) ?? 'Contact'))
                   : t('whatsappInbox.you', 'You')}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 text-sm text-gray-700 min-w-0">
@@ -1519,7 +1544,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             </Button>
           </div>
         )}
-        <div className={`flex rounded-lg border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[36px]' : 'min-h-[44px]'}`}>
+        <div className={`flex rounded-xl border-2 border-border bg-background shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:border-primary/50 ${sendDisabled ? 'opacity-70' : ''} ${hideHeader ? 'min-h-[36px]' : 'min-h-[44px]'}`}>
           <button
             type="button"
             className={`shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50 self-center ${hideHeader ? 'p-1.5' : 'p-2.5'}`}
@@ -1557,7 +1582,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             disabled={sendDisabled || (!text.trim() && !pendingMedia) || isSending || isUploading}
             title={t('whatsappInbox.send', 'Send')}
             aria-label={t('whatsappInbox.send', 'Send')}
-            className={`shrink-0 self-center rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white ${hideHeader ? 'mr-1 w-8 h-8' : 'mr-1.5 w-9 h-9'}`}
+            className={`shrink-0 self-center rounded-full bg-background border-2 border-border flex items-center justify-center text-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-background ${hideHeader ? 'mr-1 w-8 h-8' : 'mr-1.5 w-9 h-9'}`}
           >
             <Send className={hideHeader ? 'w-4 h-4' : 'w-4 h-4'} strokeWidth={2.5} />
           </button>
@@ -1565,6 +1590,13 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
       </div>
       <Dialog open={!!mediaViewer} onOpenChange={(open) => !open && setMediaViewer(null)}>
         <DialogContent className="max-w-[95vw] max-h-[90vh] w-auto p-0 gap-0 overflow-hidden bg-black/95 border-0" hideCloseButton>
+          <DialogTitle className="sr-only">
+            {mediaViewer?.type === 'image'
+              ? t('whatsappInbox.imagePreview', 'Image preview')
+              : mediaViewer?.type === 'video'
+                ? t('whatsappInbox.videoPreview', 'Video preview')
+                : t('whatsappInbox.mediaPreview', 'Media preview')}
+          </DialogTitle>
           {mediaViewer && (
             <div className="relative flex items-center justify-center min-h-[200px] max-h-[90vh] p-2">
               <button

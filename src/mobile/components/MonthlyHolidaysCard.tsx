@@ -1,22 +1,24 @@
-
 import { Calendar, Coffee } from "lucide-react";
 import { Card } from "@/mobile/components/ui/card";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { useNationalHolidays } from "@/mobile/hooks/useNationalHolidays";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { format } from "date-fns";
-import { id } from "date-fns/locale";
+import { id, enUS } from "date-fns/locale";
 
 export const MonthlyHolidaysCard = () => {
+  const { t, language } = useAppTranslation();
   const { holidays, loading, error } = useNationalHolidays();
+  const locale = language === "id" ? id : enUS;
 
   const formatHolidayDate = (dateString: string) => {
     const date = new Date(dateString);
-    return format(date, 'dd MMM', { locale: id });
+    return format(date, "dd MMM", { locale });
   };
 
   const getCurrentMonthYear = () => {
     const now = new Date();
-    return format(now, 'MMMM yyyy', { locale: id });
+    return format(now, "MMMM yyyy", { locale });
   };
 
   if (loading) {
@@ -49,10 +51,10 @@ export const MonthlyHolidaysCard = () => {
       <Card className="p-4 bg-gradient-card border border-border">
         <div className="flex items-center gap-3 mb-3">
           <Coffee className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Hari Libur Bulan Ini</h3>
+          <h3 className="font-semibold text-foreground">{t("schedule.holidaysTitle", "Hari Libur {{monthYear}}", { monthYear: getCurrentMonthYear() })}</h3>
         </div>
         <div className="text-center py-4">
-          <p className="text-sm text-destructive">Gagal memuat data libur</p>
+          <p className="text-sm text-destructive">{t("schedule.holidaysLoadError", "Gagal memuat data libur")}</p>
         </div>
       </Card>
     );
@@ -62,12 +64,12 @@ export const MonthlyHolidaysCard = () => {
     <Card className="p-4 bg-gradient-card border border-border">
       <div className="flex items-center gap-3 mb-3">
         <Coffee className="h-5 w-5 text-primary" />
-        <h3 className="font-semibold text-foreground">Hari Libur {getCurrentMonthYear()}</h3>
+        <h3 className="font-semibold text-foreground">{t("schedule.holidaysTitle", "Hari Libur {{monthYear}}", { monthYear: getCurrentMonthYear() })}</h3>
       </div>
       
       {holidays.length === 0 ? (
         <div className="text-center py-4">
-          <p className="text-sm text-muted-foreground">Tidak ada hari libur bulan ini</p>
+          <p className="text-sm text-muted-foreground">{t("schedule.noHolidaysThisMonth", "Tidak ada hari libur bulan ini")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -87,7 +89,7 @@ export const MonthlyHolidaysCard = () => {
                     </span>
                     {holiday.is_recurring && (
                       <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">
-                        Libur Tahunan
+                        {t("schedule.recurringHoliday", "Libur Tahunan")}
                       </span>
                     )}
                   </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, CheckSquare, Paperclip, User, Flag, Bell, AlertTriangle, History, Clock3, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,9 +57,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         hideCloseButton
-        className="max-w-none w-screen h-screen border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none translate-x-0 translate-y-0 left-0 top-0"
+        fullscreenAnimation
+        overlayClassName="z-[20]"
+        className="max-w-none w-screen h-screen border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col gap-0 m-0 rounded-none translate-x-0 translate-y-0 left-0 top-0 z-[20]"
       >
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <DialogTitle className="sr-only">{task.title}</DialogTitle>
+        <div className="flex-shrink-0 flex items-center gap-3 border-b border-border px-4 py-3 safe-area-top">
           <button
             type="button"
             onClick={onClose}
@@ -74,7 +77,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3"
+          style={{
+            paddingBottom: 'calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))',
+          }}
+        >
           {task.description && (
             <div className="space-y-1 min-w-0">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -113,8 +121,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="space-y-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
               <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   PIC
@@ -130,7 +138,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
               <div className="flex flex-col gap-1 items-start">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-left w-full">
                   Priority
@@ -187,7 +195,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Due Date
@@ -202,12 +210,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <span className="italic text-muted-foreground">No due date</span>
+                  <span className="text-sm font-medium text-foreground">No due date</span>
                 )}
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Status
@@ -313,7 +321,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </Button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-primary" />
@@ -343,7 +351,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               items={(task.steps ?? []).map((step) => `step-${step.id}`)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {visibleSteps.length === 0 ? (
                   <div className="rounded-lg border border-border bg-muted/40 p-4 text-center text-sm text-muted-foreground">
                     No steps yet
@@ -354,7 +362,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     .map((step, index) => (
                       <TaskStepItem
                         key={step.id}
-                        step={step as any}
+                        step={step}
                         index={index}
                         taskCreatedBy={task.created_by}
                         autoReorder={true}

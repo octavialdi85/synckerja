@@ -277,12 +277,6 @@ const ProfileSettings = () => {
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.profile.language.title", "Application Language")}</CardTitle>
-          <CardDescription>
-            {t(
-              "settings.profile.language.description",
-              "Choose the language you want to use across the application",
-            )}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="max-w-xs">

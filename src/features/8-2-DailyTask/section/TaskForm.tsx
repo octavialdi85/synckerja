@@ -23,7 +23,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
-import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
+import { ObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import './TaskForm.css';
 
 export const TaskForm = () => {
@@ -169,23 +169,23 @@ export const TaskForm = () => {
         </div>
 
         {/* Individual Objective */}
-        <div className="w-64">
+        <div className="w-64 min-w-0 overflow-hidden">
           <Button
             type="button"
             variant="outline"
             onClick={() => setIsObjectiveDialogOpen(true)}
             disabled={isSubmitting}
-            className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+            className="w-full min-w-0 justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10 overflow-hidden"
           >
             {objectiveId && objectiveContext ? (
-              <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                 <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <div className="flex flex-col min-w-0 flex-1 text-left">
-                  <span className="text-sm truncate font-medium text-gray-900">
+                <div className="flex flex-col min-w-0 flex-1 text-left overflow-hidden">
+                  <span className="text-sm truncate font-medium text-gray-900 block">
                     {objectiveContext.individualTitle}
                   </span>
                   {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
-                    <span className="text-xs text-gray-500 truncate">
+                    <span className="text-xs text-gray-500 truncate block">
                       {objectiveContext.companyTitle && objectiveContext.departmentTitle
                         ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
                         : objectiveContext.companyTitle || objectiveContext.departmentTitle}
@@ -194,9 +194,9 @@ export const TaskForm = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
                 <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                <span className="text-gray-500 text-sm">Select Individual Objective</span>
+                <span className="text-gray-500 text-sm truncate text-left block min-w-0">Select Individual Objective</span>
               </div>
             )}
           </Button>

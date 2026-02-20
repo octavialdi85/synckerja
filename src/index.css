@@ -139,6 +139,15 @@
   animation: none !important;
 }
 
+/* Fullscreen dialog (mobile/Android): GPU layer + backwards fill for smooth open animation */
+[data-fullscreen-animation="true"][data-state="open"] {
+  will-change: transform;
+  animation-fill-mode: backwards;
+}
+[data-fullscreen-animation="true"][data-state="closed"] {
+  will-change: transform;
+}
+
 /* Additional force hide for any remaining scrollbars */
 .table-container::-webkit-scrollbar-horizontal {
   display: none !important;
@@ -169,14 +178,84 @@ All colors MUST be HSL.
   padding-bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
 }
 
+/* Modal footer: spacing above safe area strip so buttons sit clearly above the black bar. */
+.safe-area-bottom-equal {
+  padding-bottom: max(1rem, calc(max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.5rem));
+}
+
 /* Slightly less bottom padding so footer sits a bit lower but still above the safe-area wrapper/black layer. */
 .safe-area-bottom-lower {
   padding-bottom: max(0px, calc(max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) - 4px));
 }
 
+/* Padding-bottom only (e.g. for inner content of bottom nav so strip can cover bar). */
+.safe-area-padding-bottom {
+  padding-bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+}
+
+/* Fullscreen modal on mobile: stop above device safe area so system nav bar stays visible. */
+.modal-above-safe-area {
+  top: 0;
+  bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+  height: auto;
+}
+
 /* Fixed element above bottom nav: use when nav is ~5rem (80px) + safe area. */
 .fixed-above-nav-safe {
   bottom: calc(5rem + var(--safe-area-inset-bottom, 0px));
+}
+
+/* Scrollable content above Tools nav: padding so last item is not covered by footer (Android/iOS). */
+.content-padding-above-nav {
+  padding-bottom: calc(5rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Same as above but smaller padding for mobile browser (non-native); native app keeps .content-padding-above-nav. */
+.content-padding-above-nav-browser {
+  padding-bottom: calc(3.5rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Schedule page: section terakhir (Hari Libur) sama jaraknya dengan Home ke nav footer (area nav sama). */
+.content-padding-above-nav-schedule {
+  padding-bottom: calc(3rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+.content-padding-above-nav-schedule-browser {
+  padding-bottom: calc(3rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Meeting notes: 4rem ke nav footer. */
+.content-padding-above-nav-meeting-notes {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Daily task: 4rem ke nav footer. */
+.content-padding-above-nav-daily-task {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Default for "halaman biasa" (e.g. daily-task-report): 4rem + safe area per mobile-tools-layout-android rule. */
+.content-padding-above-nav-default {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Daily task report: section terakhir (Blockers) 4rem ke nav footer. */
+.content-padding-above-nav-daily-task-report {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Job Desc (mobile): section terakhir 4rem ke nav footer. */
+.content-padding-above-nav-job-desc {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Home: section terakhir (Perumahan Cibodas) lebih dekat ke nav footer. */
+.content-padding-above-nav-home {
+  padding-bottom: calc(3rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Client Visit: section terakhir (Visit Analysis) tidak menempel ke nav footer; standar 4rem. */
+.content-padding-above-nav-client-visit {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
 }
 
 @layer base {
@@ -190,8 +269,8 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 27%;
 
-    --primary: 215 28% 17%;
-    --primary-foreground: 210 20% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 214 32% 91%;
     --secondary-foreground: 215 28% 17%;
@@ -238,8 +317,8 @@ All colors MUST be HSL.
     --popover: 215 25% 20%;
     --popover-foreground: 210 20% 98%;
 
-    --primary: 210 20% 98%;
-    --primary-foreground: 215 28% 17%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 215 25% 27%;
     --secondary-foreground: 210 20% 98%;

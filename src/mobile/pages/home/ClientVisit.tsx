@@ -15,8 +15,9 @@ import { SalesActivityModal, SalesActivityData } from "@/mobile/components/Sales
 import { CustomDatePicker } from "@/mobile/components/CustomDatePicker";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval, format } from "date-fns";
+import { id as idLocale, enUS as enLocale } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/mobile/components/ui/select";
-import { Skeleton } from "@/mobile/components/ui/skeleton";
+import { ClientVisitSkeleton } from "./ClientVisitSkeleton";
 import { useToast } from "@/features/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientVisitData } from "@/mobile/hooks/useClientVisitData";
@@ -26,10 +27,12 @@ import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { getCurrentPosition } from "@/mobile/utils/geolocation";
 import confetti from "canvas-confetti";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 export default function ClientVisit() {
   useStatusBarStyle('light');
   const { toast } = useToast();
+  const { t, language } = useAppTranslation();
   const [cameraModal, setCameraModal] = useState<{
     isOpen: boolean;
     type: 'start' | 'end' | null;
@@ -215,7 +218,7 @@ export default function ClientVisit() {
   // Calculate visit duration real-time
   const calculateVisitDuration = () => {
     if (!activeVisit?.actual_start_time) {
-      return "0 jam 0 menit";
+      return t("mobileHome.zeroHoursMinutes", "0 jam 0 menit");
     }
     const startTime = new Date(activeVisit.actual_start_time);
     const endTime = activeVisit.actual_end_time ? new Date(activeVisit.actual_end_time) : new Date();
@@ -223,7 +226,7 @@ export default function ClientVisit() {
     const totalMinutes = Math.floor(diffMs / (1000 * 60));
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return `${hours} jam ${minutes} menit`;
+    return t("mobileHome.hoursMinutesFormat", "{{hours}} jam {{minutes}} menit", { hours, minutes });
   };
 
   const handleStartVisit = () => {
@@ -687,67 +690,32 @@ export default function ClientVisit() {
     };
   }, [filteredTodayVisits]);
 
-  // Get period label based on date filter
   const getPeriodLabel = () => {
     switch (dateFilter) {
       case "today":
-        return "Hari Ini";
+        return t("reports.dateFilter.today", "Hari Ini");
       case "yesterday":
-        return "Kemarin";
+        return t("reports.dateFilter.yesterday", "Kemarin");
       case "this_week":
-        return "Minggu Ini";
+        return t("reports.dateFilter.thisWeek", "Minggu Ini");
       case "this_month":
-        return "Bulan Ini";
+        return t("reports.dateFilter.thisMonth", "Bulan Ini");
       case "last_month":
-        return "Bulan Lalu";
+        return t("reports.dateFilter.lastMonth", "Bulan Lalu");
       case "custom":
         if (customDateRange) {
-          const startDate = format(customDateRange.start, "dd MMM");
-          const endDate = format(customDateRange.end, "dd MMM yyyy");
+          const locale = language === "id" ? idLocale : enLocale;
+          const startDate = format(customDateRange.start, "dd MMM", { locale });
+          const endDate = format(customDateRange.end, "dd MMM yyyy", { locale });
           return `${startDate} - ${endDate}`;
         }
-        return "Custom";
+        return t("reports.dateFilter.custom", "Kustom");
       default:
-        return "Bulan Ini";
+        return t("reports.dateFilter.thisMonth", "Bulan Ini");
     }
   };
 
   const mockNotifications: any[] = [];
-
-  // Skeleton Loading Component
-  const ClientVisitSkeleton = () => (
-    <div className="space-y-2">
-      <div className="bg-card border border-border rounded-lg p-6 text-center">
-        <Skeleton className="h-12 w-48 mx-auto mb-2" />
-        <Skeleton className="h-6 w-32 mx-auto" />
-      </div>
-
-      <div className="px-2">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <Skeleton className="h-5 w-32 mb-3" />
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-20" />
-          </div>
-        </div>
-      </div>
-
-      <div className="px-3">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <Skeleton className="h-5 w-40 mb-3" />
-          <Skeleton className="h-4 w-full mb-2" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-      </div>
-
-      <div className="px-2">
-        <div className="grid grid-cols-2 gap-2">
-          <Skeleton className="h-14 rounded-md" />
-          <Skeleton className="h-14 rounded-md" />
-        </div>
-      </div>
-    </div>
-  );
 
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
@@ -757,7 +725,7 @@ export default function ClientVisit() {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
 
-        {/* Same structure as Home/Schedule/LiveChat: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+        {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc */}
         <main
           className="flex flex-col bg-background fixed inset-x-0 z-0"
           style={{
@@ -768,91 +736,92 @@ export default function ClientVisit() {
         >
           <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
             <div className="flex items-center gap-2">
-              <SidebarTrigger />
+              <SidebarTrigger className="md:hidden" />
+              <div>
+                <h1 className="text-base font-semibold text-foreground">{t("clientVisit.pageTitle", "Client Visit")}</h1>
+                <p className="text-xs text-muted-foreground">{t("clientVisit.pageSubtitle", "Kunjungan dan aktivitas client")}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
               <RealtimeStatusIndicator
                 isConnected={realtimeConnected}
+                onlineUsers={totalOnline}
                 className="text-xs md:hidden"
               />
-            </div>
-
-            <div className="flex items-center gap-2">
               <div className="hidden md:block">
-                <RealtimeStatusIndicator isConnected={realtimeConnected} />
+                <RealtimeStatusIndicator isConnected={realtimeConnected} onlineUsers={totalOnline} />
               </div>
-              <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                <SelectTrigger className="w-32 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="this_week">This Week</SelectItem>
-                  <SelectItem value="this_month">This Month</SelectItem>
-                  <SelectItem value="last_month">Last Month</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </header>
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
               {loading ? (
-                <div className="p-2">
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-client-visit">
                   <ClientVisitSkeleton />
                 </div>
               ) : (
-                <>
-                  <TimeDisplay />
-
-                  <div className="px-3 py-2">
-                    <LocationButton />
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-client-visit space-y-1">
+                  <div>
+                    <div className="bg-card rounded-lg border border-border overflow-hidden">
+                      <TimeDisplay />
+                      <LocationButton />
+                      <AttendanceStatus
+                        checkIn={activeVisit?.actual_start_time ? new Date(activeVisit.actual_start_time).toLocaleTimeString(language === "id" ? "id-ID" : "en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        }) : undefined}
+                        checkOut={activeVisit?.actual_end_time ? new Date(activeVisit.actual_end_time).toLocaleTimeString(language === "id" ? "id-ID" : "en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        }) : undefined}
+                        workingHours={calculateVisitDuration()}
+                      />
+                      <ClientVisitActions
+                        onStartVisit={handleStartVisit}
+                        onEndVisit={handleEndVisit}
+                        hasActiveVisit={!!activeVisit}
+                      />
+                    </div>
                   </div>
 
-                  <div className="px-3 mb-2">
-                    <AttendanceStatus
-                      checkIn={activeVisit?.actual_start_time ? new Date(activeVisit.actual_start_time).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      }) : undefined}
-                      checkOut={activeVisit?.actual_end_time ? new Date(activeVisit.actual_end_time).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      }) : undefined}
-                      workingHours={calculateVisitDuration()}
+                  <div>
+                    <VisitNotifications
+                      headerAction={
+                        <Select value={dateFilter} onValueChange={handleDateFilterChange}>
+                          <SelectTrigger className="w-32 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="today">{t("reports.dateFilter.today", "Hari Ini")}</SelectItem>
+                            <SelectItem value="yesterday">{t("reports.dateFilter.yesterday", "Kemarin")}</SelectItem>
+                            <SelectItem value="this_week">{t("reports.dateFilter.thisWeek", "Minggu Ini")}</SelectItem>
+                            <SelectItem value="this_month">{t("reports.dateFilter.thisMonth", "Bulan Ini")}</SelectItem>
+                            <SelectItem value="last_month">{t("reports.dateFilter.lastMonth", "Bulan Lalu")}</SelectItem>
+                            <SelectItem value="custom">{t("reports.dateFilter.custom", "Kustom")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      }
                     />
-                  </div>
-
-                  <div className="px-3 mb-2">
-                    <ClientVisitActions
-                      onStartVisit={handleStartVisit}
-                      onEndVisit={handleEndVisit}
-                      hasActiveVisit={!!activeVisit}
-                    />
-                  </div>
-
-                  <div className="px-3 mb-2">
-                    <VisitNotifications />
                   </div>
 
                   {todaySchedule && (
-                    <div className="px-3 mb-2">
+                    <div>
                       <TodayVisitSchedule visits={filteredTodayVisits} periodLabel={getPeriodLabel()} />
                     </div>
                   )}
 
-                  <div className="px-3 mb-2">
+                  <div>
                     <VisitAnalyticsCard {...calculateAnalytics} periodLabel={getPeriodLabel()} />
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
 
           {/* Spacer so content doesn't scroll under the fixed footer */}
-          <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
           <NavigationFooter className="safe-area-bottom-lower" />
         </main>
 
@@ -860,7 +829,7 @@ export default function ClientVisit() {
           isOpen={cameraModal.isOpen}
           onClose={handleCameraClose}
           onCapture={handleCameraCapture}
-          title={cameraModal.type === "start" ? "Foto Mulai Kunjungan" : "Foto Selesai Kunjungan"}
+          title={cameraModal.type === "start" ? t("clientVisit.photoStart", "Foto Mulai Kunjungan") : t("clientVisit.photoEnd", "Foto Selesai Kunjungan")}
         />
 
         <LateAttendanceModal

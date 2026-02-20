@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
     if (conversationId) {
       const { data: convRow } = await supabaseAdmin
         .from("whatsapp_conversations")
-        .select("lead_status_id")
+        .select("lead_status_id, last_inbound_at, created_at")
         .eq("id", conversationId)
         .maybeSingle();
       const leadStatusId = convRow?.lead_status_id ?? null;
@@ -212,6 +212,19 @@ Deno.serve(async (req: Request) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+      }
+      const lastInboundAt = convRow?.last_inbound_at != null ? new Date(convRow.last_inbound_at as string).getTime() : NaN;
+      const createdAt = convRow?.created_at != null ? new Date(convRow.created_at as string).getTime() : NaN;
+      const effectiveMs = Number.isNaN(lastInboundAt) ? createdAt : lastInboundAt;
+      if (!Number.isNaN(effectiveMs) && Date.now() - effectiveMs > 24 * 60 * 60 * 1000) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Pesan terakhir dari customer sudah lewat 24 jam. Kirim pesan tidak diizinkan sampai customer mengirim pesan lagi.",
+            code: "OUTSIDE_24H_WINDOW",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 

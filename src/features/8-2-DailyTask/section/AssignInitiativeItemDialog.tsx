@@ -342,19 +342,18 @@ export const AssignInitiativeItemDialog: React.FC<AssignInitiativeItemDialogProp
           </div>
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
+        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex-row justify-end gap-3">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isAssigning}
-            className="w-full md:w-auto"
           >
             Cancel
           </Button>
           <Button
             onClick={handleAssign}
             disabled={!selectedEmployee || isAssigning || (dueDate && !isValidDate)}
-            className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto"
+            className="bg-blue-600 hover:bg-blue-700"
           >
             {isAssigning ? (
               <>

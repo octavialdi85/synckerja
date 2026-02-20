@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Search, CalendarIcon, Plus, Building2, RefreshCw } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import { Button } from '@/features/ui/button';
@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from '@/features/ui/popover';
 import { useDailyTask } from '../DailyTaskContext';
+import { useActiveEmployeeIds } from '../hooks/useActiveEmployeeIds';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useToast } from '@/features/ui/use-toast';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
@@ -44,6 +45,14 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
   const { isOwner } = useCentralizedUserData();
   const planDateSelectTriggerRef = useRef<HTMLButtonElement>(null);
+  const activeEmployeeIds = useActiveEmployeeIds();
+
+  // Clear PIC if selected employee is no longer active (e.g. resigned)
+  useEffect(() => {
+    if (filters.pic && activeEmployeeIds.size > 0 && !activeEmployeeIds.has(filters.pic)) {
+      setFilters(prev => ({ ...prev, pic: '', picLevel: undefined }));
+    }
+  }, [filters.pic, activeEmployeeIds, setFilters]);
 
   // Fetch departments
   const { data: departments = [], isError: departmentsError, refetch: refetchDepartments } = useQuery({
@@ -62,25 +71,25 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     enabled: !!organizationId,
   });
 
-  // Get unique employees from all task steps for PIC filter
+  // Get unique employees from all task steps for PIC filter; exclude resigned/inactive
   const availableEmployees = useMemo(() => {
     const employeeMap = new Map<string, { id: string; full_name: string }>();
-    
+
     tasks.forEach(task => {
       task.steps?.forEach(step => {
-        if (step.assigned_employee && step.assigned_employee.id) {
+        if (step.assigned_employee?.id && activeEmployeeIds.has(step.assigned_employee.id)) {
           employeeMap.set(step.assigned_employee.id, {
             id: step.assigned_employee.id,
-            full_name: step.assigned_employee.full_name || 'Unknown'
+            full_name: step.assigned_employee.full_name || 'Unknown',
           });
         }
       });
     });
-    
-    return Array.from(employeeMap.values()).sort((a, b) => 
+
+    return Array.from(employeeMap.values()).sort((a, b) =>
       a.full_name.localeCompare(b.full_name)
     );
-  }, [tasks]);
+  }, [tasks, activeEmployeeIds]);
 
   const handleSearchChange = (value: string) => {
     setFilters(prev => ({ ...prev, search: value }));
@@ -129,23 +138,17 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
     }));
   };
 
-  // Get current selected value for combined dropdown
+  // Get current selected value for combined dropdown (exclude resigned PIC)
   const getCurrentTaskViewValue = () => {
-    if (filters.myTask === 'my_task') {
-      return 'my_task';
-    }
-    if (filters.pic) {
-      return filters.pic;
-    }
+    if (filters.myTask === 'my_task') return 'my_task';
+    if (filters.pic && activeEmployeeIds.has(filters.pic)) return filters.pic;
     return 'all_pic';
   };
 
   // Get display text for combined dropdown
   const getTaskViewDisplayText = () => {
-    if (filters.myTask === 'my_task') {
-      return 'My Task';
-    }
-    if (filters.pic) {
+    if (filters.myTask === 'my_task') return 'My Task';
+    if (filters.pic && activeEmployeeIds.has(filters.pic)) {
       const selectedEmployee = availableEmployees.find(emp => emp.id === filters.pic);
       return selectedEmployee ? selectedEmployee.full_name : 'All tasks';
     }

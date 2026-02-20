@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { CheckSquare, Target, FileText, Info } from 'lucide-react';
 import { useToast } from '@/features/1-login/hooks/use-toast';
@@ -7,8 +7,10 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
 import { supabase } from '@/integrations/supabase/client';
 import { ObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
-import { LoadingDots } from '@/components/LoadingDots';
+import { Skeleton } from '@/mobile/components/ui/skeleton';
 import { Badge } from '@/features/ui/badge';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface AddSolutionAsDailyTaskModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
   const { toast } = useToast();
   const { organizationId } = useCurrentOrg();
   const { data: cycles = [] } = useOkrCycles(organizationId);
+  const isMobile = useIsMobile();
   
   // Get active cycle IDs
   const activeCycleIds = cycles
@@ -342,18 +345,27 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-2xl md:max-h-[85vh] border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%] overflow-hidden">
-          <DialogHeader className="flex-shrink-0 pb-4 border-b px-4 pt-4 md:px-0 md:pt-0">
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <CheckSquare className="w-5 h-5 text-purple-600" />
-              Add Solution as Daily Task
+        <DialogContent
+          className={cn(
+            'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+            isMobile
+              ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+              : 'md:max-w-2xl md:max-h-[85vh] md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+          )}
+          fullscreenAnimation={isMobile}
+          hideCloseButton={isMobile}
+        >
+          <DialogHeader className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+            isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+          )}>
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+              <span className="lowercase truncate">Add Solution as Daily Task</span>
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-600 mt-1 text-left break-words">
-              Convert this solution into a daily task with an individual objective
-            </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto seamless-scroll pt-4 space-y-6 px-4 py-4 md:p-0">
+          <div className="space-y-6 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
             {/* Solution Information Card */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -372,9 +384,8 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
                 Individual Objective <span className="text-red-500">*</span>
               </label>
               {isCheckingExistingTask ? (
-                <div className="w-full border border-gray-200 rounded-lg p-3 flex items-center gap-2 bg-gray-50">
-                  <LoadingDots size="sm" />
-                  <span className="text-sm text-gray-600">Checking for existing task...</span>
+                <div className="w-full border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <Skeleton className="h-10 w-full rounded-md" />
                 </div>
               ) : (
                 <>
@@ -469,42 +480,47 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
 
             {/* Loading State */}
             {isSubmitting && (
-              <div className="flex flex-col items-center justify-center py-6 space-y-3">
-                <LoadingDots size="lg" />
-                <p className="text-sm text-gray-600">Creating task and step...</p>
+              <div className="py-6 space-y-2">
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-[80%] rounded" />
+                <Skeleton className="h-12 w-full rounded-lg" />
               </div>
             )}
           </div>
 
-          {/* Footer with Action Buttons */}
-          <div className="flex-shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t mt-4 px-4 pb-4 md:px-0 md:pb-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreateTask}
-              disabled={!selectedObjectiveId || isSubmitting || !meetingPoint}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 w-full sm:w-auto"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <LoadingDots size="sm" />
-                  <span>Creating...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <CheckSquare className="w-4 h-4" />
-                  <span>Create Task</span>
-                </div>
-              )}
-            </Button>
+          {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm", primary default, loading spinner */}
+          <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleCreateTask}
+                disabled={!selectedObjectiveId || isSubmitting || !meetingPoint}
+                className="min-w-[120px] flex items-center justify-center gap-1.5 w-full sm:w-auto"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="w-4 h-4" />
+                    Create Task
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

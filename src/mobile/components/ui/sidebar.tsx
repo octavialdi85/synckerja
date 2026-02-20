@@ -209,6 +209,7 @@ const Sidebar = React.forwardRef<
               } as React.CSSProperties
             }
             side={side}
+            underSafeArea
           >
             <SheetHeader className="sr-only">
               <SheetTitle>Mobile Navigation Sidebar</SheetTitle>

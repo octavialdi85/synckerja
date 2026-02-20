@@ -1,31 +1,40 @@
 import { useEffect, useState } from "react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
-export const TimeDisplay = () => {
+interface TimeDisplayProps {
+  /** If false, update every 60s (lighter on battery); default true for seconds precision */
+  showSeconds?: boolean;
+}
+
+export const TimeDisplay = ({ showSeconds = true }: TimeDisplayProps) => {
+  const { language } = useAppTranslation();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const locale = language === "id" ? "id-ID" : "en-US";
+  const intervalMs = showSeconds ? 1000 : 60_000;
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, intervalMs);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [intervalMs]);
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
+    return date.toLocaleTimeString(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(showSeconds ? { second: "2-digit" as const } : {}),
+      hour12: false,
     });
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('id-ID', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    return date.toLocaleDateString(locale, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 

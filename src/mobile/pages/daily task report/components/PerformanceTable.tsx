@@ -18,6 +18,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
+import { Skeleton } from '@/mobile/components/ui/skeleton';
 
 interface ResolvedBlockerRow {
   id: string;
@@ -247,15 +248,11 @@ export const PerformanceTable = () => {
           )}
         </div>
       </div>
-      <div className="flex-1 min-h-0 seamless-scroll overflow-auto p-2">
+      <div className="p-2 space-y-2">
         {viewMode === 'performance' ? (
           /* Mobile: Card-based layout for performance */
-          <div className="space-y-2">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-sm text-gray-500">Loading...</div>
-              </div>
-            ) : rows.length === 0 ? (
+          <>
+            {rows.length === 0 ? (
               <div className="text-sm text-gray-500 text-center py-8">No data</div>
             ) : (
               rows.map((r, idx) => {
@@ -299,13 +296,19 @@ export const PerformanceTable = () => {
                 );
               })
             )}
-          </div>
+          </>
         ) : (
           /* Mobile: Card-based layout for resolved blockers */
-          <div className="space-y-2">
+          <>
             {loadingResolved ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-sm text-gray-500">Loading resolved blockers...</div>
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                ))}
               </div>
             ) : resolvedRows.length === 0 ? (
               <div className="text-sm text-gray-500 text-center py-8">No resolved blockers found</div>
@@ -358,7 +361,7 @@ export const PerformanceTable = () => {
                 </div>
               ))
             )}
-          </div>
+          </>
         )}
       </div>
       <BlockerDetailsModal

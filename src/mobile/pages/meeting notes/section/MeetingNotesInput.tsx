@@ -17,7 +17,7 @@ import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmploy
 const MeetingNotesInput = () => {
   const [formData, setFormData] = useState({
     discussion_point: '',
-    request_by: '',
+    request_by: '', // stores employee id for unique Select value
     status: 'Not Started'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,17 +33,20 @@ const MeetingNotesInput = () => {
     try {
       console.log('Submitting meeting point:', formData); // Debug log
       
+      const requestByName = formData.request_by
+        ? (employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by)
+        : '';
       await addMeetingPoint({
         discussion_point: formData.discussion_point,
-        request_by: formData.request_by,
+        request_by: requestByName,
         status: formData.status,
         meeting_date: new Date().toISOString().split('T')[0] // Auto set today's date
       });
-      
-      // Reset form but keep request_by for convenience
+
+      // Reset form but keep request_by (id) for convenience
       setFormData({
         discussion_point: '',
-        request_by: formData.request_by, // Keep selected employee
+        request_by: formData.request_by,
         status: 'Not Started'
       });
     } catch (error) {
@@ -102,7 +105,7 @@ const MeetingNotesInput = () => {
                 </SelectTrigger>
                 <SelectContent className="bg-white border shadow-md z-50">
                   {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.full_name}>
+                    <SelectItem key={employee.id} value={employee.id}>
                       {employee.full_name}
                     </SelectItem>
                   ))}

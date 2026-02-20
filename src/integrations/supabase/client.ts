@@ -27,10 +27,11 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
   },
   global: {
     // Better error handling for network issues with retry logic
-    fetch: async (url, options = {}) => {
-      const isAuthRequest = url.includes('/auth/v1/');
+    fetch: async (url: RequestInfo | URL, options: RequestInit = {}) => {
+      const urlStr = typeof url === 'string' ? url : url instanceof Request ? url.url : (url as URL).href;
+      const isAuthRequest = urlStr.includes('/auth/v1/');
       // Detect refresh token vs login: refresh_token in URL params or body
-      const isRefreshToken = url.includes('grant_type=refresh_token') || 
+      const isRefreshToken = urlStr.includes('grant_type=refresh_token') || 
                             (options.body && typeof options.body === 'string' && options.body.includes('grant_type=refresh_token'));
       // Refresh token: 1 retry on 503/PGRST002 so transient server issues don't expire session immediately
       // Login: longer timeout (40s) and 1 retry on timeout so slow networks can complete
@@ -58,12 +59,12 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
           // CORS errors: Configuration issue, won't be fixed by retry
           if (response.status === 404) {
             // Check if this is an expected 404 for KOL tables
-            const isExpected404 = url.includes('/kol_') || 
-                                 url.includes('/kol-') ||
-                                 url.includes('kol_ratings') ||
-                                 url.includes('kol_metrics') ||
-                                 url.includes('kol_posts') ||
-                                 url.includes('kol_operations');
+            const isExpected404 = urlStr.includes('/kol_') || 
+                                 urlStr.includes('/kol-') ||
+                                 urlStr.includes('kol_ratings') ||
+                                 urlStr.includes('kol_metrics') ||
+                                 urlStr.includes('kol_posts') ||
+                                 urlStr.includes('kol_operations');
             
             if (isExpected404) {
               // For expected 404s, return a response that Supabase can parse as empty result
@@ -74,7 +75,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
             }
             
             // For other 404s, throw error silently
-            throw new Error(`Resource not found (404) - ${url}`);
+            throw new Error(`Resource not found (404) - ${urlStr}`);
           }
           
           if (response.status === 500) {
@@ -95,18 +96,18 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
                 continue;
               }
             }
-            if (url.includes('/auth/v1/')) {
+            if (urlStr.includes('/auth/v1/')) {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
-                detail: { status: 500, message: 'Session or refresh token error (500)', url }
+                detail: { status: 500, message: 'Session or refresh token error (500)', url: urlStr }
               }));
             }
-            throw new Error(`Server error (500) - ${url}`);
+            throw new Error(`Server error (500) - ${urlStr}`);
           }
-          if (response.status === 502 && url.includes('/auth/v1/')) {
+          if (response.status === 502 && urlStr.includes('/auth/v1/')) {
             window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
-              detail: { status: 502, message: 'Auth service unavailable. Please sign in again.', url }
+              detail: { status: 502, message: 'Auth service unavailable. Please sign in again.', url: urlStr }
             }));
-            throw new Error(`Auth service unavailable (502) - ${url}`);
+            throw new Error(`Auth service unavailable (502) - ${urlStr}`);
           }
           
           // Handle 503 Service Unavailable - usually temporary, should retry
@@ -135,7 +136,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
                               (errorBody?.message && errorBody.message.includes('schema cache'));
             
             // For auth endpoints, dispatch timeout event
-            if (url.includes('/auth/v1/')) {
+            if (urlStr.includes('/auth/v1/')) {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
                 detail: { 
                   status: 503, 
@@ -149,8 +150,8 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
             
             // Create error with PGRST002 info if available
             const errorMsg = isPGRST002 
-              ? `Database connection issue (PGRST002) - ${url}`
-              : `Service unavailable (503) - ${url}`;
+              ? `Database connection issue (PGRST002) - ${urlStr}`
+              : `Service unavailable (503) - ${urlStr}`;
             const error = new Error(errorMsg);
             if (isPGRST002) {
               (error as any).code = 'PGRST002';
@@ -165,15 +166,15 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
           const corsHeader = response.headers.get('Access-Control-Allow-Origin');
           if (response.status >= 400 && corsHeader && !corsHeader.includes(window.location.origin)) {
             // CORS configuration issue - won't be fixed by retry
-            throw new Error(`CORS error - origin not allowed: ${url}`);
+            throw new Error(`CORS error - origin not allowed: ${urlStr}`);
           }
 
           // CRITICAL: Handle 504/522 on any auth path (/token refresh, /user, etc.)
           // 522 = Connection Timed Out (Cloudflare can't reach Supabase origin - server down/slow)
           // 504 = Gateway Timeout (Supabase "context deadline exceeded" - auth service overloaded)
-          if ((response.status === 504 || response.status === 522) && url.includes('/auth/v1/')) {
+          if ((response.status === 504 || response.status === 522) && urlStr.includes('/auth/v1/')) {
             const errorType = response.status === 504 ? 'Gateway Timeout' : 'Connection Timed Out';
-            const isRefresh = url.includes('grant_type=refresh_token');
+            const isRefresh = urlStr.includes('grant_type=refresh_token');
             // Retry login once on 504/522 (server-side timeout) - often succeeds on retry
             if (isLoginRequest && !isRefresh && attempt < MAX_RETRIES) {
               if (timeoutId) clearTimeout(timeoutId);
@@ -224,7 +225,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
                              errorStack.includes('cors') ||
                              (errorName === 'TypeError' && 
                               errorMessage.includes('failed to fetch') && 
-                              url.includes('/rest/v1/') &&
+                              urlStr.includes('/rest/v1/') &&
                               !errorMessage.includes('timeout')); // Exclude timeout errors
           
           // Check for other non-retryable errors
@@ -276,7 +277,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
           if (isAuthRequest && (isNetworkError || isCorsError)) {
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
-                detail: { status: 502, message: 'Auth service unavailable. Please sign in again.', url }
+                detail: { status: 502, message: 'Auth service unavailable. Please sign in again.', url: urlStr }
               }));
             }
             throw new Error('Auth service unavailable (network/CORS). Please sign in again.');
@@ -288,16 +289,16 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
           if (isCorsError || (isTimeout && isAuthRequest)) {
             if (isTimeout && isAuthRequest && typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
-                detail: { status: 408, message: 'Auth request timed out or was aborted. Please sign in again.', url }
+                detail: { status: 408, message: 'Auth request timed out or was aborted. Please sign in again.', url: urlStr }
               }));
             }
             // Check if this is an expected CORS error for KOL tables
-            const isExpectedCorsError = url.includes('/kol_') || 
-                                       url.includes('/kol-') ||
-                                       url.includes('kol_ratings') ||
-                                       url.includes('kol_metrics') ||
-                                       url.includes('kol_posts') ||
-                                       url.includes('kol_operations');
+            const isExpectedCorsError = urlStr.includes('/kol_') || 
+                                       urlStr.includes('/kol-') ||
+                                       urlStr.includes('kol_ratings') ||
+                                       urlStr.includes('kol_metrics') ||
+                                       urlStr.includes('kol_posts') ||
+                                       urlStr.includes('kol_operations');
             
             // For expected CORS errors, throw silently - hooks will handle gracefully
             // Note: Browser console will still show CORS errors, but our code handles them silently
@@ -328,7 +329,7 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
               // For auth timeout, dispatch event so app can handle gracefully
               if (isAuthRequest) {
                 window.dispatchEvent(new CustomEvent('supabase-auth-timeout', {
-                  detail: { status: 408, message: `Auth request timeout after ${timeoutSeconds}s`, url }
+                  detail: { status: 408, message: `Auth request timeout after ${timeoutSeconds}s`, url: urlStr }
                 }));
               }
               throw new Error(`Network request timeout after ${timeoutSeconds} seconds${isAuthRequest ? ' (auth request)' : ''}`);

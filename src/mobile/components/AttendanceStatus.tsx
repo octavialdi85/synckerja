@@ -1,5 +1,6 @@
-
 import { useEffect, useState } from "react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { logger } from "@/config/logger";
 
 interface AttendanceStatusProps {
   checkIn?: string;
@@ -8,12 +9,12 @@ interface AttendanceStatusProps {
 }
 
 export const AttendanceStatus = ({ checkIn, checkOut, workingHours }: AttendanceStatusProps) => {
+  const { t } = useAppTranslation();
   const [elapsedTime, setElapsedTime] = useState("");
 
   useEffect(() => {
-    // Jika sudah clock out, tampilkan pesan selamat
     if (checkOut) {
-      setElapsedTime("Hati Hati Di Jalan, Selamat Istirahat");
+      setElapsedTime(t("mobileHome.clockOutMessage", "Hati Hati Di Jalan, Selamat Istirahat"));
       return;
     }
 
@@ -30,7 +31,6 @@ export const AttendanceStatus = ({ checkIn, checkOut, workingHours }: Attendance
       try {
         const now = new Date();
 
-        // Jika format waktu-only (HH:mm:ss atau HH.mm.ss), hitung selisih berbasis detik harian
         const timeOnly = checkIn.match(/^(\d{1,2})[.:](\d{1,2})[.:](\d{1,2})$/);
 
         let hoursDiff = 0;
@@ -47,13 +47,12 @@ export const AttendanceStatus = ({ checkIn, checkOut, workingHours }: Attendance
           const checkSec = h * 3600 + m * 60 + s;
 
           let diffSec = nowSec - checkSec;
-          if (diffSec < 0) diffSec += 24 * 3600; // melewati tengah malam
+          if (diffSec < 0) diffSec += 24 * 3600;
 
-          hoursDiff = Math.floor(diffSec / 3600); // biarkan > 23 jika kerja > 24 jam
+          hoursDiff = Math.floor(diffSec / 3600);
           minutes = Math.floor((diffSec % 3600) / 60);
           seconds = diffSec % 60;
         } else {
-          // Coba parse sebagai datetime penuh
           const parsed = new Date(checkIn);
           if (isNaN(parsed.getTime())) {
             setElapsedTime("");
@@ -61,18 +60,18 @@ export const AttendanceStatus = ({ checkIn, checkOut, workingHours }: Attendance
           }
 
           let diffMs = now.getTime() - parsed.getTime();
-          if (diffMs < 0) diffMs = 0; // jika masa depan, tampilkan 00:00:00
+          if (diffMs < 0) diffMs = 0;
 
           hoursDiff = Math.floor(diffMs / (1000 * 60 * 60));
           minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
           seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
         }
 
-        const formattedTime = `${String(hoursDiff).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        const formattedTime = `${String(hoursDiff).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
-        setElapsedTime(`Clock In ${formattedTime} ago`);
+        setElapsedTime(t("mobileHome.clockInAgo", "Clock In {{time}} ago", { time: formattedTime }));
       } catch (error) {
-        console.error('Error calculating elapsed time:', error);
+        logger.error("Error calculating elapsed time:", error);
         setElapsedTime("");
       }
     };
@@ -81,25 +80,25 @@ export const AttendanceStatus = ({ checkIn, checkOut, workingHours }: Attendance
     const interval = setInterval(updateElapsedTime, 1000);
 
     return () => clearInterval(interval);
-  }, [checkIn, checkOut]);
+  }, [checkIn, checkOut, t]);
 
   return (
     <div className="px-4 py-3">
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="text-center">
-          <p className="text-xs text-muted-foreground mb-1">Check In</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("mobileHome.checkIn", "Check In")}</p>
           <p className="text-lg font-semibold text-foreground">
-            {checkIn || '--:--:--'}
+            {checkIn || "--:--:--"}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-muted-foreground mb-1">Check Out</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("mobileHome.checkOut", "Check Out")}</p>
           <p className="text-lg font-semibold text-foreground">
-            {checkOut || '--:--:--'}
+            {checkOut || "--:--:--"}
           </p>
         </div>
       </div>
-      
+
       <div className="bg-primary rounded-lg px-4 py-2">
         <p className="text-center text-primary-foreground font-medium">
           {elapsedTime || workingHours}

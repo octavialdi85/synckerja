@@ -6,6 +6,8 @@ import { useDepartmentAccess } from '@/features/1-layouts/sidebar/useDepartmentA
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { LoadingDots } from './LoadingDots';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -42,6 +44,7 @@ export const ProtectedRoute = ({
 
   // Get additional context from useCentralizedUserData to check organization loading and employee status
   const { hasOrganization, organization, employee, isOwner } = useCentralizedUserData();
+  const isMobile = useIsMobile();
 
   // Show loading spinner while checking auth state and permissions
   // Also wait for organization data to load when permissions are required
@@ -51,6 +54,9 @@ export const ProtectedRoute = ({
   const isLoading = loading || (requiresPermissions && configLoading) || isLoadingOrgData;
   
   if (isLoading) {
+    if (isMobile) {
+      return <RouteLoadingSkeleton />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
@@ -208,9 +214,13 @@ export const ProtectedRoute = ({
 export const PublicRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const isMobile = useIsMobile();
 
   // Show loading while checking auth state
   if (loading) {
+    if (isMobile) {
+      return <RouteLoadingSkeleton />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">

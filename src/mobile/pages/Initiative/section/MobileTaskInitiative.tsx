@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Target, CheckCircle, Clock, User, ChevronRight, Loader2 } from 'lucide-react';
-import { LoadingDots } from '@/components/LoadingDots';
+import { InitiativePageSkeleton } from '../InitiativePageSkeleton';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -10,6 +11,7 @@ import { Button } from '@/features/ui/button';
 import { MobileDueDateDialog } from '../components/MobileDueDateDialog';
 import { MobileAssignInitiativeItemDialog } from '../components/MobileAssignInitiativeItemDialog';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { logger } from '@/config/logger';
 
 // Export stats for parent component
 export interface InitiativeStats {
@@ -34,18 +36,26 @@ interface UncompletedItem {
 
 interface MobileTaskInitiativeProps {
   onStatsChange?: (stats: InitiativeStats) => void;
+  /** When set, parent shows loading; this component does not render its own loading UI (avoids redundant loading). */
+  onLoadingChange?: (loading: boolean) => void;
 }
 
-const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChange }) => {
+const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChange, onLoadingChange }) => {
   const { tasks, isLoading: tasksLoading } = useDailyTask();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
+  const { t } = useAppTranslation();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
-  
   // Check if user can assign employees (not employee role)
   const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
   const [uncompletedItems, setUncompletedItems] = useState<UncompletedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const showSelfLoading = !onLoadingChange && (isLoading || tasksLoading);
+  /* Report only initiative list loading so parent does not wait for full DailyTask fetch. */
+  React.useEffect(() => {
+    onLoadingChange?.(isLoading);
+  }, [isLoading, onLoadingChange]);
   const [takingTask, setTakingTask] = useState<string | null>(null);
   const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
   const [showDueDateDialog, setShowDueDateDialog] = useState(false);
@@ -61,22 +71,18 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         
         if (userError) {
-          console.error('Error getting user:', userError);
+          logger.error('Error getting user:', userError);
           return;
         }
         
         if (!user) {
-          if (import.meta.env.DEV) {
-            console.log('No authenticated user found');
-          }
+          logger.debug('No authenticated user found');
           return;
         }
 
         // Must have organization ID to fetch employee
         if (!organizationId) {
-          if (import.meta.env.DEV) {
-            console.log('Waiting for organization ID...');
-          }
+          logger.debug('Waiting for organization ID...');
           return;
         }
 
@@ -89,17 +95,15 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
           .maybeSingle(); // Use maybeSingle() to avoid error if no record found
 
         if (employeeError) {
-          console.error('Error fetching employee:', employeeError);
+          logger.error('Error fetching employee:', employeeError);
           return;
         }
 
         if (employee) {
           setCurrentEmployeeId(employee.id);
-          if (import.meta.env.DEV) {
-            console.log('✅ Current employee ID loaded:', employee.id);
-          }
+          logger.debug('Current employee ID loaded:', employee.id);
         } else {
-          console.warn('⚠️ No employee record found for current user in this organization');
+          logger.warn('No employee record found for current user in this organization');
           toast({
             title: 'Profile Not Found',
             description: 'Your employee profile is not found in this organization. Please contact admin.',
@@ -107,7 +111,7 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
           });
         }
       } catch (error) {
-        console.error('Error fetching current employee:', error);
+        logger.error('Error fetching current employee:', error);
       }
     };
 
@@ -270,12 +274,9 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
             .order('created_at', { ascending: false });
 
           if (subStepError) {
-            console.error('Error fetching sub-steps:', subStepError);
+            logger.error('Error fetching sub-steps:', subStepError);
           } else if (incompleteSubSteps) {
-            // Only log summary, not each item (performance optimization)
-            if (import.meta.env.DEV) {
-              console.log('📊 Fetched substeps:', incompleteSubSteps.length);
-            }
+            logger.debug('Fetched substeps:', incompleteSubSteps.length);
             
             // Fetch due dates for all substep assignments
             const substepAssignmentIds = incompleteSubSteps
@@ -334,13 +335,12 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
                   });
                 }
               } catch (err) {
-                // Skip this substep if there's an error
-                console.error('Error fetching parent step:', err);
+                logger.error('Error fetching parent step:', err);
               }
             }
           }
         } catch (err) {
-          console.error('Error in sub-steps fetch:', err);
+          logger.error('Error in sub-steps fetch:', err);
         }
 
         // Sort by created_at (newest first)
@@ -356,7 +356,7 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
         });
       }
     } catch (error) {
-      console.error('Error fetching uncompleted items:', error);
+      logger.error('Error fetching uncompleted items:', error);
         toast({
           title: 'Error',
           description: 'Failed to load uncompleted tasks',
@@ -372,10 +372,15 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
     fetchUncompletedItems();
   }, [fetchUncompletedItems]);
 
-  // Show due date dialog before taking task
+  // Take task: due date dialog then assign to self. Reassign: open assign dialog for admin/HR to assign to another employee.
   const handleTakeTaskClick = (item: UncompletedItem) => {
-    setSelectedItem(item);
-    setShowDueDateDialog(true);
+    if (item.assignedTo && item.assignedTo !== currentEmployeeId) {
+      setSelectedItemForAssign(item);
+      setShowAssignDialog(true);
+    } else {
+      setSelectedItem(item);
+      setShowDueDateDialog(true);
+    }
   };
 
   // Handle actual task assignment with due date
@@ -519,7 +524,7 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
           .insert(dueDatePayload);
 
         if (dueDateError) {
-          console.error('Error saving due date:', dueDateError);
+          logger.error('Error saving due date:', dueDateError);
           // Don't fail the whole operation if due date save fails
           toast({
             title: 'Warning',
@@ -534,7 +539,7 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
       setSelectedItem(null);
       await fetchUncompletedItems();
     } catch (error) {
-      console.error('Error taking task:', error);
+      logger.error('Error taking task:', error);
       toast({
         title: 'Error',
         description: 'Failed to assign task',
@@ -573,17 +578,13 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
     }
   };
 
-  if (isLoading || tasksLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <LoadingDots size="lg" />
-      </div>
-    );
+  if (showSelfLoading) {
+    return <InitiativePageSkeleton />;
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header Stats */}
+    <div className="space-y-1">
+      {/* Header Stats - same vertical rhythm as daily task list */}
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <Target className="w-5 h-5 text-indigo-600" />
@@ -603,8 +604,8 @@ const MobileTaskInitiative: React.FC<MobileTaskInitiativeProps> = ({ onStatsChan
         </div>
       </div>
 
-      {/* Uncompleted Items List */}
-      <div className="space-y-2">
+      {/* Uncompleted Items List - space-y-1 same as /tools/daily-task */}
+      <div className="space-y-1">
         {uncompletedItems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <CheckCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />

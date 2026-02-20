@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Task } from '@/features/8-2-DailyTask/DailyTaskContext';
-
-const supabaseClient = supabase as any;
+import { logger } from '@/config/logger';
 
 interface UseBlockerCountsProps {
   filteredTasks: Task[];
@@ -66,18 +65,19 @@ export const useBlockerCounts = ({ filteredTasks }: UseBlockerCountsProps) => {
         }
 
         // SINGLE BATCHED QUERY #1: Get all sub-steps for all tasks at once
-        let allSubSteps: any[] = [];
+        type SubStepRow = { id: string; parent_step_id: string };
+        let allSubSteps: SubStepRow[] = [];
         try {
-          const { data, error } = await supabaseClient
+          const { data, error } = await supabase
             .from('task_steps_to_steps')
             .select('id, parent_step_id')
             .in('parent_step_id', allStepIds);
-          
-          if (!error && data) {
-            allSubSteps = data;
+          const rows = (data as unknown as SubStepRow[] | null) ?? [];
+          if (!error && rows.length) {
+            allSubSteps = rows;
           }
         } catch (err) {
-          console.warn('Failed to fetch sub-steps:', err);
+          logger.warn('Failed to fetch sub-steps:', err);
           // Continue with empty sub-steps
         }
 
@@ -86,41 +86,41 @@ export const useBlockerCounts = ({ filteredTasks }: UseBlockerCountsProps) => {
         const allSubStepIds = allSubSteps.map(s => s.id);
         
         // SINGLE BATCHED QUERY #2: Get ALL blocker counts for ALL steps at once (only unresolved)
-        let stepBlockers: any[] = [];
+        type BlockerRow = { task_step_id: string; is_resolved: boolean | null };
+        let stepBlockers: BlockerRow[] = [];
         try {
-          const { data, error } = await supabaseClient
+          const { data, error } = await supabase
             .from('task_step_history')
             .select('task_step_id, is_resolved')
             .eq('action_type', 'blocker_added')
             .in('task_step_id', allStepIds);
-          
-          if (!error && data) {
-            // Filter for unresolved blockers in JavaScript to avoid 500 errors
-            stepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
+          const rows = (data as unknown as BlockerRow[] | null) ?? [];
+          if (!error && rows.length) {
+            stepBlockers = rows.filter((b) => b.is_resolved === null || b.is_resolved === false);
           }
         } catch (err) {
-          console.warn('Failed to count step blockers:', err);
+          logger.warn('Failed to count step blockers:', err);
           // Continue with empty blockers - graceful degradation
         }
 
         if (cancelled) return;
 
         // SINGLE BATCHED QUERY #3: Get ALL blocker counts for ALL sub-steps at once (only unresolved)
-        let subStepBlockers: any[] = [];
+        type SubStepBlockerRow = { task_steps_to_steps_id: string; is_resolved: boolean | null };
+        let subStepBlockers: SubStepBlockerRow[] = [];
         if (allSubStepIds.length > 0) {
           try {
-            const { data, error } = await supabaseClient
+            const { data, error } = await supabase
               .from('task_step_history')
               .select('task_steps_to_steps_id, is_resolved')
               .eq('action_type', 'blocker_added')
               .in('task_steps_to_steps_id', allSubStepIds);
-            
-            if (!error && data) {
-              // Filter for unresolved blockers in JavaScript to avoid 500 errors
-              subStepBlockers = data.filter((b: any) => b.is_resolved === null || b.is_resolved === false);
+            const rows = (data as unknown as SubStepBlockerRow[] | null) ?? [];
+            if (!error && rows.length) {
+              subStepBlockers = rows.filter((b) => b.is_resolved === null || b.is_resolved === false);
             }
           } catch (err) {
-            console.warn('Failed to count sub-step blockers:', err);
+            logger.warn('Failed to count sub-step blockers:', err);
             // Continue with empty blockers - graceful degradation
           }
         }
@@ -162,7 +162,7 @@ export const useBlockerCounts = ({ filteredTasks }: UseBlockerCountsProps) => {
           setBlockerCountByTask(counts);
         }
       } catch (e) {
-        console.warn('Error loading blocker counts:', e);
+        logger.warn('Error loading blocker counts:', e);
         // Graceful degradation: Show tasks without blocker counts
         setBlockerCountByTask({});
       }

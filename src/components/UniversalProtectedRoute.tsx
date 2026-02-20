@@ -6,6 +6,8 @@ import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedU
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { useAuth } from '@/features/1-login';
 import { LoadingDots } from './LoadingDots';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
 import { logger } from '@/config/logger';
 
 interface UniversalProtectedRouteProps {
@@ -180,8 +182,12 @@ export const UniversalProtectedRoute = ({
 
   // Unified loading state - after first grant, don't show loading again for configLoading flicker (avoids double mount)
   const isLoading = loading || (requiresAuth && configLoading && !accessGrantedRef.current) || isValidating;
-  
+  const isMobile = useIsMobile();
+
   if (isLoading) {
+    if (isMobile) {
+      return <RouteLoadingSkeleton />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">

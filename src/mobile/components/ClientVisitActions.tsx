@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Button } from "@/mobile/components/ui/button";
 import { MapPin, Clock } from "lucide-react";
-import { ClientLocationValidator } from "./ClientLocationValidator";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface LocationValidationResult {
   is_valid: boolean;
@@ -21,12 +20,13 @@ interface ClientVisitActionsProps {
   isLoading?: boolean;
 }
 
-export const ClientVisitActions = ({ 
-  onStartVisit, 
-  onEndVisit, 
+export const ClientVisitActions = ({
+  onStartVisit,
+  onEndVisit,
   hasActiveVisit,
   isLoading = false
 }: ClientVisitActionsProps) => {
+  const { t } = useAppTranslation();
   const handleStartVisit = () => {
     onStartVisit();
   };
@@ -36,30 +36,30 @@ export const ClientVisitActions = ({
   };
 
   return (
-    <div className="space-y-2">
-      {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-2">
+    <div className="px-4 py-3">
+      {/* Action Buttons - padding sama seperti AttendanceActions di Home */}
+      <div className="grid grid-cols-2 gap-3">
         <Button 
           onClick={handleStartVisit}
           disabled={hasActiveVisit || isLoading}
-          className="h-12 flex flex-col gap-1"
+          className="h-14 flex flex-col gap-1 text-sm font-semibold"
           variant={hasActiveVisit ? "outline" : "default"}
         >
           <MapPin className="h-5 w-5" />
           <span className="text-xs">
-            {hasActiveVisit ? "Sudah Mulai" : "Mulai Kunjungan"}
+            {hasActiveVisit ? t("clientVisit.alreadyStarted", "Sudah Mulai") : t("clientVisit.startVisit", "Mulai Kunjungan")}
           </span>
         </Button>
         
         <Button 
           onClick={handleEndVisit}
           disabled={!hasActiveVisit || isLoading}
-          className="h-12 flex flex-col gap-1"
+          className="h-14 flex flex-col gap-1 text-sm font-semibold"
           variant={!hasActiveVisit ? "outline" : "destructive"}
         >
           <Clock className="h-5 w-5" />
           <span className="text-xs">
-            {!hasActiveVisit ? "Belum Mulai" : "Selesai Kunjungan"}
+            {!hasActiveVisit ? t("clientVisit.notStarted", "Belum Mulai") : t("clientVisit.endVisit", "Selesai Kunjungan")}
           </span>
         </Button>
       </div>

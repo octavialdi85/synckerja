@@ -22,6 +22,8 @@ import {
   SummaryData,
   RecentStepFilters,
 } from './types';
+export type { Task, TaskStep } from './types';
+
 import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } from './utils/taskUtils';
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
@@ -229,7 +231,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentStepUpdates, setRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
   const [filteredRecentStepUpdates, setFilteredRecentStepUpdates] = useState<RecentStepUpdate[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   // Track recently updated tasks to skip real-time refresh (optimization for status updates)
   const recentlyUpdatedTasksRef = useRef<Set<string>>(new Set());
   // Track tasks that have been auto-fixed for has_reminder to avoid duplicate updates
@@ -378,6 +380,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       setIsLoading(false);
       return;
     }
+    setIsLoading(true);
     try {
       const isDev = import.meta.env.DEV;
       if (isDev) {
@@ -396,7 +399,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         const result = await Promise.race([getUserPromise, getUserTimeout]);
         user = (result as any)?.data?.user;
       } catch {
-        setTasks([]);
+        // Jangan setTasks([]): effect bisa re-run; panggilan lain mungkin sudah set tasks dari cache/sukses. Hanya set loading false.
         setIsLoading(false);
         return;
       }
@@ -405,7 +408,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         if (import.meta.env.DEV) {
           logger.debug('⚠️ No authenticated user found');
         }
-        setTasks([]);
+        // Jangan setTasks([]): jangan overwrite data sukses dari run lain (effect re-run).
         setIsLoading(false);
         return;
       }
@@ -626,18 +629,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // OPTIMIZED: No longer need to query completion dates from history
       // We now use completed_at column directly from task_steps table (fetched above)
 
-      // Fetch task assignments separately to get PIC information - use batch processing
-      if (isDev) {
-        logger.query('🔍 Fetching task assignments for tasks:', taskIds);
-      }
-      
+      const stepIds = (stepsData || []).map(s => s.id);
+
+      // Run assignments, step assignments, and sub-steps in parallel (log showed ~2.25s in this segment when sequential)
       let assignmentsData: any[] = [];
-      if (taskIds.length > 0) {
-        try {
-          // Use batch processing to prevent timeout with many IDs
-          const assignmentsBatches = await batchQuery(
-            taskIds,
-            async (batch) => {
+      let stepAssignmentsData: any[] = [];
+      let subStepsData: any[] = [];
+
+      const [assignmentsBatchesResult, stepAssignsBatchesResult, subStepsBatchesResult] = await Promise.all([
+        taskIds.length > 0
+          ? batchQuery(taskIds, async (batch) => {
               const { data, error } = await supabase
                 .from('daily_tasks_assigned')
                 .select(`
@@ -649,34 +650,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                   employee:employees!employee_id(id, full_name)
                 `)
                 .in('daily_task_id', batch);
-              
               return { data: data || [], error };
-            }
-          );
-          
-          assignmentsData = assignmentsBatches;
-          if (isDev) {
-            logger.query('✅ Fetched task assignments:', assignmentsData.length);
-          }
-        } catch (error) {
-          console.error('❌ Error fetching task assignments:', error);
-          assignmentsData = [];
-        }
-      }
-
-      // Fetch step assignments separately to get PIC information for each step
-      const stepIds = (stepsData || []).map(s => s.id);
-      if (isDev) {
-        logger.query('🔍 Fetching step assignments for steps:', stepIds.length);
-      }
-      
-      let stepAssignmentsData: any[] = [];
-      if (stepIds.length > 0) {
-        try {
-          // Use batch processing to prevent timeout with many IDs
-          const stepAssignsBatches = await batchQuery(
-            stepIds,
-            async (batch) => {
+            })
+          : Promise.resolve([]),
+        stepIds.length > 0
+          ? batchQuery(stepIds, async (batch) => {
               const { data, error } = await supabase
                 .from('task_steps_assigned')
                 .select(`
@@ -690,32 +668,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                 `)
                 .in('task_step_id', batch)
                 .order('assigned_at', { ascending: false });
-              
               return { data: data || [], error };
-            }
-          );
-          
-          stepAssignmentsData = stepAssignsBatches;
-          if (isDev) {
-            logger.query('✅ Fetched step assignments:', stepAssignmentsData.length);
-          }
-        } catch (error) {
-          console.error('❌ Error fetching step assignments:', error);
-          stepAssignmentsData = [];
-        }
-      }
-
-      // Fetch ALL sub-steps (task_steps_to_steps) for all steps
-      if (isDev) {
-        logger.query('🔍 Fetching sub-steps (task_steps_to_steps) for steps:', stepIds.length);
-      }
-      let subStepsData: any[] = [];
-      if (stepIds.length > 0) {
-        try {
-          // Use batch processing to prevent timeout with many IDs
-          const subStepsBatches = await batchQuery(
-            stepIds,
-            async (batch) => {
+            })
+          : Promise.resolve([]),
+        stepIds.length > 0
+          ? batchQuery(stepIds, async (batch) => {
               const { data, error } = await supabase
                 .from('task_steps_to_steps')
                 .select(`
@@ -729,19 +686,19 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
                 `)
                 .in('parent_step_id', batch)
                 .order('order', { ascending: true });
-              
               return { data: data || [], error };
-            }
-          );
-          
-          subStepsData = subStepsBatches;
-          if (isDev) {
-            logger.query('✅ Fetched sub-steps:', subStepsData.length);
-          }
-        } catch (error) {
-          console.error('❌ Error fetching sub-steps:', error);
-          subStepsData = [];
-        }
+            })
+          : Promise.resolve([]),
+      ]);
+
+      assignmentsData = Array.isArray(assignmentsBatchesResult) ? assignmentsBatchesResult : [];
+      stepAssignmentsData = Array.isArray(stepAssignsBatchesResult) ? stepAssignsBatchesResult : [];
+      subStepsData = Array.isArray(subStepsBatchesResult) ? subStepsBatchesResult : [];
+
+      if (isDev) {
+        logger.query('✅ Fetched task assignments (parallel):', assignmentsData.length);
+        logger.query('✅ Fetched step assignments (parallel):', stepAssignmentsData.length);
+        logger.query('✅ Fetched sub-steps (parallel):', subStepsData.length);
       }
 
       // Fetch sub-step assignments to know which parent steps have assigned sub-steps
@@ -2647,9 +2604,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     initialLoadState = { orgId: organizationId, at: now };
 
     const loadData = async () => {
-      // Do not clear tasks here: it caused empty table until fetch completes (4–5s).
-      // Keep previous list (or initial []) so UI is not empty during refetch.
-      setIsLoading(false);
+      // Show loading until fetchTasks (or cache) completes; do not clear here.
 
       // Non-blocking cache check: don't wait, run in background
       (async () => {
@@ -2673,7 +2628,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       })();
 
       // Start fetching immediately - don't wait for cache check (recent step updates loaded lazily when Summary tab is opened)
-      fetchTasks().catch(() => {});
+      fetchTasks().catch((err) => {
+        logger.warn('Initial fetchTasks failed', err);
+      });
     };
 
     loadData();

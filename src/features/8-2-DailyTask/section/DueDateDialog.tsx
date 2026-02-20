@@ -3,7 +3,6 @@ import { Calendar, Clock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -76,9 +75,6 @@ export const DueDateDialog: React.FC<DueDateDialogProps> = ({
             <Calendar className="h-5 w-5 text-blue-600" />
             Set Due Date
           </DialogTitle>
-          <DialogDescription>
-            Set a deadline for completing this {getTaskTypeLabel().toLowerCase()}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

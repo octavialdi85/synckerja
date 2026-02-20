@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mob
 import { Badge } from "@/mobile/components/ui/badge";
 import { Button } from "@/mobile/components/ui/button";
 import { Separator } from "@/mobile/components/ui/separator";
-import { LoadingDots } from "@/components/LoadingDots";
+import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { formatIDR } from "@/features/10-management/utils/subscriptionUtils";
 import { format } from "date-fns";
 import { id as localeID } from "date-fns/locale";
@@ -138,14 +138,16 @@ export const MobilePaymentHistory = memo(() => {
   if (isLoading) {
     return (
       <Card className="border border-border">
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-3">
           <CardTitle className="text-base text-foreground">Riwayat Pembayaran</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
+          <CardDescription className="text-xs text-muted-foreground mt-0.5">
             Memuat transaksi subscription terbaru...
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center py-12">
-          <LoadingDots size="lg" />
+        <CardContent className="py-3 px-3 space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))}
         </CardContent>
       </Card>
     );
@@ -154,13 +156,13 @@ export const MobilePaymentHistory = memo(() => {
   if (isError) {
     return (
       <Card className="border border-destructive/40 bg-destructive/5">
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-3">
           <CardTitle className="text-base text-destructive">Gagal memuat riwayat pembayaran</CardTitle>
-          <CardDescription className="text-xs text-destructive">
+          <CardDescription className="text-xs text-destructive mt-0.5">
             Periksa koneksi Anda atau coba beberapa saat lagi.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3">
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             Coba lagi
           </Button>
@@ -172,13 +174,13 @@ export const MobilePaymentHistory = memo(() => {
   if (!payments.length) {
     return (
       <Card className="border border-border">
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-3">
           <CardTitle className="text-base text-foreground">Riwayat Pembayaran</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
+          <CardDescription className="text-xs text-muted-foreground mt-0.5">
             Belum ada transaksi pembayaran yang tercatat.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
+        <CardContent className="flex flex-col items-center gap-2 py-6 px-3 pb-3 text-sm text-muted-foreground">
           <History className="h-8 w-8 text-muted-foreground/60" />
           <p>Riwayat pembayaran akan ditampilkan di sini setelah Anda melakukan transaksi.</p>
         </CardContent>
@@ -188,19 +190,19 @@ export const MobilePaymentHistory = memo(() => {
 
   return (
     <Card className="border border-border">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2 pt-3 px-3">
         <CardTitle className="text-base text-foreground">Riwayat Pembayaran</CardTitle>
-        <CardDescription className="text-xs text-muted-foreground">
+        <CardDescription className="text-xs text-muted-foreground mt-0.5">
           Daftar transaksi subscription terbaru organisasi Anda.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3 pt-0">
+      <CardContent className="space-y-2.5 pt-0 px-3 pb-3">
         {payments.map((payment) => {
           const badge = statusBadgeVariant(payment.status);
           return (
             <div
               key={payment.id}
-              className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground"
+              className="space-y-2 rounded-2xl border border-border bg-muted/30 p-2.5 text-sm text-muted-foreground"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -211,7 +213,7 @@ export const MobilePaymentHistory = memo(() => {
                 </div>
                 <Badge className={badge.className}>{badge.label}</Badge>
               </div>
-              <div className="space-y-2 text-xs">
+              <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span>ID Transaksi</span>
                   <span className="font-medium text-foreground">{payment.order_id}</span>
@@ -226,11 +228,11 @@ export const MobilePaymentHistory = memo(() => {
                 </div>
               </div>
               {payment.notes && (
-                <div className="rounded-lg border border-border bg-background/60 p-2 text-[11px] text-muted-foreground">
+                <div className="rounded-lg border border-border bg-background/60 p-1.5 text-[11px] text-muted-foreground">
                   Catatan: {payment.notes}
                 </div>
               )}
-              <Separator />
+              <Separator className="my-1.5" />
               <Button
                 variant="outline"
                 size="sm"

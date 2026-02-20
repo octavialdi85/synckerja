@@ -52,9 +52,9 @@ const SubscriptionBottomTabsComponent: React.FC<SubscriptionBottomTabsProps> = (
 
     return (
       <nav
-        className={`fixed left-0 right-0 bottom-0 bg-card border-t border-border z-50 safe-area-bottom ${className ?? ""}`.trim()}
+        className="fixed left-0 right-0 bottom-0 bg-card border-t border-border z-30"
       >
-        <div className="grid grid-cols-3 w-full">
+        <div className={`grid grid-cols-3 w-full ${className ? className : "safe-area-padding-bottom"}`.trim()}>
           {tabItems.map(({ key, icon: Icon }) => {
             const isActive = activeTab === key;
             return (

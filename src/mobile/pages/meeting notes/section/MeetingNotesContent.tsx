@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
-import { LoadingDots } from '@/components/LoadingDots';
+import { MeetingNotesPageSkeleton } from '../MeetingNotesPageSkeleton';
 import MeetingFilters from './MeetingFilters';
 import MeetingNotesInput from './MeetingNotesInput';
 import MeetingPointsTable from './MeetingPointsTable';
@@ -11,14 +11,7 @@ export const MeetingNotesContent = () => {
   const { meetingPoints, filters, isLoading } = useMeetingNotes();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 h-full">
-        <div className="flex flex-col items-center space-y-3">
-          <LoadingDots size="lg" />
-          <p className="text-sm text-muted-foreground">Memuat meeting notes...</p>
-        </div>
-      </div>
-    );
+    return <MeetingNotesPageSkeleton />;
   }
 
   const filteredPoints = meetingPoints.filter(point => {
@@ -35,7 +28,7 @@ export const MeetingNotesContent = () => {
   });
 
   return (
-    <div className="px-3 py-3 space-y-3">
+    <div className="mx-auto w-full max-w-md px-2 pt-2 space-y-3 min-h-0 shrink-0 content-padding-above-nav-meeting-notes">
       {/* Filters Section */}
       <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
         <div className="px-2.5 py-1.5 border-b border-border">
@@ -63,8 +56,8 @@ export const MeetingNotesContent = () => {
         </div>
       </div>
 
-      {/* Summary Cards Section */}
-      <div className="bg-card border border-border rounded-lg shadow-sm">
+      {/* Summary Cards Section - mb-6 matches spacing from header to first section so last section is not flush with footer nav */}
+      <div className="bg-card border border-border rounded-lg shadow-sm mb-6">
         <div className="px-2.5 py-2.5">
           <MeetingSummaryCards />
         </div>

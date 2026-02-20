@@ -38,7 +38,7 @@ import {
 import { Badge } from "@/mobile/components/ui/badge";
 import { Slider } from "@/mobile/components/ui/slider";
 import { Switch } from "@/mobile/components/ui/switch";
-import { LoadingDots } from "@/components/LoadingDots";
+import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { MobileUpgradeConfirmationModal } from "./modal/MobileUpgradeConfirmationModal";
 import { MobileUpgradeOptionsModal } from "./modal/MobileUpgradeOptionsModal";
@@ -691,9 +691,10 @@ const HRISSubscriptionPlansTab = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center gap-2 py-16 text-center">
-        <LoadingDots size="lg" />
-        <p className="text-sm text-muted-foreground">Memuat paket subscription...</p>
+      <div className="space-y-1 py-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-24 w-full rounded-lg" />
+        ))}
       </div>
     );
   }
@@ -713,10 +714,10 @@ const HRISSubscriptionPlansTab = () => {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-1">
         <MobilePendingChangesCard />
 
-        <div className="space-y-4">
+        <div className="space-y-1">
           {sortedPlans.map(({ plan, isCurrent, isPopular, isTrial, maxMembers }) => {
             const description = plan.description?.toLowerCase() ?? "";
             const memberCount =

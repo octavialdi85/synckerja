@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
+import React, { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
@@ -602,7 +602,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                 fetchCompletionDates(completedStepIds)
                   .then(completionDateMap => {
                     if (!isActive) return;
-                    setCompletionDateMap(completionDateMap);
+                    startTransition(() => setCompletionDateMap(completionDateMap));
                     logger.query(`📅 Loaded completion dates in background: ${Object.keys(completionDateMap).length} steps`);
                   })
                   .catch(err => {
@@ -950,12 +950,14 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                         };
                       });
                       
-                      // Update recent updates in state with enriched data
+                      // Update recent updates in state with enriched data (startTransition to reduce render churn)
                       if (!isActive) return;
-                      setRecentUpdates(prevUpdates => {
-                        const combined = [...enriched, ...prevUpdates];
-                        combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-                        return combined;
+                      startTransition(() => {
+                        setRecentUpdates(prevUpdates => {
+                          const combined = [...enriched, ...prevUpdates];
+                          combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                          return combined;
+                        });
                       });
                       
                       logger.query(`📚 History loaded and enriched in background: ${enriched.length} items`);
@@ -965,7 +967,7 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
                   } catch (err) {
                     logger.warn('Error fetching history in background (non-critical)', err);
                     if (!isActive) return;
-                    setRecentUpdates([]);
+                    startTransition(() => setRecentUpdates([]));
                   }
                 }
               } catch (error) {
@@ -1086,13 +1088,13 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     return filterBySearchAndFilters(recentUpdates, filters);
   }, [recentUpdates, filters]);
 
-  const updateFilter = (key: 'search' | 'status' | 'timePeriod' | 'customStart' | 'customEnd' | 'pic' | 'task' | 'step' | 'subStep', value: string) => {
+  const updateFilter = useCallback((key: 'search' | 'status' | 'timePeriod' | 'customStart' | 'customEnd' | 'pic' | 'task' | 'step' | 'subStep', value: string) => {
     setFilters(prev => ({ ...prev, [key]: value as any }));
-  };
+  }, []);
 
   // Helper function to format date range for display
   // Format: "15 Jan - 21 Jan 2025"
-  const formatDateRangeDisplay = (): string => {
+  const formatDateRangeDisplay = useCallback((): string => {
     if (filters.timePeriod === 'all') return '';
     
     const { start, end } = getDateRange();
@@ -1117,50 +1119,74 @@ export const DailyTaskReportProvider = ({ children }: { children: React.ReactNod
     }
     
     return formatDate(start);
-  };
+  }, [filters]);
 
-  const retryRefresh = () => {
+  const retryRefresh = useCallback(() => {
     setRefreshError(null);
     void loadRef.current?.();
-  };
-  const refreshReport = async () => {
+  }, []);
+  const refreshReport = useCallback(async () => {
     setRefreshError(null);
     await loadRef.current?.();
-  };
-  // Build dependent dropdown options from current dataset
-  const base = [...performance];
-  const pics = Array.from(new Set(base.map(p => p.employeeName).filter(Boolean))).sort();
-  const tasks = Array.from(new Set(base.map(p => p.taskTitle).filter(Boolean))).sort();
-  const steps = Array.from(new Set(
-    base
-      .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
-      .map(p => p.stepTitle)
-      .filter(Boolean)
-  )).sort();
-  const subSteps = Array.from(new Set(
-    base
-      .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
-      .filter(p => (filters.step && filters.step !== 'all') ? p.stepTitle === filters.step : true)
-      .map(p => p.subStepTitle || '')
-      .filter(Boolean)
-  )).sort();
-  const value: ReportContextType = {
+  }, []);
+
+  const getBlockersForStep = useCallback((stepId: string) => blockersByStep[stepId] || [], [blockersByStep]);
+
+  // Build dependent dropdown options from current dataset (memoized to avoid new refs every render)
+  const options = useMemo(() => {
+    const base = [...performance];
+    const pics = Array.from(new Set(base.map(p => p.employeeName).filter(Boolean))).sort();
+    const tasks = Array.from(new Set(base.map(p => p.taskTitle).filter(Boolean))).sort();
+    const steps = Array.from(new Set(
+      base
+        .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
+        .map(p => p.stepTitle)
+        .filter(Boolean)
+    )).sort();
+    const subSteps = Array.from(new Set(
+      base
+        .filter(p => (filters.task && filters.task !== 'all') ? p.taskTitle === filters.task : true)
+        .filter(p => (filters.step && filters.step !== 'all') ? p.stepTitle === filters.step : true)
+        .map(p => p.subStepTitle || '')
+        .filter(Boolean)
+    )).sort();
+    return { pics, tasks, steps, subSteps };
+  }, [performance, filters.task, filters.step]);
+
+  const value = useMemo<ReportContextType>(() => ({
     loading,
-    performance: performance.map(p => ({ ...p })),
-    filtered: filtered.map(p => ({ ...p })),
+    performance,
+    filtered,
     blockers,
     recentUpdates,
     filteredBlockers,
     filteredRecentUpdates,
     filters,
     updateFilter,
-    getBlockersForStep: (stepId: string) => blockersByStep[stepId] || [],
+    getBlockersForStep,
     formatDateRangeDisplay,
     refreshError,
     retryRefresh,
     refreshReport,
-    options: { pics, tasks, steps, subSteps },
-  };
+    options,
+  }), [
+    loading,
+    performance,
+    filtered,
+    blockers,
+    recentUpdates,
+    filteredBlockers,
+    filteredRecentUpdates,
+    filters,
+    updateFilter,
+    getBlockersForStep,
+    formatDateRangeDisplay,
+    refreshError,
+    retryRefresh,
+    refreshReport,
+    options,
+  ]);
+
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;
 };
 

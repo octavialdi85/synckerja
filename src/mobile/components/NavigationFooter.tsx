@@ -1,6 +1,8 @@
 import { Home, Calendar, BarChart3, User, MapPin } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { usePrefetchHomeData } from "@/hooks/useParallelHomeData";
+import { useIsMobile } from "@/mobile/hooks/use-mobile";
+import { logger } from "@/config/logger";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/" },
@@ -18,20 +20,23 @@ interface NavigationFooterProps {
 export const NavigationFooter = ({ className }: NavigationFooterProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const prefetchHomeData = usePrefetchHomeData();
 
   const handleNavClick = (path: string) => {
-    if (path === "/") {
-      prefetchHomeData().catch(() => {});
+    if (path === "/" && !isMobile) {
+      prefetchHomeData().catch((err) => {
+        logger.warn("Prefetch home failed", err);
+      });
     }
     navigate(path);
   };
 
   return (
     <nav
-      className={`fixed left-0 right-0 bottom-0 bg-card border-t border-border z-50 safe-area-bottom ${className ?? ""}`.trim()}
+      className="fixed left-0 right-0 bottom-0 bg-card border-t border-border z-30"
     >
-      <div className="grid grid-cols-5 max-w-md mx-auto">
+      <div className={`grid grid-cols-5 max-w-md mx-auto ${className ? className : "safe-area-padding-bottom"}`.trim()}>
         {navItems.map(({ icon: Icon, label, path }) => {
           const isActive = location.pathname === path;
 

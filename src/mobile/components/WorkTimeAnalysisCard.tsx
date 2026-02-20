@@ -1,5 +1,6 @@
 import { Card } from "@/mobile/components/ui/card";
 import { Clock } from "lucide-react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface WorkTimeAnalysisCardProps {
   avgCheckIn: string;
@@ -14,29 +15,30 @@ export const WorkTimeAnalysisCard = ({
   workingHours,
   workingMinutesRemainder
 }: WorkTimeAnalysisCardProps) => {
+  const { t } = useAppTranslation();
   return (
-    <Card className="mb-4 bg-gradient-card border border-border">
+    <Card className="bg-gradient-card border border-border">
       <div className="p-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold text-foreground">Analisis Waktu Kerja</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("reports.workTimeAnalysis", "Analisis Waktu Kerja")}</h2>
         </div>
       </div>
-      <div className="p-3">
-        <div className="flex justify-between mb-2">
-          <span className="text-xs text-muted-foreground">Rata-rata masuk</span>
-          <span className="text-xs font-medium text-foreground">{avgCheckIn}</span>
+      <div className="p-3 space-y-3">
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-muted-foreground">{t("reports.avgCheckIn", "Rata-rata masuk")}</span>
+          <span className="font-semibold text-foreground">{avgCheckIn}</span>
         </div>
-        <div className="flex justify-between mb-2">
-          <span className="text-xs text-muted-foreground">Rata-rata pulang</span>
-          <span className="text-xs font-medium text-foreground">{avgCheckOut}</span>
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-muted-foreground">{t("reports.avgCheckOut", "Rata-rata pulang")}</span>
+          <span className="font-semibold text-foreground">{avgCheckOut}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-xs text-muted-foreground">Total jam kerja</span>
-          <span className="text-xs font-medium text-primary">
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-muted-foreground">{t("reports.totalWorkHours", "Total jam kerja")}</span>
+          <span className="font-semibold text-primary">
             {workingHours > 0 || workingMinutesRemainder > 0 
-              ? `${workingHours} jam ${workingMinutesRemainder} menit`
-              : "0 jam"
+              ? t("reports.hoursMinutes", "{{hours}} jam {{minutes}} menit", { hours: workingHours, minutes: workingMinutesRemainder })
+              : t("reports.zeroHours", "0 jam")
             }
           </span>
         </div>

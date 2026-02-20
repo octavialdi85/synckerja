@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Search } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -12,8 +12,12 @@ import {
 } from '@/features/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { Skeleton } from '@/mobile/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface Employee {
   id: string;
@@ -23,6 +27,7 @@ interface Employee {
 }
 
 interface MobileAssignStepDialogProps {
+  open?: boolean;
   step: {
     id: string;
     title: string;
@@ -38,7 +43,8 @@ interface MobileAssignStepDialogProps {
   onClose: () => void;
 }
 
-export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: MobileAssignStepDialogProps) => {
+export const MobileAssignStepDialog = ({ open = true, step, onAssign, onUnassign, onClose }: MobileAssignStepDialogProps) => {
+  const isMobile = useIsMobile();
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dueDate, setDueDate] = useState<string>('');
@@ -91,22 +97,26 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
           return;
         }
         // latest assignment for this step
-        const { data: assigns } = await supabase
+        const { data: assignsRaw } = await supabase
           .from('task_steps_assigned')
           .select('id, assigned_at')
           .eq('task_step_id', step.id)
           .order('assigned_at', { ascending: false })
           .limit(1);
-        const assign = (assigns || [])[0];
+        type AssignRow = { id: string; assigned_at: string };
+        const assigns = (assignsRaw as unknown as AssignRow[] | null) ?? [];
+        const assign = assigns[0];
         if (assign) {
           setActiveAssignmentId(assign.id);
-          const { data: dueRows } = await supabase
+          const { data: dueRowsRaw } = await supabase
             .from('task_steps_assigned_duedate')
             .select('due_date')
             .eq('task_steps_assigned_id', assign.id)
             .order('created_at', { ascending: false })
             .limit(1);
-          const due = (dueRows || [])[0]?.due_date as string | undefined;
+          type DueRow = { due_date: string };
+          const dueRows = (dueRowsRaw as unknown as DueRow[] | null) ?? [];
+          const due = dueRows[0]?.due_date;
           if (due) {
             const d = new Date(due);
             const yyyy = d.getFullYear();
@@ -125,7 +135,7 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
         }
         setIsInitialized(true);
       } catch (e) {
-        console.warn('Failed to load assignment/due date', e);
+        logger.warn('Failed to load assignment/due date', e);
         setIsInitialized(true);
       }
     };
@@ -163,19 +173,27 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-none h-full max-h-screen m-0 rounded-none fixed inset-0 translate-x-0 translate-y-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0 text-left">
-          <DialogTitle className="flex items-center gap-2 text-base font-normal">
-            <Users className="w-5 h-5" />
-            <span className="lowercase">Assign Step: {step.title}</span>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area'
+            : 'h-full max-h-screen fixed inset-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh]'
+        )}
+      >
+        <DialogHeader
+          className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3"
+        >
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="lowercase truncate">Assign Step: {step.title}</span>
           </DialogTitle>
-          <DialogDescription className="text-left">
-            Select an employee to assign this step to.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4 flex-1 overflow-y-auto">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6">
           {/* Current Assignment */}
           {step.assigned_to && step.assigned_employee ? (
             <div className="p-3 bg-green-50 border border-green-200 rounded-md">
@@ -205,8 +223,14 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
 
           {/* Search */}
           <div className="relative">
+            <label htmlFor="mobile-assign-step-search-employees" className="sr-only">
+              Search employees
+            </label>
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
+              id="mobile-assign-step-search-employees"
+              name="mobile-assign-step-search-employees"
+              autoComplete="off"
               placeholder="Search employees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -216,8 +240,8 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
 
           {/* Due Date and Time (two dropdowns, autosave) */}
           <div className="space-y-2">
-            <label className="text-xs text-gray-500">Due date</label>
-            <div className="grid grid-cols-2 gap-2">
+            <span id="mobile-assign-step-due-date-label" className="text-xs text-gray-500">Due date</span>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="mobile-assign-step-due-date-label">
               {/* Date Dropdown */}
               <Select
                 value={dueDate}
@@ -240,14 +264,14 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
                         due_date: iso,
                       });
                   } catch (err) {
-                    console.error('Autosave due date failed', err);
+                    logger.error('Autosave due date failed', err);
                     toast({ title: 'Error', description: 'Failed to save due date', variant: 'destructive' });
                   } finally {
                     setSavingDue(false);
                   }
                 }}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger id="mobile-assign-step-due-date" name="mobile-assign-step-due-date" className="h-9" aria-label="Due date">
                   <SelectValue placeholder="Select date" />
                 </SelectTrigger>
                 <SelectContent>
@@ -281,14 +305,14 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
                         due_date: iso,
                       });
                   } catch (err) {
-                    console.error('Autosave due time failed', err);
+                    logger.error('Autosave due time failed', err);
                     toast({ title: 'Error', description: 'Failed to save due time', variant: 'destructive' });
                   } finally {
                     setSavingDue(false);
                   }
                 }}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger id="mobile-assign-step-due-time" name="mobile-assign-step-due-time" className="h-9" aria-label="Due time">
                   <SelectValue>{dueTime || '23:59'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -306,10 +330,17 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
           {/* Employee List */}
           <div className="max-h-[calc(100vh-400px)] sm:max-h-60 overflow-y-auto space-y-2">
             {loading ? (
-              <div className="text-center py-4">
-                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-sm text-gray-500 mt-2">Loading employees...</p>
-              </div>
+              <>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="p-3 border rounded-md border-gray-200 bg-card flex items-center gap-3">
+                    <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </div>
+                ))}
+              </>
             ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-4">
                 <Users className="w-8 h-8 text-gray-400 mx-auto mb-2" />
@@ -343,11 +374,13 @@ export const MobileAssignStepDialog = ({ step, onAssign, onUnassign, onClose }: 
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
-          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
-            Close
-          </Button>
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, size="sm" */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="w-full sm:w-auto">
+              Close
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

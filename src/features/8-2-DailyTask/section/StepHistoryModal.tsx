@@ -4,8 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -41,6 +39,8 @@ import {
 import { useToast } from '@/features/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { StepDependencyModal } from './StepDependencyModal';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface StepHistory {
   id: string;
@@ -105,6 +105,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
   const [priorityDescription, setPriorityDescription] = useState('');
   
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const fetchHistory = async () => {
     if (!isOpen) return;
@@ -422,24 +423,40 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[720px] h-[720px] max-w-[95vw] max-h-[95vh] p-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            : 'w-[720px] h-[720px] max-w-[95vw] max-h-[95vh]'
+        )}
+        hideCloseButton={isMobile}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+            isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'px-6 pt-6 pb-4'
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
               <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-xl font-semibold truncate">
+              <DialogTitle className={cn('text-lg font-semibold truncate', !isMobile && 'sm:text-xl')}>
                 Step History & Updates
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
-                Manage blockers, briefs, and track progress for "{stepTitle}"
-              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-6 pb-6">
+        <div
+          className={cn(
+            'flex-1 min-h-0 overflow-hidden flex flex-col',
+            isMobile ? 'px-6 pt-4 pb-6' : 'px-6 pb-6'
+          )}
+        >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col min-h-0">
             <div className="mb-4 w-full flex-shrink-0 overflow-x-auto">
               <TabsList className="flex gap-4 bg-transparent py-2 px-2 min-w-max !h-auto !items-start rounded-none">
@@ -495,7 +512,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
               </TabsList>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll">
               <TabsContent value="blocker" className="space-y-4 pb-4">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
@@ -506,7 +523,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                     <div>
                       <Label htmlFor="blockerType">Blocker Type</Label>
                       <Select value={blockerType} onValueChange={setBlockerType}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Select blocker type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -522,7 +539,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                     <div>
                       <Label htmlFor="blockerSeverity">Severity</Label>
                       <Select value={blockerSeverity} onValueChange={setBlockerSeverity}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Select severity" />
                         </SelectTrigger>
                         <SelectContent>
@@ -542,6 +559,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                       onChange={(e) => setBlockerDescription(e.target.value)}
                       placeholder="Describe the blocker in detail..."
                       rows={3}
+                      className="text-sm"
                     />
                   </div>
                   <Button 
@@ -563,7 +581,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                   <div className="mb-4">
                     <Label htmlFor="briefType">Update Type</Label>
                     <Select value={briefType} onValueChange={setBriefType}>
-                      <SelectTrigger>
+                      <SelectTrigger className="text-sm">
                         <SelectValue placeholder="Select update type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -583,6 +601,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                       onChange={(e) => setBriefDescription(e.target.value)}
                       placeholder="Provide detailed update information..."
                       rows={4}
+                      className="text-sm"
                     />
                   </div>
                   <Button 
@@ -606,7 +625,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                     <div>
                       <Label htmlFor="newStatus">New Status</Label>
                       <Select value={newStatus} onValueChange={setNewStatus}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -621,7 +640,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                     <div>
                       <Label htmlFor="newPriority">Priority</Label>
                       <Select value={newPriority} onValueChange={setNewPriority}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Select priority" />
                         </SelectTrigger>
                         <SelectContent>
@@ -641,6 +660,7 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
                       onChange={(e) => setStatusDescription(e.target.value)}
                       placeholder="Describe the status change..."
                       rows={3}
+                      className="text-sm"
                     />
                   </div>
                   <div className="flex gap-2 mt-4">
@@ -746,11 +766,19 @@ export const StepHistoryModal: React.FC<StepHistoryModalProps> = ({
           </Tabs>
         </div>
 
-        <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 mt-auto">
-          <Button variant="outline" onClick={onClose} className="w-full md:w-auto">
-            Close
-          </Button>
-        </DialogFooter>
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm" */}
+        <div
+          className={cn(
+            'px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30 mt-auto',
+            !isMobile && 'px-6 pt-4 pb-4'
+          )}
+        >
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="w-full md:w-auto">
+              Close
+            </Button>
+          </div>
+        </div>
 
         {/* Dependency Modal */}
         {showDependencyModal && (

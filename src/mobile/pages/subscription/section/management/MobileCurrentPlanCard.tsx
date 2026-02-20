@@ -43,19 +43,19 @@ export const MobileCurrentPlanCard = memo(
 
     return (
       <Card className="border border-border">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2 pt-3 px-3">
           <div className="flex items-start justify-between gap-2">
             <div>
               <CardTitle className="text-base text-foreground">Ringkasan Subscription</CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs mt-0.5">
                 Detail plan aktif dan batas penggunaan saat ini.
               </CardDescription>
             </div>
             <Badge className={statusBadge.className}>{statusBadge.label}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 pt-0 text-sm text-muted-foreground">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3">
+        <CardContent className="space-y-3 pt-0 px-3 pb-3 text-sm text-muted-foreground">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-2.5">
             <div className="flex items-center gap-3 text-foreground">
               <ShieldCheck className="h-5 w-5 text-primary" />
               <div>
@@ -77,7 +77,7 @@ export const MobileCurrentPlanCard = memo(
             </Button>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-border bg-card/60 p-4">
+          <div className="space-y-1.5 rounded-xl border border-border bg-card/60 p-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-primary" />
@@ -97,20 +97,20 @@ export const MobileCurrentPlanCard = memo(
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-muted/30 p-4">
+          <div className="rounded-xl border border-border bg-muted/30 p-2.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Model pembayaran</span>
               <span className="font-semibold text-foreground capitalize">
                 {subscriptionStatus.billing_cycle || "Bulanan"}
               </span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
               <span>Berakhir pada</span>
               <span className="font-semibold text-foreground">
                 {formatDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date)}
               </span>
             </div>
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-card p-3 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-card p-2.5 text-xs text-muted-foreground">
               <CalendarDays className="h-4 w-4 text-primary" />
               <div>
                 <p className="font-semibold text-foreground">Pembayaran berikutnya</p>

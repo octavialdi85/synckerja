@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AttendanceHeader } from "@/mobile/components/AttendanceHeader";
 import { TimeDisplay } from "@/mobile/components/TimeDisplay";
 import { LocationChecker, LocationButton } from "@/mobile/components/LocationChecker";
@@ -11,7 +11,8 @@ import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { CameraModal } from "@/mobile/components/CameraModal";
 import { LateAttendanceModal } from "@/mobile/components/LateAttendanceModal";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
-import { Skeleton } from "@/mobile/components/ui/skeleton";
+import { AbsensiSkeleton } from "./AbsensiSkeleton";
+import { Button } from "@/mobile/components/ui/button";
 import { useToast } from "@/features/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/config/logger";
@@ -22,6 +23,16 @@ import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveChatAppBadgeSync";
 import { getCurrentPosition } from "@/mobile/utils/geolocation";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { useProfile } from "@/mobile/hooks/useProfile";
+
+function getGreetingKey(hour: number): 'morning' | 'noon' | 'afternoon' | 'night' {
+  if (hour >= 18) return 'night';
+  if (hour >= 15) return 'afternoon';
+  if (hour >= 11) return 'noon';
+  return 'morning';
+}
+
 let confetti: any;
 try {
   // Optional import to avoid build error if package not installed
@@ -32,6 +43,8 @@ try {
 const Absensi = () => {
   useStatusBarStyle('light');
   const { toast } = useToast();
+  const { t, language } = useAppTranslation();
+  const timeLocale = language === "id" ? "id-ID" : "en-US";
   const [cameraModal, setCameraModal] = useState<{
     isOpen: boolean;
     type: 'clockin' | 'clockout' | null;
@@ -51,65 +64,30 @@ const Absensi = () => {
     pendingClockIn: false
   });
   
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
-  const [organizationId, setOrganizationId] = useState<string>('');
-  
+  const lastCheckInTimeRef = useRef<string | null>(null);
+
   const {
     todayAttendance,
     officeLocation,
     todaySchedule,
     workSchedule,
     loading,
+    error,
     realtimeConnected,
-    refetch
+    refetch,
+    clearError,
+    userForPresence,
+    organizationId,
   } = useAttendanceData();
 
-  // UX: cap skeleton to a short duration to avoid feeling "stuck"
-  const [showSkeleton, setShowSkeleton] = useState(true);
-  useEffect(() => {
-    if (loading) {
-      setShowSkeleton(true);
-      const id = setTimeout(() => setShowSkeleton(false), 1200);
-      return () => clearTimeout(id);
-    } else {
-      setShowSkeleton(false);
-    }
-  }, [loading]);
+  // Setup user presence tracking (user/org from same source as attendance data)
+  const { onlineUsers, totalOnline } = useRealtimePresence(organizationId, userForPresence ?? undefined);
 
-  // Setup user presence tracking
-  const { onlineUsers, totalOnline } = useRealtimePresence(organizationId, currentUser || undefined);
-
-  // Get current user info for presence tracking
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data } = await supabase
-          .from('profiles')
-          .select('full_name, active_organization_id')
-          .eq('user_id', user.id)
-          .single();
-        type ProfileSlice = { full_name: string | null; active_organization_id: string | null };
-        const profileData = data as unknown as ProfileSlice | null;
-        if (profileData) {
-          setCurrentUser({
-            id: user.id,
-            name: profileData.full_name ?? user.email ?? 'Unknown'
-          });
-          setOrganizationId(profileData.active_organization_id ?? '');
-        }
-      } catch (error) {
-        logger.error('Absensi getCurrentUser:', error);
-        toast({
-          title: 'Error',
-          description: 'Gagal memuat info pengguna',
-          variant: 'destructive',
-        });
-      }
-    };
-    getCurrentUser();
-  }, [toast]);
+  const { profile, loading: profileLoading } = useProfile();
+  const currentHour = new Date().getHours();
+  const greetingKey = getGreetingKey(currentHour);
+  const greeting = t(`home.greeting.${greetingKey}`);
+  const displayName = profileLoading ? '...' : (profile?.full_name ?? t('mobileHome.user', 'User'));
 
   // Force refresh data when component mounts or when organization might change
   useEffect(() => {
@@ -126,58 +104,70 @@ const Absensi = () => {
     };
   }, [refetch]);
 
-  const triggerConfetti = () => {
-    // Multiple confetti bursts for celebration effect
-    const count = 200;
-    const defaults = {
-      origin: { y: 0.7 },
-      zIndex: 9999
-    };
-    function fire(particleRatio: number, opts: any) {
-      confetti({
-        ...defaults,
-        ...opts,
-        particleCount: Math.floor(count * particleRatio)
-      });
+  // Keep ref in sync with todayAttendance for reliable clock-out working_hours_minutes
+  useEffect(() => {
+    if (todayAttendance?.check_in_time) {
+      lastCheckInTimeRef.current = todayAttendance.check_in_time;
     }
+  }, [todayAttendance?.check_in_time]);
 
-    // First burst
-    fire(0.25, {
-      spread: 26,
-      startVelocity: 55
-    });
+  const triggerConfetti = () => {
+    if (typeof confetti !== 'function') return;
+    try {
+      // Multiple confetti bursts for celebration effect
+      const count = 200;
+      const defaults = {
+        origin: { y: 0.7 },
+        zIndex: 9999
+      };
+      function fire(particleRatio: number, opts: any) {
+        confetti({
+          ...defaults,
+          ...opts,
+          particleCount: Math.floor(count * particleRatio)
+        });
+      }
 
-    // Second burst
-    fire(0.2, {
-      spread: 60
-    });
+      // First burst
+      fire(0.25, {
+        spread: 26,
+        startVelocity: 55
+      });
 
-    // Third burst
-    fire(0.35, {
-      spread: 100,
-      decay: 0.91,
-      scalar: 0.8
-    });
+      // Second burst
+      fire(0.2, {
+        spread: 60
+      });
 
-    // Fourth burst
-    fire(0.1, {
-      spread: 120,
-      startVelocity: 25,
-      decay: 0.92,
-      scalar: 1.2
-    });
+      // Third burst
+      fire(0.35, {
+        spread: 100,
+        decay: 0.91,
+        scalar: 0.8
+      });
 
-    // Fifth burst
-    fire(0.1, {
-      spread: 120,
-      startVelocity: 45
-    });
+      // Fourth burst
+      fire(0.1, {
+        spread: 120,
+        startVelocity: 25,
+        decay: 0.92,
+        scalar: 1.2
+      });
+
+      // Fifth burst
+      fire(0.1, {
+        spread: 120,
+        startVelocity: 45
+      });
+    } catch (e) {
+      logger.debug('Confetti skipped', e);
+    }
   };
 
   // Fungsi untuk menghitung jam kerja real-time
   const calculateWorkingHours = () => {
     if (!todayAttendance?.check_in_time) {
-      return "0 jam 0 menit";
+      return t("mobileHome.zeroHoursMinutes", "0 jam 0 menit");
     }
     const checkInTime = new Date(todayAttendance.check_in_time);
     const endTime = todayAttendance.check_out_time ? new Date(todayAttendance.check_out_time) : new Date();
@@ -185,14 +175,14 @@ const Absensi = () => {
     const totalMinutes = Math.floor(diffMs / (1000 * 60));
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return `${hours} jam ${minutes} menit`;
+    return t("mobileHome.hoursMinutesFormat", "{{hours}} jam {{minutes}} menit", { hours, minutes });
   };
 
   const handleClockIn = () => {
     if (todayAttendance?.check_in_time) {
         toast({
-          title: "Sudah Clock In",
-          description: "Anda sudah melakukan clock in hari ini",
+          title: t("mobileHome.alreadyClockIn", "Sudah Clock In"),
+          description: t("mobileHome.alreadyClockInDesc", "Anda sudah melakukan clock in hari ini"),
           variant: "destructive",
           duration: 4000,
         });
@@ -202,8 +192,8 @@ const Absensi = () => {
     // Check if today is a working day
     if (todaySchedule && !todaySchedule.isWorkingDay) {
       toast({
-        title: "Hari Libur",
-        description: "Hari ini adalah hari libur sesuai jadwal kerja",
+        title: t("mobileHome.holidayTitle", "Hari Libur"),
+        description: t("mobileHome.holidayDesc", "Hari ini adalah hari libur sesuai jadwal kerja"),
         variant: "destructive",
         duration: 4000,
       });
@@ -221,8 +211,8 @@ const Absensi = () => {
       // Check if too early (more than 1 hour before start time)
       if (currentTime < startTime - 60) {
         toast({
-          title: "Terlalu Dini",
-          description: `Waktu clock in belum dimulai. Jadwal kerja mulai ${workSchedule.start_time}`,
+          title: t("mobileHome.tooEarly", "Terlalu Dini"),
+          description: t("mobileHome.tooEarlyDesc", "Waktu clock in belum dimulai. Jadwal kerja mulai {{time}}", { time: workSchedule.start_time ?? "08:00" }),
           variant: "destructive",
           duration: 4000,
         });
@@ -232,8 +222,8 @@ const Absensi = () => {
       // Check if too late (after end time)
       if (currentTime > endTime) {
         toast({
-          title: "Waktu Kerja Berakhir",
-          description: `Waktu kerja sudah berakhir jam ${workSchedule.end_time}`,
+          title: t("mobileHome.workEndedTitle", "Waktu Kerja Berakhir"),
+          description: t("mobileHome.workEndedDesc", "Waktu kerja sudah berakhir jam {{time}}", { time: workSchedule.end_time ?? "17:00" }),
           variant: "destructive",
           duration: 4000,
         });
@@ -261,8 +251,8 @@ const Absensi = () => {
   const handleClockOut = () => {
     if (!todayAttendance?.check_in_time) {
       toast({
-        title: "Belum Clock In",
-        description: "Anda harus clock in terlebih dahulu",
+        title: t("mobileHome.mustClockInFirst", "Belum Clock In"),
+        description: t("mobileHome.mustClockInFirstDesc", "Anda harus clock in terlebih dahulu"),
         variant: "destructive",
         duration: 4000,
       });
@@ -270,8 +260,8 @@ const Absensi = () => {
     }
     if (todayAttendance?.check_out_time) {
       toast({
-        title: "Sudah Clock Out",
-        description: "Anda sudah melakukan clock out hari ini",
+        title: t("mobileHome.alreadyClockOut", "Sudah Clock Out"),
+        description: t("mobileHome.alreadyClockOutDesc", "Anda sudah melakukan clock out hari ini"),
         variant: "destructive",
         duration: 4000,
       });
@@ -287,10 +277,11 @@ const Absensi = () => {
       // Minimum 4 hours work before allowing clock out
       if (workedHours < 4) {
         toast({
-          title: "Belum Cukup Waktu Kerja",
-          description: `Anda baru bekerja ${Math.floor(workedHours)} jam ${Math.floor(
-            (workedHours % 1) * 60,
-          )} menit. Minimal 4 jam kerja.`,
+          title: t("mobileHome.notEnoughWorkTime", "Belum Cukup Waktu Kerja"),
+          description: t("mobileHome.notEnoughWorkTimeDesc", "Anda baru bekerja {{hours}} jam {{minutes}} menit. Minimal 4 jam kerja.", {
+            hours: Math.floor(workedHours),
+            minutes: Math.floor((workedHours % 1) * 60),
+          }),
           variant: "destructive",
           duration: 4000,
         });
@@ -342,8 +333,8 @@ const Absensi = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast({
-          title: "Error",
-          description: "User tidak ditemukan",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.userNotFound", "User tidak ditemukan"),
           variant: "destructive",
           duration: 4000,
         });
@@ -351,16 +342,17 @@ const Absensi = () => {
       }
 
       // Get user's active organization from profile
-      const { data: profile }: any = await (supabase as any)
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('active_organization_id')
         .eq('user_id', user.id)
         .single();
+      const profile = profileData as unknown as { active_organization_id: string | null } | null;
 
       if (!profile?.active_organization_id) {
         toast({
-          title: "Error",
-          description: "Organisasi aktif tidak ditemukan",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.orgNotFound", "Organisasi aktif tidak ditemukan"),
           variant: "destructive",
           duration: 4000,
         });
@@ -368,18 +360,21 @@ const Absensi = () => {
       }
 
       // Get employee data for the active organization
-      const { data: employee, error: employeeError }: any = await (supabase as any)
+      // @ts-ignore Supabase client types can cause "excessively deep" instantiation here
+      const employeeRes = await supabase
         .from('employees')
         .select('id, organization_id')
         .eq('user_id', user.id)
         .eq('organization_id', profile.active_organization_id)
         .limit(1)
         .single();
-        
+      const { data: employeeData, error: employeeError } = employeeRes as { data: unknown; error: unknown };
+      const employee = employeeData as unknown as { id: string; organization_id: string } | null;
+
       if (employeeError || !employee) {
         toast({
-          title: "Error",
-          description: "Data karyawan tidak ditemukan",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.employeeNotFound", "Data karyawan tidak ditemukan"),
           variant: "destructive",
           duration: 4000,
         });
@@ -387,15 +382,17 @@ const Absensi = () => {
       }
 
       // Get office location and validate distance
-      const { data: offices, error: officeError }: any = await (supabase as any)
+      const { data: officesData, error: officeError } = await supabase
         .from('office_locations')
         .select('*')
         .eq('organization_id', employee.organization_id)
         .eq('is_active', true);
+      const offices = officesData as unknown as Array<{ id: string; latitude: number; longitude: number; radius_meters: number }> | null;
+
       if (officeError) {
         toast({
-          title: "Error",
-          description: "Gagal mengambil data kantor",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.failedToLoadOffice", "Gagal mengambil data kantor"),
           variant: "destructive",
           duration: 4000,
         });
@@ -422,8 +419,8 @@ const Absensi = () => {
 
       if (!validOffice) {
         toast({
-          title: "Lokasi Tidak Valid",
-          description: "Anda tidak berada dalam radius area kantor yang diizinkan",
+          title: t("mobileHome.locationInvalid", "Lokasi Tidak Valid"),
+          description: t("mobileHome.locationInvalidDesc", "Anda tidak berada dalam radius area kantor yang diizinkan"),
           variant: "destructive",
           duration: 4000,
         });
@@ -438,33 +435,35 @@ const Absensi = () => {
         let scheduleId: string | null = (workSchedule?.id as string) || null;
         if (!scheduleId) {
           // Try default first
-          let { data: ws }: any = await (supabase as any)
+          let { data: ws } = await supabase
             .from('work_schedule_settings')
             .select('id')
             .eq('organization_id', employee.organization_id)
             .eq('is_active', true)
             .eq('is_default', true)
             .maybeSingle();
-          
+          type WsRow = { id: string } | null;
+          let wsRow: WsRow = ws as unknown as WsRow;
+
           // If no default, get any active schedule
-          if (!ws) {
-            const { data: fallbackWs }: any = await (supabase as any)
+          if (!wsRow) {
+            const { data: fallbackWs } = await supabase
               .from('work_schedule_settings')
               .select('id')
               .eq('organization_id', employee.organization_id)
               .eq('is_active', true)
               .limit(1)
               .maybeSingle();
-            ws = fallbackWs;
+            wsRow = fallbackWs as unknown as WsRow;
           }
-          
-          scheduleId = ws?.id || null;
+
+          scheduleId = wsRow?.id || null;
         }
         
         if (!scheduleId) {
           toast({
-            title: "Jadwal Kerja Tidak Ditemukan",
-            description: "Silakan hubungi admin untuk mengatur jadwal kerja aktif.",
+            title: t("mobileHome.scheduleNotFound", "Jadwal Kerja Tidak Ditemukan"),
+            description: t("mobileHome.scheduleNotFoundDesc", "Silakan hubungi admin untuk mengatur jadwal kerja aktif."),
             variant: "destructive",
             duration: 4000,
           });
@@ -484,14 +483,15 @@ const Absensi = () => {
           lateToleranceMinutes = workSchedule.late_tolerance_minutes || 0;
         } else {
           // Fetch from DB if workSchedule not available
-          const { data: scheduleData }: any = await (supabase as any)
+          const { data: scheduleData } = await supabase
             .from('work_schedule_settings')
             .select('start_time, late_tolerance_minutes')
             .eq('id', scheduleId)
             .single();
-          if (scheduleData) {
-            scheduledStartTime = scheduleData.start_time || "08:00:00";
-            lateToleranceMinutes = scheduleData.late_tolerance_minutes || 0;
+          const schedule = scheduleData as unknown as { start_time?: string; late_tolerance_minutes?: number } | null;
+          if (schedule) {
+            scheduledStartTime = schedule.start_time || "08:00:00";
+            lateToleranceMinutes = schedule.late_tolerance_minutes || 0;
           }
         }
         
@@ -502,7 +502,7 @@ const Absensi = () => {
         const actualLateMinutes = Math.max(0, checkInTimeMinutes - scheduledStartMinutes);
         const isLate = actualLateMinutes > lateToleranceMinutes;
         
-        console.log('Lateness calculation:', {
+        logger.debug('Lateness calculation', {
           checkInTimeMinutes,
           scheduledStartMinutes,
           lateToleranceMinutes,
@@ -525,6 +525,7 @@ const Absensi = () => {
           work_schedule_id: scheduleId || null, // Ensure no undefined values
           is_late: isLate,
           late_minutes: isLate ? actualLateMinutes : 0,
+          // Fitur upload foto attendance belum diimplementasi; path saat ini placeholder. TODO: upload imageData ke Supabase Storage dan gunakan path/URL yang dikembalikan.
           check_in_photo_path: `attendance/${user.id}/${Date.now()}_checkin.jpg`,
           notes: lateReason || null
         };
@@ -534,25 +535,28 @@ const Absensi = () => {
           sessionStorage.removeItem('lateReason');
         }
 
-        const { data: insertedRecord, error: insertError }: any = await (supabase as any)
+        const { data: insertedRecordData, error: insertError } = await supabase
           .from('attendance_records')
           .insert(attendanceData)
           .select()
           .single();
+        const insertedRecord = insertedRecordData as unknown as { id: string; check_in_time: string } | null;
 
         if (insertError) {
-          console.error('Clock in error:', insertError);
+          logger.error('Clock in error:', insertError);
           toast({
-            title: "Clock In Gagal",
-            description: "Terjadi kesalahan saat menyimpan data",
+            title: t("mobileHome.clockInFailed", "Clock In Gagal"),
+            description: t("mobileHome.saveError", "Terjadi kesalahan saat menyimpan data"),
             variant: "destructive",
             duration: 4000,
           });
           return;
         }
 
+        if (insertedRecord) lastCheckInTimeRef.current = insertedRecord.check_in_time;
+
         // Create attendance validation record
-        const validationData = {
+        const validationData = insertedRecord ? {
           attendance_record_id: insertedRecord.id,
           organization_id: employee.organization_id,
           validation_type: 'overall',
@@ -563,20 +567,22 @@ const Absensi = () => {
             work_schedule_id: scheduleId
           },
           validated_at: new Date().toISOString()
-        };
+        } : null;
 
-        const { error: validationError }: any = await (supabase as any)
+        if (validationData) {
+        const { error: validationError } = await supabase
           .from('attendance_validations')
           .insert(validationData);
 
         if (validationError) {
-          console.error('Validation error:', validationError);
+          logger.error('Validation error:', validationError);
           // Continue even if validation fails, as attendance is already recorded
+        }
         }
 
         toast({
-          title: "Clock In Berhasil",
-          description: "Selamat! Anda telah berhasil melakukan clock in",
+          title: t("mobileHome.clockInSuccess", "Clock In Berhasil"),
+          description: t("mobileHome.clockInSuccessDesc", "Selamat! Anda telah berhasil melakukan clock in"),
           variant: "default",
           duration: 3000,
         });
@@ -587,8 +593,13 @@ const Absensi = () => {
         }, 500);
 
       } else if (cameraModal.type === 'clockout') {
-        // Clock Out Logic
-        const { error: updateError }: any = await (supabase as any)
+        // Clock Out Logic - use ref so working_hours_minutes is correct even before refetch
+        const checkInTime = lastCheckInTimeRef.current ?? todayAttendance?.check_in_time;
+        const working_hours_minutes = checkInTime
+          ? Math.floor((Date.now() - new Date(checkInTime).getTime()) / (1000 * 60))
+          : 0;
+
+        const { error: updateError } = await supabase
           .from('attendance_records')
           .update({
             check_out_time: new Date().toISOString(),
@@ -597,27 +608,28 @@ const Absensi = () => {
               longitude: currentLocation.longitude,
               address: "Location captured"
             },
+            // Fitur upload foto attendance belum diimplementasi; path saat ini placeholder. TODO: upload imageData ke Supabase Storage dan gunakan path/URL yang dikembalikan.
             check_out_photo_path: `attendance/${user.id}/${Date.now()}_checkout.jpg`,
-            working_hours_minutes: todayAttendance ? Math.floor((new Date().getTime() - new Date(todayAttendance.check_in_time!).getTime()) / (1000 * 60)) : 0
+            working_hours_minutes
           })
           .eq('employee_id', employee.id)
           .eq('attendance_date', new Date().toISOString().split('T')[0])
           .is('check_out_time', null);
 
         if (updateError) {
-          console.error('Clock out error:', updateError);
-        toast({
-          title: "Clock Out Gagal",
-          description: "Terjadi kesalahan saat menyimpan data",
-          variant: "destructive",
-          duration: 4000,
-        });
+          logger.error('Clock out error:', updateError);
+          toast({
+            title: t("mobileHome.clockOutFailed", "Clock Out Gagal"),
+            description: t("mobileHome.saveError", "Terjadi kesalahan saat menyimpan data"),
+            variant: "destructive",
+            duration: 4000,
+          });
           return;
         }
 
         toast({
-          title: "Clock Out Berhasil",
-          description: "Selamat! Anda telah menyelesaikan hari kerja",
+          title: t("mobileHome.clockOutSuccess", "Clock Out Berhasil"),
+          description: t("mobileHome.clockOutSuccessDesc", "Selamat! Anda telah menyelesaikan hari kerja"),
           variant: "default",
           duration: 3000,
         });
@@ -631,10 +643,10 @@ const Absensi = () => {
       // Refresh attendance data
       refetch();
     } catch (error) {
-      console.error('Attendance error:', error);
+      logger.error('Attendance error:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Terjadi kesalahan tidak terduga",
+        title: t("mobileHome.error", "Error"),
+        description: error instanceof Error ? error.message : t("mobileHome.unexpectedError", "Terjadi kesalahan tidak terduga"),
         variant: "destructive",
         duration: 4000,
       });
@@ -651,63 +663,6 @@ const Absensi = () => {
   const currentOfficeLocation = officeLocation;
   const currentSchedule = todaySchedule;
 
-  // Skeleton Loading Component
-  const AbsensiSkeleton = () => (
-    <div className="space-y-2">
-      {/* Time Display Skeleton */}
-      <div className="bg-card border border-border rounded-lg p-6 text-center">
-        <Skeleton className="h-12 w-48 mx-auto mb-2" />
-        <Skeleton className="h-6 w-32 mx-auto" />
-      </div>
-
-      {/* Schedule Skeleton */}
-      <div className="px-2">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <Skeleton className="h-5 w-32 mb-3" />
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-20" />
-          </div>
-        </div>
-      </div>
-
-      {/* Location Skeleton */}
-      <div className="px-3">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <Skeleton className="h-5 w-40 mb-3" />
-          <Skeleton className="h-4 w-full mb-2" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-      </div>
-
-      {/* Attendance Status Skeleton */}
-      <div className="px-3">
-        <div className="bg-card border border-border rounded-lg p-4 space-y-4">
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-16" />
-          </div>
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-16" />
-          </div>
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-4 w-24" />
-          </div>
-        </div>
-      </div>
-
-      {/* Action Buttons Skeleton */}
-      <div className="px-2">
-        <div className="grid grid-cols-2 gap-2">
-          <Skeleton className="h-14 rounded-md" />
-          <Skeleton className="h-14 rounded-md" />
-        </div>
-      </div>
-    </div>
-  );
-
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
   return (
@@ -717,7 +672,7 @@ const Absensi = () => {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
 
-        {/* Same structure as LiveChatListView: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+        {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc: main fixed + useVisualViewport, header safe-area-top, scroll area seamless-scroll, NavigationFooter safe-area-bottom-lower */}
         <main
           className="flex flex-col bg-background fixed inset-x-0 z-0"
           style={{
@@ -727,65 +682,99 @@ const Absensi = () => {
           }}
         >
           <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="md:hidden" />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <SidebarTrigger className="md:hidden shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">{greeting},</p>
+                <p className="text-base font-semibold text-foreground truncate">{displayName}</p>
+              </div>
+            </div>
+            <div className="shrink-0">
               <RealtimeStatusIndicator
                 isConnected={realtimeConnected}
                 onlineUsers={totalOnline}
                 className="text-xs"
               />
             </div>
-            <div className="hidden md:block">
-              <RealtimeStatusIndicator
-                isConnected={realtimeConnected}
-                onlineUsers={totalOnline}
-              />
-            </div>
           </header>
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
-              {showSkeleton ? (
-                <div className="p-2">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
+              {loading ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-home">
                   <AbsensiSkeleton />
                 </div>
+              ) : error ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-home">
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive font-medium mb-1">{t('mobileHome.error', 'Error')}</p>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {error.message === 'NO_USER'
+                        ? t('mobileHome.userNotFound', 'User tidak ditemukan')
+                        : error.message === 'NO_ORG'
+                          ? t('mobileHome.orgNotFound', 'Organisasi aktif tidak ditemukan')
+                          : error.message === 'NO_EMPLOYEE'
+                            ? t('mobileHome.employeeNotFound', 'Data karyawan tidak ditemukan')
+                            : error.message === 'FETCH_PROFILE_FAILED'
+                              ? t('mobileHome.failedToLoadProfile', 'Gagal memuat profil')
+                              : error.message}
+                    </p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => { clearError(); refetch(); }}
+                    >
+                      {t("mobileHome.retry", "Coba lagi")}
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <>
-                  <TimeDisplay />
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-home space-y-1">
+                  {/* pt-2 = spasi ke header; space-y-1 = jarak antar section sama seperti daily task */}
+                  <div>
+                    <div className="bg-card rounded-lg border border-border overflow-hidden">
+                      <TimeDisplay />
 
-                  {/* Location Button - di antara jam atas dan jam check in/out */}
-                  {currentOfficeLocation && <LocationButton officeLocation={currentOfficeLocation} />}
+                      {/* Location Button - di antara jam atas dan jam check in/out */}
+                      {currentOfficeLocation && <LocationButton officeLocation={currentOfficeLocation} />}
 
-                  <AttendanceStatus
-                    checkIn={todayAttendance?.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString('id-ID', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit'
-                    }) : undefined}
-                    checkOut={todayAttendance?.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString('id-ID', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit'
-                    }) : undefined}
-                    workingHours={calculateWorkingHours()}
-                  />
+                      <AttendanceStatus
+                        checkIn={todayAttendance?.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString(timeLocale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        }) : undefined}
+                        checkOut={todayAttendance?.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString(timeLocale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        }) : undefined}
+                        workingHours={calculateWorkingHours()}
+                      />
 
-                  <AttendanceActions onClockIn={handleClockIn} onClockOut={handleClockOut} />
+                      <AttendanceActions onClockIn={handleClockIn} onClockOut={handleClockOut} />
+                    </div>
+                  </div>
 
                   {currentSchedule && workSchedule && (
-                    <div className="px-2 mb-2">
+                    <div>
                       <TodaySchedule schedule={currentSchedule} />
                     </div>
                   )}
 
-                  {currentOfficeLocation && <LocationChecker officeLocation={currentOfficeLocation} />}
-                </>
+                  {currentOfficeLocation && (
+                    <div>
+                      <LocationChecker officeLocation={currentOfficeLocation} />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
 
           {/* Spacer so content doesn't scroll under the fixed footer; same as LiveChatListView */}
-          <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
           <NavigationFooter className="safe-area-bottom-lower" />
         </main>
 

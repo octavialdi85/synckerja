@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, Clock, FileText, History, CheckSquare } from 'lucide-react';
+import { AlertCircle, Plus, Edit, Trash2, CheckCircle2, FileText, History, CheckSquare } from 'lucide-react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import { Label } from '@/features/ui/label';
 import {
   Select,
@@ -33,6 +35,7 @@ interface IssuesDialogProps {
 }
 
 const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssueCountChange }: IssuesDialogProps) => {
+  const isMobile = useIsMobile();
   const { 
     getIssueHistory, 
     addIssue, 
@@ -72,6 +75,9 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
   // Add as Daily Task modal state
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [selectedSolutionForTask, setSelectedSolutionForTask] = useState<any>(null);
+
+  // Full description view popup (when description is truncated and user clicks to read full)
+  const [fullDescriptionModal, setFullDescriptionModal] = useState<{ title: string; content: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
@@ -279,18 +285,27 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-none w-screen h-screen md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin] border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%] overflow-hidden">
-        <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-foreground break-words">
-            <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
-            Issues & Solutions
+      <DialogContent
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+            : 'md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin] md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+        )}
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+      >
+        <DialogHeader className={cn(
+          'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+          isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+        )}>
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
+            <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+            <span className="lowercase truncate">Issues & Solutions: {discussionPoint}</span>
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground mt-1 line-clamp-2 font-medium break-words">
-            {discussionPoint}
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll px-4 py-4 md:pr-4 md:pb-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
           <div className="flex flex-col space-y-6 pt-4">
           {/* ========== ISSUES SECTION ========== */}
           <div>
@@ -310,7 +325,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                     placeholder="Describe the problem or issue that needs to be addressed..."
                     value={newIssue}
                     onChange={(e) => setNewIssue(e.target.value)}
-                    className="min-h-[80px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                    className="text-sm min-h-[80px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                   />
                 </div>
 
@@ -332,27 +347,27 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                 </h4>
               </div>
               
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto seamless-scroll">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead>Issue Description</TableHead>
-                      <TableHead className="w-[150px]">Created</TableHead>
-                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead className="w-[50px] min-w-[50px] shrink-0">#</TableHead>
+                      <TableHead className="min-w-[320px]">Issue Description</TableHead>
+                      <TableHead className="w-[150px] min-w-[140px] shrink-0">Created</TableHead>
+                      <TableHead className="w-[120px] min-w-[120px] shrink-0">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8">
+                        <TableCell colSpan={4} className="text-center py-8">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto mb-2"></div>
                           Loading...
                         </TableCell>
                       </TableRow>
                     ) : issues.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                           <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                           <p className="font-medium">No issues yet</p>
                           <p className="text-sm">Add the first issue above to get started.</p>
@@ -364,13 +379,13 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           <TableCell className="text-center text-gray-600 font-medium">
                             {index + 1}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[320px] align-top">
                             {editingIssueId === issue.id ? (
                               <div className="space-y-2">
                                 <Textarea
                                   value={editingIssueText}
                                   onChange={(e) => setEditingIssueText(e.target.value)}
-                                  className="min-h-[60px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                                  className="text-sm min-h-[60px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                                 />
                                 <div className="flex items-center gap-2 justify-end">
                                   <Button
@@ -391,15 +406,29 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">
+                              <p
+                                role="button"
+                                tabIndex={0}
+                                className="text-gray-900 text-sm leading-relaxed line-clamp-2 cursor-pointer hover:bg-orange-50/50 rounded px-1 -mx-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFullDescriptionModal({ title: 'Issue Description', content: issue.issue_description });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setFullDescriptionModal({ title: 'Issue Description', content: issue.issue_description });
+                                  }
+                                }}
+                              >
                                 {issue.issue_description}
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                             {formatDateTime(issue.created_at)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"
@@ -453,7 +482,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                     Select Issue
                   </Label>
                   <Select value={selectedIssueId} onValueChange={setSelectedIssueId}>
-                    <SelectTrigger className="bg-white border border-gray-200 focus:border-green-300 w-full">
+                    <SelectTrigger className="text-sm bg-white border border-gray-200 focus:border-green-300 w-full">
                       <SelectValue placeholder="Select an issue to add solution..." />
                     </SelectTrigger>
                     <SelectContent className="bg-white border shadow-lg max-h-[200px] w-full max-w-[calc(100vw-2rem)] md:min-w-[400px] md:max-w-none">
@@ -483,7 +512,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                     placeholder="Describe the solution for the selected issue..."
                     value={newSolution}
                     onChange={(e) => setNewSolution(e.target.value)}
-                    className="min-h-[80px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100"
+                    className="text-sm min-h-[80px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100"
                   />
                 </div>
 
@@ -505,16 +534,16 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                 </h4>
               </div>
               
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto seamless-scroll">
+                <Table className="min-w-[900px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead>Issue Reference</TableHead>
-                      <TableHead>Solution Description</TableHead>
-                      <TableHead className="w-[150px]">Created</TableHead>
-                      <TableHead className="w-[100px]">Updates</TableHead>
-                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead className="w-[50px] min-w-[50px] shrink-0">#</TableHead>
+                      <TableHead className="min-w-[180px]">Issue Reference</TableHead>
+                      <TableHead className="min-w-[320px]">Solution Description</TableHead>
+                      <TableHead className="w-[150px] min-w-[140px] shrink-0">Created</TableHead>
+                      <TableHead className="w-[100px] min-w-[100px] shrink-0">Updates</TableHead>
+                      <TableHead className="w-[120px] min-w-[120px] shrink-0">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -539,20 +568,20 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           <TableCell className="text-center text-gray-600 font-medium">
                             {index + 1}
                           </TableCell>
-                          <TableCell className="max-w-xs">
+                          <TableCell className="min-w-[180px] align-top">
                             <div className="bg-orange-50 border border-orange-200 rounded-md p-2">
                               <p className="text-xs text-orange-800 font-medium line-clamp-2">
                                 {getIssueDescription(solution.meeting_point_issue_id)}
                               </p>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[320px] align-top">
                             {editingSolutionId === solution.id ? (
                               <div className="space-y-2">
                                 <Textarea
                                   value={editingSolutionText}
                                   onChange={(e) => setEditingSolutionText(e.target.value)}
-                                  className="min-h-[60px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100"
+                                  className="text-sm min-h-[60px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100"
                                 />
                                 <div className="flex items-center gap-2 justify-end">
                                   <Button
@@ -573,15 +602,29 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">
+                              <p
+                                role="button"
+                                tabIndex={0}
+                                className="text-gray-900 text-sm leading-relaxed line-clamp-2 cursor-pointer hover:bg-green-50/50 rounded px-1 -mx-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFullDescriptionModal({ title: 'Solution Description', content: solution.solution_description });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setFullDescriptionModal({ title: 'Solution Description', content: solution.solution_description });
+                                  }
+                                }}
+                              >
                                 {solution.solution_description}
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                             {formatDateTime(solution.created_at)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -593,7 +636,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                               {solutionUpdateCounts[solution.id] || 0}
                             </Button>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"
@@ -643,92 +686,140 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
           </div>
           </div>
         </div>
+
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm" */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="w-full sm:w-auto">
+              Close
+            </Button>
+          </div>
+        </div>
       </DialogContent>
 
-      {/* Issue Notes Dialog */}
+      {/* Full description popup (read full Issue/Solution description) */}
+      <Dialog open={!!fullDescriptionModal} onOpenChange={(open) => !open && setFullDescriptionModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-lg">{fullDescriptionModal?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto rounded-md border bg-muted/30 p-4">
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              {fullDescriptionModal?.content}
+            </p>
+          </div>
+          <div className="flex justify-end pt-3">
+            <Button variant="outline" onClick={() => setFullDescriptionModal(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Issue Notes Dialog - rules: header safe-area-top px-4 pt-4 pb-3, footer two-layer no safe-area-padding-bottom, size="sm", form text-sm */}
       {notesIssueId && (
         <Dialog open={!!notesIssueId} onOpenChange={handleCancelIssueNotes}>
-          <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-2xl border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%]">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 break-words">
-                  <FileText className="w-5 h-5 text-orange-600 flex-shrink-0" />
-                  Issue Notes
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="issue-notes" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Notes
-                  </Label>
-                  <Textarea
-                    id="issue-notes"
-                    placeholder="Add notes or comments for this issue..."
-                    value={editingIssueNotes}
-                    onChange={(e) => setEditingIssueNotes(e.target.value)}
-                    className="min-h-[150px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 break-words max-w-full"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelIssueNotes}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => handleSaveIssueNotes(notesIssueId)}
-                    className="bg-orange-600 hover:bg-orange-700 text-white w-full sm:w-auto"
-                  >
-                    Save Notes
-                  </Button>
-                </div>
+          <DialogContent
+            className={cn(
+              'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+              isMobile
+                ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+                : 'md:max-w-2xl md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+            )}
+            fullscreenAnimation={isMobile}
+            hideCloseButton={isMobile}
+          >
+            <DialogHeader className={cn(
+              'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+              isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+            )}>
+              <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                <span className="lowercase truncate">Issue Notes</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
+              <div>
+                <Label htmlFor="issue-notes" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Notes
+                </Label>
+                <Textarea
+                  id="issue-notes"
+                  placeholder="Add notes or comments for this issue..."
+                  value={editingIssueNotes}
+                  onChange={(e) => setEditingIssueNotes(e.target.value)}
+                  className="text-sm min-h-[150px] resize-none bg-white border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 break-words max-w-full"
+                />
+              </div>
+            </div>
+            <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleCancelIssueNotes} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSaveIssueNotes(notesIssueId)}
+                  className="min-w-[120px] flex items-center justify-center gap-1.5 w-full sm:w-auto"
+                >
+                  Save Notes
+                </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Solution Notes Dialog */}
+      {/* Solution Notes Dialog - rules: header safe-area-top px-4 pt-4 pb-3, footer two-layer no safe-area-padding-bottom, size="sm", form text-sm */}
       {notesSolutionId && (
         <Dialog open={!!notesSolutionId} onOpenChange={handleCancelSolutionNotes}>
-          <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-2xl border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%]">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 break-words">
-                  <FileText className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  Solution Notes
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="solution-notes" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Notes
-                  </Label>
-                  <Textarea
-                    id="solution-notes"
-                    placeholder="Add notes or comments for this solution..."
-                    value={editingSolutionNotes}
-                    onChange={(e) => setEditingSolutionNotes(e.target.value)}
-                    className="min-h-[150px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100 break-words max-w-full"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelSolutionNotes}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => handleSaveSolutionNotes(notesSolutionId)}
-                    className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
-                  >
-                    Save Notes
-                  </Button>
-                </div>
+          <DialogContent
+            className={cn(
+              'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+              isMobile
+                ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+                : 'md:max-w-2xl md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+            )}
+            fullscreenAnimation={isMobile}
+            hideCloseButton={isMobile}
+          >
+            <DialogHeader className={cn(
+              'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+              isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+            )}>
+              <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                <span className="lowercase truncate">Solution Notes</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
+              <div>
+                <Label htmlFor="solution-notes" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Notes
+                </Label>
+                <Textarea
+                  id="solution-notes"
+                  placeholder="Add notes or comments for this solution..."
+                  value={editingSolutionNotes}
+                  onChange={(e) => setEditingSolutionNotes(e.target.value)}
+                  className="text-sm min-h-[150px] resize-none bg-white border border-gray-200 focus:border-green-300 focus:ring-2 focus:ring-green-100 break-words max-w-full"
+                />
+              </div>
+            </div>
+            <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleCancelSolutionNotes} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSaveSolutionNotes(notesSolutionId)}
+                  className="min-w-[120px] flex items-center justify-center gap-1.5 w-full sm:w-auto"
+                >
+                  Save Notes
+                </Button>
               </div>
             </div>
           </DialogContent>

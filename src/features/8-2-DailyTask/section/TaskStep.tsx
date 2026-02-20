@@ -14,6 +14,12 @@ import { ModalAddTaskStep } from './ModalAddTaskStep';
 import UpdateHistoryDialog from '@/features/8-1-meeting-notes/modal/UpdateHistoryDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from '@/features/ui/dialog';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -933,33 +939,65 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
                     {step.description}
                   </p>
                   {step.description.length > 50 && (
-                    <Popover open={isDescriptionPopoverOpen} onOpenChange={setIsDescriptionPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex-shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsDescriptionPopoverOpen(true);
-                          }}
+                    isMobile ? (
+                      <Dialog open={isDescriptionPopoverOpen} onOpenChange={setIsDescriptionPopoverOpen}>
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsDescriptionPopoverOpen(true);
+                            }}
+                          >
+                            See more
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent
+                          className="w-[80vmin] max-w-[calc(100vw-2rem)] aspect-square max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
+                          hideCloseButton={false}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          See more
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-80 p-4"
-                        align="start"
-                        side="bottom"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-semibold text-gray-900">Description</h4>
-                          <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
-                            {step.description}
-                          </p>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                          <DialogTitle className="sr-only">Description</DialogTitle>
+                          <div className="flex-shrink-0 flex items-center justify-between px-4 pr-12 py-3 border-b border-border">
+                            <h4 className="text-sm font-semibold text-gray-900">Description</h4>
+                          </div>
+                          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 py-3">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                              {step.description}
+                            </p>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    ) : (
+                      <Popover open={isDescriptionPopoverOpen} onOpenChange={setIsDescriptionPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsDescriptionPopoverOpen(true);
+                            }}
+                          >
+                            See more
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent 
+                          className="w-80 p-4"
+                          align="center"
+                          side="bottom"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-900">Description</h4>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                              {step.description}
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )
                   )}
                 </div>
               </div>
@@ -1162,24 +1200,23 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       />
     )}
 
-    {/* Assignment Dialog */}
-    {showAssignDialog && (
-      isMobile ? (
-        <MobileAssignStepDialog
-          step={step}
-          onAssign={handleAssignStep}
-          onUnassign={handleUnassignStep}
-          onClose={() => setShowAssignDialog(false)}
-        />
-      ) : (
-        <AssignStepDialog
-          step={step}
-          onAssign={handleAssignStep}
-          onUnassign={handleUnassignStep}
-          onClose={() => setShowAssignDialog(false)}
-        />
-      )
-    )}
+    {/* Assignment Dialog - mobile: keep mounted so close animation can run */}
+    {isMobile ? (
+      <MobileAssignStepDialog
+        open={showAssignDialog}
+        step={step}
+        onAssign={handleAssignStep}
+        onUnassign={handleUnassignStep}
+        onClose={() => setShowAssignDialog(false)}
+      />
+    ) : showAssignDialog ? (
+      <AssignStepDialog
+        step={step}
+        onAssign={handleAssignStep}
+        onUnassign={handleUnassignStep}
+        onClose={() => setShowAssignDialog(false)}
+      />
+    ) : null}
 
     {/* History Modal */}
     {showHistoryModal && (

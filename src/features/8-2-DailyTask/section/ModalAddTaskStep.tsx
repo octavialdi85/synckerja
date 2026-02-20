@@ -4,7 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -13,6 +12,8 @@ import { Separator } from '@/features/ui/separator';
 import { ListChecks } from 'lucide-react';
 import { useDailyTask } from '../DailyTaskContext';
 import { useToast } from '@/features/ui/use-toast';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 // import { useTranslation } from 'react-i18next';
 
 export interface ModalAddTaskStepProps {
@@ -42,6 +43,7 @@ export const ModalAddTaskStep = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addTaskStep, updateTaskStep } = useDailyTask();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const isEditMode = !!editingStep;
 
@@ -133,32 +135,48 @@ export const ModalAddTaskStep = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[600px] h-[600px] max-w-[90vw] max-h-[90vh] p-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            : 'w-[600px] h-[600px] max-w-[90vw] max-h-[90vh]'
+        )}
+        hideCloseButton={isMobile}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+            isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'px-6 pt-6 pb-4'
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
               <ListChecks className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <div>
-              <DialogTitle className="text-xl font-semibold">
+            <div className="min-w-0">
+              <DialogTitle className={cn('text-lg font-semibold', !isMobile && 'md:text-xl')}>
                 {isEditMode ? 'Edit Step' : 'Add New Step'}
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-1">
-                {isEditMode 
-                  ? 'Update step details for your task'
-                  : 'Enter step details to add to your task'}
-              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div 
-          className="flex-1 overflow-y-auto px-6 py-6" 
-          style={{ 
-            scrollbarWidth: 'thin',
-            scrollBehavior: 'smooth',
-            scrollbarColor: '#d1d5db transparent'
-          }}
+        <div
+          className={cn(
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll',
+            isMobile ? 'px-6 pt-4 pb-6' : 'px-6 py-6'
+          )}
+          style={
+            !isMobile
+              ? {
+                  scrollbarWidth: 'thin',
+                  scrollBehavior: 'smooth',
+                  scrollbarColor: '#d1d5db transparent',
+                }
+              : undefined
+          }
         >
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Task Information Section */}
@@ -193,6 +211,7 @@ export const ModalAddTaskStep = ({
                     }
                   }}
                   disabled={isSubmitting}
+                  className="text-sm"
                   autoFocus
                 />
               </div>
@@ -212,33 +231,35 @@ export const ModalAddTaskStep = ({
                   value={stepDescription}
                   onChange={(e) => setStepDescription(e.target.value)}
                   disabled={isSubmitting}
-                  className="min-h-[100px] resize-none"
+                  className="text-sm min-h-[100px] resize-none"
                 />
               </div>
             </div>
           </form>
         </div>
 
-        <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
-          <div className="flex items-center justify-end gap-3">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={handleCancel} 
+        <div className={cn('px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30', !isMobile && 'px-6 pt-4 pb-4')}>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCancel}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button 
-              type="button" 
+            <Button
+              type="button"
+              size="sm"
               onClick={handleSubmit}
               disabled={!stepTitle.trim() || isSubmitting}
-              className="min-w-[120px]"
+              className="min-w-[120px] flex items-center justify-center gap-1.5"
             >
               {isSubmitting ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  {isEditMode ? 'Saving...' : 'Adding...'}
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>{isEditMode ? 'Saving...' : 'Adding...'}</span>
                 </>
               ) : (
                 isEditMode ? 'Save Changes' : 'Add Step'

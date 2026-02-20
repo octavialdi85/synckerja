@@ -26,6 +26,8 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { logger } from '@/config/logger';
 import { createCompletionApprovalIfAssignee } from '../services/completionApprovalService';
 import { useDailyTaskOptional } from '../DailyTaskContext';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface SubStep {
   id: string;
@@ -78,6 +80,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const { t } = useAppTranslation();
   const dailyTaskContext = useDailyTaskOptional();
   const rejectedReasonsBySubStepId = dailyTaskContext?.rejectedReasonsBySubStepId ?? {};
+  const isMobile = useIsMobile();
   const [parentPlan, setParentPlan] = useState<ParentPlanInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubStepId, setPendingSubStepId] = useState<string | null>(null);
@@ -638,8 +641,21 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            : 'w-[620px] max-w-[90vw] max-h-[90vh] h-[600px]'
+        )}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top',
+            isMobile ? 'px-4 pt-4 pb-3' : 'px-6 pt-6 pb-4'
+          )}
+        >
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -651,7 +667,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
               <ArrowLeft className="w-5 h-5 text-blue-600" />
             </Button>
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-xl font-semibold flex items-center gap-2 truncate">
+              <DialogTitle className={cn('text-lg font-semibold flex items-center gap-2 truncate', !isMobile && 'md:text-xl')}>
                 Steps
                 <Badge variant="secondary">{completedCount}/{visibleSubSteps.length}</Badge>
               </DialogTitle>
@@ -663,12 +679,19 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         </DialogHeader>
 
         <div
-          className="flex-1 overflow-y-auto px-6 py-6 space-y-4"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollBehavior: 'smooth',
-            scrollbarColor: '#d1d5db transparent',
-          }}
+          className={cn(
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-4 seamless-scroll',
+            isMobile ? 'px-6 pt-4 pb-6' : 'px-6 py-6'
+          )}
+          style={
+            !isMobile
+              ? {
+                  scrollbarWidth: 'thin',
+                  scrollBehavior: 'smooth',
+                  scrollbarColor: '#d1d5db transparent',
+                }
+              : undefined
+          }
         >
           {/* Inline Add Form */}
           <div className="flex items-center gap-2">
@@ -679,10 +702,10 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
               onKeyDown={(e) => {
                 if (e.key === 'Enter') addSubStep();
               }}
-              className="flex-1"
+              className="flex-1 text-sm"
               disabled={adding}
             />
-            <Button onClick={addSubStep} disabled={!newTitle.trim() || adding} className="bg-blue-600 hover:bg-blue-700">
+            <Button type="button" size="sm" onClick={addSubStep} disabled={!newTitle.trim() || adding} className="min-w-[2.25rem]">
               <Plus className="w-4 h-4" />
             </Button>
           </div>
@@ -817,10 +840,12 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 				</div>
         </div>
 
-        <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex items-center justify-end gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
-            Close
-          </Button>
+        <div className={cn('px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30', isMobile ? '' : 'px-6 pt-4 pb-4')}>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
+              Close
+            </Button>
+          </div>
         </div>
         {showHistoryForSubStep && (
           <StepHistoryModal

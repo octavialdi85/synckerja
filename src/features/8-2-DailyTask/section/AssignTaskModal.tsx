@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Calendar, X, Building2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
@@ -8,6 +8,8 @@ import { DueDatePicker } from './DueDatePicker';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface AssignTaskModalProps {
   open: boolean;
@@ -24,6 +26,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
 }) => {
   const { data: employees = [] } = useAvailableEmployees();
   const { organizationId } = useCurrentOrg();
+  const isMobile = useIsMobile();
   const [selectedEmployee, setSelectedEmployee] = useState<string>(
     currentAssignment?.employeeId || 'unassigned'
   );
@@ -97,18 +100,34 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="w-5 h-5 text-blue-600" />
+      <DialogContent
+        className={cn(
+          'p-0 gap-0 flex flex-col',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            : 'max-w-md max-h-[90vh]'
+        )}
+        hideCloseButton={isMobile}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top',
+            isMobile ? 'px-4 pt-4 pb-3' : 'px-6 pt-6 pb-4'
+          )}
+        >
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <User className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
             Assign Task
           </DialogTitle>
-          <DialogDescription>
-            Assign this task to an employee and set a deadline if needed
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-4">
+        <div
+          className={cn(
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll space-y-4',
+            isMobile ? 'px-6 pt-4 pb-6' : 'px-6 pt-4 pb-4'
+          )}
+        >
           {/* Employee Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -208,12 +227,15 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
               </p>
             )}
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t">
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, size="sm", primary = variant default */}
+        <div className={cn('px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30', isMobile ? '' : 'px-6 pt-4 pb-4')}>
+          <div className="flex items-center justify-between gap-2">
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               onClick={handleClear}
               disabled={!hasChanges}
               className="text-gray-600"
@@ -221,20 +243,22 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({
               <X className="w-4 h-4 mr-2" />
               Clear
             </Button>
-            <div className="flex gap-2">
+            <div className="flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => onOpenChange(false)}
               >
                 Cancel
               </Button>
               <Button
                 type="button"
+                size="sm"
                 onClick={handleSubmit}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="min-w-[120px] flex items-center justify-center gap-1.5"
               >
-                <User className="w-4 h-4 mr-2" />
+                <User className="w-4 h-4" />
                 Assign
               </Button>
             </div>

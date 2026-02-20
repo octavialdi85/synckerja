@@ -1,9 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { History, Clock, User, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Textarea } from '@/features/ui/textarea';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import { Label } from '@/features/ui/label';
 import {
   Select,
@@ -25,6 +26,7 @@ interface UpdateHistoryDialogProps {
 }
 
 const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, solutionId }: UpdateHistoryDialogProps) => {
+  const isMobile = useIsMobile();
   const { getUpdateHistoryByMeetingPoint, getUpdateHistory, addUpdate, updateUpdate, deleteUpdate, getIssueHistory } = useMeetingNotes();
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
@@ -257,21 +259,28 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-4xl md:max-h-[85vh] border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%] overflow-hidden">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
-          <DialogHeader className="flex-shrink-0 pb-4 border-b">
-            <div className="flex-1 pr-4">
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-foreground break-words">
-                <History className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                Update History
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-1 line-clamp-2 font-medium break-words">
-                {discussionPoint}
-              </DialogDescription>
-            </div>
-          </DialogHeader>
+      <DialogContent
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+            : 'md:max-w-4xl md:max-h-[85vh] md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+        )}
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+      >
+        <DialogHeader className={cn(
+          'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+          isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+        )}>
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
+            <History className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="lowercase truncate">Update History: {discussionPoint}</span>
+          </DialogTitle>
+        </DialogHeader>
 
-          <div className="flex-1 overflow-hidden flex flex-col space-y-6 pt-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
+          <div className="flex-1 flex flex-col space-y-6">
             {/* Add New Update Section */}
             <div className="flex-shrink-0 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 md:p-5 border border-blue-100">
               <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2 text-sm md:text-base">
@@ -295,7 +304,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                         value={selectedIssueId} 
                         onValueChange={setSelectedIssueId}
                       >
-                        <SelectTrigger className="bg-white border border-gray-200 focus:border-blue-300 w-full">
+                        <SelectTrigger className="text-sm bg-white border border-gray-200 focus:border-blue-300 w-full">
                           <SelectValue placeholder="Select an issue..." />
                         </SelectTrigger>
                         <SelectContent className="bg-white border shadow-lg max-h-[200px] w-full max-w-[calc(100vw-2rem)] md:min-w-[300px] md:max-w-none">
@@ -331,7 +340,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                       onValueChange={setSelectedSolutionId}
                       disabled={!!solutionId}
                     >
-                      <SelectTrigger className="bg-white border border-gray-200 focus:border-blue-300 w-full">
+                      <SelectTrigger className="text-sm bg-white border border-gray-200 focus:border-blue-300 w-full">
                         <SelectValue placeholder="Select a solution..." />
                       </SelectTrigger>
                       <SelectContent className="bg-white border shadow-lg max-h-[200px] w-full max-w-[calc(100vw-2rem)] md:min-w-[300px] md:max-w-none">
@@ -356,7 +365,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                     placeholder="Describe the progress or changes made..."
                     value={newUpdate}
                     onChange={(e) => setNewUpdate(e.target.value)}
-                    className="min-h-[80px] resize-none bg-white border border-gray-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 break-words max-w-full"
+                    className="text-sm min-h-[80px] resize-none bg-white border border-gray-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 break-words max-w-full"
                     disabled={solutions.length === 0}
                   />
                 </div>
@@ -367,7 +376,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                       Update Status (Optional)
                     </Label>
                     <Select value={newStatus} onValueChange={setNewStatus}>
-                      <SelectTrigger className="bg-white border border-gray-200 focus:border-blue-300 w-full">
+                      <SelectTrigger className="text-sm bg-white border border-gray-200 focus:border-blue-300 w-full">
                         <SelectValue placeholder="Keep current status or change..." />
                       </SelectTrigger>
                     <SelectContent className="bg-white border shadow-lg w-full max-w-[calc(100vw-2rem)] md:min-w-[200px] md:max-w-none">
@@ -458,7 +467,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                             <Textarea
                               value={editingText}
                               onChange={(e) => setEditingText(e.target.value)}
-                              className="min-h-[80px] resize-none bg-white border border-gray-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 break-words max-w-full"
+                              className="text-sm min-h-[80px] resize-none bg-white border border-gray-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 break-words max-w-full"
                             />
                             <div className="flex items-center gap-2 justify-end">
                               <Button
@@ -489,6 +498,15 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                 </div>
               </ScrollArea>
             </div>
+          </div>
+        </div>
+
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm" */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="w-full sm:w-auto">
+              Close
+            </Button>
           </div>
         </div>
       </DialogContent>

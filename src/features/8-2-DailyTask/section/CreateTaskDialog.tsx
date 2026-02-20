@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Flag, User, Target, UserPlus, ArrowLeft, Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -16,7 +17,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/features/ui/dialog';
 import {
   Popover,
@@ -30,8 +30,7 @@ import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
-import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
-import { ObjectiveHierarchyDialog as MobileObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
+import { ObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { MonthPicker } from '@/features/share/calendar';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -79,7 +78,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const { data: currentEmployee } = useCurrentEmployee();
   const { organizationId } = useCurrentOrg();
   const { data: cycles = [] } = useOkrCycles(organizationId);
-  
+
   // State declarations - must be before useMemo that uses planDate
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -297,8 +296,15 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         }}
       >
         <DialogContent
-          className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col"
-          hideCloseButton={!dismissible}
+          className={cn(
+            'p-0 flex flex-col gap-0',
+            isMobile
+              ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area z-30'
+              : 'w-[620px] max-w-[90vw] max-h-[90vh] h-[600px]'
+          )}
+          overlayClassName={isMobile ? 'z-30' : undefined}
+          hideCloseButton={isMobile || !dismissible}
+          fullscreenAnimation={isMobile}
           onInteractOutside={(e) => {
             if (!dismissible) e.preventDefault();
           }}
@@ -306,23 +312,14 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             if (!dismissible) e.preventDefault();
           }}
         >
-          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-semibold">{t('dailyTask.createTask.title', 'Create New Task')}</DialogTitle>
-                <DialogDescription className="text-sm text-muted-foreground mt-1">
-                  {t('dailyTask.createTask.description', 'Create a new task and link it to an individual objective. Fill in all required fields to save.')}
-                </DialogDescription>
-              </div>
-            </div>
+          <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+            <DialogTitle className="text-lg font-semibold">{t('dailyTask.createTask.title', 'Create New Task')}</DialogTitle>
           </DialogHeader>
 
-          <form id="create-task-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+          <form id="create-task-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Scrollable body: on input focus, consider scrollIntoView({ behavior: 'smooth', block: 'nearest' }) so the field stays visible when soft keyboard opens on Android. */}
             <div
-              className="flex-1 overflow-y-auto px-6 py-6"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 pt-4 pb-6"
               style={{
                 scrollbarWidth: 'thin',
                 scrollBehavior: 'smooth',
@@ -342,7 +339,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       placeholder="What needs to be done?"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       disabled={isSubmitting}
                       required
                       autoFocus
@@ -411,7 +408,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label className="text-sm font-medium">
                       Individual Objective
                     </Label>
@@ -420,17 +417,17 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       variant="outline"
                       onClick={() => setIsObjectiveDialogOpen(true)}
                       disabled={isSubmitting}
-                      className="w-full justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+                      className="w-full min-w-0 justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10 overflow-hidden"
                     >
                       {objectiveId && objectiveContext ? (
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                           <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                          <div className="flex flex-col min-w-0 flex-1 text-left">
-                            <span className="text-sm truncate font-medium text-gray-900">
+                          <div className="flex flex-col min-w-0 flex-1 text-left overflow-hidden">
+                            <span className="text-sm truncate font-medium text-gray-900 block">
                               {objectiveContext.individualTitle}
                             </span>
                             {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
-                              <span className="text-xs text-gray-500 truncate">
+                              <span className="text-xs text-gray-500 truncate block">
                                 {objectiveContext.companyTitle && objectiveContext.departmentTitle
                                   ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
                                   : objectiveContext.companyTitle || objectiveContext.departmentTitle}
@@ -439,9 +436,9 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 min-w-0 w-full">
+                        <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
                           <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                          <span className="text-gray-500 text-sm truncate text-left">
+                          <span className="text-gray-500 text-sm truncate text-left block min-w-0">
                             Select Individual Objective
                           </span>
                         </div>
@@ -523,11 +520,12 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
               </div>
             </div>
 
-            <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30">
-              <div className="flex items-center justify-end gap-3">
+            <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+              <div className="flex items-center justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={handleClose}
                   disabled={isSubmitting}
                 >
@@ -535,8 +533,9 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 </Button>
                 <Button
                   type="submit"
+                  size="sm"
                   disabled={!title.trim() || !planDate || isSubmitting}
-                  className="min-w-[140px] flex items-center justify-center gap-2"
+                  className="min-w-[120px] flex items-center justify-center gap-1.5"
                 >
                   {isSubmitting ? (
                     <>
@@ -566,33 +565,18 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 
       {/* Lazy-load objective dialogs only when open so Company/Department objectives aren't fetched on page load */}
       {isObjectiveDialogOpen && (
-        isMobile ? (
-          <MobileObjectiveHierarchyDialog
-            open={isObjectiveDialogOpen}
-            onOpenChange={setIsObjectiveDialogOpen}
-            onSelect={(id, context) => {
-              setObjectiveId(id);
-              setObjectiveContext(context);
-            }}
-            selectedObjectiveId={objectiveId}
-            organizationId={organizationId || ''}
-            cycleIds={activeCycleIds}
-            planDate={planDate}
-          />
-        ) : (
-          <ObjectiveHierarchyDialog
-            open={isObjectiveDialogOpen}
-            onOpenChange={setIsObjectiveDialogOpen}
-            onSelect={(id, context) => {
-              setObjectiveId(id);
-              setObjectiveContext(context);
-            }}
-            selectedObjectiveId={objectiveId}
-            organizationId={organizationId || ''}
-            cycleIds={activeCycleIds}
-            planDate={planDate}
-          />
-        )
+        <ObjectiveHierarchyDialog
+          open={isObjectiveDialogOpen}
+          onOpenChange={setIsObjectiveDialogOpen}
+          onSelect={(id, context) => {
+            setObjectiveId(id);
+            setObjectiveContext(context);
+          }}
+          selectedObjectiveId={objectiveId}
+          organizationId={organizationId || ''}
+          cycleIds={activeCycleIds}
+          planDate={planDate}
+        />
       )}
     </>
   );

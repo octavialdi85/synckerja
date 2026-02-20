@@ -7,14 +7,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppLanguage, DEFAULT_LANGUAGE, LANGUAGE_STORAGE_KEY } from "./translations";
+import { AppLanguage, APP_LANGUAGE_DEVICE_OVERRIDE_KEY, DEFAULT_LANGUAGE, LANGUAGE_STORAGE_KEY } from "./translations";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { logger } from "@/config/logger";
 
+export interface SetLanguageOptions {
+  deviceOnly?: boolean;
+}
+
 interface LanguageContextValue {
   language: AppLanguage;
-  setLanguage: (language: AppLanguage) => void;
+  setLanguage: (language: AppLanguage, options?: SetLanguageOptions) => void;
 }
 
 const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
@@ -30,12 +34,20 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const { organizationId } = useCurrentOrg();
   const [isLoadingFromDb, setIsLoadingFromDb] = useState(true);
 
-  // Load language from database when organizationId is available
+  // Load language from database when organizationId is available (skip if device override is set)
   useEffect(() => {
     const loadLanguageFromDatabase = async () => {
       if (!organizationId) {
         setIsLoadingFromDb(false);
         return;
+      }
+
+      if (typeof window !== "undefined") {
+        const deviceOverride = window.localStorage.getItem(APP_LANGUAGE_DEVICE_OVERRIDE_KEY);
+        if (deviceOverride === "true") {
+          setIsLoadingFromDb(false);
+          return;
+        }
       }
 
       try {
@@ -55,7 +67,6 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           // Convert boolean to AppLanguage: true = "id", false = "en"
           const dbLanguage: AppLanguage = data.is_indonesian ? 'id' : 'en';
           
-          // Update language from database
           setLanguageState(dbLanguage);
           if (typeof window !== "undefined") {
             window.localStorage.setItem(LANGUAGE_STORAGE_KEY, dbLanguage);
@@ -82,11 +93,22 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [language]);
 
-  const setLanguage = useCallback((nextLanguage: AppLanguage) => {
+  const setLanguage = useCallback((nextLanguage: AppLanguage, options?: SetLanguageOptions) => {
+    const deviceOnly = options?.deviceOnly === true;
+
     setLanguageState(nextLanguage);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
       document.documentElement.lang = nextLanguage;
+      if (deviceOnly) {
+        window.localStorage.setItem(APP_LANGUAGE_DEVICE_OVERRIDE_KEY, "true");
+      } else {
+        window.localStorage.removeItem(APP_LANGUAGE_DEVICE_OVERRIDE_KEY);
+      }
+    }
+
+    if (deviceOnly) {
+      return;
     }
 
     // Save to database if organizationId is available
@@ -99,10 +121,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
             return;
           }
 
-          // Convert language to boolean: "id" = true (Indonesian), "en" = false (English)
           const isIndonesian = nextLanguage === 'id';
 
-          // Upsert language setting to application_language table
           const { error: langError } = await supabase
             .from('application_language')
             .upsert({

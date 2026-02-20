@@ -72,32 +72,32 @@ const MeetingFilters = () => {
           />
         </div>
         
-        {/* Filter Buttons - Wrap on mobile */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Filter Buttons - Single row, equal width */}
+        <div className="flex items-center gap-1.5 flex-nowrap w-full">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 md:flex-none min-w-[100px]">
-                {filters.status || 'All Statuses'}
-                <ChevronDown className="ml-1 w-4 h-4" />
+              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 min-w-0 justify-between gap-1.5 text-left px-2">
+                <span className="truncate min-w-0">{filters.status || 'All Statuses'}</span>
+                <ChevronDown className="w-4 h-4 flex-shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-white z-50">
-              <DropdownMenuItem onClick={() => handleStatusFilter('All Statuses')}>
+            <DropdownMenuContent className="bg-white z-50 min-w-[10rem] p-1">
+              <DropdownMenuItem onClick={() => handleStatusFilter('All Statuses')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 All Statuses
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusFilter('Not Started')}>
+              <DropdownMenuItem onClick={() => handleStatusFilter('Not Started')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Not Started
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusFilter('On Going')}>
+              <DropdownMenuItem onClick={() => handleStatusFilter('On Going')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 On Going
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusFilter('Completed')}>
+              <DropdownMenuItem onClick={() => handleStatusFilter('Completed')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Completed
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusFilter('Rejected')}>
+              <DropdownMenuItem onClick={() => handleStatusFilter('Rejected')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Rejected
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusFilter('Presented')}>
+              <DropdownMenuItem onClick={() => handleStatusFilter('Presented')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Presented
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -105,18 +105,18 @@ const MeetingFilters = () => {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 md:flex-none min-w-[100px]">
-                {filters.requestBy || 'All Request By'}
-                <ChevronDown className="ml-1 w-4 h-4" />
+              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 min-w-0 justify-between gap-1.5 text-left px-2">
+                <span className="truncate min-w-0">{filters.requestBy || 'All Request By'}</span>
+                <ChevronDown className="w-4 h-4 flex-shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-white z-50">
-              <DropdownMenuItem onClick={() => handleRequestByFilter('All Request By')}>
+            <DropdownMenuContent className="bg-white z-50 min-w-[10rem] p-1">
+              <DropdownMenuItem onClick={() => handleRequestByFilter('All Request By')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 All Request By
               </DropdownMenuItem>
               {uniqueRequestBy.map((name) => (
-                <DropdownMenuItem key={name} onClick={() => handleRequestByFilter(name!)}>
-                  {name}
+                <DropdownMenuItem key={name} onClick={() => handleRequestByFilter(name!)} className="text-left px-3 py-2 text-sm cursor-pointer min-w-0">
+                  <span className="truncate block">{name}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -124,28 +124,28 @@ const MeetingFilters = () => {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 md:flex-none min-w-[100px]">
-                {filters.timeFilter || 'All Time'}
-                <ChevronDown className="ml-1 w-4 h-4" />
+              <Button variant="outline" className="h-9 text-xs md:text-sm border-gray-200 flex-1 min-w-0 justify-between gap-1.5 text-left px-2">
+                <span className="truncate min-w-0">{filters.timeFilter || 'All Time'}</span>
+                <ChevronDown className="w-4 h-4 flex-shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-white z-50">
-              <DropdownMenuItem onClick={() => handleTimeFilter('All Time')}>
+            <DropdownMenuContent className="bg-white z-50 min-w-[10rem] p-1">
+              <DropdownMenuItem onClick={() => handleTimeFilter('All Time')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 All Time
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleTimeFilter('Today')}>
+              <DropdownMenuItem onClick={() => handleTimeFilter('Today')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Today
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleTimeFilter('Yesterday')}>
+              <DropdownMenuItem onClick={() => handleTimeFilter('Yesterday')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Yesterday
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleTimeFilter('This Week')}>
+              <DropdownMenuItem onClick={() => handleTimeFilter('This Week')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 This Week
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleTimeFilter('This Month')}>
+              <DropdownMenuItem onClick={() => handleTimeFilter('This Month')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 This Month
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleTimeFilter('Last Month')}>
+              <DropdownMenuItem onClick={() => handleTimeFilter('Last Month')} className="text-left px-3 py-2 text-sm cursor-pointer">
                 Last Month
               </DropdownMenuItem>
             </DropdownMenuContent>

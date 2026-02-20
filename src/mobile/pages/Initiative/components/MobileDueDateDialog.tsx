@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Label } from '@/features/ui/label';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface MobileDueDateDialogProps {
   open: boolean;
@@ -29,6 +24,7 @@ export const MobileDueDateDialog: React.FC<MobileDueDateDialogProps> = ({
   taskType,
   isLoading = false
 }) => {
+  const isMobile = useIsMobile();
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('23:59');
 
@@ -70,18 +66,24 @@ export const MobileDueDateDialog: React.FC<MobileDueDateDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-none h-full max-h-screen m-0 rounded-none fixed inset-0 translate-x-0 translate-y-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-[500px] sm:h-auto sm:max-h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-blue-600" />
-            Set Due Date
+      <DialogContent
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area'
+            : 'h-full max-h-screen fixed inset-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-[500px] sm:h-auto sm:max-h-[90vh]'
+        )}
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+      >
+        <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="lowercase truncate">Set Due Date</span>
           </DialogTitle>
-          <DialogDescription>
-            Set a deadline for completing this {getTaskTypeLabel().toLowerCase()}
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4 flex-1 overflow-y-auto">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6">
           {/* Task Title Display */}
           <div className="rounded-lg bg-gray-50 p-3 border border-gray-200">
             <div className="text-xs font-medium text-gray-500 mb-1">
@@ -104,7 +106,7 @@ export const MobileDueDateDialog: React.FC<MobileDueDateDialogProps> = ({
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
-              className="w-full"
+              className="w-full text-sm"
             />
           </div>
 
@@ -119,7 +121,7 @@ export const MobileDueDateDialog: React.FC<MobileDueDateDialogProps> = ({
               type="time"
               value={selectedTime}
               onChange={(e) => setSelectedTime(e.target.value)}
-              className="w-full"
+              className="w-full text-sm"
             />
           </div>
 
@@ -143,33 +145,40 @@ export const MobileDueDateDialog: React.FC<MobileDueDateDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isLoading}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={!isValidDate || isLoading}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-          >
-            {isLoading ? (
-              <>
-                <span className="mr-2">⏳</span>
-                Taking Task...
-              </>
-            ) : (
-              <>
-                <span className="mr-2">✓</span>
-                Confirm & Take Task
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm", primary default, loading spinner */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirm}
+              disabled={!isValidDate || isLoading}
+              className="min-w-[120px] flex items-center justify-center gap-1.5 w-full sm:w-auto"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Confirming...</span>
+                </>
+              ) : (
+                <>
+                  <span>✓</span>
+                  Confirm & Take Task
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

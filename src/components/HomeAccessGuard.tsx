@@ -6,6 +6,8 @@ import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedU
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { LoadingDots } from './LoadingDots';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
 import { logger } from '@/config/logger';
 
 const SUBSCRIPTION_CACHE_KEY_PREFIX = 'home_subscription_';
@@ -191,8 +193,38 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     checkSubscription();
   }, [organization?.id]);
 
+  const isMobile = useIsMobile();
+
   // Show loading while checking auth, user data, and expiry status
   if (authLoading || userDataLoading || loadingSubscription || expiryLoading) {
+    if (isMobile) {
+      return (
+        <>
+          <RouteLoadingSkeleton />
+          {showSlowConnectionWarning && (
+            <div className="fixed bottom-4 left-4 right-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 z-50">
+              <WifiOff className="h-6 w-6 text-yellow-600 mx-auto mb-2 block" />
+              <p className="text-sm text-yellow-800 text-center">
+                Koneksi lambat terdeteksi. Sedang mencoba menghubungkan ke server...
+              </p>
+            </div>
+          )}
+          {userDataError && (
+            <div className="fixed bottom-4 left-4 right-4 p-4 bg-red-50 rounded-lg border border-red-200 z-50">
+              <p className="text-sm text-red-800 text-center">
+                Terjadi kesalahan: {userDataError.message}
+              </p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-2 w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+              >
+                Muat Ulang Halaman
+              </button>
+            </div>
+          )}
+        </>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4 max-w-md mx-auto px-4">
@@ -255,6 +287,9 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // If organization was just created but context hasn't updated yet, show loading
   if (organizationJustCreated && (!hasOrganization || !organization)) {
     logger.debug('HomeAccessGuard: Organization just created, waiting for context update...');
+    if (isMobile) {
+      return <RouteLoadingSkeleton />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">

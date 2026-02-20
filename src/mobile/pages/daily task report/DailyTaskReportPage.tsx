@@ -10,11 +10,13 @@ import { OverviewCards } from './components/OverviewCards';
 import { PerformanceTable } from './components/PerformanceTable';
 import { BlockersAndUpdatesPanel } from './components/BlockersAndUpdatesPanel';
 import { Filters } from './components/Filters';
-import { LoadingDots } from '@/components/LoadingDots';
+import { DailyTaskReportPageSkeleton } from './DailyTaskReportPageSkeleton';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const DailyTaskReportPage = () => {
   useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { t } = useAppTranslation();
 
   return (
     <DesktopWarning>
@@ -23,7 +25,7 @@ const DailyTaskReportPage = () => {
           <div className="min-h-screen flex w-full bg-background">
             <AppSidebar />
 
-            {/* Same structure as Home/Daily Task/Initiative/LiveChat: fixed viewport container, header (safe-area-top), scrollable content, footer (safe-area-bottom-lower) */}
+            {/* Layout per .cursor/rules/mobile-tools-layout-android.mdc */}
             <main
               className="flex flex-col bg-background fixed inset-x-0 z-0"
               style={{
@@ -36,20 +38,21 @@ const DailyTaskReportPage = () => {
                 <div className="flex items-center gap-2">
                   <SidebarTrigger className="md:hidden" />
                   <div>
-                    <h1 className="text-base font-semibold text-foreground">Daily Task Report</h1>
-                    <p className="text-xs text-muted-foreground">Ringkasan performa dan progress tugas</p>
+                    <h1 className="text-base font-semibold text-foreground">{t('dailyTaskReport.page.title', 'Daily Task Report')}</h1>
+                    <p className="text-xs text-muted-foreground">{t('dailyTaskReport.page.subtitle', 'Ringkasan performa dan progress tugas')}</p>
                   </div>
                 </div>
                 <div></div>
               </header>
 
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
-                  <DailyTaskReportContent />
+                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
+                  <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-daily-task-report space-y-1">
+                    <DailyTaskReportContent />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
               <ToolsNavigationFooter className="safe-area-bottom-lower" />
             </main>
           </div>
@@ -59,22 +62,15 @@ const DailyTaskReportPage = () => {
   );
 };
 
-const DailyTaskReportContent = () => {
+const DailyTaskReportContentInner = () => {
   const { loading } = useDailyTaskReport();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="flex flex-col items-center space-y-3">
-          <LoadingDots size="lg" />
-          <p className="text-sm text-muted-foreground">Memuat laporan...</p>
-        </div>
-      </div>
-    );
+    return <DailyTaskReportPageSkeleton />;
   }
 
   return (
-    <div className="p-3 pb-24 space-y-3">
+    <>
       <div className="bg-card border border-border rounded-lg shadow-sm">
         <Filters />
       </div>
@@ -83,17 +79,15 @@ const DailyTaskReportContent = () => {
         <OverviewCards />
       </div>
 
-      <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-        <div className="p-2 md:p-3">
-          <PerformanceTable />
-        </div>
-      </div>
+      <PerformanceTable />
 
       <div className="bg-card border border-border rounded-lg shadow-sm">
         <BlockersAndUpdatesPanel />
       </div>
-    </div>
+    </>
   );
 };
+
+const DailyTaskReportContent = React.memo(DailyTaskReportContentInner);
 
 export default DailyTaskReportPage;

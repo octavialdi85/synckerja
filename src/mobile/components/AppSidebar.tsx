@@ -34,38 +34,33 @@ export function AppSidebar() {
     >
       <SidebarContent className="bg-background">
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 text-foreground font-semibold px-4 py-3">
+          <SidebarGroupLabel className="flex items-center gap-2 text-foreground font-semibold px-4 py-2">
             <Clock className="h-5 w-5 text-primary" />
             <span className="text-foreground">ProfitLoop</span>
           </SidebarGroupLabel>
-          
-          <Separator className="bg-primary/20 mx-4 mb-2" />
-          
-          <SidebarGroupContent className="px-2">
-            <SidebarMenu className="space-y-1">
-              {menuItems.map((item, index) => (
-                <div key={item.title}>
-                  <SidebarMenuItem>
-                    <NavLink
-                      to={item.url}
-                      end
-                      className={({ isActive }) =>
-                        [
-                          "flex items-center gap-3 px-3 py-2.5 rounded-lg w-full transition-colors",
-                          isActive
-                            ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                            : "text-foreground hover:bg-primary/10",
-                        ].join(" ")
-                      }
-                    >
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      <span className="font-medium">{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuItem>
-                  {index < menuItems.length - 1 && (
-                    <Separator className="bg-border/50 mx-2 my-1" />
-                  )}
-                </div>
+
+          <Separator className="bg-primary/20 mx-4 mb-1.5" />
+
+          <SidebarGroupContent className="px-2 pb-2">
+            <SidebarMenu className="space-y-0.5">
+              {menuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <NavLink
+                    to={item.url}
+                    end
+                    className={({ isActive }) =>
+                      [
+                        "flex items-center gap-3 px-3 py-2 rounded-lg w-full transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                          : "text-foreground hover:bg-primary/10",
+                      ].join(" ")
+                    }
+                  >
+                    <item.icon className="h-4 w-4 flex-shrink-0" />
+                    <span className="font-medium">{item.title}</span>
+                  </NavLink>
+                </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>

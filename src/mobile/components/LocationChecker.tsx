@@ -1,8 +1,10 @@
-import { MapPin, Navigation, Clock, CheckCircle2 } from "lucide-react";
+import { MapPin, Navigation, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/mobile/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/config/logger";
 import { getCurrentPosition } from "@/mobile/utils/geolocation";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface LocationCheckerProps {
   officeLocation?: {
@@ -15,6 +17,7 @@ interface LocationCheckerProps {
 }
 
 export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
+  const { t } = useAppTranslation();
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isInOfficeArea, setIsInOfficeArea] = useState(false);
@@ -84,7 +87,7 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
 
       return nearestOffice;
     } catch (error) {
-      console.error('Error finding nearest office:', error);
+      logger.error('Error finding nearest office:', error);
       return null;
     }
   };
@@ -106,25 +109,25 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
         setIsInOfficeArea(inArea);
 
         toast({
-          title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+          title: inArea ? t("mobileHome.locationValid", "Lokasi Valid") : t("mobileHome.outsideOfficeArea", "Di luar Area Kantor"),
           description: inArea
-            ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
-            : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+            ? t("mobileHome.youAreInArea", "Anda berada di area {{name}} ({{distance}}m dari kantor)", { name: nearest.name, distance: String(nearest.distance) })
+            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(nearest.radius_meters) }),
           variant: inArea ? "default" : "destructive",
           duration: 4000,
         });
       } else {
         toast({
-          title: "Error",
-          description: "Tidak dapat menemukan data kantor",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.cannotFindOffice", "Tidak dapat menemukan data kantor"),
           variant: "destructive",
           duration: 4000,
         });
       }
     } catch (err) {
       toast({
-        title: "Error Lokasi",
-        description: err instanceof Error ? err.message : "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
+        title: t("mobileHome.locationError", "Error Lokasi"),
+        description: err instanceof Error ? err.message : t("mobileHome.locationPermissionError", "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan."),
         variant: "destructive",
         duration: 5000,
       });
@@ -136,8 +139,8 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
   const displayOffice = nearestOffice || officeLocation;
 
   return (
-    <div className="px-3 mt-1">
-      {/* Office Info */}
+    <div>
+      {/* Office Info - no extra px here; parent (Absensi) already provides container px-2 so card width matches other sections */}
       {displayOffice && (
         <div className="bg-card rounded-lg p-4 mb-4 border border-border">
           <div className="flex items-start gap-3">
@@ -146,7 +149,7 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
               <h3 className="font-semibold text-foreground mb-1">{displayOffice.name}</h3>
               <p className="text-sm text-muted-foreground mb-2">{displayOffice.address}</p>
               <p className="text-xs text-muted-foreground">
-                Radius absensi: {displayOffice.radius_meters || displayOffice.radius}m dari kantor
+                {t("mobileHome.attendanceRadius", "Radius absensi: {{meters}}m dari kantor", { meters: String(displayOffice.radius_meters || displayOffice.radius) })}
               </p>
             </div>
           </div>
@@ -163,11 +166,11 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
                 <Navigation className="h-4 w-4 text-destructive" />
               )}
               <span className="text-sm font-medium text-foreground">
-                {isInOfficeArea ? `Dalam Area ${nearestOffice.name}` : `Diluar Area Kantor`}
+                {isInOfficeArea ? t("mobileHome.inArea", "Dalam Area {{name}}", { name: nearestOffice.name }) : t("mobileHome.outsideOffice", "Diluar Area Kantor")}
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              {distance}m dari kantor
+              {t("mobileHome.metersFromOffice", "{{distance}}m dari kantor", { distance: String(distance) })}
             </span>
           </div>
         </div>
@@ -178,6 +181,7 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
 
 // Separate component for the location button
 export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
+  const { t } = useAppTranslation();
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isInOfficeArea, setIsInOfficeArea] = useState(false);
@@ -247,7 +251,7 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
 
       return nearestOffice;
     } catch (error) {
-      console.error('Error finding nearest office:', error);
+      logger.error('Error finding nearest office:', error);
       return null;
     }
   };
@@ -269,25 +273,25 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
         setIsInOfficeArea(inArea);
 
         toast({
-          title: inArea ? "Lokasi Valid" : "Di luar Area Kantor",
+          title: inArea ? t("mobileHome.locationValid", "Lokasi Valid") : t("mobileHome.outsideOfficeArea", "Di luar Area Kantor"),
           description: inArea
-            ? `Anda berada di area ${nearest.name} (${nearest.distance}m dari kantor)`
-            : `Kantor terdekat: ${nearest.name} - ${nearest.distance}m. Radius maksimal: ${nearest.radius_meters}m`,
+            ? t("mobileHome.youAreInArea", "Anda berada di area {{name}} ({{distance}}m dari kantor)", { name: nearest.name, distance: String(nearest.distance) })
+            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(nearest.radius_meters) }),
           variant: inArea ? "default" : "destructive",
           duration: 4000,
         });
       } else {
         toast({
-          title: "Error",
-          description: "Tidak dapat menemukan data kantor",
+          title: t("mobileHome.error", "Error"),
+          description: t("mobileHome.cannotFindOffice", "Tidak dapat menemukan data kantor"),
           variant: "destructive",
           duration: 4000,
         });
       }
     } catch (err) {
       toast({
-        title: "Error Lokasi",
-        description: err instanceof Error ? err.message : "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan.",
+        title: t("mobileHome.locationError", "Error Lokasi"),
+        description: err instanceof Error ? err.message : t("mobileHome.locationPermissionError", "Tidak dapat mengakses lokasi. Pastikan GPS aktif dan izin lokasi diberikan."),
         variant: "destructive",
         duration: 5000,
       });
@@ -333,11 +337,9 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
       </button>
       
       <p className="text-sm text-muted-foreground mt-2 text-center">
-        {isCheckingLocation 
-          ? 'Mengecek lokasi...' 
-          : isInOfficeArea
-          ? 'Tap untuk cek lokasi'
-          : 'Tap untuk cek lokasi'}
+        {isCheckingLocation
+          ? t("mobileHome.checkingLocation", "Mengecek lokasi...")
+          : t("mobileHome.tapToCheckLocation", "Tap untuk cek lokasi")}
       </p>
     </div>
   );

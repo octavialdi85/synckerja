@@ -196,7 +196,6 @@ export function LiveChatListView({
             </div>
 
             {/* Spacer so list doesn't scroll under the fixed footer; footer uses safe-area-bottom */}
-            <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
             <NavigationFooter className="safe-area-bottom-lower" />
           </main>
         </div>

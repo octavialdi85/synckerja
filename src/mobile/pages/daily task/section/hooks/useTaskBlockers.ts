@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/DailyTaskContext';
-
-const supabaseClient = supabase as any;
+import { logger } from '@/config/logger';
 
 interface UseTaskBlockersProps {
   getVisibleSteps: (task: Task) => TaskStepEntity[];
@@ -14,11 +13,12 @@ interface UseTaskBlockersProps {
 export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
   const [blockerModalOpen, setBlockerModalOpen] = useState(false);
   const [blockerModalItems, setBlockerModalItems] = useState<any[]>([]);
+  const [loadingBlockers, setLoadingBlockers] = useState(false);
 
   const openTaskBlockers = useCallback(async (task: Task) => {
-    // OPTIMIZATION: Open modal immediately with loading state
     setBlockerModalItems([]);
     setBlockerModalOpen(true);
+    setLoadingBlockers(true);
 
     try {
       // Use getVisibleSteps from hook to show steps based on filters
@@ -26,17 +26,17 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
       const stepIds = visibleSteps.map(s => s.id);
       
       // OPTIMIZATION: Fetch sub-steps
-      const subStepsResult: any = stepIds.length > 0
-        ? await supabaseClient
+      const subStepsResult = stepIds.length > 0
+        ? await supabase
             .from('task_steps_to_steps')
             .select('id, title, parent_step_id')
             .in('parent_step_id', stepIds)
-        : { data: [], error: null };
+        : { data: [] as { id: string; title: string; parent_step_id: string }[], error: null };
 
       // Fetch history for steps with timeout
-      let stepHistoryResult: any = { data: [], error: null };
+      let stepHistoryResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
       if (stepIds.length > 0) {
-        stepHistoryResult = await supabaseClient
+        stepHistoryResult = await supabase
           .from('task_step_history')
           .select('*')
           .eq('action_type', 'blocker_added')
@@ -51,9 +51,9 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
       const subIds = subSteps.map((s: any) => s.id);
 
       // Fetch sub-step history ONLY if we have sub-steps
-      let subStepHistoryResult: any = { data: [], error: null };
+      let subStepHistoryResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
       if (subIds.length > 0) {
-        subStepHistoryResult = await supabaseClient
+        subStepHistoryResult = await supabase
           .from('task_step_history')
           .select('*')
           .eq('action_type', 'blocker_added')
@@ -89,20 +89,21 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
       let employeeMap: Record<string, any> = {};
       if (createdByUserIds.length > 0) {
         try {
-          const { data: employeesData, error: employeesError } = await supabaseClient
+          const { data: employeesData, error: employeesError } = await supabase
             .from('employees')
             .select('id, full_name, user_id')
             .in('user_id', createdByUserIds);
-          
-          if (!employeesError && employeesData) {
-            employeesData.forEach((emp: any) => {
+          type EmpRow = { id: string; full_name: string; user_id: string };
+          const employees = (employeesData as unknown as EmpRow[] | null) ?? [];
+          if (!employeesError && employees.length) {
+            employees.forEach((emp) => {
               if (emp.user_id) {
                 employeeMap[emp.user_id] = emp;
               }
             });
           }
         } catch (error) {
-          console.warn('Error fetching employee data for created_by:', error);
+          logger.warn('Error fetching employee data for created_by:', error);
         }
       }
       
@@ -121,14 +122,17 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
       
       setBlockerModalItems(enriched);
     } catch (error) {
-      console.error('Error in openTaskBlockers:', error);
+      logger.error('Error in openTaskBlockers:', error);
       setBlockerModalItems([]);
+    } finally {
+      setLoadingBlockers(false);
     }
   }, [getVisibleSteps]);
 
   return {
     blockerModalOpen,
     blockerModalItems,
+    loadingBlockers,
     setBlockerModalOpen,
     openTaskBlockers,
   };

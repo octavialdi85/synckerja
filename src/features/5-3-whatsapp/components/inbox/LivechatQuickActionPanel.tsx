@@ -18,7 +18,7 @@ import { Plus, User, Clock, ChevronDown, ChevronUp, AlertCircle } from 'lucide-r
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { format } from 'date-fns';
 import type { LiveChatConversation } from '../../types';
-import { isResolvedStatus } from '../../constants/leadStatus';
+import { isResolvedStatus, isOutside24hWindow } from '../../constants/leadStatus';
 import { computeFollowUpAndPriority } from '@/features/5-3-leads-management/utils/fuPriorityFromUpdates';
 
 /** Ticket ID for lead lookup: WA-xxx, IG-xxx, EMAIL-xxx. */
@@ -89,6 +89,8 @@ interface LeadStatus {
 
 interface LivechatQuickActionPanelProps {
   conversation: LiveChatConversation | null;
+  /** When true, hide the lead/customer name row (e.g. when shown in mobile sheet header). */
+  hideLeadTitle?: boolean;
 }
 
 /** Unified row for display: from email_conversation_follow_up_updates or lead_follow_up_updates (WA, by conversation_id). */
@@ -100,7 +102,7 @@ interface FollowUpUpdateRow {
   created_at: string;
 }
 
-export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPanelProps) {
+export function LivechatQuickActionPanel({ conversation, hideLeadTitle = false }: LivechatQuickActionPanelProps) {
   const { t } = useAppTranslation();
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
@@ -330,23 +332,27 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
 
   const isEmail = conversation?.source === 'email';
   const isInstagram = conversation?.source === 'instagram';
+  const isWhatsApp = conversation?.source === 'whatsapp';
   const statusTable = isEmail ? 'email_conversations' : isInstagram ? 'instagram_conversations' : 'whatsapp_conversations';
   const statusQueryKeyBase = isEmail ? 'email-conversation-status' : isInstagram ? 'instagram-conversation-status' : 'whatsapp-conversation-status';
-  const { data: conversationStatus, isLoading: statusLoading } = useQuery({
+  const { data: conversationStatusRow, isLoading: statusLoading } = useQuery({
     queryKey: [statusQueryKeyBase, conversation?.id],
     queryFn: async () => {
       if (!conversation?.id) return null;
       const { data, error } = await supabase
         .from(statusTable)
-        .select('lead_status_id')
+        .select('lead_status_id, last_inbound_at, created_at')
         .eq('id', conversation.id)
         .maybeSingle();
       if (error) throw error;
-      return (data?.lead_status_id as string) ?? null;
+      return data as { lead_status_id?: string; last_inbound_at?: string | null; created_at?: string } | null;
     },
     enabled: !!conversation?.id,
     refetchInterval: 5000,
   });
+  const conversationStatusId = conversationStatusRow?.lead_status_id ?? null;
+  const lastInboundAt = conversationStatusRow?.last_inbound_at ?? null;
+  const conversationCreatedAt = conversationStatusRow?.created_at ?? null;
 
   const { data: followUpUpdates = [], refetch: refetchFollowUps } = useQuery({
     queryKey: [isEmail ? 'email-conversation-follow-ups' : 'wa-lead-follow-up-updates', conversation?.id],
@@ -416,12 +422,18 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
   const leadTitle = conversation ? getLeadTitle(conversation, t) : '';
   // Only use a status id that exists in leadStatuses so Select stays controlled and we never send invalid FK
   const currentStatusId = (() => {
-    const fromConv = conversationStatus ?? '';
+    const fromConv = conversationStatusId ?? '';
     if (fromConv && leadStatuses.some((s) => s.id === fromConv)) return fromConv;
     return leadStatuses.length > 0 ? leadStatuses[0].id : '';
   })();
   const currentStatus = leadStatuses.find((s) => s.id === currentStatusId);
   const isResolved = isResolvedStatus(currentStatus?.name ?? null);
+  const outside24h =
+    (isWhatsApp || isInstagram) &&
+    isOutside24hWindow(lastInboundAt, conversationCreatedAt);
+  const effectiveResolved = isResolved || outside24h;
+  const closedStatus = leadStatuses.find((s) => isResolvedStatus(s.name));
+  const displayStatusId = effectiveResolved && closedStatus ? closedStatus.id : currentStatusId;
   const statusQueryKey = statusQueryKeyBase;
 
   const handleAddUpdate = async (e: React.FormEvent) => {
@@ -514,7 +526,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         lead_status: oldStatusName ? { name: oldStatusName } : undefined,
         conversionDescription,
       });
-      queryClient.setQueryData([statusQueryKey, conversation.id], newStatusId);
+      queryClient.setQueryData([statusQueryKeyBase, conversation.id], { lead_status_id: newStatusId, last_inbound_at: lastInboundAt, created_at: conversationCreatedAt });
       await queryClient.invalidateQueries({ queryKey: [statusQueryKey, conversation.id] });
       await queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success(t('whatsappInbox.statusUpdated', 'Status updated'));
@@ -580,9 +592,11 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500 truncate" title={leadTitle}>
-        {leadTitle}
-      </p>
+      {!hideLeadTitle && (
+        <p className="text-xs text-gray-500 truncate" title={leadTitle}>
+          {leadTitle}
+        </p>
+      )}
 
       {/* Popup: Pilih Layanan dan Kategori sebelum Converted/Resolve */}
       <Dialog open={serviceCategoryDialogOpen} onOpenChange={(open) => { setServiceCategoryDialogOpen(open); if (!open) { setPendingStatusId(null); setDialogDescription(''); } }}>
@@ -759,11 +773,11 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
       <div className="rounded-lg border border-gray-200 bg-slate-50/80 shadow-sm overflow-hidden">
         <button
           type="button"
-          onClick={() => !isResolved && setIsFollowUpExpanded((v) => !v)}
-          disabled={isResolved}
+          onClick={() => !effectiveResolved && setIsFollowUpExpanded((v) => !v)}
+          disabled={effectiveResolved}
           className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-slate-100/80 transition-colors rounded-t-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-slate-50/80"
           aria-expanded={isFollowUpExpanded}
-          title={isResolved ? t('whatsappInbox.chatResolvedNoActions', 'Chat sudah di-resolve') : (isFollowUpExpanded ? t('whatsappInbox.clickToCollapse', 'Click to collapse') : t('whatsappInbox.clickToExpand', 'Click to expand'))}
+          title={effectiveResolved ? t('whatsappInbox.chatResolvedNoActions', 'Chat sudah di-resolve') : (isFollowUpExpanded ? t('whatsappInbox.clickToCollapse', 'Click to collapse') : t('whatsappInbox.clickToExpand', 'Click to expand'))}
         >
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
@@ -790,7 +804,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
                 placeholder={t('whatsappInbox.updateDetailsPlaceholder', 'Describe the progress or changes made...')}
                 className="min-h-[72px] resize-none text-sm bg-white border-gray-200"
                 required
-                disabled={isResolved}
+                disabled={effectiveResolved}
               />
             </div>
             <div className="flex gap-2 items-end">
@@ -799,7 +813,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
                   {t('whatsappInbox.prospectStatus', 'Prospect Status')} <span className="text-red-500">*</span>
                 </label>
                 <Select value={prospectStatus} onValueChange={setProspectStatus} required>
-                  <SelectTrigger className="w-full text-sm bg-white border-gray-200" disabled={isResolved}>
+                  <SelectTrigger className="w-full text-sm bg-white border-gray-200" disabled={effectiveResolved}>
                     <SelectValue placeholder={t('whatsappInbox.selectProspectStatus', 'Select prospect status...')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -814,7 +828,7 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
               <Button
                 type="submit"
                 size="sm"
-                disabled={isResolved || isSubmitting || !updateDetails.trim() || !prospectStatus}
+                disabled={effectiveResolved || isSubmitting || !updateDetails.trim() || !prospectStatus}
                 className="shrink-0 h-10"
               >
                 {isSubmitting ? t('whatsappInbox.adding', 'Adding...') : t('whatsappInbox.addUpdate', 'Add Update')}
@@ -883,17 +897,17 @@ export function LivechatQuickActionPanel({ conversation }: LivechatQuickActionPa
         )}
       </div>
 
-      {/* Status - kode sama dengan leads-management (LeadStatusSelect) */}
+      {/* Status - kode sama dengan leads-management (LeadStatusSelect); when outside 24h show Resolve and disable */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-gray-600">
           {t('whatsappInbox.status', 'Status')}
         </label>
         <LeadStatusSelect
-          value={currentStatusId || undefined}
+          value={displayStatusId || undefined}
           onValueChange={handleStatusChange}
           leadStatuses={leadStatuses}
-          currentStatusName={currentStatus?.name ?? ''}
-          disabled={isResolved}
+          currentStatusName={effectiveResolved ? (closedStatus?.name ?? '') : (currentStatus?.name ?? '')}
+          disabled={effectiveResolved}
           triggerClassName="w-full text-sm border rounded-lg font-medium"
           isLoading={statusLoading}
         />

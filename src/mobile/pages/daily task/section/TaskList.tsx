@@ -1,12 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { TooltipProvider } from '@/features/ui/tooltip';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
-import { useDailyTask, type Task } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
+import type { Task } from '@/features/8-2-DailyTask/types';
 import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { DeadlineExtensionDialog } from '@/features/8-2-DailyTask/section/DeadlineExtensionDialog';
 import { DeadlineHistoryDialog } from '@/features/8-2-DailyTask/section/DeadlineHistoryDialog';
 import { EditTaskDialog } from '@/features/8-2-DailyTask/section/EditTaskDialog';
@@ -37,17 +40,16 @@ import {
 } from './utils/taskUtils';
 
 export const TaskList = () => {
-  const context = useDailyTask();
-  const { tasks, filters, updateTask, deleteTask, reorderTaskSteps, highlightedTask } = context;
-  const requestDeadlineExtension = (context as any).requestDeadlineExtension;
+  const { tasks, filters, updateTask, deleteTask, reorderTaskSteps, highlightedTask, requestDeadlineExtension } = useDailyTask();
   const { user } = useCurrentUser();
   const { data: currentEmployee } = useCurrentEmployee();
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   const currentUserId = user?.id ?? undefined;
   const currentEmployeeId =
-    currentEmployee && typeof (currentEmployee as any).id === 'string'
-      ? ((currentEmployee as any).id as string)
+    currentEmployee && typeof (currentEmployee as unknown as { id?: string })?.id === 'string'
+      ? (currentEmployee as unknown as { id: string }).id
       : undefined;
 
   // Custom hooks
@@ -84,10 +86,19 @@ export const TaskList = () => {
 
   const { taskRefs } = useAutoScroll({ highlightedTaskId: highlightedTask });
   const { blockerCountByTask } = useBlockerCounts({ filteredTasks });
-  const { blockerModalOpen, blockerModalItems, setBlockerModalOpen, openTaskBlockers } =
+  const { blockerModalOpen, blockerModalItems, loadingBlockers, setBlockerModalOpen, openTaskBlockers } =
     useTaskBlockers({
       getVisibleSteps,
     });
+
+  // Mobile: sort tasks by progress ascending (lowest at top, 100% at bottom)
+  const sortedTasks = useMemo(
+    () =>
+      [...filteredTasks].sort(
+        (a, b) => calculateAssignedStepsProgress(a) - calculateAssignedStepsProgress(b)
+      ),
+    [filteredTasks, calculateAssignedStepsProgress]
+  );
 
   // State management
   const [editingTask, setEditingTask] = useState<string | null>(null);
@@ -133,12 +144,12 @@ export const TaskList = () => {
         const newStatus = task.status === 'completed' ? 'pending' : 'completed';
         if (newStatus !== task.status) {
           toast({
-            title: newStatus === 'completed' ? 'Task Completed' : 'Task Reopened',
+            title: newStatus === 'completed' ? t('dailyTask.taskCompleted', 'Task Completed') : t('dailyTask.taskReopened', 'Task Reopened'),
             description: `"${task.title}" has been ${newStatus === 'completed' ? 'marked as completed' : 'reopened'}`,
           });
           // Optimistic update: langsung update tanpa menunggu (updateTask sudah melakukan optimistic update di context)
           updateTask(task.id, { status: newStatus }).catch((err) => {
-            console.error('Error updating task status:', err);
+            logger.error('Error updating task status:', err);
             toast({
               title: 'Error',
               description: 'Failed to update task status',
@@ -154,34 +165,34 @@ export const TaskList = () => {
       const visibleSteps = getVisibleSteps(task);
       const isFullComplete = visibleSteps.length > 0 && assignedProgress === 100;
 
-      // Jika task sudah completed dan punya step, tidak bisa di-uncheck
-      if (task.status === 'completed' && task.has_substeps !== false) {
+      // Jika task sudah completed dan punya step, tidak bisa di-uncheck (we're already in "has steps" path)
+      if (task.status === 'completed') {
         toast({
-          title: 'Cannot Uncheck Task',
-          description: 'Cannot uncheck task with steps. Please manage steps individually.',
+          title: t('dailyTask.cannotUncheckTask', 'Cannot Uncheck Task'),
+          description: t('dailyTask.cannotUncheckTaskDesc', 'Cannot uncheck task with steps. Please manage steps individually.'),
           variant: 'destructive',
         });
         return;
       }
 
-      // Jika task belum completed, cek apakah semua step sudah selesai
-      if (!isFullComplete && task.status !== 'completed') {
+      // Jika task belum completed, cek apakah semua step sudah selesai (we're in non-completed path here)
+      if (!isFullComplete) {
         toast({
-          title: 'Cannot Complete Task',
-          description: 'Please complete all assigned steps first',
+          title: t('dailyTask.cannotCompleteTask', 'Cannot Complete Task'),
+          description: t('dailyTask.completeAllStepsFirst', 'Please complete all assigned steps first'),
           variant: 'destructive',
         });
         return;
       }
 
       // Jika semua step sudah selesai, baru bisa checklist task
-      if (isFullComplete && task.status !== 'completed') {
+      if (isFullComplete) {
         toast({
-          title: 'Task Completed',
+          title: t('dailyTask.taskCompleted', 'Task Completed'),
           description: `"${task.title}" has been marked as completed`,
         });
         updateTask(task.id, { status: 'completed' }).catch((err) => {
-          console.error('Error updating task status:', err);
+          logger.error('Error updating task status:', err);
           toast({
             title: 'Error',
             description: 'Failed to update task status',
@@ -190,14 +201,20 @@ export const TaskList = () => {
         });
       }
     },
-    [calculateAssignedStepsProgress, getVisibleSteps, toast, updateTask]
+    [calculateAssignedStepsProgress, getVisibleSteps, toast, updateTask, t]
   );
 
   const handlePriorityChange = useCallback(
     async (taskId: string, newPriority: Task['priority']) => {
-      await updateTask(taskId, { priority: newPriority });
+      updateTask(taskId, { priority: newPriority }).catch(() => {
+        toast({
+          title: 'Error',
+          description: 'Failed to update priority',
+          variant: 'destructive',
+        });
+      });
     },
-    [updateTask]
+    [updateTask, toast]
   );
 
   const handleDeleteClick = useCallback((task: Task) => {
@@ -209,11 +226,18 @@ export const TaskList = () => {
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (deleteDialog.taskId) {
+    if (!deleteDialog.taskId) return;
+    try {
       await deleteTask(deleteDialog.taskId);
       setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete task',
+        variant: 'destructive',
+      });
     }
-  }, [deleteDialog.taskId, deleteTask]);
+  }, [deleteDialog.taskId, deleteTask, toast]);
 
   const handleCancelDelete = useCallback(() => {
     setDeleteDialog({ isOpen: false, taskId: null, taskTitle: '' });
@@ -231,9 +255,15 @@ export const TaskList = () => {
         return;
       }
 
-      await updateTask(task.id, { has_reminder: newReminderValue });
+      updateTask(task.id, { has_reminder: newReminderValue }).catch(() => {
+        toast({
+          title: 'Error',
+          description: 'Failed to update reminder',
+          variant: 'destructive',
+        });
+      });
     },
-    [updateTask]
+    [updateTask, toast]
   );
 
   const onDragEnd = useCallback(
@@ -260,8 +290,8 @@ export const TaskList = () => {
         );
 
         if (task) {
-          // Get the steps in their current order
-          const sortedSteps = task.steps.sort((a, b) => a.order - b.order);
+          // Get the steps in their current order (copy to avoid mutating context state)
+          const sortedSteps = [...task.steps].sort((a, b) => a.order - b.order);
           const activeIndex = sortedSteps.findIndex((s) => s.id === activeStepId);
           const overIndex = sortedSteps.findIndex((s) => s.id === overStepId);
 
@@ -275,24 +305,30 @@ export const TaskList = () => {
             const stepIds = newSteps.map((step) => step.id);
 
             // Call reorder function
-            reorderTaskSteps(task.id, stepIds);
+            reorderTaskSteps(task.id, stepIds).catch(() => {
+              toast({
+                title: 'Error',
+                description: 'Failed to reorder steps',
+                variant: 'destructive',
+              });
+            });
           }
         }
       }
     },
-    [tasks, reorderTaskSteps]
+    [tasks, reorderTaskSteps, toast]
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col mobile-task-list px-4">
+    <div className="flex flex-col mobile-task-list">
       <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <TooltipProvider>
           <div className="flex flex-col">
-            <div className="space-y-3 py-4 pb-16">
-              {filteredTasks.length === 0 ? (
+            <div className="space-y-1">
+              {sortedTasks.length === 0 ? (
                 <EmptyState />
               ) : (
-                filteredTasks.map((task) => {
+                sortedTasks.map((task) => {
                   const isHighlighted = highlightedTask === task.id;
                   const visibleSteps = getVisibleSteps(task);
                   const progress = calculateAssignedStepsProgress(task);
@@ -382,6 +418,7 @@ export const TaskList = () => {
             onOpenChange={setBlockerModalOpen}
             items={blockerModalItems}
             initialTab={'list'}
+            loading={loadingBlockers}
           />
 
           {activeTask && (
@@ -413,7 +450,7 @@ export const TaskList = () => {
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" />
-              Add Task
+              {t('dailyTask.addTask', 'Add Task')}
             </Button>
           </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
@@ -9,8 +9,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/features/ui/accordion';
-import { Search, Building2, Users, Check, Target, Loader2, ChevronDown, ArrowLeft } from 'lucide-react';
-import { useObjectives } from '@/features/1_home/components/HomeOKRDashboard/component/ObjectivesTabImport/useObjectives';
+import { Search, Building2, Users, Check, Target, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/mobile/components/ui/skeleton';
+import { useCompanyObjectives } from '@/features/2-8-dashboard/hooks/useCompanyObjectives';
+import { useDepartmentObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useDepartmentObjectives';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
 import { Progress } from '@/features/ui/progress';
 import {
@@ -20,6 +22,7 @@ import {
   TooltipTrigger,
 } from '@/features/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 
 interface CompanyObjective {
   id: string;
@@ -78,25 +81,101 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedObjectiveId);
   const [expandedCompany, setExpandedCompany] = useState<string | undefined>(undefined);
   const [expandedDepartments, setExpandedDepartments] = useState<Record<string, string | undefined>>({});
+  const isMobile = useIsMobile();
 
-  // Fetch Company Objectives with nested Department Objectives
-  const { data: companyObjectives = [], isLoading: isLoadingCompany } = useObjectives(
+  // Same data source as desktop: fetch ALL company + department objectives, then filter client-side
+  const { data: allCompanyObjectivesRaw = [], isLoading: isLoadingCompany } = useCompanyObjectives(
     organizationId,
-    cycleIds[0], // Use first cycle ID for company objectives
-    'company'
+    undefined
   );
 
-  // Fetch Individual Objectives
-  const { data: individualObjectives = [], isLoading: isLoadingIndividual } = useIndividualObjectives(
+  const { data: allDepartmentObjectivesRaw = [] } = useDepartmentObjectives(
+    organizationId,
+    undefined,
+    false
+  );
+
+  // Filter by cycleIds client-side (same as desktop)
+  const companyObjectivesRaw = React.useMemo(() => {
+    if (!allCompanyObjectivesRaw || allCompanyObjectivesRaw.length === 0) return [];
+    if (cycleIds.length === 0) return allCompanyObjectivesRaw;
+    const validCycleIds = cycleIds.filter(id => id && typeof id === 'string');
+    if (validCycleIds.length === 0) return allCompanyObjectivesRaw;
+    return allCompanyObjectivesRaw.filter((co: any) =>
+      co.cycle_id && validCycleIds.includes(co.cycle_id)
+    );
+  }, [allCompanyObjectivesRaw, cycleIds]);
+
+  const departmentObjectivesRaw = React.useMemo(() => {
+    if (!allDepartmentObjectivesRaw || allDepartmentObjectivesRaw.length === 0) return [];
+    if (cycleIds.length === 0) return allDepartmentObjectivesRaw;
+    const validCycleIds = cycleIds.filter(id => id && typeof id === 'string');
+    if (validCycleIds.length === 0) return allDepartmentObjectivesRaw;
+    return allDepartmentObjectivesRaw.filter((dept: any) =>
+      dept.cycle_id && validCycleIds.includes(dept.cycle_id)
+    );
+  }, [allDepartmentObjectivesRaw, cycleIds]);
+
+  // Build companyObjectives: attach departments to each company (same as desktop, with fallback to all depts)
+  const companyObjectives = React.useMemo(() => {
+    if (!companyObjectivesRaw || companyObjectivesRaw.length === 0) return [];
+    const companyObjectiveIds = new Set(companyObjectivesRaw.map((co: any) => co.id));
+    const deptByCompany = new Map<string, any[]>();
+    departmentObjectivesRaw.forEach((dept: any) => {
+      if (dept.company_objective_id && companyObjectiveIds.has(dept.company_objective_id)) {
+        if (!deptByCompany.has(dept.company_objective_id)) deptByCompany.set(dept.company_objective_id, []);
+        deptByCompany.get(dept.company_objective_id)!.push(dept);
+      }
+    });
+    if (deptByCompany.size === 0) {
+      allDepartmentObjectivesRaw.forEach((dept: any) => {
+        if (dept.company_objective_id && companyObjectiveIds.has(dept.company_objective_id)) {
+          if (!deptByCompany.has(dept.company_objective_id)) deptByCompany.set(dept.company_objective_id, []);
+          deptByCompany.get(dept.company_objective_id)!.push(dept);
+        }
+      });
+    }
+    return companyObjectivesRaw.map((co: any) => ({
+      ...co,
+      department_objectives: deptByCompany.get(co.id) || [],
+      key_results: deptByCompany.get(co.id) || [],
+    }));
+  }, [companyObjectivesRaw, departmentObjectivesRaw, allDepartmentObjectivesRaw]);
+
+  // Individual objectives: filtered by cycle + fallback to all (same as desktop)
+  const { data: individualObjectivesFiltered = [], isLoading: isLoadingIndividualFiltered } = useIndividualObjectives(
     organizationId,
     cycleIds
   );
+  const { data: individualObjectivesAll = [] } = useIndividualObjectives(organizationId, undefined);
 
-  // Build hierarchy structure
+  const departmentObjectiveIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    companyObjectives.forEach((co: any) => {
+      (co.department_objectives || co.key_results || []).forEach((dept: any) => ids.add(dept.id));
+    });
+    return ids;
+  }, [companyObjectives]);
+
+  const individualObjectives = React.useMemo(() => {
+    const result = [...individualObjectivesFiltered];
+    if (departmentObjectiveIds.size > 0 && individualObjectivesFiltered.length === 0) {
+      individualObjectivesAll.forEach((indiv: any) => {
+        if (indiv.department_objective_id && departmentObjectiveIds.has(indiv.department_objective_id)) {
+          if (!result.find(r => r.id === indiv.id)) result.push(indiv);
+        }
+      });
+    }
+    if (result.length === 0) return individualObjectivesAll;
+    return result;
+  }, [individualObjectivesFiltered, individualObjectivesAll, departmentObjectiveIds]);
+
+  const isLoadingIndividual = isLoadingIndividualFiltered;
+
+  // Build hierarchy structure (same shape as before)
   const hierarchy = useMemo(() => {
     if (!companyObjectives || !individualObjectives) return [];
 
-    // Create maps for quick lookup
     const departmentMap = new Map<string, {
       id: string;
       title: string;
@@ -106,12 +185,10 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
       individuals: IndividualObjective[];
     }>();
 
-    // Process company objectives to extract departments
-    // useObjectives returns department_objectives as nested or as key_results
-    (companyObjectives as any[]).forEach((company) => {
-      // Check both department_objectives and key_results (transformed format)
+    type CompanyShape = CompanyObjective & { department_objectives?: unknown[]; key_results?: unknown[] };
+    (companyObjectives as CompanyShape[]).forEach((company) => {
       const departments = company.department_objectives || company.key_results || [];
-      departments.forEach((dept: any) => {
+      departments.forEach((dept: { id: string; title: string; status?: string; progress_percentage?: number }) => {
         departmentMap.set(dept.id, {
           id: dept.id,
           title: dept.title,
@@ -123,7 +200,6 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
       });
     });
 
-    // Attach individual objectives to departments
     individualObjectives.forEach((indiv) => {
       if (indiv.department_objective_id && departmentMap.has(indiv.department_objective_id)) {
         const dept = departmentMap.get(indiv.department_objective_id)!;
@@ -131,11 +207,9 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
       }
     });
 
-    // Build final hierarchy
-    const result = (companyObjectives as any[]).map((company) => {
-      // Check both department_objectives and key_results (transformed format)
+    return (companyObjectives as CompanyShape[]).map((company) => {
       const departmentsData = company.department_objectives || company.key_results || [];
-      const departments = departmentsData.map((dept: any) => {
+      const departments = departmentsData.map((dept: { id: string; title: string; status?: string; progress_percentage?: number }) => {
         const deptData = departmentMap.get(dept.id);
         return deptData || {
           id: dept.id,
@@ -146,17 +220,14 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
           individuals: [],
         };
       });
-
       return {
         id: company.id,
         title: company.title,
         status: company.status,
-        progress_percentage: (company as any).progress_percentage || 0,
+        progress_percentage: company.progress_percentage ?? 0,
         departments,
       };
     });
-
-    return result;
   }, [companyObjectives, individualObjectives]);
 
   // Get standalone Individual Objectives (without department)
@@ -236,12 +307,21 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
 
   const isLoading = isLoadingCompany || isLoadingIndividual;
   const hasData = hierarchy.length > 0 || standaloneObjectives.length > 0;
+  const needsOrg = !organizationId || organizationId === '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-none w-screen h-screen md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin] border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden">
-        <DialogHeader className="flex-shrink-0 p-4 md:p-0">
-          <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+      <DialogContent
+        hideCloseButton
+        fullscreenAnimation={isMobile}
+        className={cn(
+          'max-w-none w-screen border-none md:border bg-card p-0 md:p-6 shadow-xl focus:outline-none flex flex-col gap-0 m-0 md:m-auto rounded-none md:rounded-lg translate-x-0 md:translate-x-[-50%] translate-y-0 md:translate-y-[-50%] left-0 md:left-[50%] top-0 md:top-[50%] overflow-hidden',
+          isMobile ? 'fixed left-0 right-0 top-0 modal-above-safe-area' : 'h-screen',
+          'md:w-[70vmin] md:h-[70vmin] md:max-w-[70vmin] md:max-h-[70vmin]'
+        )}
+      >
+        <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3 md:px-0 md:pt-0 md:pb-0">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2 md:text-xl">
             <Button
               variant="ghost"
               size="sm"
@@ -253,13 +333,10 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
             </Button>
             <span>Select Individual Objective</span>
           </DialogTitle>
-          <DialogDescription className="text-xs md:text-sm mt-1 text-left">
-            Choose an individual objective from the hierarchy. Only individual objectives can be selected.
-          </DialogDescription>
         </DialogHeader>
 
-        {/* Search Input */}
-        <div className="px-4 md:px-0 flex-shrink-0 mb-2">
+        {/* Search Input - wrapper adds spacing and shadow as separator */}
+        <div className="px-4 md:px-0 flex-shrink-0 pt-3 pb-3 shadow-[0_2px_6px_rgba(0,0,0,0.06)] bg-card z-10 relative">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 z-10 pointer-events-none" />
             <Input
@@ -271,14 +348,28 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 px-4 md:px-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 md:py-12">
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin text-blue-600" />
-                <p className="text-xs md:text-sm text-gray-500">Loading objectives...</p>
-              </div>
+        {/* Content Area - full height, no gap to search bar or footer */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-4 md:px-0">
+          {needsOrg ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : isLoading ? (
+            <div className="space-y-3 py-2 md:py-0">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="space-y-2 border-b border-border pb-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-4 flex-shrink-0 rounded" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <div className="ml-6 space-y-1">
+                    <Skeleton className="h-3 w-40" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : !hasData ? (
             <div className="flex flex-col items-center justify-center py-8 md:py-12">
@@ -553,11 +644,13 @@ export const ObjectiveHierarchyDialog: React.FC<ObjectiveHierarchyDialogProps> =
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 p-4 md:p-0 border-t md:border-t-0 mt-auto">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
-            Cancel
-          </Button>
-        </DialogFooter>
+        <div className="flex-shrink-0 border-t bg-muted/30 mt-auto z-10 relative md:border-t-0 md:shadow-[0_-2px_6px_rgba(0,0,0,0.06)] md:bg-card">
+          <div className="px-4 pt-3 pb-3 md:p-0 flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
+              Cancel
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -6,17 +6,14 @@ import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mobile/components/ui/card";
 import { Button } from "@/mobile/components/ui/button";
-import { LoadingDots } from "@/components/LoadingDots";
+import { OverviewTabPageSkeleton } from "./OverviewTabPageSkeleton";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 import { useOptimizedSubscription } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { useSubscriptionAnalytics } from "@/features/10-overview/hooks/useSubscriptionAnalytics";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { CurrentSubscription, EmployeeGrowthChart, UsageMetricsCards } from "@/features/10-overview/section";
 import { SubscriptionBottomTabs, useSubscriptionTabs } from "@/mobile/pages/subscription/shared/SubscriptionTabs";
-
-const useAppTranslation = () => ({
-  t: (_: string, defaultValue: string) => defaultValue,
-});
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 const OverviewTabPage = memo(() => {
   useOptimizedPerformanceMonitor("OverviewTabPageMobile");
@@ -48,15 +45,11 @@ const OverviewTabPage = memo(() => {
   useStatusBarStyle('light');
   const renderContent = () => {
     if (isInitialLoading) {
-      return (
-        <div className="flex justify-center items-center py-12">
-          <LoadingDots size="lg" />
-        </div>
-      );
+      return <OverviewTabPageSkeleton />;
     }
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-1">
         {statusError && (
           <Card className="border-destructive/40 bg-destructive/5">
             <CardHeader>
@@ -99,19 +92,24 @@ const OverviewTabPage = memo(() => {
             }}
           >
             <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
-              <SidebarTrigger />
-              <div className="text-sm font-semibold text-foreground">
-                {t("subscription.overview.pageTitle", "Subscription Overview")}
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="md:hidden" />
+                <div>
+                  <h1 className="text-base font-semibold text-foreground">{t("subscription.overview.pageTitle", "Subscription Overview")}</h1>
+                  <p className="text-xs text-muted-foreground">{t("subscription.overview.pageSubtitle", "Plan status and usage")}</p>
+                </div>
               </div>
+              <div />
             </header>
 
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
-                <div className="px-3 pt-4 pb-6 space-y-3">{renderContent()}</div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
+                <div className="mx-auto w-full max-w-md px-2 pt-2 space-y-1 content-padding-above-nav-default">
+                  {renderContent()}
+                </div>
               </div>
             </div>
 
-            <div className="flex-shrink-0" style={{ height: "80px" }} aria-hidden />
             <SubscriptionBottomTabs activeTab={activeTab} onTabChange={handleTabChange} className="safe-area-bottom-lower" />
           </main>
         </div>

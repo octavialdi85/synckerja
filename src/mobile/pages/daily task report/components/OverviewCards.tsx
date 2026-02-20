@@ -23,7 +23,7 @@ export const OverviewCards = () => {
   );
 
   return (
-    <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-2 mb-2 p-2 md:p-0">
+    <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-2 p-2 md:p-0">
       <Card title="Total Assignments" value={total} color="border-gray-200" />
       <Card title="Completed" value={completed} color="border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50" />
       <Card title="On Time" value={ontime} color="border-green-100 bg-gradient-to-br from-green-50 to-emerald-50" />

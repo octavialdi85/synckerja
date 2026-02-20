@@ -42,7 +42,7 @@ export const DueDatePicker = ({ value, onChange, disabled = false }: DueDatePick
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="start">
+      <PopoverContent className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" align="center">
         <div className="p-2">
           <CustomDatePicker
             selected={selectedDate}

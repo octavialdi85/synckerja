@@ -7,7 +7,7 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { logger } from '@/config/logger';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
 import { supabase } from '@/integrations/supabase/client';
-import { ObjectiveHierarchyDialog } from '@/features/8-2-DailyTask/modal/ObjectiveHierarchyDialog';
+import { ObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import { LoadingDots } from '@/components/LoadingDots';
 import { Badge } from '@/features/ui/badge';
 
@@ -344,7 +344,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
               <CheckSquare className="w-5 h-5 text-purple-600" />
               Add Solution as Daily Task
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-600 mt-1">
+            <DialogDescription className="text-sm text-gray-600 mt-1 hidden sm:block">
               Convert this solution into a daily task with an individual objective
             </DialogDescription>
           </DialogHeader>

@@ -75,6 +75,9 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [selectedSolutionForTask, setSelectedSolutionForTask] = useState<any>(null);
 
+  // Full description view popup (when description is truncated and user clicks to read full)
+  const [fullDescriptionModal, setFullDescriptionModal] = useState<{ title: string; content: string } | null>(null);
+
   useEffect(() => {
     if (isOpen && meetingPointId) {
       loadData();
@@ -369,27 +372,27 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                 </h4>
               </div>
               
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto seamless-scroll">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead>Issue Description</TableHead>
-                      <TableHead className="w-[150px]">Created</TableHead>
-                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead className="w-[50px] min-w-[50px] shrink-0">#</TableHead>
+                      <TableHead className="min-w-[320px]">Issue Description</TableHead>
+                      <TableHead className="w-[150px] min-w-[140px] shrink-0">Created</TableHead>
+                      <TableHead className="w-[120px] min-w-[120px] shrink-0">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8">
+                        <TableCell colSpan={4} className="text-center py-8">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto mb-2"></div>
                           Loading...
                         </TableCell>
                       </TableRow>
                     ) : issues.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                           <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                           <p className="font-medium">No issues yet</p>
                           <p className="text-sm">Add the first issue above to get started.</p>
@@ -401,7 +404,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           <TableCell className="text-center text-gray-600 font-medium">
                             {index + 1}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[320px] align-top">
                             {editingIssueId === issue.id ? (
                               <div className="space-y-2">
                                 <Textarea
@@ -428,15 +431,29 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">
+                              <p
+                                role="button"
+                                tabIndex={0}
+                                className="text-gray-900 text-sm leading-relaxed line-clamp-2 cursor-pointer hover:bg-orange-50/50 rounded px-1 -mx-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFullDescriptionModal({ title: 'Issue Description', content: issue.issue_description });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setFullDescriptionModal({ title: 'Issue Description', content: issue.issue_description });
+                                  }
+                                }}
+                              >
                                 {issue.issue_description}
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                             {formatDateTime(issue.created_at)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"
@@ -542,16 +559,16 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                 </h4>
               </div>
               
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto seamless-scroll">
+                <Table className="min-w-[900px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead>Issue Reference</TableHead>
-                      <TableHead>Solution Description</TableHead>
-                      <TableHead className="w-[150px]">Created</TableHead>
-                      <TableHead className="w-[100px]">Updates</TableHead>
-                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead className="w-[50px] min-w-[50px] shrink-0">#</TableHead>
+                      <TableHead className="min-w-[180px]">Issue Reference</TableHead>
+                      <TableHead className="min-w-[320px]">Solution Description</TableHead>
+                      <TableHead className="w-[150px] min-w-[140px] shrink-0">Created</TableHead>
+                      <TableHead className="w-[100px] min-w-[100px] shrink-0">Updates</TableHead>
+                      <TableHead className="w-[120px] min-w-[120px] shrink-0">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -576,14 +593,14 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                           <TableCell className="text-center text-gray-600 font-medium">
                             {index + 1}
                           </TableCell>
-                          <TableCell className="max-w-xs">
+                          <TableCell className="min-w-[180px] align-top">
                             <div className="bg-orange-50 border border-orange-200 rounded-md p-2">
                               <p className="text-xs text-orange-800 font-medium line-clamp-2">
                                 {getIssueDescription(solution.meeting_point_issue_id)}
                               </p>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="min-w-[320px] align-top">
                             {editingSolutionId === solution.id ? (
                               <div className="space-y-2">
                                 <Textarea
@@ -610,15 +627,29 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">
+                              <p
+                                role="button"
+                                tabIndex={0}
+                                className="text-gray-900 text-sm leading-relaxed line-clamp-2 cursor-pointer hover:bg-green-50/50 rounded px-1 -mx-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFullDescriptionModal({ title: 'Solution Description', content: solution.solution_description });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setFullDescriptionModal({ title: 'Solution Description', content: solution.solution_description });
+                                  }
+                                }}
+                              >
                                 {solution.solution_description}
                               </p>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                             {formatDateTime(solution.created_at)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -630,7 +661,7 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
                               {solutionUpdateCounts[solution.id] || 0}
                             </Button>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"
@@ -681,6 +712,25 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
           </div>
         </div>
       </DialogContent>
+
+      {/* Full description popup (read full Issue/Solution description) */}
+      <Dialog open={!!fullDescriptionModal} onOpenChange={(open) => !open && setFullDescriptionModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-lg">{fullDescriptionModal?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto rounded-md border bg-muted/30 p-4">
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              {fullDescriptionModal?.content}
+            </p>
+          </div>
+          <div className="flex justify-end pt-3">
+            <Button variant="outline" onClick={() => setFullDescriptionModal(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Issue Notes Dialog */}
       {notesIssueId && (

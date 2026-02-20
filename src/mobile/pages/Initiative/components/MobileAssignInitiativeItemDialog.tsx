@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Calendar, Clock } from 'lucide-react';
+import { Users, Search, Calendar } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/features/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
+import { logger } from '@/config/logger';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface Employee {
   id: string;
@@ -44,7 +47,8 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
   const { organizationId } = useCurrentOrg();
   const { data: employees = [], isLoading: loading } = useAvailableEmployees();
   const { userRole, isOwner, isAdmin } = useCentralizedUserData();
-  
+  const isMobile = useIsMobile();
+
   // Check if user can assign employees (not employee role)
   const canAssignEmployees = isOwner || isAdmin || userRole === 'hr';
 
@@ -191,7 +195,7 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
       onAssign();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error assigning task:', error);
+      logger.error('Error assigning task:', error);
       toast({
         title: 'Error',
         description: 'Failed to assign task',
@@ -218,18 +222,24 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-none h-full max-h-screen m-0 rounded-none fixed inset-0 translate-x-0 translate-y-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600" />
-            Assign {getItemTypeLabel()}
+      <DialogContent
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area'
+            : 'h-full max-h-screen fixed inset-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh]'
+        )}
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+      >
+        <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="lowercase truncate">Assign {getItemTypeLabel()}: {item.title}</span>
           </DialogTitle>
-          <DialogDescription>
-            Assign this {getItemTypeLabel().toLowerCase()} to an employee and set a deadline
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 flex-1 overflow-y-auto py-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6">
           {/* Item Info */}
           <div className="rounded-lg bg-gray-50 p-3 border border-gray-200">
             <div className="text-xs font-medium text-gray-500 mb-1">
@@ -253,7 +263,7 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
               placeholder="Search employees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-sm"
             />
           </div>
 
@@ -308,13 +318,13 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
-                className="w-full"
+                className="w-full text-sm"
               />
               <Input
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="w-full"
+                className="w-full text-sm"
               />
             </div>
             {dueDate && (
@@ -332,33 +342,40 @@ export const MobileAssignInitiativeItemDialog: React.FC<MobileAssignInitiativeIt
           </div>
         </div>
 
-        <DialogFooter className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isAssigning}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAssign}
-            disabled={!selectedEmployee || isAssigning || (dueDate && !isValidDate)}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-          >
-            {isAssigning ? (
-              <>
-                <span className="mr-2">⏳</span>
-                Assigning...
-              </>
-            ) : (
-              <>
-                <Users className="w-4 h-4 mr-2" />
-                Assign
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        {/* Footer - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom, two-layer, size="sm", primary default, loading spinner */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={isAssigning}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleAssign}
+              disabled={!selectedEmployee || isAssigning || (dueDate && !isValidDate)}
+              className="min-w-[120px] flex items-center justify-center gap-1.5 w-full sm:w-auto"
+            >
+              {isAssigning ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Assigning...</span>
+                </>
+              ) : (
+                <>
+                  <Users className="w-4 h-4" />
+                  Assign
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

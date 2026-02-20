@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Flag, User, Calendar, Building2, Target, Unlink } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -32,9 +33,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
 import { useOkrCycles } from '@/features/1_home/components/HomeOKRDashboard/hooks/useOkrCycles';
 import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDashboard/modal/useIndividualObjectives';
-import { ObjectiveHierarchyDialog } from '../modal/ObjectiveHierarchyDialog';
+import { ObjectiveHierarchyDialog } from '@/mobile/pages/daily task/section/ObjectiveHierarchyDialog';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useToast } from '@/features/ui/use-toast';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 
 interface EditTaskDialogProps {
   isOpen: boolean;
@@ -43,6 +45,7 @@ interface EditTaskDialogProps {
 }
 
 export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose, taskId }) => {
+  const isMobile = useIsMobile();
   const { t } = useAppTranslation();
   const { toast } = useToast();
   const { tasks, updateTask } = useDailyTask();
@@ -280,32 +283,32 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
         if (!value) onClose();
       }}
     >
-      <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <Flag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl font-semibold">Edit Task</DialogTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Update the selected task details and save your changes.
-              </p>
-            </div>
-          </div>
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area z-30'
+            : 'w-[620px] max-w-[90vw] max-h-[90vh] h-[600px]'
+        )}
+        overlayClassName={isMobile ? 'z-30' : undefined}
+        hideCloseButton={isMobile}
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+          <DialogTitle className="text-lg font-semibold">Edit Task</DialogTitle>
         </DialogHeader>
 
-        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div
-            className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6"
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 pt-4 pb-6"
             style={{
               scrollbarWidth: 'thin',
               scrollBehavior: 'smooth',
               scrollbarColor: '#d1d5db transparent',
             }}
           >
-            <div className="space-y-6">
-              <div className="space-y-4">
+            <div className="space-y-6 min-w-0">
+              <div className="space-y-4 min-w-0">
           {/* Task Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -315,7 +318,7 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
                 placeholder="What needs to be done?"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isSubmitting}
                 required
               />
@@ -400,27 +403,27 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
           </div>
 
           {/* Individual Objective */}
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Individual Objective
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsObjectiveDialogOpen(true)}
                 disabled={isSubmitting}
-                className="flex-1 justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10"
+                className="flex-1 min-w-0 justify-start border border-gray-200 rounded-lg hover:bg-gray-50 h-10 overflow-hidden"
               >
                 {objectiveId && objectiveContext ? (
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                     <Target className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                    <div className="flex flex-col min-w-0 flex-1 text-left">
-                      <span className="text-sm truncate font-medium text-gray-900">
+                    <div className="flex flex-col min-w-0 flex-1 text-left overflow-hidden">
+                      <span className="text-sm truncate font-medium text-gray-900 block">
                         {objectiveContext.individualTitle}
                       </span>
                       {(objectiveContext.companyTitle || objectiveContext.departmentTitle) && (
-                        <span className="text-xs text-gray-500 truncate">
+                        <span className="text-xs text-gray-500 truncate block">
                           {objectiveContext.companyTitle && objectiveContext.departmentTitle
                             ? `${objectiveContext.companyTitle} → ${objectiveContext.departmentTitle}`
                             : objectiveContext.companyTitle || objectiveContext.departmentTitle}
@@ -429,9 +432,9 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 min-w-0 w-full">
+                  <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
                     <Target className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    <span className="text-gray-500 text-sm truncate text-left">
+                    <span className="text-gray-500 text-sm truncate text-left block min-w-0">
                       Select Individual Objective
                     </span>
                   </div>
@@ -599,38 +602,42 @@ export const EditTaskDialog: React.FC<EditTaskDialogProps> = ({ isOpen, onClose,
       </div>
     </form>
         
-        {/* Action Buttons */}
-        <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t bg-muted/30 flex items-center justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              if (formRef.current) {
-                formRef.current.requestSubmit();
-              }
-            }}
-            disabled={!title.trim() || isSubmitting}
-            className="min-w-[140px] flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Flag className="w-4 h-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
+        {/* Action Buttons - rules: px-4 pt-3 pb-3, no safe-area-padding-bottom */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (formRef.current) {
+                  formRef.current.requestSubmit();
+                }
+              }}
+              disabled={!title.trim() || isSubmitting}
+              className="min-w-[120px] flex items-center justify-center gap-1.5"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Flag className="w-4 h-4" />
+                  <span>Save Changes</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

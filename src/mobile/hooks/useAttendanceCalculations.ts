@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { id } from "date-fns/locale";
+import { id, enUS } from "date-fns/locale";
 
 interface AttendanceRecord {
   id: string;
@@ -20,9 +20,11 @@ interface AttendanceRecord {
 
 interface UseAttendanceCalculationsProps {
   attendanceHistory: AttendanceRecord[];
+  language?: "id" | "en";
 }
 
-export const useAttendanceCalculations = ({ attendanceHistory }: UseAttendanceCalculationsProps) => {
+export const useAttendanceCalculations = ({ attendanceHistory, language = "id" }: UseAttendanceCalculationsProps) => {
+  const locale = language === "id" ? id : enUS;
   const filteredStats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -171,7 +173,7 @@ export const useAttendanceCalculations = ({ attendanceHistory }: UseAttendanceCa
     // Group data by month
     const monthlyData = attendanceHistory.reduce((acc: Record<string, any>, record) => {
       const date = new Date(record.attendance_date);
-      const monthKey = format(date, "MMM yyyy", { locale: id });
+      const monthKey = format(date, "MMM yyyy", { locale });
       
       if (!acc[monthKey]) {
         acc[monthKey] = {
@@ -199,7 +201,7 @@ export const useAttendanceCalculations = ({ attendanceHistory }: UseAttendanceCa
       terlambat: number;
       tidakHadir: number;
     }>; // Last 6 months
-  }, [attendanceHistory]);
+  }, [attendanceHistory, locale]);
 
   return {
     filteredStats,

@@ -8,11 +8,13 @@ import { useToast } from '@/features/ui/use-toast';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: Array<{ id: string; blocker_type?: string; description?: string; created_at: string; subStepTitle?: string | null; is_resolved?: boolean; created_by_employee?: { full_name: string } | null }>
+  items: Array<{ id: string; blocker_type?: string; description?: string; created_at: string; subStepTitle?: string | null; is_resolved?: boolean; created_by_employee?: { full_name: string } | null }>;
   initialTab?: 'list' | 'resolved';
+  /** When true and items are empty, show loading state instead of empty message */
+  loading?: boolean;
 }
 
-export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items, initialTab = 'list' }) => {
+export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items, initialTab = 'list', loading = false }) => {
   const [localItems, setLocalItems] = useState<Props['items']>(items || []);
   const [resolutionFor, setResolutionFor] = useState<Props['items'][number] | null>(null);
   const [resolvedRows, setResolvedRows] = useState<Array<{ id: string; task_step_history_id: string; description: string; created_at: string; blocker_description?: string; taskTitle?: string; stepTitle?: string; subStepTitle?: string | null }>>([]);
@@ -148,7 +150,11 @@ export const BlockerDetailsModal: React.FC<Props> = ({ open, onOpenChange, items
           </TabsList>
           <TabsContent value="list" className="flex-1 min-h-0 px-4 pb-4">
             <div className="flex-1 min-h-0 seamless-scroll overflow-auto space-y-2">
-              {localItems.length === 0 ? (
+              {localItems.length === 0 && loading ? (
+                <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+                  <span className="animate-pulse">Loading blockers...</span>
+                </div>
+              ) : localItems.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">

@@ -1,6 +1,6 @@
-
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 import { useToast } from '@/mobile/components/ui/use-toast';
 
 interface RealtimeConfig {
@@ -19,23 +19,21 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
   const [isConnected, setIsConnected] = useState(false);
   const { toast } = useToast();
 
-  // Memoize configurations to prevent unnecessary re-renders
+  // Memoize configurations by primitive deps (table + filter) to avoid deep comparison
+  const configDeps = configs.map(c => `${c.table}:${c.filter?.column ?? ''}:${c.filter?.eq ?? ''}:${(c.filter?.in ?? []).join(',')}`).join('|');
   const stableConfigs = useMemo(() => {
     return configs.map(config => ({
       ...config,
-      // Create stable functions to prevent infinite re-renders
       onInsert: config.onInsert,
       onUpdate: config.onUpdate,
       onDelete: config.onDelete,
     }));
-  }, [JSON.stringify(configs.map(c => ({ 
-    table: c.table, 
-    filter: c.filter 
-  })))]);
+  // configDeps is primitive; configs included so callbacks stay current when parent memo updates
+  }, [configDeps, configs]);
 
   // Stable error handler
   const handleError = useCallback((table: string, error: any) => {
-    console.error(`Error handling realtime event for ${table}:`, error);
+    logger.error(`Error handling realtime event for ${table}:`, error);
     toast({
       title: "Real-time Error",
       description: `Failed to process update for ${table}`,
@@ -43,25 +41,24 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
     });
   }, [toast]);
 
-  // Stable connection error handler
+  // Stable connection error handler (log only; realtime is optional - app works with initial fetch + refetch)
   const handleConnectionError = useCallback((table: string) => {
-    console.error(`❌ Real-time connection failed for ${table}`);
-    toast({
-      title: "Connection Error",
-      description: `Failed to connect real-time updates for ${table}`,
-      variant: "destructive"
-    });
-  }, [toast]);
+    logger.warn(
+      `Real-time connection failed for ${table}. ` +
+      'Ensure the table is in the Supabase Realtime publication if you need live updates.'
+    );
+    // No toast: realtime is best-effort; avoid alarming the user for optional live updates
+  }, []);
 
   useEffect(() => {
     if (!stableConfigs.length) return;
 
-    console.log('Setting up realtime channels for tables:', stableConfigs.map(c => c.table));
-    
+    logger.realtime('Setting up realtime channels for tables:', stableConfigs.map(c => c.table));
+
     // Create channels for each table configuration
     const channels = stableConfigs.map((config, index) => {
       const channelName = `realtime-${config.table}-${index}-${Date.now()}`;
-      console.log(`Setting up realtime for table: ${config.table}`);
+      logger.realtime(`Setting up realtime for table: ${config.table}`);
       
       let channelBuilder = supabase.channel(channelName);
 
@@ -86,8 +83,8 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
       }
 
       channelBuilder = channelBuilder.on('postgres_changes', changeConfig, (payload) => {
-        console.log(`Realtime event for ${config.table}:`, payload);
-        console.log(`Realtime filter config:`, changeConfig);
+        logger.realtime(`Realtime event for ${config.table}:`, payload);
+        logger.realtime('Realtime filter config:', changeConfig);
         
         try {
           switch (payload.eventType) {
@@ -107,11 +104,11 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
       });
 
       return channelBuilder.subscribe((status) => {
-        console.log(`Realtime status for ${config.table}:`, status);
+        logger.realtime(`Realtime status for ${config.table}:`, status);
         setIsConnected(status === 'SUBSCRIBED');
-        
+
         if (status === 'SUBSCRIBED') {
-          console.log(`✅ Real-time connected for ${config.table}`);
+          logger.realtime(`Real-time connected for ${config.table}`);
         } else if (status === 'CHANNEL_ERROR') {
           handleConnectionError(config.table);
         }
@@ -120,7 +117,7 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up realtime channels...');
+      logger.realtime('Cleaning up realtime channels');
       channels.forEach(channel => {
         supabase.removeChannel(channel);
       });
@@ -151,7 +148,7 @@ export const useRealtimeAttendance = (organizationId: string, onDataChange?: () 
     if (!isValidUUID) {
       // Only warn for actual invalid UUIDs, not placeholder values
       if (organizationId && organizationId !== 'skip' && organizationId !== 'null' && organizationId !== 'undefined') {
-        console.warn('Invalid organizationId for realtime attendance:', organizationId);
+        logger.warn('Invalid organizationId for realtime attendance:', organizationId);
       }
       return [];
     }
@@ -161,15 +158,15 @@ export const useRealtimeAttendance = (organizationId: string, onDataChange?: () 
       table: 'attendance_records',
       filter: { column: 'organization_id', eq: organizationId },
       onInsert: (payload: any) => {
-        console.log('📡 New attendance record:', payload.new);
+        logger.realtime('New attendance record:', payload.new);
         stableOnDataChange();
       },
       onUpdate: (payload: any) => {
-        console.log('📡 Updated attendance record:', payload.new);
+        logger.realtime('Updated attendance record:', payload.new);
         stableOnDataChange();
       },
       onDelete: (payload: any) => {
-        console.log('📡 Deleted attendance record:', payload.old);
+        logger.realtime('Deleted attendance record:', payload.old);
         stableOnDataChange();
       }
     },
@@ -177,15 +174,15 @@ export const useRealtimeAttendance = (organizationId: string, onDataChange?: () 
       table: 'attendance_penalties',
       filter: { column: 'organization_id', eq: organizationId },
       onInsert: (payload: any) => {
-        console.log('📡 New penalty:', payload.new);
+        logger.realtime('New penalty:', payload.new);
         stableOnDataChange();
       },
       onUpdate: (payload: any) => {
-        console.log('📡 Updated penalty:', payload.new);
+        logger.realtime('Updated penalty:', payload.new);
         stableOnDataChange();
       },
       onDelete: (payload: any) => {
-        console.log('📡 Deleted penalty:', payload.old);
+        logger.realtime('Deleted penalty:', payload.old);
         stableOnDataChange();
       }
     }
@@ -215,7 +212,7 @@ export const useRealtimeEmployees = (organizationId: string, onDataChange?: () =
     if (!isValidUUID) {
       // Only warn for actual invalid UUIDs, not placeholder values
       if (organizationId && organizationId !== 'skip' && organizationId !== 'null' && organizationId !== 'undefined') {
-        console.warn('Invalid organizationId for realtime employees:', organizationId);
+        logger.warn('Invalid organizationId for realtime employees:', organizationId);
       }
       return [];
     }
@@ -225,15 +222,15 @@ export const useRealtimeEmployees = (organizationId: string, onDataChange?: () =
       table: 'employees',
       filter: { column: 'organization_id', eq: organizationId },
       onInsert: (payload: any) => {
-        console.log('New employee:', payload.new);
+        logger.realtime('New employee:', payload.new);
         stableOnDataChange();
       },
       onUpdate: (payload: any) => {
-        console.log('Updated employee:', payload.new);
+        logger.realtime('Updated employee:', payload.new);
         stableOnDataChange();
       },
       onDelete: (payload: any) => {
-        console.log('Deleted employee:', payload.old);
+        logger.realtime('Deleted employee:', payload.old);
         stableOnDataChange();
       }
     }
@@ -263,7 +260,7 @@ export const useRealtimeOrganization = (organizationId: string, onDataChange?: (
     if (!isValidUUID) {
       // Only warn for actual invalid UUIDs, not placeholder values
       if (organizationId && organizationId !== 'skip' && organizationId !== 'null' && organizationId !== 'undefined') {
-        console.warn('Invalid organizationId for realtime organization:', organizationId);
+        logger.warn('Invalid organizationId for realtime organization:', organizationId);
       }
       return [];
     }
@@ -273,7 +270,7 @@ export const useRealtimeOrganization = (organizationId: string, onDataChange?: (
       table: 'organizations',
       filter: { column: 'id', eq: organizationId },
       onUpdate: (payload: any) => {
-        console.log('Updated organization:', payload.new);
+        logger.realtime('Updated organization:', payload.new);
         stableOnDataChange();
       }
     },
@@ -281,7 +278,7 @@ export const useRealtimeOrganization = (organizationId: string, onDataChange?: (
       table: 'profiles',
       filter: { column: 'active_organization_id', eq: organizationId },
       onUpdate: (payload: any) => {
-        console.log('Updated profile:', payload.new);
+        logger.realtime('Updated profile:', payload.new);
         stableOnDataChange();
       }
     }

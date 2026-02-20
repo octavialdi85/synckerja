@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Edit, User, FileText } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
-import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
 import { Label } from '@/features/ui/label';
 import {
@@ -13,6 +12,8 @@ import {
   SelectValue,
 } from '@/features/ui/select';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface MeetingPoint {
   id: string;
@@ -32,6 +33,7 @@ interface EditMeetingPointDialogProps {
 }
 
 const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }: EditMeetingPointDialogProps) => {
+  const isMobile = useIsMobile();
   const [formData, setFormData] = useState({
     discussion_point: '',
     request_by: '',
@@ -74,16 +76,28 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-none w-screen h-screen md:w-auto md:h-auto md:max-w-2xl border-none bg-card p-0 shadow-xl focus:outline-none flex flex-col m-0 rounded-none md:rounded-lg translate-x-0 translate-y-0 md:translate-x-[-50%] md:translate-y-[-50%] left-0 top-0 md:left-[50%] md:top-[50%]">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="w-5 h-5 text-blue-600" />
-              Edit Meeting Point
-            </DialogTitle>
-          </DialogHeader>
+      <DialogContent
+        className={cn(
+          'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 border-none bg-card shadow-xl focus:outline-none overflow-hidden',
+          isMobile
+            ? 'fixed left-0 right-0 top-0 modal-above-safe-area h-screen'
+            : 'md:max-w-2xl md:rounded-lg md:translate-x-[-50%] md:translate-y-[-50%] md:left-[50%] md:top-[50%] fixed inset-0 md:h-auto md:max-h-[90vh]'
+        )}
+        fullscreenAnimation={isMobile}
+        hideCloseButton={isMobile}
+      >
+        <DialogHeader className={cn(
+          'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left',
+          isMobile ? 'safe-area-top px-4 pt-4 pb-3' : 'md:px-6 md:pt-6 md:pb-4'
+        )}>
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Edit className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="lowercase truncate">Edit Meeting Point</span>
+          </DialogTitle>
+        </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll px-6 pt-4 pb-6 md:px-4 md:pb-4">
+          <form id="edit-meeting-point-form" onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="edit-discussion-point" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                 <FileText className="w-3 h-3" />
@@ -94,7 +108,7 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                 placeholder="Enter discussion point..."
                 value={formData.discussion_point}
                 onChange={(e) => handleInputChange('discussion_point', e.target.value)}
-                className="mt-1 min-h-[100px] resize-none break-words max-w-full"
+                className="text-sm mt-1 min-h-[100px] resize-none break-words max-w-full"
                 required
               />
             </div>
@@ -106,7 +120,7 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                   Request By
                 </Label>
                 <Select value={formData.request_by} onValueChange={(value) => handleInputChange('request_by', value)}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="text-sm mt-1">
                     <SelectValue placeholder={isLoadingEmployees ? "Loading employees..." : "Select employee..."} />
                   </SelectTrigger>
                 <SelectContent className="bg-white border shadow-md z-50 w-full max-w-[calc(100vw-2rem)] md:min-w-[300px] md:max-w-none">
@@ -124,7 +138,7 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                   Status
                 </Label>
                 <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="text-sm mt-1">
                     <SelectValue />
                   </SelectTrigger>
                 <SelectContent className="bg-white border shadow-md z-50 w-full max-w-[calc(100vw-2rem)] md:min-w-[200px] md:max-w-none">
@@ -137,24 +151,38 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                 </Select>
               </div>
             </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={!formData.discussion_point.trim() || isSubmitting}
-              >
-                {isSubmitting ? 'Updating...' : 'Update Meeting Point'}
-              </Button>
-            </div>
           </form>
+        </div>
+
+        {/* Footer - pt-3 pb-3 so spacing above and below buttons is equal; modal-above-safe-area already keeps modal above nav bar */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="edit-meeting-point-form"
+              size="sm"
+              disabled={!formData.discussion_point.trim() || isSubmitting}
+              className="min-w-[120px] flex items-center justify-center gap-1.5"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Updating...</span>
+                </>
+              ) : (
+                'Update Meeting Point'
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

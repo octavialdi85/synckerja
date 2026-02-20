@@ -1,6 +1,7 @@
 import { Card } from "@/mobile/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface ChartData {
   month: string;
@@ -14,18 +15,19 @@ interface AttendanceChartProps {
 }
 
 export const AttendanceChart = ({ chartData }: AttendanceChartProps) => {
+  const { t } = useAppTranslation();
   return (
     <Card className="bg-gradient-card border border-border">
-      <div className="p-3 border-b border-border">
+      <div className="px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold text-foreground">Grafik Kehadiran</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("reports.attendanceChartTitle", "Grafik Kehadiran")}</h2>
         </div>
       </div>
-      <div className="p-2">
+      <div className="px-2 pt-1 pb-2">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 5, right: 5, left: 2, bottom: 2 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="month" 
@@ -38,6 +40,7 @@ export const AttendanceChart = ({ chartData }: AttendanceChartProps) => {
                 fontSize={10}
                 tick={{ fontSize: 10 }}
                 width={30}
+                allowDecimals={false}
               />
               <Tooltip 
                 contentStyle={{
@@ -49,19 +52,19 @@ export const AttendanceChart = ({ chartData }: AttendanceChartProps) => {
               />
               <Bar 
                 dataKey="hadir" 
-                name="Hadir"
+                name={t("reports.status.present", "Hadir")}
                 fill="hsl(var(--success))"
                 radius={[1, 1, 0, 0]}
               />
               <Bar 
                 dataKey="terlambat" 
-                name="Terlambat"
+                name={t("reports.status.late", "Terlambat")}
                 fill="hsl(var(--warning))"
                 radius={[1, 1, 0, 0]}
               />
               <Bar 
                 dataKey="tidakHadir" 
-                name="Tidak Hadir"
+                name={t("reports.status.absent", "Tidak Hadir")}
                 fill="hsl(var(--destructive))"
                 radius={[1, 1, 0, 0]}
               />
@@ -71,7 +74,7 @@ export const AttendanceChart = ({ chartData }: AttendanceChartProps) => {
           <div className="text-center py-4">
             <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
             <p className="text-xs text-muted-foreground">
-              Belum ada data untuk ditampilkan dalam grafik
+              {t("reports.chartNoData", "Belum ada data untuk ditampilkan dalam grafik")}
             </p>
           </div>
         )}

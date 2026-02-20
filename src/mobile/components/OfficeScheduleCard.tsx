@@ -1,18 +1,21 @@
-import { Clock, MapPin, Loader2 } from "lucide-react";
+import { Clock, MapPin } from "lucide-react";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { useWorkSchedule } from "@/mobile/hooks/useWorkSchedule";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { LANGUAGE_STORAGE_KEY } from "@/features/share/i18n/translations";
+
 export const OfficeScheduleCard = () => {
+  const { t, language } = useAppTranslation();
+  const storedLang = typeof window !== "undefined" ? window.localStorage.getItem(LANGUAGE_STORAGE_KEY) : null;
+  const useId = (storedLang === "id" || storedLang === "en" ? storedLang : language) === "id";
+  const th = (idLabel: string, enLabel: string) => (useId ? idLabel : enLabel);
   const {
     workSchedule,
     scheduleData,
     loading,
     error
   } = useWorkSchedule();
-  console.log('🏢 OfficeScheduleCard: workSchedule updated', {
-    workSchedule: workSchedule?.name,
-    lateTolerance: workSchedule?.late_tolerance_minutes,
-    loading
-  });
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -31,18 +34,18 @@ export const OfficeScheduleCard = () => {
   };
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active':
-        return 'Aktif';
-      case 'upcoming':
-        return 'Nanti';
-      case 'completed':
-        return 'Selesai';
-      case 'holiday':
-        return 'Libur';
-      case 'off':
-        return 'Libur';
+      case "active":
+        return th("Aktif", "Active");
+      case "upcoming":
+        return th("Nanti", "Upcoming");
+      case "completed":
+        return th("Selesai", "Completed");
+      case "holiday":
+        return th("Libur", "Off");
+      case "off":
+        return th("Libur", "Off");
       default:
-        return '';
+        return "";
     }
   };
   if (loading) {
@@ -57,11 +60,11 @@ export const OfficeScheduleCard = () => {
         <div className="overflow-hidden">
           {/* Header Skeleton */}
           <div className="grid grid-cols-5 bg-primary text-primary-foreground p-3 text-xs font-medium">
-            <div>Hari</div>
-            <div>Tanggal</div>
-            <div>Masuk</div>
-            <div>Pulang</div>
-            <div>Status</div>
+            <div>{th("Hari", "Day")}</div>
+            <div>{th("Tanggal", "Date")}</div>
+            <div>{th("Masuk", "In")}</div>
+            <div>{th("Pulang", "Out")}</div>
+            <div>{t("schedule.officeTable.status", "Status")}</div>
           </div>
           
           {/* Schedule Items Skeleton */}
@@ -94,32 +97,35 @@ export const OfficeScheduleCard = () => {
       </div>;
   }
   if (error || !workSchedule) {
-    return <div className="bg-card rounded-lg border border-border p-6 text-center">
+    return (
+      <div className="bg-card rounded-lg border border-border p-6 text-center">
         <div className="flex flex-col items-center gap-3">
           <Clock className="h-8 w-8 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium text-foreground mb-1">Jadwal Kerja Belum Dikonfigurasi</p>
-            <p className="text-xs text-muted-foreground">Silakan hubungi administrator untuk mengatur jadwal kerja</p>
+            <p className="text-sm font-medium text-foreground mb-1">{t("schedule.notConfigured", "Jadwal Kerja Belum Dikonfigurasi")}</p>
+            <p className="text-xs text-muted-foreground">{t("schedule.contactAdmin", "Silakan hubungi administrator untuk mengatur jadwal kerja")}</p>
           </div>
         </div>
-      </div>;
+      </div>
+    );
   }
-  return <div className="bg-card rounded-lg border border-border overflow-hidden">
+  return (
+    <div className="bg-card rounded-lg border border-border overflow-hidden">
       <div className="p-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold text-foreground">{workSchedule.name}</h2>
+          <h2 className="font-semibold text-foreground">{t("schedule.regularScheduleTitle", "Jadwal Reguler Senin - Minggu")}</h2>
         </div>
       </div>
       
       <div className="overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-5 bg-primary text-primary-foreground p-3 text-xs font-medium">
-          <div>Hari</div>
-          <div>Tanggal</div>
-          <div>Masuk</div>
-          <div>Pulang</div>
-          <div>Status</div>
+          <div>{th("Hari", "Day")}</div>
+          <div>{th("Tanggal", "Date")}</div>
+          <div>{th("Masuk", "In")}</div>
+          <div>{th("Pulang", "Out")}</div>
+          <div>{t("schedule.officeTable.status", "Status")}</div>
         </div>
         
         {/* Schedule Items */}
@@ -162,13 +168,18 @@ export const OfficeScheduleCard = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Timezone: {workSchedule.timezone}</span>
+            <span className="text-xs text-muted-foreground">{t("schedule.timezone", "Timezone: {{value}}", { value: workSchedule.timezone })}</span>
           </div>
-          {workSchedule.break_start_time && workSchedule.break_end_time && <span className="text-xs text-muted-foreground">
-              Istirahat: {workSchedule.break_start_time.slice(0, 5)} - {workSchedule.break_end_time.slice(0, 5)}
-            </span>}
+          {workSchedule.break_start_time && workSchedule.break_end_time && (
+            <span className="text-xs text-muted-foreground">
+              {t("schedule.breakLabel", "Istirahat: {{start}} - {{end}}", {
+                start: workSchedule.break_start_time.slice(0, 5),
+                end: workSchedule.break_end_time.slice(0, 5),
+              })}
+            </span>
+          )}
         </div>
-        {workSchedule.late_tolerance_minutes > 0}
       </div>
-    </div>;
+    </div>
+  );
 };

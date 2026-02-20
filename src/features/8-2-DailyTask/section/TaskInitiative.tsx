@@ -450,10 +450,15 @@ const TaskInitiative: React.FC<TaskInitiativeProps> = ({ onStatsChange }) => {
     fetchUncompletedItems();
   }, [fetchUncompletedItems]);
 
-  // Show due date dialog before taking task
+  // Take task: due date dialog then assign to self. Reassign: open assign dialog for admin/HR to assign to another employee.
   const handleTakeTaskClick = (item: UncompletedItem) => {
-    setSelectedItem(item);
-    setShowDueDateDialog(true);
+    if (item.assignedTo && item.assignedTo !== currentEmployeeId) {
+      setSelectedItemForAssign(item);
+      setShowAssignDialog(true);
+    } else {
+      setSelectedItem(item);
+      setShowDueDateDialog(true);
+    }
   };
 
   // Handle actual task assignment with due date

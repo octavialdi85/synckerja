@@ -116,7 +116,10 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col">
+      <DialogContent
+        className="w-[620px] max-w-[90vw] max-h-[90vh] h-[600px] p-0 flex flex-col"
+        aria-describedby="assign-step-description"
+      >
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
@@ -126,21 +129,14 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
               <DialogTitle className="text-xl font-semibold truncate">
                 Assign Step
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-1 truncate">
+              <DialogDescription id="assign-step-description" className="text-sm text-muted-foreground mt-1 truncate">
                 {step.title}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div
-          className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollBehavior: 'smooth',
-            scrollbarColor: '#d1d5db transparent',
-          }}
-        >
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5 seamless-scroll max-h-[calc(100vh-120px)]">
           {/* Current Assignment */}
           {step.assigned_to && step.assigned_employee ? (
             <div className="p-3 bg-green-50 border border-green-200 rounded-md">
@@ -170,10 +166,15 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
 
           {/* Search */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Search</label>
+            <label htmlFor="assign-step-search-employees" className="text-sm font-medium text-gray-700">
+              Search
+            </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
+                id="assign-step-search-employees"
+                name="assign-step-search-employees"
+                autoComplete="off"
                 placeholder="Search employees..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -184,10 +185,12 @@ export const AssignStepDialog = ({ step, onAssign, onUnassign, onClose }: Assign
 
           {/* Due Date (single field, autosave) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="assign-step-due-date" className="text-sm font-medium text-gray-700">
               Due date <span className="text-red-500">*</span>
             </label>
             <Input
+              id="assign-step-due-date"
+              name="assign-step-due-date"
               type="date"
               className="h-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={dueDate}

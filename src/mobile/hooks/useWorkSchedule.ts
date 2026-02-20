@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeData } from './useRealtimeData';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface WorkSchedule {
   id: string;
@@ -42,17 +43,22 @@ interface ScheduleDay {
   holidayName?: string | null;
 }
 
+const DAY_NAMES_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+const DAY_NAMES_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 export const useWorkSchedule = () => {
+  const { language } = useAppTranslation();
   const [workSchedule, setWorkSchedule] = useState<WorkSchedule | null>(null);
-  const [scheduleData, setScheduleData] = useState<ScheduleDay[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
-  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const dayNames = language === 'en' ? DAY_NAMES_EN : DAY_NAMES_ID;
+  const dateLocale = language === 'en' ? 'en-US' : 'id-ID';
 
-  const generateWeeklySchedule = (schedule: WorkSchedule, holidays: Holiday[]): ScheduleDay[] => {
+  const generateWeeklySchedule = (schedule: WorkSchedule, holidaysList: Holiday[]): ScheduleDay[] => {
     const today = new Date();
     const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const schedules: ScheduleDay[] = [];
@@ -67,21 +73,17 @@ export const useWorkSchedule = () => {
       const dbDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
       
       // Check if this day is in working_days array - make sure schedule exists and has working_days
+      // DB convention: 1=Mon .. 7=Sun (JS getDay(): 0=Sun, 1=Mon .. 6=Sat; we map 0→7)
       const isScheduledDay =
         schedule &&
         Array.isArray(schedule.working_days) &&
         schedule.working_days.includes(dbDayOfWeek);
-      console.log(
-        `📅 Day ${dayOfWeek} (DB: ${dbDayOfWeek}): isScheduledDay = ${isScheduledDay}, working_days = ${JSON.stringify(
-          schedule?.working_days,
-        )}, schedule exists = ${!!schedule}`,
-      );
 
       const isoDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
         date.getDate(),
       ).padStart(2, "0")}`;
 
-      const matchedHoliday = holidays.find((holiday) => {
+      const matchedHoliday = holidaysList.find((holiday) => {
         if (!holiday.is_active || !holiday.applies_to_attendance) return false;
 
         if (holiday.is_recurring || holiday.country_code) {
@@ -114,7 +116,7 @@ export const useWorkSchedule = () => {
 
       schedules.push({
         day: dayNames[dayOfWeek],
-        date: date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+        date: date.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' }),
         startTime:
           isWorkingDay && status !== "holiday" ? schedule.start_time.slice(0, 5) : "-",
         endTime:
@@ -179,9 +181,9 @@ export const useWorkSchedule = () => {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         try {
-          const parsed = JSON.parse(cached) as { schedule: WorkSchedule; weekly: ScheduleDay[]; ts: number };
+          const parsed = JSON.parse(cached) as { schedule: WorkSchedule; holidays?: Holiday[]; ts: number };
           setWorkSchedule(parsed.schedule);
-          setScheduleData(parsed.weekly);
+          setHolidays(parsed.holidays ?? []);
           setInitialized(true);
         } catch {}
       }
@@ -231,16 +233,14 @@ export const useWorkSchedule = () => {
         .eq("applies_to_attendance", true);
 
       const activeHolidays: Holiday[] = holidaysData ?? [];
+      setHolidays(activeHolidays);
 
       if (scheduleData) {
         console.log('✅ Setting work schedule:', scheduleData);
         console.log('🕐 Late tolerance minutes:', scheduleData.late_tolerance_minutes);
         setWorkSchedule(scheduleData);
-        const weekly = generateWeeklySchedule(scheduleData, activeHolidays);
-        setScheduleData(weekly);
-        // Update cache
         try {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ schedule: scheduleData, weekly, ts: Date.now() }));
+          sessionStorage.setItem(cacheKey, JSON.stringify({ schedule: scheduleData, holidays: activeHolidays, ts: Date.now() }));
         } catch {}
       } else {
         console.log('❌ No schedule data found');
@@ -285,7 +285,11 @@ export const useWorkSchedule = () => {
     ] : []
   );
 
-  // Force re-render when workSchedule changes
+  const scheduleData = useMemo(
+    () => (workSchedule ? generateWeeklySchedule(workSchedule, holidays) : []),
+    [workSchedule, holidays, language]
+  );
+
   useEffect(() => {
     if (workSchedule) {
       console.log('📋 Work schedule data updated:', {

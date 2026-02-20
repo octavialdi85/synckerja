@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, MapPin, User } from "lucide-react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface ClientVisitStatusProps {
   startTime?: string;
@@ -8,12 +9,13 @@ interface ClientVisitStatusProps {
   visitDuration?: string;
 }
 
-export const ClientVisitStatus = ({ 
-  startTime, 
-  endTime, 
-  currentClient, 
-  visitDuration 
+export const ClientVisitStatus = ({
+  startTime,
+  endTime,
+  currentClient,
+  visitDuration,
 }: ClientVisitStatusProps) => {
+  const { t } = useAppTranslation();
   return (
     <div className="px-3 mb-4">
       <Card>
@@ -22,7 +24,7 @@ export const ClientVisitStatus = ({
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4" />
-                <span className="text-sm">Mulai Kunjungan</span>
+                <span className="text-sm">{t("clientVisit.startVisit", "Mulai Kunjungan")}</span>
               </div>
               <span className="text-sm font-medium">
                 {startTime || '-'}
@@ -32,7 +34,7 @@ export const ClientVisitStatus = ({
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                <span className="text-sm">Selesai Kunjungan</span>
+                <span className="text-sm">{t("clientVisit.endVisit", "Selesai Kunjungan")}</span>
               </div>
               <span className="text-sm font-medium">
                 {endTime || '-'}
@@ -43,7 +45,7 @@ export const ClientVisitStatus = ({
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <User className="h-4 w-4" />
-                  <span className="text-sm">Client Aktif</span>
+                  <span className="text-sm">{t("clientVisit.activeClient", "Client Aktif")}</span>
                 </div>
                 <span className="text-sm font-medium">
                   {currentClient}
@@ -54,10 +56,10 @@ export const ClientVisitStatus = ({
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                <span className="text-sm">Durasi Kunjungan</span>
+                <span className="text-sm">{t("clientVisit.visitDuration", "Durasi Kunjungan")}</span>
               </div>
               <span className="text-sm font-medium text-primary">
-                {visitDuration || '0 jam 0 menit'}
+                {visitDuration || t("mobileHome.zeroHoursMinutes", "0 jam 0 menit")}
               </span>
             </div>
           </div>

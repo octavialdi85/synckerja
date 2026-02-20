@@ -118,10 +118,10 @@ import Reimbursement from "./features/9_request-form/pages/Reimbursement/Reimbur
 import CashAdvance from "./features/9_request-form/pages/CashAdvance/CashAdvance";
 import Loan from "./features/9_request-form/pages/Loan/Loan";
 
-// Import debug utilities in development
-if (process.env.NODE_ENV === 'development') {
-  import('./utils/debugPermissions');
-  import('./utils/testRouteProtection');
+// Import debug utilities in development (non-blocking so server restart doesn't break the app)
+if (import.meta.env.DEV) {
+  import('./utils/debugPermissions').catch(() => {});
+  import('./utils/testRouteProtection').catch(() => {});
 }
 
 // Disable React Query focusManager globally to prevent any refetch on window focus

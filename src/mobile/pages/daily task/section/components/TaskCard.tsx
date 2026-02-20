@@ -2,7 +2,7 @@ import React from 'react';
 import { CheckSquare, Square, Target, User, Calendar, Bell, AlertTriangle, Clock3, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
-import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/DailyTaskContext';
+import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/types';
 import { formatDate, isOverdue } from '../utils/taskUtils';
 
 interface TaskCardProps {
@@ -45,7 +45,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div
       ref={taskRef}
-      className={`flex flex-col gap-3 rounded-lg border border-blue-100 bg-white p-3 shadow-sm transition-all duration-300 ${
+      className={`flex flex-col gap-1.5 rounded-lg border border-blue-100 bg-white p-3 shadow-sm transition-all duration-300 ${
         isHighlighted ? 'bg-blue-50 ring-1 ring-blue-500' : 'hover:bg-blue-50'
       }`}
     >
@@ -91,7 +91,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </button>
 
         <div
-          className="flex-1 min-w-0 space-y-2 cursor-pointer"
+          className="flex-1 min-w-0 cursor-pointer"
           onClick={() => onOpenModal(task.id)}
         >
           <div className="flex items-start justify-between gap-2">
@@ -131,53 +131,81 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {progress}%
             </span>
           </div>
+        </div>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
-                }`}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+      <div
+        className="w-full cursor-pointer"
+        onClick={() => onOpenModal(task.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpenModal(task.id);
+          }
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <CheckSquare className="h-3.5 w-3.5" />
-              {visibleSteps.filter((s) => s.is_completed).length}/{visibleSteps.length}
-            </span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 text-foreground">
-                  <User className="h-3.5 w-3.5 text-blue-500" />
-                  {task.assigned_to_name ? (
-                    <span className="max-w-[140px] truncate text-[11px] text-muted-foreground">
-                      {task.assigned_to_name}
-                    </span>
-                  ) : (
-                    <span className="italic text-muted-foreground">Unassigned</span>
-                  )}
-                </span>
-              </TooltipTrigger>
-              {task.assigned_to_name && (
-                <TooltipContent>
-                  <span>{task.assigned_to_name}</span>
-                </TooltipContent>
-              )}
-            </Tooltip>
-            {task.due_date && (
-              <span
-                className={`inline-flex items-center gap-1 ${
-                  isOverdueTask ? 'text-destructive' : 'text-muted-foreground'
-                }`}
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                {formatDate(task.due_date)}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 w-full text-[11px] text-muted-foreground cursor-pointer"
+        onClick={() => onOpenModal(task.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpenModal(task.id);
+          }
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1">
+            <CheckSquare className="h-3.5 w-3.5" />
+            {visibleSteps.filter((s) => s.is_completed).length}/{visibleSteps.length}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-foreground">
+                <User className="h-3.5 w-3.5 text-blue-500" />
+                {task.assigned_to_name ? (
+                  <span className="max-w-[140px] truncate text-[11px] text-muted-foreground">
+                    {task.assigned_to_name}
+                  </span>
+                ) : (
+                  <span className="italic text-muted-foreground">Unassigned</span>
+                )}
               </span>
+            </TooltipTrigger>
+            {task.assigned_to_name && (
+              <TooltipContent>
+                <span>{task.assigned_to_name}</span>
+              </TooltipContent>
             )}
-            <div className="ml-auto flex items-center gap-1">
+          </Tooltip>
+          {task.due_date && (
+            <span
+              className={`inline-flex items-center gap-1 ${
+                isOverdueTask ? 'text-destructive' : 'text-muted-foreground'
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              {formatDate(task.due_date)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -273,8 +301,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
-          </div>
-        </div>
       </div>
     </div>
   );

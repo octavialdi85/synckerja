@@ -3,27 +3,28 @@ import { Badge } from "@/mobile/components/ui/badge";
 import { ScrollArea } from "@/mobile/components/ui/scroll-area";
 import { Clock, MapPin, User, Phone, Building2 } from "lucide-react";
 import { ClientVisit } from "@/mobile/hooks/useClientVisitData";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface TodayVisitScheduleProps {
   visits: ClientVisit[];
-  periodLabel: string; // Label untuk periode yang dipilih (e.g., "Hari Ini", "Bulan Ini", dll)
+  periodLabel: string;
 }
 
 export const TodayVisitSchedule = ({ visits, periodLabel }: TodayVisitScheduleProps) => {
+  const { t, language } = useAppTranslation();
   if (visits.length === 0) {
     return (
       <Card>
-        <CardHeader>
-         <CardTitle className="flex items-center gap-2 text-lg">
-           <Clock className="h-5 w-5 text-primary" />
-           Jadwal Kunjungan {periodLabel}
-         </CardTitle>
+        <CardHeader className="p-3 pb-2.5 border-b border-border">
+          <CardTitle className="text-base font-medium">
+            {t("clientVisit.scheduleTitle", "Jadwal Kunjungan {{period}}", { period: periodLabel })}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="px-3 pt-0">
+        <CardContent className="px-3 pt-2 pb-3">
           <div className="text-center py-4 text-muted-foreground">
             <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Tidak ada kunjungan yang dijadwalkan</p>
-            <p className="text-xs mt-1">Anda bisa mulai kunjungan spontan kapan saja</p>
+            <p className="text-sm">{t("clientVisit.noScheduledVisits", "Tidak ada kunjungan yang dijadwalkan")}</p>
+            <p className="text-xs mt-1">{t("clientVisit.spontaneousHint", "Anda bisa mulai kunjungan spontan kapan saja")}</p>
           </div>
         </CardContent>
       </Card>
@@ -32,13 +33,12 @@ export const TodayVisitSchedule = ({ visits, periodLabel }: TodayVisitSchedulePr
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Clock className="h-5 w-5 text-primary" />
-          Jadwal Kunjungan {periodLabel} ({visits.length})
+      <CardHeader className="p-3 pb-2.5 border-b border-border">
+        <CardTitle className="text-base font-medium">
+          {t("clientVisit.scheduleTitle", "Jadwal Kunjungan {{period}}", { period: periodLabel })} ({visits.length})
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-3 pt-0 pr-2">
+      <CardContent className="px-3 pt-2 pb-3 pr-2">
         <ScrollArea className="h-[300px] pr-1">
           <div className="space-y-2 pr-0">
             {visits.map((visit) => (
@@ -48,16 +48,16 @@ export const TodayVisitSchedule = ({ visits, periodLabel }: TodayVisitSchedulePr
                     <div className="flex items-center gap-2 mb-1">
                       <User className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium text-sm">
-                        {visit.client?.company_name || 'Unknown Client'}
+                        {visit.client?.company_name || t("clientVisit.unknownClient", "Unknown Client")}
                       </span>
                       <Badge variant={
-                        visit.status === 'completed' ? 'default' :
-                        visit.status === 'in_progress' ? 'secondary' :
-                        visit.status === 'cancelled' ? 'destructive' : 'outline'
+                        visit.status === "completed" ? "default" :
+                        visit.status === "in_progress" ? "secondary" :
+                        visit.status === "cancelled" ? "destructive" : "outline"
                       }>
-                        {visit.status === 'scheduled' ? 'Terjadwal' :
-                         visit.status === 'in_progress' ? 'Berlangsung' :
-                         visit.status === 'completed' ? 'Selesai' : 'Dibatalkan'}
+                        {visit.status === "scheduled" ? t("clientVisit.scheduled", "Terjadwal") :
+                         visit.status === "in_progress" ? t("clientVisit.inProgress", "Berlangsung") :
+                         visit.status === "completed" ? t("clientVisit.completedVisit", "Selesai") : t("clientVisit.cancelled", "Dibatalkan")}
                       </Badge>
                     </div>
                     
@@ -92,7 +92,7 @@ export const TodayVisitSchedule = ({ visits, periodLabel }: TodayVisitSchedulePr
                     <span>
                       {visit.planned_start_time && visit.planned_end_time
                         ? `${visit.planned_start_time} - ${visit.planned_end_time}`
-                        : 'Waktu fleksibel'
+                        : t("clientVisit.flexibleTime", "Waktu fleksibel")
                       }
                     </span>
                   </div>
@@ -100,9 +100,9 @@ export const TodayVisitSchedule = ({ visits, periodLabel }: TodayVisitSchedulePr
                   {visit.actual_start_time && (
                     <div className="flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
-                      <span>Dimulai: {new Date(visit.actual_start_time).toLocaleTimeString('id-ID', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                      <span>{t("clientVisit.startedAt", "Dimulai")}: {new Date(visit.actual_start_time).toLocaleTimeString(language === "id" ? "id-ID" : "en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit"
                       })}</span>
                     </div>
                   )}

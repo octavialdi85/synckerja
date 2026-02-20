@@ -240,17 +240,10 @@ export const BlockersAndUpdatesPanel = () => {
 
         {/* Shared Content Area - displays blockers or updates based on activeTab */}
         <div className="flex-1 overflow-hidden flex flex-col m-0 min-h-0">
-          <div className="p-2 md:p-3 space-y-2 seamless-scroll flex-1 overflow-auto min-h-0">
+          <div className="p-2 md:p-3 space-y-2 flex-1 min-h-0">
           {activeTab === 'blockers' ? (
             <>
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <div className="text-xs md:text-sm text-gray-500">Loading...</div>
-                  </div>
-                </div>
-              ) : unresolvedBlockers.length === 0 ? (
+              {unresolvedBlockers.length === 0 ? (
                 <div className="text-xs md:text-sm text-gray-500">No blockers reported.</div>
               ) : (
                 Object.entries(grouped).map(([taskTitle, steps]) => (
@@ -309,14 +302,7 @@ export const BlockersAndUpdatesPanel = () => {
             </>
           ) : (
             <>
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <div className="text-xs md:text-sm text-gray-500">Loading...</div>
-                  </div>
-                </div>
-              ) : (recentUpdates || []).length === 0 ? (
+              {(recentUpdates || []).length === 0 ? (
                 <div className="text-xs md:text-sm text-gray-500">No updates.</div>
               ) : (
                 (recentUpdates || []).map((u: any) => {

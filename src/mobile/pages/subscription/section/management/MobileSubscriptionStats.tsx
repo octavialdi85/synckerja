@@ -67,7 +67,7 @@ export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubsc
   }, [subscriptionStatus]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       <Card className="border border-border">
         <CardContent className="grid grid-cols-2 gap-3 p-3">
           {stats.map((stat, index) => (

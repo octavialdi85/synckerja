@@ -5,13 +5,14 @@ import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { ToolsNavigationFooter } from '@/mobile/components/ToolsNavigationFooter';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
 import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
-import { MeetingNotesProvider, useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
-import { LoadingDots } from '@/components/LoadingDots';
+import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { MeetingNotesContent } from './section/MeetingNotesContent';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const MeetingNotesPage = () => {
   useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+  const { t } = useAppTranslation();
 
   return (
     <DesktopWarning>
@@ -33,20 +34,19 @@ const MeetingNotesPage = () => {
                 <div className="flex items-center gap-2">
                   <SidebarTrigger className="md:hidden" />
                   <div>
-                    <h1 className="text-base font-semibold text-foreground">Meeting Notes</h1>
-                    <p className="text-xs text-muted-foreground">Catat dan tindak lanjuti poin rapat</p>
+                    <h1 className="text-base font-semibold text-foreground">{t('meetingNotes.page.title', 'Meeting Notes')}</h1>
+                    <p className="text-xs text-muted-foreground">{t('meetingNotes.page.subtitle', 'Catat dan tindak lanjuti poin rapat')}</p>
                   </div>
                 </div>
                 <div></div>
               </header>
 
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
                   <MeetingNotesContent />
                 </div>
               </div>
 
-              <div className="flex-shrink-0" style={{ height: '80px' }} aria-hidden />
               <ToolsNavigationFooter className="safe-area-bottom-lower" />
             </main>
           </div>

@@ -111,10 +111,40 @@ Deno.serve(async (req: Request) => {
     if (conversationId) {
       const { data: conv } = await supabase
         .from("instagram_conversations")
-        .select("organization_id, instagram_business_account_id")
+        .select("organization_id, instagram_business_account_id, lead_status_id, last_inbound_at, created_at")
         .eq("id", conversationId)
         .maybeSingle();
       if (conv?.organization_id && conv?.instagram_business_account_id) {
+        const leadStatusId = conv?.lead_status_id ?? null;
+        if (leadStatusId) {
+          const { data: statusRow } = await supabase
+            .from("lead_statuses")
+            .select("name")
+            .eq("id", leadStatusId)
+            .maybeSingle();
+          const statusName = (statusRow?.name as string) ?? "";
+          if (statusName.trim().toLowerCase() === "closed") {
+            return new Response(
+              JSON.stringify({
+                error: "Chat sudah di-resolve. Kirim pesan tidak diizinkan sampai ada pesan masuk baru dari customer.",
+                code: "CONVERSATION_RESOLVED",
+              }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+        const lastInboundAt = conv?.last_inbound_at != null ? new Date(conv.last_inbound_at as string).getTime() : NaN;
+        const createdAt = conv?.created_at != null ? new Date(conv.created_at as string).getTime() : NaN;
+        const effectiveMs = Number.isNaN(lastInboundAt) ? createdAt : lastInboundAt;
+        if (!Number.isNaN(effectiveMs) && Date.now() - effectiveMs > 24 * 60 * 60 * 1000) {
+          return new Response(
+            JSON.stringify({
+              error: "Pesan terakhir dari customer sudah lewat 24 jam. Kirim pesan tidak diizinkan sampai customer mengirim pesan lagi.",
+              code: "OUTSIDE_24H_WINDOW",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         const { data: igAcc } = await supabase
           .from("organization_instagram_accounts")
           .select("facebook_page_id, page_access_token")

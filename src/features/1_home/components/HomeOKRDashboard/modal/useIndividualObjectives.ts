@@ -114,6 +114,7 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
       
       // OPTIMIZATION: Simplified query to prevent timeout
       // Only select essential fields, reduced joins depth
+      // Use left join (no !inner) so objectives are returned even when employee or okr_cycle is missing
       let query = supabase
         .from('individual_objectives')
         .select(`
@@ -131,8 +132,8 @@ export const useIndividualObjectives = (organizationId?: string, cycleIds?: stri
           organization_id,
           created_at,
           updated_at,
-          employees!inner(full_name),
-          okr_cycles!inner(name, year, quarter)
+          employees(full_name),
+          okr_cycles(name, year, quarter)
         `)
         .eq('organization_id', organizationId)
         .limit(50); // Limit results to prevent timeout

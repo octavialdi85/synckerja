@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback } from "react";
 import { Camera, X, RotateCcw } from "lucide-react";
 import { Button } from "@/mobile/components/ui/button";
+import { logger } from "@/config/logger";
+import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/mobile/components/ui/dialog";
 import { useToast } from "@/mobile/components/ui/use-toast";
 
@@ -32,7 +34,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
         videoRef.current.srcObject = mediaStream;
       }
     } catch (error) {
-      console.error("Error accessing camera:", error);
+      logger.error("Error accessing camera:", error);
       toast({
         title: "Error Kamera",
         description: "Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.",
@@ -129,7 +131,7 @@ export const CameraModal = ({ isOpen, onClose, onCapture, title }: CameraModalPr
                 <canvas ref={canvasRef} className="hidden" />
                 {isLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                    <p className="text-muted-foreground">Memuat kamera...</p>
+                    <Skeleton className="h-24 w-24 rounded-lg" />
                   </div>
                 )}
               </>

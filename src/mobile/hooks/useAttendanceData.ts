@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/config/logger";
 import { useRealtimeAttendance } from "./useRealtimeData";
 
 export const useAttendanceData = () => {
@@ -8,40 +9,61 @@ export const useAttendanceData = () => {
   const [todaySchedule, setTodaySchedule] = useState<any>(null);
   const [workSchedule, setWorkSchedule] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
+  const [userForPresence, setUserForPresence] = useState<{ id: string; name: string } | null>(null);
 
   const fetchAttendanceData = async () => {
     try {
       setLoading(true);
-      
+      setError(null);
+
       // Reset all data when organization changes
       setTodayAttendance(null);
       setOfficeLocation(null);
       setTodaySchedule(null);
       setWorkSchedule(null);
+      setUserForPresence(null);
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setError(new Error('NO_USER'));
+        return;
+      }
 
-      // Get user's active organization from profile
-      const { data: profile } = await supabase
+      // Get user's active organization and name from profile
+      const { data: profileRaw, error: profileError } = await supabase
         .from('profiles')
-        .select('active_organization_id')
+        .select('active_organization_id, full_name')
         .eq('user_id', user.id)
         .single();
+      if (profileError) {
+        setError(new Error('FETCH_PROFILE_FAILED'));
+        return;
+      }
+      const profile = profileRaw as unknown as { active_organization_id: string; full_name?: string } | null;
 
-      if (!profile?.active_organization_id) return;
+      if (!profile?.active_organization_id) {
+        setError(new Error('NO_ORG'));
+        return;
+      }
+
+      setUserForPresence({
+        id: user.id,
+        name: profile?.full_name ?? user.email ?? 'Unknown',
+      });
 
       // Check if organization changed
       if (activeOrganizationId && activeOrganizationId !== profile.active_organization_id) {
-        console.log('Organization changed from', activeOrganizationId, 'to', profile.active_organization_id);
+        logger.debug('Organization changed from', activeOrganizationId, 'to', profile.active_organization_id);
       }
-      
+
       setActiveOrganizationId(profile.active_organization_id);
 
-      // Get employee data for the active organization
-      const { data: employee } = await supabase
+      // Get employee data for the active organization (Supabase types can be excessively deep here)
+      // @ts-ignore Supabase client generic depth limit
+      const { data: employeeRaw } = await supabase
         .from('employees')
         .select(`
           id, 
@@ -52,27 +74,32 @@ export const useAttendanceData = () => {
         .eq('organization_id', profile.active_organization_id)
         .limit(1)
         .single();
+      const employee = employeeRaw as unknown as { id: string; organization_id: string; departments?: { name?: string } } | null;
 
-      if (!employee) return;
+      if (!employee) {
+        setError(new Error('NO_EMPLOYEE'));
+        return;
+      }
 
       // Get today's attendance
       const today = new Date().toISOString().split('T')[0];
-      const { data: attendance } = await supabase
+      const { data: attendanceRaw } = await supabase
         .from('attendance_records')
         .select('*')
         .eq('employee_id', employee.id)
         .eq('attendance_date', today)
         .maybeSingle();
-
-      setTodayAttendance(attendance);
+      setTodayAttendance(attendanceRaw as unknown as any);
 
       // Get office location
-      const { data: offices } = await supabase
+      const { data: officesRaw } = await supabase
         .from('office_locations')
         .select('*')
         .eq('organization_id', employee.organization_id)
         .eq('is_active', true)
         .limit(1);
+      type OfficeRow = { name: string; address: string; latitude: number | string; longitude: number | string; radius_meters: number };
+      const offices = (officesRaw as unknown as OfficeRow[] | null) ?? null;
 
       if (offices && offices.length > 0) {
         const office = offices[0];
@@ -86,34 +113,43 @@ export const useAttendanceData = () => {
       }
 
       // Get work schedule from work_schedule_settings - try default first, then any active one
-      let { data: workScheduleData } = await supabase
+      type WorkScheduleRow = {
+        working_days?: number[];
+        start_time?: string;
+        end_time?: string;
+        late_tolerance_minutes?: number;
+        break_start_time?: string;
+        break_end_time?: string;
+      };
+      let { data: workScheduleRaw } = await supabase
         .from('work_schedule_settings')
         .select('*')
         .eq('organization_id', employee.organization_id)
         .eq('is_active', true)
         .eq('is_default', true)
         .maybeSingle();
+      let workScheduleData = workScheduleRaw as unknown as WorkScheduleRow | null;
 
       // If no default found, get any active work schedule
       if (!workScheduleData) {
-        const { data: fallbackSchedule } = await supabase
+        const { data: fallbackRaw } = await supabase
           .from('work_schedule_settings')
           .select('*')
           .eq('organization_id', employee.organization_id)
           .eq('is_active', true)
           .limit(1)
           .maybeSingle();
-        workScheduleData = fallbackSchedule;
+        workScheduleData = fallbackRaw as unknown as WorkScheduleRow | null;
       }
 
-      const { data: holidaysData } = await supabase
+      const { data: holidaysRaw } = await supabase
         .from("national_holidays")
         .select("id, name, date, is_recurring, is_active, applies_to_attendance, country_code")
         .or(`organization_id.eq.${employee.organization_id},organization_id.is.null`)
         .eq("is_active", true)
         .eq("applies_to_attendance", true);
-
-      const activeHolidays = holidaysData ?? [];
+      type HolidayRow = { id: string; name?: string; date: string; is_recurring?: boolean; is_active?: boolean; applies_to_attendance?: boolean; country_code?: string };
+      const activeHolidays = (holidaysRaw as unknown as HolidayRow[] | null) ?? [];
 
       const todayDate = new Date();
       const todayIso = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(
@@ -141,7 +177,7 @@ export const useAttendanceData = () => {
         const scheduledWorkingDay = workScheduleData.working_days?.includes(dbDay);
         const isHoliday = Boolean(matchHoliday);
         const isWorkingDay = scheduledWorkingDay && !isHoliday;
-        console.log(`🔍 Current day: ${currentDay}, DB day: ${dbDay}, Working days: ${JSON.stringify(workScheduleData.working_days)}, Is working day: ${isWorkingDay}`);
+        logger.debug('Current day:', currentDay, 'DB day:', dbDay, 'Working days:', workScheduleData.working_days, 'Is working day:', isWorkingDay);
         
         setTodaySchedule({
           startTime: workScheduleData.start_time?.substring(0, 5) || "08:00",
@@ -177,27 +213,33 @@ export const useAttendanceData = () => {
         });
       }
 
-    } catch (error) {
-      console.error('Error fetching attendance data:', error);
+    } catch (err) {
+      const errObj = err instanceof Error ? err : new Error(String(err));
+      setError(errObj);
+      logger.error('Error fetching attendance data:', errObj);
     } finally {
       setLoading(false);
     }
   };
 
+  const clearError = () => setError(null);
+
   // Setup realtime attendance updates - only when organizationId is available
   const { isConnected: realtimeConnected } = useRealtimeAttendance(
     activeOrganizationId && activeOrganizationId.length > 0 ? activeOrganizationId : 'skip',
     () => {
-      console.log('📡 Real-time attendance update detected, refetching data...');
+      logger.realtime('Real-time attendance update detected, refetching data');
       fetchAttendanceData();
     }
   );
 
+  // Run once on mount to load initial attendance data
   useEffect(() => {
     fetchAttendanceData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run only on mount
   }, []);
 
-  // Listen for profile changes (organization switching)
+  // Listen for profile changes (organization switching); subscription is stable
   useEffect(() => {
     const channel = supabase
       .channel('profile-changes')
@@ -209,7 +251,7 @@ export const useAttendanceData = () => {
           table: 'profiles'
         },
         (payload) => {
-          console.log('Profile updated, refetching attendance data:', payload);
+          logger.debug('Profile updated, refetching attendance data', payload);
           // Small delay to ensure the change is committed
           setTimeout(() => {
             fetchAttendanceData();
@@ -221,6 +263,7 @@ export const useAttendanceData = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once, listen forever
   }, []);
 
   return {
@@ -229,7 +272,11 @@ export const useAttendanceData = () => {
     todaySchedule,
     workSchedule,
     loading,
+    error,
     realtimeConnected,
-    refetch: fetchAttendanceData
+    refetch: fetchAttendanceData,
+    clearError,
+    userForPresence,
+    organizationId: activeOrganizationId ?? '',
   };
 };

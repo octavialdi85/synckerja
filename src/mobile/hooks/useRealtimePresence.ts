@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 
 interface UserPresence {
   user_id: string;
@@ -12,11 +13,13 @@ interface UserPresence {
 export const useRealtimePresence = (organizationId: string, currentUser?: { id: string; name: string }) => {
   const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (!organizationId || !currentUser) return;
 
     const channel = supabase.channel(`organization-${organizationId}`);
+    channelRef.current = channel;
 
     // Track current user presence
     const userStatus: UserPresence = {
@@ -30,7 +33,7 @@ export const useRealtimePresence = (organizationId: string, currentUser?: { id: 
     channel
       .on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
-        console.log('Presence sync:', newState);
+        logger.debug('Presence sync:', newState);
         
         const users: UserPresence[] = [];
         Object.values(newState).forEach((presences: any) => {
@@ -42,18 +45,18 @@ export const useRealtimePresence = (organizationId: string, currentUser?: { id: 
         setOnlineUsers(users);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('User joined:', key, newPresences);
+        logger.debug('User joined:', key, newPresences);
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('User left:', key, leftPresences);
+        logger.debug('User left:', key, leftPresences);
       })
       .subscribe(async (status) => {
-        console.log('Presence status:', status);
+        logger.debug('Presence status:', status);
         setIsConnected(status === 'SUBSCRIBED');
-        
+
         if (status === 'SUBSCRIBED') {
           const presenceTrackStatus = await channel.track(userStatus);
-          console.log('Tracking presence:', presenceTrackStatus);
+          logger.debug('Tracking presence:', presenceTrackStatus);
         }
       });
 
@@ -79,6 +82,7 @@ export const useRealtimePresence = (organizationId: string, currentUser?: { id: 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('popstate', handlePageChange);
       supabase.removeChannel(channel);
+      channelRef.current = null;
       setIsConnected(false);
       setOnlineUsers([]);
     };
@@ -86,9 +90,9 @@ export const useRealtimePresence = (organizationId: string, currentUser?: { id: 
 
   const updateStatus = (status: 'online' | 'away' | 'busy') => {
     if (!currentUser) return;
-    
-    const channel = supabase.channel(`organization-${organizationId}`);
-    channel.track({
+    const ch = channelRef.current;
+    if (!ch) return;
+    ch.track({
       user_id: currentUser.id,
       full_name: currentUser.name,
       online_at: new Date().toISOString(),

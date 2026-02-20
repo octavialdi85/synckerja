@@ -5,6 +5,8 @@ import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { useSubscriptionExpiryRealtime } from '@/hooks/useSubscriptionExpiryRealtime';
 import SubscriptionExpiredPage from '@/features/1-login/pages/SubscriptionExpiredPage';
 import { LoadingDots } from './LoadingDots';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
 
 interface SubscriptionExpiryGuardProps {
   children: ReactNode;
@@ -110,8 +112,12 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
 
   // Unified loading state - combine all loading checks into one simple message
   const isAnyLoading = authLoading || isLoading || isChecking;
-  
+  const isMobile = useIsMobile();
+
   if (isAnyLoading) {
+    if (isMobile) {
+      return <RouteLoadingSkeleton />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
