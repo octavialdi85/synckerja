@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { differenceInCalendarDays, format, formatDistanceToNowStrict, startOfDay } from "date-fns";
 import { id as indonesianLocale } from "date-fns/locale";
@@ -10,6 +10,7 @@ import { JobDescAssignment, JobDescEmployeeSummary } from "./types";
 import { useDailyTask } from "@/features/8-2-DailyTask/DailyTaskContext";
 import { ModalViewSubSteps } from "@/features/8-2-DailyTask/section/ModalViewSubSteps";
 import { supabase } from '@/integrations/supabase/client';
+import { devLog } from '@/config/logger';
 
 interface JobDescEmployeeCardProps {
   summary: JobDescEmployeeSummary;
@@ -49,15 +50,15 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
     parentStepTitle: '',
   });
 
-  // Cache untuk performance optimization
-  const [stepIdCache, setStepIdCache] = useState<Map<string, string>>(new Map());
-  const [parentStepIdCache, setParentStepIdCache] = useState<Map<string, string>>(new Map());
+  // Cache untuk performance optimization (ref agar callback stabil)
+  const stepIdCacheRef = useRef<Map<string, string>>(new Map());
+  const parentStepIdCacheRef = useRef<Map<string, string>>(new Map());
 
   // Helper function untuk mendapatkan stepId dari assignmentId (dengan cache)
   const getStepId = useCallback(async (assignmentId: string): Promise<string | null> => {
-    // Check cache first
-    if (stepIdCache.has(assignmentId)) {
-      return stepIdCache.get(assignmentId) || null;
+    const cache = stepIdCacheRef.current;
+    if (cache.has(assignmentId)) {
+      return cache.get(assignmentId) || null;
     }
 
     try {
@@ -70,20 +71,19 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
       if (error || !data) return null;
 
       const stepId = data.task_step_id;
-      // Update cache
-      setStepIdCache(prev => new Map(prev).set(assignmentId, stepId));
+      cache.set(assignmentId, stepId);
       return stepId;
     } catch (error) {
-      console.error('Error fetching stepId:', error);
+      devLog.warn('JobDescEmployeeCard: fetch stepId failed', error);
       return null;
     }
-  }, [stepIdCache]);
+  }, []);
 
   // Helper function untuk mendapatkan parentStepId dari assignmentId (dengan cache)
   const getParentStepId = useCallback(async (assignmentId: string): Promise<string | null> => {
-    // Check cache first
-    if (parentStepIdCache.has(assignmentId)) {
-      return parentStepIdCache.get(assignmentId) || null;
+    const cache = parentStepIdCacheRef.current;
+    if (cache.has(assignmentId)) {
+      return cache.get(assignmentId) || null;
     }
 
     try {
@@ -98,18 +98,24 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
 
       if (error || !data) return null;
 
-      const parentStepId = (data as any).task_steps_to_steps?.parent_step_id;
+      const parentStepId = (data as { task_steps_to_steps?: { parent_step_id?: string | null } | null }).task_steps_to_steps?.parent_step_id ?? null;
       if (parentStepId) {
-        // Update cache
-        setParentStepIdCache(prev => new Map(prev).set(assignmentId, parentStepId));
+        cache.set(assignmentId, parentStepId);
         return parentStepId;
       }
       return null;
     } catch (error) {
-      console.error('Error fetching parentStepId:', error);
+      devLog.warn('JobDescEmployeeCard: fetch parentStepId failed', error);
       return null;
     }
-  }, [parentStepIdCache]);
+  }, []);
+
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
 
   // Handle click pada task title
   const handleTaskTitleClick = useCallback(async (assignment: JobDescAssignment) => {
@@ -137,7 +143,8 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
       
       // Scroll ke step jika stepId ditemukan
       if (stepId) {
-        setTimeout(() => {
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => {
           scrollToStep(stepId);
         }, 300); // Delay untuk memastikan task sudah expanded
       } else {
@@ -166,7 +173,8 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
         setExpandedTasks(prev => new Set([...prev, assignment.taskId]));
         
         // Scroll ke parent step
-        setTimeout(() => {
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => {
           scrollToStep(parentStepId);
         }, 300);
       } else {

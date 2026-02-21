@@ -50,7 +50,7 @@ const sheetVariants = cva(
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
   VariantProps<typeof sheetVariants> {
-  /** When true, use z-30 so native safe-area overlay (z-40) stays on top (e.g. mobile sidebar). */
+  /** When true, use z-20 so sidebar stays behind drawer (z-20) and nav footer (z-30) / native strip (z-40) stay on top. */
   underSafeArea?: boolean;
 }
 
@@ -59,10 +59,10 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(({ side = "right", className, children, underSafeArea = false, ...props }, ref) => (
   <SheetPortal>
-    <SheetOverlay className={cn(underSafeArea && "z-30")} />
+    <SheetOverlay className={cn(underSafeArea && "z-20")} />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), underSafeArea && "z-30", className)}
+      className={cn(sheetVariants({ side }), underSafeArea && "z-20", className)}
       {...props}
     >
       {children}

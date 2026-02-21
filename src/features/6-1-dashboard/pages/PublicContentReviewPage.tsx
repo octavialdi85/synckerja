@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Textarea } from '@/features/ui/textarea';
@@ -17,8 +17,20 @@ import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
 import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
+import { useSafeAreaInsets } from '@/mobile/contexts/SafeAreaInsetsContext';
 
 const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
+
+const LOAD_TIMEOUT_MS = 20000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    ),
+  ]);
+}
 
 interface PublicReviewContent {
   social_media_plan_id: string;
@@ -72,11 +84,15 @@ function getCommentAccent(commentId: string): (typeof COMMENT_ACCENT_COLORS)[num
   return COMMENT_ACCENT_COLORS[index];
 }
 
-/** Portrait-oriented content types (Reel, Story, Shorts, etc.) use 9/16 aspect ratio */
-function isPortraitContent(contentTypeName: string | null): boolean {
-  if (!contentTypeName) return false;
-  const n = contentTypeName.toLowerCase();
-  return n.includes('reel') || n.includes('story') || n.includes('shorts') || n.includes('tiktok') || n.includes('vertical');
+/** Portrait-oriented content types (Reel, Story, Shorts, etc.) use 9/16 aspect ratio. When unknown, default to portrait to avoid cropping vertical content. */
+function isPortraitContent(contentTypeName: string | null | undefined): boolean {
+  if (contentTypeName == null || String(contentTypeName).trim() === '') return true; // default portrait so Reel/vertical is not cropped
+  const n = String(contentTypeName).toLowerCase();
+  // Portrait keywords take precedence (e.g. "Reel" or "Content X - Reel" must stay portrait)
+  if (n.includes('reel') || n.includes('story') || n.includes('shorts') || n.includes('tiktok') || n.includes('vertical')) return true;
+  if (n.includes('landscape') || n.includes('horizontal') || n.includes('youtube')) return false;
+  // "video" alone can be landscape; avoid treating "Reel - video" as landscape
+  return false;
 }
 
 /** Public review page always uses English (shared link may be opened without app/Settings). */
@@ -97,12 +113,15 @@ interface PublicContentReviewPageProps {
 const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showBackToHome = false }) => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const t = usePublicReviewT();
+  const safeArea = useSafeAreaInsets();
   const [content, setContent] = useState<PublicReviewContent | null>(null);
   const [briefExtended, setBriefExtended] = useState<PublicReviewBriefExtended | null>(null);
   const [comments, setComments] = useState<PublicReviewComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commenterDisplayName, setCommenterDisplayName] = useState('');
@@ -114,7 +133,36 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
   const [videoUseIframe, setVideoUseIframe] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  /** True only after user has successfully sent at least one comment this session (enables Request Revision) */
+  const [hasSuccessfullySentCommentThisSession, setHasSuccessfullySentCommentThisSession] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [commentInputFocused, setCommentInputFocused] = useState(false);
+  const [viewportOffsetTop, setViewportOffsetTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== 'undefined' && window.visualViewport ? window.visualViewport.height : typeof window !== 'undefined' ? window.innerHeight : 0
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Header fixed when keyboard is open OR user is in "Write a comment" input */
+  const headerFixed = showBackToHome && (keyboardOpen || commentInputFocused);
+
+  useEffect(() => {
+    if (!showBackToHome || typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const check = () => {
+      setKeyboardOpen(vv.height < window.innerHeight * 0.8);
+      setViewportOffsetTop(vv.offsetTop);
+      setViewportHeight(vv.height);
+    };
+    check();
+    vv.addEventListener('resize', check);
+    vv.addEventListener('scroll', check, { passive: true });
+    return () => {
+      vv.removeEventListener('resize', check);
+      vv.removeEventListener('scroll', check);
+    };
+  }, [showBackToHome]);
 
   const { canShowApprovalButtons } = useProdApprovalAccess(!!showBackToHome);
   const { user } = useAuth();
@@ -147,6 +195,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       token_param: token,
     });
     if (rpcError) {
+      devLog.warn('get_public_review_comments failed', rpcError);
+      setComments([]);
       return;
     }
     setComments(Array.isArray(data) ? (data as PublicReviewComment[]) : []);
@@ -159,6 +209,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       token_param: token,
     });
     if (rpcError) {
+      devLog.warn('get_public_review_brief_extended_by_token failed', rpcError);
+      setBriefExtended(null);
       return;
     }
     if (data && typeof data === 'object' && 'target_audience' in data && 'caption' in data) {
@@ -178,18 +230,32 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       return;
     }
     let cancelled = false;
+    setError(null);
     (async () => {
       setLoading(true);
-      await Promise.all([loadContent(), loadBriefExtended()]);
-      if (cancelled) return;
-      await loadComments();
-      if (cancelled) return;
-      setLoading(false);
+      try {
+        await withTimeout(
+          (async () => {
+            await Promise.all([loadContent(), loadBriefExtended()]);
+            if (cancelled) return;
+            await loadComments();
+          })(),
+          LOAD_TIMEOUT_MS,
+          t('publicReview.error.timeout', 'Request timed out. Please try again.')
+        );
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : t('publicReview.error.timeout', 'Request timed out. Please try again.'));
+          setContent(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token, loadContent, loadBriefExtended, loadComments]);
+  }, [token, loadContent, loadBriefExtended, loadComments, retryTrigger, t]);
 
   // Nama komentar: user login = dari profile aktif; guest = dari localStorage (atau nanti lewat popup)
   useEffect(() => {
@@ -289,6 +355,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       toast.success(t('publicReview.toast.success', 'Comment sent'));
       setCommentText('');
       await loadComments();
+      setHasSuccessfullySentCommentThisSession(true);
     } catch (e) {
       const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : null;
       toast.error(msg || t('publicReview.toast.error', 'Failed to send comment'));
@@ -323,6 +390,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         toast.success(t('publicReview.toast.success', 'Comment sent'));
         setCommentText('');
         await loadComments();
+        setHasSuccessfullySentCommentThisSession(true);
       } catch (e) {
         const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : null;
         toast.error(msg || t('publicReview.toast.error', 'Failed to send comment'));
@@ -475,6 +543,10 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         toast.error(t('publicReview.toast.fetchFailed', 'Failed to fetch current data'));
         return;
       }
+      if (!currentPlan) {
+        toast.error(t('publicReview.toast.fetchFailed', 'Failed to fetch current data'));
+        return;
+      }
       const shouldIncrement = currentPlan.production_status !== 'Request Revision';
       const newProductionRevisionCount = shouldIncrement
         ? (currentPlan.production_revision_count || 0) + 1
@@ -500,13 +572,16 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         return;
       }
       toast.success(t('publicReview.toast.revisionSuccess', 'Production status updated to Request Revision'));
+      if (showBackToHome) {
+        navigate('/tools/daily-task?view=jobdesc', { replace: true });
+      }
     } catch (e) {
       devLog.error('Error in handleRevision:', e);
       toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
     } finally {
       setApprovalLoading(false);
     }
-  }, [canShowApprovalButtons, commenterDisplayName, comments, content?.social_media_plan_id, token, t]);
+  }, [canShowApprovalButtons, commenterDisplayName, comments, content?.social_media_plan_id, token, t, showBackToHome, navigate]);
 
   const link = content?.google_drive_link ?? content?.link_url ?? '';
   const embedUrl = getEmbedUrl(link);
@@ -518,7 +593,10 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div
+        className="min-h-screen bg-gray-50 flex items-center justify-center p-4"
+        style={showBackToHome ? { minHeight: '100dvh', height: '100dvh' } : undefined}
+      >
         <p className="text-gray-600">{t('publicReview.loading', 'Loading...')}</p>
       </div>
     );
@@ -526,10 +604,23 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
 
   if (error || !content) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div
+        className="min-h-screen bg-gray-50 flex items-center justify-center p-4 flex flex-col gap-4"
+        style={showBackToHome ? { minHeight: '100dvh', height: '100dvh' } : undefined}
+      >
         <Alert variant="destructive" className="max-w-md">
           <AlertDescription>{error ?? t('publicReview.error.invalidLinkShort', 'Invalid link')}</AlertDescription>
         </Alert>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setRetryTrigger((prev) => prev + 1);
+          }}
+        >
+          {t('publicReview.retry', 'Coba lagi')}
+        </Button>
       </div>
     );
   }
@@ -547,10 +638,36 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
     contain: 'layout paint',
   };
 
+  const contentTitle = content?.title || t('publicReview.content.noTitle', 'Untitled');
+
   return (
     <div
-      className="min-h-screen h-screen max-h-screen bg-gray-50 flex flex-col overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain min-w-0"
-      style={scrollContainerStyle}
+      className={cn(
+        'min-h-screen h-screen max-h-screen bg-gray-50 flex flex-col min-w-0',
+        showBackToHome ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain',
+      )}
+      style={
+        showBackToHome
+          ? headerFixed
+            ? {
+                ...scrollContainerStyle,
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                top: viewportOffsetTop,
+                height: viewportHeight,
+                minHeight: viewportHeight,
+                maxHeight: viewportHeight,
+              }
+            : {
+                ...scrollContainerStyle,
+                minHeight: '100dvh',
+                height: '100dvh',
+                maxHeight: '100dvh',
+                marginTop: safeArea.top > 0 ? -safeArea.top : 0,
+              }
+          : scrollContainerStyle
+      }
     >
       <Dialog open={showCommenterPopup} onOpenChange={setShowCommenterPopup}>
         <DialogContent
@@ -596,30 +713,77 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           </div>
         </DialogContent>
       </Dialog>
-      <div className="flex-1 max-w-2xl w-full mx-auto px-3 py-4 sm:p-4 flex flex-col gap-2 min-w-0 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {/* Preview with header (title + metadata) in the section header, no separate "Preview" label */}
+      {showBackToHome && (
+        <>
+          <header
+            className="z-30 flex items-center gap-2 px-3 pb-2 bg-card border-b border-border min-w-0 fixed left-0 right-0"
+            style={{
+              top: headerFixed ? viewportOffsetTop : 0,
+              paddingTop: safeArea.top + 16,
+              paddingBottom: 12,
+              position: 'fixed' as const,
+              left: 0,
+              right: 0,
+            }}
+          >
+            <button
+            type="button"
+            onClick={() => {
+              const fromJobDesc = (location.state as { from?: string } | null)?.from === 'jobdesc';
+              // On Android (showBackToHome) always go to daily-task so header stays visible and user returns to Job Desc; on web use state.
+              const target = showBackToHome ? '/tools/daily-task?view=jobdesc' : (fromJobDesc ? '/tools/daily-task?view=jobdesc' : '/');
+              navigate(target, { replace: true });
+            }}
+            className="flex-shrink-0 p-1 -m-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
+            aria-label={showBackToHome || (location.state as { from?: string } | null)?.from === 'jobdesc' ? 'Back to Job Desc' : 'Back to home'}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-base font-semibold text-foreground truncate min-w-0">
+            {contentTitle}
+          </h1>
+        </header>
+        </>
+      )}
+      <div
+        className={cn(showBackToHome && 'flex-1 min-h-0 flex flex-col min-w-0')}
+        style={!showBackToHome ? { flex: 1, minHeight: 0 } : undefined}
+      >
+      <div
+        className={cn(
+          'max-w-2xl w-full mx-auto sm:p-4 flex flex-col gap-2 min-w-0 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]',
+          showBackToHome
+            ? 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll'
+            : 'flex-1 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]',
+        )}
+        style={
+          showBackToHome
+            ? {
+                paddingTop: headerFixed ? viewportOffsetTop + safeArea.top + 68 : safeArea.top + 68,
+                paddingBottom: '0.25rem',
+              }
+            : { paddingBottom: `calc(5.5rem + ${safeArea.bottom}px)` }
+        }
+      >
+        {/* Preview with header (title + metadata). Video: portrait (Reel) = 9/16, landscape = 16/9. Section responsive: min-height on video wrapper so content is not cut off. */}
         {(() => {
-          /* Portrait 9:16 agar video tidak terpotong; responsive: full width di mobile, max 320px di desktop */
-          const videoBoxClass = 'aspect-[9/16] w-full max-w-[min(100%,320px)] mx-auto min-w-0';
+          const isPortrait = isPortraitContent(content?.content_type_name ?? null);
+          const videoBoxClass = isPortrait
+            ? 'aspect-[9/16] w-full max-w-full mx-auto min-w-0'
+            : 'aspect-video w-full max-w-full mx-auto min-w-0';
+          const isVideoFile = link && isFileLink(link);
+          const videoWrapperMinHeight = isVideoFile && isPortrait ? { minHeight: 'min(56.25vw, 568px)' } : undefined;
           return (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y min-w-0">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col touch-pan-y min-w-0 flex-shrink-0">
               <div className="p-2 sm:p-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  {showBackToHome && (
-                    <button
-                      type="button"
-                      onClick={() => navigate('/')}
-                      className="flex-shrink-0 p-1 -m-1 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 touch-manipulation"
-                      aria-label="Back to home"
-                    >
-                      <ArrowLeft className="h-5 w-5" />
-                    </button>
-                  )}
-                  <h1 className="font-semibold text-gray-900 truncate pr-2 text-sm sm:text-base min-w-0">
-                    {content.title || t('publicReview.content.noTitle', 'Untitled')}
-                  </h1>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 mt-1.5 sm:mt-2 text-xs text-gray-600">
+                {!showBackToHome && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h1 className="font-semibold text-gray-900 truncate pr-2 text-sm sm:text-base min-w-0">
+                      {contentTitle}
+                    </h1>
+                  </div>
+                )}
+                <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 text-xs text-gray-600', !showBackToHome && 'mt-1.5 sm:mt-2')}>
                   {content.service_name != null && content.service_name !== '' && (
                     <span className="flex items-center gap-1">
                       <Briefcase className="h-3 w-3" />
@@ -648,7 +812,10 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                   )}
                 </div>
               </div>
-              <div className="flex-1 p-2 sm:p-4 flex items-center justify-center bg-white touch-pan-y min-w-0">
+              <div
+                className="flex-1 p-2 sm:p-4 flex items-center justify-center bg-white touch-pan-y min-w-0 min-h-0"
+                style={videoWrapperMinHeight}
+              >
                 {!link ? (
                   <div className="text-center text-gray-500 text-sm">{t('publicReview.preview.noLink', 'No link')}</div>
                 ) : isFolderLink(link) ? (
@@ -666,27 +833,56 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 ) : isFileLink(link) && embedUrl ? (
                   (() => {
                     const useIframe = videoUseIframe || !directVideoUrl;
+                    const portraitVideoStyle = isPortrait
+                      ? {
+                          ...videoLayerStyle,
+                          width: '100%',
+                          aspectRatio: '9/16',
+                          flexShrink: 0,
+                          alignSelf: 'center',
+                          maxHeight: 'min(568px, 80dvh)',
+                        }
+                      : { ...videoLayerStyle, flexShrink: 0 };
+                    const isNative = showBackToHome;
+                    const portraitAspectWrapper = isPortrait && isNative
+                      ? { position: 'relative' as const, width: '100%', paddingBottom: '177.78%' }
+                      : undefined;
                     if (useIframe) {
                       return (
-                        <div
-                          className={`rounded-lg overflow-hidden bg-black touch-pan-y ${videoBoxClass}`}
-                          style={videoLayerStyle}
-                        >
-                          <iframe
-                            src={embedUrl}
-                            className="w-full h-full border-0 rounded-lg touch-pan-y"
-                            style={{ touchAction: 'pan-y' }}
-                            title="Preview"
-                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                            loading="lazy"
-                          />
+                        <div className="w-full flex flex-col items-center flex-shrink-0">
+                          {portraitAspectWrapper ? (
+                            <div className="w-full rounded-lg overflow-hidden bg-black touch-pan-y shrink-0" style={portraitAspectWrapper}>
+                              <iframe
+                                src={embedUrl}
+                                className="absolute inset-0 w-full h-full border-0 rounded-lg touch-pan-y"
+                                style={{ touchAction: 'pan-y' }}
+                                title="Preview"
+                                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className={`rounded-lg overflow-hidden bg-black touch-pan-y shrink-0 ${videoBoxClass}`}
+                              style={portraitVideoStyle}
+                            >
+                              <iframe
+                                src={embedUrl}
+                                className="w-full h-full border-0 rounded-lg touch-pan-y"
+                                style={{ touchAction: 'pan-y' }}
+                                title="Preview"
+                                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     }
                     return (
                       <div
-                        className={`rounded-lg overflow-hidden bg-black touch-pan-y ${videoBoxClass} ${!videoPlaying ? 'cursor-pointer' : ''}`}
-                        style={videoLayerStyle}
+                        className={portraitAspectWrapper ? 'w-full rounded-lg overflow-hidden bg-black touch-pan-y shrink-0' : `rounded-lg overflow-hidden bg-black touch-pan-y shrink-0 ${videoBoxClass} ${!videoPlaying ? 'cursor-pointer' : ''}`}
+                        style={portraitAspectWrapper ?? portraitVideoStyle}
                         onClick={() => {
                           if (!videoPlaying) handleVideoPlay();
                         }}
@@ -703,7 +899,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                         <video
                           ref={videoRef}
                           src={directVideoUrl}
-                          className={cn('w-full h-full object-contain object-center touch-pan-y', !videoPlaying && 'pointer-events-none')}
+                          className={cn(portraitAspectWrapper ? 'absolute inset-0 w-full h-full object-contain object-center touch-pan-y' : 'w-full h-full object-contain object-center touch-pan-y', !videoPlaying && 'pointer-events-none')}
                           style={{ touchAction: 'pan-y' }}
                           controls
                           playsInline
@@ -754,13 +950,13 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           </div>
         ) : null}
 
-        {/* Comments - selalu ditampilkan */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-1 min-h-0 min-w-0">
+        {/* Comments - selalu ditampilkan (border sama seperti Target Audience) */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 min-h-[320px] min-w-0 overflow-visible">
           <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 flex items-center gap-2 border-l-4 border-l-blue-500">
             <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
             <h4 className="font-medium text-sm text-blue-900 truncate">{t('publicReview.comments.title', 'Comments')}</h4>
           </div>
-          <div className="flex-1 overflow-auto overflow-x-hidden p-2 sm:p-3 space-y-2 min-h-[160px] sm:min-h-[200px]">
+          <div className="flex-1 min-h-[120px] overflow-auto overflow-x-hidden p-2 sm:p-3 space-y-2">
             {comments.length === 0 ? (
               <p className="text-sm text-gray-500">{t('publicReview.comments.empty', 'No comments yet. Be the first.')}</p>
             ) : (
@@ -826,13 +1022,88 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
               })
             )}
           </div>
-          <div className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3">
+          {!showBackToHome && (
+            <div className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3 bg-white">
+              <div className="relative">
+                <Textarea
+                  ref={commentTextareaRef}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder={t('publicReview.comments.placeholder', 'Write a comment...')}
+                  className="min-h-[80px] sm:min-h-[88px] text-sm resize-none w-full min-w-0 pr-11 pb-2 border border-input bg-background"
+                  disabled={submitting}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={handleSubmitComment}
+                  disabled={!commentText.trim() || submitting}
+                  title={submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}
+                  aria-label={submitting ? t('publicReview.comments.sending', 'Sending...') : t('publicReview.comments.add', 'Add Comment')}
+                  className="absolute right-2 bottom-2 h-9 w-9 rounded-lg shrink-0 touch-manipulation"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="w-full flex flex-nowrap items-center gap-3 pt-2 border-t border-gray-100 flex-shrink-0 pb-4">
+                <Button
+                  onClick={handleApprove}
+                  disabled={approvalLoading || !!commentText.trim() || hasSuccessfullySentCommentThisSession}
+                  className="flex-1 min-w-0 h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation"
+                >
+                  <Check className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t('publicReview.approveContent', 'Approve Content')}</span>
+                </Button>
+                <Button
+                  onClick={handleRevision}
+                  disabled={!hasSuccessfullySentCommentThisSession || approvalLoading}
+                  variant="outline"
+                  title={!hasSuccessfullySentCommentThisSession ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
+                  className="flex-1 min-w-0 h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t('publicReview.requestRevision', 'Request Revision')}</span>
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      {showBackToHome && (
+        <div
+          className="flex-shrink-0 w-full max-w-2xl mx-auto bg-gray-50 border-t border-gray-200 px-3 sm:p-4 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]"
+          style={{
+            paddingBottom: keyboardOpen
+              ? '0.5rem'
+              : safeArea.bottom > 0 ? `${safeArea.bottom}px` : '0.125rem',
+          }}
+        >
+          <div className="space-y-3 pt-3">
             <div className="relative">
               <Textarea
+                ref={commentTextareaRef}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
+                onFocus={() => {
+                  setCommentInputFocused(true);
+                  setKeyboardOpen(true);
+                  requestAnimationFrame(() => {
+                    commentTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  });
+                }}
+                onBlur={() => {
+                  setCommentInputFocused(false);
+                  window.setTimeout(() => {
+                    if (typeof window !== 'undefined' && window.visualViewport && window.visualViewport.height >= window.innerHeight * 0.8) {
+                      setKeyboardOpen(false);
+                    }
+                  }, 300);
+                }}
                 placeholder={t('publicReview.comments.placeholder', 'Write a comment...')}
-                className="min-h-[88px] sm:min-h-[100px] text-sm resize-none w-full min-w-0 pr-11 pb-2"
+                className="min-h-[80px] sm:min-h-[88px] text-sm resize-none w-full min-w-0 pr-11 pb-2 border border-input bg-background rounded-lg"
                 disabled={submitting}
               />
               <Button
@@ -851,30 +1122,32 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 )}
               </Button>
             </div>
-            {showBackToHome && canShowApprovalButtons && (
-              <div className="flex flex-nowrap justify-center items-center gap-3 pt-2 border-t border-gray-100">
+            {canShowApprovalButtons && !keyboardOpen && (
+              <div className="w-full flex flex-nowrap items-center gap-3 pt-2 border-t border-gray-200 flex-shrink-0 pb-2">
                 <Button
                   onClick={handleApprove}
-                  disabled={approvalLoading}
-                  className="h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-5 gap-2 min-h-[44px] min-w-[160px] touch-manipulation"
+                  disabled={approvalLoading || !!commentText.trim() || hasSuccessfullySentCommentThisSession}
+                  className="flex-1 min-w-0 h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation"
                 >
-                  <Check className="h-4 w-4" />
-                  {t('publicReview.approveContent', 'Approve Content')}
+                  <Check className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t('publicReview.approveContent', 'Approve Content')}</span>
                 </Button>
                 <Button
                   onClick={handleRevision}
-                  disabled={!hasCurrentUserCommented || approvalLoading}
+                  disabled={!hasSuccessfullySentCommentThisSession || approvalLoading}
                   variant="outline"
-                  title={!hasCurrentUserCommented ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
-                  className="h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-5 gap-2 min-h-[44px] min-w-[160px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+                  title={!hasSuccessfullySentCommentThisSession ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
+                  className="flex-1 min-w-0 h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  {t('publicReview.requestRevision', 'Request Revision')}
+                  <RotateCcw className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t('publicReview.requestRevision', 'Request Revision')}</span>
                 </Button>
               </div>
             )}
           </div>
         </div>
+      )}
+      </div>
       </div>
     </div>
   );

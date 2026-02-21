@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Filter, RefreshCw } from 'lucide-react';
 import { SidebarTrigger } from '@/mobile/components/ui/sidebar';
 import {
@@ -23,6 +23,20 @@ export function DailyTaskLayout() {
   const { filters, resetFilters, refetchTasks, isLoading } = useDailyTask();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const activeFilters = hasActiveFilters(filters);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll list to top when date/plan filter changes so the updated list is visible
+  useEffect(() => {
+    if (listScrollRef.current) {
+      listScrollRef.current.scrollTop = 0;
+    }
+  }, [
+    filters.dateRange,
+    filters.planDateRange,
+    filters.customPlanMonth,
+    filters.customStartDate,
+    filters.customEndDate,
+  ]);
 
   const handleRefresh = async () => {
     resetFilters();
@@ -83,7 +97,11 @@ export function DailyTaskLayout() {
                 <DrawerTitle>{t('dailyTask.filters.filter', 'Filter')}</DrawerTitle>
               </DrawerHeader>
               <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-0">
-                <MobileTaskFilterDrawerContent />
+                <MobileTaskFilterDrawerContent
+                onAfterCustomMonthSelect={() => setDrawerOpen(false)}
+                onAfterCustomDateRangeSelect={() => setDrawerOpen(false)}
+                onAfterDueDatePresetSelect={() => setDrawerOpen(false)}
+              />
               </div>
             </DrawerContent>
           </Drawer>
@@ -91,7 +109,10 @@ export function DailyTaskLayout() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
+        <div
+          ref={listScrollRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col"
+        >
           <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-daily-task">
             {isLoading ? <DailyTaskPageSkeleton /> : <TaskList />}
           </div>

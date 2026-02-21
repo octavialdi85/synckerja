@@ -654,6 +654,7 @@ const idTranslations: TranslationDictionary = {
   "dailyTask.filters.nextMonthPlan": "Rencana Bulan Depan",
   "dailyTask.filters.lastMonthPlan": "Rencana Bulan Lalu",
   "dailyTask.filters.customMonth": "Bulan Kustom",
+  "dailyTask.emptyState.noTasksForSelectedMonth": "Tidak ada task untuk bulan yang dipilih.",
   "dailyTask.objective.linkedTo": "Linked to",
   "dailyTask.objective.notLinked": "Not linked",
   "dailyTask.objective.unlink": "Lepas tautan",
@@ -667,6 +668,7 @@ const idTranslations: TranslationDictionary = {
   "dailyTask.summary.plannedThisMonth": "Direncanakan Bulan Ini",
   "dailyTask.summary.completionRate": "Tingkat Penyelesaian",
   "dailyTask.summary.loading": "Memuat ringkasan...",
+  "dailyTask.summary.subtitle": "Ringkasan Tugas",
   "dailyTask.page.loading": "Memuat tugas...",
   "dailyTask.page.title": "Tugas Harian",
   "dailyTask.page.subtitle": "Kelola tugas harian Anda di sini",
@@ -866,6 +868,8 @@ const idTranslations: TranslationDictionary = {
   "dailyTask.approval.cancel": "Cancel",
   "dailyTask.approval.fetchError": "Failed to load approvals. Please try again.",
   "dailyTask.approval.retry": "Retry",
+  "dailyTask.approval.approveConfirmTitle": "Konfirmasi Approve",
+  "dailyTask.approval.approveConfirmDesc": "Yakin ingin menyetujui item ini?",
 
   "pages.campaignCalculator.title": "Kalkulator Kampanye",
   "pages.campaignCalculator.description":
@@ -3493,6 +3497,7 @@ const enTranslations: TranslationDictionary = {
   "dailyTask.filters.nextMonthPlan": "Next Month Plan",
   "dailyTask.filters.lastMonthPlan": "Last Month Plan",
   "dailyTask.filters.customMonth": "Custom Month",
+  "dailyTask.emptyState.noTasksForSelectedMonth": "No tasks for the selected month.",
   "dailyTask.objective.linkedTo": "Linked to",
   "dailyTask.objective.notLinked": "Not linked",
   "dailyTask.objective.unlink": "Unlink",
@@ -3506,6 +3511,7 @@ const enTranslations: TranslationDictionary = {
   "dailyTask.summary.plannedThisMonth": "Planned This Month",
   "dailyTask.summary.completionRate": "Completion Rate",
   "dailyTask.summary.loading": "Loading summary...",
+  "dailyTask.summary.subtitle": "Task Summary",
   "dailyTask.page.loading": "Loading tasks...",
   "dailyTask.page.title": "Daily Task",
   "dailyTask.page.subtitle": "Manage your daily tasks here",
@@ -3705,6 +3711,8 @@ const enTranslations: TranslationDictionary = {
   "dailyTask.approval.cancel": "Cancel",
   "dailyTask.approval.fetchError": "Failed to load approvals. Please try again.",
   "dailyTask.approval.retry": "Retry",
+  "dailyTask.approval.approveConfirmTitle": "Confirm Approve",
+  "dailyTask.approval.approveConfirmDesc": "Are you sure you want to approve this item?",
 
   "pages.campaignCalculator.title": "Campaign Calculator",
   "pages.campaignCalculator.description":

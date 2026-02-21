@@ -1,6 +1,6 @@
-
+import { useState } from "react";
 import { Clock, CreditCard, Home, MessageCircle } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 import {
   Sidebar,
@@ -10,9 +10,12 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
-  useSidebar,
 } from "@/mobile/components/ui/sidebar";
 import { Separator } from "@/mobile/components/ui/separator";
+import { useIsMobile } from "@/mobile/hooks/use-mobile";
+import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { useOrganizationList } from "@/mobile/hooks/useOrganizationList";
+import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelectDrawer";
 
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
@@ -22,21 +25,45 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { open } = useSidebar();
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const isMobile = useIsMobile();
+  const { organizationName, forceRefreshUserData } = useCentralizedUserData();
+  const { organizations } = useOrganizationList();
+  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
 
-  const sectionLabel = currentPath.startsWith("/subscription") ? "Subscription" : "Home";
+  const canOpenOrgDrawer = isMobile && organizations.length > 1;
 
   return (
-    <Sidebar
-      className="border-r border-primary/20 bg-background"
-    >
+    <Sidebar className="border-r border-primary/20 bg-background">
       <SidebarContent className="bg-background">
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 text-foreground font-semibold px-4 py-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <span className="text-foreground">ProfitLoop</span>
+          <SidebarGroupLabel className="flex items-center gap-2 text-foreground px-4 py-2">
+            {isMobile ? (
+              <>
+                <span
+                  role={canOpenOrgDrawer ? "button" : undefined}
+                  tabIndex={canOpenOrgDrawer ? 0 : undefined}
+                  onClick={canOpenOrgDrawer ? () => setOrgDrawerOpen(true) : undefined}
+                  onKeyDown={
+                    canOpenOrgDrawer
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setOrgDrawerOpen(true);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`text-sm font-medium text-foreground truncate ${canOpenOrgDrawer ? "cursor-pointer hover:opacity-80" : ""}`}
+                >
+                  {organizationName || "Organisasi"}
+                </span>
+              </>
+            ) : (
+              <>
+                <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-foreground">ProfitLoop</span>
+              </>
+            )}
           </SidebarGroupLabel>
 
           <Separator className="bg-primary/20 mx-4 mb-1.5" />
@@ -66,6 +93,14 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {isMobile && (
+        <OrganizationSelectDrawer
+          open={orgDrawerOpen}
+          onOpenChange={setOrgDrawerOpen}
+          onSwitched={() => forceRefreshUserData()}
+        />
+      )}
     </Sidebar>
   );
 }

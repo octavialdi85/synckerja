@@ -11,18 +11,16 @@ import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/features/ui/use-toast";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/mobile/components/ui/dropdown-menu";
 import { ProfilePhotoUpload } from "@/mobile/components/ProfilePhotoUpload";
-import { clearCurrentOrgCacheForUser } from "@/features/1-login/hooks/useCurrentOrg";
+import { useOrganizationList } from "@/mobile/hooks/useOrganizationList";
+import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelectDrawer";
 import { useLanguage } from "@/features/share/i18n/LanguageProvider";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import type { AppLanguage } from "@/features/share/i18n/translations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/mobile/components/ui/select";
 import { ChangePasswordModal } from "@/mobile/components/ChangePasswordModal";
-import { logger } from "@/config/logger";
-
 const Profile = () => {
   const {
     profile,
@@ -35,12 +33,14 @@ const Profile = () => {
   const {
     toast
   } = useToast();
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [currentOrganization, setCurrentOrganization] = useState<any>(null);
-  const [organizationsLoading, setOrganizationsLoading] = useState(true);
-  const [switchingOrganization, setSwitchingOrganization] = useState(false);
-  const [fadeOut, setFadeOut] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
+  const {
+    organizations,
+    activeOrganization,
+    loading: organizationsLoading,
+    switchingOrganization,
+  } = useOrganizationList();
   useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const { language, setLanguage } = useLanguage();
@@ -62,120 +62,8 @@ const Profile = () => {
     }
   };
 
-  // Fetch user's organizations
-  const fetchOrganizations = async () => {
-    try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user) return;
+  const canOpenOrgDrawer = organizations.length > 1 && !switchingOrganization;
 
-      // Get user's organizations through user_organizations table
-      const { data: userOrgs }: any = await (supabase as any)
-        .from('user_organizations')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-      if (userOrgs && userOrgs.length > 0) {
-        // Get organization details
-        const orgIds = userOrgs.map(uo => uo.organization_id);
-        const { data: orgsData }: any = await (supabase as any)
-          .from('organizations')
-          .select('id, company_name, industry')
-          .in('id', orgIds);
-        if (orgsData) {
-          setOrganizations(orgsData);
-
-          // Get current active organization from profile
-          const { data: profileData }: any = await (supabase as any)
-            .from('profiles')
-            .select('active_organization_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          if (profileData?.active_organization_id) {
-            const activeOrg = orgsData.find(org => org.id === profileData.active_organization_id);
-            setCurrentOrganization(activeOrg);
-          }
-        }
-      }
-    } catch (error) {
-      logger.error('Error fetching organizations:', error);
-    } finally {
-      setOrganizationsLoading(false);
-    }
-  };
-  const switchOrganization = async (organizationId: string) => {
-    if (switchingOrganization) return; // Prevent multiple switches
-
-    try {
-      setSwitchingOrganization(true);
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const selectedOrg = organizations.find(org => org.id === organizationId);
-
-      // Show immediate feedback
-      toast({
-        title: "Beralih organisasi...",
-        description: `Berpindah ke ${selectedOrg?.company_name}`
-      });
-
-      // Start fade transition
-      setFadeOut(true);
-
-      // Update active organization in profile
-      const {
-        error
-      } = await supabase.from('profiles').update({
-        active_organization_id: organizationId
-      }).eq('user_id', user.id);
-      if (error) throw error;
-
-      // CRITICAL: Clear useCurrentOrg memory + localStorage cache so Daily Task, Initiative, etc. use the new org
-      try {
-        clearCurrentOrgCacheForUser(user.id);
-        window.dispatchEvent(new CustomEvent('organization-switched', { detail: { organizationId } }));
-      } catch (e) {
-        logger.warn('Failed to clear org cache on switch:', e);
-      }
-
-      // Wait for fade animation
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Update current organization state
-      setCurrentOrganization(selectedOrg);
-      
-      // Refetch profile data for the new organization
-      await refetch();
-      
-      toast({
-        title: "Berhasil",
-        description: `Berhasil beralih ke ${selectedOrg?.company_name}`
-      });
-
-      // Fade back in smoothly
-      setFadeOut(false);
-      setSwitchingOrganization(false);
-    } catch (error) {
-      setFadeOut(false);
-      setSwitchingOrganization(false);
-      toast({
-        title: "Error",
-        description: "Gagal beralih organisasi",
-        variant: "destructive"
-      });
-    }
-  };
-  useEffect(() => {
-    if (!loading && profile) {
-      fetchOrganizations();
-    }
-  }, [loading, profile]);
   if (loading) {
     return (
       <DesktopWarning>
@@ -278,7 +166,7 @@ const Profile = () => {
 
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
-                <div className={`mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default space-y-1 transition-all duration-300 ${fadeOut ? "opacity-50 scale-95" : "opacity-100 scale-100"}`}>
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default space-y-1">
                   <div>
                     <Card className="bg-gradient-card border border-border">
                       <div className="p-4 text-center">
@@ -385,45 +273,53 @@ const Profile = () => {
                         <h3 className="text-sm font-medium text-foreground">{t("profile.yourOrganizations", "Organisasi Anda ({{count}})", { count: organizations.length })}</h3>
                       </div>
                       <div className="p-2 space-y-2">
-                  {/* Current Organization Dropdown */}
-                  <DropdownMenu>
-                     <DropdownMenuTrigger asChild disabled={switchingOrganization}>
-                       <div className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg border border-border cursor-pointer hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center shrink-0">
-                            <Building2 className="h-3.5 w-3.5 text-primary-foreground" />
-                          </div>
-                           <div className="min-w-0">
-                             <p className="text-sm font-medium text-foreground truncate">
-                               {organizationsLoading ? t("profile.loading", "Memuat...") : switchingOrganization ? t("profile.switchingOrg", "Beralih organisasi...") : currentOrganization?.company_name || t("profile.selectOrganization", "Pilih Organisasi")}
-                             </p>
-                             <p className="text-xs text-muted-foreground">{t("profile.role.owner", "Owner")}</p>
-                           </div>
-                        </div>
-                         <div className="flex items-center gap-1.5 shrink-0">
-                           {switchingOrganization ? <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> : <>
-                               <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                                 <Check className="w-2.5 h-2.5 text-white" />
-                               </div>
-                               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                             </>}
-                         </div>
+                  {/* Organization trigger: opens drawer when multiple orgs */}
+                  <div
+                    role={canOpenOrgDrawer ? "button" : undefined}
+                    tabIndex={canOpenOrgDrawer ? 0 : undefined}
+                    onClick={canOpenOrgDrawer && !switchingOrganization ? () => setOrgDrawerOpen(true) : undefined}
+                    onKeyDown={
+                      canOpenOrgDrawer
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setOrgDrawerOpen(true);
+                            }
+                          }
+                        : undefined
+                    }
+                    className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg border border-border transition-colors min-h-[44px]"
+                    style={organizations.length > 1 && !switchingOrganization ? { cursor: "pointer" } : undefined}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center shrink-0">
+                        <Building2 className="h-3.5 w-3.5 text-primary-foreground" />
                       </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-full min-w-[260px] bg-popover border-border">
-                       {organizations.map(org => <DropdownMenuItem key={org.id} onClick={() => switchOrganization(org.id)} disabled={switchingOrganization || currentOrganization?.id === org.id} className="flex items-center gap-2.5 py-2 px-2.5 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                          <div className="w-5 h-5 bg-primary rounded flex items-center justify-center shrink-0">
-                            <Building2 className="h-2.5 w-2.5 text-primary-foreground" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {organizationsLoading ? t("profile.loading", "Memuat...") : switchingOrganization ? t("profile.switchingOrg", "Beralih organisasi...") : activeOrganization?.company_name || t("profile.selectOrganization", "Pilih Organisasi")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{t("profile.role.owner", "Owner")}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {switchingOrganization ? <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> : (
+                        <>
+                          <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{org.company_name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{org.industry}</p>
-                          </div>
-                          {currentOrganization?.id === org.id && <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />}
-                        </DropdownMenuItem>)}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
+                          {canOpenOrgDrawer && <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <OrganizationSelectDrawer
+                    open={orgDrawerOpen}
+                    onOpenChange={setOrgDrawerOpen}
+                    onSwitched={() => refetch()}
+                  />
+
                   {/* Create New Organization Button */}
                   <Button variant="outline" size="sm" className="w-full h-9 border-border hover:bg-muted justify-start text-sm" onClick={() => navigate('/create-organization')}>
                     <svg className="h-3.5 w-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

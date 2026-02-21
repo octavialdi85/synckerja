@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { SafeAreaInsetsProvider, useSafeAreaInsets } from "@/mobile/contexts/SafeAreaInsetsContext";
 
@@ -7,6 +8,19 @@ interface NativeSafeAreaWrapperProps {
 
 function NativeSafeAreaWrapperInner({ children }: NativeSafeAreaWrapperProps) {
   const { top, bottom } = useSafeAreaInsets();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const check = () => setKeyboardOpen(vv.height < window.innerHeight * 0.75);
+    check();
+    vv.addEventListener("resize", check);
+    return () => vv.removeEventListener("resize", check);
+  }, []);
+
+  const showBottomBar = bottom > 0 && !keyboardOpen;
+
   return (
     <>
       <div
@@ -20,7 +34,7 @@ function NativeSafeAreaWrapperInner({ children }: NativeSafeAreaWrapperProps) {
       >
         {children}
       </div>
-      {bottom > 0 && (
+      {showBottomBar && (
         <div
           aria-hidden
           className="bg-black fixed left-0 right-0 bottom-0 z-40"

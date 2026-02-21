@@ -136,15 +136,12 @@ export const useWorkSchedule = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Starting work schedule fetch...');
 
       // Get current user's organization
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('User not authenticated');
       }
-      
-      console.log('🔍 Current user:', user.id);
 
       // Get user's active organization first
       const { data: profileData, error: profileError } = await supabase
@@ -152,8 +149,6 @@ export const useWorkSchedule = () => {
         .select('active_organization_id')
         .eq('user_id', user.id)
         .single();
-
-      console.log('👤 Profile data:', profileData, 'Error:', profileError);
 
       if (profileError || !profileData?.active_organization_id) {
         throw profileError || new Error('No active organization found');
@@ -169,8 +164,6 @@ export const useWorkSchedule = () => {
         .eq('user_id', user.id)
         .eq('organization_id', profileData.active_organization_id)
         .single();
-
-      console.log('👤 Employee data:', employeeData, 'Error:', employeeError);
 
       if (employeeError) {
         throw employeeError;
@@ -191,7 +184,6 @@ export const useWorkSchedule = () => {
       // Convert JS day (0=Sunday) to DB day (7=Sunday)
       const currentDay = new Date().getDay();
       const dbDay = currentDay === 0 ? 7 : currentDay;
-      console.log('📅 Current day:', currentDay, 'DB day:', dbDay);
 
       // Fetch work schedule settings for today's specific day using PostgreSQL array operator
       let { data: scheduleData, error: scheduleError } = await supabase
@@ -203,10 +195,8 @@ export const useWorkSchedule = () => {
         .contains('working_days', [dbDay])
         .maybeSingle();
 
-      console.log('📋 Schedule query result:', scheduleData, 'Error:', scheduleError);
       // If no schedule for today found, get any active schedule
       if (!scheduleData) {
-        console.log('⚠️ No schedule for today, trying fallback...');
         const { data: fallbackSchedule, error: fallbackError } = await supabase
           .from('work_schedule_settings')
           .select('*')
@@ -217,7 +207,6 @@ export const useWorkSchedule = () => {
         
         scheduleData = fallbackSchedule;
         scheduleError = fallbackError;
-        console.log('📋 Fallback schedule:', scheduleData, 'Error:', scheduleError);
       }
 
       if (scheduleError) {
@@ -236,14 +225,10 @@ export const useWorkSchedule = () => {
       setHolidays(activeHolidays);
 
       if (scheduleData) {
-        console.log('✅ Setting work schedule:', scheduleData);
-        console.log('🕐 Late tolerance minutes:', scheduleData.late_tolerance_minutes);
         setWorkSchedule(scheduleData);
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({ schedule: scheduleData, holidays: activeHolidays, ts: Date.now() }));
         } catch {}
-      } else {
-        console.log('❌ No schedule data found');
       }
     } catch (err) {
       console.error('Error fetching work schedule:', err);
@@ -254,13 +239,8 @@ export const useWorkSchedule = () => {
   };
 
   useEffect(() => {
-    console.log('🚀 useWorkSchedule: Initial fetch on mount');
     fetchWorkSchedule();
   }, []);
-
-  useEffect(() => {
-    console.log('🚀 useWorkSchedule: Organization ID changed:', organizationId);
-  }, [organizationId]);
 
   // Setup realtime updates for work schedule settings (guarded by orgId)
   useRealtimeData(
@@ -269,16 +249,12 @@ export const useWorkSchedule = () => {
         table: 'work_schedule_settings',
         filter: { column: 'organization_id', eq: organizationId },
         onInsert: () => {
-          console.log('📡 New work schedule created, refetching...', organizationId);
           fetchWorkSchedule();
         },
         onUpdate: () => {
-          console.log('📡 Work schedule updated, refetching...', organizationId);
-          console.log('📡 Current tolerance before update:', workSchedule?.late_tolerance_minutes);
           fetchWorkSchedule();
         },
         onDelete: () => {
-          console.log('📡 Work schedule deleted, refetching...', organizationId);
           fetchWorkSchedule();
         }
       }
@@ -289,16 +265,6 @@ export const useWorkSchedule = () => {
     () => (workSchedule ? generateWeeklySchedule(workSchedule, holidays) : []),
     [workSchedule, holidays, language]
   );
-
-  useEffect(() => {
-    if (workSchedule) {
-      console.log('📋 Work schedule data updated:', {
-        name: workSchedule.name,
-        lateTolerance: workSchedule.late_tolerance_minutes,
-        organizationId: workSchedule.organization_id
-      });
-    }
-  }, [workSchedule]);
 
   return {
     workSchedule,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, User, Loader2, ClipboardCheck, Eye } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
@@ -16,18 +17,7 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useToast } from '@/features/ui/use-toast';
 import type { CompletionApprovalRow } from '../services/completionApprovalService';
 import { supabase } from '@/integrations/supabase/client';
-import GoogleDriveLinkDialog from '@/features/6-1-dashboard/modal/GoogleDriveLinkDialog';
-
-/** Minimal plan shape for preview modal (fetched when user clicks View Content). */
-interface PlanForPreview {
-  id: string;
-  title: string | null;
-  google_drive_link: string | null;
-  production_approved: boolean | null;
-  production_status: string | null;
-  post_date: string | null;
-  content_type?: { id: string; name: string } | null;
-}
+import { usePublicReviewToken } from '@/features/6-1-dashboard/hook/usePublicReviewToken';
 
 function getDisplayTitle(row: CompletionApprovalRow): string {
   const taskTitle = row.daily_tasks?.title ?? 'Task';
@@ -44,8 +34,15 @@ function getEntityTypeLabel(entityType: string, t: (k: string, fallback: string)
   return t('dailyTask.approval.entitySubstep', 'Sub-step');
 }
 
-export const PendingApprovalSection = () => {
+export interface PendingApprovalSectionProps {
+  /** When 'jobdesc-overview', title click navigates to Daily Task Summary view instead of task list. */
+  variant?: 'sidebar' | 'jobdesc-overview';
+}
+
+export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps = {}) => {
   const { t } = useAppTranslation();
+  const navigate = useNavigate();
+  const { getOrCreate } = usePublicReviewToken();
   const { pending, rejected, loading, fetchError, approve, reject, refresh } = useCompletionApprovals([]);
   const { refetchTasks, uncheckCompletionLocally, setPendingApprovalFocus, navigateToTask } = useDailyTask();
   const { toast } = useToast();
@@ -54,12 +51,12 @@ export const PendingApprovalSection = () => {
     row: null,
     reason: '',
   });
+  /** Row for which approve confirmation is shown (simple popup to avoid accidental click). */
+  const [approveConfirmRow, setApproveConfirmRow] = useState<CompletionApprovalRow | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
-
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewRow, setPreviewRow] = useState<CompletionApprovalRow | null>(null);
-  const [previewPlan, setPreviewPlan] = useState<PlanForPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  /** Row id for which "View Content" is in progress (navigate to /review/{token}). */
+  const [viewContentLoadingRowId, setViewContentLoadingRowId] = useState<string | null>(null);
+  const [refetchError, setRefetchError] = useState<string | null>(null);
 
   const handleApprove = async (row: CompletionApprovalRow) => {
     setActingId(row.id);
@@ -71,6 +68,17 @@ export const PendingApprovalSection = () => {
     }
     toast({ title: t('dailyTask.approval.approved', 'Approved'), description: t('dailyTask.approval.approvedDesc', 'Completion approved.') });
     refresh();
+  };
+
+  const handleApproveClick = (row: CompletionApprovalRow) => {
+    setApproveConfirmRow(row);
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!approveConfirmRow) return;
+    const row = approveConfirmRow;
+    setApproveConfirmRow(null);
+    await handleApprove(row);
   };
 
   const handleRejectClick = (row: CompletionApprovalRow) => {
@@ -106,15 +114,29 @@ export const PendingApprovalSection = () => {
     toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
     refresh();
     try {
+      setRefetchError(null);
       await refetchTasks();
-    } catch {
-      toast({ title: t('dailyTask.approval.error', 'Error'), description: 'Failed to refresh tasks', variant: 'destructive' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t('dailyTask.approval.refetchFailed', 'Failed to refresh tasks');
+      setRefetchError(msg);
+      toast({ title: t('dailyTask.approval.error', 'Error'), description: msg, variant: 'destructive' });
     }
   };
 
   const handleTitleClick = (row: CompletionApprovalRow) => {
     const taskId = row.daily_task_id;
     const stepId = row.task_step_id ?? undefined;
+    if (variant === 'jobdesc-overview') {
+      setPendingApprovalFocus(
+        row.entity_type === 'task'
+          ? { taskId }
+          : row.entity_type === 'step'
+            ? { taskId, stepId }
+            : { taskId, stepId, openSubStepModalForStepId: stepId },
+      );
+      navigate('/tools/daily-task?view=summary');
+      return;
+    }
     if (row.entity_type === 'task') {
       setPendingApprovalFocus({ taskId });
       navigateToTask(taskId);
@@ -122,7 +144,6 @@ export const PendingApprovalSection = () => {
       setPendingApprovalFocus({ taskId, stepId });
       navigateToTask(taskId, stepId);
     } else {
-      // substep: focus task + step and open sub-step modal for this step
       setPendingApprovalFocus({ taskId, stepId, openSubStepModalForStepId: stepId });
       navigateToTask(taskId, stepId);
     }
@@ -131,55 +152,33 @@ export const PendingApprovalSection = () => {
   const handleViewContent = async (row: CompletionApprovalRow) => {
     const planId = row.entity_type === 'step' ? row.task_steps?.social_media_plan_id : null;
     if (!planId) return;
-    setPreviewRow(row);
-    setPreviewLoading(true);
-    setPreviewPlan(null);
+    setViewContentLoadingRowId(row.id);
     try {
       const { data, error } = await supabase
         .from('social_media_plans')
-        .select('id, title, google_drive_link, production_approved, production_status, post_date, content_type:content_types(id, name)')
+        .select('google_drive_link')
         .eq('id', planId)
         .single();
       if (error) throw error;
-      setPreviewPlan(data as PlanForPreview);
-      setPreviewOpen(true);
+      const linkUrl = (data as { google_drive_link?: string | null } | null)?.google_drive_link?.trim();
+      if (!linkUrl) {
+        toast({
+          title: t('dailyTask.approval.error', 'Error'),
+          description: t('dailyTask.approval.noContentLink', 'No content link for this plan.'),
+          variant: 'destructive',
+        });
+        return;
+      }
+      const { token } = await getOrCreate({ socialMediaPlanId: planId, linkUrl });
+      navigate(`/review/${token}`, { state: { from: 'jobdesc' } });
     } catch (e) {
       toast({
         title: t('dailyTask.approval.error', 'Error'),
-        description: e instanceof Error ? e.message : 'Failed to load content.',
+        description: e instanceof Error ? e.message : 'Failed to open review.',
         variant: 'destructive',
       });
     } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const handlePreviewClose = () => {
-    setPreviewOpen(false);
-    setPreviewRow(null);
-    setPreviewPlan(null);
-  };
-
-  const handleRejectFromPopup = async (row: CompletionApprovalRow) => {
-    setActingId(row.id);
-    const { error } = await reject(row.id, 'Request Revision');
-    setActingId(null);
-    if (error) {
-      toast({ title: t('dailyTask.approval.error', 'Error'), description: error.message, variant: 'destructive' });
-      return;
-    }
-    uncheckCompletionLocally({
-      entityType: row.entity_type,
-      dailyTaskId: row.daily_task_id,
-      taskStepId: row.task_step_id ?? undefined,
-      taskStepsToStepsId: row.task_steps_to_steps_id ?? undefined,
-    });
-    toast({ title: t('dailyTask.approval.rejected', 'Rejected'), description: t('dailyTask.approval.rejectedDesc', 'Completion rejected; item unchecked.') });
-    refresh();
-    try {
-      await refetchTasks();
-    } catch {
-      toast({ title: t('dailyTask.approval.error', 'Error'), description: 'Failed to refresh tasks', variant: 'destructive' });
+      setViewContentLoadingRowId(null);
     }
   };
 
@@ -211,6 +210,24 @@ export const PendingApprovalSection = () => {
                 {t('dailyTask.approval.retry', 'Retry')}
               </button>
             </p>
+          ) : refetchError ? (
+            <p className="text-xs text-red-600 py-2">
+              {refetchError}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setRefetchError(null);
+                    await refetchTasks();
+                  } catch (e) {
+                    setRefetchError(e instanceof Error ? e.message : t('dailyTask.approval.refetchFailed', 'Failed to refresh tasks'));
+                  }
+                }}
+                className="ml-2 underline font-medium"
+              >
+                {t('dailyTask.approval.retry', 'Retry')}
+              </button>
+            </p>
           ) : loading && pending.length === 0 ? (
             <p className="text-xs text-gray-500 py-2 flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
@@ -219,7 +236,7 @@ export const PendingApprovalSection = () => {
           ) : pending.length === 0 ? (
             <p className="text-xs text-gray-500 py-2">{t('dailyTask.approval.noPending', 'No items pending approval.')}</p>
           ) : (
-            <ul className="space-y-2 pr-1">
+            <ul className="space-y-2">
               {pending.map((row) => (
                 <li
                   key={row.id}
@@ -228,27 +245,27 @@ export const PendingApprovalSection = () => {
                   <button
                     type="button"
                     onClick={() => handleTitleClick(row)}
-                    className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-amber-700 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-400 rounded min-w-0"
+                    className="w-full text-left font-medium text-gray-900 truncate cursor-pointer hover:text-amber-700 hover:underline focus:outline-none focus:ring-1 focus:ring-amber-400 rounded"
                     title={getDisplayTitle(row)}
                   >
                     {getDisplayTitle(row)}
                   </button>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 min-w-0">
+                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                     <User className="w-3 h-3 flex-shrink-0" />
                     <span className="truncate">{row.assignee?.full_name ?? t('dailyTask.approval.assignee', 'Assignee')}</span>
                     <span className="text-gray-400 flex-shrink-0">·</span>
                     <span className="flex-shrink-0">{getEntityTypeLabel(row.entity_type, t)}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     {showViewContent(row) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-gray-700 border-gray-200 hover:bg-gray-50 flex-shrink-0 h-7 px-2 text-xs"
+                        className="text-gray-700 border-gray-200 hover:bg-gray-50 h-7 px-2 text-xs"
                         onClick={() => handleViewContent(row)}
-                        disabled={previewLoading}
+                        disabled={viewContentLoadingRowId !== null}
                       >
-                        {previewLoading && previewRow?.id === row.id ? (
+                        {viewContentLoadingRowId === row.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                         ) : (
                           <Eye className="h-3.5 w-3.5 mr-1" />
@@ -259,8 +276,8 @@ export const PendingApprovalSection = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-green-600 border-green-200 hover:bg-green-50 flex-shrink-0 h-7 px-2 text-xs"
-                      onClick={() => handleApprove(row)}
+                      className="text-green-600 border-green-200 hover:bg-green-50 h-7 px-2 text-xs"
+                      onClick={() => handleApproveClick(row)}
                       disabled={actingId === row.id}
                     >
                       {actingId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
@@ -269,7 +286,7 @@ export const PendingApprovalSection = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50 flex-shrink-0 h-7 px-2 text-xs"
+                      className="text-red-600 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
                       onClick={() => handleRejectClick(row)}
                       disabled={actingId === row.id}
                     >
@@ -344,39 +361,35 @@ export const PendingApprovalSection = () => {
         </DialogContent>
       </Dialog>
 
-      {previewOpen && previewPlan && previewRow && (
-        <GoogleDriveLinkDialog
-          isOpen={previewOpen}
-          onClose={handlePreviewClose}
-          googleDriveLink={previewPlan.google_drive_link ?? ''}
-          productionApproved={previewPlan.production_approved ?? false}
-          socialMediaPlanId={previewPlan.id}
-          contentTitle={previewPlan.title ?? undefined}
-          contentType={previewPlan.content_type?.name}
-          postDate={previewPlan.post_date ?? undefined}
-          onSave={() => {}}
-          onApprove={() => {
-            void handleApprove(previewRow)
-              .then(() => refresh())
-              .catch((err) => {
-                toast({
-                  title: t('dailyTask.approval.error', 'Error'),
-                  description: err?.message ?? 'Action failed',
-                  variant: 'destructive',
-                });
-              });
-          }}
-          onRevision={() => {
-            void handleRejectFromPopup(previewRow).catch((err) => {
-              toast({
-                title: t('dailyTask.approval.error', 'Error'),
-                description: err?.message ?? 'Action failed',
-                variant: 'destructive',
-              });
-            });
-          }}
-        />
-      )}
+      {/* Approve confirmation dialog (avoid accidental click) */}
+      <Dialog open={!!approveConfirmRow} onOpenChange={(open) => !open && setApproveConfirmRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('dailyTask.approval.approveConfirmTitle', 'Konfirmasi Approve')}</DialogTitle>
+            <DialogDescription>
+              {t('dailyTask.approval.approveConfirmDesc', 'Yakin ingin menyetujui item ini?')}
+            </DialogDescription>
+          </DialogHeader>
+          {approveConfirmRow && (
+            <p className="text-sm text-gray-600 truncate" title={getDisplayTitle(approveConfirmRow)}>
+              {getDisplayTitle(approveConfirmRow)}
+            </p>
+          )}
+          <DialogFooter className="gap-3">
+            <Button variant="outline" onClick={() => setApproveConfirmRow(null)}>
+              {t('dailyTask.approval.cancel', 'Cancel')}
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleApproveConfirm}
+              disabled={actingId !== null}
+            >
+              {actingId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {t('dailyTask.approval.approve', 'Approve')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

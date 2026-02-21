@@ -10,12 +10,6 @@ import {
   SelectGroup,
   SelectLabel,
 } from '@/features/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/mobile/components/ui/dialog';
 import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { useActiveEmployeeIds } from '@/features/8-2-DailyTask/hooks/useActiveEmployeeIds';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
@@ -26,7 +20,16 @@ import { format, startOfMonth } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import type { TaskFilters } from '@/features/8-2-DailyTask/hooks/useTaskFilters';
 
-export function MobileTaskFilterDrawerContent() {
+export interface MobileTaskFilterDrawerContentProps {
+  /** Dipanggil setelah user memilih bulan di Custom Month agar drawer bisa ditutup dan daftar terfilter langsung terlihat. */
+  onAfterCustomMonthSelect?: () => void;
+  /** Dipanggil setelah user memilih rentang tanggal di Custom Range agar drawer bisa ditutup. */
+  onAfterCustomDateRangeSelect?: () => void;
+  /** Dipanggil setelah user memilih Today / Yesterday / This Week agar drawer ditutup dan daftar terfilter terlihat. */
+  onAfterDueDatePresetSelect?: () => void;
+}
+
+export function MobileTaskFilterDrawerContent({ onAfterCustomMonthSelect, onAfterCustomDateRangeSelect, onAfterDueDatePresetSelect }: MobileTaskFilterDrawerContentProps = {}) {
   const { t } = useAppTranslation();
   const { filters, setFilters, tasks } = useDailyTask();
   const { isOwner } = useCentralizedUserData();
@@ -55,7 +58,6 @@ export function MobileTaskFilterDrawerContent() {
     return Array.from(employeeMap.values()).sort((a, b) => a.full_name.localeCompare(b.full_name));
   }, [tasks, activeEmployeeIds]);
   const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
 
   const getMergedDatePlanValue = () => {
     if (filters.dateRange) return filters.dateRange;
@@ -137,6 +139,7 @@ export function MobileTaskFilterDrawerContent() {
           planDateRange: undefined,
           customPlanMonth: undefined,
         }));
+        setTimeout(() => onAfterDueDatePresetSelect?.(), 50);
       }
       return;
     }
@@ -149,7 +152,6 @@ export function MobileTaskFilterDrawerContent() {
           customStartDate: undefined,
           customEndDate: undefined,
         }));
-        setIsMonthPickerOpen(true);
       } else {
         setFilters(prev => ({
           ...prev,
@@ -171,16 +173,21 @@ export function MobileTaskFilterDrawerContent() {
       customEndDate: format(endDate, 'yyyy-MM-dd'),
     }));
     setIsCustomDatePickerOpen(false);
+    onAfterCustomDateRangeSelect?.();
   };
 
   const handleCustomPlanMonthSelect = (date: Date) => {
     const monthStart = startOfMonth(date);
+    const monthStr = format(monthStart, 'yyyy-MM-dd'); // e.g. 2026-03-01
     setFilters(prev => ({
       ...prev,
       planDateRange: 'custom_month_plan',
-      customPlanMonth: format(monthStart, 'yyyy-MM-dd'),
+      customPlanMonth: monthStr,
     }));
-    setIsMonthPickerOpen(false);
+    // Tutup drawer setelah state filter ter-commit agar daftar task terfilter tampil dengan benar (terutama di mobile)
+    setTimeout(() => {
+      onAfterCustomMonthSelect?.();
+    }, 50);
   };
 
   // Match desktop TaskFilters: All tasks / My Task / PIC (employee) selection
@@ -335,19 +342,16 @@ export function MobileTaskFilterDrawerContent() {
         initialEndDate={filters.customEndDate ? new Date(filters.customEndDate) : undefined}
       />
 
-      <Dialog open={isMonthPickerOpen} onOpenChange={setIsMonthPickerOpen}>
-        <DialogContent className="max-w-[min(90vw,400px)]">
-          <DialogHeader>
-            <DialogTitle>{t('dailyTask.filters.customMonth', 'Custom Month')}</DialogTitle>
-          </DialogHeader>
-          <div className="p-2">
-            <MonthPicker
-              selected={filters.customPlanMonth ? new Date(filters.customPlanMonth) : undefined}
-              onSelect={handleCustomPlanMonthSelect}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {filters.planDateRange === 'custom_month_plan' && (
+        <div className="grid gap-1.5 px-4 pb-4 text-left">
+          <MonthPicker
+            compact
+            className="w-full max-w-none"
+            selected={filters.customPlanMonth ? new Date(filters.customPlanMonth) : undefined}
+            onSelect={handleCustomPlanMonthSelect}
+          />
+        </div>
+      )}
     </>
   );
 }

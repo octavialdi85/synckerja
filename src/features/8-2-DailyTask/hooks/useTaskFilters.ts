@@ -202,19 +202,23 @@ export const useTaskFilters = ({
         return true;
       }
 
-      // Include overdue across ranges:
-      // - Task overdue (task.due_date past) and task not completed
-      if (isOverdueDate(task.due_date) && (task.status !== 'completed')) {
-        return true;
-      }
-      // - Any step overdue (step.assigned_due_date past) and step not completed
-      const hasOverdueStep =
-        Array.isArray(task.steps) &&
-        task.steps.some(
-          (step) => isOverdueDate(step.assigned_due_date || null) && step.is_completed !== true
-        );
-      if (hasOverdueStep) {
-        return true;
+      // Include overdue only for preset month ranges (this_month, last_month), not for "today" / "yesterday" / "this_week" / "custom"
+      // so that "Today" and "Custom range" (e.g. November 2025) show only tasks due in that range
+      const isStrictRange = ['today', 'yesterday', 'this_week', 'custom'].includes(filters.dateRange);
+      if (!isStrictRange) {
+        // - Task overdue (task.due_date past) and task not completed
+        if (isOverdueDate(task.due_date) && (task.status !== 'completed')) {
+          return true;
+        }
+        // - Any step overdue (step.assigned_due_date past) and step not completed
+        const hasOverdueStep =
+          Array.isArray(task.steps) &&
+          task.steps.some(
+            (step) => isOverdueDate(step.assigned_due_date || null) && step.is_completed !== true
+          );
+        if (hasOverdueStep) {
+          return true;
+        }
       }
 
       return false;

@@ -109,8 +109,6 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
         created_by: user.id
       };
 
-      console.log('🚀 Creating individual objective:', objectiveData);
-
       await createIndividualObjective.mutateAsync(objectiveData);
 
       toast({
@@ -144,42 +142,6 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
     obj.status === 'active' || obj.status === 'draft'
   );
 
-  // Debug logging to help identify the issue
-  React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 CreateIndividualObjectiveModal - Department Objectives Debug:', {
-        totalObjectives: departmentObjectives.length,
-        availableObjectives: availableDepartmentObjectives.length,
-        allObjectives: departmentObjectives.map(obj => ({
-          id: obj.id,
-          title: obj.title,
-          status: obj.status,
-          cycle_id: obj.cycle_id,
-          organization_id: obj.organization_id
-        })),
-        cycleId,
-        organizationId,
-        queryKey: ['department-objectives', organizationId, cycleId ? [cycleId] : undefined, false]
-      });
-      
-      // Check specifically for "te" objective
-      const teObjective = departmentObjectives.find(obj => obj.title === 'te');
-      if (teObjective) {
-        console.log('🚨 FOUND "te" OBJECTIVE:', {
-          id: teObjective.id,
-          title: teObjective.title,
-          status: teObjective.status,
-          cycle_id: teObjective.cycle_id,
-          organization_id: teObjective.organization_id,
-          created_at: teObjective.created_at,
-          updated_at: teObjective.updated_at
-        });
-      } else {
-        console.log('✅ No "te" objective found in departmentObjectives');
-      }
-    }
-  }, [departmentObjectives, availableDepartmentObjectives, cycleId, organizationId]);
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
@@ -192,7 +154,6 @@ export const CreateIndividualObjectiveModal: React.FC<CreateIndividualObjectiveM
   };
 
   const handleRefresh = () => {
-    console.log('🔄 Refreshing department objectives...');
     refetch();
   };
 

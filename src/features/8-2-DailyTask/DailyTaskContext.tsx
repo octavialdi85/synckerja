@@ -2602,6 +2602,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       return;
     }
     initialLoadState = { orgId: organizationId, at: now };
+    let cancelled = false;
 
     const loadData = async () => {
       // Show loading until fetchTasks (or cache) completes; do not clear here.
@@ -2615,10 +2616,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           );
           const result = await Promise.race([getUserPromise, getUserTimeout]);
           const user = (result as any)?.data?.user;
-          if (user) {
+          if (user && !cancelled) {
             const cacheKey = `tasks_${organizationId}_${user.id}`;
             const cached = getCached<any[]>(cacheKey, 60000);
-            if (cached !== undefined && cached !== null) {
+            if (cached !== undefined && cached !== null && !cancelled) {
               setTasks(cached);
             }
           }
@@ -2634,6 +2635,9 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     };
 
     loadData();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 

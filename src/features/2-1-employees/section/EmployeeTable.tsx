@@ -80,25 +80,6 @@ const EmployeeRow = memo(({
 
   // Use consistent status display logic
   const displayStatus = getEmployeeStatus(employee);
-  
-  // Debug logging for ALL employees to track status sync issues (only in development)
-  if (import.meta.env.DEV) {
-    // Log for Shally specifically or any employee with status issues
-    if (employee.full_name?.toLowerCase().includes('shally') || 
-        employee.status === 'terminated' || 
-        employee.employee_status_name === 'terminated' ||
-        employee.pending_removal) {
-      console.log(`[EmployeeTable] ${employee.full_name}:`, {
-        id: employee.id,
-        raw_status: employee.status,
-        employee_status_id: (employee as any).employee_status_id,
-        employee_status_name: employee.employee_status_name,
-        pending_removal: employee.pending_removal,
-        final_displayStatus: displayStatus,
-        getEmployeeStatus_result: getEmployeeStatus(employee)
-      });
-    }
-  }
 
   const photoUrl = getPhotoUrl(employee.photo_url);
   return (

@@ -588,7 +588,7 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     }
   }, [user?.id, session, authLoading]);
 
-  // Force refresh function that bypasses caching
+  // Force refresh function that bypasses caching (e.g. after switch organization in drawer)
   const forceRefreshUserData = useCallback(async () => {
     logger.userData('CentralizedUserDataContext: Force refresh requested');
     if (!user) {
@@ -599,8 +599,9 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     logger.userData('CentralizedUserDataContext: Resetting cache and forcing refresh...');
     lastUserIdRef.current = '';
     fetchingRef.current = false;
+    userDataCacheRef.current = null; // Clear cache so sidebar/context get fresh org name
+    previousOrgIdRef.current = undefined; // Allow org-change effect to run if needed
     
-    // Call refreshUserData with user parameter
     await refreshUserData();
   }, [refreshUserData, user]);
 

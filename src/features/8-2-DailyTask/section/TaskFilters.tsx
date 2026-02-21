@@ -482,21 +482,19 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
             />
           </PopoverTrigger>
           <PopoverContent 
-            className="w-auto p-0 border border-gray-200 rounded-lg shadow-lg" 
+            className="w-auto p-2 border border-gray-200 rounded-lg shadow-lg" 
             align="start"
             side="bottom"
             sideOffset={4}
           >
-            <div className="p-2">
-              <div className="text-sm font-medium text-gray-700 mb-2 px-2 flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4 text-blue-500" />
-                Select Plan Date
-              </div>
-              <MonthPicker
-                selected={filters.customPlanMonth ? new Date(filters.customPlanMonth) : undefined}
-                onSelect={handleCustomPlanMonthSelect}
-              />
+            <div className="text-sm font-medium text-gray-700 mb-2 px-2 flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-blue-500" />
+              Select Plan Date
             </div>
+            <MonthPicker
+              selected={filters.customPlanMonth ? new Date(filters.customPlanMonth) : undefined}
+              onSelect={handleCustomPlanMonthSelect}
+            />
           </PopoverContent>
         </Popover>
       </div>

@@ -41,9 +41,9 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
     });
   }, [toast]);
 
-  // Stable connection error handler (log only; realtime is optional - app works with initial fetch + refetch)
+  // Stable connection error handler (debug only; realtime is optional - app works with initial fetch + refetch)
   const handleConnectionError = useCallback((table: string) => {
-    logger.warn(
+    logger.debug(
       `Real-time connection failed for ${table}. ` +
       'Ensure the table is in the Supabase Realtime publication if you need live updates.'
     );

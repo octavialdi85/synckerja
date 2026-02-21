@@ -11,6 +11,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { devLog } from "@/config/logger";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { fetchRejectedForOrg, type RejectedApprovalLookupRow } from "@/features/8-2-DailyTask/services/completionApprovalService";
 import {
@@ -503,9 +504,7 @@ const fetchAssignments = async (
 
   const statusNameById = new Map<string, string>();
   if (statusesRes.error) {
-    if (import.meta.env.DEV) {
-      console.warn('Job Desc: employee_statuses fetch failed, filtering by employees.status only:', statusesRes.error);
-    }
+    devLog.warn('Job Desc: employee_statuses fetch failed, filtering by employees.status only', statusesRes.error);
   } else {
     (statusesRes.data ?? []).forEach((s: { id: string; name: string }) => {
       if (s.id && s.name) statusNameById.set(s.id, s.name);

@@ -19,7 +19,6 @@ import { BlockerDetailsModal } from '@/features/8-2-DailyTaskReport/components/B
 import '@/features/8-2-DailyTask/section/TaskList.css';
 
 // Hooks
-import { useTaskFilters } from './hooks/useTaskFilters';
 import { useTaskModal } from './hooks/useTaskModal';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import { useBlockerCounts } from './hooks/useBlockerCounts';
@@ -40,25 +39,26 @@ import {
 } from './utils/taskUtils';
 
 export const TaskList = () => {
-  const { tasks, filters, updateTask, deleteTask, reorderTaskSteps, highlightedTask, requestDeadlineExtension } = useDailyTask();
+  const {
+    tasks,
+    filters,
+    effectiveFilteredTasks,
+    getVisibleStepsEffective,
+    updateTask,
+    deleteTask,
+    reorderTaskSteps,
+    highlightedTask,
+    requestDeadlineExtension,
+  } = useDailyTask();
   const { user } = useCurrentUser();
+  const currentUserId = user?.id;
   const { data: currentEmployee } = useCurrentEmployee();
   const { toast } = useToast();
   const { t } = useAppTranslation();
 
-  const currentUserId = user?.id ?? undefined;
-  const currentEmployeeId =
-    currentEmployee && typeof (currentEmployee as unknown as { id?: string })?.id === 'string'
-      ? (currentEmployee as unknown as { id: string }).id
-      : undefined;
-
-  // Custom hooks
-  const { filteredTasks, getVisibleSteps, isMyTask } = useTaskFilters({
-    tasks,
-    filters,
-    currentUserId,
-    currentEmployeeId,
-  });
+  // Gunakan daftar terfilter dari context (satu sumber kebenaran: termasuk filter plan date / custom month)
+  const filteredTasks = effectiveFilteredTasks;
+  const getVisibleSteps = getVisibleStepsEffective;
 
   const calculateAssignedStepsProgress = useCallback(
     (task: Task): number => {
@@ -319,12 +319,21 @@ export const TaskList = () => {
     [tasks, reorderTaskSteps, toast]
   );
 
+  // Key so list remounts when date/plan filter changes (avoids stale DOM when filter updates)
+  const listKey = [
+    filters.dateRange ?? '',
+    filters.planDateRange ?? '',
+    filters.customPlanMonth ?? '',
+    filters.customStartDate ?? '',
+    filters.customEndDate ?? '',
+  ].join('|');
+
   return (
     <div className="flex flex-col mobile-task-list">
       <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <TooltipProvider>
           <div className="flex flex-col">
-            <div className="space-y-1">
+            <div key={listKey} className="space-y-1">
               {sortedTasks.length === 0 ? (
                 <EmptyState />
               ) : (

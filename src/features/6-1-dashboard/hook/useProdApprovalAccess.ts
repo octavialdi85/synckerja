@@ -100,7 +100,7 @@ export function useProdApprovalAccess(enabled: boolean): { canShowApprovalButton
 
         if (configError || !config) {
           devLog.debug('No prod_approved configuration found, falling back to admin access');
-          setCanShowApprovalButtons(userRole.role === 'owner' || userRole.role === 'admin');
+          if (!cancelled) setCanShowApprovalButtons(userRole.role === 'owner' || userRole.role === 'admin');
           return;
         }
 
@@ -117,7 +117,7 @@ export function useProdApprovalAccess(enabled: boolean): { canShowApprovalButton
           finalAccess: hasRoleAccess || isException,
         });
 
-        setCanShowApprovalButtons(hasRoleAccess || isException);
+        if (!cancelled) setCanShowApprovalButtons(hasRoleAccess || isException);
       } catch (error) {
         devLog.error('Error checking approval access:', error);
         if (!cancelled) setCanShowApprovalButtons(false);

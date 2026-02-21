@@ -31,8 +31,6 @@ const MeetingNotesInput = () => {
     setIsSubmitting(true);
     
     try {
-      console.log('Submitting meeting point:', formData); // Debug log
-      
       const requestByName = formData.request_by
         ? (employees.find((e) => e.id === formData.request_by)?.full_name ?? formData.request_by)
         : '';
@@ -66,7 +64,6 @@ const MeetingNotesInput = () => {
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      console.log('Enter pressed, submitting form'); // Debug log
       handleSubmit();
     }
   };

@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/features/share/hooks/useCurrentUser';
 import { useToast } from '@/features/ui/use-toast';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { format } from 'date-fns';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import {
   TaskListTableHeader,
   TaskListRow,
@@ -22,6 +23,7 @@ import { useIndividualObjectives } from '@/features/1_home/components/HomeOKRDas
 import './TaskList.css';
 
 export const TaskList = () => {
+  const { t } = useAppTranslation();
   const {
     tasks,
     effectiveFilteredTasks,
@@ -295,7 +297,9 @@ export const TaskList = () => {
                         {tasks.length > 0 ? (
                           <>
                             <p className="text-sm text-gray-400">
-                              No tasks match your current filters. Try &quot;All tasks&quot; or clear filters.
+                              {filters.planDateRange === 'custom_month_plan' && filters.customPlanMonth
+                                ? t('dailyTask.emptyState.noTasksForSelectedMonth', 'No tasks for the selected month.')
+                                : 'No tasks match your current filters. Try "All tasks" or clear filters.'}
                             </p>
                             <button
                               type="button"

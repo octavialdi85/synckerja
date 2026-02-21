@@ -13,6 +13,7 @@ import {
 import { useJobDescAssignments } from "./useJobDescAssignments";
 import { JobDescFilters } from "./JobDescFilters";
 import { JobDescEmployeeCard } from "./JobDescEmployeeCard";
+import { PendingApprovalSection } from "@/features/8-2-DailyTask/section/PendingApprovalSection";
 
 const formatRangeLabel = (range: DateRangeValue) => {
   if (!range.start || !range.end) return "-";
@@ -151,6 +152,9 @@ export const JobDescTracker = () => {
         </p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col p-0">
+        <div className="px-1 mb-2 shrink-0">
+          {renderFilters()}
+        </div>
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as "overview" | "detail")}
@@ -184,41 +188,42 @@ export const JobDescTracker = () => {
             className="flex-1 min-h-0 overflow-y-auto seamless-scroll"
           >
             <div className="space-y-1 content-padding-above-nav-job-desc shrink-0">
-              {renderFilters()}
-
               {isLoading ? (
                 <div className="py-6 flex items-center justify-center">
                   <LoadingDots />
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-                    <p className="text-[11px] text-indigo-700">
-                      {t("dailyTask.jobDesc.metrics.activeAssignments", "Tugas Aktif")}
-                    </p>
-                    <p className="text-2xl font-semibold text-indigo-900">
-                      {metrics.assignments}
-                    </p>
-                    <p className="text-[11px] text-indigo-600">
-                      {t("dailyTask.jobDesc.metrics.busyEmployees", "{{count}} karyawan sibuk", {
-                        count: metrics.busy,
-                      })}
-                    </p>
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                      <p className="text-[11px] text-indigo-700">
+                        {t("dailyTask.jobDesc.metrics.activeAssignments", "Tugas Aktif")}
+                      </p>
+                      <p className="text-2xl font-semibold text-indigo-900">
+                        {metrics.assignments}
+                      </p>
+                      <p className="text-[11px] text-indigo-600">
+                        {t("dailyTask.jobDesc.metrics.busyEmployees", "{{count}} karyawan sibuk", {
+                          count: metrics.busy,
+                        })}
+                      </p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                      <p className="text-[11px] text-emerald-700">
+                        {t("dailyTask.jobDesc.metrics.idleEmployees", "Karyawan Idle")}
+                      </p>
+                      <p className="text-2xl font-semibold text-emerald-900">
+                        {metrics.idle}
+                      </p>
+                      <p className="text-[11px] text-emerald-600">
+                        {t("dailyTask.jobDesc.metrics.avgPendingDays", "Rata-rata pending {{days}} hari", {
+                          days: metrics.pendingDays,
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
-                    <p className="text-[11px] text-emerald-700">
-                      {t("dailyTask.jobDesc.metrics.idleEmployees", "Karyawan Idle")}
-                    </p>
-                    <p className="text-2xl font-semibold text-emerald-900">
-                      {metrics.idle}
-                    </p>
-                    <p className="text-[11px] text-emerald-600">
-                      {t("dailyTask.jobDesc.metrics.avgPendingDays", "Rata-rata pending {{days}} hari", {
-                        days: metrics.pendingDays,
-                      })}
-                    </p>
-                  </div>
-                </div>
+                  <PendingApprovalSection variant="jobdesc-overview" />
+                </>
               )}
             </div>
           </TabsContent>
@@ -228,7 +233,6 @@ export const JobDescTracker = () => {
             className="flex-1 min-h-0 overflow-y-auto seamless-scroll"
           >
             <div className="space-y-1 content-padding-above-nav-job-desc shrink-0">
-              {renderFilters()}
               {isLoading ? (
                 <div className="py-6 flex items-center justify-center">
                   <LoadingDots />

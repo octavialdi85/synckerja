@@ -97,23 +97,31 @@ export const MobileAssignStepDialog = ({ open = true, step, onAssign, onUnassign
           return;
         }
         // latest assignment for this step
-        const { data: assignsRaw } = await supabase
+        const { data: assignsRaw, error: assignError } = await supabase
           .from('task_steps_assigned')
           .select('id, assigned_at')
           .eq('task_step_id', step.id)
           .order('assigned_at', { ascending: false })
           .limit(1);
+        if (assignError) {
+          logger.warn('task_steps_assigned fetch error', assignError);
+          setIsInitialized(true);
+          return;
+        }
         type AssignRow = { id: string; assigned_at: string };
         const assigns = (assignsRaw as unknown as AssignRow[] | null) ?? [];
         const assign = assigns[0];
         if (assign) {
           setActiveAssignmentId(assign.id);
-          const { data: dueRowsRaw } = await supabase
+          const { data: dueRowsRaw, error: dueError } = await supabase
             .from('task_steps_assigned_duedate')
             .select('due_date')
             .eq('task_steps_assigned_id', assign.id)
             .order('created_at', { ascending: false })
             .limit(1);
+          if (dueError) {
+            logger.warn('task_steps_assigned_duedate fetch error', dueError);
+          }
           type DueRow = { due_date: string };
           const dueRows = (dueRowsRaw as unknown as DueRow[] | null) ?? [];
           const due = dueRows[0]?.due_date;
