@@ -4,12 +4,14 @@ import { Button } from "@/features/ui/button";
 import OrganizationForm from "@/features/1-login/components/CreateOrganization/OrganizationForm";
 import { useNavigate } from "react-router-dom";
 import { Building, ArrowLeft, Loader2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 
 const CreateOrganization = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isEmailVerified, hasOrganization, loading } = useCentralizedUserData();
+  const [formLoading, setFormLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Helper function untuk membaca sessionStorage flags
   const getSessionFlags = () => {
@@ -61,44 +63,77 @@ const CreateOrganization = () => {
   // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4 safe-area-inset">
-        <Card className="w-full max-w-md shadow-sm border rounded-xl bg-white">
-          <CardContent className="p-4 sm:p-6 text-center">
-            <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 animate-spin text-primary mx-auto mb-3 sm:mb-4" />
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2">Memuat Data...</h2>
-            <p className="text-gray-600 text-xs sm:text-sm">Mohon tunggu sebentar...</p>
-          </CardContent>
-        </Card>
+      <div className="fixed left-0 right-0 top-0 modal-above-safe-area flex flex-col bg-[#f8fafc] overflow-hidden z-0">
+        <div className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 safe-area-top px-4 pt-4 pb-3">
+          <h1 className="text-lg font-semibold text-left">Buat Organisasi</h1>
+        </div>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Memuat Data...</h2>
+            <p className="text-gray-600 text-sm">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // Mobile fullscreen layout: modal-above-safe-area agar footer di atas pita navigasi device
   return (
-    <div className="min-h-screen flex items-start sm:items-center justify-center bg-[#f8fafc] py-4 sm:py-8 px-3 sm:px-4 safe-area-inset">
-      <Card className="w-full max-w-full sm:max-w-2xl shadow-sm border-0 sm:border rounded-none sm:rounded-xl sm:rounded-2xl bg-white">
-        <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6 pt-4 sm:pt-6">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => navigate("/login")}
-              className="p-1.5 sm:p-2 h-8 w-8 sm:h-9 sm:w-9 -ml-1"
-            >
-              <ArrowLeft size={18} className="sm:w-4 sm:h-4" />
-            </Button>
-            <Building size={20} className="sm:w-6 sm:h-6 text-primary" />
-          </div>
-          <CardTitle className="text-xl sm:text-2xl font-bold leading-tight">
+    <div className="fixed left-0 right-0 top-0 modal-above-safe-area flex flex-col bg-[#f8fafc] overflow-hidden z-0">
+      {/* Header - sticky di atas (flex-shrink-0, tidak ikut scroll) */}
+      <header className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/login")}
+            className="p-1.5 h-8 w-8 -ml-1"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+          </Button>
+          <Building size={20} className="text-primary flex-shrink-0" />
+          <h1 className="text-lg font-semibold leading-tight">
             Buat Organisasi Pertama
-          </CardTitle>
-          <p className="text-muted-foreground text-sm sm:text-base mt-1.5 sm:mt-2 leading-relaxed">
-            Lengkapi informasi organisasi Anda untuk mulai menggunakan ProfitLoop
-          </p>
-        </CardHeader>
-        <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6 pt-0">
-          <OrganizationForm />
-        </CardContent>
-      </Card>
+          </h1>
+        </div>
+      </header>
+
+      {/* Body - satu-satunya area scroll; overscroll-contain agar tidak overscroll ke luar (footer/header tidak terangkat) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain seamless-scroll touch-pan-y">
+        <div className="px-4 py-4 pb-4">
+          <OrganizationForm
+            formId="create-org-form"
+            hideSubmitButton
+            onLoadingChange={setFormLoading}
+            onAcceptTermsChange={setAcceptTerms}
+          />
+        </div>
+      </div>
+
+      {/* Footer - sticky di bawah (flex-shrink-0, tidak ikut scroll) */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-3 border-t bg-muted/30">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            type="submit"
+            form="create-org-form"
+            size="sm"
+            disabled={formLoading || !acceptTerms}
+            className="min-w-[120px] flex items-center justify-center gap-1.5"
+          >
+            {formLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Membuat Organisasi...</span>
+              </>
+            ) : (
+              "Buat Organisasi"
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

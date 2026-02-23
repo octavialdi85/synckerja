@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/features/ui/button";
 import { Checkbox } from "@/features/ui/checkbox";
 import { Input } from "@/features/ui/input";
@@ -8,6 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui/card";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/features/1-login/hooks/use-toast";
+
+export interface OrganizationFormProps {
+  /** Form id for external submit button (e.g. mobile fullscreen footer) */
+  formId?: string;
+  /** When true, hide the submit button (footer rendered by parent per modal-android-fullscreen) */
+  hideSubmitButton?: boolean;
+  /** Notify parent of loading state for footer button */
+  onLoadingChange?: (loading: boolean) => void;
+  /** Notify parent when terms acceptance changes (for footer button disabled state) */
+  onAcceptTermsChange?: (accepted: boolean) => void;
+}
 
 // Types and initial data
 interface OrganizationFormData {
@@ -32,10 +43,30 @@ const initialFormData: OrganizationFormData = {
   acceptTerms: false,
 };
 
-const OrganizationForm = () => {
+// Result row types for Supabase queries (used when generated types cannot infer)
+interface ProfileRow {
+  full_name: string | null;
+  email: string | null;
+}
+interface DepartmentIdRow {
+  id: string;
+}
+interface OrganizationSubscriptionRow {
+  has_active_subscription: boolean | null;
+}
+
+const OrganizationForm = ({ formId, hideSubmitButton, onLoadingChange, onAcceptTermsChange }: OrganizationFormProps) => {
   const [formData, setFormData] = useState<OrganizationFormData>(initialFormData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onLoadingChange?.(loading);
+  }, [loading, onLoadingChange]);
+
+  useEffect(() => {
+    onAcceptTermsChange?.(formData.acceptTerms);
+  }, [formData.acceptTerms, onAcceptTermsChange]);
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
@@ -89,8 +120,8 @@ const OrganizationForm = () => {
         throw orgResult.error;
       }
 
-      const orgData = orgResult.data as any;
-      const profileData = profileResult.data;
+      const orgData = orgResult.data as unknown as { id: string };
+      const profileData = profileResult.data as unknown as ProfileRow | null;
 
       // Step 2: Create department, user_organizations, and user_roles
       // Note: Create department manually since trigger might not work consistently
@@ -143,13 +174,13 @@ const OrganizationForm = () => {
           .eq('is_default', true)
           .maybeSingle();
         
-        defaultDeptId = existingDept?.id || null;
+        defaultDeptId = (existingDept as unknown as DepartmentIdRow | null)?.id ?? null;
         
         if (!defaultDeptId) {
           console.warn('No default department found - continuing without department');
         }
       } else {
-        defaultDeptId = deptResult.data?.id || null;
+        defaultDeptId = (deptResult.data as unknown as DepartmentIdRow | null)?.id ?? null;
         console.log('Default department created successfully:', defaultDeptId);
       }
 
@@ -204,7 +235,7 @@ const OrganizationForm = () => {
         .eq('id', orgData.id)
         .single();
 
-      const hasActiveSubscription = orgCheck?.has_active_subscription === true;
+      const hasActiveSubscription = (orgCheck as unknown as OrganizationSubscriptionRow | null)?.has_active_subscription === true;
 
       // Show success toast
       toast({
@@ -253,7 +284,7 @@ const OrganizationForm = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+    <form id={formId} onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       {/* Basic Information */}
       <Card className="mx-0 sm:mx-0">
         <CardHeader className="px-4 sm:px-6 pb-3 sm:pb-6 pt-4 sm:pt-6">
@@ -264,6 +295,7 @@ const OrganizationForm = () => {
             <Label htmlFor="name">Nama Organisasi *</Label>
             <Input
               id="name"
+              className="text-sm"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               placeholder="Masukkan nama organisasi"
@@ -277,6 +309,7 @@ const OrganizationForm = () => {
             <Input
               id="email"
               type="email"
+              className="text-sm"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
               placeholder="email@organisasi.com"
@@ -289,6 +322,7 @@ const OrganizationForm = () => {
             <Label htmlFor="phone">Nomor Telepon</Label>
             <Input
               id="phone"
+              className="text-sm"
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
               placeholder="+62 xxx xxxx xxxx"
@@ -308,6 +342,7 @@ const OrganizationForm = () => {
             <Label htmlFor="address">Alamat</Label>
             <Input
               id="address"
+              className="text-sm"
               value={formData.address}
               onChange={(e) => handleInputChange('address', e.target.value)}
               placeholder="Alamat lengkap organisasi"
@@ -319,6 +354,7 @@ const OrganizationForm = () => {
             <Label htmlFor="website">Website</Label>
             <Input
               id="website"
+              className="text-sm"
               value={formData.website}
               onChange={(e) => handleInputChange('website', e.target.value)}
               placeholder="https://www.organisasi.com"
@@ -330,6 +366,7 @@ const OrganizationForm = () => {
             <Label htmlFor="industry">Industri</Label>
             <Input
               id="industry"
+              className="text-sm"
               value={formData.industry}
               onChange={(e) => handleInputChange('industry', e.target.value)}
               placeholder="Contoh: Teknologi, Keuangan, Kesehatan, dll"
@@ -376,20 +413,22 @@ const OrganizationForm = () => {
         </label>
       </div>
 
-      <Button
-        type="submit"
-        className="w-full h-11 sm:h-11 rounded-lg text-sm sm:text-base font-semibold bg-[#181E29] hover:bg-[#222b3c] mt-3 sm:mt-4"
-        disabled={loading || !formData.acceptTerms}
-      >
-        {loading ? (
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-            <span>Membuat Organisasi...</span>
-          </div>
-        ) : (
-          "Buat Organisasi"
-        )}
-      </Button>
+      {!hideSubmitButton && (
+        <Button
+          type="submit"
+          className="w-full h-11 sm:h-11 rounded-lg text-sm sm:text-base font-semibold bg-[#181E29] hover:bg-[#222b3c] mt-3 sm:mt-4"
+          disabled={loading || !formData.acceptTerms}
+        >
+          {loading ? (
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span>Membuat Organisasi...</span>
+            </div>
+          ) : (
+            "Buat Organisasi"
+          )}
+        </Button>
+      )}
     </form>
   );
 };

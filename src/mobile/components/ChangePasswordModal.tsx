@@ -182,7 +182,8 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
       <DialogContent
         className={cn(
           'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 z-30',
-          'fixed left-0 right-0 top-0 modal-above-safe-area h-[100dvh] min-h-[100dvh] sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh] sm:min-h-0'
+          // Tanpa h-[100dvh] agar modal-above-safe-area mengontrol tinggi; footer tetap di atas pita navigasi
+          'fixed left-0 right-0 top-0 modal-above-safe-area sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh] sm:min-h-0'
         )}
         overlayClassName="!z-30"
         fullscreenAnimation={isMobile}
