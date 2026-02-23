@@ -219,7 +219,7 @@ export const BlockersAndUpdatesPanel = () => {
   }, [unresolvedBlockers]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-full min-h-0">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'blockers' | 'updates')} className="flex flex-col flex-1 min-h-0">
         <div className="border-b bg-gray-50">
           <TabsList className="w-full h-auto bg-transparent p-0 rounded-none border-none">
@@ -250,7 +250,7 @@ export const BlockersAndUpdatesPanel = () => {
 
         {/* Shared Content Area - displays blockers or updates based on activeTab */}
         <div className="flex-1 overflow-hidden flex flex-col m-0 min-h-0">
-          <div className="p-3 space-y-2 seamless-scroll flex-1 overflow-auto min-h-0">
+          <div className="p-3 space-y-2 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain flex-1 min-h-0">
           {activeTab === 'blockers' ? (
             <>
               {loading ? (

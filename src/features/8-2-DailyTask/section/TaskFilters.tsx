@@ -300,8 +300,8 @@ export const TaskFilters = ({ onAddTask, showAddTaskButton = true }: TaskFilters
 
   return (
     <div className="w-full min-w-0">
-      <div className="p-1.5 sm:p-2 bg-white border border-gray-200 rounded-md">
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 seamless-scroll">
+      <div className="p-1.5 sm:p-2 bg-white border border-gray-200 rounded-md min-w-0 overflow-hidden">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden min-w-0 seamless-scroll nested-scroll-touch-chain">
       {/* Search Input - Hidden when PIC filter is active */}
       {!filters.pic && (
         <div className="relative flex-1 min-w-[140px]">

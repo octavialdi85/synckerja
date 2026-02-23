@@ -233,7 +233,7 @@ export function WhatsAppInboxPage() {
                       </div>
                     </DialogContent>
                   </Dialog>
-                  <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
                     <ConversationList
                       conversations={conversations}
                       isLoading={waLoading || igLoading || emailLoading}
@@ -289,7 +289,7 @@ export function WhatsAppInboxPage() {
                           <PanelRightClose className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 p-4">
+                      <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0 p-4">
                         <LivechatQuickActionPanel conversation={selectedConversation ?? null} />
                       </div>
                     </>

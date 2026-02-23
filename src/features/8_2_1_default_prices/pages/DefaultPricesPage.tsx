@@ -64,15 +64,15 @@ const DefaultPricesPage = () => {
       <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex-1 min-h-0">
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col min-h-0">
               <div className="flex-shrink-0 mb-1">
                 <PricingToolsHeaderAndTab activeTab={activeTab} onTabChange={handleTabChange} />
               </div>
 
               <div className="flex-1 min-h-0">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
-                  <div className="flex-1 min-h-0 overflow-hidden">
-                    <div className="h-full overflow-y-auto seamless-scroll px-4 py-6 max-h-[calc(100vh-120px)]">
+                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain px-4 py-6">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
                           <h2 className="text-lg font-semibold text-gray-900">Product & Service</h2>

@@ -198,7 +198,7 @@ const PasswordManagerPage: React.FC = () => {
                       <h3 className="text-sm font-semibold text-gray-900">Categories</h3>
                       <p className="text-xs text-gray-500 mt-1">Filter by category</p>
                     </div>
-                    <div className="flex-1 overflow-y-auto seamless-scroll p-3">
+                    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-3">
                       {!showContent ? (
                         <div className="flex items-center justify-center py-8">
                           <LoadingDots size="sm" />
@@ -244,7 +244,7 @@ const PasswordManagerPage: React.FC = () => {
                               onAddPassword={handleAddPassword}
                             />
                           </div>
-                          <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
                             <div className="p-4">
                               <PasswordList
                                 passwords={filteredPasswords}

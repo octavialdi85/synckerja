@@ -132,10 +132,8 @@ export const ClientVisitsPageContent = () => {
               </div>
 
               {/* Scrollable Sidebar Content */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full p-4 seamless-scroll max-h-[calc(100vh-120px)]">
-                  <RecentClientVisitsOverview visits={filteredVisits} />
-                </div>
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
+                <RecentClientVisitsOverview visits={filteredVisits} />
               </div>
 
               {/* Sidebar Footer */}

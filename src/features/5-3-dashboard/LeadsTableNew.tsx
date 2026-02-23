@@ -272,8 +272,8 @@ export default function LeadsTableNew({ leads, onUpdateLead, onDeleteLead, onRef
   return (
     <div className="h-full flex flex-col">
       {/* rule 3.1: satu scroll container untuk tabel, nested-scroll-touch-chain */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
-        <table className="w-full caption-bottom text-sm">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
+        <table className="w-full min-w-max caption-bottom text-sm">
           <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <TableRow className="hover:bg-transparent">
               {tableHeaders.map((header) => (

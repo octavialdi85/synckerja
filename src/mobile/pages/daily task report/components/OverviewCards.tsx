@@ -26,9 +26,6 @@ export const OverviewCards = () => {
 
   return (
     <div className="w-full">
-      <p className="text-[10px] text-gray-500 mb-1.5 p-2 md:p-0" title={t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}>
-        {t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}
-      </p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-2 p-2 md:p-0">
       <Card title={t('dailyTaskReport.overview.totalAssignments', 'Total Assignments')} value={total} color="border-gray-200" />
       <Card title={t('dailyTaskReport.overview.completed', 'Completed')} value={completed} color="border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50" />

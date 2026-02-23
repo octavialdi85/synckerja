@@ -33,11 +33,11 @@ const PlansTabPage = memo(() => {
   
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-2">
-            <div className="h-full flex flex-col overflow-hidden">
+            <div className="h-full flex flex-col min-h-0">
                 {/* Header and Tab Navigation */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -46,16 +46,16 @@ const PlansTabPage = memo(() => {
                   />
                 </div>
 
-                {/* Plans Content */}
-                <div className="flex-1 min-h-0">
+                {/* Plans Content - overflow-hidden agar section tidak overlap keluar area */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                   <Suspense fallback={
-                    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                      <div className="col-span-9">
+                    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full overflow-hidden">
+                      <div className="col-span-9 flex flex-col min-h-0">
                         <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
                           <LoadingDots size="lg" />
                         </div>
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-3 flex flex-col min-h-0">
                         <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
                           <LoadingDots size="lg" />
                         </div>

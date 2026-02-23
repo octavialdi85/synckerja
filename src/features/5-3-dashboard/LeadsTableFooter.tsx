@@ -5,21 +5,31 @@ interface LeadsTableFooterProps {
   selectedStatus?: string;
 }
 
-export const LeadsTableFooter = ({ 
-  totalLeads, 
-  convertedLeads, 
+export const LeadsTableFooter = ({
+  totalLeads,
+  convertedLeads,
   filteredLeads = totalLeads,
-  selectedStatus 
+  selectedStatus,
 }: LeadsTableFooterProps) => {
-  const statusText = selectedStatus && selectedStatus !== 'all' 
-    ? ` in ${selectedStatus}` 
-    : '';
-    
+  const statusText =
+    selectedStatus && selectedStatus !== 'all'
+      ? ` (${selectedStatus})`
+      : '';
+
   return (
-    <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>Showing {filteredLeads} of {totalLeads} leads{statusText}</span>
-        <span className="text-xs text-gray-400">Total: {totalLeads} leads</span>
+    <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+        <span>
+          Showing <span className="font-medium text-gray-800">{filteredLeads}</span> of{' '}
+          <span className="font-medium text-gray-800">{totalLeads}</span> leads
+          {statusText}
+        </span>
+        <div className="flex items-center gap-4">
+          <span>
+            Converted: <span className="font-medium text-green-700">{convertedLeads}</span>
+          </span>
+          <span className="text-gray-400">Total: {totalLeads} leads</span>
+        </div>
       </div>
     </div>
   );

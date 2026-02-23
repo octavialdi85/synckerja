@@ -12,11 +12,11 @@ const CashAdvance = () => {
 
   return (
     <StandardLayout>
-      <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
-        <div className="flex flex-1 min-h-0">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative overscroll-none">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0 px-4 pb-4 overflow-hidden">
+            <div className="h-full flex flex-col min-h-0">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <HeaderAndTab 
@@ -26,8 +26,8 @@ const CashAdvance = () => {
               </div>
 
               {/* Main Content Area */}
-              <div className="flex-1 min-h-0">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="h-full min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                   <CashAdvanceContent />
                 </div>
               </div>

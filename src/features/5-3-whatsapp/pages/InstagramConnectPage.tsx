@@ -214,7 +214,7 @@ export function InstagramConnectPage() {
               <div className="flex-shrink-0">
                 <HeaderAndTab />
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
                 <div className="min-h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4">
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_3fr] gap-6">
@@ -335,80 +335,82 @@ export function InstagramConnectPage() {
                         </CardContent>
                       </Card>
 
-                      <Card>
-                        <CardHeader>
+                      <Card className="flex flex-col min-h-0">
+                        <CardHeader className="flex-shrink-0">
                           <CardTitle>{t('instagramConnect.rightTitle', 'Connected accounts')}</CardTitle>
                           <CardDescription>{t('instagramConnect.rightDescription', 'List of connected Instagram Business accounts.')}</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                          {configLoading || accountsLoading ? (
-                            <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
-                              <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                              {t('instagramConnect.loadingAccounts', 'Loading...')}
-                            </div>
-                          ) : (
-                            <div className="space-y-4">
-                              {connectedAccounts.length === 0 && availableToConnect.length === 0 && (
-                                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                                  <Instagram className="w-12 h-12 text-slate-300 mb-3" />
-                                  <p className="text-sm text-slate-600">
-                                    {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook only to authorize.')}
-                                  </p>
-                                </div>
-                              )}
-                              {connectedAccounts.map((acc) => (
-                                <div key={acc.id} className="rounded-xl border border-purple-200/70 bg-purple-50/60 p-5 shadow-sm">
-                                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-11 h-11 rounded-xl bg-[#E4405F]/15 flex items-center justify-center shrink-0">
-                                        <Instagram className="w-6 h-6 text-[#E4405F]" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <h3 className="font-semibold text-slate-900 truncate">
-                                          {acc.instagram_username ? `@${acc.instagram_username}` : acc.instagram_name || acc.instagram_business_account_id}
-                                        </h3>
-                                        <span className="inline-flex items-center gap-1.5 text-purple-600 text-sm font-medium mt-0.5">
-                                          <CheckCircle2 className="w-4 h-4 shrink-0" />
-                                          {t('instagramConnect.connected', 'Connected')}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                                      onClick={() => handleDisconnect(acc.id)}
-                                      disabled={isDisconnecting}
-                                    >
-                                      <Unplug className="w-4 h-4 mr-2" />
-                                      {t('instagramConnect.disconnect', 'Disconnect')}
-                                    </Button>
+                        <CardContent className="flex-1 min-h-0 p-0">
+                          <div className="overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[min(50vh,420px)] min-h-0 px-6 pb-6">
+                            {configLoading || accountsLoading ? (
+                              <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
+                                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                {t('instagramConnect.loadingAccounts', 'Loading...')}
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {connectedAccounts.length === 0 && availableToConnect.length === 0 && (
+                                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                    <Instagram className="w-12 h-12 text-slate-300 mb-3" />
+                                    <p className="text-sm text-slate-600">
+                                      {t('instagramConnect.noConnectedAccounts', 'No Instagram account connected. Use Connect with Facebook only to authorize.')}
+                                    </p>
                                   </div>
-                                </div>
-                              ))}
-                              {availableToConnect.length > 0 && (
-                                <div className="pt-4 border-t border-slate-200">
-                                  <p className="text-sm font-medium text-slate-700 mb-2">Available to connect</p>
-                                  {availableToConnect.map((acc) => (
-                                    <div key={acc.id} className="flex items-center justify-between gap-3 py-2">
-                                      <span className="text-sm text-slate-600">
-                                        {acc.username ? `@${acc.username}` : acc.name || acc.id}
-                                      </span>
+                                )}
+                                {connectedAccounts.map((acc) => (
+                                  <div key={acc.id} className="rounded-xl border border-purple-200/70 bg-purple-50/60 p-5 shadow-sm">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-11 h-11 rounded-xl bg-[#E4405F]/15 flex items-center justify-center shrink-0">
+                                          <Instagram className="w-6 h-6 text-[#E4405F]" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <h3 className="font-semibold text-slate-900 truncate">
+                                            {acc.instagram_username ? `@${acc.instagram_username}` : acc.instagram_name || acc.instagram_business_account_id}
+                                          </h3>
+                                          <span className="inline-flex items-center gap-1.5 text-purple-600 text-sm font-medium mt-0.5">
+                                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                            {t('instagramConnect.connected', 'Connected')}
+                                          </span>
+                                        </div>
+                                      </div>
                                       <Button
                                         type="button"
+                                        variant="outline"
                                         size="sm"
-                                        onClick={() => handleConnect(acc)}
-                                        disabled={isConnecting}
+                                        className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                        onClick={() => handleDisconnect(acc.id)}
+                                        disabled={isDisconnecting}
                                       >
-                                        Connect
+                                        <Unplug className="w-4 h-4 mr-2" />
+                                        {t('instagramConnect.disconnect', 'Disconnect')}
                                       </Button>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                                  </div>
+                                ))}
+                                {availableToConnect.length > 0 && (
+                                  <div className="pt-4 border-t border-slate-200">
+                                    <p className="text-sm font-medium text-slate-700 mb-2">Available to connect</p>
+                                    {availableToConnect.map((acc) => (
+                                      <div key={acc.id} className="flex items-center justify-between gap-3 py-2">
+                                        <span className="text-sm text-slate-600">
+                                          {acc.username ? `@${acc.username}` : acc.name || acc.id}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => handleConnect(acc)}
+                                          disabled={isConnecting}
+                                        >
+                                          Connect
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     </div>

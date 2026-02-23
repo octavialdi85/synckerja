@@ -138,7 +138,7 @@ export function EmailConnectPage() {
               <div className="flex-shrink-0">
                 <HeaderAndTab />
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
                 <div className="min-h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4">
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_3fr] gap-6">
@@ -325,78 +325,80 @@ export function EmailConnectPage() {
                       </Card>
 
                       {/* Right: Connected accounts */}
-                      <Card>
-                        <CardHeader>
+                      <Card className="flex flex-col min-h-0">
+                        <CardHeader className="flex-shrink-0">
                           <CardTitle>{t('emailConnect.rightTitle', 'Connected accounts')}</CardTitle>
                           <CardDescription>{t('emailConnect.rightDescription', 'List of email accounts connected to CRM.')}</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                          {connectionsLoading ? (
-                            <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
-                              {t('emailConnect.loading', 'Loading...')}
-                            </div>
-                          ) : connections.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <Mail className="w-12 h-12 text-slate-300 mb-3" />
-                              <p className="text-sm text-slate-600">
-                                {t('emailConnect.noConnectedAccounts', 'No email account connected.')}
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="space-y-4">
-                              {connections.map((conn) => (
-                                <div
-                                  key={conn.id}
-                                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
-                                >
-                                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                                        <Mail className="w-5 h-5 text-blue-600" />
+                        <CardContent className="flex-1 min-h-0 p-0">
+                          <div className="overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[min(50vh,420px)] min-h-0 px-6 pb-6">
+                            {connectionsLoading ? (
+                              <div className="flex items-center justify-center py-12 text-slate-500 text-sm">
+                                {t('emailConnect.loading', 'Loading...')}
+                              </div>
+                            ) : connections.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                <Mail className="w-12 h-12 text-slate-300 mb-3" />
+                                <p className="text-sm text-slate-600">
+                                  {t('emailConnect.noConnectedAccounts', 'No email account connected.')}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {connections.map((conn) => (
+                                  <div
+                                    key={conn.id}
+                                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+                                  >
+                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                          <Mail className="w-5 h-5 text-blue-600" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="font-medium text-slate-900 truncate">{conn.email_address}</p>
+                                          <p className="text-xs text-slate-500 truncate mt-0.5" title={conn.inbound_address}>
+                                            {conn.inbound_address}
+                                          </p>
+                                          <span
+                                            className={cn(
+                                              'inline-flex text-xs font-medium mt-1',
+                                              (conn.status === 'verified' || conn.confirmation_code) ? 'text-green-600' : 'text-amber-600'
+                                            )}
+                                          >
+                                            {conn.status === 'verified' || conn.confirmation_code
+                                              ? t('emailConnect.statusVerified', 'Verified')
+                                              : t('emailConnect.statusPending', 'Pending verification')}
+                                          </span>
+                                        </div>
                                       </div>
-                                      <div className="min-w-0">
-                                        <p className="font-medium text-slate-900 truncate">{conn.email_address}</p>
-                                        <p className="text-xs text-slate-500 truncate mt-0.5" title={conn.inbound_address}>
-                                          {conn.inbound_address}
-                                        </p>
-                                        <span
-                                          className={cn(
-                                            'inline-flex text-xs font-medium mt-1',
-                                            (conn.status === 'verified' || conn.confirmation_code) ? 'text-green-600' : 'text-amber-600'
-                                          )}
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={handleOpenLiveChat}
+                                          className="text-blue-600 border-blue-200"
                                         >
-                                          {conn.status === 'verified' || conn.confirmation_code
-                                            ? t('emailConnect.statusVerified', 'Verified')
-                                            : t('emailConnect.statusPending', 'Pending verification')}
-                                        </span>
+                                          <MessageCircle className="w-4 h-4 mr-1" />
+                                          {t('emailConnect.liveChat', 'Live Chat')}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-red-600 border-red-200"
+                                          onClick={() => handleRemoveConnection(conn)}
+                                        >
+                                          <Unplug className="w-4 h-4" />
+                                        </Button>
                                       </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleOpenLiveChat}
-                                        className="text-blue-600 border-blue-200"
-                                      >
-                                        <MessageCircle className="w-4 h-4 mr-1" />
-                                        {t('emailConnect.liveChat', 'Live Chat')}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-red-600 border-red-200"
-                                        onClick={() => handleRemoveConnection(conn)}
-                                      >
-                                        <Unplug className="w-4 h-4" />
-                                      </Button>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     </div>

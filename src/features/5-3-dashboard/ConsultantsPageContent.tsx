@@ -244,9 +244,9 @@ export const ConsultantsPageContent = () => {
           <LoadingDots size="lg" />
         </div>
       ) : (
-      <div className="flex-1 grid grid-cols-12 gap-2 min-h-[100vh] min-w-0 overflow-hidden">
-        {/* Section utama - 9 columns — rule 3.1 */}
-        <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full overflow-hidden">
+        {/* Section utama - 9 columns, full height memenuhi area grid */}
+        <div className="col-span-9 h-full flex flex-col min-h-0 overflow-hidden">
           <div className="h-full flex flex-col min-h-0 overflow-hidden">
             <div className="flex-shrink-0 mb-2">
               <div className="bg-white border rounded-md p-2">
@@ -263,13 +263,16 @@ export const ConsultantsPageContent = () => {
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
               <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
-                <LeadsTableNew 
-                  leads={filteredLeads}
-                  onUpdateLead={updateLead}
-                  onDeleteLead={deleteLead}
-                  onRefreshLeads={refetch}
-                  loading={loading}
-                />
+                {/* Area tabel saja yang scroll; footer tetap di bawah dan selalu terlihat */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <LeadsTableNew 
+                    leads={filteredLeads}
+                    onUpdateLead={updateLead}
+                    onDeleteLead={deleteLead}
+                    onRefreshLeads={refetch}
+                    loading={loading}
+                  />
+                </div>
                 <LeadsTableFooter 
                   totalLeads={leads.length}
                   convertedLeads={convertedLeads}
@@ -281,8 +284,8 @@ export const ConsultantsPageContent = () => {
           </div>
         </div>
 
-        {/* Sidebar kanan — rule 3.1: satu scroll container; saat mentok chain ke content wrapper (halaman utama) */}
-        <div className="col-span-3 flex flex-col min-h-0 overflow-hidden">
+        {/* Sidebar Report Summary - full height memenuhi area grid, scroll di dalam */}
+        <div className="col-span-3 h-full flex flex-col min-h-0 overflow-hidden">
           <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden min-h-0">
             <div className="px-4 py-1.5 border-b flex-shrink-0">
               <div className="flex items-center justify-between">

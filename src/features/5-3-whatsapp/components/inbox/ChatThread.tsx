@@ -1060,7 +1060,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
         )}
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto seamless-scroll pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.75rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain pl-4 pr-2 pt-6 min-h-0 bg-[#efeae2] flex flex-col-reverse gap-y-1 ${hideHeader ? (keyboardOpen ? 'pb-20' : 'pb-[calc(3.75rem+max(var(--safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px)+0.5rem))]') : 'pb-[84px]'}`}
         {...(hideHeader ? { onTouchStart: unlockInboundNotificationAudio } : {})}
       >
         {isLoading ? (
@@ -1243,7 +1243,7 @@ export function ChatThread({ conversation, connectedPhoneNumberIds, hasNoConnect
             <div
               id={`msg-${msg.id}`}
               key={msg.id}
-              className={`flex items-start gap-2 ${marginBetween} ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
+              className={`flex items-start gap-2 shrink-0 ${marginBetween} ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'} ${effectiveScrollToMessageId === msg.id ? 'cursor-pointer' : ''}`}
               onClick={
                 effectiveScrollToMessageId === msg.id
                   ? (e) => {

@@ -30,8 +30,8 @@ const ManagementContent = memo(() => {
             </div>
           </div>
 
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+          {/* Scrollable Content - rule 3.1: satu scroll per panel, chaining ke halaman */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             <div className="p-4 space-y-4">
               {/* Enhanced Subscription Management */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -66,16 +66,16 @@ const ManagementContent = memo(() => {
       </div>
 
       {/* Sidebar Section - 3 columns */}
-      <div className="col-span-3 h-full">
-        <div className="bg-white border rounded-lg h-full flex flex-col">
+      <div className="col-span-3 flex flex-col min-h-0 h-full">
+        <div className="bg-white border rounded-lg h-full flex flex-col min-h-0 overflow-hidden">
           {/* Sidebar Header */}
           <div className="px-4 py-1.5 border-b flex-shrink-0">
             <h3 className="text-sm font-semibold text-gray-900">Quick Info</h3>
             <p className="text-xs text-gray-500 mt-1">Subscription details</p>
           </div>
 
-          {/* Scrollable Sidebar Content */}
-          <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+          {/* Scrollable Sidebar Content - rule 3.1: satu scroll per panel, chaining ke halaman */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
             <div className="space-y-3">
               <div className="p-3 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-500 mb-1">Current Plan</p>
@@ -155,7 +155,7 @@ const ManagementTabPage = memo(() => {
   
   return (
     <StandardLayout>
-      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+      <div className="h-screen bg-gray-100 flex flex-col font-sans relative overflow-hidden">
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-2">
@@ -168,8 +168,8 @@ const ManagementTabPage = memo(() => {
                   />
                 </div>
 
-                {/* Management Content - single loading state to avoid flicker */}
-                <div className="flex-1 min-h-0">
+                {/* Management Content - single loading state; overflow-hidden agar section tidak overlap */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                   {pageLoading ? loadingFallback : <ManagementContent />}
                 </div>
             </div>

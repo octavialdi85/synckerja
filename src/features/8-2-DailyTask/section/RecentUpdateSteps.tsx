@@ -246,7 +246,7 @@ const RecentUpdateSteps = () => {
         )}
       </div>
       
-      <div className="space-y-3 max-h-64 overflow-y-auto seamless-scroll">
+      <div className="space-y-3 max-h-64 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         {displayUpdates.map((update) => {
           const isClicked = clickedUpdateId === update.id;
           return (

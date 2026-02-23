@@ -48,7 +48,7 @@ const MeetingNotesContent = () => {
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col min-h-0">
                 {/* Header and Tabs */}
                 <div className="flex-shrink-0 mb-1">
                   <HeaderAndTab 
@@ -73,11 +73,9 @@ const MeetingNotesContent = () => {
                           <MeetingNotesInput />
                         </div>
 
-                        {/* Scrollable Table Content */}
-                        <div className="flex-1 min-h-0 overflow-hidden max-h-[calc(100vh-120px)]">
-                          <div className="h-full p-4 overflow-y-auto overflow-x-auto seamless-scroll">
-                            <MeetingPointsTable />
-                          </div>
+                        {/* Single scroll container: inside MeetingPointsTable */}
+                        <div className="flex-1 min-h-0 p-4">
+                          <MeetingPointsTable />
                         </div>
 
                         {/* Table Footer */}
@@ -90,8 +88,8 @@ const MeetingNotesContent = () => {
                   </div>
                   
                   {/* Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <div className="bg-white border rounded-lg h-full flex flex-col">
+                  <div className="col-span-3 h-full flex flex-col min-h-0">
+                    <div className="bg-white border rounded-lg h-full flex flex-col min-h-0">
                         {/* Sidebar Header */}
                         <div className="px-4 py-1.5 border-b flex-shrink-0">
                           <h3 className="text-sm font-semibold text-gray-900">Meeting Summary</h3>
@@ -99,7 +97,7 @@ const MeetingNotesContent = () => {
                         </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] p-4">
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
                         <MeetingSummaryCards />
                       </div>
 

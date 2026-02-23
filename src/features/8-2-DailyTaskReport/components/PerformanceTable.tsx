@@ -344,7 +344,7 @@ export const PerformanceTable = () => {
           </div>
         )}
       </div>
-      <div className="flex-1 min-h-0 seamless-scroll overflow-x-auto overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
         {viewMode === 'performance' ? (
           /* Assignments Performance Table */
           <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>

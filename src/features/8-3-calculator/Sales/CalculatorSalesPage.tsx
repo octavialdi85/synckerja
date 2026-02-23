@@ -36,7 +36,7 @@ const CalculatorSalesPage = () => {
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-            <div className="h-full flex flex-col">
+            <div className="h-full flex flex-col min-h-0">
               {/* Header and Tabs */}
               <div className="flex-shrink-0 mb-1">
                 <SalesHeaderAndTab />
@@ -48,8 +48,8 @@ const CalculatorSalesPage = () => {
                   {/* Main Content Area */}
                   <div className="col-span-9 h-full min-h-0">
                     <div className="h-full bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col min-h-0">
-                      <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] px-6 py-6">
+                      <div className="flex-1 min-h-0 flex flex-col">
+                        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain px-6 py-6">
                           <div className="space-y-4 pb-4">
                             {/* Sales Calculator Wrapper */}
                             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/features/ui/tabs";
@@ -43,7 +43,18 @@ const sortSummaries = (summaries: JobDescEmployeeSummary[]) => {
   });
 };
 
-export const JobDescTracker = () => {
+export type JobDescTrackerStats = {
+  assignments: number;
+  busy: number;
+  idle: number;
+  pendingDays: number;
+};
+
+interface JobDescTrackerProps {
+  onStatsChange?: (stats: JobDescTrackerStats) => void;
+}
+
+export const JobDescTracker = ({ onStatsChange }: JobDescTrackerProps) => {
   const { t } = useAppTranslation();
   const [timeframe, setTimeframe] = useState<JobDescTimeframe>("weekly");
   const [customRange, setCustomRange] = useState<DateRangeValue>({
@@ -114,6 +125,10 @@ export const JobDescTracker = () => {
     };
   }, [filteredSummaries]);
 
+  useEffect(() => {
+    onStatsChange?.(metrics);
+  }, [metrics, onStatsChange]);
+
   const renderFilters = () => (
     <JobDescFilters
       timeframe={timeframe}
@@ -150,7 +165,7 @@ export const JobDescTracker = () => {
           })}
         </p>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 seamless-scroll p-0">
+      <CardContent className="flex-1 min-h-0 p-0">
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as "overview" | "detail")}
@@ -181,7 +196,7 @@ export const JobDescTracker = () => {
 
           <TabsContent
             value="overview"
-            className="flex-1 min-h-0 overflow-y-auto px-2 pb-4 seamless-scroll"
+            className="flex-1 min-h-0 px-2 pb-4"
           >
             <div className="space-y-3">
               {renderFilters()}
@@ -225,7 +240,7 @@ export const JobDescTracker = () => {
 
           <TabsContent
             value="detail"
-            className="flex-1 min-h-0 overflow-y-auto px-2 pb-4 seamless-scroll"
+            className="flex-1 min-h-0 px-2 pb-4"
           >
             <div className="space-y-3">
               {renderFilters()}

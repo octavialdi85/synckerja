@@ -232,7 +232,7 @@ export function WhatsAppConnectPage() {
               <div className="flex-shrink-0">
                 <HeaderAndTab />
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
                 <div className="min-h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4">
                   <div className="space-y-6">
                     <AlertDialog open={!!disconnectTarget} onOpenChange={(open) => !open && setDisconnectTarget(null)}>

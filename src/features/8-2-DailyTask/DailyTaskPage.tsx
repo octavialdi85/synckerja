@@ -13,7 +13,8 @@ import { CreateDailyTemplateModal } from './section/CreateDailyTemplateModal';
 import { DailyTaskProvider, useDailyTask } from './DailyTaskContext';
 import { MeetingNotesProvider } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { LoadingDots } from '@/components/LoadingDots';
-import { JobDescTracker } from './section/JobDescTracker';
+import { JobDescTracker, type JobDescTrackerStats } from './section/JobDescTracker';
+import { JobDescSidebarFooter } from './section/JobDescSidebarFooter';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 const DailyTaskPage = () => {
@@ -32,6 +33,12 @@ const DailyTaskContent = () => {
   const { tasks, filteredTasks, isLoading, setFilters, setExpandedTasks, setHighlightedTask, scrollToStep } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
+  const [jobDescStats, setJobDescStats] = useState<JobDescTrackerStats>({
+    assignments: 0,
+    busy: 0,
+    idle: 0,
+    pendingDays: 0,
+  });
   const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
   const [createTemplateSheetOpen, setCreateTemplateSheetOpen] = useState(false);
   const appliedNavParamsRef = useRef(false);
@@ -110,11 +117,9 @@ const DailyTaskContent = () => {
                     </div>
                     <div className="flex-1 min-h-0">
                       <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                        {/* Scrollable Task Content */}
-                        <div className="flex-1 min-h-0 overflow-hidden">
-                          <div className="h-full p-4">
-                            <TaskList />
-                          </div>
+                        {/* Single scroll container: inside TaskList (table wrapper) */}
+                        <div className="flex-1 min-h-0 p-4">
+                          <TaskList />
                         </div>
 
                         {/* Task Footer */}
@@ -128,8 +133,8 @@ const DailyTaskContent = () => {
                   </div>
                   
                   {/* Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full max-h-[calc(100vh-120px)]">
-                    <div className="bg-white border rounded-lg h-full flex flex-col">
+                  <div className="col-span-3 h-full max-h-[calc(100vh-120px)] flex flex-col min-h-0">
+                    <div className="bg-white border rounded-lg h-full flex flex-col min-h-0">
                         {/* Sidebar Header with Tabs */}
                         <div className="border-b flex-shrink-0">
                           {/* Tab Buttons */}
@@ -169,12 +174,14 @@ const DailyTaskContent = () => {
                         </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
                         {sidebarTab === 'summary' && <TaskSummaryCards />}
                         {sidebarTab === 'initiative' && (
                           <TaskInitiative onStatsChange={setInitiativeStats} />
                         )}
-                        {sidebarTab === 'jobdesc' && <JobDescTracker />}
+                        {sidebarTab === 'jobdesc' && (
+                          <JobDescTracker onStatsChange={setJobDescStats} />
+                        )}
                       </div>
 
                       {/* Sidebar Footer - Conditional based on active tab */}
@@ -189,6 +196,14 @@ const DailyTaskContent = () => {
                         <TaskInitiativeFooter 
                           totalItems={initiativeStats.totalItems}
                           unassignedItems={initiativeStats.unassignedItems}
+                        />
+                      )}
+                      {sidebarTab === 'jobdesc' && (
+                        <JobDescSidebarFooter
+                          assignments={jobDescStats.assignments}
+                          busy={jobDescStats.busy}
+                          idle={jobDescStats.idle}
+                          pendingDays={jobDescStats.pendingDays}
                         />
                       )}
                     </div>

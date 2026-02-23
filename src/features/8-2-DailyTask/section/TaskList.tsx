@@ -276,10 +276,10 @@ export const TaskList = () => {
   return (
     <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <TooltipProvider>
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col min-h-0">
           <div
             ref={scrollContainerRef}
-            className="flex-1 min-h-0 max-h-[calc(100vh-120px)] seamless-scroll overflow-auto"
+            className="flex-1 min-h-0 max-h-[calc(100vh-120px)] overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain"
           >
             <table className="w-full caption-bottom text-sm task-list-table">
               <TaskListTableHeader />

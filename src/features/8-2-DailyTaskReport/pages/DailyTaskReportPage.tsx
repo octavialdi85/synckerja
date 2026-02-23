@@ -25,7 +25,8 @@ const DailyTaskReportContent = () => {
             <OverviewCards />
           </div>
           <div className="flex-shrink-0 px-0 pb-0.5"><Filters /></div>
-          <div className="flex-1 min-h-0 seamless-scroll">
+          {/* Single scroll container: inside PerformanceTable (table wrapper) */}
+          <div className="flex-1 min-h-0">
             <PerformanceTable />
           </div>
         </div>
@@ -42,7 +43,7 @@ const DailyTaskReportPage = () => {
     <DailyTaskReportProvider>
       <StandardLayout>
         <div className="h-screen bg-gray-100 flex flex-col font-sans relative">
-          <div className="flex-1 flex flex-col px-3 pb-3">
+          <div className="flex-1 flex flex-col min-h-0 px-3 pb-3">
             <div className="flex-shrink-0 mb-1">
               <HeaderAndTab activeTab="daily-task-report" onTabChange={() => {}} />
             </div>

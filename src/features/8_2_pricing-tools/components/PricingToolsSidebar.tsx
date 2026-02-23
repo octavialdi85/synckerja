@@ -185,8 +185,8 @@ export const PricingToolsSidebar = ({
     }
   };
   return (
-    <div className="h-full flex flex-col">
-      <div className="h-full flex flex-col space-y-2">
+    <div className="h-full flex flex-col min-h-0">
+      <div className="h-full flex flex-col min-h-0 space-y-2">
         {/* Calculation Results Card */}
         <Card className="flex-shrink-0">
           <CardHeader className="pb-2">
@@ -423,11 +423,9 @@ export const PricingToolsSidebar = ({
           </DialogContent>
         </Dialog>
 
-        {/* Tutorial Section */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <div className="h-full overflow-y-auto seamless-scroll">
-            <PriceCalculatorTutorial />
-          </div>
+        {/* Tutorial Section - single scroll container for sidebar content */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+          <PriceCalculatorTutorial />
         </div>
       </div>
     </div>

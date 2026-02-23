@@ -389,11 +389,11 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
   }
 
   return (
-    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+    <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full overflow-hidden">
       {/* Main Content Section - 9 columns */}
-      <div className="col-span-9 flex flex-col min-h-0">
-        <div className="flex-1 min-h-0">
-          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+      <div className="col-span-9 flex flex-col min-h-0 h-full">
+        <div className="flex-1 min-h-0 min-w-0">
+          <div className="h-full min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
             {/* Content Header */}
             <div className="px-4 py-2 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -404,8 +404,8 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
               </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+            {/* Scrollable Content - single scroll per panel (rule 3.1) */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
               <div className="p-4 space-y-4">
                 {/* Pending Changes Card */}
                 <PendingChangesCard />
@@ -489,16 +489,16 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       </div>
       
       {/* Sidebar Section - 3 columns */}
-      <div className="col-span-3 h-full">
-        <div className="bg-white border rounded-lg h-full flex flex-col">
+      <div className="col-span-3 h-full min-h-0 min-w-0">
+        <div className="bg-white border rounded-lg h-full flex flex-col min-h-0 overflow-hidden">
           {/* Sidebar Header */}
           <div className="px-4 py-1.5 border-b flex-shrink-0">
             <h3 className="text-sm font-semibold text-gray-900">{t('subscription.plans.comparison.title', 'Plan Comparison')}</h3>
             <p className="text-xs text-gray-500 mt-1">{t('subscription.plans.comparison.description', 'Compare features and pricing')}</p>
           </div>
 
-          {/* Scrollable Sidebar Content */}
-          <div className="flex-1 overflow-y-auto seamless-scroll p-4">
+          {/* Scrollable Sidebar Content - single scroll per panel (rule 3.1) */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
             <div className="space-y-4">
               {/* Current Plan Summary */}
               {subscriptionStatus && (

@@ -480,7 +480,7 @@ export const HabitSpreadsheetView = () => {
       </div>
 
       {/* Unified Scroll Container - spinner when loading, table when loaded (one layout, no flicker) */}
-      <div ref={unifiedScrollRef} className="flex-1 overflow-x-auto overflow-y-auto seamless-scroll relative flex flex-col">
+      <div ref={unifiedScrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto seamless-scroll nested-scroll-touch-chain relative flex flex-col">
         {!showContent ? (
           <div className="flex-1 flex items-center justify-center min-h-[200px]">
             <div className="flex flex-col items-center gap-3">

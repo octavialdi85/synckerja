@@ -206,7 +206,7 @@ export const VisitSchedulingTable = memo(({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         <table className="w-full caption-bottom text-sm">
           <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <TableRow className="hover:bg-transparent">
