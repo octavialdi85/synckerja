@@ -73,7 +73,8 @@ export function useInstagramConversations() {
       if (error) throw error;
       return (data ?? []) as InstagramConversation[];
     },
-    refetchInterval: 10000,
+    refetchInterval: 20000,
+    refetchOnWindowFocus: false,
     staleTime: 30_000,
   });
 }

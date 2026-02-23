@@ -19,6 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { Skeleton } from '@/mobile/components/ui/skeleton';
+import { logger } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface ResolvedBlockerRow {
   id: string;
@@ -37,6 +39,7 @@ export const PerformanceTable = () => {
   const { filtered: rows, loading, getBlockersForStep, filteredBlockers, filters } = useDailyTaskReport();
   const { organizationId } = useCurrentOrg();
   const { toast } = useToast();
+  const { t } = useAppTranslation();
   const [openForStep, setOpenForStep] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'performance' | 'resolved'>('performance');
   const [resolvedRows, setResolvedRows] = useState<ResolvedBlockerRow[]>([]);
@@ -54,18 +57,21 @@ export const PerformanceTable = () => {
 
   // Fetch resolved blocker details when switching to resolved view
   useEffect(() => {
+    let cancelled = false;
+
     const fetchResolvedDetails = async () => {
       if (viewMode !== 'resolved' || !organizationId) return;
-      
+
       setLoadingResolved(true);
       try {
-        const { data: resolvedData, error } = await (supabase as any).rpc('get_all_resolved_blockers', {
+        const { data: resolvedData, error } = await supabase.rpc('get_all_resolved_blockers', {
           p_organization_id: organizationId,
           p_limit: 100
         });
 
+        if (cancelled) return;
         if (error) {
-          console.error('Error loading resolved blockers:', error);
+          logger.error('Error loading resolved blockers:', error);
           setResolvedRows([]);
           setLoadingResolved(false);
           return;
@@ -96,16 +102,19 @@ export const PerformanceTable = () => {
           };
         });
 
+        if (cancelled) return;
         setResolvedRows(mapped);
       } catch (error) {
-        console.error('Error in fetchResolvedDetails:', error);
+        if (cancelled) return;
+        logger.error('Error in fetchResolvedDetails:', error);
         setResolvedRows([]);
       } finally {
-        setLoadingResolved(false);
+        if (!cancelled) setLoadingResolved(false);
       }
     };
 
     fetchResolvedDetails();
+    return () => { cancelled = true; };
   }, [viewMode, organizationId]);
 
   const handleEditResolution = (row: ResolvedBlockerRow) => {
@@ -126,10 +135,10 @@ export const PerformanceTable = () => {
         .single();
 
       if (error) {
-        console.error('Error updating resolution:', error);
+        logger.error('Error updating resolution:', error);
         toast({
-          title: 'Error',
-          description: `Failed to update resolution: ${error.message}`,
+          title: t('dailyTaskReport.toast.error', 'Error'),
+          description: `${t('dailyTaskReport.errors.updateResolution', 'Failed to update resolution')}: ${error.message}`,
           variant: 'destructive',
         });
         return;
@@ -145,14 +154,14 @@ export const PerformanceTable = () => {
       setEditResolutionText('');
 
       toast({
-        title: 'Success',
-        description: 'Resolution details updated successfully',
+        title: t('dailyTaskReport.toast.success', 'Success'),
+        description: t('dailyTaskReport.success.resolutionUpdated', 'Resolution details updated successfully'),
       });
     } catch (error: any) {
-      console.error('Unexpected error updating resolution:', error);
+      logger.error('Unexpected error updating resolution:', error);
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
+        title: t('dailyTaskReport.toast.error', 'Error'),
+        description: t('dailyTaskReport.errors.generic', 'An unexpected error occurred'),
         variant: 'destructive',
       });
     } finally {
@@ -174,10 +183,10 @@ export const PerformanceTable = () => {
         .eq('id', rowToDelete.id);
 
       if (deleteResError) {
-        console.error('Error deleting resolution:', deleteResError);
+        logger.error('Error deleting resolution:', deleteResError);
         toast({
-          title: 'Error',
-          description: `Failed to delete resolution: ${deleteResError.message}`,
+          title: t('dailyTaskReport.toast.error', 'Error'),
+          description: `${t('dailyTaskReport.errors.deleteResolution', 'Failed to delete resolution')}: ${deleteResError.message}`,
           variant: 'destructive',
         });
         setIsDeleting(false);
@@ -190,10 +199,10 @@ export const PerformanceTable = () => {
         .eq('id', rowToDelete.task_step_history_id);
 
       if (updateError) {
-        console.error('Error updating blocker status:', updateError);
+        logger.error('Error updating blocker status:', updateError);
         toast({
-          title: 'Warning',
-          description: 'Resolution deleted but blocker status not updated',
+          title: t('dailyTaskReport.toast.warning', 'Warning'),
+          description: t('dailyTaskReport.errors.resolutionDeletedBlockerNotUpdated', 'Resolution deleted but blocker status not updated'),
           variant: 'destructive',
         });
       }
@@ -202,14 +211,14 @@ export const PerformanceTable = () => {
       setDeletingRowId(null);
 
       toast({
-        title: 'Success',
-        description: 'Resolution deleted successfully',
+        title: t('dailyTaskReport.toast.success', 'Success'),
+        description: t('dailyTaskReport.success.resolutionDeleted', 'Resolution deleted successfully'),
       });
     } catch (error: any) {
-      console.error('Error deleting resolution:', error);
+      logger.error('Error deleting resolution:', error);
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
+        title: t('dailyTaskReport.toast.error', 'Error'),
+        description: t('dailyTaskReport.errors.generic', 'An unexpected error occurred'),
         variant: 'destructive',
       });
     } finally {

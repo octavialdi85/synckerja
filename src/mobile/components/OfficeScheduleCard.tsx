@@ -1,20 +1,22 @@
 import { Clock, MapPin } from "lucide-react";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
-import { useWorkSchedule } from "@/mobile/hooks/useWorkSchedule";
+import type { WorkSchedule, ScheduleDay } from "@/mobile/hooks/useWorkSchedule";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { LANGUAGE_STORAGE_KEY } from "@/features/share/i18n/translations";
 
-export const OfficeScheduleCard = () => {
+export interface OfficeScheduleCardProps {
+  workSchedule: WorkSchedule | null;
+  scheduleData: ScheduleDay[];
+  loading: boolean;
+  error: string | null;
+  refetch?: () => void;
+}
+
+export const OfficeScheduleCard = ({ workSchedule, scheduleData, loading, error }: OfficeScheduleCardProps) => {
   const { t, language } = useAppTranslation();
   const storedLang = typeof window !== "undefined" ? window.localStorage.getItem(LANGUAGE_STORAGE_KEY) : null;
   const useId = (storedLang === "id" || storedLang === "en" ? storedLang : language) === "id";
   const th = (idLabel: string, enLabel: string) => (useId ? idLabel : enLabel);
-  const {
-    workSchedule,
-    scheduleData,
-    loading,
-    error
-  } = useWorkSchedule();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -173,8 +175,8 @@ export const OfficeScheduleCard = () => {
           {workSchedule.break_start_time && workSchedule.break_end_time && (
             <span className="text-xs text-muted-foreground">
               {t("schedule.breakLabel", "Istirahat: {{start}} - {{end}}", {
-                start: workSchedule.break_start_time.slice(0, 5),
-                end: workSchedule.break_end_time.slice(0, 5),
+                start: workSchedule.break_start_time?.slice(0, 5),
+                end: workSchedule.break_end_time?.slice(0, 5),
               })}
             </span>
           )}

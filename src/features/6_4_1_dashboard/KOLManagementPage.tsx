@@ -49,12 +49,11 @@ export const KOLManagementPage = () => {
 
   return (
     <>
-      {/* Grid Layout: 12 columns (9-3) - Same as EmployeePage */}
-      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
-        {/* Main Content - 9 columns */}
-        <div className="col-span-9 h-full">
-          <div className="h-full flex flex-col">
-            {/* Filter Section */}
+      {/* Grid: section utama (tabel) + sidebar kanan — scroll-chaining rule 3.1: satu scroll per panel */}
+      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full overflow-hidden">
+        {/* Section utama - Tabel - 9 columns — rule 3.1 */}
+        <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col min-h-0 overflow-hidden">
             <div className="flex-shrink-0 mb-2">
               <div className="bg-white border rounded-md p-2">
                 <KOLManagementFilters 
@@ -65,15 +64,11 @@ export const KOLManagementPage = () => {
                 />
               </div>
             </div>
-            
-            {/* Metrics Cards Section */}
             <div className="flex-shrink-0 mb-2">
               <KOLManagementMetricsCards metrics={metrics} isLoading={isLoading} />
             </div>
-            
-            {/* Table Section - Main Content */}
-            <div className="flex-1 min-h-0">
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                 <KOLManagementTable 
                   profiles={filteredProfiles} 
                   isLoading={isLoading}
@@ -83,39 +78,30 @@ export const KOLManagementPage = () => {
             </div>
           </div>
         </div>
-        
-        {/* Right Column - Overview Sidebar (25% like employee page) */}
-        <div className="col-span-3 h-full">
-          <div className="h-full flex flex-col">
-            <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-              {/* Sidebar Header */}
-              <div className="px-4 py-1.5 border-b flex-shrink-0">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {t('kolManagement.overview.title', 'KOL Overview')}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {t('kolManagement.overview.description', 'Summary of KOL data')}
-                    </p>
-                  </div>
+
+        {/* Sidebar kanan - Overview — rule 3.1: satu scroll container */}
+        <div className="col-span-3 flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden min-h-0">
+            <div className="px-4 py-1.5 border-b flex-shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {t('kolManagement.overview.title', 'KOL Overview')}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('kolManagement.overview.description', 'Summary of KOL data')}
+                  </p>
                 </div>
               </div>
-
-              {/* Scrollable Sidebar Content */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full p-4">
-                  <KOLManagementOverview metrics={metrics} profiles={filteredProfiles} />
-                </div>
-              </div>
-
-              {/* Sidebar Footer */}
-              <KOLManagementSidebarFooter 
-                totalCategories={categories}
-                selectedCategory={filters.category || 'all'}
-                totalKOLs={filteredProfiles.length}
-              />
             </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
+              <KOLManagementOverview metrics={metrics} profiles={filteredProfiles} />
+            </div>
+            <KOLManagementSidebarFooter 
+              totalCategories={categories}
+              selectedCategory={filters.category || 'all'}
+              totalKOLs={filteredProfiles.length}
+            />
           </div>
         </div>
       </div>

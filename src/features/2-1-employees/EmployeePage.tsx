@@ -134,7 +134,7 @@ export const EmployeePage = () => {
                 {/* Right Column - Overview Sidebar (25% like employee page) */}
                 <div className="col-span-3 h-full">
                   <div className="h-full flex flex-col">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-120px)]">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
                         <div className="flex items-start justify-between gap-3">
@@ -154,7 +154,7 @@ export const EmployeePage = () => {
 
                       {/* Scrollable Sidebar Content */}
                       <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full p-4">
+                        <div className="h-full p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
                           <EmployeeOverview employees={filteredEmployees} />
                         </div>
                       </div>

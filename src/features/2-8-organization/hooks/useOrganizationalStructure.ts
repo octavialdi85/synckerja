@@ -3,10 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
+import { isEmployeeInOrganizationalStructure } from '@/features/2-1-employees/utils/employeeUtils';
 
 export const useOrganizationalStructure = () => {
   const { organizationId } = useCurrentOrg();
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees();
+  const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees();
+
+  // Exclude only resigned/terminated/inactive/pending removal; include active, probation, contract, etc.
+  const employees = useMemo(
+    () => allEmployees.filter(isEmployeeInOrganizationalStructure),
+    [allEmployees]
+  );
 
   // Fetch departments
   const { data: departments = [], isLoading: departmentsLoading } = useQuery({

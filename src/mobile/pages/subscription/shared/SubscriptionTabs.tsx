@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Layers, Settings2 } from "lucide-react";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { cn } from "@/lib/utils";
 
 export type SubscriptionTabKey = "overview" | "plans" | "management";
@@ -16,20 +17,6 @@ const tabItems = [
   { key: "plans" as const, icon: Layers },
   { key: "management" as const, icon: Settings2 },
 ];
-
-const useAppTranslation = () => {
-  const translate = useCallback(
-    (_: string, defaultValue: string, variables?: Record<string, string | number>) => {
-      if (!variables) return defaultValue;
-      return Object.entries(variables).reduce<string>(
-        (acc, [placeholder, value]) => acc.replace(`{{${placeholder}}}`, String(value)),
-        defaultValue,
-      );
-    },
-    [],
-  );
-  return { t: translate };
-};
 
 export interface SubscriptionBottomTabsProps {
   activeTab: SubscriptionTabKey;

@@ -19,9 +19,11 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
+import { logger } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const BlockersAndUpdatesPanel = () => {
-  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport() as any;
+  const { filteredBlockers: blockers, filteredRecentUpdates: recentUpdates, loading } = useDailyTaskReport();
   const [activeTab, setActiveTab] = useState<'blockers' | 'updates'>('blockers');
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'list' | 'resolved'>('list');
@@ -34,6 +36,7 @@ export const BlockersAndUpdatesPanel = () => {
   const [editDescription, setEditDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const { t } = useAppTranslation();
 
   const handleResolve = async (blocker: any) => {
     setResolutionFor(blocker);
@@ -49,10 +52,10 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', resolutionFor.id);
       
       if (error) {
-        console.error('Error updating blocker resolution status:', error);
+        logger.error('Error updating blocker resolution status:', error);
         toast({
-          title: 'Error',
-          description: `Failed to mark blocker as resolved: ${error.message}`,
+          title: t('dailyTaskReport.toast.error', 'Error'),
+          description: `${t('dailyTaskReport.errors.markBlockerResolved', 'Failed to mark blocker as resolved')}: ${error.message}`,
           variant: 'destructive',
         });
         return;
@@ -64,12 +67,12 @@ export const BlockersAndUpdatesPanel = () => {
         });
       
       if (checkError) {
-        console.error('Error verifying blocker resolution:', checkError);
+        logger.error('Error verifying blocker resolution:', checkError);
       } else if (!resolutionCheck || resolutionCheck.length === 0) {
-        console.warn('⚠️ Blocker marked as resolved but no resolution entry found');
+        logger.warn('⚠️ Blocker marked as resolved but no resolution entry found');
         toast({
-          title: 'Warning',
-          description: 'Blocker marked as resolved but resolution details may not have been saved',
+          title: t('dailyTaskReport.toast.warning', 'Warning'),
+          description: t('dailyTaskReport.errors.resolutionDetailsNotSaved', 'Blocker marked as resolved but resolution details may not have been saved'),
           variant: 'destructive',
         });
       }
@@ -78,14 +81,14 @@ export const BlockersAndUpdatesPanel = () => {
       setResolutionFor(null);
       
       toast({
-        title: 'Success',
-        description: 'Blocker marked as resolved',
+        title: t('dailyTaskReport.toast.success', 'Success'),
+        description: t('dailyTaskReport.success.blockerResolved', 'Blocker marked as resolved'),
       });
     } catch (error: any) {
-      console.error('Unexpected error in handleResolutionComplete:', error);
+      logger.error('Unexpected error in handleResolutionComplete:', error);
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred while updating blocker status',
+        title: t('dailyTaskReport.toast.error', 'Error'),
+        description: t('dailyTaskReport.errors.updateBlockerStatus', 'An unexpected error occurred while updating blocker status'),
         variant: 'destructive',
       });
     }
@@ -106,10 +109,10 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', deletingBlocker.id);
 
       if (error) {
-        console.error('Error deleting blocker:', error);
+        logger.error('Error deleting blocker:', error);
         toast({
-          title: 'Error',
-          description: `Failed to delete blocker: ${error.message}`,
+          title: t('dailyTaskReport.toast.error', 'Error'),
+          description: `${t('dailyTaskReport.errors.deleteBlocker', 'Failed to delete blocker')}: ${error.message}`,
           variant: 'destructive',
         });
         return;
@@ -122,7 +125,7 @@ export const BlockersAndUpdatesPanel = () => {
           .eq('task_step_history_id', deletingBlocker.id);
 
         if (resError) {
-          console.warn('Could not delete resolution entry:', resError);
+          logger.warn('Could not delete resolution entry:', resError);
         }
       }
 
@@ -130,14 +133,14 @@ export const BlockersAndUpdatesPanel = () => {
       setDeletingBlocker(null);
 
       toast({
-        title: 'Success',
-        description: 'Blocker deleted successfully',
+        title: t('dailyTaskReport.toast.success', 'Success'),
+        description: t('dailyTaskReport.success.blockerDeleted', 'Blocker deleted successfully'),
       });
     } catch (error: any) {
-      console.error('Unexpected error deleting blocker:', error);
+      logger.error('Unexpected error deleting blocker:', error);
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
+        title: t('dailyTaskReport.toast.error', 'Error'),
+        description: t('dailyTaskReport.errors.generic', 'An unexpected error occurred'),
         variant: 'destructive',
       });
     } finally {
@@ -161,10 +164,10 @@ export const BlockersAndUpdatesPanel = () => {
         .eq('id', editingBlocker.id);
 
       if (error) {
-        console.error('Error updating blocker:', error);
+        logger.error('Error updating blocker:', error);
         toast({
-          title: 'Error',
-          description: `Failed to update blocker: ${error.message}`,
+          title: t('dailyTaskReport.toast.error', 'Error'),
+          description: `${t('dailyTaskReport.errors.updateBlocker', 'Failed to update blocker')}: ${error.message}`,
           variant: 'destructive',
         });
         return;
@@ -174,16 +177,14 @@ export const BlockersAndUpdatesPanel = () => {
       setEditDescription('');
 
       toast({
-        title: 'Success',
-        description: 'Blocker updated successfully',
+        title: t('dailyTaskReport.toast.success', 'Success'),
+        description: t('dailyTaskReport.success.blockerUpdated', 'Blocker updated successfully'),
       });
-
-      window.location.reload();
     } catch (error: any) {
-      console.error('Unexpected error updating blocker:', error);
+      logger.error('Unexpected error updating blocker:', error);
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
+        title: t('dailyTaskReport.toast.error', 'Error'),
+        description: t('dailyTaskReport.errors.generic', 'An unexpected error occurred'),
         variant: 'destructive',
       });
     } finally {

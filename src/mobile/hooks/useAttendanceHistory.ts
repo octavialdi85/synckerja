@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/config/logger";
 import { useRealtimeData } from "./useRealtimeData";
 
 interface AttendanceHistoryItem {
@@ -18,19 +19,30 @@ interface AttendanceHistoryItem {
   }[];
 }
 
-export const useAttendanceHistory = () => {
+export interface UseAttendanceHistoryOptions {
+  onRealtimeRefetch?: () => void;
+}
+
+export const useAttendanceHistory = (options?: UseAttendanceHistoryOptions) => {
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
+  const onRealtimeRefetchRef = useRef(options?.onRealtimeRefetch);
+  onRealtimeRefetchRef.current = options?.onRealtimeRefetch;
 
   const fetchAttendanceHistory = async () => {
+    cancelledRef.current = false;
     try {
+      if (cancelledRef.current) return;
       setLoading(true);
-      
+      setError(null);
+
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      if (cancelledRef.current) return;
 
       // Get user's active organization first
       const { data: profileData, error: profileError } = await supabase
@@ -40,9 +52,10 @@ export const useAttendanceHistory = () => {
         .single();
 
       if (profileError || !profileData?.active_organization_id) {
-        setError("No active organization found");
+        if (!cancelledRef.current) setError("No active organization found");
         return;
       }
+      if (cancelledRef.current) return;
 
       // Get employee data for the active organization
       const { data: employee, error: employeeError } = await supabase
@@ -53,9 +66,14 @@ export const useAttendanceHistory = () => {
         .single();
 
       if (employeeError) {
-        setError("Failed to get employee data");
+        if (!cancelledRef.current) setError("Failed to get employee data");
         return;
       }
+      if (!employee) {
+        if (!cancelledRef.current) setError("Employee not found");
+        return;
+      }
+      if (cancelledRef.current) return;
 
       setOrganizationId(employee.organization_id);
 
@@ -65,9 +83,12 @@ export const useAttendanceHistory = () => {
       if (cached) {
         try {
           const parsed = JSON.parse(cached) as { items: AttendanceHistoryItem[]; ts: number };
-          setAttendanceHistory(parsed.items);
-        } catch {}
+          if (!cancelledRef.current) setAttendanceHistory(parsed.items);
+        } catch (e) {
+          logger.debug('Attendance cache read failed', e);
+        }
       }
+      if (cancelledRef.current) return;
 
       // Get attendance records with penalties
       const { data: attendanceData, error: attendanceError } = await supabase
@@ -87,26 +108,32 @@ export const useAttendanceHistory = () => {
         .limit(20);
 
       if (attendanceError) {
-        setError("Failed to fetch attendance data");
+        if (!cancelledRef.current) setError("Failed to fetch attendance data");
         return;
       }
+      if (cancelledRef.current) return;
 
-      // Get penalties for each attendance record
+      // Get penalties for each attendance record (skip query if no records)
       const attendanceIds = attendanceData?.map(record => record.id) || [];
-      const { data: penaltiesData, error: penaltiesError } = await supabase
-        .from('attendance_penalties')
-        .select(`
-          attendance_record_id,
-          penalty_amount,
-          penalty_reason,
-          status
-        `)
-        .in('attendance_record_id', attendanceIds)
-        .eq('status', 'active');
+      let penaltiesData: { attendance_record_id: string; penalty_amount: number; penalty_reason: string; status: string }[] = [];
+      if (attendanceIds.length > 0) {
+        const { data: penalties, error: penaltiesError } = await supabase
+          .from('attendance_penalties')
+          .select(`
+            attendance_record_id,
+            penalty_amount,
+            penalty_reason,
+            status
+          `)
+          .in('attendance_record_id', attendanceIds)
+          .eq('status', 'active');
 
-      if (penaltiesError) {
-        console.warn("Failed to fetch penalties data:", penaltiesError);
+        if (penaltiesError) {
+          logger.warn('Failed to fetch penalties:', penaltiesError);
+        }
+        penaltiesData = penalties ?? [];
       }
+      if (cancelledRef.current) return;
 
       // Combine attendance with penalties
       const combinedData: AttendanceHistoryItem[] = attendanceData?.map(record => ({
@@ -117,11 +144,13 @@ export const useAttendanceHistory = () => {
       setAttendanceHistory(combinedData);
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify({ items: combinedData, ts: Date.now() }));
-      } catch {}
+      } catch (e) {
+        logger.debug('Attendance cache write failed', e);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (!cancelledRef.current) setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-      setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     }
   };
 
@@ -132,32 +161,38 @@ export const useAttendanceHistory = () => {
         table: 'attendance_records',
         filter: { column: 'organization_id', eq: organizationId },
         onInsert: () => {
-          console.log('📡 New attendance record, refetching history...');
+          logger.debug('New attendance record, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         },
         onUpdate: () => {
-          console.log('📡 Attendance record updated, refetching history...');
+          logger.debug('Attendance record updated, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         },
         onDelete: () => {
-          console.log('📡 Attendance record deleted, refetching history...');
+          logger.debug('Attendance record deleted, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         }
       },
       {
         table: 'attendance_penalties',
         filter: { column: 'organization_id', eq: organizationId },
         onInsert: () => {
-          console.log('📡 New penalty added, refetching history...');
+          logger.debug('New penalty added, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         },
         onUpdate: () => {
-          console.log('📡 Penalty updated, refetching history...');
+          logger.debug('Penalty updated, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         },
         onDelete: () => {
-          console.log('📡 Penalty removed, refetching history...');
+          logger.debug('Penalty removed, refetching history');
           fetchAttendanceHistory();
+          onRealtimeRefetchRef.current?.();
         }
       }
     ] : []
@@ -165,6 +200,9 @@ export const useAttendanceHistory = () => {
 
   useEffect(() => {
     fetchAttendanceHistory();
+    return () => {
+      cancelledRef.current = true;
+    };
   }, []);
 
   return {

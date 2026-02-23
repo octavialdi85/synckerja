@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/features/ui/alert-dialog';
+import { useToast } from '@/features/1-login/hooks/use-toast';
 
 interface MeetingPoint {
   id: string;
@@ -30,14 +31,16 @@ const DeleteMeetingPointDialog = ({
   onDeleteSuccess 
 }: DeleteMeetingPointDialogProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
 
   const handleDelete = async () => {
     if (!meetingPoint?.id) return;
 
     setIsDeleting(true);
-    
     try {
       await onDeleteSuccess(meetingPoint.id);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to delete meeting point', variant: 'destructive' });
     } finally {
       setIsDeleting(false);
     }

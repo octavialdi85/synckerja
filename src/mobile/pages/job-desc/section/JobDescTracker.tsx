@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/features/ui/tabs";
 import { Alert, AlertDescription } from "@/features/ui/alert";
+import { Button } from "@/features/ui/button";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { LoadingDots } from "@/components/LoadingDots";
 import {
@@ -57,7 +58,7 @@ export const JobDescTracker = () => {
   const [includeOverdue, setIncludeOverdue] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "detail">("overview");
 
-  const { data, isLoading, isError, error, range, refetch } = useJobDescAssignments({
+  const { data, isLoading, isError, error, range, refetch, organizationId } = useJobDescAssignments({
     timeframe,
     customRange,
     includeOverdue,
@@ -152,6 +153,16 @@ export const JobDescTracker = () => {
         </p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col p-0">
+        {!organizationId ? (
+          <div className="px-1 py-4 content-padding-above-nav-job-desc">
+            <Alert>
+              <AlertDescription className="text-xs">
+                {t("dailyTask.jobDesc.noOrg", "Pilih organisasi atau tunggu organisasi dimuat.")}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+        <>
         <div className="px-1 mb-2 shrink-0">
           {renderFilters()}
         </div>
@@ -172,7 +183,7 @@ export const JobDescTracker = () => {
           </div>
 
           {isError && (
-            <div className="px-1 mb-2">
+            <div className="px-1 mb-2 flex flex-col gap-2">
               <Alert>
                 <AlertDescription className="text-xs">
                   {t("dailyTask.jobDesc.error", "Tidak dapat memuat data: {{message}}", {
@@ -180,6 +191,9 @@ export const JobDescTracker = () => {
                   })}
                 </AlertDescription>
               </Alert>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                {t("mobileHome.retry", "Coba lagi")}
+              </Button>
             </div>
           )}
 
@@ -251,6 +265,8 @@ export const JobDescTracker = () => {
             </div>
           </TabsContent>
         </Tabs>
+        </>
+        )}
       </CardContent>
     </Card>
   );

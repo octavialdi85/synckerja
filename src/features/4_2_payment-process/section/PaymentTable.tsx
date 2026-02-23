@@ -383,8 +383,8 @@ export const PaymentTable = ({
         <h2 className="text-sm font-semibold text-gray-900">Payment Requests</h2>
       </div>
 
-      {/* Table Content */}
-      <div className="flex-1 overflow-x-auto seamless-scroll" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      {/* Table Content - satu scroll container per panel, scroll chaining */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
         <Table className="min-w-[1400px]">
           <TableHeader>
             <TableRow className="bg-gray-50">

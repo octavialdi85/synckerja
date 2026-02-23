@@ -25,7 +25,7 @@ export const ApplicationsPageWrapper = () => {
               </div>
 
               {/* Content Area - Scrollable */}
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
                 <div className="min-h-full">
                   <ApplicationsPage />
                 </div>

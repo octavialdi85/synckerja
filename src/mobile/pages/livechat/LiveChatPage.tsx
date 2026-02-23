@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { getLeadStatusDisplayName } from '@/features/5-3-leads-management/leadStatusDisplay';
@@ -49,7 +50,7 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
   const { accounts: igAccounts } = useInstagramAccounts();
   const { connections: emailConnections } = useEmailConnections();
 
-  const { data: leadStatuses = [] } = useQuery({
+  const { data: leadStatuses = [], error: leadStatusesError } = useQuery({
     queryKey: ['lead-statuses'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -62,6 +63,12 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
     },
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (leadStatusesError) {
+      toast.error(t('livechat.leadStatusesLoadFailed', 'Gagal memuat daftar status.'));
+    }
+  }, [leadStatusesError, t]);
 
   const allConversations: LiveChatConversation[] = useMemo(() => {
     const wa: LiveChatConversation[] = (waConversations as WhatsAppConversation[]).map((c) => ({ ...c, source: 'whatsapp' as const }));

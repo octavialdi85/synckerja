@@ -83,6 +83,7 @@ export function LiveChatChatView({
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() =>
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
   );
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const isKeyboardOpen =
     typeof window !== 'undefined' &&
@@ -91,6 +92,7 @@ export function LiveChatChatView({
 
   const handleRequestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
+    setIsRequestingPermission(true);
     try {
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
@@ -104,13 +106,19 @@ export function LiveChatChatView({
         userVisibleOnly: true,
         applicationServerKey,
       });
+      const p256dh = subscription.getKey('p256dh');
+      const auth = subscription.getKey('auth');
+      if (!p256dh || !auth) {
+        toast.error(t('livechat.notificationNotSupported', 'Notifikasi tidak didukung.'));
+        return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       const body = {
         endpoint: subscription.endpoint,
         keys: {
-          p256dh: arrayBufferToBase64Url(subscription.getKey('p256dh')!),
-          auth: arrayBufferToBase64Url(subscription.getKey('auth')!),
+          p256dh: arrayBufferToBase64Url(p256dh),
+          auth: arrayBufferToBase64Url(auth),
         },
       };
       const res = await fetch(`${SUPABASE_URL}/functions/v1/livechat-save-push-subscription`, {
@@ -130,6 +138,8 @@ export function LiveChatChatView({
       setNotificationPermission('denied');
       devLog.error('Push subscribe error', e);
       toast.error(t('livechat.pushSubscribeError', 'Aktivasi notifikasi gagal.'));
+    } finally {
+      setIsRequestingPermission(false);
     }
   };
 
@@ -209,6 +219,8 @@ export function LiveChatChatView({
             size="icon"
             className="shrink-0 h-9 w-9 text-white hover:bg-slate-700 hover:text-white"
             onClick={handleRequestNotificationPermission}
+            disabled={isRequestingPermission}
+            aria-busy={isRequestingPermission}
             title={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
             aria-label={t('whatsappInbox.enableNotifications', 'Aktifkan notifikasi')}
           >

@@ -14,8 +14,8 @@ export const ConsultantDashboardPage = () => {
               <div className="flex-shrink-0">
                 <HeaderAndTab />
               </div>
-              {/* Main Content - seamless scroll like EmployeeManagementMain */}
-              <div className="flex-1 min-h-0 overflow-hidden seamless-scroll max-h-[calc(100vh-120px)]">
+              {/* Scroll halaman utama: agar saat sidebar mentok scroll bisa chain ke sini (rule 3.1) */}
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
                 <ConsultantsPageContent />
               </div>
             </div>

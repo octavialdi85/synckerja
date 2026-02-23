@@ -1,7 +1,6 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useRealtimeData } from './useRealtimeData';
+import { logger } from '@/config/logger';
 
 interface AttendanceStats {
   present_days: number;
@@ -11,14 +10,21 @@ interface AttendanceStats {
   attendance_percentage: number;
 }
 
-export const useAttendanceStats = () => {
+export interface UseAttendanceStatsOptions {
+  skipAttendanceRealtime?: boolean;
+}
+
+export const useAttendanceStats = (options?: UseAttendanceStatsOptions) => {
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
   const fetchAttendanceStats = async () => {
+    cancelledRef.current = false;
     try {
+      if (cancelledRef.current) return;
       setLoading(true);
       setError(null);
 
@@ -34,6 +40,12 @@ export const useAttendanceStats = () => {
         .select('active_organization_id')
         .eq('user_id', user.id)
         .single();
+
+      if (profileError || !profileData?.active_organization_id) {
+        throw profileError || new Error('No active organization found');
+      }
+      if (cancelledRef.current) return;
+
       setOrgId(profileData.active_organization_id);
 
       // Try cache first (per org + month)
@@ -43,14 +55,10 @@ export const useAttendanceStats = () => {
       if (cached) {
         try {
           const parsed = JSON.parse(cached) as { stats: AttendanceStats; ts: number };
-          setStats(parsed.stats);
+          if (!cancelledRef.current) setStats(parsed.stats);
         } catch {}
       }
-
-
-      if (profileError || !profileData?.active_organization_id) {
-        throw profileError || new Error('No active organization found');
-      }
+      if (cancelledRef.current) return;
 
       // Get employee data for the active organization
       const { data: employeeData, error: employeeError } = await supabase
@@ -62,6 +70,9 @@ export const useAttendanceStats = () => {
 
       if (employeeError) {
         throw employeeError;
+      }
+      if (!employeeData) {
+        throw new Error('Employee not found');
       }
 
       // Get work schedule settings from database - handle multiple default schedules
@@ -75,7 +86,7 @@ export const useAttendanceStats = () => {
         .maybeSingle();
 
       if (scheduleError && scheduleError.code !== 'PGRST116') {
-        console.warn('Error fetching work schedule:', scheduleError);
+        logger.warn('Error fetching work schedule:', scheduleError);
       }
 
       // Use working days from database or default to all days (Mon-Sun)
@@ -97,11 +108,11 @@ export const useAttendanceStats = () => {
         .lte('date', monthEnd.toISOString().split('T')[0]);
 
       if (holidaysError) {
-        console.warn('Error fetching holidays:', holidaysError);
+        logger.warn('Error fetching holidays:', holidaysError);
       }
 
       // Process holidays: include fixed holidays in current month and recurring holidays for any year
-      const holidayDates = new Set();
+      const holidayDates = new Set<number>();
       holidaysData?.forEach(holiday => {
         const holidayDate = new Date(holiday.date);
         if (holiday.is_recurring) {
@@ -117,8 +128,8 @@ export const useAttendanceStats = () => {
         }
       });
 
-      console.log('Holiday dates for this month:', Array.from(holidayDates));
-      console.log('Working days of week:', workingDaysOfWeek);
+      logger.debug('Holiday dates for this month:', Array.from(holidayDates));
+      logger.debug('Working days of week:', workingDaysOfWeek);
 
       // Check if working every day (all 7 days of the week)
       // Note: JavaScript Date.getDay() returns 0=Sunday, 1=Monday, ..., 6=Saturday
@@ -126,7 +137,7 @@ export const useAttendanceStats = () => {
       const worksEveryDay = workingDaysOfWeek.length === 7 && 
         [1,2,3,4,5,6,7].every(day => workingDaysOfWeek.includes(day));
         
-      console.log('Works every day check:', worksEveryDay);
+      logger.debug('Works every day check:', worksEveryDay);
 
       // Fetch attendance records for current month
       const { data: attendanceData, error: attendanceError } = await supabase
@@ -170,7 +181,7 @@ export const useAttendanceStats = () => {
           
           // Debug log for problematic dates
           if (day === 17) { // 17 Agustus
-            console.log(`Day ${day}: dayOfWeek=${dayOfWeek}, isWorkingDay=${isWorkingDay}, isHoliday=${isHoliday}`);
+            if (import.meta.env?.DEV) logger.debug(`Day ${day}: dayOfWeek=${dayOfWeek}, isWorkingDay=${isWorkingDay}, isHoliday=${isHoliday}`);
           }
         }
       }
@@ -201,8 +212,8 @@ export const useAttendanceStats = () => {
         }
       }
 
-      console.log(`Total working days in month: ${totalWorkingDays}`);
-      console.log(`Working days until today: ${workingDaysUntilToday}`);
+      logger.debug(`Total working days in month: ${totalWorkingDays}`);
+      logger.debug(`Working days until today: ${workingDaysUntilToday}`);
 
       // Count actual present days (attendance records with check_in_time on working days)
       let actualPresentDays = 0;
@@ -252,6 +263,7 @@ export const useAttendanceStats = () => {
       const absentDays = Math.max(0, workingDaysUntilToday - actualPresentDays);
       const attendancePercentage = workingDaysUntilToday > 0 ? (actualPresentDays / workingDaysUntilToday) * 100 : 0;
 
+      if (cancelledRef.current) return;
       setStats({
         present_days: actualPresentDays,
         absent_days: absentDays,
@@ -271,29 +283,31 @@ export const useAttendanceStats = () => {
       } catch {}
 
     } catch (err) {
-      console.error('Error fetching attendance stats:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch attendance stats');
+      logger.error('Error fetching attendance stats:', err);
+      if (!cancelledRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch attendance stats');
     } finally {
-      setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     }
   };
+
+  const skipAttendanceRealtime = options?.skipAttendanceRealtime === true;
 
   useEffect(() => {
     fetchAttendanceStats();
 
     // Set up realtime listeners for automatic updates
-    // Guard subscribe by visibility and orgId
+    let visibilityCleanup: (() => void) | undefined;
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
       const onVisible = () => {
         if (document.visibilityState === 'visible') fetchAttendanceStats();
       };
       document.addEventListener('visibilitychange', onVisible, { once: true });
-      return () => document.removeEventListener('visibilitychange', onVisible);
+      visibilityCleanup = () => document.removeEventListener('visibilitychange', onVisible);
     }
 
-    const attendanceChannel = supabase
-      .channel('attendance-stats-updates')
-      .on(
+    let channelBuilder = supabase.channel('attendance-stats-updates');
+    if (!skipAttendanceRealtime) {
+      channelBuilder = channelBuilder.on(
         'postgres_changes',
         {
           event: '*',
@@ -301,10 +315,12 @@ export const useAttendanceStats = () => {
           table: 'attendance_records'
         },
         () => {
-          console.log('Attendance records updated, refreshing stats...');
+          logger.debug('Attendance records updated, refreshing stats...');
           fetchAttendanceStats();
         }
-      )
+      );
+    }
+    const attendanceChannel = channelBuilder
       .on(
         'postgres_changes',
         {
@@ -313,7 +329,7 @@ export const useAttendanceStats = () => {
           table: 'national_holidays'
         },
         () => {
-          console.log('National holidays updated, refreshing stats...');
+          logger.debug('National holidays updated, refreshing stats...');
           fetchAttendanceStats();
         }
       )
@@ -325,16 +341,18 @@ export const useAttendanceStats = () => {
           table: 'work_schedule_settings'
         },
         () => {
-          console.log('Work schedule settings updated, refreshing stats...');
+          logger.debug('Work schedule settings updated, refreshing stats...');
           fetchAttendanceStats();
         }
       )
       .subscribe();
 
     return () => {
+      cancelledRef.current = true;
+      visibilityCleanup?.();
       try { supabase.removeChannel(attendanceChannel); } catch {}
     };
-  }, []);
+  }, [skipAttendanceRealtime]);
 
   return {
     stats,

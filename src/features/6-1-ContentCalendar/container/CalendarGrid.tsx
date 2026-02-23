@@ -118,7 +118,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               </div>
               
               {dayInfo.count > 0 ? (
-                <div className="flex-1 space-y-1 overflow-y-auto seamless-scroll">
+                <div className="flex-1 min-h-0 space-y-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
                   {dayInfo.plans.map((plan: any, planIndex: number) => {
                     // Determine individual plan color based on status
                     const approved = plan?.approved === true;
@@ -226,7 +226,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                             <div className="text-[9px] font-semibold text-emerald-50 mb-0.5">
                               Links:
                             </div>
-                            <div className="space-y-0.5 max-h-16 overflow-y-auto">
+                            <div className="space-y-0.5">
                               {planLinks
                                 .filter(link => link?.url && isValidUrl(link.url)) // Filter invalid URLs
                                 .slice(0, 3) // Limit to 3 links to prevent overflow

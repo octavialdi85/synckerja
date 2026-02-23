@@ -5,6 +5,8 @@ import { Progress } from "@/mobile/components/ui/progress";
 import { Button } from "@/mobile/components/ui/button";
 import { RefreshCw, Users, CalendarDays, ShieldCheck } from "lucide-react";
 import type { SubscriptionStatus } from "@/features/10-management/hooks/useOptimizedSubscription";
+import { formatSubscriptionDate } from "@/features/10-management/utils/dateUtils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface MobileCurrentPlanCardProps {
   subscriptionStatus: SubscriptionStatus;
@@ -12,19 +14,9 @@ interface MobileCurrentPlanCardProps {
   isRefreshing?: boolean;
 }
 
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-};
-
 export const MobileCurrentPlanCard = memo(
   ({ subscriptionStatus, onRefresh, isRefreshing }: MobileCurrentPlanCardProps) => {
+    const { t } = useAppTranslation();
     const usagePercent =
       subscriptionStatus.member_count > 0
         ? Math.min(
@@ -36,19 +28,19 @@ export const MobileCurrentPlanCard = memo(
         : 0;
 
     const statusBadge = subscriptionStatus.is_active
-      ? { label: "Aktif", className: "bg-green-500 text-white" }
+      ? { label: t("subscription.management.statusActive"), className: "bg-green-500 text-white" }
       : subscriptionStatus.is_trial
-        ? { label: "Trial", className: "bg-blue-500 text-white" }
-        : { label: "Tidak Aktif", className: "bg-destructive text-destructive-foreground" };
+        ? { label: t("subscription.management.statusTrial"), className: "bg-blue-500 text-white" }
+        : { label: t("subscription.management.statusInactive"), className: "bg-destructive text-destructive-foreground" };
 
     return (
       <Card className="border border-border">
         <CardHeader className="pb-2 pt-3 px-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <CardTitle className="text-base text-foreground">Ringkasan Subscription</CardTitle>
+              <CardTitle className="text-base text-foreground">{t("subscription.management.cardTitle")}</CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Detail plan aktif dan batas penggunaan saat ini.
+                {t("subscription.management.cardDescription")}
               </CardDescription>
             </div>
             <Badge className={statusBadge.className}>{statusBadge.label}</Badge>
@@ -59,9 +51,9 @@ export const MobileCurrentPlanCard = memo(
             <div className="flex items-center gap-3 text-foreground">
               <ShieldCheck className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Plan aktif</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("subscription.management.planActive")}</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {subscriptionStatus.plan_name || "Tanpa Plan"}
+                  {subscriptionStatus.plan_name || t("subscription.management.noPlan")}
                 </p>
               </div>
             </div>
@@ -82,7 +74,7 @@ export const MobileCurrentPlanCard = memo(
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-primary" />
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Penggunaan member
+                  {t("subscription.management.usageMember")}
                 </p>
               </div>
               <span className="text-xs font-semibold text-foreground">
@@ -92,29 +84,29 @@ export const MobileCurrentPlanCard = memo(
             <Progress value={usagePercent} className="h-2" />
             <p className="text-[11px] text-muted-foreground">
               {usagePercent >= 80
-                ? "Anda mendekati batas member. Pertimbangkan upgrade plan."
-                : "Masih tersedia kapasitas member untuk organisasi Anda."}
+                ? t("subscription.management.nearLimit")
+                : t("subscription.management.capacityAvailable")}
             </p>
           </div>
 
           <div className="rounded-xl border border-border bg-muted/30 p-2.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Model pembayaran</span>
+              <span>{t("subscription.management.paymentModel")}</span>
               <span className="font-semibold text-foreground capitalize">
-                {subscriptionStatus.billing_cycle || "Bulanan"}
+                {subscriptionStatus.billing_cycle || t("subscription.management.monthly")}
               </span>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Berakhir pada</span>
+              <span>{t("subscription.management.endsOn")}</span>
               <span className="font-semibold text-foreground">
-                {formatDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date)}
+                {formatSubscriptionDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date, { month: "long" })}
               </span>
             </div>
             <div className="mt-2 flex items-center gap-2 rounded-lg bg-card p-2.5 text-xs text-muted-foreground">
               <CalendarDays className="h-4 w-4 text-primary" />
               <div>
-                <p className="font-semibold text-foreground">Pembayaran berikutnya</p>
-                <p>{formatDate(subscriptionStatus.next_payment_date)}</p>
+                <p className="font-semibold text-foreground">{t("subscription.management.nextPayment")}</p>
+                <p>{formatSubscriptionDate(subscriptionStatus.next_payment_date, { month: "long" })}</p>
               </div>
             </div>
           </div>

@@ -661,6 +661,15 @@ export const CentralizedUserDataProvider = ({ children }: { children: React.Reac
     }
   }, [userData?.active_organization_id]);
 
+  // Sync sidebar and all pages when organization is switched from Profile or Sidebar drawer
+  useEffect(() => {
+    const handleOrganizationSwitch = () => {
+      forceRefreshUserData();
+    };
+    window.addEventListener('organization-switched', handleOrganizationSwitch);
+    return () => window.removeEventListener('organization-switched', handleOrganizationSwitch);
+  }, [forceRefreshUserData]);
+
   // Computed values - focus only on 5 core tables  
   const isAuthenticated = !!user;
   const isEmailVerified = !!userData && userData.email_verified === true; // Use email_verification_tokens.email_verified NOT auth.users.email_confirmed_at

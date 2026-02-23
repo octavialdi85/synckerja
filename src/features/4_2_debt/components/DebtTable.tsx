@@ -191,8 +191,8 @@ export const DebtTable = ({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 min-h-0 min-w-0 seamless-scroll overflow-x-auto overflow-y-auto">
+      {/* Table - satu scroll container per panel, scroll chaining */}
+      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain">
         <table className="w-full min-w-[1600px]">
           <thead className="bg-gray-50 border-b">
             <tr>

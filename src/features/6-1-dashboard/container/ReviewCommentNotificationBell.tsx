@@ -47,7 +47,7 @@ export function ReviewCommentNotificationBell({ onOpenPreview }: ReviewCommentNo
             <SheetTitle>{t('reviewCommentNotifications.title', 'Comment notifications')}</SheetTitle>
           </SheetHeader>
           <div className="mt-4 flex flex-1 flex-col gap-4 overflow-hidden">
-            <div className="seamless-scroll max-h-[calc(100vh-120px)] flex-1 overflow-y-auto pr-2">
+            <div className="seamless-scroll nested-scroll-touch-chain overflow-y-auto overflow-x-hidden max-h-[calc(100vh-120px)] flex-1 min-h-0 pr-2">
               {unreadNotifications.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('reviewCommentNotifications.empty', 'No notifications')}

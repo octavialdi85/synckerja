@@ -84,7 +84,7 @@ const KOLDashboardPageComponent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <div className="seamless-scroll max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLDashboard />
             </Suspense>
@@ -92,7 +92,7 @@ const KOLDashboardPageComponent = () => {
         );
       case 'kol-management':
         return (
-          <div className="w-full h-full">
+          <div className="w-full h-full min-h-0 overflow-hidden">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLManagementContent />
             </Suspense>
@@ -100,7 +100,7 @@ const KOLDashboardPageComponent = () => {
         );
       case 'campaigns':
         return (
-          <div className="w-full h-full">
+          <div className="w-full h-full min-h-0 overflow-hidden">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLCampaignsContent />
             </Suspense>
@@ -108,7 +108,7 @@ const KOLDashboardPageComponent = () => {
         );
       case 'content-post':
         return (
-          <div className="w-full h-full">
+          <div className="w-full h-full min-h-0 overflow-hidden">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLContentPostTab />
             </Suspense>
@@ -116,7 +116,7 @@ const KOLDashboardPageComponent = () => {
         );
       case 'payment-terms':
         return (
-          <div className="seamless-scroll max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <KOLPaymentTermsTab />
             </Suspense>
@@ -124,7 +124,7 @@ const KOLDashboardPageComponent = () => {
         );
       case 'analytics':
         return (
-          <div className="seamless-scroll max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLAnalyticsTab />
             </Suspense>
@@ -132,7 +132,7 @@ const KOLDashboardPageComponent = () => {
         );
       default:
         return (
-          <div className="seamless-scroll max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             <Suspense fallback={<TabLoadingSkeleton />}>
               <EnhancedKOLDashboard />
             </Suspense>
@@ -156,8 +156,8 @@ const KOLDashboardPageComponent = () => {
                 />
               </div>
 
-              {/* Content Area - Full Height */}
-              <div className="flex-1 min-h-0 h-full">
+              {/* Content Area — scroll-chaining rule 3.1: bounded height agar scroll per tab jalan */}
+              <div className="flex-1 min-h-0 h-full overflow-hidden">
                 {renderTabContent()}
               </div>
             </div>

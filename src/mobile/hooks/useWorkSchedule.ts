@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 import { useRealtimeData } from './useRealtimeData';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
-interface WorkSchedule {
+export interface WorkSchedule {
   id: string;
   name: string;
   working_days: number[];
@@ -31,7 +32,7 @@ interface Holiday {
 
 type ScheduleStatus = "active" | "upcoming" | "completed" | "off" | "holiday";
 
-interface ScheduleDay {
+export interface ScheduleDay {
   day: string;
   date: string;
   startTime: string;
@@ -118,9 +119,9 @@ export const useWorkSchedule = () => {
         day: dayNames[dayOfWeek],
         date: date.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' }),
         startTime:
-          isWorkingDay && status !== "holiday" ? schedule.start_time.slice(0, 5) : "-",
+          isWorkingDay && status !== "holiday" ? (schedule.start_time?.slice(0, 5) ?? '-') : "-",
         endTime:
-          isWorkingDay && status !== "holiday" ? schedule.end_time.slice(0, 5) : "-",
+          isWorkingDay && status !== "holiday" ? (schedule.end_time?.slice(0, 5) ?? '-') : "-",
         status,
         location: 'Kantor',
         isWorkingDay,
@@ -172,12 +173,17 @@ export const useWorkSchedule = () => {
       // Try cache first (per org)
       const cacheKey = `mobile.workSchedule.${employeeData.organization_id}`;
       const cached = sessionStorage.getItem(cacheKey);
+      const CACHE_TTL_MS = 2 * 60 * 1000;
       if (cached) {
         try {
           const parsed = JSON.parse(cached) as { schedule: WorkSchedule; holidays?: Holiday[]; ts: number };
           setWorkSchedule(parsed.schedule);
           setHolidays(parsed.holidays ?? []);
           setInitialized(true);
+          if (parsed.ts && Date.now() - parsed.ts < CACHE_TTL_MS) {
+            setLoading(false);
+            return;
+          }
         } catch {}
       }
 
@@ -231,7 +237,7 @@ export const useWorkSchedule = () => {
         } catch {}
       }
     } catch (err) {
-      console.error('Error fetching work schedule:', err);
+      logger.error('Error fetching work schedule:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch work schedule');
     } finally {
       setLoading(false);

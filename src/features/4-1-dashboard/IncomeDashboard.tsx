@@ -11,6 +11,7 @@ import { useIncomeMasterData } from './hooks/useIncomeMasterData';
 import { formatToRupiah } from '@/utils/formatCurrency';
 import { IncomeVsExpensesChart } from './IncomeVsExpensesChart';
 import { HeaderAndTab } from './HeaderAndTab';
+import { RecentIncomeOverview } from './RecentIncomeOverview';
 import { IncomeTransactionWithRelations } from './types';
 import { useBankAccounts } from '@/hooks/organized/useBankAccounts';
 import { useBankAccountBalances } from '@/hooks/organized/useBankAccountBalances';
@@ -248,9 +249,12 @@ export function IncomeDashboard() {
                 />
               </div>
               
-              {/* Content Area - Scrollable */}
-              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
-                <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+              {/* Content Area - Grid: section utama + sidebar kanan */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Section utama - 9 kolom */}
+                <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
+                    <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
                   <div className="animate-pulse">
                     <div className="h-8 bg-gray-200 rounded mb-4 w-48"></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -258,6 +262,8 @@ export function IncomeDashboard() {
                         <div key={i} className="bg-white p-4 rounded-lg h-24"></div>
                       ))}
                     </div>
+                  </div>
+                </div>
                   </div>
                 </div>
               </div>
@@ -282,9 +288,11 @@ export function IncomeDashboard() {
               />
             </div>
             
-            {/* Content Area - Scrollable */}
-            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
-              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col">
+            {/* Content Area - Grid: main (9) + sidebar (3) */}
+            <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+              <div className="col-span-9 flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)]">
+                  <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col">
               {/* Compact Header Controls */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                 <h2 className="text-lg font-bold text-gray-800">Income Analytics</h2>
@@ -796,10 +804,26 @@ export function IncomeDashboard() {
                 </div>
               </div>
               </div>
+                  </div>
+                </div>
+                {/* Sidebar kanan - Recent Income */}
+                <div className="col-span-3 flex flex-col min-h-0">
+                  <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-120px)]">
+                    <div className="px-4 py-1.5 border-b flex-shrink-0">
+                      <h3 className="text-sm font-semibold text-gray-900">Recent Income</h3>
+                      <p className="text-xs text-gray-500 mt-1">Latest transactions and overview</p>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                      <div className="h-full p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
+                        <RecentIncomeOverview />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Balance History Modal */}
       <Dialog open={isBalanceHistoryOpen} onOpenChange={setIsBalanceHistoryOpen}>

@@ -16,11 +16,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { ProfilePhotoUpload } from "@/mobile/components/ProfilePhotoUpload";
 import { useOrganizationList } from "@/mobile/hooks/useOrganizationList";
 import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelectDrawer";
+import { useOrganizationSwitchCallback } from "@/mobile/hooks/useOrganizationSwitchCallback";
 import { useLanguage } from "@/features/share/i18n/LanguageProvider";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import type { AppLanguage } from "@/features/share/i18n/translations";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/mobile/components/ui/select";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose,
+} from "@/mobile/components/ui/drawer";
 import { ChangePasswordModal } from "@/mobile/components/ChangePasswordModal";
+import { cn } from "@/lib/utils";
 const Profile = () => {
   const {
     profile,
@@ -35,12 +44,14 @@ const Profile = () => {
   } = useToast();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
+  const [languageDrawerOpen, setLanguageDrawerOpen] = useState(false);
   const {
     organizations,
     activeOrganization,
     loading: organizationsLoading,
     switchingOrganization,
   } = useOrganizationList();
+  const onOrganizationSwitched = useOrganizationSwitchCallback();
   useStatusBarStyle('light');
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const { language, setLanguage } = useLanguage();
@@ -104,39 +115,41 @@ const Profile = () => {
   }
   if (error || !profile) {
     return (
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar />
-          <main
-            className="flex flex-col bg-background fixed inset-x-0 z-0"
-            style={{
-              top: viewportOffsetTop,
-              height: viewportHeight > 0 ? viewportHeight : undefined,
-              minHeight: viewportHeight > 0 ? undefined : "100dvh",
-            }}
-          >
-            <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger className="md:hidden" />
-                <div>
-                  <h1 className="text-base font-semibold text-foreground">{t("profile.pageTitle", "Profile")}</h1>
-                  <p className="text-xs text-muted-foreground">{t("profile.pageSubtitle", "Profil dan pengaturan")}</p>
+      <DesktopWarning>
+        <SidebarProvider>
+          <div className="min-h-screen flex w-full bg-background">
+            <AppSidebar />
+            <main
+              className="flex flex-col bg-background fixed inset-x-0 z-0"
+              style={{
+                top: viewportOffsetTop,
+                height: viewportHeight > 0 ? viewportHeight : undefined,
+                minHeight: viewportHeight > 0 ? undefined : "100dvh",
+              }}
+            >
+              <header className="flex-shrink-0 sticky top-0 z-30 flex items-center justify-between p-3 bg-card border-b border-border safe-area-top">
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger className="md:hidden" />
+                  <div>
+                    <h1 className="text-base font-semibold text-foreground">{t("profile.pageTitle", "Profile")}</h1>
+                    <p className="text-xs text-muted-foreground">{t("profile.pageSubtitle", "Profil dan pengaturan")}</p>
+                  </div>
+                </div>
+                <div></div>
+              </header>
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col items-center justify-center">
+                  <div className="text-center p-4">
+                    <p className="text-destructive mb-4">{t("profile.loadFailed", "Gagal memuat profil")}</p>
+                    <Button onClick={() => refetch()}>{t("profile.tryAgain", "Coba Lagi")}</Button>
+                  </div>
                 </div>
               </div>
-              <div></div>
-            </header>
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col items-center justify-center">
-                <div className="text-center p-4">
-                  <p className="text-destructive mb-4">{t("profile.loadFailed", "Gagal memuat profil")}</p>
-                  <Button onClick={() => window.location.reload()}>{t("profile.tryAgain", "Coba Lagi")}</Button>
-                </div>
-              </div>
-            </div>
-            <NavigationFooter className="safe-area-bottom-lower" />
-          </main>
-        </div>
-      </SidebarProvider>
+              <NavigationFooter className="safe-area-bottom-lower" />
+            </main>
+          </div>
+        </SidebarProvider>
+      </DesktopWarning>
     );
   }
   return (
@@ -299,6 +312,7 @@ const Profile = () => {
                         <p className="text-sm font-medium text-foreground truncate">
                           {organizationsLoading ? t("profile.loading", "Memuat...") : switchingOrganization ? t("profile.switchingOrg", "Beralih organisasi...") : activeOrganization?.company_name || t("profile.selectOrganization", "Pilih Organisasi")}
                         </p>
+                        {/* TODO: tampilkan role dari API ketika tersedia. */}
                         <p className="text-xs text-muted-foreground">{t("profile.role.owner", "Owner")}</p>
                       </div>
                     </div>
@@ -317,7 +331,10 @@ const Profile = () => {
                   <OrganizationSelectDrawer
                     open={orgDrawerOpen}
                     onOpenChange={setOrgDrawerOpen}
-                    onSwitched={() => refetch()}
+                    onSwitched={() => {
+                      refetch();
+                      onOrganizationSwitched();
+                    }}
                   />
 
                   {/* Create New Organization Button */}
@@ -337,22 +354,69 @@ const Profile = () => {
                         <h3 className="font-semibold text-foreground">{t("settings.section.title", "Pengaturan")}</h3>
                       </div>
                       <div className="p-3 space-y-3">
-                        <Select
-                          value={language}
-                          onValueChange={(value) => setLanguage(value as AppLanguage, { deviceOnly: true })}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="id">
-                              {t("settings.profile.language.option.id", "Bahasa Indonesia")}
-                            </SelectItem>
-                            <SelectItem value="en">
-                              {t("settings.profile.language.option.en", "Bahasa Inggris")}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Drawer open={languageDrawerOpen} onOpenChange={setLanguageDrawerOpen}>
+                          <DrawerTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full h-10 justify-between gap-2 text-left px-3"
+                            >
+                              <span>
+                                {language === "id"
+                                  ? t("settings.profile.language.option.id", "Bahasa Indonesia")
+                                  : t("settings.profile.language.option.en", "English")}
+                              </span>
+                              <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            </Button>
+                          </DrawerTrigger>
+                          <DrawerContent className="max-h-[85dvh] flex flex-col">
+                            <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                              <DrawerTitle className="text-lg font-semibold">
+                                {t("settings.profile.language.title", "Application Language")}
+                              </DrawerTitle>
+                            </DrawerHeader>
+                            <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+                              <div className="flex flex-col gap-2 w-full">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLanguage("id" as AppLanguage, { deviceOnly: true });
+                                    setLanguageDrawerOpen(false);
+                                  }}
+                                  className={cn(
+                                    "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors",
+                                    language === "id"
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background border-input hover:bg-muted"
+                                  )}
+                                >
+                                  {t("settings.profile.language.option.id", "Bahasa Indonesia")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLanguage("en" as AppLanguage, { deviceOnly: true });
+                                    setLanguageDrawerOpen(false);
+                                  }}
+                                  className={cn(
+                                    "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors",
+                                    language === "en"
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background border-input hover:bg-muted"
+                                  )}
+                                >
+                                  {t("settings.profile.language.option.en", "English")}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+                              <DrawerClose asChild>
+                                <Button className="w-full" size="sm">
+                                  {t("dailyTaskReport.filters.done", "Done")}
+                                </Button>
+                              </DrawerClose>
+                            </div>
+                          </DrawerContent>
+                        </Drawer>
                         <Button
                           variant="outline"
                           className="w-full justify-start gap-3 h-11"

@@ -41,7 +41,7 @@ export const useOptimizedPerformanceMonitor = (componentName: string) => {
         }
       }
     }
-  }, [componentName]);
+  }, []);
 
   useEffect(() => {
     startTimeRef.current = performance.now();
@@ -61,7 +61,7 @@ export const useOptimizedPerformanceMonitor = (componentName: string) => {
     return () => {
       // Cleanup on unmount
     };
-  }, [componentName]);
+  }, []);
 
   return metricsRef.current;
 };
@@ -106,5 +106,5 @@ export const useMemoryMonitor = (componentName: string) => {
       const intervalId = setInterval(checkMemory, 10000); // Check every 10s
       return () => clearInterval(intervalId);
     }
-  }, [componentName]);
+  }, []);
 };

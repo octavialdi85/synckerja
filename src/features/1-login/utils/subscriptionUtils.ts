@@ -1,18 +1,26 @@
 // Utility functions for subscription pricing and formatting
 export const formatIDR = (amount: number): string => {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return 'Rp 0';
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
-  }).format(amount);
+  }).format(n);
 };
 
 export const getMonthlyPriceForMembers = (basePrice: number, memberCount: number): number => {
-  return basePrice * memberCount;
+  const base = Number(basePrice);
+  const count = Number(memberCount);
+  return (Number.isFinite(base) ? base : 0) * (Number.isFinite(count) ? count : 0);
 };
 
-export const getYearlyPriceForMembers = (basePrice: number, memberCount: number): number => {
-  return (basePrice * memberCount * 12) * 0.8; // 20% discount for yearly
+export const getYearlyPriceForMembers = (basePrice: number, memberCount: number, annualDiscountPercent?: number | null): number => {
+  const base = Number(basePrice);
+  const count = Number(memberCount);
+  const discount = annualDiscountPercent != null && Number.isFinite(Number(annualDiscountPercent)) ? Number(annualDiscountPercent) : 20;
+  const product = (Number.isFinite(base) ? base : 0) * (Number.isFinite(count) ? count : 0) * 12;
+  return product * (1 - discount / 100);
 };
 
 

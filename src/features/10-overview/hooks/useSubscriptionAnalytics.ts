@@ -46,7 +46,9 @@ export const useSubscriptionAnalytics = () => {
   const {
     data: analytics,
     isLoading,
-    error
+    error,
+    refetch,
+    isError,
   } = useQuery({
     queryKey: ['subscription-analytics', organizationId],
     queryFn: async () => {
@@ -142,8 +144,11 @@ export const useSubscriptionAnalytics = () => {
       // Calculate usage metrics
       const employeeUtilizationPercentage = employeeCount ? Math.min(100, (employeeCount / 1000) * 100) : 0;
       const planEfficiencyScore = Math.min(100, employeeUtilizationPercentage * 1.2);
-      const growthRate = employee_growth.length > 1 ? 
-        ((employee_growth[employee_growth.length - 1].count - employee_growth[0].count) / employee_growth[0].count) * 100 : 0;
+      const firstCount = employee_growth.length > 0 ? employee_growth[0].count : 0;
+      const growthRate =
+        employee_growth.length > 1 && firstCount !== 0
+          ? ((employee_growth[employee_growth.length - 1].count - firstCount) / firstCount) * 100
+          : 0;
 
       const usage_metrics = {
         employee_utilization_percentage: employeeUtilizationPercentage,
@@ -166,11 +171,14 @@ export const useSubscriptionAnalytics = () => {
     gcTime: 30 * 60 * 1000, // 30 minutes cache
     refetchOnMount: false, // Disable mount refetch to use cache
     refetchOnWindowFocus: false, // Disable focus refetch
+    retry: 1,
   });
 
   return {
     analytics,
     isLoading,
     error,
+    refetch,
+    isError,
   };
 };

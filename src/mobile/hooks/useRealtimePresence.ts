@@ -86,7 +86,8 @@ export const useRealtimePresence = (organizationId: string, currentUser?: { id: 
       setIsConnected(false);
       setOnlineUsers([]);
     };
-  }, [organizationId, currentUser]);
+    // Use primitive deps to avoid re-subscribing when parent re-creates currentUser object reference
+  }, [organizationId, currentUser?.id]);
 
   const updateStatus = (status: 'online' | 'away' | 'busy') => {
     if (!currentUser) return;

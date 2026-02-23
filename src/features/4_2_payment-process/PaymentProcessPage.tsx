@@ -72,11 +72,11 @@ export const PaymentProcessPage = () => {
             />
           </div>
 
-          {/* Grid Layout: 12 columns (9-3) */}
-          <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 overflow-hidden">
-            {/* Main Content - 9 columns */}
-            <div className="col-span-9 h-full">
-              <div className="h-full flex flex-col">
+          {/* Grid Layout: full height, table & sidebar satu scroll per panel (scroll chaining) */}
+          <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 max-h-[calc(100vh-120px)] overflow-hidden grid-rows-1">
+            {/* Main Content - 9 columns, full height */}
+            <div className="col-span-9 flex flex-col min-h-0 h-full">
+              <div className="flex flex-col flex-1 min-h-0 h-full">
                 {/* Filter Section */}
                 <div className="flex-shrink-0 mb-2">
                   <div className="bg-white border rounded-md p-2">
@@ -95,9 +95,9 @@ export const PaymentProcessPage = () => {
                   </div>
                 </div>
                 
-                {/* Table Section - Main Content */}
-                <div className="flex-1 min-h-0">
-                  <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll">
+                {/* Table Section - scroll container di dalam PaymentTable */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                     <PaymentTable 
                       requests={filteredRequests}
                       onRefresh={handleRefresh}
@@ -114,34 +114,32 @@ export const PaymentProcessPage = () => {
               </div>
             </div>
             
-            {/* Right Column - Overview Sidebar (25% like employee page) */}
-            <div className="col-span-3 h-full">
-              <div className="h-full flex flex-col">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                  {/* Sidebar Header */}
-                  <div className="px-4 py-1.5 border-b flex-shrink-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-gray-900">Payment Overview</h3>
-                        <p className="text-xs text-gray-500 mt-1">Summary of payment requests</p>
-                      </div>
+            {/* Right Column - Overview Sidebar, scroll chaining */}
+            <div className="col-span-3 flex flex-col min-h-0 h-full">
+              <div className="flex flex-col flex-1 min-h-0 h-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                {/* Sidebar Header */}
+                <div className="px-4 py-1.5 border-b flex-shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900">Payment Overview</h3>
+                      <p className="text-xs text-gray-500 mt-1">Summary of payment requests</p>
                     </div>
                   </div>
-
-                  {/* Scrollable Sidebar Content */}
-                  <div className="flex-1 min-h-0 overflow-hidden">
-                    <div className="h-full p-4">
-                      <PaymentOverview requests={filteredRequests} />
-                    </div>
-                  </div>
-
-                  {/* Sidebar Footer */}
-                  <PaymentSidebarFooter 
-                    totalRequests={filteredRequests.length}
-                    totalAmount={totalAmount}
-                    selectedStatus={filters.status}
-                  />
                 </div>
+
+                {/* Scrollable Sidebar Content - satu scroll container, chain ke halaman */}
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="flex-1 min-h-0 p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+                    <PaymentOverview requests={filteredRequests} />
+                  </div>
+                </div>
+
+                {/* Sidebar Footer */}
+                <PaymentSidebarFooter 
+                  totalRequests={filteredRequests.length}
+                  totalAmount={totalAmount}
+                  selectedStatus={filters.status}
+                />
               </div>
             </div>
           </div>

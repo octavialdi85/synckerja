@@ -1,6 +1,6 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 
 export interface ProfileData {
   id: string;
@@ -21,9 +21,12 @@ export const useProfile = () => {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
+  const realtimeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProfile = async () => {
     try {
+      cancelledRef.current = false;
       setLoading(true);
       setError(null);
 
@@ -31,9 +34,7 @@ export const useProfile = () => {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError) {
-        if (import.meta.env?.DEV) {
-          console.error('Auth error:', userError);
-        }
+        logger.error('Auth error:', userError);
         // Clean up invalid auth state
         await cleanupAuthState();
         throw new Error('Authentication failed');
@@ -42,16 +43,24 @@ export const useProfile = () => {
       if (!user) {
         throw new Error('User not authenticated');
       }
+      if (cancelledRef.current) return;
 
       // Get user's active organization from profile
-      const { data: profile } = await supabase
+      const { data: profileRow, error: profileError } = await supabase
         .from('profiles')
         .select('active_organization_id')
         .eq('user_id', user.id)
         .single();
 
-      if (!profile?.active_organization_id) {
+      if (profileError && profileError.code !== 'PGRST116') {
+        setError(profileError.message ?? 'Failed to load profile');
+        return;
+      }
+      if (cancelledRef.current) return;
+
+      if (!profileRow?.active_organization_id) {
         // Fallback to auth user data if no active organization
+        if (cancelledRef.current) return;
         setProfile({
           id: user.id,
           full_name: user.user_metadata?.full_name || 'User',
@@ -59,10 +68,9 @@ export const useProfile = () => {
         });
         return;
       }
+      if (cancelledRef.current) return;
 
-      if (import.meta.env?.DEV) {
-        console.log('Active organization ID:', profile.active_organization_id);
-      }
+      logger.debug('Active organization ID:', profileRow.active_organization_id);
 
       // Fetch employee data for the active organization only
       const { data: employeeData, error: employeeError } = await supabase
@@ -83,23 +91,21 @@ export const useProfile = () => {
           organization_id
         `)
         .eq('user_id', user.id)
-        .eq('organization_id', profile.active_organization_id)
+        .eq('organization_id', profileRow.active_organization_id)
         .maybeSingle();
 
-      if (import.meta.env?.DEV) {
-        console.log('Employee data query result:', { employeeData, employeeError });
-      }
+      logger.debug('Employee data query result:', { employeeData, employeeError });
 
       if (employeeError && employeeError.code !== 'PGRST116') {
-        if (import.meta.env?.DEV) {
-          console.error('Error fetching employee data:', employeeError);
-        }
+        logger.error('Error fetching employee data:', employeeError);
         throw employeeError;
       }
+      if (cancelledRef.current) return;
 
       if (employeeData) {
         // Verify the employee belongs to the correct organization
-        if (employeeData.organization_id === profile.active_organization_id) {
+        if (employeeData.organization_id === profileRow.active_organization_id) {
+          if (cancelledRef.current) return;
           setProfile({
             id: employeeData.id,
             full_name: employeeData.full_name,
@@ -115,10 +121,8 @@ export const useProfile = () => {
             photo_url: employeeData.photo_url,
           });
         } else {
-          if (import.meta.env?.DEV) {
-            console.warn('Employee organization mismatch');
-          }
-          // Fallback to basic user data
+          logger.warn('Employee organization mismatch');
+          if (cancelledRef.current) return;
           setProfile({
             id: user.id,
             full_name: user.user_metadata?.full_name || 'User',
@@ -126,10 +130,8 @@ export const useProfile = () => {
           });
         }
       } else {
-        if (import.meta.env?.DEV) {
-          console.log('No employee data found for active organization');
-        }
-        // Fallback to auth user data if no employee record found
+        logger.debug('No employee data found for active organization');
+        if (cancelledRef.current) return;
         setProfile({
           id: user.id,
           full_name: user.user_metadata?.full_name || 'User',
@@ -137,17 +139,15 @@ export const useProfile = () => {
         });
       }
     } catch (err) {
-      if (import.meta.env?.DEV) {
-        console.error('Error fetching profile:', err);
-      }
-      setError(err instanceof Error ? err.message : 'Failed to fetch profile');
+      logger.error('Error fetching profile:', err);
+      if (!cancelledRef.current) setError(err instanceof Error ? err.message : 'Failed to fetch profile');
       
       // If it's an auth error, redirect to login
       if (err instanceof Error && (err.message.includes('not authenticated') || err.message.includes('Authentication failed'))) {
         window.location.href = '/login';
       }
     } finally {
-      setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     }
   };
 
@@ -163,9 +163,7 @@ export const useProfile = () => {
       // Sign out
       await supabase.auth.signOut({ scope: 'global' });
     } catch (error) {
-      if (import.meta.env?.DEV) {
-        console.error('Error cleaning up auth state:', error);
-      }
+      logger.error('Error cleaning up auth state:', error);
     }
   };
 
@@ -176,30 +174,18 @@ export const useProfile = () => {
       // Clear profile data
       setProfile(null);
     } catch (err) {
-      if (import.meta.env?.DEV) {
-        console.error('Error logging out:', err);
-      }
+      logger.error('Error logging out:', err);
       throw err;
     }
   };
 
   useEffect(() => {
     fetchProfile();
+    return () => { cancelledRef.current = true; };
   }, []);
 
   // Listen for profile changes (organization switching)
   useEffect(() => {
-    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-      // Defer subscription until tab is visible
-      const onVisible = () => {
-        if (document.visibilityState === 'visible') {
-          fetchProfile();
-        }
-      };
-      document.addEventListener('visibilitychange', onVisible, { once: true });
-      return () => document.removeEventListener('visibilitychange', onVisible);
-    }
-
     const channel = supabase
       .channel('profile-organization-changes')
       .on(
@@ -210,10 +196,9 @@ export const useProfile = () => {
           table: 'profiles'
         },
         (payload) => {
-          if (import.meta.env?.DEV) {
-            console.log('Profile organization updated:', payload);
-          }
-          setTimeout(() => {
+          logger.debug('Profile organization updated:', payload);
+          if (realtimeTimeoutRef.current) clearTimeout(realtimeTimeoutRef.current);
+          realtimeTimeoutRef.current = setTimeout(() => {
             fetchProfile();
           }, 150);
         }
@@ -221,13 +206,15 @@ export const useProfile = () => {
       .subscribe();
 
     return () => {
+      if (realtimeTimeoutRef.current) {
+        clearTimeout(realtimeTimeoutRef.current);
+        realtimeTimeoutRef.current = null;
+      }
       try {
         supabase.removeChannel(channel);
       } catch (e) {
         // Avoid noisy errors when socket already closed
-        if (import.meta.env?.DEV) {
-          console.warn('Cleanup channel skipped:', e);
-        }
+        logger.warn('Cleanup channel skipped:', e);
       }
     };
   }, []);

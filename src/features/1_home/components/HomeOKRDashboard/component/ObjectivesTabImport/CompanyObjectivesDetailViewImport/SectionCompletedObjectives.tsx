@@ -35,7 +35,7 @@ export const SectionCompletedObjectives = ({
         </div>
       </div>
       
-      <div className="p-0 overflow-y-auto seamless-scroll scrollbar-hide border-r border-gray-200">
+      <div className="p-0 border-r border-gray-200">
         <Accordion type="single" collapsible value={expandedObjective} onValueChange={setExpandedObjective}>
           {completedObjectives.map(objective => renderObjectiveCard(objective, 'completed', 'border-l-blue-500', 'text-blue-600'))}
         </Accordion>

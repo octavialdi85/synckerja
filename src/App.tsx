@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/features/1-login";
 import { CentralizedUserDataProvider } from "@/features/1-login/contexts/CentralizedUserDataContext";
+import { CurrentOrgProvider } from "@/features/1-login/contexts/CurrentOrgContext";
 import { LanguageProvider } from "@/features/share/i18n/LanguageProvider";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { UniversalProtectedRoute } from "@/components/UniversalProtectedRoute";
@@ -253,6 +254,7 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <CentralizedUserDataProvider>
+          <CurrentOrgProvider>
           <LanguageProvider>
             <Toaster />
             <Sonner />
@@ -943,6 +945,7 @@ const App = () => (
               </NativeSafeAreaWrapper>
             </BrowserRouter>
           </LanguageProvider>
+          </CurrentOrgProvider>
         </CentralizedUserDataProvider>
       </AuthProvider>
     </TooltipProvider>

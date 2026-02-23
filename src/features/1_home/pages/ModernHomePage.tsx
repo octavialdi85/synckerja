@@ -73,11 +73,13 @@ function ModernHomePage() {
                   </div>
 
                   {/* Center Section - OKR Dashboard (50%) - single load like social-media dashboard, no blink */}
-                  <div className="col-span-6 h-full">
-                    <div className="h-full flex flex-col max-h-[calc(100vh-200px)]">
-                      <OKRSectionVisibilityProvider>
-                        <HomeOKRDashboard />
-                      </OKRSectionVisibilityProvider>
+                  <div className="col-span-6 h-full min-h-0">
+                    <div className="h-full flex flex-col max-h-[calc(100vh-200px)] min-h-0">
+                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                        <OKRSectionVisibilityProvider>
+                          <HomeOKRDashboard />
+                        </OKRSectionVisibilityProvider>
+                      </div>
                     </div>
                   </div>
 

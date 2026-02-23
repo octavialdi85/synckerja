@@ -136,7 +136,7 @@ const OKRPageContent = () => {
                                   </div>
                                 </div>
                               ) : activeTab === 'company-objectives' ? (
-                                <div className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll max-h-[calc(100vh-120px)]">
+                                <div className="space-y-4 mt-4 flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)] min-h-0">
                                   <div>
                                     <CompanyObjectivesProgressCard
                                         enhancedCompanyObjectives={[]}
@@ -161,7 +161,7 @@ const OKRPageContent = () => {
                                     </div>
                                 </div>
                               ) : activeTab === 'department-objectives' ? (
-                                <div className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll max-h-[calc(100vh-120px)]">
+                                <div className="space-y-4 mt-4 flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)] min-h-0">
                                   <DepartmentObjectivesProgressCard
                                     enhancedDepartmentObjectives={[]}
                                     calculateOverallProgress={() => departmentStats.data?.avgProgress || 0}
@@ -186,7 +186,7 @@ const OKRPageContent = () => {
                                   />
                                 </div>
                               ) : (
-                                <div className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll max-h-[calc(100vh-120px)]">
+                                <div className="space-y-4 mt-4 flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)] min-h-0">
                                   <IndividualObjectivesProgressCard
                                     enhancedIndividualObjectives={[]}
                                     calculateOverallProgress={() => individualStats.data?.avgProgress || 0}
@@ -232,7 +232,7 @@ const OKRPageContent = () => {
                       </div>
 
                       <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full p-4 seamless-scroll overflow-y-auto">
+                        <div className="h-full p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
                           {!pageReady ? (
                             <div className="flex items-center justify-center py-8">
                               <LoadingDots size="sm" />

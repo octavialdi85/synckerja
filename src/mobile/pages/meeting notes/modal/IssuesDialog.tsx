@@ -23,6 +23,19 @@ import {
   TableRow,
 } from '@/features/ui/table';
 import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
+import { useToast } from '@/features/1-login/hooks/use-toast';
+import { logger } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 import UpdateHistoryDialog from '@/mobile/pages/meeting notes/modal/UpdateHistoryDialog';
 import { AddSolutionAsDailyTaskModal } from '@/mobile/pages/meeting notes/modal/AddSolutionAsDailyTaskModal';
 
@@ -36,8 +49,10 @@ interface IssuesDialogProps {
 
 const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssueCountChange }: IssuesDialogProps) => {
   const isMobile = useIsMobile();
-  const { 
-    getIssueHistory, 
+  const { toast } = useToast();
+  const { t } = useAppTranslation();
+  const {
+    getIssueHistory,
     addIssue, 
     updateIssue,
     updateIssueNotes,
@@ -78,6 +93,10 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
 
   // Full description view popup (when description is truncated and user clicks to read full)
   const [fullDescriptionModal, setFullDescriptionModal] = useState<{ title: string; content: string } | null>(null);
+  const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
+  const [deletingSolutionId, setDeletingSolutionId] = useState<string | null>(null);
+  const [isDeletingIssue, setIsDeletingIssue] = useState(false);
+  const [isDeletingSolution, setIsDeletingSolution] = useState(false);
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
@@ -105,13 +124,14 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
           const updates = await getUpdateHistory(solution.id);
           updateCounts[solution.id] = updates.length;
         } catch (error) {
-          console.error(`Error loading update count for solution ${solution.id}:`, error);
+          logger.error(`Error loading update count for solution ${solution.id}:`, error);
           updateCounts[solution.id] = 0;
         }
       }
       setSolutionUpdateCounts(updateCounts);
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading data:', error);
+      toast({ title: 'Error', description: 'Failed to load issues and solutions', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -126,7 +146,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       await loadData();
       setNewIssue('');
     } catch (error) {
-      console.error('Error adding issue:', error);
+      logger.error('Error adding issue:', error);
+      toast({ title: 'Error', description: 'Failed to add issue', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -146,7 +167,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setEditingIssueId(null);
       setEditingIssueText('');
     } catch (error) {
-      console.error('Error updating issue:', error);
+      logger.error('Error updating issue:', error);
+      toast({ title: 'Error', description: 'Failed to update issue', variant: 'destructive' });
     }
   };
 
@@ -155,17 +177,27 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     setEditingIssueText('');
   };
 
-  const handleDeleteIssue = async (issueId: string) => {
-    if (!window.confirm('Are you sure you want to delete this issue? All associated solutions will also be deleted.')) {
-      return;
-    }
+  const handleRequestDeleteIssue = (issueId: string) => {
+    setDeletingIssueId(issueId);
+  };
 
+  const handleConfirmDeleteIssue = async () => {
+    if (!deletingIssueId) return;
+    setIsDeletingIssue(true);
     try {
-      await deleteIssue(issueId);
+      await deleteIssue(deletingIssueId);
+      setDeletingIssueId(null);
       await loadData();
     } catch (error) {
-      console.error('Error deleting issue:', error);
+      logger.error('Error deleting issue:', error);
+      toast({ title: 'Error', description: 'Failed to delete issue', variant: 'destructive' });
+    } finally {
+      setIsDeletingIssue(false);
     }
+  };
+
+  const handleDeleteIssue = async (issueId: string) => {
+    handleRequestDeleteIssue(issueId);
   };
 
   const handleAddSolution = async () => {
@@ -178,7 +210,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNewSolution('');
       setSelectedIssueId('');
     } catch (error) {
-      console.error('Error adding solution:', error);
+      logger.error('Error adding solution:', error);
+      toast({ title: 'Error', description: 'Failed to add solution', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +231,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setEditingSolutionId(null);
       setEditingSolutionText('');
     } catch (error) {
-      console.error('Error updating solution:', error);
+      logger.error('Error updating solution:', error);
+      toast({ title: 'Error', description: 'Failed to update solution', variant: 'destructive' });
     }
   };
 
@@ -207,17 +241,27 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
     setEditingSolutionText('');
   };
 
-  const handleDeleteSolution = async (solutionId: string) => {
-    if (!window.confirm('Are you sure you want to delete this solution?')) {
-      return;
-    }
+  const handleRequestDeleteSolution = (solutionId: string) => {
+    setDeletingSolutionId(solutionId);
+  };
 
+  const handleConfirmDeleteSolution = async () => {
+    if (!deletingSolutionId) return;
+    setIsDeletingSolution(true);
     try {
-      await deleteSolution(solutionId);
+      await deleteSolution(deletingSolutionId);
+      setDeletingSolutionId(null);
       await loadData();
     } catch (error) {
-      console.error('Error deleting solution:', error);
+      logger.error('Error deleting solution:', error);
+      toast({ title: 'Error', description: 'Failed to delete solution', variant: 'destructive' });
+    } finally {
+      setIsDeletingSolution(false);
     }
+  };
+
+  const handleDeleteSolution = async (solutionId: string) => {
+    handleRequestDeleteSolution(solutionId);
   };
 
   const handleOpenIssueNotes = (issue: any) => {
@@ -232,7 +276,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNotesIssueId(null);
       setEditingIssueNotes('');
     } catch (error) {
-      console.error('Error saving issue notes:', error);
+      logger.error('Error saving issue notes:', error);
+      toast({ title: 'Error', description: 'Failed to save issue notes', variant: 'destructive' });
     }
   };
 
@@ -253,7 +298,8 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
       setNotesSolutionId(null);
       setEditingSolutionNotes('');
     } catch (error) {
-      console.error('Error saving solution notes:', error);
+      logger.error('Error saving solution notes:', error);
+      toast({ title: 'Error', description: 'Failed to save solution notes', variant: 'destructive' });
     }
   };
 
@@ -696,6 +742,40 @@ const IssuesDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, onIssu
           </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={!!deletingIssueId} onOpenChange={(open) => !open && setDeletingIssueId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete issue</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('meetingNotes.issues.confirmDeleteIssue', 'Are you sure you want to delete this issue? All associated solutions will also be deleted.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingIssue}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteIssue} disabled={isDeletingIssue} className="bg-red-600 hover:bg-red-700">
+              {isDeletingIssue ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deletingSolutionId} onOpenChange={(open) => !open && setDeletingSolutionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete solution</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('meetingNotes.issues.confirmDeleteSolution', 'Are you sure you want to delete this solution?')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingSolution}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteSolution} disabled={isDeletingSolution} className="bg-red-600 hover:bg-red-700">
+              {isDeletingSolution ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Full description popup (read full Issue/Solution description) */}
       <Dialog open={!!fullDescriptionModal} onOpenChange={(open) => !open && setFullDescriptionModal(null)}>

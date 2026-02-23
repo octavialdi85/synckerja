@@ -304,8 +304,11 @@ export function ConversationList({
       queryClient.invalidateQueries({ queryKey: ['email-conversations'] });
     };
     return (
-      <div className="p-4 text-sm text-red-600 flex flex-col items-center justify-center gap-3">
+      <div className="p-4 text-sm text-red-600 flex flex-col items-center justify-center gap-3 text-center">
         <span>{t('whatsappInbox.failedToLoadConversations', 'Failed to load conversations.')}</span>
+        <span className="text-muted-foreground text-xs">
+          {t('livechat.conversationsErrorHint', 'Salah satu sumber (WhatsApp/Instagram/Email) gagal. Coba lagi untuk memuat ulang semuanya.')}
+        </span>
         <Button variant="outline" size="sm" onClick={handleRetry}>
           {t('common.retry', 'Coba lagi')}
         </Button>

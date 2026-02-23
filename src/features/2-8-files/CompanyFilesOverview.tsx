@@ -26,8 +26,8 @@ export const CompanyFilesOverview = () => {
 
   return (
     <>
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-4">
+      {/* Scrollable Content - satu scroll container dengan nested-scroll-touch-chain */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4 space-y-4">
         {/* Storage Usage */}
         <Card className="p-4">
           <div className="flex items-center gap-3 mb-3">

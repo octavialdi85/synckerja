@@ -74,7 +74,8 @@ export function useWhatsAppConversations() {
       if (error) throw error;
       return (data ?? []) as WhatsAppConversation[];
     },
-    refetchInterval: 10000,
+    refetchInterval: 20000,
+    refetchOnWindowFocus: false,
     staleTime: 30_000,
   });
 }

@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Card, CardContent } from '@/features/ui/card';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface UsageMetrics {
   employee_utilization_percentage: number;
@@ -13,11 +14,12 @@ interface UsageMetricsCardsProps {
 }
 
 export const UsageMetricsCards = memo(({ metrics, isLoading }: UsageMetricsCardsProps) => {
+  const { t } = useAppTranslation();
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
         {Array.from({ length: 3 }).map((_, index) => (
-          <Card key={index}>
+          <Card key={`usage-metrics-skeleton-${index}`}>
             <CardContent className="p-3">
               <div className="text-center space-y-1.5">
                 <div className="h-8 bg-slate-200 rounded animate-pulse w-14 mx-auto"></div>
@@ -40,7 +42,7 @@ export const UsageMetricsCards = memo(({ metrics, isLoading }: UsageMetricsCards
             <div className="text-2xl font-semibold text-blue-600">
               {Math.round(metrics.employee_utilization_percentage)}%
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Employee Utilization</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('subscription.overview.employeeUtilization')}</p>
           </div>
         </CardContent>
       </Card>
@@ -51,7 +53,7 @@ export const UsageMetricsCards = memo(({ metrics, isLoading }: UsageMetricsCards
             <div className="text-2xl font-semibold text-green-600">
               {Math.round(metrics.plan_efficiency_score)}%
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Plan Efficiency</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('subscription.overview.planEfficiency')}</p>
           </div>
         </CardContent>
       </Card>
@@ -62,7 +64,7 @@ export const UsageMetricsCards = memo(({ metrics, isLoading }: UsageMetricsCards
             <div className="text-2xl font-semibold text-purple-600">
               {Math.round(metrics.growth_rate)}%
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Growth Rate</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('subscription.overview.growthRate')}</p>
           </div>
         </CardContent>
       </Card>

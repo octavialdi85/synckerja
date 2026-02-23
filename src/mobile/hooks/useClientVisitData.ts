@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/config/logger";
 import { useRealtimeData } from "./useRealtimeData";
 
 export interface ClientVisit {
   id: string;
-  client_id: string;
+  client_id?: string;
+  lead_client_id?: string;
   employee_id: string;
   organization_id: string;
   visit_date: string;
@@ -41,26 +43,34 @@ export const useClientVisitData = () => {
   const [todaySchedule, setTodaySchedule] = useState<TodayVisitSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
-  const fetchClientVisitData = async () => {
+  const fetchClientVisitData = useCallback(async () => {
     try {
+      cancelledRef.current = false;
       setLoading(true);
       setError(null);
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
+      if (cancelledRef.current) return;
       if (!user) {
         setError("User not authenticated");
         return;
       }
 
       // Get user's active organization
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('active_organization_id')
         .eq('user_id', user.id)
         .single();
 
+      if (cancelledRef.current) return;
+      if (profileError && profileError.code !== 'PGRST116') {
+        setError(profileError.message ?? 'Failed to load profile');
+        return;
+      }
       if (!profile?.active_organization_id) {
         setError("No active organization found");
         return;
@@ -74,6 +84,7 @@ export const useClientVisitData = () => {
         .eq('organization_id', profile.active_organization_id)
         .single();
 
+      if (cancelledRef.current) return;
       if (!employee) {
         setError("Employee data not found");
         return;
@@ -92,13 +103,15 @@ export const useClientVisitData = () => {
         .eq('visit_date', today)
         .order('planned_start_time', { ascending: true });
 
+      if (cancelledRef.current) return;
       if (visitsError) {
-        console.error('Error fetching visits:', visitsError);
+        logger.error('Error fetching visits:', visitsError);
         setError("Failed to fetch visit data");
         return;
       }
 
       const typedVisits = (visits || []) as any[];
+      if (cancelledRef.current) return;
       setTodayVisits(typedVisits);
       setTodaySchedule({
         isVisitDay: typedVisits.length > 0,
@@ -107,27 +120,42 @@ export const useClientVisitData = () => {
       });
 
     } catch (err) {
-      console.error('Error in fetchClientVisitData:', err);
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      logger.error('Error in fetchClientVisitData:', err);
+      if (!cancelledRef.current) setError(err instanceof Error ? err.message : "An unexpected error occurred");
     } finally {
-      setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   // Setup realtime updates
   const { isConnected: realtimeConnected } = useRealtimeData([
     {
       table: 'clients',
       onInsert: () => {
-        console.log('📡 New client, refetching visit data...');
+        logger.debug('New client, refetching visit data');
         fetchClientVisitData();
       },
       onUpdate: () => {
-        console.log('📡 Client updated, refetching visit data...');
+        logger.debug('Client updated, refetching visit data');
         fetchClientVisitData();
       },
       onDelete: () => {
-        console.log('📡 Client deleted, refetching visit data...');
+        logger.debug('Client deleted, refetching visit data');
+        fetchClientVisitData();
+      }
+    },
+    {
+      table: 'client_visits',
+      onInsert: () => {
+        logger.debug('Client visit inserted, refetching visit data');
+        fetchClientVisitData();
+      },
+      onUpdate: () => {
+        logger.debug('Client visit updated, refetching visit data');
+        fetchClientVisitData();
+      },
+      onDelete: () => {
+        logger.debug('Client visit deleted, refetching visit data');
         fetchClientVisitData();
       }
     }
@@ -135,7 +163,8 @@ export const useClientVisitData = () => {
 
   useEffect(() => {
     fetchClientVisitData();
-  }, []);
+    return () => { cancelledRef.current = true; };
+  }, [fetchClientVisitData]);
 
   return {
     todayVisits,

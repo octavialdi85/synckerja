@@ -1144,7 +1144,8 @@ const SocialMediaContent = () => {
           <div className="flex flex-1 min-h-0">
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
-              <div className="h-full flex flex-col overflow-hidden">
+              {/* Tinggi tetap: scroll hanya di area tabel & sidebar, bukan halaman */}
+              <div className="h-full flex flex-col min-h-0 overflow-hidden">
                   {/* Header and Tabs */}
                   <div className="flex-shrink-0 mb-1">
                     <HeaderAndTab 
@@ -1154,7 +1155,7 @@ const SocialMediaContent = () => {
                   </div>
 
                   <Tabs value={activeMainTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-                    <TabsContent value="dashboard" className="mt-0 flex-1 flex flex-col min-h-0 h-full">
+                    <TabsContent value="dashboard" className="mt-0 flex-1 flex flex-col min-h-0">
                       {/* Performance Tables - Full Width Above Sidebar */}
                       <div className="flex-shrink-0 mb-2">
                         <SocialMediaErrorBoundary>
@@ -1179,11 +1180,11 @@ const SocialMediaContent = () => {
                         </SocialMediaErrorBoundary>
                       </div>
 
-                      {/* Main Grid Layout - Metrics, Table, and Sidebar */}
+                      {/* Main Grid Layout - full height, table & sidebar satu scroll per panel (scroll chaining) */}
                       <DashboardLoadingWrapper isLoading={loading || (!organizationId && contentPlans.length === 0)}>
-                        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0">
-                          {/* Left Section - Main Content (75% width / 9 cols) */}
-                          <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full">
+                        <div className="grid grid-cols-12 gap-2 flex-1 min-h-0 max-h-[calc(100vh-120px)] overflow-hidden grid-rows-1">
+                          {/* Left Section - Content Planner / Production / Content Post (9 cols) */}
+                          <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full overflow-hidden">
                             {/* Social Media Metrics */}
                             <div className="flex-shrink-0">
                               <SocialMediaErrorBoundary>
@@ -1214,8 +1215,11 @@ const SocialMediaContent = () => {
                                 </SocialMediaErrorBoundary>
                               </div>
                               
-                              {/* Scrollable Content Area */}
-                              <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+                              {/* Scrollable Content Area - satu scroll container per panel, scroll chaining; max-height agar scroll jalan */}
+                              <div
+                                className="flex-1 min-h-0 overflow-y-auto overflow-x-auto seamless-scroll nested-scroll-touch-chain content-plan-table-scroll"
+                                style={{ maxHeight: 'calc(100vh - 320px)' }}
+                              >
                                 <SocialMediaErrorBoundary>
                                   <ContentPlanTable 
                                     contentPlans={Array.isArray(filteredContentPlans) ? filteredContentPlans : []} 
@@ -1255,10 +1259,12 @@ const SocialMediaContent = () => {
                             </div>
                           </div>
 
-                           {/* Right Section - Sidebar (25% width / 3 cols) */}
-                           <div className="col-span-3 space-y-2 flex flex-col min-h-0 h-full">
-                             <div className="h-full flex flex-col">
-                               <SidebarContainer selectedMonth={deferredMonth} serviceFilter={serviceFilter} />
+                           {/* Right Section - Sidebar (3 cols): tinggi tetap, scroll hanya di dalam tab (Funnel/Content Balance/Reminders) */}
+                           <div className="col-span-3 flex flex-col min-h-0 h-full overflow-hidden">
+                             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                                 <SidebarContainer selectedMonth={deferredMonth} serviceFilter={serviceFilter} />
+                               </div>
                              </div>
                            </div>
                         </div>

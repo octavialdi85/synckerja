@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useRef, type ReactNode } from "react";
 import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
@@ -23,19 +23,24 @@ const OverviewTabPage = memo(() => {
   const { organizationId } = useCurrentOrg();
 
   const { subscriptionStatus, isLoading, statusError, refreshSubscriptionStatus } = useOptimizedSubscription();
-  const { analytics, isLoading: analyticsLoading } = useSubscriptionAnalytics();
+  const { analytics, isLoading: analyticsLoading, isError: analyticsError, refetch: refetchAnalytics } = useSubscriptionAnalytics();
 
   const isInitialLoading = isLoading && !subscriptionStatus;
+  const subscriptionStatusRef = useRef(subscriptionStatus);
+  const statusErrorRef = useRef(statusError);
+  subscriptionStatusRef.current = subscriptionStatus;
+  statusErrorRef.current = statusError;
 
   useEffect(() => {
     setActiveTabOnLocationChange();
   }, [setActiveTabOnLocationChange]);
 
-
   useEffect(() => {
     if (organizationId && isLoading && !subscriptionStatus && !statusError) {
       const timer = window.setTimeout(() => {
-        refreshSubscriptionStatus();
+        if (!subscriptionStatusRef.current && !statusErrorRef.current) {
+          refreshSubscriptionStatus();
+        }
       }, 10000);
       return () => window.clearTimeout(timer);
     }
@@ -43,12 +48,12 @@ const OverviewTabPage = memo(() => {
   }, [organizationId, isLoading, subscriptionStatus, statusError, refreshSubscriptionStatus]);
 
   useStatusBarStyle('light');
-  const renderContent = () => {
-    if (isInitialLoading) {
-      return <OverviewTabPageSkeleton />;
-    }
 
-    return (
+  let content: ReactNode;
+  if (isInitialLoading) {
+    content = <OverviewTabPageSkeleton />;
+  } else {
+    content = (
       <div className="space-y-1">
         {statusError && (
           <Card className="border-destructive/40 bg-destructive/5">
@@ -66,13 +71,27 @@ const OverviewTabPage = memo(() => {
           </Card>
         )}
 
-        {subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
+        {!statusError && subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
+        {analyticsError && (
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardHeader>
+              <CardTitle className="text-destructive">{t("subscription.overview.analyticsErrorTitle", "Data analitik tidak tersedia")}</CardTitle>
+              <CardDescription className="text-destructive">
+                {t("subscription.overview.analyticsErrorDescription", "Silakan coba muat ulang data analitik.")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" variant="outline" onClick={() => refetchAnalytics()}>
+                {t("subscription.overview.refresh", "Muat ulang data")}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         <EmployeeGrowthChart data={analytics?.employee_growth || []} isLoading={analyticsLoading} />
         <UsageMetricsCards metrics={analytics?.usage_metrics || null} isLoading={analyticsLoading} />
-
       </div>
     );
-  };
+  }
 
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
@@ -105,7 +124,7 @@ const OverviewTabPage = memo(() => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
                 <div className="mx-auto w-full max-w-md px-2 pt-2 space-y-1 content-padding-above-nav-default">
-                  {renderContent()}
+                  {content}
                 </div>
               </div>
             </div>

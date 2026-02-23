@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card } from '@/mobile/components/ui/card';
 import { Skeleton } from '@/mobile/components/ui/skeleton';
 

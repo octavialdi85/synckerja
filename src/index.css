@@ -52,6 +52,77 @@
   display: none !important;
 }
 
+/* Nested scroll container: keep touch scroll inside this element so parent does not steal it */
+.nested-scroll-touch {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+/* Nested scroll with chaining: list scrolls first; when list hits top/bottom, scroll continues to main page */
+.nested-scroll-touch-chain {
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+/* Home OKR tab: scroll area dengan tinggi pasti dari viewport agar scroll selalu jalan.
+   overscroll-behavior: auto agar saat list mentok (atas/bawah) scroll lanjut ke halaman utama. */
+.home-okr-tab-scroll {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: calc(100vh - 260px) !important;
+  min-height: 200px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: auto;
+  touch-action: pan-y;
+}
+
+/* Content Pillar Tracker (sidebar Funnel): scroll-chaining rule 3.1 — satu scroll container, tinggi dibatasi, nested-scroll-touch-chain */
+.content-pillar-tracker-scroll {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: calc(100vh - 280px) !important;
+  min-height: 0 !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: auto !important; /* override .seamless-scroll agar chain ke parent saat mentok (rule 3.3) */
+  touch-action: pan-y;
+}
+
+/* Content Balance tab (sidebar): sama seperti Funnel — satu scroll container untuk daftar PIC, layout tetap */
+.content-balance-tab-scroll {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: calc(100vh - 280px) !important;
+  min-height: 0 !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: auto !important;
+  touch-action: pan-y;
+}
+
+/* Dashboard Plan table: satu scroll per panel, tinggi terbatas agar area tabel bisa scroll */
+.content-plan-table-scroll {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  max-height: calc(100vh - 320px) !important;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: auto;
+  touch-action: pan-y;
+}
+
+/* Product Knowledge table: satu scroll per panel, tinggi dibatasi agar area tabel bisa scroll (scroll-chaining) */
+.product-knowledge-table-scroll {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  /* Offset untuk header + tab + filter + padding agar area tabel tidak meluber */
+  max-height: calc(100vh - 280px) !important;
+  min-height: 0 !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: auto !important;
+  touch-action: pan-y;
+}
+
 /* Global scrollbar hiding for dashboard area */
 [data-radix-tabs-content] {
   scrollbar-width: none !important;

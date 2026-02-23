@@ -154,11 +154,12 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
     if (!planId) return;
     setViewContentLoadingRowId(row.id);
     try {
+      // Use maybeSingle() to avoid 406 when RLS returns 0 rows (single() expects exactly one row)
       const { data, error } = await supabase
         .from('social_media_plans')
         .select('google_drive_link')
         .eq('id', planId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       const linkUrl = (data as { google_drive_link?: string | null } | null)?.google_drive_link?.trim();
       if (!linkUrl) {
@@ -172,9 +173,15 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
       const { token } = await getOrCreate({ socialMediaPlanId: planId, linkUrl });
       navigate(`/review/${token}`, { state: { from: 'jobdesc' } });
     } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : (e as { code?: string; message?: string })?.code === 'PGRST116'
+            ? t('dailyTask.approval.reviewAccessDenied', 'Content not found or access denied.')
+            : t('dailyTask.approval.reviewOpenFailed', 'Failed to open review.');
       toast({
         title: t('dailyTask.approval.error', 'Error'),
-        description: e instanceof Error ? e.message : 'Failed to open review.',
+        description: msg,
         variant: 'destructive',
       });
     } finally {
@@ -201,8 +208,8 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
           <span className="text-xl font-bold text-amber-600">{pending.length}</span>
         </div>
 
-        {/* List of items to approve (seamless vertical scroll) */}
-        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 min-w-0">
+        {/* List of items to approve (seamless vertical scroll; nested-scroll-touch so finger scroll works inside box) */}
+        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch min-h-0 min-w-0">
           {fetchError ? (
             <p className="text-xs text-red-600 py-2">
               {t('dailyTask.approval.fetchError', 'Failed to load approvals. Please try again.')}
@@ -273,26 +280,31 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
                         {t('dailyTask.approval.viewContent', 'View Content')}
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-green-600 border-green-200 hover:bg-green-50 h-7 px-2 text-xs"
-                      onClick={() => handleApproveClick(row)}
-                      disabled={actingId === row.id}
-                    >
-                      {actingId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
-                      {t('dailyTask.approval.approve', 'Approve')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
-                      onClick={() => handleRejectClick(row)}
-                      disabled={actingId === row.id}
-                    >
-                      <XCircle className="h-3.5 w-3.5 mr-1" />
-                      {t('dailyTask.approval.reject', 'Reject')}
-                    </Button>
+                    {/* On Job Desc overview, Approve/Reject are on /review page — hide when View Content is shown */}
+                    {!(variant === 'jobdesc-overview' && showViewContent(row)) && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 border-green-200 hover:bg-green-50 h-7 px-2 text-xs"
+                          onClick={() => handleApproveClick(row)}
+                          disabled={actingId === row.id}
+                        >
+                          {actingId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
+                          {t('dailyTask.approval.approve', 'Approve')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50 h-7 px-2 text-xs"
+                          onClick={() => handleRejectClick(row)}
+                          disabled={actingId === row.id}
+                        >
+                          <XCircle className="h-3.5 w-3.5 mr-1" />
+                          {t('dailyTask.approval.reject', 'Reject')}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </li>
               ))}

@@ -16,6 +16,19 @@ import {
 import { ScrollArea } from '@/features/ui/scroll-area';
 import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/features/1-login/hooks/use-toast';
+import { logger } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/features/ui/alert-dialog';
 
 interface UpdateHistoryDialogProps {
   isOpen: boolean;
@@ -27,6 +40,8 @@ interface UpdateHistoryDialogProps {
 
 const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId, solutionId }: UpdateHistoryDialogProps) => {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
+  const { t } = useAppTranslation();
   const { getUpdateHistoryByMeetingPoint, getUpdateHistory, addUpdate, updateUpdate, deleteUpdate, getIssueHistory } = useMeetingNotes();
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
@@ -40,6 +55,9 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const [showNoSolutionAlert, setShowNoSolutionAlert] = useState(false);
+  const [deletingUpdateId, setDeletingUpdateId] = useState<string | null>(null);
+  const [isDeletingUpdate, setIsDeletingUpdate] = useState(false);
 
   useEffect(() => {
     if (isOpen && meetingPointId) {
@@ -102,7 +120,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         setSelectedIssueId(issuesData[0].id);
       }
     } catch (error) {
-      console.error('Error loading issues:', error);
+      logger.error('Error loading issues:', error);
+      toast({ title: 'Error', description: 'Failed to load issues', variant: 'destructive' });
     }
   };
 
@@ -124,15 +143,16 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         // Find the solution to get its issue_id
         const solution = data?.find(s => s.id === solutionId);
         if (solution) {
-          setSelectedIssueId(solution.meeting_point_issue_id);
-          setSolutions([solution]);
-        }
-      } else {
-        // If no solutionId, solutions will be filtered by selectedIssueId in useEffect
-        // Don't auto-select here, let the useEffect handle it
+        setSelectedIssueId(solution.meeting_point_issue_id);
+        setSolutions([solution]);
+      }
+    } else {
+      // If no solutionId, solutions will be filtered by selectedIssueId in useEffect
+      // Don't auto-select here, let the useEffect handle it
       }
     } catch (error) {
-      console.error('Error loading solutions:', error);
+      logger.error('Error loading solutions:', error);
+      toast({ title: 'Error', description: 'Failed to load solutions', variant: 'destructive' });
     }
   };
 
@@ -169,7 +189,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
         setUpdateHistory(history);
       }
     } catch (error) {
-      console.error('Error loading update history:', error);
+      logger.error('Error loading update history:', error);
+      toast({ title: 'Error', description: 'Failed to load update history', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -183,9 +204,9 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       setSelectedSolutionId(solutions[0].id);
     }
     
-    // If still no solution, show alert
+    // If still no solution, show alert dialog
     if (!selectedSolutionId) {
-      alert('Please create a solution first before adding updates. You can create solutions in the Issues dialog.');
+      setShowNoSolutionAlert(true);
       return;
     }
 
@@ -200,7 +221,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       setNewUpdate('');
       setNewStatus('');
     } catch (error) {
-      console.error('Error adding update:', error);
+      logger.error('Error adding update:', error);
+      toast({ title: 'Error', description: 'Failed to add update', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -233,7 +255,8 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
       setEditingUpdateId(null);
       setEditingText('');
     } catch (error) {
-      console.error('Error updating:', error);
+      logger.error('Error updating:', error);
+      toast({ title: 'Error', description: 'Failed to update', variant: 'destructive' });
     }
   };
 
@@ -242,18 +265,22 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
     setEditingText('');
   };
 
-  const handleDeleteUpdate = async (updateId: string) => {
-    if (!window.confirm('Are you sure you want to delete this update?')) {
-      return;
-    }
+  const handleRequestDeleteUpdate = (updateId: string) => {
+    setDeletingUpdateId(updateId);
+  };
 
+  const handleConfirmDeleteUpdate = async () => {
+    if (!deletingUpdateId) return;
+    setIsDeletingUpdate(true);
     try {
-      await deleteUpdate(updateId);
-      
-      // Reload update history
+      await deleteUpdate(deletingUpdateId);
+      setDeletingUpdateId(null);
       await loadUpdateHistory();
     } catch (error) {
-      console.error('Error deleting update:', error);
+      logger.error('Error deleting update:', error);
+      toast({ title: 'Error', description: 'Failed to delete update', variant: 'destructive' });
+    } finally {
+      setIsDeletingUpdate(false);
     }
   };
 
@@ -452,7 +479,7 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDeleteUpdate(update.id)}
+                                onClick={() => handleRequestDeleteUpdate(update.id)}
                                 className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
                                 title="Delete update"
                               >
@@ -510,6 +537,37 @@ const UpdateHistoryDialog = ({ isOpen, onClose, discussionPoint, meetingPointId,
           </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={showNoSolutionAlert} onOpenChange={setShowNoSolutionAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Info</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('meetingNotes.updateHistory.noSolutionAlert', 'Please create a solution first before adding updates. You can create solutions in the Issues dialog.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowNoSolutionAlert(false)}>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deletingUpdateId} onOpenChange={(open) => !open && setDeletingUpdateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete update</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('meetingNotes.updateHistory.confirmDeleteUpdate', 'Are you sure you want to delete this update?')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingUpdate}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteUpdate} disabled={isDeletingUpdate} className="bg-red-600 hover:bg-red-700">
+              {isDeletingUpdate ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

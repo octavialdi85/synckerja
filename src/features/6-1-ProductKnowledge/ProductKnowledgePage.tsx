@@ -145,13 +145,13 @@ const ProductKnowledgeContent: React.FC = () => {
                 />
               </div>
               
-              {/* Main Grid Layout - Table and Sidebar */}
-              <div className="flex-1 min-h-0">
-                <div className="grid grid-cols-12 gap-2 flex-1 min-h-0 h-full">
+              {/* Main Grid Layout - Table and Sidebar (scroll-chaining: satu scroll per panel) */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 flex-1 min-h-0 h-full overflow-hidden">
                   {/* Left Section - Main Content (75% width / 9 cols) */}
-                  <div className="col-span-9 space-y-2 flex flex-col min-h-0 h-full">
+                  <div className="col-span-9 space-y-2 flex flex-col min-h-0 overflow-hidden">
                     {/* Product Knowledge Table */}
-                    <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative h-full">
+                    <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-h-0 relative overflow-hidden">
                   {/* Filters Section - Sticky at top */}
                   <div className="sticky top-0 p-4 pb-3 flex-shrink-0 border-b-2 border-gray-300 bg-white z-20">
                     <ProductKnowledgeFilters
@@ -166,9 +166,9 @@ const ProductKnowledgeContent: React.FC = () => {
                     />
                   </div>
                   
-                  {/* Scrollable Content Area */}
-                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[calc(100vh-120px)]">
-                        <div className="p-6 w-full min-w-0 overflow-x-auto">
+                  {/* Content area: scroll terjadi di dalam ProductKnowledgeTable (wrapper tabel punya product-knowledge-table-scroll) */}
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="p-6 w-full min-w-0 h-full">
                       <ProductKnowledgeTable 
                         data={filteredData}
                         isLoading={isLoading || isLoadingServices || isLoadingSubServices}
@@ -183,12 +183,14 @@ const ProductKnowledgeContent: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Right Section - Sidebar (25% width / 3 cols) */}
-                  <div className="col-span-3 flex flex-col min-h-0 h-full">
-                    <ProductKnowledgeSidebar
+                  {/* Right Section - Sidebar (25% width / 3 cols): tinggi tetap, scroll di dalam sidebar */}
+                  <div className="col-span-3 flex flex-col min-h-0 h-full overflow-hidden">
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <ProductKnowledgeSidebar
                       selectedItemId={selectedSidebarItemId}
                       onSelectItem={(id) => setSelectedSidebarItemId(id)}
                     />
+                    </div>
                   </div>
                 </div>
               </div>

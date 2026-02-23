@@ -36,6 +36,27 @@ export const isEmployeeActive = (employee: {
 };
 
 /**
+ * Determine if an employee should appear in organizational structure (e.g. /company/organization).
+ * Excludes only resigned, terminated, inactive, pending removal.
+ * Includes active, probation, contract, and any other non-resigned status.
+ */
+export const isEmployeeInOrganizationalStructure = (employee: {
+  employee_status_name?: string | null;
+  status?: string | null;
+  pending_removal?: boolean | null;
+}): boolean => {
+  if (employee.pending_removal === true) {
+    return false;
+  }
+  const statusFromField = (employee.status ?? '').toString().trim().toLowerCase();
+  const statusFromName = (employee.employee_status_name ?? '').toString().trim().toLowerCase();
+  if (NON_ACTIVE_STATUSES.has(statusFromField) || NON_ACTIVE_STATUSES.has(statusFromName)) {
+    return false;
+  }
+  return true;
+};
+
+/**
  * Get employee status for display
  * Returns the status name or 'Active' as default
  * If pending_removal is true, returns 'Pending Removal'

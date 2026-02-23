@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 function getNotificationSoundUrl(): string {
   if (typeof window === 'undefined') return '/notification-bell.wav';
@@ -26,7 +27,11 @@ function playInboundSound(): void {
   }
 }
 
-function showInboundNotification(title: string, body: string) {
+function showInboundNotification(
+  title: string,
+  body: string,
+  timeoutsRef?: { current: ReturnType<typeof setTimeout>[] }
+) {
   if (typeof document === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
@@ -36,7 +41,8 @@ function showInboundNotification(title: string, body: string) {
       tag: 'livechat-inbound',
       requireInteraction: false,
     });
-    setTimeout(() => n.close(), 6000);
+    const timeoutId = setTimeout(() => n.close(), 6000);
+    if (timeoutsRef) timeoutsRef.current.push(timeoutId);
   } catch {
     // ignore
   }
@@ -53,15 +59,18 @@ function getChannelLabel(table: InboundTable): string {
 function getMessagePreview(row: Record<string, unknown>): string {
   const body = (row.body as string) ?? (row.caption as string) ?? (row.text as string) ?? (row.snippet as string) ?? '';
   const str = typeof body === 'string' ? body.trim() : '';
-  if (str.length <= 48) return str || 'Pesan baru';
+  if (str.length <= 48) return str;
   return str.slice(0, 45) + '…';
 }
 
+type TFunction = (key: string, fallback: string) => string;
+
 /** Toast bergaya WhatsApp: eksplisit [Channel] + preview pesan */
-function showInboundToast(channelLabel: string, messagePreview: string) {
+function showInboundToast(channelLabel: string, messagePreview: string, t: TFunction) {
   playInboundSound();
-  toast(`[${channelLabel}] Pesan baru`, {
-    description: messagePreview,
+  const newMessageLabel = t('livechat.inboundNewMessage', 'Pesan baru');
+  toast(`[${channelLabel}] ${newMessageLabel}`, {
+    description: messagePreview || newMessageLabel,
     duration: 4000,
     position: 'top-center',
     classNames: {
@@ -74,7 +83,9 @@ function showInboundToast(channelLabel: string, messagePreview: string) {
 }
 
 export function useLiveChatInboundNotification(currentConversationId: string | null) {
+  const { t } = useAppTranslation();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const notificationTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     const channelName = 'livechat_inbound_global';
@@ -83,6 +94,10 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+    notificationTimeoutsRef.current = [];
+
+    const newMessageLabel = t('livechat.inboundNewMessage', 'Pesan baru');
+    const openAppHint = t('livechat.inboundMessageOpenApp', 'Ada pesan masuk di Live Chat. Buka aplikasi untuk melihat.');
 
     const handleInbound = (table: InboundTable) => (payload: { new?: Record<string, unknown> }) => {
       const row = payload?.new as { conversation_id?: string; direction?: string } | undefined;
@@ -94,12 +109,13 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
       const channelLabel = getChannelLabel(table);
       const messagePreview = getMessagePreview((payload?.new ?? {}) as Record<string, unknown>);
       // Toast in-app selalu ditampilkan (saat foreground maupun background — saat user kembali akan terlihat)
-      showInboundToast(channelLabel, messagePreview);
+      showInboundToast(channelLabel, messagePreview || newMessageLabel, t);
       // Saat tab di background, tambahkan notifikasi sistem agar user bisa diingatkan
       if (document.visibilityState === 'hidden') {
         showInboundNotification(
-          `[${channelLabel}] Pesan baru`,
-          messagePreview || 'Ada pesan masuk di Live Chat. Buka aplikasi untuk melihat.'
+          `[${channelLabel}] ${newMessageLabel}`,
+          messagePreview || openAppHint,
+          notificationTimeoutsRef
         );
       }
     };
@@ -128,16 +144,18 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
         devLog.warn('LiveChat inbound subscription failed', status);
         if (!channelErrorToastShownRef.current) {
           channelErrorToastShownRef.current = true;
-          toast.warning('Koneksi notifikasi terganggu');
+          toast.warning(t('livechat.notificationConnectionDisrupted', 'Koneksi notifikasi terganggu'));
         }
       }
     });
 
     return () => {
+      notificationTimeoutsRef.current.forEach((id) => clearTimeout(id));
+      notificationTimeoutsRef.current = [];
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [currentConversationId]);
+  }, [currentConversationId, t]);
 }

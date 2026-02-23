@@ -213,7 +213,7 @@ export const CompanyCompanyAssetsPage = () => {
                 {/* Right Column - Overview Sidebar (25% like employee page) */}
                 <div className="col-span-3 h-full">
                   <div className="h-full flex flex-col">
-                    <div className="bg-white border rounded-lg h-full flex flex-col">
+                    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-120px)]">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
                         <div className="flex flex-col">
@@ -223,7 +223,8 @@ export const CompanyCompanyAssetsPage = () => {
                       </div>
 
                       {/* Scrollable Sidebar Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-4">
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="h-full p-4 space-y-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
                         {/* Quick Stats */}
                         <div className="grid grid-cols-1 gap-3">
                           <div className="p-3 bg-blue-50 rounded-lg">
@@ -264,6 +265,7 @@ export const CompanyCompanyAssetsPage = () => {
                               </div>
                             </div>
                           </div>
+                        </div>
                         </div>
                       </div>
 

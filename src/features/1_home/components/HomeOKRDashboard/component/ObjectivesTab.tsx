@@ -139,25 +139,12 @@ export const ObjectivesTab = ({
   };
 
   // Special handling for company objectives - use new CompanyObjectivesDetailView
+  // Struktur sengaja sama dengan Department/Individual agar scroll satu layer (parent home-okr-tab-scroll) dan bisa ke bawah lagi setelah ke atas
   if (type === 'company' && organizationId) {
     return (
-      <div className="space-y-4 h-full w-full flex flex-col overflow-hidden">
-        
-        {/* TODO: Update to use specific contribution modals */}
-        {/* {showCreateDialog && organizationId && (
-          <ModalCreateObjective 
-            open={showCreateDialog} 
-            onOpenChange={setShowCreateDialog} 
-            level={type}
-            organizationId={organizationId} 
-            cycleId={filteredCycleIds?.[0] || selectedCycleId}
-            onSuccess={handleObjectiveAdded}
-          />
-        )} */}
-        
-        
+      <div className="space-y-4 h-full w-full flex flex-col">
         {hasYearQuarterSelection(yearQuarterSelection) ? (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1">
             <CompanyObjectivesDetailView 
               organizationId={organizationId}
               cycleId={hasMultipleCycles ? undefined : selectedCycleId}
@@ -171,7 +158,6 @@ export const ObjectivesTab = ({
             <p>Please select a time period to view objectives</p>
           </div>
         )}
-
       </div>
     );
   }

@@ -13,6 +13,8 @@ import {
 } from '@/features/ui/select';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { useToast } from '@/features/1-login/hooks/use-toast';
+import { logger } from '@/config/logger';
 import { cn } from '@/lib/utils';
 
 interface MeetingPoint {
@@ -29,11 +31,12 @@ interface EditMeetingPointDialogProps {
   isOpen: boolean;
   onClose: () => void;
   meetingPoint: MeetingPoint;
-  onEditSuccess: (id: string, data: any) => Promise<void>;
+  onEditSuccess: (id: string, data: Partial<MeetingPoint>) => Promise<void>;
 }
 
 const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }: EditMeetingPointDialogProps) => {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     discussion_point: '',
     request_by: '',
@@ -43,14 +46,25 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
   const { data: employees = [], isLoading: isLoadingEmployees } = useAvailableEmployees();
 
   useEffect(() => {
-    if (meetingPoint) {
+    if (meetingPoint && employees.length > 0) {
+      const requestByName = meetingPoint.request_by || '';
+      const requestById =
+        requestByName &&
+        employees.find((e) => (e.full_name || e.email) === requestByName)?.id;
+      setFormData((prev) => ({
+        ...prev,
+        discussion_point: meetingPoint.discussion_point,
+        request_by: requestById ?? requestByName,
+        status: meetingPoint.status,
+      }));
+    } else if (meetingPoint) {
       setFormData({
         discussion_point: meetingPoint.discussion_point,
         request_by: meetingPoint.request_by || '',
-        status: meetingPoint.status
+        status: meetingPoint.status,
       });
     }
-  }, [meetingPoint]);
+  }, [meetingPoint, employees]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,10 +72,19 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
 
     setIsSubmitting(true);
     try {
-      await onEditSuccess(meetingPoint.id, formData);
+      const requestByName =
+        formData.request_by &&
+        (employees.find((e) => e.id === formData.request_by)?.full_name ||
+          employees.find((e) => e.id === formData.request_by)?.email) ||
+        formData.request_by;
+      await onEditSuccess(meetingPoint.id, {
+        ...formData,
+        request_by: requestByName,
+      });
       onClose();
     } catch (error) {
-      console.error('Error updating meeting point:', error);
+      logger.error('Error updating meeting point:', error);
+      toast({ title: 'Error', description: 'Failed to update meeting point', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -125,7 +148,7 @@ const EditMeetingPointDialog = ({ isOpen, onClose, meetingPoint, onEditSuccess }
                   </SelectTrigger>
                 <SelectContent className="bg-white border shadow-md z-50 w-full max-w-[calc(100vw-2rem)] md:min-w-[300px] md:max-w-none">
                   {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.full_name || employee.email}>
+                    <SelectItem key={employee.id} value={employee.id}>
                       {employee.full_name || employee.email}
                     </SelectItem>
                   ))}

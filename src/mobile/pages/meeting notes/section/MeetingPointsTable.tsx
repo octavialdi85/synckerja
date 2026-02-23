@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Edit, Trash2, History, User, Clock, AlertCircle } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
@@ -16,59 +16,81 @@ import {
   TableHeader,
   TableRow,
 } from '@/features/ui/table';
-import { useMeetingNotes } from '@/features/8-1-meeting-notes/MeetingNotesContext';
+import { useMeetingNotes, type MeetingPoint } from '@/features/8-1-meeting-notes/MeetingNotesContext';
+import { logger } from '@/config/logger';
 import EditMeetingPointDialog from '@/mobile/pages/meeting notes/modal/EditMeetingPointDialog';
 import DeleteMeetingPointDialog from '@/mobile/pages/meeting notes/modal/DeleteMeetingPointDialog';
 import UpdateHistoryDialog from '@/mobile/pages/meeting notes/modal/UpdateHistoryDialog';
 import IssuesDialog from '@/mobile/pages/meeting notes/modal/IssuesDialog';
 import './MeetingPointsTable.css';
 
-const MeetingPointsTable = () => {
+interface MeetingPointsTableProps {
+  /** When provided, table shows only these points (e.g. pre-filtered by parent). */
+  points?: MeetingPoint[];
+}
+
+const MeetingPointsTable = ({ points: pointsProp }: MeetingPointsTableProps) => {
   const { meetingPoints, filters, updateMeetingPoint, deleteMeetingPoint, getUpdateCount, getIssueHistory } = useMeetingNotes();
-  const [editingPoint, setEditingPoint] = useState<any>(null);
-  const [deletingPoint, setDeletingPoint] = useState<any>(null);
-  const [historyPoint, setHistoryPoint] = useState<any>(null);
-  const [issuesPoint, setIssuesPoint] = useState<any>(null);
+  const [editingPoint, setEditingPoint] = useState<MeetingPoint | null>(null);
+  const [deletingPoint, setDeletingPoint] = useState<MeetingPoint | null>(null);
+  const [historyPoint, setHistoryPoint] = useState<MeetingPoint | null>(null);
+  const [issuesPoint, setIssuesPoint] = useState<MeetingPoint | null>(null);
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
   const [updateCounts, setUpdateCounts] = useState<Record<string, number>>({});
 
-  // Load issue counts and update counts for all meeting points
+  const filteredPoints = useMemo(() => {
+    if (pointsProp) return pointsProp;
+    return meetingPoints.filter(point => {
+      if (filters.search && !(point.discussion_point ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
+        return false;
+      }
+      if (filters.status && point.status !== filters.status) {
+        return false;
+      }
+      if (filters.requestBy && point.request_by !== filters.requestBy) {
+        return false;
+      }
+      return true;
+    });
+  }, [pointsProp, meetingPoints, filters.search, filters.status, filters.requestBy]);
+
+  const pointsToLoad = pointsProp ?? meetingPoints;
+
+  // Load issue counts and update counts for displayed points
   useEffect(() => {
+    let cancelled = false;
     const loadCounts = async () => {
       const issueCountsData: Record<string, number> = {};
       const updateCountsData: Record<string, number> = {};
-      
-      for (const point of meetingPoints) {
-        const [issues, updateCount] = await Promise.all([
-          getIssueHistory(point.id),
-          Promise.resolve(getUpdateCount(point.id))
-        ]);
-        issueCountsData[point.id] = issues.length;
-        updateCountsData[point.id] = updateCount;
+      try {
+        for (const point of pointsToLoad) {
+          if (cancelled) return;
+          const [issues, updateCount] = await Promise.all([
+            getIssueHistory(point.id),
+            Promise.resolve(getUpdateCount(point.id))
+          ]);
+          if (cancelled) return;
+          issueCountsData[point.id] = issues.length;
+          updateCountsData[point.id] = updateCount;
+        }
+        if (!cancelled) {
+          setIssueCounts(issueCountsData);
+          setUpdateCounts(updateCountsData);
+        }
+      } catch (err) {
+        logger.error('Error loading issue/update counts:', err);
+        if (!cancelled) {
+          setIssueCounts(prev => ({ ...prev }));
+          setUpdateCounts(prev => ({ ...prev }));
+        }
       }
-      
-      setIssueCounts(issueCountsData);
-      setUpdateCounts(updateCountsData);
     };
 
-    if (meetingPoints.length > 0) {
+    if (pointsToLoad.length > 0) {
       loadCounts();
     }
-  }, [meetingPoints, getIssueHistory, getUpdateCount]);
-
-  // Filter meeting points based on filters
-  const filteredPoints = meetingPoints.filter(point => {
-    if (filters.search && !point.discussion_point.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
-    }
-    if (filters.status && point.status !== filters.status) {
-      return false;
-    }
-    if (filters.requestBy && point.request_by !== filters.requestBy) {
-      return false;
-    }
-    return true;
-  });
+    return () => { cancelled = true; };
+  }, [pointsToLoad.length, pointsToLoad.map(p => p.id).join(','), getIssueHistory, getUpdateCount]);
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
@@ -94,33 +116,41 @@ const MeetingPointsTable = () => {
     });
   };
 
-  const handleEdit = (point: any) => {
+  const handleEdit = (point: MeetingPoint) => {
     setEditingPoint(point);
   };
 
-  const handleDelete = (point: any) => {
+  const handleDelete = (point: MeetingPoint) => {
     setDeletingPoint(point);
   };
 
-  const handleShowHistory = (point: any) => {
+  const handleShowHistory = (point: MeetingPoint) => {
     setHistoryPoint(point);
   };
 
-  const handleShowIssues = async (point: any) => {
+  const handleShowIssues = async (point: MeetingPoint) => {
     setIssuesPoint(point);
     // Fetch issue count when opening dialog
     const issues = await getIssueHistory(point.id);
     setIssueCounts(prev => ({ ...prev, [point.id]: issues.length }));
   };
 
-  const handleEditSuccess = async (id: string, data: any) => {
-    await updateMeetingPoint(id, data);
-    setEditingPoint(null);
+  const handleEditSuccess = async (id: string, data: Partial<MeetingPoint>) => {
+    try {
+      await updateMeetingPoint(id, data);
+      setEditingPoint(null);
+    } catch {
+      // Context already shows toast; keep dialog open for retry
+    }
   };
 
   const handleDeleteSuccess = async (id: string) => {
-    await deleteMeetingPoint(id);
-    setDeletingPoint(null);
+    try {
+      await deleteMeetingPoint(id);
+      setDeletingPoint(null);
+    } catch {
+      // Context already shows toast; keep dialog open for retry
+    }
   };
 
   // Mobile Card View
@@ -396,7 +426,7 @@ const MeetingPointsTable = () => {
         <UpdateHistoryDialog
           isOpen={!!historyPoint}
           onClose={() => setHistoryPoint(null)}
-          discussionPoint={historyPoint.discussion_point}
+          discussionPoint={historyPoint.discussion_point ?? ''}
           meetingPointId={historyPoint.id}
         />
       )}
@@ -405,7 +435,7 @@ const MeetingPointsTable = () => {
         <IssuesDialog
           isOpen={!!issuesPoint}
           onClose={() => setIssuesPoint(null)}
-          discussionPoint={issuesPoint.discussion_point}
+          discussionPoint={issuesPoint.discussion_point ?? ''}
           meetingPointId={issuesPoint.id}
           onIssueCountChange={(count) => {
             setIssueCounts(prev => ({ ...prev, [issuesPoint.id]: count }));

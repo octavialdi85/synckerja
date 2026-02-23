@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/fea
 import { Badge } from '@/features/ui/badge';
 import { Progress } from '@/features/ui/progress';
 import { Calendar, Users, CreditCard, AlertTriangle } from 'lucide-react';
-import type { SubscriptionStatus } from '@/hooks/useOptimizedSubscription';
+import type { SubscriptionStatus } from '@/features/10-management/hooks/useOptimizedSubscription';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface CurrentSubscriptionProps {
   subscriptionStatus: SubscriptionStatus;
@@ -12,8 +13,12 @@ interface CurrentSubscriptionProps {
 export const CurrentSubscription = memo(({
   subscriptionStatus
 }: CurrentSubscriptionProps) => {
+  const { t } = useAppTranslation();
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+    if (!dateString || typeof dateString !== 'string') return '-';
+    const date = new Date(dateString);
+    if (!Number.isFinite(date.getTime())) return '-';
+    return date.toLocaleDateString('id-ID', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
@@ -34,11 +39,11 @@ export const CurrentSubscription = memo(({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              Current Subscription
-              {subscriptionStatus.is_trial && <Badge variant="secondary">Trial</Badge>}
+              {t('subscription.overview.currentSubscription')}
+              {subscriptionStatus.is_trial && <Badge variant="secondary">{t('subscription.overview.trial')}</Badge>}
             </CardTitle>
             <CardDescription>
-              {subscriptionStatus.plan_name} Plan
+              {subscriptionStatus.plan_name} {t('subscription.overview.subscription')}
             </CardDescription>
           </div>
         </div>
@@ -50,7 +55,7 @@ export const CurrentSubscription = memo(({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium">Employee Usage</span>
+              <span className="text-sm font-medium">{t('subscription.overview.employeeUsage')}</span>
               {isNearLimit && <AlertTriangle className="h-4 w-4 text-orange-500" />}
             </div>
             <div className="space-y-1">
@@ -70,7 +75,7 @@ export const CurrentSubscription = memo(({
               </div>
               {subscriptionStatus.over_limit && (
                 <p className="text-xs text-red-600">
-                  Over limit! Please upgrade your plan.
+                  {t('subscription.overview.overLimit')}
                 </p>
               )}
             </div>
@@ -81,20 +86,19 @@ export const CurrentSubscription = memo(({
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-500" />
               <span className="text-sm font-medium">
-                {subscriptionStatus.is_trial ? 'Trial Period' : 'Subscription'}
+                {subscriptionStatus.is_trial ? t('subscription.overview.trialPeriod') : t('subscription.overview.subscription')}
               </span>
             </div>
             <div className="text-sm">
               <p className="text-gray-700">
-                {subscriptionStatus.is_trial ? 'Ends' : 'Renews'} on{' '}
-                {expiryDate && formatDate(expiryDate)}
+                {subscriptionStatus.is_trial ? t('subscription.overview.endsOn') : t('subscription.overview.renewsOn')} {expiryDate && formatDate(expiryDate)}
               </p>
               <p className={`text-xs ${(subscriptionStatus.days_until_expiry || 0) <= 3 ? 'text-red-600' : 'text-gray-500'}`}>
                 {subscriptionStatus.days_until_expiry < 0
-                  ? `Expired ${Math.abs(subscriptionStatus.days_until_expiry)} days ago`
+                  ? t('subscription.overview.expiredDaysAgo', 'Expired X days ago', { count: Math.abs(subscriptionStatus.days_until_expiry) })
                   : subscriptionStatus.days_until_expiry === 0
-                  ? 'Expires today'
-                  : `${subscriptionStatus.days_until_expiry} days remaining`
+                  ? t('subscription.overview.expiresToday', 'Expires today')
+                  : t('subscription.overview.daysRemaining', 'X days remaining', { count: subscriptionStatus.days_until_expiry })
                 }
               </p>
             </div>
@@ -105,16 +109,16 @@ export const CurrentSubscription = memo(({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium">Billing</span>
+                <span className="text-sm font-medium">{t('subscription.overview.billing')}</span>
               </div>
               <div className="text-sm">
                 <p className="text-gray-700 capitalize">
                   {subscriptionStatus.billing_cycle} billing
                 </p>
                 <p className="text-xs text-gray-500">
-                  {subscriptionStatus.next_payment_date 
-                    ? `Next payment: ${formatDate(subscriptionStatus.next_payment_date)}`
-                    : 'Next payment due'
+                  {subscriptionStatus.next_payment_date
+                    ? t('subscription.overview.nextPayment', 'Next payment: X', { date: formatDate(subscriptionStatus.next_payment_date) })
+                    : t('subscription.overview.nextPaymentDue', 'Next payment due')
                   }
                 </p>
               </div>
@@ -130,17 +134,17 @@ export const CurrentSubscription = memo(({
               <div className="space-y-1">
                 {subscriptionStatus.needs_renewal && (
                   <p className="text-sm font-medium text-orange-800">
-                    {subscriptionStatus.is_trial ? 'Trial' : 'Subscription'} expires soon
+                    {subscriptionStatus.is_trial ? t('subscription.overview.trialExpiresSoon') : t('subscription.overview.subscriptionExpiresSoon')}
                   </p>
                 )}
                 {subscriptionStatus.over_limit && (
                   <p className="text-sm font-medium text-orange-800">
-                    Employee limit exceeded
+                    {t('subscription.overview.employeeLimitExceeded')}
                   </p>
                 )}
                 <p className="text-xs text-orange-600">
-                  {subscriptionStatus.needs_renewal && `${subscriptionStatus.is_trial ? 'Choose a plan' : 'Renew your subscription'} to avoid service interruption.`}
-                  {subscriptionStatus.over_limit && ' Please upgrade your plan to accommodate all employees.'}
+                  {subscriptionStatus.needs_renewal && t('subscription.overview.choosePlanRenew')}
+                  {subscriptionStatus.over_limit && ` ${t('subscription.overview.upgradePlanEmployees')}`}
                 </p>
               </div>
             </div>

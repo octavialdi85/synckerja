@@ -63,7 +63,7 @@ export const CompanyFilesPage = () => {
                 {/* Right Column - Overview Sidebar (25% like employee page) */}
                 <div className="col-span-3 h-full">
                   <div className="h-full flex flex-col">
-                    <div className="bg-white border rounded-lg h-full flex flex-col">
+                    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-120px)]">
                       {/* Sidebar Header */}
                       <div className="px-4 py-1.5 border-b flex-shrink-0">
                         <div className="flex flex-col">
@@ -72,8 +72,10 @@ export const CompanyFilesPage = () => {
                         </div>
                       </div>
 
-                      {/* Sidebar Content with Footer */}
-                      <CompanyFilesOverview />
+                      {/* Scrollable Sidebar Content */}
+                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                        <CompanyFilesOverview />
+                      </div>
                     </div>
                   </div>
                 </div>

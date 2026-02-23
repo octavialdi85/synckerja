@@ -1,4 +1,3 @@
-import React from 'react';
 import { Skeleton } from '@/mobile/components/ui/skeleton';
 
 export const ReportsSkeleton = () => (

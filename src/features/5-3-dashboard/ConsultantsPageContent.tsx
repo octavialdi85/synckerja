@@ -244,10 +244,10 @@ export const ConsultantsPageContent = () => {
           <LoadingDots size="lg" />
         </div>
       ) : (
-      <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
-        {/* Main Content - 9 columns */}
-        <div className="col-span-9 h-full flex flex-col min-h-0">
-          <div className="h-full flex flex-col min-h-0 seamless-scroll max-h-[calc(100vh-120px)]">
+      <div className="flex-1 grid grid-cols-12 gap-2 min-h-[100vh] min-w-0 overflow-hidden">
+        {/* Section utama - 9 columns — rule 3.1 */}
+        <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col min-h-0 overflow-hidden">
             <div className="flex-shrink-0 mb-2">
               <div className="bg-white border rounded-md p-2">
                 <LeadsFilters 
@@ -258,22 +258,18 @@ export const ConsultantsPageContent = () => {
                 />
               </div>
             </div>
-
             <div className="flex-shrink-0 mb-2">
               <LeadsMetricsCards leads={filteredLeads} />
             </div>
-
             <div className="flex-1 min-h-0 overflow-hidden">
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col seamless-scroll max-h-[calc(100vh-320px)]">
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <LeadsTableNew 
-                    leads={filteredLeads}
-                    onUpdateLead={updateLead}
-                    onDeleteLead={deleteLead}
-                    onRefreshLeads={refetch}
-                    loading={loading}
-                  />
-                </div>
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                <LeadsTableNew 
+                  leads={filteredLeads}
+                  onUpdateLead={updateLead}
+                  onDeleteLead={deleteLead}
+                  onRefreshLeads={refetch}
+                  loading={loading}
+                />
                 <LeadsTableFooter 
                   totalLeads={leads.length}
                   convertedLeads={convertedLeads}
@@ -285,50 +281,44 @@ export const ConsultantsPageContent = () => {
           </div>
         </div>
 
-        {/* Right Column - Sidebar */}
-        <div className="col-span-3 h-full flex flex-col min-h-0">
-          <div className="h-full flex flex-col min-h-0 max-h-[calc(100vh-120px)]">
-            <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col min-h-0">
-              <div className="px-4 py-1.5 border-b flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800">Report Summary</h3>
-                    <p className="text-sm text-slate-500">Data summary based on filters</p>
-                  </div>
-                  <Button onClick={generatePDFReport} disabled={isGeneratingPDF} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isGeneratingPDF ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4 mr-2" />
-                        Download PDF
-                      </>
-                    )}
-                  </Button>
+        {/* Sidebar kanan — rule 3.1: satu scroll container; saat mentok chain ke content wrapper (halaman utama) */}
+        <div className="col-span-3 flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden min-h-0">
+            <div className="px-4 py-1.5 border-b flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Report Summary</h3>
+                  <p className="text-sm text-slate-500">Data summary based on filters</p>
                 </div>
+                <Button onClick={generatePDFReport} disabled={isGeneratingPDF} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isGeneratingPDF ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download PDF
+                    </>
+                  )}
+                </Button>
               </div>
-
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full p-4 seamless-scroll overflow-y-auto">
-                  <LeadsInsights 
-                    leads={filteredLeads} 
-                    filters={filters} 
-                    clientStatuses={clientStatuses} 
-                    clientProfiles={clientProfiles}
-                    allEmployees={employees}
-                    organizationId={organizationId ?? undefined}
-                  />
-                </div>
-              </div>
-
-              <LeadsSidebarFooter 
-                totalLeads={filteredLeads.length}
-                convertedLeads={convertedLeads}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
+              <LeadsInsights 
+                leads={filteredLeads} 
+                filters={filters} 
+                clientStatuses={clientStatuses} 
+                clientProfiles={clientProfiles}
+                allEmployees={employees}
+                organizationId={organizationId ?? undefined}
               />
             </div>
+            <LeadsSidebarFooter 
+              totalLeads={filteredLeads.length}
+              convertedLeads={convertedLeads}
+            />
           </div>
         </div>
       </div>

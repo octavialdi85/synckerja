@@ -6,14 +6,18 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
 import { devLog } from "@/config/logger";
+import { toast } from "sonner";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 export function useLiveChatFCM() {
   const navigate = useNavigate();
-  const listenersAdded = useRef(false);
+  const { t } = useAppTranslation();
+  const handlesRef = useRef<PluginListenerHandle[]>([]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -34,9 +38,11 @@ export function useLiveChatFCM() {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           devLog.error("livechat-save-fcm-token failed", res.status, err);
+          toast.error(t("livechat.fcmTokenSaveFailed", "Gagal menyimpan token notifikasi. Coba lagi nanti."));
         }
       } catch (e) {
         devLog.error("livechat-save-fcm-token error", e);
+        toast.error(t("livechat.fcmTokenSaveError", "Token notifikasi gagal disimpan."));
       }
     };
 
@@ -50,24 +56,20 @@ export function useLiveChatFCM() {
       }
     };
 
-    run();
-
-    if (!listenersAdded.current) {
-      PushNotifications.addListener(
+    const setup = async () => {
+      const h1 = await PushNotifications.addListener(
         "registration",
         (ev: { value: string }) => {
           if (ev.value) saveToken(ev.value);
         }
       );
-
-      PushNotifications.addListener(
+      const h2 = await PushNotifications.addListener(
         "pushNotificationReceived",
         () => {
           // Optional: in-app toast or play sound when in foreground
         }
       );
-
-      PushNotifications.addListener(
+      const h3 = await PushNotifications.addListener(
         "pushNotificationActionPerformed",
         (ev: { notification: { data?: Record<string, string> } }) => {
           const data = ev.notification?.data;
@@ -83,8 +85,15 @@ export function useLiveChatFCM() {
           }
         }
       );
+      handlesRef.current = [h1, h2, h3];
+      run();
+    };
 
-      listenersAdded.current = true;
-    }
-  }, [navigate]);
+    setup();
+
+    return () => {
+      handlesRef.current.forEach((h) => h.remove());
+      handlesRef.current = [];
+    };
+  }, [navigate, t]);
 }

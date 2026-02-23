@@ -3,68 +3,61 @@ import { Card, CardContent } from "@/mobile/components/ui/card";
 import type { SubscriptionStatus } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { Calendar, Users, Clock3, Shield } from "lucide-react";
 import { formatIDR } from "@/features/1-login/utils/subscriptionUtils";
+import { formatSubscriptionDate } from "@/features/10-management/utils/dateUtils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface MobileSubscriptionStatsProps {
   subscriptionStatus: SubscriptionStatus;
 }
 
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-};
-
 export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubscriptionStatsProps) => {
+  const { t } = useAppTranslation();
   const stats = useMemo(
     () => [
       {
         icon: Shield,
-        title: "Status Plan",
+        title: t("subscription.management.statusPlan"),
         value: subscriptionStatus.is_trial
-          ? "Trial aktif"
+          ? t("subscription.management.trialActive")
           : subscriptionStatus.is_active
-            ? "Aktif"
-            : "Tidak aktif",
+            ? t("subscription.management.statusActive")
+            : t("subscription.management.statusInactive"),
         accent: "bg-emerald-100 text-emerald-700",
       },
       {
         icon: Calendar,
-        title: "Periode Berakhir",
-        value: formatDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date),
+        title: t("subscription.management.periodEnd"),
+        value: formatSubscriptionDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date, { month: "short" }),
         accent: "bg-blue-100 text-blue-700",
       },
       {
         icon: Users,
-        title: "Anggota Terpakai",
+        title: t("subscription.management.membersUsed"),
         value: `${subscriptionStatus.current_employees}/${subscriptionStatus.member_count}`,
         accent: "bg-amber-100 text-amber-700",
       },
       {
         icon: Clock3,
-        title: "Sisa Hari",
-        value: `${subscriptionStatus.days_until_expiry ?? 0} hari`,
+        title: t("subscription.management.daysLeft"),
+        value: `${subscriptionStatus.days_until_expiry ?? 0} ${t("subscription.management.daysUnit")}`,
         accent: "bg-purple-100 text-purple-700",
       },
     ],
-    [subscriptionStatus],
+    [subscriptionStatus, t],
   );
 
   const billingSummary = useMemo(() => {
     const basePrice = subscriptionStatus.base_price_per_member || 0;
+    const discountPct = subscriptionStatus.annual_discount_percentage ?? 0;
     const amount =
       subscriptionStatus.billing_cycle === "yearly"
-        ? basePrice * subscriptionStatus.member_count * 12
+        ? basePrice * subscriptionStatus.member_count * 12 * (1 - discountPct / 100)
         : basePrice * subscriptionStatus.member_count;
     return {
-      billingCycle: subscriptionStatus.billing_cycle === "yearly" ? "Tahunan" : "Bulanan",
+      billingCycle: subscriptionStatus.billing_cycle === "yearly" ? t("subscription.management.yearly") : t("subscription.management.monthly"),
       amount: formatIDR(amount),
     };
-  }, [subscriptionStatus]);
+  }, [subscriptionStatus, t]);
 
   return (
     <div className="space-y-1">
@@ -88,11 +81,11 @@ export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubsc
       <Card className="border border-border bg-muted/30">
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm text-muted-foreground">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide">Rangkuman billing</p>
+            <p className="text-xs font-medium uppercase tracking-wide">{t("subscription.management.billingSummary")}</p>
             <p className="text-sm font-semibold text-foreground">{billingSummary.billingCycle}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs">Estimasi tagihan</p>
+            <p className="text-xs">{t("subscription.management.estimateBill")}</p>
             <p className="text-sm font-semibold text-foreground">{billingSummary.amount}</p>
           </div>
         </CardContent>

@@ -210,10 +210,10 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
-  // Loading state
+  // Loading state (satu scroll per panel: scroll di parent, jangan nested overflow)
   if (loading) {
     return (
-      <div className="w-full h-full seamless-scroll overflow-auto flex items-center justify-center">
+      <div className="w-full min-h-0 flex items-center justify-center py-8">
         <LoadingDots size="lg" />
       </div>
     );
@@ -222,7 +222,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   // Empty state
   if (contentPlans.length === 0) {
     return (
-      <div className="w-full h-full seamless-scroll overflow-auto">
+      <div className="w-full min-h-0">
         <table className="w-full border-collapse table-fixed">
           <TableHeader />
           <tbody>
@@ -238,7 +238,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   }
 
   return (
-    <div className="w-full h-full seamless-scroll overflow-auto">
+    <div className="w-full min-h-0">
       <table className="w-full border-collapse table-fixed">
         <TableHeader />
         <tbody>

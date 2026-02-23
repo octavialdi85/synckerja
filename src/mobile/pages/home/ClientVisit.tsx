@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { TimeDisplay } from "@/mobile/components/TimeDisplay";
 import { LocationChecker, LocationButton } from "@/mobile/components/LocationChecker";
 import { AttendanceStatus } from "@/mobile/components/AttendanceStatus";
@@ -16,7 +16,17 @@ import { CustomDatePicker } from "@/mobile/components/CustomDatePicker";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval, format } from "date-fns";
 import { id as idLocale, enUS as enLocale } from "date-fns/locale";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/mobile/components/ui/select";
+import { Button } from "@/features/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose,
+} from "@/mobile/components/ui/drawer";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { ClientVisitSkeleton } from "./ClientVisitSkeleton";
 import { useToast } from "@/features/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,8 +36,14 @@ import { useRealtimePresence } from "@/mobile/hooks/useRealtimePresence";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { getCurrentPosition } from "@/mobile/utils/geolocation";
-import confetti from "canvas-confetti";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { logger } from "@/config/logger";
+
+let confetti: ((opts?: object) => void) | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  confetti = require("canvas-confetti");
+} catch {}
 
 export default function ClientVisit() {
   useStatusBarStyle('light');
@@ -56,6 +72,8 @@ export default function ClientVisit() {
   const [dateFilter, setDateFilter] = useState("this_month");
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [customDateRange, setCustomDateRange] = useState<{start: Date; end: Date} | null>(null);
+  const [periodDrawerOpen, setPeriodDrawerOpen] = useState(false);
+  const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const {
     todayVisits,
@@ -74,7 +92,7 @@ export default function ClientVisit() {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile }: any = await (supabase as any)
+        const { data: profile } = await supabase
           .from('profiles')
           .select('full_name, active_organization_id')
           .eq('user_id', user.id)
@@ -83,13 +101,15 @@ export default function ClientVisit() {
         if (profile) {
           setCurrentUser({ 
             id: user.id, 
-            name: profile.full_name || user.email || 'Unknown'
+            name: profile.full_name ?? user.email ?? 'Unknown'
           });
-          setOrganizationId(profile.active_organization_id || '');
+          setOrganizationId(profile.active_organization_id ?? '');
         }
       }
     };
-    getCurrentUser();
+    getCurrentUser().catch((err) => {
+      logger.error('ClientVisit getCurrentUser', err);
+    });
   }, []);
 
   // Check for active visit
@@ -114,6 +134,16 @@ export default function ClientVisit() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [refetch]);
+
+  // Clear confetti timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (confettiTimeoutRef.current) {
+        clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Get date range based on filter selection
   const getDateRange = useMemo(() => {
@@ -170,6 +200,23 @@ export default function ClientVisit() {
     }
   }, [dateFilter, customDateRange]);
 
+  const periodOptions: { value: string; labelKey: string }[] = [
+    { value: "today", labelKey: "reports.dateFilter.today" },
+    { value: "yesterday", labelKey: "reports.dateFilter.yesterday" },
+    { value: "this_week", labelKey: "reports.dateFilter.thisWeek" },
+    { value: "this_month", labelKey: "reports.dateFilter.thisMonth" },
+    { value: "last_month", labelKey: "reports.dateFilter.lastMonth" },
+    { value: "custom", labelKey: "reports.dateFilter.custom" },
+  ];
+  const periodFallbacks: Record<string, string> = {
+    today: "Today",
+    yesterday: "Yesterday",
+    this_week: "This Week",
+    this_month: "This Month",
+    last_month: "Last Month",
+    custom: "Custom",
+  };
+
   // Handle date filter change
   const handleDateFilterChange = (value: string) => {
     if (value === "custom") {
@@ -195,6 +242,7 @@ export default function ClientVisit() {
   }, [todayVisits, getDateRange]);
 
   const triggerConfetti = () => {
+    if (typeof confetti !== 'function') return;
     const count = 200;
     const defaults = {
       origin: { y: 0.7 },
@@ -328,7 +376,7 @@ export default function ClientVisit() {
       );
 
       if (validationError) {
-        console.error('Location validation error:', validationError);
+        logger.error('Location validation error:', validationError);
         toast({
           title: "Error Validasi Lokasi",
           description: "Gagal memvalidasi lokasi",
@@ -349,6 +397,14 @@ export default function ClientVisit() {
         });
         return;
       }
+      if (!validation?.location_id) {
+        toast({
+          title: t("mobileHome.error", "Error"),
+          description: "Lokasi tidak valid",
+          variant: "destructive"
+        });
+        return;
+      }
 
       // Get the office location details to check is_client_location and sales assignment
       const { data: officeLocation, error: officeError }: any = await (supabase as any)
@@ -358,7 +414,7 @@ export default function ClientVisit() {
         .maybeSingle();
 
       if (officeError) {
-        console.error('Error fetching office location:', officeError);
+        logger.error('Error fetching office location:', officeError);
         toast({
           title: "Error",
           description: "Gagal mendapatkan data lokasi kantor",
@@ -413,7 +469,7 @@ export default function ClientVisit() {
           .eq('is_active', true)
           .limit(1);
 
-        // If no clients exist, create a default one
+        // Product: auto-create default client when none exist for first visit.
         if (!clients || clients.length === 0) {
           const { data: newClient, error: clientError }: any = await (supabase as any)
             .from('clients')
@@ -471,7 +527,7 @@ export default function ClientVisit() {
             .single();
 
           if (insertError) {
-            console.error('Start visit error:', insertError);
+            logger.error('Start visit error:', insertError);
             toast({
               title: "Gagal Memulai Kunjungan",
               description: "Terjadi kesalahan saat menyimpan data",
@@ -486,7 +542,8 @@ export default function ClientVisit() {
             className: "bg-success text-success-foreground"
           });
 
-          setTimeout(() => {
+          if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
+          confettiTimeoutRef.current = setTimeout(() => {
             triggerConfetti();
           }, 500);
 
@@ -517,11 +574,11 @@ export default function ClientVisit() {
             },
             end_photo_path: `visits/${user.id}/${Date.now()}_end.jpg`,
             status: 'completed',
-            // Update validation info for end visit if different from start
-            ...(locationValidation && {
+            // End visit validation (validation is in scope from handleCameraCapture)
+            ...(validation && {
               location_validation_result: {
                 ...activeVisit.location_validation_result,
-                end_validation: locationValidation
+                end_validation: validation
               }
             })
           })
@@ -529,7 +586,7 @@ export default function ClientVisit() {
           .eq('status', 'in_progress');
 
         if (updateError) {
-          console.error('End visit error:', updateError);
+          logger.error('End visit error:', updateError);
           toast({
             title: "Gagal Mengakhiri Kunjungan",
             description: "Terjadi kesalahan saat menyimpan data",
@@ -544,7 +601,8 @@ export default function ClientVisit() {
           className: "bg-success text-success-foreground"
         });
 
-        setTimeout(() => {
+        if (confettiTimeoutRef.current) clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = setTimeout(() => {
           triggerConfetti();
         }, 500);
 
@@ -572,7 +630,7 @@ export default function ClientVisit() {
       setCameraModal({ isOpen: false, type: null });
       refetch();
     } catch (error) {
-      console.error('Visit error:', error);
+      logger.error('Visit error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Terjadi kesalahan tidak terduga",
@@ -582,6 +640,10 @@ export default function ClientVisit() {
   };
 
   const handleCameraClose = () => {
+    if (confettiTimeoutRef.current) {
+      clearTimeout(confettiTimeoutRef.current);
+      confettiTimeoutRef.current = null;
+    }
     setCameraModal({
       isOpen: false,
       type: null
@@ -634,7 +696,7 @@ export default function ClientVisit() {
         .insert(salesActivityData);
 
       if (error) {
-        console.error('Sales activity error:', error);
+        logger.error('Sales activity error:', error);
         toast({
           title: "Gagal Menyimpan",
           description: `Error: ${error.message}`,
@@ -653,7 +715,7 @@ export default function ClientVisit() {
       setShowSalesActivityModal(false);
 
     } catch (error) {
-      console.error('Error saving sales activity:', error);
+      logger.error('Error saving sales activity:', error);
       throw error;
     }
   };
@@ -760,6 +822,20 @@ export default function ClientVisit() {
                 <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-client-visit">
                   <ClientVisitSkeleton />
                 </div>
+              ) : error ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-client-visit">
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive font-medium mb-1">{t('mobileHome.error', 'Error')}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{error}</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => refetch()}
+                    >
+                      {t("mobileHome.retry", "Coba lagi")}
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-client-visit space-y-1">
                   <div>
@@ -788,21 +864,58 @@ export default function ClientVisit() {
                   </div>
 
                   <div>
+                    <p className="text-xs text-muted-foreground px-1 pb-1">
+                      {t("clientVisit.showingTodayOnly", "Menampilkan kunjungan hari ini")}
+                    </p>
                     <VisitNotifications
                       headerAction={
-                        <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                          <SelectTrigger className="w-32 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="today">{t("reports.dateFilter.today", "Hari Ini")}</SelectItem>
-                            <SelectItem value="yesterday">{t("reports.dateFilter.yesterday", "Kemarin")}</SelectItem>
-                            <SelectItem value="this_week">{t("reports.dateFilter.thisWeek", "Minggu Ini")}</SelectItem>
-                            <SelectItem value="this_month">{t("reports.dateFilter.thisMonth", "Bulan Ini")}</SelectItem>
-                            <SelectItem value="last_month">{t("reports.dateFilter.lastMonth", "Bulan Lalu")}</SelectItem>
-                            <SelectItem value="custom">{t("reports.dateFilter.custom", "Kustom")}</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Drawer open={periodDrawerOpen} onOpenChange={setPeriodDrawerOpen}>
+                          <DrawerTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-32 h-8 text-xs justify-between gap-1 px-2"
+                            >
+                              <span className="truncate min-w-0">{getPeriodLabel()}</span>
+                              <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            </Button>
+                          </DrawerTrigger>
+                          <DrawerContent className="max-h-[85dvh] flex flex-col">
+                            <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                              <DrawerTitle className="text-lg font-semibold">
+                                {t("clientVisit.notificationsTitle", "Visit Notifications")}
+                              </DrawerTitle>
+                            </DrawerHeader>
+                            <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+                              <div className="flex flex-col gap-2 w-full">
+                                {periodOptions.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => {
+                                      handleDateFilterChange(opt.value);
+                                      setPeriodDrawerOpen(false);
+                                    }}
+                                    className={cn(
+                                      "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors",
+                                      dateFilter === opt.value
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-background border-input hover:bg-muted"
+                                    )}
+                                  >
+                                    {t(opt.labelKey, periodFallbacks[opt.value] ?? "Custom")}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+                              <DrawerClose asChild>
+                                <Button className="w-full" size="sm">
+                                  {t("dailyTaskReport.filters.done", "Done")}
+                                </Button>
+                              </DrawerClose>
+                            </div>
+                          </DrawerContent>
+                        </Drawer>
                       }
                     />
                   </div>

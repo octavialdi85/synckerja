@@ -3,7 +3,7 @@ import { Button } from "@/mobile/components/ui/button";
 import { Badge } from "@/mobile/components/ui/badge";
 import { Separator } from "@/mobile/components/ui/separator";
 import { formatIDR } from "@/features/1-login/utils/subscriptionUtils";
-import type { SubscriptionPlan } from "@/features/10-management/hooks/useOptimizedSubscription";
+import type { SubscriptionPlan, SubscriptionStatus } from "@/features/10-management/hooks/useOptimizedSubscription";
 import { cn } from "@/lib/utils";
 
 interface ProRatedData {
@@ -41,7 +41,7 @@ interface MobileUpgradeConfirmationModalProps {
   onConfirm: () => void;
   currentPlan: SubscriptionPlan;
   newPlan: SubscriptionPlan;
-  subscriptionStatus: any;
+  subscriptionStatus: SubscriptionStatus;
   billingCycle: "monthly" | "yearly";
   currentMemberCount: number;
   newMemberCount: number;
@@ -221,13 +221,18 @@ export const MobileUpgradeConfirmationModal = ({
             </Button>
             <Button
               className={cn(
-                "h-12 rounded-full text-sm font-semibold text-white",
+                "h-12 rounded-full text-sm font-semibold text-white min-w-[120px] flex items-center justify-center gap-1.5",
                 isScheduled ? "bg-orange-600 hover:bg-orange-700" : "bg-primary hover:bg-primary/90",
               )}
               onClick={onConfirm}
               disabled={isLoading}
             >
-              {isLoading ? "Memproses..." : isScheduled ? "Jadwalkan Perubahan" : "Konfirmasi & Bayar"}
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Memproses...</span>
+                </>
+              ) : isScheduled ? "Jadwalkan Perubahan" : "Konfirmasi & Bayar"}
             </Button>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/features/ui/card';
-import { ScrollArea } from '@/features/ui/scroll-area';
 import { Button } from '@/features/ui/button';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
@@ -336,7 +335,7 @@ export const SectionActivityNotifikasi = ({ standalone }: SectionActivityNotifik
       </CardHeader>
 
       <CardContent className="p-0 flex-1 flex flex-col min-h-0 overflow-hidden">
-        <ScrollArea className="flex-1 px-4 seamless-scroll">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain px-4">
           {activeTab === 'activities' ? (
             <>
           {isLoading ? (
@@ -571,7 +570,7 @@ export const SectionActivityNotifikasi = ({ standalone }: SectionActivityNotifik
               </div>
           </div>
           )}
-        </ScrollArea>
+        </div>
         
         {/* Type Filter Footer */}
         {activeTab === 'activities' && (

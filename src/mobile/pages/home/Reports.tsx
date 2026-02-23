@@ -17,25 +17,39 @@ import { AttendanceChart } from "@/mobile/components/AttendanceChart";
 import { RealtimeStatusIndicator } from "@/mobile/components/RealtimeStatusIndicator";
 import { CustomDatePicker } from "@/mobile/components/CustomDatePicker";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths, isWithinInterval, format } from "date-fns";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/mobile/components/ui/select";
+import { Button } from "@/features/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose,
+} from "@/mobile/components/ui/drawer";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useState, useMemo } from "react";
 
 const Reports = () => {
   useStatusBarStyle("light");
   const { t, language } = useAppTranslation();
   const {
+    stats: attendanceStats,
+    loading: statsLoading,
+    error: statsError,
+    refetch: refetchStats
+  } = useAttendanceStats({ skipAttendanceRealtime: true });
+  const {
     attendanceHistory,
     loading,
     error,
-    realtimeConnected
-  } = useAttendanceHistory();
-  const {
-    stats: attendanceStats,
-    loading: statsLoading
-  } = useAttendanceStats();
+    realtimeConnected,
+    refetch
+  } = useAttendanceHistory({ onRealtimeRefetch: refetchStats });
   const [dateFilter, setDateFilter] = useState("this_month");
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [customDateRange, setCustomDateRange] = useState<{start: Date; end: Date} | null>(null);
+  const [periodDrawerOpen, setPeriodDrawerOpen] = useState(false);
 
   // Handle date filter change
   const handleDateFilterChange = (value: string) => {
@@ -52,8 +66,19 @@ const Reports = () => {
     setDateFilter("custom");
   };
 
-  // Get date range based on filter selection
-  const getDateRange = useMemo(() => {
+  const periodOptions: { value: string; labelKey: string }[] = [
+    { value: "today", labelKey: "reports.dateFilter.today" },
+    { value: "yesterday", labelKey: "reports.dateFilter.yesterday" },
+    { value: "this_week", labelKey: "reports.dateFilter.thisWeek" },
+    { value: "this_month", labelKey: "reports.dateFilter.thisMonth" },
+    { value: "last_month", labelKey: "reports.dateFilter.lastMonth" },
+    { value: "custom", labelKey: "reports.dateFilter.custom" },
+  ];
+  const selectedPeriod = periodOptions.find((o) => o.value === dateFilter);
+  const periodLabel = selectedPeriod ? t(selectedPeriod.labelKey, dateFilter) : t("reports.dateFilter.thisMonth", "This Month");
+
+  // Date range based on filter selection
+  const dateRange = useMemo(() => {
     const now = new Date();
     switch (dateFilter) {
       case "today":
@@ -112,9 +137,9 @@ const Reports = () => {
     if (!attendanceHistory || attendanceHistory.length === 0) return [];
     return attendanceHistory.filter(record => {
       const recordDate = new Date(record.attendance_date);
-      return isWithinInterval(recordDate, getDateRange);
+      return isWithinInterval(recordDate, dateRange);
     });
-  }, [attendanceHistory, getDateRange]);
+  }, [attendanceHistory, dateRange]);
 
   // Use the custom hook for calculations
   const {
@@ -163,7 +188,27 @@ const Reports = () => {
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
-              {(loading || statsLoading) ? (
+              {error && !loading ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default">
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive font-medium mb-1">{t("reports.error", "Error")}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{error}</p>
+                    <Button variant="default" size="sm" onClick={() => refetch()}>
+                      {t("mobileHome.retry", "Coba lagi")}
+                    </Button>
+                  </div>
+                </div>
+              ) : statsError && !statsLoading ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default">
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive font-medium mb-1">{t("reports.error", "Error")}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{statsError}</p>
+                    <Button variant="default" size="sm" onClick={() => refetchStats()}>
+                      {t("mobileHome.retry", "Coba lagi")}
+                    </Button>
+                  </div>
+                </div>
+              ) : (loading || statsLoading) ? (
                 <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default">
                   <ReportsSkeleton />
                 </div>
@@ -185,19 +230,53 @@ const Reports = () => {
                       totalOvertime={filteredStats.totalOvertime}
                       statsLoading={statsLoading}
                       headerAction={
-                        <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                          <SelectTrigger className="w-32 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="today">{t("reports.dateFilter.today", "Hari Ini")}</SelectItem>
-                            <SelectItem value="yesterday">{t("reports.dateFilter.yesterday", "Kemarin")}</SelectItem>
-                            <SelectItem value="this_week">{t("reports.dateFilter.thisWeek", "Minggu Ini")}</SelectItem>
-                            <SelectItem value="this_month">{t("reports.dateFilter.thisMonth", "Bulan Ini")}</SelectItem>
-                            <SelectItem value="last_month">{t("reports.dateFilter.lastMonth", "Bulan Lalu")}</SelectItem>
-                            <SelectItem value="custom">{t("reports.dateFilter.custom", "Kustom")}</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Drawer open={periodDrawerOpen} onOpenChange={setPeriodDrawerOpen}>
+                          <DrawerTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-32 h-8 text-xs justify-between gap-1 px-2"
+                            >
+                              <span className="truncate min-w-0">{periodLabel}</span>
+                              <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            </Button>
+                          </DrawerTrigger>
+                          <DrawerContent className="max-h-[85dvh] flex flex-col">
+                            <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                              <DrawerTitle className="text-lg font-semibold">
+                                {t("reports.statsPeriodSelected", "Selected Period Stats")}
+                              </DrawerTitle>
+                            </DrawerHeader>
+                            <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
+                              <div className="flex flex-col gap-2 w-full">
+                                {periodOptions.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => {
+                                      handleDateFilterChange(opt.value);
+                                      setPeriodDrawerOpen(false);
+                                    }}
+                                    className={cn(
+                                      "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors",
+                                      dateFilter === opt.value
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-background border-input hover:bg-muted"
+                                    )}
+                                  >
+                                    {t(opt.labelKey, opt.value)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+                              <DrawerClose asChild>
+                                <Button className="w-full" size="sm">
+                                  {t("dailyTaskReport.filters.done", "Done")}
+                                </Button>
+                              </DrawerClose>
+                            </div>
+                          </DrawerContent>
+                        </Drawer>
                       }
                     />
                   </div>

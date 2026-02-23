@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
 
 export interface SubscriptionPlan {
   id: string;
@@ -17,7 +18,7 @@ export interface SubscriptionPlan {
 
 export const useSubscriptionPlans = () => {
   return useQuery({
-    queryKey: ['subscription-plans'],
+    queryKey: optimizedQueryKeys.subscription.plans,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('subscription_plans')

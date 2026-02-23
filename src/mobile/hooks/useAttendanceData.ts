@@ -101,6 +101,7 @@ export const useAttendanceData = () => {
       type OfficeRow = { name: string; address: string; latitude: number | string; longitude: number | string; radius_meters: number };
       const offices = (officesRaw as unknown as OfficeRow[] | null) ?? null;
 
+      const officeName = offices?.length ? offices[0].name : "Kantor Pusat";
       if (offices && offices.length > 0) {
         const office = offices[0];
         setOfficeLocation({
@@ -182,7 +183,7 @@ export const useAttendanceData = () => {
         setTodaySchedule({
           startTime: workScheduleData.start_time?.substring(0, 5) || "08:00",
           endTime: workScheduleData.end_time?.substring(0, 5) || "17:00",
-          location: officeLocation?.name || "Kantor Pusat",
+          location: officeName,
           department: employee?.departments?.name || "IT Department",
           notes: isHoliday
             ? matchHoliday?.name
@@ -203,7 +204,7 @@ export const useAttendanceData = () => {
         setTodaySchedule({
           startTime: "08:00",
           endTime: "17:00", 
-          location: officeLocation?.name || "Kantor Pusat",
+          location: officeName,
           department: employee?.departments?.name || "IT Department",
           notes: "Jadwal kerja default",
           isWorkingDay: true,

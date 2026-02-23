@@ -172,7 +172,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     const chargeCycle = subscriptionStatus.billing_cycle === 'yearly' ? 'yearly' : billingCycle;
     const basePrice = plan.base_price_per_member;
     const finalAmount = chargeCycle === 'yearly'
-      ? getYearlyPriceForMembers(basePrice, memberCount)
+      ? getYearlyPriceForMembers(basePrice, memberCount, plan.annual_discount_percentage)
       : getMonthlyPriceForMembers(basePrice, memberCount);
 
     try {
@@ -219,7 +219,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       // Use prorate_amount if it exists and > 0, otherwise use full price
       const prorateAmount = proRatedData?.calculation?.prorate_amount;
       const fullPrice = isYearly
-        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount, selectedPlan.annual_discount_percentage)
         : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
       const finalAmount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
@@ -258,7 +258,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       // Use prorate_amount if it exists and > 0, otherwise use full price
       const prorateAmount = proRatedData?.calculation?.prorate_amount;
       const fullPrice = isYearly
-        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount, selectedPlan.annual_discount_percentage)
         : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
       const finalAmount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 

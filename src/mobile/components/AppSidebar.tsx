@@ -13,8 +13,8 @@ import {
 } from "@/mobile/components/ui/sidebar";
 import { Separator } from "@/mobile/components/ui/separator";
 import { useIsMobile } from "@/mobile/hooks/use-mobile";
-import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import { useOrganizationList } from "@/mobile/hooks/useOrganizationList";
+import { useOrganizationSwitchCallback } from "@/mobile/hooks/useOrganizationSwitchCallback";
 import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelectDrawer";
 
 const menuItems = [
@@ -26,11 +26,12 @@ const menuItems = [
 
 export function AppSidebar() {
   const isMobile = useIsMobile();
-  const { organizationName, forceRefreshUserData } = useCentralizedUserData();
-  const { organizations } = useOrganizationList();
+  const { organizations, activeOrganization } = useOrganizationList();
+  const onOrganizationSwitched = useOrganizationSwitchCallback();
   const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
 
   const canOpenOrgDrawer = isMobile && organizations.length > 1;
+  const organizationDisplayName = activeOrganization?.company_name ?? "Organisasi";
 
   return (
     <Sidebar className="border-r border-primary/20 bg-background">
@@ -55,7 +56,7 @@ export function AppSidebar() {
                   }
                   className={`text-sm font-medium text-foreground truncate ${canOpenOrgDrawer ? "cursor-pointer hover:opacity-80" : ""}`}
                 >
-                  {organizationName || "Organisasi"}
+                  {organizationDisplayName}
                 </span>
               </>
             ) : (
@@ -98,7 +99,7 @@ export function AppSidebar() {
         <OrganizationSelectDrawer
           open={orgDrawerOpen}
           onOpenChange={setOrgDrawerOpen}
-          onSwitched={() => forceRefreshUserData()}
+          onSwitched={onOrganizationSwitched}
         />
       )}
     </Sidebar>

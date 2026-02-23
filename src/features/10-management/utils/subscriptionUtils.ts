@@ -39,10 +39,12 @@ export const getYearlyPriceForMembers = (plan: SubscriptionPlan, memberCount: nu
  * Helper function to format currency in Indonesian Rupiah
  */
 export const formatIDR = (amount: number): string => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "Rp 0";
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(n);
 };

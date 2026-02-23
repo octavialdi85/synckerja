@@ -297,9 +297,9 @@ export const PageAccessTab = () => {
                   {/* Left Column - Main Content - 9 columns */}
                   <div className="col-span-9 flex flex-col min-h-0">
                     
-                    {/* Main Card Section */}
-                    <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                    {/* Main Card Section - fixed height sama dengan sidebar Access Overview */}
+                    <div className="flex-1 min-h-0 max-h-[calc(100vh-120px)]">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                         {/* Card Header */}
                         <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
                           <div className="flex items-center justify-between">
@@ -444,8 +444,8 @@ export const PageAccessTab = () => {
                           </div>
                         </div>
                         
-                        {/* Scrollable Table Content */}
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                        {/* Scrollable Table Content - satu scroll container per panel */}
+                        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
                           <div className="p-4">
                             {loading ? (
                               <div className="flex items-center justify-center py-8">
@@ -453,7 +453,7 @@ export const PageAccessTab = () => {
                                 Loading configurations...
                               </div>
                             ) : (
-                              <div className="relative w-full overflow-auto seamless-scroll">
+                              <div className="relative w-full min-h-0">
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
@@ -563,8 +563,8 @@ export const PageAccessTab = () => {
                     </div>
                   </div>
                   
-                  {/* Right Column - Overview Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
+                  {/* Right Column - Overview Sidebar - 3 columns, tinggi sama dengan table utama */}
+                  <div className="col-span-3 h-full max-h-[calc(100vh-120px)]">
                     <AccessPermissionsOverview configurations={configurations} />
                   </div>
                 </div>

@@ -262,8 +262,8 @@ export const AttendanceTable = ({ searchTerm, status, dateRange }: AttendanceTab
         </p>
       </div>
 
-      <div className="rounded-md border bg-white">
-        <div className="seamless-scroll overflow-auto">
+      <div className="rounded-md border bg-white min-h-0">
+        <div className="min-h-0">
           <TooltipProvider delayDuration={200}>
             <Table className="w-full min-w-[1200px] table-fixed">
               <TableHeader>

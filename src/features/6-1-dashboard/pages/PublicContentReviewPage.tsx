@@ -23,13 +23,19 @@ const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
 
 const LOAD_TIMEOUT_MS = 20000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms)
-    ),
-  ]);
+function withTimeoutAndCancel<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): { promise: Promise<T>; cancel: () => void } {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return {
+    promise: Promise.race([promise, timeoutPromise]),
+    cancel: () => clearTimeout(timeoutId!),
+  };
 }
 
 interface PublicReviewContent {
@@ -231,18 +237,20 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
     }
     let cancelled = false;
     setError(null);
+    const loadPromise = (async () => {
+      await Promise.all([loadContent(), loadBriefExtended()]);
+      if (cancelled) return;
+      await loadComments();
+    })();
+    const { promise, cancel } = withTimeoutAndCancel(
+      loadPromise,
+      LOAD_TIMEOUT_MS,
+      t('publicReview.error.timeout', 'Request timed out. Please try again.')
+    );
     (async () => {
       setLoading(true);
       try {
-        await withTimeout(
-          (async () => {
-            await Promise.all([loadContent(), loadBriefExtended()]);
-            if (cancelled) return;
-            await loadComments();
-          })(),
-          LOAD_TIMEOUT_MS,
-          t('publicReview.error.timeout', 'Request timed out. Please try again.')
-        );
+        await promise;
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : t('publicReview.error.timeout', 'Request timed out. Please try again.'));
@@ -254,6 +262,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
     })();
     return () => {
       cancelled = true;
+      cancel();
     };
   }, [token, loadContent, loadBriefExtended, loadComments, retryTrigger, t]);
 
@@ -268,8 +277,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
       try {
         const raw = localStorage.getItem(REVIEW_COMMENTER_STORAGE_KEY + token);
         if (raw) {
-          const parsed = JSON.parse(raw) as { displayName?: string };
-          if (parsed?.displayName?.trim()) {
+          const parsed = JSON.parse(raw) as { displayName?: unknown };
+          if (parsed && typeof parsed.displayName === 'string' && parsed.displayName.trim()) {
             setCommenterDisplayName(parsed.displayName.trim());
           }
         }
@@ -615,7 +624,6 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           variant="outline"
           onClick={() => {
             setError(null);
-            setLoading(true);
             setRetryTrigger((prev) => prev + 1);
           }}
         >

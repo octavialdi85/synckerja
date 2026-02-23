@@ -137,7 +137,8 @@ export const KOLManagementTable = memo(({
   return (
     <>
       <div className="h-full flex flex-col">
-        <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+        {/* rule 3.1: satu scroll container untuk tabel, nested-scroll-touch-chain */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
           <table className="w-full caption-bottom text-sm kol-management-table">
             <TableHeader className="bg-gray-50 sticky top-0 z-20 shadow-sm">
               <TableRow className="hover:bg-transparent">

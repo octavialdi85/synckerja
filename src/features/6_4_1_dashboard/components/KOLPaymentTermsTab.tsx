@@ -14,6 +14,7 @@ const KOLPaymentTermsTab = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedTerm, setSelectedTerm] = useState(null);
+  const [activeTab, setActiveTab] = useState<'templates' | 'agreements'>('templates');
 
   const templates = paymentTerms.filter(term => term.type === 'template');
   const agreements = paymentTerms.filter(term => term.type === 'agreement');
@@ -89,31 +90,38 @@ const KOLPaymentTermsTab = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'templates' | 'agreements')} className="w-full space-y-6">
+      {/* Section utama: scroll ditangani oleh wrapper di KOLDashboardPage (rule 3.1: satu scroll container) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Payment Terms</h2>
-          <p className="text-gray-600">Manage payment models and terms for KOL collaborations</p>
+          <p className="text-gray-600 text-sm mt-0.5">Manage payment models and terms for KOL collaborations</p>
         </div>
-        <Button onClick={handleCreate} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Payment Term
-        </Button>
+        <div className="flex items-center gap-3">
+          <TabsList className="h-8 p-0.5 bg-gray-100/80 border border-gray-200 rounded-md inline-flex w-auto shrink-0">
+            <TabsTrigger
+              value="templates"
+              className="h-7 px-3 text-xs font-medium rounded data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-500 border-0 gap-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Templates ({templates.length})
+            </TabsTrigger>
+            <TabsTrigger
+              value="agreements"
+              className="h-7 px-3 text-xs font-medium rounded data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-500 border-0 gap-1.5"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Agreements ({agreements.length})
+            </TabsTrigger>
+          </TabsList>
+          <Button onClick={handleCreate} className="h-7 px-3 text-xs font-medium gap-1.5 shrink-0 rounded-md">
+            <Plus className="w-3.5 h-3.5" />
+            Create Payment Term
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="templates" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="templates" className="flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Templates ({templates.length})
-          </TabsTrigger>
-          <TabsTrigger value="agreements" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            Agreements ({agreements.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="templates" className="space-y-4 mt-4">
+      <TabsContent value="templates" className="space-y-4 mt-0">
           {templates.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -201,7 +209,7 @@ const KOLPaymentTermsTab = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="agreements" className="space-y-4 mt-4">
+      <TabsContent value="agreements" className="space-y-4 mt-0">
           {agreements.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -326,7 +334,7 @@ const KOLPaymentTermsTab = () => {
                           </span>
                         </div>
                         <Progress value={calculateMilestoneProgress(term.milestones)} className="h-2" />
-                        <div className="grid gap-2 max-h-32 overflow-y-auto">
+                        <div className="grid gap-2 max-h-32 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
                           {term.milestones.map((milestone: any, index: number) => (
                             <div key={index} className="flex justify-between items-center text-xs">
                               <span className="flex items-center gap-2">
@@ -344,21 +352,19 @@ const KOLPaymentTermsTab = () => {
               ))}
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+      </TabsContent>
 
       <PaymentTermModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         paymentTerm={selectedTerm}
       />
-      
       <PaymentUpdateModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         paymentTerm={selectedTerm}
       />
-    </div>
+    </Tabs>
   );
 };
 

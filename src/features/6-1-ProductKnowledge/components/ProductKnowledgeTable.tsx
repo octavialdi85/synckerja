@@ -74,7 +74,8 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
   return (
     <div className="w-full max-w-full">
       <div className="rounded-md border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto seamless-scroll">
+        {/* Satu scroll container untuk tabel: max-height dari CSS agar vertikal & horizontal scroll jalan */}
+        <div className="product-knowledge-table-scroll overflow-x-auto overflow-y-auto seamless-scroll nested-scroll-touch-chain">
           <table className="border-collapse" style={{ minWidth: '3888px', width: '100%' }}>
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>

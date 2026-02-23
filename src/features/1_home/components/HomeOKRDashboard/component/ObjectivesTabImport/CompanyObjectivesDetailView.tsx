@@ -528,7 +528,7 @@ export const CompanyObjectivesDetailView = ({
             
             {/* Display All Key Results (Company + Department Objectives) */}
             {objective.all_key_results && objective.all_key_results.length > 0 && (
-              <div className="space-y-2 mb-4 max-h-[520px] overflow-y-auto pr-2">
+              <div className="space-y-2 mb-4 max-h-[520px] overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0 pr-2">
                 {objective.all_key_results.map((kr: any) => {
                   const actualKRProgress = getActualProgress(kr);
                   const isDepartmentObjective = kr.source_type === 'department_objective';
@@ -667,43 +667,46 @@ export const CompanyObjectivesDetailView = ({
       </AccordionItem>
     );
   };
-  return <div className="h-full flex flex-col max-h-[calc(100vh-120px)] overflow-hidden animate-in fade-in duration-200">
+  return (
+    <>
+      <div className="h-full w-full flex flex-col">
+        <div className="flex-1 w-full min-h-0">
+          <div className="space-y-4 h-full">
+            {/* Active Objectives */}
+            <SectionActiveObjectives
+              activeObjectives={activeObjectives}
+              expandedObjective={expandedObjective}
+              setExpandedObjective={setExpandedObjective}
+              renderObjectiveCard={renderObjectiveCard}
+            />
 
-      {/* Status Groups */}
-      <div className="flex-1 space-y-2 seamless-scroll overflow-y-auto scrollbar-hide min-h-0 mt-1">
-        {/* Active Objectives */}
-        <SectionActiveObjectives
-          activeObjectives={activeObjectives}
-          expandedObjective={expandedObjective}
-          setExpandedObjective={setExpandedObjective}
-          renderObjectiveCard={renderObjectiveCard}
-        />
+            {/* Draft Objectives */}
+            <SectionDraftObjectives
+              draftObjectives={draftObjectives}
+              expandedObjective={expandedObjective}
+              setExpandedObjective={setExpandedObjective}
+              renderObjectiveCard={renderObjectiveCard}
+            />
 
-        {/* Draft Objectives */}
-        <SectionDraftObjectives
-          draftObjectives={draftObjectives}
-          expandedObjective={expandedObjective}
-          setExpandedObjective={setExpandedObjective}
-          renderObjectiveCard={renderObjectiveCard}
-        />
-
-        {/* Completed Objectives */}
-        <SectionCompletedObjectives
-          completedObjectives={completedObjectives}
-          expandedObjective={expandedObjective}
-          setExpandedObjective={setExpandedObjective}
-          renderObjectiveCard={renderObjectiveCard}
-        />
+            {/* Completed Objectives */}
+            <SectionCompletedObjectives
+              completedObjectives={completedObjectives}
+              expandedObjective={expandedObjective}
+              setExpandedObjective={setExpandedObjective}
+              renderObjectiveCard={renderObjectiveCard}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* TODO: Update to use ModalAddCompanyContribution */}
-      {/* <ModalCreateObjective open={showCreateDialog} onOpenChange={setShowCreateDialog} organizationId={organizationId} entityId={organizationId} entityName="Company" cycleId={cycleId} /> */}
+      {createKRDialog.open && createKRDialog.objective && (
+        <CreateKeyResultDialog
+          open={createKRDialog.open}
+          onOpenChange={open => setCreateKRDialog({ open })}
+          objective={createKRDialog.objective}
+        />
+      )}
 
-      {createKRDialog.open && createKRDialog.objective && <CreateKeyResultDialog open={createKRDialog.open} onOpenChange={open => setCreateKRDialog({
-      open
-    })} objective={createKRDialog.objective} />}
-
-      {/* Edit Modals */}
       {editModal.open && editModal.objective && editModal.type === 'company' && (
         <AddObjectiveDialog
           type="company"
@@ -744,5 +747,6 @@ export const CompanyObjectivesDetailView = ({
           }}
         />
       )}
-    </div>;
+    </>
+  );
 };

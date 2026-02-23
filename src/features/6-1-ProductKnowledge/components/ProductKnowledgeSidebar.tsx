@@ -641,7 +641,7 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
   };
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm max-h-[calc(100vh-135px)]">
+    <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-gray-200 bg-white">
         {/* Tab Buttons */}
@@ -951,8 +951,8 @@ export const ProductKnowledgeSidebar: React.FC<ProductKnowledgeSidebarProps> = (
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll">
+      {/* Content Area - rule 3.1: satu scroll per panel, seamless-scroll, nested-scroll-touch-chain, min-h-0 */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         {activeTab === 'keywords' ? (
           selectedKeyword ? (
           /* Keyword Detail View */

@@ -25,7 +25,7 @@ export const ManagementTabPageSkeleton = () => (
       </div>
       <div className="p-3 space-y-2">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-12 w-full rounded" />
+          <Skeleton key={`management-skeleton-${i}`} className="h-12 w-full rounded" />
         ))}
       </div>
     </Card>

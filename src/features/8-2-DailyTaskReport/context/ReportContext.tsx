@@ -37,7 +37,7 @@ export interface ComputedPerformanceRow {
   type?: 'step' | 'substep'; // NEW: untuk identifikasi type
 }
 
-interface ReportContextType {
+export interface ReportContextType {
   loading: boolean;
   performance: ComputedPerformanceRow[];
   filtered: ComputedPerformanceRow[];

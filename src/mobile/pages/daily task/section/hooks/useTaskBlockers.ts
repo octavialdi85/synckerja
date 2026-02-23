@@ -71,6 +71,18 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
           .limit(50);
       }
 
+      // Fetch step-level blocker history (task_step_id, no sub-step)
+      let stepHistoryResult: { data: unknown[] | null; error: unknown } = { data: [], error: null };
+      if (stepIds.length > 0) {
+        stepHistoryResult = await supabase
+          .from('task_step_history')
+          .select('*')
+          .eq('action_type', 'blocker_added')
+          .in('task_step_id', stepIds)
+          .order('created_at', { ascending: false })
+          .limit(50);
+      }
+
       // Combine and filter history
       let allHistory: BlockerHistoryRow[] = [];
       
@@ -116,14 +128,15 @@ export const useTaskBlockers = ({ getVisibleSteps }: UseTaskBlockersProps) => {
         }
       }
       
+      const steps = task.steps ?? [];
       const enriched: BlockerModalItem[] = allHistory.map((h) => {
-        const step = task.steps.find(s => s.id === h.task_step_id) || null;
+        const step = steps.find(s => s.id === h.task_step_id) || null;
         const sub = h.task_steps_to_steps_id ? subById[h.task_steps_to_steps_id] : null;
         const createdByEmployee = h.created_by ? employeeMap[h.created_by] : null;
         return {
           ...h,
           taskTitle: task.title,
-          stepTitle: step?.title ?? (sub ? (task.steps.find(s => s.id === sub.parent_step_id)?.title ?? '-') : '-'),
+          stepTitle: step?.title ?? (sub ? (steps.find(s => s.id === sub.parent_step_id)?.title ?? '-') : '-'),
           subStepTitle: sub?.title ?? null,
           created_by_employee: createdByEmployee ? { full_name: createdByEmployee.full_name } : null,
         };

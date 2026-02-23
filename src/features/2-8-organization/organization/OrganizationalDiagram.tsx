@@ -16,6 +16,7 @@ import { useEmployees } from '@/features/2-1-employees/hooks/useEmployees';
 import { useCurrentUserEmployee } from '@/features/1-login/hooks/useCurrentUserEmployee';
 import { getPhotoUrl, getInitials } from '@/features/2-1-employees/hooks/photoUtils';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { isEmployeeInOrganizationalStructure } from '@/features/2-1-employees/utils/employeeUtils';
 
 interface OrganizationalDiagramProps {
   onEmployeeClick?: (employeeId: string) => void;
@@ -34,9 +35,15 @@ export const OrganizationalDiagram = ({ onEmployeeClick }: OrganizationalDiagram
   const [zoomLevel, setZoomLevel] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: employees = [], isLoading } = useEmployees();
+  const { data: allEmployees = [], isLoading } = useEmployees();
   const { data: currentUserEmployee } = useCurrentUserEmployee();
   const { organization, organizationName: contextOrganizationName } = useCentralizedUserData();
+
+  // Exclude only resigned/terminated/inactive/pending removal; include active, probation, contract, etc.
+  const employees = React.useMemo(
+    () => allEmployees.filter(isEmployeeInOrganizationalStructure),
+    [allEmployees]
+  );
 
   // Build hierarchy based on job levels
   const buildHierarchy = React.useMemo(() => {

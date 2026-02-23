@@ -165,15 +165,27 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
 
   const isMobile = useIsMobile();
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      if (!isLoading) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setErrors({});
+      }
+      onOpenChange(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
           'w-full max-w-none m-0 rounded-none translate-x-0 translate-y-0 flex flex-col p-0 gap-0 z-30',
           'fixed left-0 right-0 top-0 modal-above-safe-area h-[100dvh] min-h-[100dvh] sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:max-w-md sm:h-auto sm:max-h-[90vh] sm:min-h-0'
         )}
         overlayClassName="!z-30"
-        fullscreenAnimation
+        fullscreenAnimation={isMobile}
         hideCloseButton
       >
         <DialogHeader className="flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left px-4 pt-4 pb-3 safe-area-top">
@@ -215,7 +227,7 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
                   type={showCurrentPassword ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className={cn('pr-10', errors.current && 'border-destructive')}
+                  className={cn('text-sm pr-10', errors.current && 'border-destructive')}
                   placeholder=""
                   autoComplete="current-password"
                 />
@@ -247,7 +259,7 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
                   type={showNewPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className={cn('pr-10', errors.new && 'border-destructive')}
+                  className={cn('text-sm pr-10', errors.new && 'border-destructive')}
                   placeholder=""
                   autoComplete="new-password"
                 />
@@ -280,7 +292,7 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={cn('pr-10', errors.confirm && 'border-destructive')}
+                  className={cn('text-sm pr-10', errors.confirm && 'border-destructive')}
                   placeholder=""
                   autoComplete="new-password"
                 />
@@ -303,16 +315,21 @@ export const ChangePasswordModal = ({ open, onOpenChange }: ChangePasswordModalP
             </div>
           </div>
 
-          <div className={cn('px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30', isMobile && 'safe-area-padding-bottom')}>
+          <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
             <div className="flex items-center justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={isLoading}>
                 {t('settings.security.actions.cancel', 'Cancel')}
               </Button>
-              <Button type="submit" size="sm" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 gap-2">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isLoading}
+                className="min-w-[120px] flex items-center justify-center gap-1.5"
+              >
                 {isLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {t('settings.security.actions.updating', 'Updating...')}
+                    <span>{t('settings.security.actions.updating', 'Updating...')}</span>
                   </>
                 ) : (
                   <>

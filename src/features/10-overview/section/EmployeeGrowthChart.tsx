@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface EmployeeGrowthChartProps {
   data: any[];
@@ -9,6 +10,7 @@ interface EmployeeGrowthChartProps {
 }
 
 export const EmployeeGrowthChart = memo(({ data, isLoading }: EmployeeGrowthChartProps) => {
+  const { t } = useAppTranslation();
   if (isLoading) {
     return (
       <Card className="p-4">
@@ -21,13 +23,25 @@ export const EmployeeGrowthChart = memo(({ data, isLoading }: EmployeeGrowthChar
     );
   }
 
+  if (!data?.length) {
+    return (
+      <Card className="p-4">
+        <div className="flex items-center gap-2 text-base font-semibold">
+          <TrendingUp className="h-4 w-4" />
+          {t('subscription.overview.employeeGrowth')}
+        </div>
+        <p className="text-sm text-muted-foreground mt-3">{t('subscription.overview.noEmployeeGrowthData')}</p>
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 text-base font-semibold">
         <TrendingUp className="h-4 w-4" />
-        Employee Growth
+        {t('subscription.overview.employeeGrowth')}
       </div>
-      <p className="text-xs text-muted-foreground mt-1">Employee registration over the last 6 months</p>
+      <p className="text-xs text-muted-foreground mt-1">{t('subscription.overview.employeeGrowthSubtitle')}</p>
       <div className="h-44 mt-3">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>

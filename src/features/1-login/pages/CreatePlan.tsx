@@ -173,7 +173,7 @@ const CreatePlan = () => {
     console.log('💳 Initiating Midtrans payment for paid plan');
     try {
       const finalAmount = isYearly
-        ? getYearlyPriceForMembers(plan, memberCount)
+        ? getYearlyPriceForMembers(plan.base_price_per_member, memberCount, plan.annual_discount_percentage)
         : getMonthlyPriceForMembers(plan, memberCount);
 
       await initiateMidtransPayment({

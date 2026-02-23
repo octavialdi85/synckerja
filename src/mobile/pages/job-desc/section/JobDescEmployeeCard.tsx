@@ -66,7 +66,7 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
         .from('task_steps_assigned')
         .select('task_step_id')
         .eq('id', assignmentId)
-        .single();
+        .maybeSingle();
 
       if (error || !data) return null;
 
@@ -94,7 +94,7 @@ export const JobDescEmployeeCard = ({ summary }: JobDescEmployeeCardProps) => {
           task_steps_to_steps!inner(parent_step_id)
         `)
         .eq('id', assignmentId)
-        .single();
+        .maybeSingle();
 
       if (error || !data) return null;
 

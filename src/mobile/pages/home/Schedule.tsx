@@ -13,17 +13,23 @@ import { useAttendanceStats } from "@/mobile/hooks/useAttendanceStats";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { Button } from "@/features/ui/button";
 import { Loader2, Calendar, Clock } from "lucide-react";
 const Schedule = () => {
   useStatusBarStyle('light');
   const { t } = useAppTranslation();
   const {
     workSchedule,
-    loading: scheduleLoading
+    scheduleData,
+    loading: scheduleLoading,
+    error: scheduleError,
+    refetch: refetchSchedule
   } = useWorkSchedule();
   const {
     stats,
-    loading: statsLoading
+    loading: statsLoading,
+    error: statsError,
+    refetch: refetchStats
   } = useAttendanceStats();
 
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
@@ -60,6 +66,20 @@ const Schedule = () => {
                 <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default">
                   <ScheduleSkeleton />
                 </div>
+              ) : (scheduleError || statsError) ? (
+                <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default">
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive font-medium mb-1">{t("schedule.error", "Error")}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{scheduleError || statsError}</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => { refetchSchedule(); refetchStats(); }}
+                    >
+                      {t("mobileHome.retry", "Coba lagi")}
+                    </Button>
+                  </div>
+                </div>
               ) : (
               <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default space-y-1">
                 {/* Spasi jelas antara section Hari Libur dan footer nav */}
@@ -67,21 +87,13 @@ const Schedule = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <Card className="p-3 bg-gradient-card border border-border">
                     <div className="text-2xl font-bold text-primary mb-1">
-                      {statsLoading ? (
-                        <Skeleton className="h-8 w-12" />
-                      ) : (
-                        stats?.present_days ?? 0
-                      )}
+                      {stats?.present_days ?? 0}
                     </div>
                     <div className="text-xs text-muted-foreground">{t("schedule.presentThisMonth", "Hadir Bulan Ini")}</div>
                   </Card>
                   <Card className="p-3 bg-gradient-card border border-border">
                     <div className="text-2xl font-bold text-primary mb-1">
-                      {statsLoading ? (
-                        <Skeleton className="h-8 w-12" />
-                      ) : (
-                        stats?.absent_days ?? 0
-                      )}
+                      {stats?.absent_days ?? 0}
                     </div>
                     <div className="text-xs text-muted-foreground">{t("schedule.absentThisMonth", "Tidak Hadir Bulan Ini")}</div>
                   </Card>
@@ -98,24 +110,24 @@ const Schedule = () => {
                       <div>
                         <p className="text-muted-foreground">{t("schedule.workHours", "Jam Kerja")}</p>
                         <p className="font-medium text-foreground">
-                          {workSchedule.start_time.slice(0, 5)} - {workSchedule.end_time.slice(0, 5)}
+                          {workSchedule.start_time?.slice(0, 5) ?? '08:00'} - {workSchedule.end_time?.slice(0, 5) ?? '17:00'}
                         </p>
                       </div>
                       {workSchedule.break_start_time && workSchedule.break_end_time && (
                         <div>
                           <p className="text-muted-foreground">{t("schedule.breakHours", "Jam Istirahat")}</p>
                           <p className="font-medium text-foreground">
-                            {workSchedule.break_start_time.slice(0, 5)} - {workSchedule.break_end_time.slice(0, 5)}
+                            {workSchedule.break_start_time?.slice(0, 5)} - {workSchedule.break_end_time?.slice(0, 5)}
                           </p>
                         </div>
                       )}
                       <div>
                         <p className="text-muted-foreground">{t("schedule.lateTolerance", "Toleransi Terlambat")}</p>
-                        <p className="font-medium text-foreground">{t("schedule.lateToleranceMinutes", "{{minutes}} menit", { minutes: workSchedule.late_tolerance_minutes })}</p>
+                        <p className="font-medium text-foreground">{t("schedule.lateToleranceMinutes", "{{minutes}} menit", { minutes: workSchedule.late_tolerance_minutes ?? 0 })}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">{t("schedule.workingDays", "Hari Kerja")}</p>
-                        <p className="font-medium text-foreground">{t("schedule.workingDaysPerWeek", "{{count}} hari/minggu", { count: workSchedule.working_days.length })}</p>
+                        <p className="font-medium text-foreground">{t("schedule.workingDaysPerWeek", "{{count}} hari/minggu", { count: workSchedule.working_days?.length ?? 0 })}</p>
                       </div>
                     </div>
                   </Card>
@@ -130,7 +142,13 @@ const Schedule = () => {
                 )}
 
                 {/* Office Schedule */}
-                <OfficeScheduleCard />
+                <OfficeScheduleCard
+                  workSchedule={workSchedule ?? null}
+                  scheduleData={scheduleData ?? []}
+                  loading={scheduleLoading}
+                  error={scheduleError}
+                  refetch={refetchSchedule}
+                />
 
                 {/* Monthly Holidays */}
                 <MonthlyHolidaysCard />

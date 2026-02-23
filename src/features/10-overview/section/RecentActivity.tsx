@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
-import type { SubscriptionStatus } from '@/hooks/useOptimizedSubscription';
+import type { SubscriptionStatus } from '@/features/10-management/hooks/useOptimizedSubscription';
 
 interface RecentActivityProps {
   subscriptionStatus: SubscriptionStatus | null;

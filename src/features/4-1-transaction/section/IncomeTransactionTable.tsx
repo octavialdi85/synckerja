@@ -114,8 +114,8 @@ export const IncomeTransactionTable = ({
         </Dialog>
       </div>
 
-      {/* Table Content */}
-      <div className="flex-1 overflow-auto seamless-scroll">
+      {/* Table Content - satu scroll container per panel, scroll chaining */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">

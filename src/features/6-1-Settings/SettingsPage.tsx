@@ -208,26 +208,21 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
 
-              {/* Main Content Area - Grid Layout */}
-              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-                {/* Left Column - Sidebar - 3 columns */}
-                <div className="col-span-3 h-full">
-                  <div className="bg-white border rounded-lg shadow-sm h-full flex flex-col">
-                    {/* Sidebar Header */}
+              {/* Main Content Area - Grid: sidebar kiri + section utama kanan — scroll-chaining rule 3.1: satu scroll per panel */}
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 overflow-hidden">
+                {/* Left Column - Sidebar (menu) - 3 columns — rule 3.1 */}
+                <div className="col-span-3 flex flex-col min-h-0 overflow-hidden">
+                  <div className="bg-white border rounded-lg shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
                     <div className="px-4 py-1.5 border-b flex-shrink-0">
                       <h3 className="text-sm font-semibold text-gray-900">Pengaturan Social Media</h3>
                       <p className="text-xs text-gray-500 mt-1">Konfigurasi sistem social media</p>
                     </div>
-
-                    {/* Scrollable Sidebar Content */}
-                    <div className="flex-1 overflow-y-auto seamless-scroll p-3">
+                    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-3">
                       <SettingsSidebar
                         activeSection={activeSection}
                         onSectionChange={setActiveSection}
                       />
                     </div>
-
-                    {/* Sidebar Footer */}
                     <div className="flex-shrink-0 px-4 py-2 border-t border-gray-200 bg-gray-50">
                       <div className="flex items-center justify-between text-xs text-gray-500">
                         <span>Settings Overview</span>
@@ -236,11 +231,11 @@ export const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                
-                {/* Right Column - Content - 9 columns */}
-                <div className="col-span-9 flex flex-col min-h-0">
-                  <div className="flex-1 min-h-0">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+
+                {/* Right Column - Section utama (konten) - 9 columns — rule 3.1 */}
+                <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
                       {/* Content Header */}
                       <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
                         <div className="flex items-center justify-between">
@@ -272,8 +267,8 @@ export const SettingsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Scrollable Content */}
-                      <div className="flex-1 overflow-y-auto seamless-scroll min-h-0">
+                      {/* Scrollable Content — rule 3.1: satu scroll container, nested-scroll-touch-chain */}
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
                         <div className="p-4">
                           {renderContent()}
                         </div>

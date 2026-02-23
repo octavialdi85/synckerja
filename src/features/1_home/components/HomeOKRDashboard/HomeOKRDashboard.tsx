@@ -105,12 +105,13 @@ const HomeOKRDashboardContent = () => {
       [index]: !prev[index]
     }));
   };
-  return <div className="space-y-2 h-full flex flex-col">
-      <SectionGreetings currentTime={currentTime} greeting={getGreeting()} />
-
+  return <div className="space-y-2 h-full min-h-0 flex flex-col">
+      <div className="flex-shrink-0">
+        <SectionGreetings currentTime={currentTime} greeting={getGreeting()} />
+      </div>
 
       {/* OKR Objectives Section */}
-      <Card className="border border-border flex-1 flex flex-col overflow-hidden">
+      <Card className="border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
         
         <CardContent className="flex-1 flex flex-col overflow-hidden">
           <Tabs defaultValue="company-objectives" className="w-full h-full flex flex-col overflow-hidden">
@@ -120,7 +121,8 @@ const HomeOKRDashboardContent = () => {
               <TabsTrigger value="individual-objectives" className="text-sm font-semibold">Individual Objective</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="company-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
+            <TabsContent value="company-objectives" className="mt-4 flex-1 flex flex-col min-h-0 data-[state=inactive]:hidden">
+              <div className="home-okr-tab-scroll seamless-scroll nested-scroll-touch-chain space-y-4" role="region" aria-label="Objectives list">
               {/* Company Objectives Progress Overview */}
               <CompanyObjectivesProgressCard
                 enhancedCompanyObjectives={[]} // Will be populated by ObjectivesTab
@@ -153,9 +155,11 @@ const HomeOKRDashboardContent = () => {
                 onYearQuarterChange={setYearQuarterSelection} 
                 availableYears={availableYears} 
               />
+              </div>
             </TabsContent>
 
-            <TabsContent value="department-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
+            <TabsContent value="department-objectives" className="mt-4 flex-1 flex flex-col min-h-0 data-[state=inactive]:hidden">
+              <div className="home-okr-tab-scroll seamless-scroll nested-scroll-touch-chain space-y-4" role="region" aria-label="Objectives list">
               {/* Department Objectives Progress Overview */}
               <DepartmentObjectivesProgressCard
                 enhancedDepartmentObjectives={[]} // Will be populated by ObjectivesTab
@@ -189,9 +193,11 @@ const HomeOKRDashboardContent = () => {
                 onYearQuarterChange={setYearQuarterSelection} 
                 availableYears={availableYears} 
               />
+              </div>
             </TabsContent>
 
-            <TabsContent value="individual-objectives" className="space-y-4 mt-4 flex-1 overflow-auto seamless-scroll min-h-0">
+            <TabsContent value="individual-objectives" className="mt-4 flex-1 flex flex-col min-h-0 data-[state=inactive]:hidden">
+              <div className="home-okr-tab-scroll seamless-scroll nested-scroll-touch-chain space-y-4" role="region" aria-label="Objectives list">
               {/* Individual Objectives Progress Overview */}
               <IndividualObjectivesProgressCard
                 enhancedIndividualObjectives={[]} // Will be populated by ObjectivesTab
@@ -224,6 +230,7 @@ const HomeOKRDashboardContent = () => {
                 onYearQuarterChange={setYearQuarterSelection} 
                 availableYears={availableYears} 
               />
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

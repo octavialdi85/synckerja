@@ -36,10 +36,15 @@ interface PaymentParams {
   };
 }
 
-export const useMidtransPayment = () => {
+export interface UseMidtransPaymentOptions {
+  onPaymentClose?: (path: string) => void;
+}
+
+export const useMidtransPayment = (options?: UseMidtransPaymentOptions) => {
   const { t } = useAppTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const onPaymentClose = options?.onPaymentClose;
 
   const initiateMidtransPayment = async (params: PaymentParams) => {
     if (isLoading || isPopupOpen) {
@@ -126,10 +131,8 @@ export const useMidtransPayment = () => {
       // Delay to ensure cleanup is complete
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Configure Snap with proper error handling for localhost
-      const appOrigin = window.location.origin;
-      const successRedirectUrl = `${appOrigin}/subscription/overview`;
-      const fallbackRedirectUrl = `${appOrigin}/subscription/plans`;
+      const successPath = '/subscription/overview';
+      const fallbackPath = '/subscription/plans';
 
       const syncPaymentStatus = async (result: any, statusOverride?: 'success' | 'pending' | 'failed') => {
         try {
@@ -169,33 +172,35 @@ export const useMidtransPayment = () => {
           syncPaymentStatus(result, 'success');
           setIsPopupOpen(false);
           toast.success(t('subscription.plans.success.paymentSuccess', 'Payment successful! Your subscription is being activated...'));
-          
           localStorage.setItem('lastOrderId', data.order_id);
-          
-          setTimeout(() => {
-            window.location.href = successRedirectUrl;
-          }, 2000);
+          if (onPaymentClose) {
+            setTimeout(() => onPaymentClose(successPath), 2000);
+          } else {
+            setTimeout(() => { window.location.href = `${window.location.origin}${successPath}`; }, 2000);
+          }
         },
         onPending: (result: any) => {
           syncPaymentStatus(result, 'pending');
           setIsPopupOpen(false);
           toast.info(t('subscription.plans.info.paymentProcessing', 'Payment is being processed...'));
-          
           localStorage.setItem('lastOrderId', data.order_id);
-          
-          setTimeout(() => {
-            window.location.href = successRedirectUrl;
-          }, 1000);
+          if (onPaymentClose) {
+            setTimeout(() => onPaymentClose(successPath), 1000);
+          } else {
+            setTimeout(() => { window.location.href = `${window.location.origin}${successPath}`; }, 1000);
+          }
         },
         onError: () => {
           setIsPopupOpen(false);
           toast.error(t('subscription.plans.error.paymentFailed', 'Payment failed. Please try again.'));
-          window.location.href = fallbackRedirectUrl;
+          if (onPaymentClose) onPaymentClose(fallbackPath);
+          else window.location.href = `${window.location.origin}${fallbackPath}`;
         },
         onClose: () => {
           setIsPopupOpen(false);
           toast.info(t('subscription.plans.info.paymentCancelled', 'Payment cancelled'));
-          window.location.href = fallbackRedirectUrl;
+          if (onPaymentClose) onPaymentClose(fallbackPath);
+          else window.location.href = `${window.location.origin}${fallbackPath}`;
         }
       };
 
@@ -226,42 +231,25 @@ export const useMidtransPayment = () => {
     }
   };
 
-  const loadMidtransScript = (): Promise<void> => {
-    return new Promise(async (resolve, reject) => {
-      if (window.snap) {
-        resolve();
-        return;
-      }
+  const loadMidtransScript = async (): Promise<void> => {
+    if (window.snap) return;
 
-      try {
-        // Get client key from edge function
-        const { data: keyData, error } = await supabase.functions.invoke('get-midtrans-config');
-        
-        if (error) {
-          reject(new Error('Failed to get Midtrans configuration'));
-          return;
-        }
+    const { data: keyData, error } = await supabase.functions.invoke('get-midtrans-config');
+    if (error) {
+      throw new Error('Failed to get Midtrans configuration');
+    }
+    const clientKey = keyData?.client_key;
+    if (!clientKey) {
+      throw new Error('Midtrans client key not configured');
+    }
 
-        const clientKey = keyData?.client_key;
-        
-        if (!clientKey) {
-          reject(new Error('Midtrans client key not configured'));
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.src = 'https://app.midtrans.com/snap/snap.js';
-        script.setAttribute('data-client-key', clientKey);
-        script.onload = () => {
-          resolve();
-        };
-        script.onerror = () => {
-          reject(new Error('Failed to load Midtrans script'));
-        };
-        document.head.appendChild(script);
-      } catch (error) {
-        reject(error);
-      }
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://app.midtrans.com/snap/snap.js';
+      script.setAttribute('data-client-key', clientKey);
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Midtrans script'));
+      document.head.appendChild(script);
     });
   };
 

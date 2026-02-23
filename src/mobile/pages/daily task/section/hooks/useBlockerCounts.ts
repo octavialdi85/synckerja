@@ -17,7 +17,7 @@ export const useBlockerCounts = ({ filteredTasks }: UseBlockerCountsProps) => {
   const blockerCalculationKey = useMemo(() => {
     if (filteredTasks.length === 0) return '';
     return filteredTasks
-      .map(t => `${t.id}:${t.steps.length}`)
+      .map(t => `${t.id}:${(t.steps ?? []).length}`)
       .sort()
       .join('|');
   }, [filteredTasks]);
@@ -54,7 +54,7 @@ export const useBlockerCounts = ({ filteredTasks }: UseBlockerCountsProps) => {
         const taskToStepMapping: Record<string, string[]> = {};
         
         tasksToProcess.forEach(t => {
-          const stepIds = t.steps.map(s => s.id);
+          const stepIds = (t.steps ?? []).map(s => s.id);
           taskToStepMapping[t.id] = stepIds;
           allStepIds.push(...stepIds);
         });

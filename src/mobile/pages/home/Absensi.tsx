@@ -33,7 +33,7 @@ function getGreetingKey(hour: number): 'morning' | 'noon' | 'afternoon' | 'night
   return 'morning';
 }
 
-let confetti: any;
+let confetti: ((opts?: object) => void) | undefined;
 try {
   // Optional import to avoid build error if package not installed
   // eslint-disable-next-line @typescript-eslint/no-var-requires

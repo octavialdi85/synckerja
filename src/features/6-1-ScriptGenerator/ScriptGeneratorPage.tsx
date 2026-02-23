@@ -50,8 +50,8 @@ const ScriptGeneratorContent: React.FC = () => {
 
   return (
     <StandardLayout>
-      <div className="min-h-screen max-h-screen bg-gray-100 flex flex-col font-sans relative overflow-hidden">
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans relative">
+        <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 px-4 pb-4 overflow-hidden">
             <div className="h-full flex flex-col overflow-hidden max-w-full">
@@ -62,42 +62,40 @@ const ScriptGeneratorContent: React.FC = () => {
                   handleTabChange={handleTabChange}
                 />
               </div>
-              
-              {/* Main Content Area */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
-                  {/* Scrollable Content Area */}
-                  <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll max-h-[calc(100vh-120px)]">
-                    <div className="p-6 w-full min-w-0">
-                      <div className="space-y-6">
-                        {/* Form and Result Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {/* Form Section */}
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                              <ScriptGeneratorForm
-                                onGenerate={handleGenerate}
-                                isGenerating={isGenerating}
-                              />
-                            </div>
-                          </div>
 
-                          {/* ChatGPT Prompt Result Section */}
-                          <div className="space-y-4">
-                            {generatedScript ? (
-                              <div className="bg-white rounded-lg p-4 border border-gray-200 h-full">
-                                <ScriptResult 
-                                  script={generatedScript}
-                                />
-                              </div>
-                            ) : (
-                              <div className="bg-gray-50 rounded-lg p-8 border border-gray-200 border-dashed text-center h-full flex items-center justify-center">
-                                <p className="text-gray-500 text-sm">
-                                  Hasil prompt untuk ChatGPT akan muncul di sini setelah Anda mengisi form dan klik "Generate Script"
-                                </p>
-                              </div>
-                            )}
+              {/* Grid: Section utama (form) + Sidebar kanan (result) — scroll-chaining rule 3.1: satu scroll per panel */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0 h-full overflow-hidden">
+                  {/* Section utama (form): satu scroll container — rule 3.1 */}
+                  <div className="lg:col-span-8 flex flex-col min-h-0 overflow-hidden">
+                    <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
+                        <div className="p-6 w-full min-w-0">
+                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <ScriptGeneratorForm
+                              onGenerate={handleGenerate}
+                              isGenerating={isGenerating}
+                            />
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sidebar kanan (hasil prompt): satu scroll container — rule 3.1 */}
+                  <div className="lg:col-span-4 flex flex-col min-h-0 overflow-hidden">
+                    <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
+                        <div className="p-6 w-full min-w-0">
+                          {generatedScript ? (
+                            <ScriptResult script={generatedScript} />
+                          ) : (
+                            <div className="bg-gray-50 rounded-lg p-8 border border-gray-200 border-dashed text-center min-h-[200px] flex items-center justify-center">
+                              <p className="text-gray-500 text-sm">
+                                Hasil prompt untuk ChatGPT akan muncul di sini setelah Anda mengisi form dan klik &quot;Generate Script&quot;
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

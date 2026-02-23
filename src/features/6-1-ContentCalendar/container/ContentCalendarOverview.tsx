@@ -45,8 +45,8 @@ export const ContentCalendarOverview = ({
     .slice(0, 5);
 
   return (
-    <div className="bg-white border rounded-lg h-full flex flex-col">
-      <Tabs defaultValue="overview" className="w-full h-full flex flex-col overflow-hidden">
+    <div className="bg-white border rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
+      <Tabs defaultValue="overview" className="w-full h-full flex flex-col overflow-hidden min-h-0">
         {/* Tabs Header - Fixed */}
         <div className="px-4 py-2 border-b flex-shrink-0">
           <TabsList className="grid w-full grid-cols-3 h-8 mb-2">
@@ -57,8 +57,8 @@ export const ContentCalendarOverview = ({
           <p className="text-xs text-gray-500">{monthName}</p>
         </div>
 
-        {/* Overview Tab Content */}
-        <TabsContent value="overview" className="flex-1 p-4 space-y-4 min-h-0 overflow-y-auto seamless-scroll m-0">
+        {/* Overview Tab Content — scroll-chaining: sama seperti Funnel/Content Balance, satu scroll per panel */}
+        <TabsContent value="overview" className="flex-1 p-4 space-y-4 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
         {/* Monthly Statistics */}
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-gray-700 mb-3">Monthly Statistics</h4>
@@ -131,18 +131,14 @@ export const ContentCalendarOverview = ({
         )}
         </TabsContent>
 
-        {/* Funnel Tab Content */}
-        <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
-          <div className="w-full h-full flex flex-col">
-            <ContentPillarTracker selectedMonth={currentDate} serviceFilter={serviceFilter} />
-          </div>
+        {/* Funnel Tab Content — scroll di TabsContent (satu scroll per panel, rule 3.1) */}
+        <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+          <ContentPillarTracker selectedMonth={currentDate} serviceFilter={serviceFilter} />
         </TabsContent>
 
-        {/* Content Balance Tab Content */}
-        <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
-          <div className="w-full h-full flex flex-col">
-            <ContentBalanceTab selectedMonth={currentDate} serviceFilter={serviceFilter} />
-          </div>
+        {/* Content Balance Tab Content — scroll di TabsContent (satu scroll per panel, rule 3.1) */}
+        <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+          <ContentBalanceTab selectedMonth={currentDate} serviceFilter={serviceFilter} />
         </TabsContent>
       </Tabs>
     </div>

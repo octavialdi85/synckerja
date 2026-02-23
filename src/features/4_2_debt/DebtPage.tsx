@@ -196,9 +196,9 @@ export const DebtPage = () => {
               />
             </div>
             
-            {/* Content Area - Scrollable */}
-            <div className="flex-1 min-h-0 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)] min-w-0">
-              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-full flex flex-col min-w-0">
+            {/* Content Area - satu scroll di table (scroll chaining) */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden min-w-0 max-h-[calc(100vh-120px)]">
+              <div className="p-2 bg-gradient-to-br from-gray-50 to-white min-h-0 flex flex-col flex-1 min-w-0 overflow-hidden">
                 {/* Quick View Total Current Balance - not affected by filters; updates when balance changes (e.g. debt payment from bank) */}
                 <Card className="mb-4 bg-blue-600 text-white border-0 w-full min-w-0 flex-shrink-0">
                   <CardContent className="p-3 min-w-0">
@@ -288,8 +288,8 @@ export const DebtPage = () => {
                   </Card>
                 </div>
 
-                {/* Table Section */}
-                <div className="flex-1 min-h-0 flex flex-col">
+                {/* Table Section - scroll container di dalam DebtTable */}
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   <DebtTable
                     debts={debts}
                     isLoading={isLoading}

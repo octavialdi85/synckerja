@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef, type FC, type ChangeEvent } from 'react';
 import { User, Camera, Trash2, Loader2 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/mobile/components/ui/avatar';
 import { Button } from '@/mobile/components/ui/button';
@@ -9,11 +9,11 @@ interface ProfilePhotoUploadProps {
   profile: ProfileData;
 }
 
-export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({ profile }) => {
+export const ProfilePhotoUpload: FC<ProfilePhotoUploadProps> = ({ profile }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadPhoto, deletePhoto, uploading, deleting } = useProfilePhoto();
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       await uploadPhoto(file);

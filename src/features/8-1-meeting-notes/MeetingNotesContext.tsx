@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/1-login/hooks/use-toast';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
@@ -6,7 +6,7 @@ import { logger } from '@/config/logger';
 
 const isDev = import.meta.env.DEV;
 
-interface MeetingPoint {
+export interface MeetingPoint {
   id: string;
   meeting_date: string;
   discussion_point: string;
@@ -27,6 +27,7 @@ interface MeetingPointUpdate {
     solution_description: string;
     meeting_point_id: string;
     meeting_point_issue_id: string;
+    meeting_points?: { discussion_point: string };
   };
 }
 
@@ -185,10 +186,10 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
 
       const solutionIds = solutions.map(s => s.id);
 
-      // Then get all updates for these solutions
+      // Then get all updates for these solutions (include meeting_points.discussion_point for Recent Updates UI)
       const { data, error } = await supabase
         .from('meeting_point_updates')
-        .select('*, meeting_point_solutions(solution_description, meeting_point_id)')
+        .select('*, meeting_point_solutions(meeting_point_id, meeting_points(discussion_point))')
         .in('meeting_point_solution_id', solutionIds)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -487,17 +488,16 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     }
   };
 
-  const getUpdateCount = (meetingPointId: string): number => {
-    // Count updates from recentUpdates that belong to solutions of this meeting point
-    // This uses the cached recentUpdates data for performance
+  /** Count of updates for a meeting point from cached recentUpdates (max 20 total; not full DB count). */
+  const getUpdateCount = useCallback((meetingPointId: string): number => {
     return recentUpdates.filter(update => {
       const solution = update.meeting_point_solutions;
       return solution?.meeting_point_id === meetingPointId;
     }).length;
-  };
+  }, [recentUpdates]);
 
   // ========== ISSUES FUNCTIONS ==========
-  const getIssueHistory = async (meetingPointId: string): Promise<MeetingPointIssue[]> => {
+  const getIssueHistory = useCallback(async (meetingPointId: string): Promise<MeetingPointIssue[]> => {
     try {
       const { data, error } = await supabase
         .from('meeting_point_issues')
@@ -516,7 +516,7 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
       });
       return [];
     }
-  };
+  }, []);
 
   const addIssue = async (meetingPointId: string, issueDescription: string) => {
     if (!organizationId) return;

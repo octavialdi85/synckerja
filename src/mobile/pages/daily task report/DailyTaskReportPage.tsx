@@ -12,6 +12,7 @@ import { BlockersAndUpdatesPanel } from './components/BlockersAndUpdatesPanel';
 import { Filters } from './components/Filters';
 import { DailyTaskReportPageSkeleton } from './DailyTaskReportPageSkeleton';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { Button } from '@/features/ui/button';
 
 const DailyTaskReportPage = () => {
   useStatusBarStyle('light');
@@ -63,7 +64,8 @@ const DailyTaskReportPage = () => {
 };
 
 const DailyTaskReportContentInner = () => {
-  const { loading } = useDailyTaskReport();
+  const { loading, refreshError, retryRefresh } = useDailyTaskReport();
+  const { t } = useAppTranslation();
 
   if (loading) {
     return <DailyTaskReportPageSkeleton />;
@@ -71,6 +73,15 @@ const DailyTaskReportContentInner = () => {
 
   return (
     <>
+      {refreshError != null && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-sm text-destructive font-medium">{t('dailyTaskReport.page.loadError', 'Failed to load report')}</p>
+          <p className="text-xs text-muted-foreground">{refreshError}</p>
+          <Button variant="default" size="sm" className="self-start" onClick={() => retryRefresh()}>
+            {t('dailyTaskReport.page.retry', 'Retry')}
+          </Button>
+        </div>
+      )}
       <div className="bg-card border border-border rounded-lg shadow-sm">
         <Filters />
       </div>

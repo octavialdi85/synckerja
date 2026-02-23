@@ -165,7 +165,7 @@ export const BankAccountManagement: React.FC = () => {
         </div>
       ) : (
         <div className="border rounded-lg overflow-hidden flex-1 min-h-0 flex flex-col">
-          <div className="overflow-x-auto overflow-y-auto seamless-scroll flex-1">
+          <div className="overflow-x-auto overflow-y-auto seamless-scroll nested-scroll-touch-chain min-h-0 flex-1">
             <Table>
               <TableHeader>
                 <TableRow>

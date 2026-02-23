@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/features/ui/use-toast";
-import { clearCurrentOrgCacheForUser } from "@/features/1-login/hooks/useCurrentOrg";
+import { clearCurrentOrgCacheForUser, setCurrentOrgCacheForUser } from "@/features/1-login/hooks/useCurrentOrgCache";
 import { logger } from "@/config/logger";
 
 export interface OrganizationItem {
@@ -93,10 +93,6 @@ export function useOrganizationList() {
 
       try {
         setSwitchingOrganization(true);
-        toast({
-          title: "Beralih organisasi...",
-          description: `Berpindah ke ${selectedOrg.company_name}`,
-        });
 
         const { error } = await supabase
           .from("profiles")
@@ -109,6 +105,7 @@ export function useOrganizationList() {
         if (error) throw error;
 
         clearCurrentOrgCacheForUser(user.id);
+        setCurrentOrgCacheForUser(user.id, organizationId);
         window.dispatchEvent(new CustomEvent("organization-switched", { detail: { organizationId } }));
 
         await queryClient.invalidateQueries({ queryKey });

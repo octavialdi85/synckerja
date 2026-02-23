@@ -98,7 +98,7 @@ export const AttendancePage = () => {
           </div>
           <div className="flex-1 min-h-0">
             {activeTab === 'dashboard' && (
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)] min-h-0">
                 <DashboardOverview />
               </div>
             )}
@@ -110,7 +110,7 @@ export const AttendancePage = () => {
             )}
 
             {activeTab === 'settings' && (
-              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4 overflow-y-auto seamless-scroll max-h-[calc(100vh-120px)]">
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm p-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-120px)] min-h-0">
                 <AttendanceSettings />
               </div>
             )}

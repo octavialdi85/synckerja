@@ -172,9 +172,9 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth, serviceFilter 
   };
 
   return (
-    <Card className="h-full flex flex-col seamless-scroll">
-      <CardContent className="p-0 h-full flex flex-col seamless-scroll overflow-hidden">
-        <Tabs defaultValue="funnel" className="w-full h-full flex flex-col seamless-scroll overflow-hidden">
+    <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <CardContent className="p-0 h-full flex flex-col overflow-hidden min-h-0">
+        <Tabs defaultValue="funnel" className="w-full h-full flex flex-col overflow-hidden min-h-0">
           {/* Tabs Header - Fixed */}
           <TabsList className="grid w-full grid-cols-3 flex-shrink-0 h-8">
             <TabsTrigger value="funnel" className="text-xs py-1">Funnel</TabsTrigger>
@@ -182,26 +182,16 @@ const ReminderTab: React.FC<ReminderTabProps> = ({ selectedMonth, serviceFilter 
             <TabsTrigger value="pengingat" className="text-xs py-1">{t('reminderTab.tab.pengingat', 'Reminders')}</TabsTrigger>
           </TabsList>
           
-          {/* Scrollable Content Area */}
-          <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
-            <div className="w-full h-full flex flex-col">
-              {/* Content Pillar Tracker - Full Width */}
-              <div className="w-full h-full flex-1 min-h-0">
-                <ContentPillarTracker selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
-              </div>
-            </div>
+          {/* Scrollable Content Area — sama untuk ketiga tab: TabsContent = scroll container (overflow-y-auto) */}
+          <TabsContent value="funnel" className="flex-1 p-0 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+            <ContentPillarTracker selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
           </TabsContent>
 
-          <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-hidden seamless-scroll">
-            <div className="w-full h-full flex flex-col">
-              {/* Content Balance Tab - Full Width */}
-              <div className="w-full h-full flex-1 min-h-0">
-                <ContentBalanceTab selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
-              </div>
-            </div>
+          <TabsContent value="content-balance" className="flex-1 p-0 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
+            <ContentBalanceTab selectedMonth={selectedMonth} serviceFilter={serviceFilter} />
           </TabsContent>
-          
-          <TabsContent value="pengingat" className="flex-1 p-2 space-y-3 m-0 overflow-y-auto seamless-scroll min-h-0">
+
+          <TabsContent value="pengingat" className="flex-1 p-2 space-y-3 m-0 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
             {/* Daily Task Reminders */}
             <div>
               <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">

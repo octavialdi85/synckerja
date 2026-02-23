@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 
 interface NationalHoliday {
   id: string;
@@ -87,7 +88,7 @@ export const useNationalHolidays = () => {
       setHolidays(currentMonthHolidays);
 
     } catch (err) {
-      console.error('Error fetching national holidays:', err);
+      logger.error('Error fetching national holidays:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch holidays');
     } finally {
       setLoading(false);
@@ -108,7 +109,7 @@ export const useNationalHolidays = () => {
           table: 'national_holidays'
         },
         () => {
-          console.log('National holidays updated, refreshing...');
+          logger.debug('National holidays updated, refreshing...');
           fetchCurrentMonthHolidays();
         }
       )

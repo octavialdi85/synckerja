@@ -32,15 +32,15 @@ export const AccessPermissionsOverview = ({ configurations = [] }: AccessPermiss
   );
 
   return (
-    <div className="bg-white border rounded-lg h-full flex flex-col">
+    <div className="bg-white border rounded-lg h-full flex flex-col max-h-[calc(100vh-120px)]">
       {/* Header */}
       <div className="px-4 py-1.5 border-b flex-shrink-0">
         <h3 className="text-sm font-semibold text-gray-900">Access Overview</h3>
         <p className="text-xs text-gray-500 mt-1">Permission statistics and insights</p>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto seamless-scroll p-4 space-y-4">
+      {/* Scrollable Content - satu scroll container dengan nested-scroll-touch-chain */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4 space-y-4">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-3">
           <div className="p-3 bg-blue-50 rounded-lg">

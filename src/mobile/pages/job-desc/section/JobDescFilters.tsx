@@ -1,6 +1,17 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Input } from "@/features/ui/input";
 import { Label } from "@/features/ui/label";
 import { Switch } from "@/features/ui/switch";
+import { Button } from "@/features/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose,
+} from "@/mobile/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { DateRangeValue, JobDescEmployeeSummary, JobDescTimeframe } from "./types";
@@ -44,6 +55,14 @@ export const JobDescFilters = ({
   onEmployeeChange,
 }: JobDescFiltersProps) => {
   const { t } = useAppTranslation();
+  const [employeeDrawerOpen, setEmployeeDrawerOpen] = useState(false);
+
+  const selectedEmployee = selectedEmployeeId
+    ? employees.find((e) => e.employeeId === selectedEmployeeId)
+    : null;
+  const employeeLabel = selectedEmployee
+    ? selectedEmployee.name
+    : t("dailyTask.jobDesc.filters.employeePlaceholder", "All employees");
 
   return (
     <div className="space-y-3">
@@ -78,13 +97,18 @@ export const JobDescFilters = ({
             </Label>
             <Input
               type="date"
-              value={customRange.start ? customRange.start.toISOString().slice(0, 10) : ""}
-              onChange={(event) =>
+              value={
+                customRange.start
+                  ? `${customRange.start.getFullYear()}-${String(customRange.start.getMonth() + 1).padStart(2, "0")}-${String(customRange.start.getDate()).padStart(2, "0")}`
+                  : ""
+              }
+              onChange={(event) => {
+                const value = event.target.value;
                 onCustomRangeChange({
                   ...customRange,
-                  start: event.target.value ? new Date(event.target.value) : null,
-                })
-              }
+                  start: value ? new Date(value + "T00:00:00") : null,
+                });
+              }}
               className="h-8 text-xs"
             />
           </div>
@@ -94,13 +118,18 @@ export const JobDescFilters = ({
             </Label>
             <Input
               type="date"
-              value={customRange.end ? customRange.end.toISOString().slice(0, 10) : ""}
-              onChange={(event) =>
+              value={
+                customRange.end
+                  ? `${customRange.end.getFullYear()}-${String(customRange.end.getMonth() + 1).padStart(2, "0")}-${String(customRange.end.getDate()).padStart(2, "0")}`
+                  : ""
+              }
+              onChange={(event) => {
+                const value = event.target.value;
                 onCustomRangeChange({
                   ...customRange,
-                  end: event.target.value ? new Date(event.target.value) : null,
-                })
-              }
+                  end: value ? new Date(value + "T00:00:00") : null,
+                });
+              }}
               className="h-8 text-xs"
             />
           </div>
@@ -117,20 +146,68 @@ export const JobDescFilters = ({
           )}
           className="h-8 text-xs"
         />
-        <select
-          value={selectedEmployeeId ?? ""}
-          onChange={(event) => onEmployeeChange(event.target.value || null)}
-          className="h-8 text-xs border rounded px-2 text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="">
-            {t("dailyTask.jobDesc.filters.employeePlaceholder", "Semua karyawan")}
-          </option>
-          {employees.map((employee) => (
-            <option key={employee.employeeId} value={employee.employeeId}>
-              {employee.name}
-            </option>
-          ))}
-        </select>
+        <Drawer open={employeeDrawerOpen} onOpenChange={setEmployeeDrawerOpen}>
+          <DrawerTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-8 text-xs border-input justify-between gap-1.5 text-left px-2 w-full"
+            >
+              <span className="truncate min-w-0">{employeeLabel}</span>
+              <ChevronDown className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+            </Button>
+          </DrawerTrigger>
+          <DrawerContent className="max-h-[85dvh] flex flex-col">
+            <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+              <DrawerTitle className="text-lg font-semibold">
+                {t("dailyTask.jobDesc.filters.employeePlaceholder", "All employees")}
+              </DrawerTitle>
+            </DrawerHeader>
+            <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4">
+              <div className="flex flex-col gap-2 w-full max-h-[50vh] overflow-y-auto overflow-x-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEmployeeChange(null);
+                    setEmployeeDrawerOpen(false);
+                  }}
+                  className={cn(
+                    "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors break-words whitespace-normal",
+                    !selectedEmployeeId
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-input hover:bg-muted"
+                  )}
+                >
+                  {t("dailyTask.jobDesc.filters.employeePlaceholder", "All employees")}
+                </button>
+                {employees.map((employee) => (
+                  <button
+                    key={employee.employeeId}
+                    type="button"
+                    onClick={() => {
+                      onEmployeeChange(employee.employeeId);
+                      setEmployeeDrawerOpen(false);
+                    }}
+                    className={cn(
+                      "w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors break-words whitespace-normal",
+                      selectedEmployeeId === employee.employeeId
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-input hover:bg-muted"
+                    )}
+                  >
+                    {employee.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+              <DrawerClose asChild>
+                <Button className="w-full" size="sm">
+                  {t("dailyTaskReport.filters.done", "Done")}
+                </Button>
+              </DrawerClose>
+            </div>
+          </DrawerContent>
+        </Drawer>
       </div>
 
       <div className="flex items-center justify-between rounded-lg border px-3 py-2">

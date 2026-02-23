@@ -91,7 +91,7 @@ export const SectionQuickMenu = ({
           {t('quickMenu.title', 'Quick Menu - Online Attendance')}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 flex-1 overflow-y-auto seamless-scroll scrollbar-hide">
+      <CardContent className="space-y-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain scrollbar-hide">
         <SimpleAttendanceCamera 
           onAttendanceUpdate={refreshStatus} 
           onCameraStateChange={setIsCameraActive}

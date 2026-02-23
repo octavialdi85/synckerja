@@ -4,9 +4,18 @@ import { SidebarProvider, SidebarTrigger } from '@/mobile/components/ui/sidebar'
 import { AppSidebar } from '@/mobile/components/AppSidebar';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useVisualViewport } from '@/mobile/hooks/useVisualViewport';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/features/ui/dialog';
-import { Search } from 'lucide-react';
+import { Button } from '@/features/ui/button';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerClose,
+} from '@/mobile/components/ui/drawer';
+import { Search, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { LiveChatConversation } from '@/features/5-3-whatsapp/types';
 import type { WhatsAppAccount } from '@/features/5-3-whatsapp/types';
 import { MobileConversationList } from './components/MobileConversationList';
@@ -53,7 +62,14 @@ export function LiveChatListView({
   const { t } = useAppTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchPopupOpen, setSearchPopupOpen] = useState(false);
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
+  const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
+
+  const accountLabel = accountFilter
+    ? accountOptions.find((o) => o.value === accountFilter)?.label ?? t('whatsappInbox.filterAllAccounts', 'All accounts')
+    : t('whatsappInbox.filterAllAccounts', 'All accounts');
+  const statusLabel = statusOptions.find((o) => o.value === statusFilter)?.label ?? t('whatsappInbox.allStatus', 'All Status');
   const isKeyboardLikelyOpen = typeof window !== 'undefined' && viewportHeight > 0 && viewportHeight < window.innerHeight * 0.85;
 
   const waAccountsForHint = waAccounts.map((a) => ({
@@ -80,39 +96,104 @@ export function LiveChatListView({
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden text-white hover:bg-slate-700 hover:text-white" />
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-base font-semibold text-white">Live Chat</h1>
+                  <h1 className="text-base font-semibold text-white">{t('sidebar.operations.livechat.title', 'Live Chat')}</h1>
                   <p className="text-xs text-slate-300 truncate">{t('sidebar.operations.livechat.description', 'Inbox dan percakapan WhatsApp')}</p>
                 </div>
               </div>
 
               <div className="flex w-full items-center gap-1.5 min-w-0">
-                <Select
-                  value={accountFilter || 'all'}
-                  onValueChange={(v) => setAccountFilter((v === 'all' ? '' : v) as AccountFilterValue)}
-                >
-                  <SelectTrigger className="h-8 flex-1 min-w-0 px-2 text-sm font-medium border border-input bg-background" aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}>
-                    <SelectValue placeholder={t('whatsappInbox.filterByAccount', 'Filter menurut akun')} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
-                    {accountOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 flex-1 min-w-0 px-2 text-sm font-medium border border-input bg-background" aria-label={t('whatsappInbox.filterByStatus', 'Filter menurut status')}>
-                    <SelectValue placeholder={t('whatsappInbox.status', 'Status')} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border shadow-md z-50 max-h-[min(60vh,400px)]">
-                    {statusOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Drawer open={accountDrawerOpen} onOpenChange={setAccountDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-8 flex-1 min-w-0 justify-between gap-1.5 text-left px-2 text-sm font-medium border border-input bg-background text-foreground hover:bg-muted/50"
+                      aria-label={t('whatsappInbox.filterByAccount', 'Filter menurut akun')}
+                    >
+                      <span className="truncate min-w-0">{accountLabel}</span>
+                      <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent className="max-h-[85dvh] flex flex-col bg-background">
+                    <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                      <DrawerTitle className="text-lg font-semibold text-foreground">
+                        {t('whatsappInbox.filterAllAccounts', 'All accounts')}
+                      </DrawerTitle>
+                    </DrawerHeader>
+                    <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4">
+                      <div className="flex flex-col gap-2 w-full max-h-[50vh] overflow-y-auto overflow-x-hidden">
+                        {accountOptions.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setAccountFilter((opt.value === 'all' ? '' : opt.value) as AccountFilterValue);
+                              setAccountDrawerOpen(false);
+                            }}
+                            className={cn(
+                              'w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors break-words whitespace-normal',
+                              (opt.value === 'all' ? !accountFilter : accountFilter === opt.value)
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background border-input hover:bg-muted'
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+                      <DrawerClose asChild>
+                        <Button className="w-full" size="sm">{t('dailyTaskReport.filters.done', 'Done')}</Button>
+                      </DrawerClose>
+                    </div>
+                  </DrawerContent>
+                </Drawer>
+                <Drawer open={statusDrawerOpen} onOpenChange={setStatusDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-8 flex-1 min-w-0 justify-between gap-1.5 text-left px-2 text-sm font-medium border border-input bg-background text-foreground hover:bg-muted/50"
+                      aria-label={t('whatsappInbox.filterByStatus', 'Filter menurut status')}
+                    >
+                      <span className="truncate min-w-0">{statusLabel}</span>
+                      <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent className="max-h-[85dvh] flex flex-col bg-background">
+                    <DrawerHeader className="text-left pb-2 safe-area-top px-4 pt-4">
+                      <DrawerTitle className="text-lg font-semibold text-foreground">
+                        {t('whatsappInbox.status', 'Status')}
+                      </DrawerTitle>
+                    </DrawerHeader>
+                    <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 px-4 pb-4">
+                      <div className="flex flex-col gap-2 w-full max-h-[50vh] overflow-y-auto overflow-x-hidden">
+                        {statusOptions.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setStatusFilter(opt.value);
+                              setStatusDrawerOpen(false);
+                            }}
+                            className={cn(
+                              'w-full px-3 py-2.5 rounded-md text-sm border text-left transition-colors break-words whitespace-normal',
+                              statusFilter === opt.value
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background border-input hover:bg-muted'
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 border-t bg-muted/30 px-4 pt-3 pb-3">
+                      <DrawerClose asChild>
+                        <Button className="w-full" size="sm">{t('dailyTaskReport.filters.done', 'Done')}</Button>
+                      </DrawerClose>
+                    </div>
+                  </DrawerContent>
+                </Drawer>
                 <button
                   type="button"
                   onClick={() => setSearchPopupOpen(true)}

@@ -330,10 +330,10 @@ const ContentCalendarContent: React.FC = () => {
                   />
                 </div>
                 
-                {/* Main Content Area - Grid Layout */}
-                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+                {/* Main Content Area - Grid Layout (scroll-chaining: satu scroll per panel) */}
+                <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 overflow-hidden">
                   {/* Left Column - Calendar View - 9 columns */}
-                  <div className="col-span-9 flex flex-col min-h-0">
+                  <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
                     {/* Calendar Controls Section */}
                     <div className="flex-shrink-0 mb-1">
                       <div className="bg-white border rounded-md p-2">
@@ -355,9 +355,9 @@ const ContentCalendarContent: React.FC = () => {
                     
                     {/* Calendar Section */}
                     <div className="flex-1 min-h-0">
-                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                        {/* Calendar Grid with Scroll */}
-                        <div className="flex-1 overflow-y-auto seamless-scroll min-h-0 p-4">
+                      <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col min-h-0 overflow-hidden">
+                        {/* Calendar Grid - satu scroll container per panel (rule 3.1): overflow-y-auto, seamless-scroll, nested-scroll-touch-chain, min-h-0 */}
+                        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
                           <CalendarGrid
                             calendarDays={calendarDays}
                             getDayInfo={getDayInfo}
@@ -383,15 +383,17 @@ const ContentCalendarContent: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* Right Column - Overview Sidebar - 3 columns */}
-                  <div className="col-span-3 h-full">
-                    <ContentCalendarOverview 
+                  {/* Right Column - Overview Sidebar - 3 columns (scroll-chaining: tinggi tetap, scroll di dalam tab) */}
+                  <div className="col-span-3 flex flex-col min-h-0 h-full overflow-hidden">
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <ContentCalendarOverview 
                       monthlyStats={monthlyStats}
                       plansByDate={plansByDate}
                       contentPlans={filteredContentPlans}
                       currentDate={currentDate}
                       serviceFilter={selectedService}
                     />
+                    </div>
                   </div>
                 </div>
             </div>

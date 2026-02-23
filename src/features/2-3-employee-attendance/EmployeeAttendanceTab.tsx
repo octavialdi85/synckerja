@@ -4,7 +4,6 @@ import { ResponsiveAttendanceTable } from './ResponsiveAttendanceTable';
 import AttendanceCalendarView from './AttendanceCalendarView';
 import { EnhancedAttendanceSidebar } from './EnhancedAttendanceSidebar';
 import { useKeyboardNavigation } from '@/features/2-3-employee-attendance/hooks/useKeyboardNavigation';
-import { ScrollArea } from '@/features/ui/scroll-area';
 import { AttendanceFilters, createDefaultFilterState, type FilterState } from './AttendanceFilters';
 
 interface EmployeeAttendanceTabProps {
@@ -56,48 +55,46 @@ const EmployeeAttendanceTab = ({ currentView, onViewChange }: EmployeeAttendance
   });
 
   return (
-    <div className="h-full max-h-[calc(100vh-120px)]">
-      <div className="h-full overflow-y-auto seamless-scroll">
-        <div className="grid grid-cols-12 gap-2 min-h-[calc(100vh-120px)]">
-          {/* Main Content */}
-          <div className="col-span-12 xl:col-span-9 flex flex-col min-h-0" ref={tableRef}>
-            <div className="flex-1 min-h-0 flex flex-col gap-2">
-              <AttendanceFilters
-                filters={filters}
-                setFilters={setFilters}
-                currentView={currentView}
-                onViewChange={onViewChange}
-              />
-              <div className="flex-1 min-h-0">
-                <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-                  <div className="flex-1 min-h-0 flex flex-col">
-                    {currentView === 'table' ? (
-                    <ResponsiveAttendanceTable 
-                        searchTerm={filters.searchTerm}
+    <div className="h-full max-h-[calc(100vh-120px)] min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 grid grid-cols-12 gap-2">
+        {/* Main Content */}
+        <div className="col-span-12 xl:col-span-9 flex flex-col min-h-0" ref={tableRef}>
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <AttendanceFilters
+              filters={filters}
+              setFilters={setFilters}
+              currentView={currentView}
+              onViewChange={onViewChange}
+            />
+            <div className="flex-1 min-h-0">
+              <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {currentView === 'table' ? (
+                    <ResponsiveAttendanceTable
+                      searchTerm={filters.searchTerm}
                       status={filters.status}
                       dateRange={filters.dateRange}
-                      />
-                    ) : (
+                    />
+                  ) : (
                     <AttendanceCalendarView
                       searchTerm={filters.searchTerm}
                       status={filters.status}
                       dateRange={filters.dateRange}
                     />
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Enhanced Side Panel */}
-          <div className="col-span-12 xl:col-span-3 flex flex-col min-h-0">
-            <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col">
-              <ScrollArea className="flex-1 px-6 py-4 seamless-scroll">
-                <EnhancedAttendanceSidebar 
-                  selectedRows={selectedRows}
-                />
-              </ScrollArea>
+        {/* Sidebar kanan - satu scroll container per panel */}
+        <div className="col-span-12 xl:col-span-3 flex flex-col min-h-0">
+          <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-120px)]">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="h-full px-6 py-4 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0">
+                <EnhancedAttendanceSidebar selectedRows={selectedRows} />
+              </div>
             </div>
           </div>
         </div>

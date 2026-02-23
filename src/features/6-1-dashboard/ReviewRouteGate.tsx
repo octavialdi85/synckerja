@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/config/logger';
 import { LoadingDots } from '@/components/LoadingDots';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import PublicContentReviewPage from './pages/PublicContentReviewPage';
 
@@ -11,6 +13,7 @@ import PublicContentReviewPage from './pages/PublicContentReviewPage';
  * full AuthContext initialization (getSession + getUser + retries).
  */
 export const ReviewRouteGate: React.FC = () => {
+  const { t } = useAppTranslation();
   const { token } = useParams<{ token: string }>();
   const [checking, setChecking] = useState(true);
   const [hasSession, setHasSession] = useState<boolean | null>(null);
@@ -34,8 +37,11 @@ export const ReviewRouteGate: React.FC = () => {
         } else if (!cancelled) {
           setHasSession(false);
         }
-      } catch {
-        if (!cancelled) setHasSession(false);
+      } catch (err) {
+        if (!cancelled) {
+          logger.error('ReviewRouteGate getSession', err);
+          setHasSession(false);
+        }
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -48,7 +54,7 @@ export const ReviewRouteGate: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
           <LoadingDots size="lg" />
-          <p className="text-sm text-gray-600">Loading...</p>
+          <p className="text-sm text-gray-600">{t('publicReview.loading', 'Loading...')}</p>
         </div>
       </div>
     );

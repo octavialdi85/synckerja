@@ -17,7 +17,19 @@ interface TodayScheduleProps {
 export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
   const { t } = useAppTranslation();
 
-  const isCurrentlyWorkTime = () => {
+  /** Returns true only when today is a working day and current time is within work hours. */
+  const isCurrentlyWorkTime = (): boolean => {
+    if (schedule.isHoliday || schedule.isWorkingDay === false) return false;
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const [startHour, startMin] = schedule.startTime.split(":").map(Number);
+    const [endHour, endMin] = schedule.endTime.split(":").map(Number);
+    const startTime = startHour * 60 + startMin;
+    const endTime = endHour * 60 + endMin;
+    return currentTime >= startTime && currentTime <= endTime;
+  };
+
+  const getTimeStatus = () => {
     if (schedule.isHoliday) {
       return {
         status: "holiday",
@@ -26,7 +38,6 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
           : t("mobileHome.todayOff", "Hari ini libur"),
       };
     }
-
     if (schedule.isWorkingDay === false) {
       return {
         status: "off",
@@ -34,17 +45,6 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
       };
     }
 
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-    const [startHour, startMin] = schedule.startTime.split(":").map(Number);
-    const [endHour, endMin] = schedule.endTime.split(":").map(Number);
-    const startTime = startHour * 60 + startMin;
-    const endTime = endHour * 60 + endMin;
-
-    return currentTime >= startTime && currentTime <= endTime;
-  };
-
-  const getTimeStatus = () => {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     const [startHour, startMin] = schedule.startTime.split(":").map(Number);
@@ -59,17 +59,17 @@ export const TodaySchedule = ({ schedule }: TodayScheduleProps) => {
         status: "upcoming",
         message: t("mobileHome.workStartedIn", "Jam kerja dimulai dalam {{duration}}", { duration }),
       };
-    } else if (isCurrentlyWorkTime()) {
+    }
+    if (isCurrentlyWorkTime()) {
       return {
         status: "active",
         message: t("mobileHome.currentlyWorking", "Sedang dalam jam kerja"),
       };
-    } else {
-      return {
-        status: "completed",
-        message: t("mobileHome.workEnded", "Jam kerja telah selesai"),
-      };
     }
+    return {
+      status: "completed",
+      message: t("mobileHome.workEnded", "Jam kerja telah selesai"),
+    };
   };
 
   const timeStatus = getTimeStatus();

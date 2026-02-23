@@ -11,6 +11,7 @@ import { Skeleton } from '@/mobile/components/ui/skeleton';
 import { Badge } from '@/features/ui/badge';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { logger } from '@/config/logger';
 
 interface AddSolutionAsDailyTaskModalProps {
   isOpen: boolean;
@@ -154,7 +155,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         setObjectiveContext(context);
         setIsAutoSelected(true);
       } catch (error) {
-        console.error('Error checking existing task:', error);
+        logger.error('Error checking existing task:', error);
         // Silent fail - user can still select manually
       } finally {
         setIsCheckingExistingTask(false);
@@ -176,7 +177,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
       if (error) throw error;
       setMeetingPoint(data);
     } catch (error) {
-      console.error('Error fetching meeting point:', error);
+      logger.error('Error fetching meeting point:', error);
       toast({
         title: 'Error',
         description: 'Failed to load meeting point data',
@@ -235,7 +236,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         .maybeSingle();
 
       if (checkTaskError) {
-        console.error('Error checking existing task:', checkTaskError);
+        logger.error('Error checking existing task:', checkTaskError);
         throw checkTaskError;
       }
 
@@ -255,7 +256,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
           .maybeSingle();
 
         if (checkStepError) {
-          console.error('Error checking existing step:', checkStepError);
+          logger.error('Error checking existing step:', checkStepError);
           throw checkStepError;
         }
 
@@ -299,7 +300,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
         .limit(1);
 
       if (stepsQueryError) {
-        console.error('Error fetching existing steps:', stepsQueryError);
+        logger.error('Error fetching existing steps:', stepsQueryError);
         throw stepsQueryError;
       }
 
@@ -331,7 +332,7 @@ export const AddSolutionAsDailyTaskModal: React.FC<AddSolutionAsDailyTaskModalPr
       // Close modal
       onClose();
     } catch (error) {
-      console.error('Error adding solution as daily task:', error);
+      logger.error('Error adding solution as daily task:', error);
       toast({
         title: 'Error',
         description: 'Failed to add solution as daily task',

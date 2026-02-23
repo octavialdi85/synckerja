@@ -1,8 +1,10 @@
 import React from 'react';
 import { useDailyTaskReport } from '@/features/8-2-DailyTaskReport/context/ReportContext';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const OverviewCards = () => {
   const { filtered } = useDailyTaskReport();
+  const { t } = useAppTranslation();
   const total = filtered.length;
   const completed = filtered.filter(p => p.isCompleted).length;
   const withDue = filtered.filter(p => p.dueDate).length;
@@ -23,11 +25,16 @@ export const OverviewCards = () => {
   );
 
   return (
-    <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-2 p-2 md:p-0">
-      <Card title="Total Assignments" value={total} color="border-gray-200" />
-      <Card title="Completed" value={completed} color="border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50" />
-      <Card title="On Time" value={ontime} color="border-green-100 bg-gradient-to-br from-green-50 to-emerald-50" />
-      <Card title="Late" value={late} color="border-red-100 bg-gradient-to-br from-red-50 to-orange-50" />
+    <div className="w-full">
+      <p className="text-[10px] text-gray-500 mb-1.5 p-2 md:p-0" title={t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}>
+        {t('dailyTaskReport.overview.dataDisclaimer', 'Completion and blocker data may be temporarily limited.')}
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-2 p-2 md:p-0">
+      <Card title={t('dailyTaskReport.overview.totalAssignments', 'Total Assignments')} value={total} color="border-gray-200" />
+      <Card title={t('dailyTaskReport.overview.completed', 'Completed')} value={completed} color="border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50" />
+      <Card title={t('dailyTaskReport.overview.onTime', 'On Time')} value={ontime} color="border-green-100 bg-gradient-to-br from-green-50 to-emerald-50" />
+      <Card title={t('dailyTaskReport.overview.late', 'Late')} value={late} color="border-red-100 bg-gradient-to-br from-red-50 to-orange-50" />
+      </div>
     </div>
   );
 };

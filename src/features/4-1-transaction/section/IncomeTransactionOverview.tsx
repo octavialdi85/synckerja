@@ -111,9 +111,10 @@ const OverviewContent = ({ transactions = [] }: { transactions?: any[] }) => {
 };
 
 export const IncomeTransactionOverview = ({ transactions = [] }: IncomeTransactionOverviewProps) => {
-  const [activeTab, setActiveTab] = useState('overview');  return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col h-full">
-      <TabsList className="grid w-full grid-cols-2 h-9 mb-4 bg-gray-100">
+  const [activeTab, setActiveTab] = useState('overview');
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col min-h-0 flex-1">
+      <TabsList className="grid w-full grid-cols-2 h-9 mb-4 bg-gray-100 flex-shrink-0">
         <TabsTrigger 
           value="overview" 
           className="text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
@@ -128,10 +129,11 @@ export const IncomeTransactionOverview = ({ transactions = [] }: IncomeTransacti
           Bank Accounts
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="overview" className="mt-0 flex-1 min-h-0 overflow-y-auto seamless-scroll">
+      {/* Tab content dapat sisa tinggi; Overview scroll di sidebar, Bank Accounts scroll di tabel */}
+      <TabsContent value="overview" className="mt-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain focus-visible:outline-none data-[state=inactive]:hidden">
         <OverviewContent transactions={transactions} />
       </TabsContent>
-      <TabsContent value="bank-accounts" className="mt-0 flex-1 min-h-0 overflow-y-auto seamless-scroll">
+      <TabsContent value="bank-accounts" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden focus-visible:outline-none data-[state=inactive]:hidden">
         <BankAccountManagement />
       </TabsContent>
     </Tabs>

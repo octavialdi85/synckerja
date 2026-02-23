@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Zap,
   Users,
@@ -39,6 +40,14 @@ import { Badge } from "@/mobile/components/ui/badge";
 import { Slider } from "@/mobile/components/ui/slider";
 import { Switch } from "@/mobile/components/ui/switch";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/mobile/components/ui/dialog";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { cn } from "@/lib/utils";
 import { MobileUpgradeConfirmationModal } from "./modal/MobileUpgradeConfirmationModal";
 import { MobileUpgradeOptionsModal } from "./modal/MobileUpgradeOptionsModal";
@@ -50,6 +59,7 @@ interface PlanMeta {
   maxMembers: number;
   isCurrent: boolean;
   isTrial: boolean;
+  isPopular: boolean;
 }
 
 const getEmployeeLimitFromFeatures = (features: string[]) => {
@@ -83,7 +93,7 @@ const calculatePlanPrice = (
   members: number,
   billingCycle: BillingCycle,
 ) => {
-  const base = plan.base_price_per_member * members;
+  const base = (plan.base_price_per_member ?? 0) * members;
   if (billingCycle === "yearly") {
     const discount = plan.annual_discount_percentage || 0;
     return base * 12 * (1 - discount / 100);
@@ -137,8 +147,10 @@ const canChangePlan = (
 };
 
 const MobilePendingChangesCard = memo(() => {
+  const { t } = useAppTranslation();
   const { data: pendingChanges, isLoading } = usePendingSubscriptionChanges();
   const cancelScheduledChange = useCancelScheduledChange();
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -155,13 +167,15 @@ const MobilePendingChangesCard = memo(() => {
 
   if (!pendingChanges || pendingChanges.length === 0) return null;
 
-  const handleCancel = async (changeId: string) => {
-    const confirmed = window.confirm("Batalkan perubahan terjadwal ini?");
-    if (!confirmed) return;
+  const handleCancelClick = (changeId: string) => {
+    setCancelTargetId(changeId);
+  };
 
+  const handleCancelConfirm = async () => {
+    if (!cancelTargetId) return;
     try {
-      await cancelScheduledChange.mutateAsync(changeId);
-      toast.success("Perubahan berhasil dibatalkan.");
+      await cancelScheduledChange.mutateAsync(cancelTargetId);
+      setCancelTargetId(null);
     } catch (error) {
       console.error(error);
       toast.error("Gagal membatalkan perubahan.");
@@ -169,6 +183,7 @@ const MobilePendingChangesCard = memo(() => {
   };
 
   return (
+    <>
     <Card className="border border-blue-200 bg-blue-50/60">
       <CardHeader className="space-y-2">
         <div className="flex items-center justify-between">
@@ -214,7 +229,7 @@ const MobilePendingChangesCard = memo(() => {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 text-red-600 hover:bg-red-50"
-                onClick={() => handleCancel(change.id)}
+                onClick={() => handleCancelClick(change.id)}
                 disabled={cancelScheduledChange.isPending}
               >
                 <span className="sr-only">Batalkan</span>
@@ -248,6 +263,26 @@ const MobilePendingChangesCard = memo(() => {
         </p>
       </CardContent>
     </Card>
+
+    <Dialog open={!!cancelTargetId} onOpenChange={(open) => !open && setCancelTargetId(null)}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Batalkan perubahan</DialogTitle>
+          <DialogDescription>
+            {t("subscription.plans.pendingChanges.cancelConfirm", "Apakah Anda yakin ingin membatalkan perubahan terjadwal ini?")}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onClick={() => setCancelTargetId(null)} disabled={cancelScheduledChange.isPending}>
+            Batal
+          </Button>
+          <Button size="sm" onClick={handleCancelConfirm} disabled={cancelScheduledChange.isPending}>
+            {cancelScheduledChange.isPending ? "Memproses..." : "Konfirmasi"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 });
 
@@ -274,6 +309,8 @@ const PlanCard = memo(
     isComingSoon,
     onMemberCountChange,
     onBillingCycleChange,
+    isEmployeeCountError,
+    t,
   }: {
     plan: SubscriptionPlan;
     totalPrice: number;
@@ -294,6 +331,8 @@ const PlanCard = memo(
     isComingSoon: boolean;
     onMemberCountChange: (planId: string, count: number) => void;
     onBillingCycleChange: (planId: string, checked: boolean) => void;
+    isEmployeeCountError?: boolean;
+    t: (key: string, fallback: string, variables?: Record<string, string | number>) => string;
   }) => {
     const IconComponent = getPlanIcon(plan.name);
     return (
@@ -331,14 +370,14 @@ const PlanCard = memo(
             </div>
             <div className="flex flex-col items-end gap-1">
               {isCurrent && (
-                <Badge className="bg-green-500 text-xs text-white">Plan Aktif</Badge>
+                <Badge className="bg-green-500 text-xs text-white">{t("subscription.plans.badge.current", "Plan Aktif")}</Badge>
               )}
               {!isCurrent && isPopular && !isComingSoon && (
-                <Badge className="bg-blue-500 text-xs text-white">Paling Populer</Badge>
+                <Badge className="bg-blue-500 text-xs text-white">{t("subscription.plans.badge.popular", "Paling Populer")}</Badge>
               )}
               {isComingSoon && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Segera Hadir
+                  {t("subscription.plans.button.comingSoon", "Segera Hadir")}
                 </Badge>
               )}
             </div>
@@ -377,7 +416,7 @@ const PlanCard = memo(
           <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                <span>Jumlah member</span>
+                <span>{t("subscription.plans.memberCount.label", "Jumlah member: {{count}}", { count: memberCount })}</span>
                 <span className="text-sm font-semibold text-foreground">{memberCount} anggota</span>
               </div>
               <Slider
@@ -417,8 +456,8 @@ const PlanCard = memo(
               Fitur yang disertakan
             </p>
             <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-              {plan.features?.map((feature, index) => (
-                <div key={index} className="flex items-start gap-2 text-sm text-foreground">
+              {plan.features?.map((feature) => (
+                <div key={`${plan.id}-${String(feature).slice(0, 40)}`} className="flex items-start gap-2 text-sm text-foreground">
                   <Check className="mt-0.5 h-4 w-4 text-green-500" />
                   <span>{feature}</span>
                 </div>
@@ -445,7 +484,7 @@ const PlanCard = memo(
 
           {isCurrent && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-700">
-              Limit member saat ini {currentMemberCount} • {currentEmployeeCount} karyawan aktif
+              Limit member saat ini {currentMemberCount} • {isEmployeeCountError ? "Jumlah karyawan tidak tersedia" : `${currentEmployeeCount} karyawan aktif`}
             </div>
           )}
 
@@ -454,7 +493,7 @@ const PlanCard = memo(
             onClick={onSelect}
             disabled={disabled || isComingSoon}
           >
-            {isComingSoon ? "Segera Hadir" : buttonText}
+            {isComingSoon ? t("subscription.plans.button.comingSoon", "Segera Hadir") : buttonText}
           </Button>
           {disabled && !membersWithinLimit && (
             <p className="text-center text-xs text-destructive">
@@ -475,10 +514,14 @@ const PlanCard = memo(
 PlanCard.displayName = "PlanCard";
 
 const HRISSubscriptionPlansTab = () => {
+  const navigate = useNavigate();
+  const { t } = useAppTranslation();
   const { data: plans, isLoading, error } = useSubscriptionPlans();
   const { subscriptionStatus, subscriptionPlans } = useOptimizedSubscription();
-  const { data: currentEmployeeCount = 0 } = useEmployeeCount();
-  const { initiateMidtransPayment } = useMidtransPayment();
+  const { data: currentEmployeeCount = 0, isError: isEmployeeCountError } = useEmployeeCount();
+  const { initiateMidtransPayment, isLoading: isPaymentLoading } = useMidtransPayment({
+    onPaymentClose: (path) => navigate(path),
+  });
   const proRateCalculation = useProRateCalculation();
   const schedulePlanChange = useSchedulePlanChange();
 
@@ -535,7 +578,8 @@ const HRISSubscriptionPlansTab = () => {
       const isCurrent =
         subscriptionStatus?.plan_name &&
         subscriptionStatus.plan_name.toLowerCase() === plan.name.toLowerCase();
-      return { plan, maxMembers, isCurrent, isTrial };
+      const isPopular = plan.name.toLowerCase().includes("professional");
+      return { plan, maxMembers, isCurrent, isTrial, isPopular };
     });
   }, [plans, subscriptionStatus]);
 
@@ -582,7 +626,9 @@ const HRISSubscriptionPlansTab = () => {
           // Set scheduled_date ke hari ini karena expired, perubahan harus langsung
           calculation.calculation.scheduled_date = new Date().toISOString();
           calculation.calculation.remaining_days = 0;
-          console.log('⚠️ Subscription expired - forcing immediate charge:', calculation.calculation);
+          if (import.meta.env.DEV) {
+            console.debug('Subscription expired - forcing immediate charge:', calculation.calculation);
+          }
         }
 
         setProRatedData(calculation);
@@ -599,7 +645,6 @@ const HRISSubscriptionPlansTab = () => {
       } catch (err) {
         console.error(err);
         setProRatedData(null);
-        setConfirmationOpen(true);
       }
     },
     [proRateCalculation, subscriptionPlans, subscriptionStatus],
@@ -612,7 +657,7 @@ const HRISSubscriptionPlansTab = () => {
       // Use prorate_amount if it exists and > 0, otherwise use full price
       const prorateAmount = proRatedData?.calculation?.prorate_amount;
       const fullPrice = isYearly
-        ? getYearlyPriceForMembers(basePrice, selectedMemberCount)
+        ? getYearlyPriceForMembers(basePrice, selectedMemberCount, selectedPlan.annual_discount_percentage)
         : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
       const amount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
@@ -682,7 +727,6 @@ const HRISSubscriptionPlansTab = () => {
       setOptionsOpen(false);
       setSelectedPlan(null);
       setProRatedData(null);
-      toast.success("Perubahan dijadwalkan.");
     } catch (error) {
       console.error(error);
       toast.error("Gagal menjadwalkan perubahan.");
@@ -772,9 +816,11 @@ const HRISSubscriptionPlansTab = () => {
                 currentMemberCount={subscriptionStatus?.member_count || 0}
                 currentEmployeeCount={currentEmployeeCount}
                 subscriptionStatus={subscriptionStatus}
+                isEmployeeCountError={isEmployeeCountError}
                 isComingSoon={isComingSoon}
                 onMemberCountChange={handleMemberCountChange}
                 onBillingCycleChange={handleBillingCycleToggle}
+                t={t}
               />
             );
           })}
@@ -807,6 +853,7 @@ const HRISSubscriptionPlansTab = () => {
           currentMemberCount={subscriptionStatus.member_count || 0}
           newMemberCount={selectedMemberCount}
           proRatedData={proRatedData}
+          isLoading={isPaymentLoading}
         />
       )}
 

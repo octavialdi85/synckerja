@@ -8,6 +8,7 @@ import {
   rejectCompletion,
   type CompletionApprovalRow,
 } from '../services/completionApprovalService';
+import { supabase } from '@/integrations/supabase/client';
 
 /** Delay (ms) before fetching approval data so main task list loads first; keeps page load fast. */
 const DEFER_APPROVAL_FETCH_MS = 800;
@@ -20,12 +21,13 @@ function getRejectionKeyForRow(row: CompletionApprovalRow): string {
   return '';
 }
 
-/** Exclude steps whose linked social_media_plan is already Prod Approved on dashboard (no need to show in pending). */
+/** Exclude steps whose linked social_media_plan is already Prod Approved, or has Request Revision (approve/reject happens on /review). */
 function filterPendingExcludingProdApproved(rows: CompletionApprovalRow[]): CompletionApprovalRow[] {
   return rows.filter((row) => {
     if (row.entity_type !== 'step') return true;
     if (!row.task_steps?.social_media_plan_id) return true;
     if (row.task_steps?.social_media_plans?.production_approved === true) return false;
+    if (row.task_steps?.social_media_plans?.production_status === 'Request Revision') return false;
     return true;
   });
 }
@@ -91,6 +93,71 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
       clearTimeout(t);
     };
   }, [organizationId, currentEmployee?.id, refresh]);
+
+  // Realtime: sync when approve/reject on another device or when /review updates social_media_plans
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!organizationId || !currentEmployee?.id) return;
+
+    const channelNameCA = `completion_approvals_assigner_${currentEmployee.id}_${Date.now()}`;
+    const channelCA = supabase
+      .channel(channelNameCA)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'completion_approvals',
+          filter: `assigner_employee_id=eq.${currentEmployee.id}`,
+        },
+        () => {
+          refreshRef.current();
+        }
+      )
+      .subscribe(() => {});
+
+    const channelNameSMP = `social_media_plans_updates_${Date.now()}`;
+    const channelSMP = supabase
+      .channel(channelNameSMP)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'social_media_plans',
+        },
+        () => {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => {
+            debounceRef.current = null;
+            refreshRef.current();
+          }, 1500);
+        }
+      )
+      .subscribe(() => {});
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      supabase.removeChannel(channelCA);
+      supabase.removeChannel(channelSMP);
+    };
+  }, [organizationId, currentEmployee?.id]);
+
+  // Refetch when user returns to tab (fallback if realtime missed)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [refresh]);
 
   const approve = useCallback(
     async (approvalId: string) => {

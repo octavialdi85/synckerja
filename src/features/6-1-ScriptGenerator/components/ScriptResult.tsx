@@ -70,7 +70,8 @@ export const ScriptResult: React.FC<ScriptResultProps> = ({
         </div>
       </div>
       
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto seamless-scroll">
+      {/* Rule 3.4: satu scroll per panel — scroll hanya di container sidebar, tidak nested di sini */}
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
         <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono leading-relaxed">
           {script}
         </pre>

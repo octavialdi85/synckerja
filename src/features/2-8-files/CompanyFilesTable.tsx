@@ -64,7 +64,7 @@ export const CompanyFilesTable = ({ onUploadFile }: CompanyFilesTableProps) => {
     <>
       <div className="flex flex-col h-full">
         {/* Scrollable Table Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400" style={{ maxHeight: 'calc(100vh - 280px)', scrollBehavior: 'smooth' }}>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain">
           <div className="border rounded-t-lg overflow-hidden">
             <Table>
               <CompanyFilesTableHeader />

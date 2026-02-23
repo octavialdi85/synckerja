@@ -584,7 +584,7 @@ const fetchAssignments = async (
   const { data: taskRecords, error: taskError } = missingTaskIds.length
     ? await supabase
         .from("daily_tasks")
-        .select("id, title, status, priority, due_date")
+        .select("id, title, status, priority, due_date, finish_date")
         .in("id", missingTaskIds)
     : { data: [], error: null };
 
@@ -687,5 +687,6 @@ export const useJobDescAssignments = ({
   return {
     ...query,
     range,
+    organizationId: organizationId ?? null,
   };
 };

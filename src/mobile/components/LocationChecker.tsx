@@ -16,6 +16,9 @@ interface LocationCheckerProps {
   };
 }
 
+const getRadiusMeters = (o: { radius_meters?: number; radius?: number } | null | undefined): number =>
+  o?.radius_meters ?? o?.radius ?? 0;
+
 export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
   const { t } = useAppTranslation();
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
@@ -105,14 +108,15 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
       if (nearest) {
         setNearestOffice(nearest);
         setDistance(nearest.distance);
-        const inArea = nearest.distance <= nearest.radius_meters;
+        const radiusM = getRadiusMeters(nearest);
+        const inArea = nearest.distance <= radiusM;
         setIsInOfficeArea(inArea);
 
         toast({
           title: inArea ? t("mobileHome.locationValid", "Lokasi Valid") : t("mobileHome.outsideOfficeArea", "Di luar Area Kantor"),
           description: inArea
             ? t("mobileHome.youAreInArea", "Anda berada di area {{name}} ({{distance}}m dari kantor)", { name: nearest.name, distance: String(nearest.distance) })
-            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(nearest.radius_meters) }),
+            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(radiusM) }),
           variant: inArea ? "default" : "destructive",
           duration: 4000,
         });
@@ -149,7 +153,7 @@ export const LocationChecker = ({ officeLocation }: LocationCheckerProps) => {
               <h3 className="font-semibold text-foreground mb-1">{displayOffice.name}</h3>
               <p className="text-sm text-muted-foreground mb-2">{displayOffice.address}</p>
               <p className="text-xs text-muted-foreground">
-                {t("mobileHome.attendanceRadius", "Radius absensi: {{meters}}m dari kantor", { meters: String(displayOffice.radius_meters || displayOffice.radius) })}
+                {t("mobileHome.attendanceRadius", "Radius absensi: {{meters}}m dari kantor", { meters: String(displayOffice.radius_meters ?? displayOffice.radius) })}
               </p>
             </div>
           </div>
@@ -269,14 +273,15 @@ export const LocationButton = ({ officeLocation }: LocationCheckerProps) => {
       if (nearest) {
         setNearestOffice(nearest);
         setDistance(nearest.distance);
-        const inArea = nearest.distance <= nearest.radius_meters;
+        const radiusM = getRadiusMeters(nearest);
+        const inArea = nearest.distance <= radiusM;
         setIsInOfficeArea(inArea);
 
         toast({
           title: inArea ? t("mobileHome.locationValid", "Lokasi Valid") : t("mobileHome.outsideOfficeArea", "Di luar Area Kantor"),
           description: inArea
             ? t("mobileHome.youAreInArea", "Anda berada di area {{name}} ({{distance}}m dari kantor)", { name: nearest.name, distance: String(nearest.distance) })
-            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(nearest.radius_meters) }),
+            : t("mobileHome.nearestOffice", "Kantor terdekat: {{name}} - {{distance}}m. Radius maksimal: {{radius}}m", { name: nearest.name, distance: String(nearest.distance), radius: String(radiusM) }),
           variant: inArea ? "default" : "destructive",
           duration: 4000,
         });

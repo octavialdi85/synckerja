@@ -286,12 +286,12 @@ export const TaskList = () => {
         // Find the task that contains these steps
         const task = tasks.find(
           (t) =>
-            t.steps.some((s) => s.id === activeStepId) && t.steps.some((s) => s.id === overStepId)
+            (t.steps ?? []).some((s) => s.id === activeStepId) && (t.steps ?? []).some((s) => s.id === overStepId)
         );
 
         if (task) {
           // Get the steps in their current order (copy to avoid mutating context state)
-          const sortedSteps = [...task.steps].sort((a, b) => a.order - b.order);
+          const sortedSteps = [...(task.steps ?? [])].sort((a, b) => a.order - b.order);
           const activeIndex = sortedSteps.findIndex((s) => s.id === activeStepId);
           const overIndex = sortedSteps.findIndex((s) => s.id === overStepId);
 

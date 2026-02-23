@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, type ReactNode } from "react";
 import { DesktopWarning } from "@/mobile/components/DesktopWarning";
 import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
@@ -20,36 +20,51 @@ const ManagementTabPage = memo(() => {
   useOptimizedPerformanceMonitor("ManagementTabPageMobile");
   const { t } = useAppTranslation();
   const { activeTab, handleTabChange, setActiveTabOnLocationChange } = useSubscriptionTabs("management");
-  const { subscriptionStatus, isLoading, refreshSubscriptionStatus } = useOptimizedSubscription();
+  const { subscriptionStatus, isLoading, statusError, refreshSubscriptionStatus } = useOptimizedSubscription();
 
   useEffect(() => {
     setActiveTabOnLocationChange();
   }, [setActiveTabOnLocationChange]);
 
-  const renderContent = () => {
-    if (isLoading && !subscriptionStatus) {
-      return <ManagementTabPageSkeleton />;
-    }
-
-    if (!subscriptionStatus) {
-      return (
-        <Card className="border border-border">
-          <CardHeader>
-            <CardTitle>{t("subscription.management.noDataTitle", "Subscription belum tersedia")}</CardTitle>
-            <CardDescription>
-              {t("subscription.management.noDataDescription", "Kami belum dapat menemukan informasi subscription aktif untuk organisasi Anda.")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" size="sm" onClick={() => refreshSubscriptionStatus()}>
-              {t("subscription.management.refreshStatus", "Perbarui Status")}
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
+  let content: ReactNode;
+  if (isLoading && !subscriptionStatus) {
+    content = <ManagementTabPageSkeleton />;
+  } else if (statusError) {
+    content = (
+      <Card className="border border-destructive/40 bg-destructive/5">
+        <CardHeader>
+          <CardTitle className="text-destructive">
+            {t("subscription.management.errorTitle", "Gagal memuat data subscription")}
+          </CardTitle>
+          <CardDescription>
+            {t("subscription.management.errorDescription", "Terjadi kesalahan saat memuat data. Periksa koneksi dan coba lagi.")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm" onClick={() => refreshSubscriptionStatus()}>
+            {t("subscription.management.retryButton", "Coba lagi")}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  } else if (!subscriptionStatus) {
+    content = (
+      <Card className="border border-border">
+        <CardHeader>
+          <CardTitle>{t("subscription.management.noDataTitle", "Subscription belum tersedia")}</CardTitle>
+          <CardDescription>
+            {t("subscription.management.noDataDescription", "Kami belum dapat menemukan informasi subscription aktif untuk organisasi Anda.")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm" onClick={() => refreshSubscriptionStatus()}>
+            {t("subscription.management.refreshStatus", "Perbarui Status")}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  } else {
+    content = (
       <div className="space-y-1">
         <MobileCurrentPlanCard
           subscriptionStatus={subscriptionStatus}
@@ -60,7 +75,7 @@ const ManagementTabPage = memo(() => {
         <MobilePaymentHistory />
       </div>
     );
-  };
+  }
 
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
 
@@ -92,7 +107,7 @@ const ManagementTabPage = memo(() => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
                 <div className="mx-auto w-full max-w-md px-2 pt-2 space-y-1 content-padding-above-nav-default">
-                  {renderContent()}
+                  {content}
                 </div>
               </div>
             </div>
