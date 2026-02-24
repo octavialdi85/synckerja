@@ -18,6 +18,7 @@ import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useSafeAreaInsets } from '@/mobile/contexts/SafeAreaInsetsContext';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 
 const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
 
@@ -170,11 +171,15 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
     };
   }, [showBackToHome]);
 
-  const { canShowApprovalButtons } = useProdApprovalAccess(!!showBackToHome);
+  /** Selalu cek akses agar Guest tidak lihat tombol Approve/Request Revision; tombol hanya untuk user login dengan role Owner/Admin (atau sesuai approval_access_configurations) */
+  const { canShowApprovalButtons } = useProdApprovalAccess(true);
   const { user } = useAuth();
   const { data: profileData } = useUnifiedProfile();
   const isLoggedIn = !!user;
   const profileDisplayName = profileData?.fullName?.trim() ?? '';
+  /** Mobile browser (bukan native): agar section write a comment dekat dengan pita navigasi, kurangi kedalaman scroll & tambah safe area bawah */
+  const isMobileViewport = useIsMobile();
+  const isMobileBrowser = isMobileViewport && !showBackToHome;
 
   const loadContent = useCallback(async () => {
     if (!token) return;
@@ -770,7 +775,9 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 paddingTop: headerFixed ? viewportOffsetTop + safeArea.top + 68 : safeArea.top + 68,
                 paddingBottom: '0.25rem',
               }
-            : { paddingBottom: `calc(5.5rem + ${safeArea.bottom}px)` }
+            : isMobileBrowser
+              ? { paddingBottom: '0.5rem' }
+              : { paddingBottom: `calc(5.5rem + ${safeArea.bottom}px)` }
         }
       >
         {/* Preview with header (title + metadata). Video: portrait (Reel) = 9/16, landscape = 16/9. Section responsive: min-height on video wrapper so content is not cut off. */}
@@ -1031,7 +1038,10 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
             )}
           </div>
           {!showBackToHome && (
-            <div className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3 bg-white">
+            <div
+              className="p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 space-y-3 bg-white"
+              style={isMobileBrowser && safeArea.bottom > 0 ? { paddingBottom: `max(0.75rem, ${safeArea.bottom}px)` } : undefined}
+            >
               <div className="relative">
                 <Textarea
                   ref={commentTextareaRef}
@@ -1057,26 +1067,28 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                   )}
                 </Button>
               </div>
-              <div className="w-full flex flex-nowrap items-center gap-3 pt-2 border-t border-gray-100 flex-shrink-0 pb-4">
-                <Button
-                  onClick={handleApprove}
-                  disabled={approvalLoading || !!commentText.trim() || hasSuccessfullySentCommentThisSession}
-                  className="flex-1 min-w-0 h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation"
-                >
-                  <Check className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{t('publicReview.approveContent', 'Approve Content')}</span>
-                </Button>
-                <Button
-                  onClick={handleRevision}
-                  disabled={!hasSuccessfullySentCommentThisSession || approvalLoading}
-                  variant="outline"
-                  title={!hasSuccessfullySentCommentThisSession ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
-                  className="flex-1 min-w-0 h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <RotateCcw className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{t('publicReview.requestRevision', 'Request Revision')}</span>
-                </Button>
-              </div>
+              {canShowApprovalButtons && (
+                <div className="w-full flex flex-nowrap items-center gap-3 pt-2 border-t border-gray-100 flex-shrink-0 pb-4">
+                  <Button
+                    onClick={handleApprove}
+                    disabled={approvalLoading || !!commentText.trim() || hasSuccessfullySentCommentThisSession}
+                    className="flex-1 min-w-0 h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation"
+                  >
+                    <Check className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t('publicReview.approveContent', 'Approve Content')}</span>
+                  </Button>
+                  <Button
+                    onClick={handleRevision}
+                    disabled={!hasSuccessfullySentCommentThisSession || approvalLoading}
+                    variant="outline"
+                    title={!hasSuccessfullySentCommentThisSession ? t('publicReview.toast.revisionNeedComment', 'Tambahkan minimal satu komentar (dengan nama Anda) sebelum request revision') : undefined}
+                    className="flex-1 min-w-0 h-9 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium px-3 gap-2 min-h-[44px] touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <RotateCcw className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t('publicReview.requestRevision', 'Request Revision')}</span>
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
