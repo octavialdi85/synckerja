@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from './section/HeaderAndTab';
 import { TaskFilters } from './section/TaskFilters';
@@ -16,6 +17,12 @@ import { LoadingDots } from '@/components/LoadingDots';
 import { JobDescTracker, type JobDescTrackerStats } from './section/JobDescTracker';
 import { JobDescSidebarFooter } from './section/JobDescSidebarFooter';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { supabase } from '@/integrations/supabase/client';
+import type { ContentPlan } from '@/features/6-1-dashboard/types/social-media';
+import GoogleDriveLinkDialog from '@/features/6-1-dashboard/modal/GoogleDriveLinkDialog';
+import { Dialog, DialogContent } from '@/features/ui/dialog';
+import { Button } from '@/features/ui/button';
 
 const DailyTaskPage = () => {
   return (
@@ -30,6 +37,8 @@ const DailyTaskPage = () => {
 const DailyTaskContent = () => {
   const { t } = useAppTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
   const { tasks, filteredTasks, isLoading, setFilters, setExpandedTasks, setHighlightedTask, scrollToStep } = useDailyTask();
   const [sidebarTab, setSidebarTab] = useState<'summary' | 'initiative' | 'jobdesc'>('summary');
   const [initiativeStats, setInitiativeStats] = useState<InitiativeStats>({ totalItems: 0, unassignedItems: 0 });
@@ -42,6 +51,44 @@ const DailyTaskContent = () => {
   const [initialLoadTimeout, setInitialLoadTimeout] = useState(false);
   const [createTemplateSheetOpen, setCreateTemplateSheetOpen] = useState(false);
   const appliedNavParamsRef = useRef(false);
+
+  // Preview modal from "View Content" in Task Summary Pending Approval (same as Comment Notifications on dashboard)
+  const [previewPlanIdForModal, setPreviewPlanIdForModal] = useState<string | null>(null);
+  const pendingApprovalRefreshRef = useRef<(() => void) | null>(null);
+
+  const PLAN_SELECT = `
+    id, organization_id, post_date, content_type_id, pic_id, service_id, sub_service_id, title, content_pillar_id, brief, status, revision_count, approved, completion_date, pic_production_id, pic_production_source, google_drive_link, production_status, production_revision_count, production_completion_date, production_approved, production_approved_date, post_link, post_link_created_by, done, actual_post_date, on_time_status, status_content, created_at, updated_at,
+    content_type:content_types(id, name), service:services(id, name), sub_service:sub_services(id, name), content_pillar:content_pillars(id, name, color), pic:employees!social_media_plans_pic_id_fkey(id, full_name), pic_production:employees!social_media_plans_pic_production_id_fkey(id, full_name), post_link_creator:employees!social_media_plans_post_link_created_by_fkey(id, full_name)
+  `;
+  const { data: previewPlanFetched, isFetching, isError } = useQuery({
+    queryKey: ['social-media-plan', previewPlanIdForModal],
+    enabled: !!previewPlanIdForModal && !!organizationId,
+    queryFn: async (): Promise<ContentPlan | null> => {
+      if (!previewPlanIdForModal || !organizationId) return null;
+      const { data, error } = await supabase
+        .from('social_media_plans')
+        .select(PLAN_SELECT)
+        .eq('id', previewPlanIdForModal)
+        .eq('organization_id', organizationId)
+        .single();
+      if (error || !data) return null;
+      return data as unknown as ContentPlan;
+    },
+    staleTime: 10000,
+  });
+
+  const previewPlan: ContentPlan | null = previewPlanIdForModal ? previewPlanFetched ?? null : null;
+
+  useEffect(() => {
+    if (!previewPlanIdForModal) return;
+    queryClient.invalidateQueries({ queryKey: ['link-comments', previewPlanIdForModal] });
+  }, [previewPlanIdForModal, queryClient]);
+
+  const handleClosePreviewModal = () => {
+    setPreviewPlanIdForModal(null);
+    pendingApprovalRefreshRef.current?.();
+    pendingApprovalRefreshRef.current = null;
+  };
 
   // Very short loading only when organizationId not ready yet (avoids flash)
   React.useEffect(() => {
@@ -175,7 +222,14 @@ const DailyTaskContent = () => {
 
                       {/* Scrollable Sidebar Content */}
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain p-4">
-                        {sidebarTab === 'summary' && <TaskSummaryCards />}
+                        {sidebarTab === 'summary' && (
+                          <TaskSummaryCards
+                            onOpenPreview={(planId, callbacks) => {
+                              setPreviewPlanIdForModal(planId);
+                              pendingApprovalRefreshRef.current = callbacks?.onClose ?? null;
+                            }}
+                          />
+                        )}
                         {sidebarTab === 'initiative' && (
                           <TaskInitiative onStatsChange={setInitiativeStats} />
                         )}
@@ -217,6 +271,58 @@ const DailyTaskContent = () => {
           onOpenChange={setCreateTemplateSheetOpen}
           onSuccess={() => setCreateTemplateSheetOpen(false)}
         />
+
+        {/* Preview modal when "View Content" is clicked in Task Summary Pending Approval */}
+        {previewPlanIdForModal && !previewPlan && (
+          <Dialog open={true} onOpenChange={(open) => !open && handleClosePreviewModal()}>
+            <DialogContent className="max-w-md">
+              <div className="flex flex-col items-center justify-center py-8 gap-4">
+                {isError ? (
+                  <p className="text-sm text-red-600">Failed to load content. You may not have access.</p>
+                ) : (
+                  <>
+                    <LoadingDots size="md" />
+                    <p className="text-sm text-gray-600">Loading preview...</p>
+                  </>
+                )}
+                <Button variant="outline" size="sm" onClick={handleClosePreviewModal}>
+                  Close
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+        {previewPlan && (
+          <GoogleDriveLinkDialog
+            isOpen={true}
+            onClose={handleClosePreviewModal}
+            googleDriveLink={previewPlan.google_drive_link || ''}
+            productionApproved={previewPlan.production_approved || false}
+            onSave={(link) => {
+              const normalized = link?.trim() ? link : null;
+              supabase
+                .from('social_media_plans')
+                .update({
+                  google_drive_link: normalized,
+                  ...(normalized ? {} : { production_status: null }),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', previewPlan.id)
+                .then(() => {});
+            }}
+            socialMediaPlanId={previewPlan.id}
+            planTitle={previewPlan.title ?? undefined}
+            contentTitle={previewPlan.title ?? undefined}
+            contentType={previewPlan.content_type?.name}
+            postDate={previewPlan.post_date ?? undefined}
+            onApprove={() => {
+              pendingApprovalRefreshRef.current?.();
+            }}
+            onRevision={() => {
+              pendingApprovalRefreshRef.current?.();
+            }}
+          />
+        )}
       </div>
     </StandardLayout>
   );

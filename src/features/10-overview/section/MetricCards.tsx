@@ -5,9 +5,13 @@ import type { SubscriptionStatus } from '@/features/10-management/hooks/useOptim
 
 interface MetricCardsProps {
   subscriptionStatus: SubscriptionStatus | null;
+  /** When set, overrides days remaining to match Payment History */
+  daysRemainingOverride?: number | null;
+  /** When true and no override, show loading for days (avoids wrong 58 on first paint). */
+  nextBillingLoading?: boolean;
 }
 
-export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
+export const MetricCards = memo(({ subscriptionStatus, daysRemainingOverride, nextBillingLoading }: MetricCardsProps) => {
   // Optimized quick stats computation  
   const quickStats = useMemo(() => {
     if (!subscriptionStatus) return [];
@@ -22,11 +26,15 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
     const memberLimit = subscriptionStatus?.member_count || 
                        subscriptionStatus?.member_limit || 0;
     
-    // Enhanced days calculation with multiple fallbacks
-    const daysLeft = Math.max(0, 
-      subscriptionStatus?.days_until_expiry || 
-      subscriptionStatus?.days_remaining || 0
-    );
+    // Days: prefer override from payment-history logic so Overview matches Management/Payment History
+    const daysLeft = nextBillingLoading && daysRemainingOverride == null
+      ? 0
+      : Math.max(0,
+          daysRemainingOverride ??
+          subscriptionStatus?.days_until_expiry ??
+          subscriptionStatus?.days_remaining ?? 0
+        );
+    const daysLeftLoading = nextBillingLoading && daysRemainingOverride == null;
     
     // Enhanced status with more detailed information
     const isTrial = subscriptionStatus?.is_trial || false;
@@ -46,17 +54,17 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
              'text-red-500' : 'text-emerald-600'
     }, {
       title: isTrial ? 'Trial Days Left' : 'Days Remaining',
-      value: daysLeft,
+      value: daysLeftLoading ? '...' : daysLeft,
       icon: Calendar,
-      color: daysLeft <= 3 ? 'text-red-500' : 
-             daysLeft <= 7 ? 'text-yellow-600' : 'text-emerald-600'
+      color: daysLeftLoading ? 'text-gray-500' : (daysLeft <= 3 ? 'text-red-500' : 
+             daysLeft <= 7 ? 'text-yellow-600' : 'text-emerald-600')
     }, {
       title: 'Subscription Status',
       value: status,
       icon: isActive ? CheckCircle : AlertCircle,
       color: isActive ? 'text-emerald-600' : 'text-red-500'
     }];
-  }, [subscriptionStatus]);
+  }, [subscriptionStatus, daysRemainingOverride, nextBillingLoading]);
 
   // Responsive grid: 1 col mobile, 2 cols tablet, 4 cols desktop
   const gridClass = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 min-w-0';
@@ -146,7 +154,8 @@ export const MetricCards = memo(({ subscriptionStatus }: MetricCardsProps) => {
     prevProps.subscriptionStatus.plan_name === nextProps.subscriptionStatus.plan_name &&
     prevProps.subscriptionStatus.current_employees === nextProps.subscriptionStatus.current_employees &&
     prevProps.subscriptionStatus.member_count === nextProps.subscriptionStatus.member_count &&
-    prevProps.subscriptionStatus.days_until_expiry === nextProps.subscriptionStatus.days_until_expiry &&
+    (prevProps.daysRemainingOverride ?? prevProps.subscriptionStatus.days_until_expiry) === (nextProps.daysRemainingOverride ?? nextProps.subscriptionStatus.days_until_expiry) &&
+    prevProps.nextBillingLoading === nextProps.nextBillingLoading &&
     prevProps.subscriptionStatus.is_active === nextProps.subscriptionStatus.is_active
   );
 });

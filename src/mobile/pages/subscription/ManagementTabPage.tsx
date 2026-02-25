@@ -9,6 +9,8 @@ import { Button } from "@/mobile/components/ui/button";
 import { ManagementTabPageSkeleton } from "./ManagementTabPageSkeleton";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 import { useOptimizedSubscription } from "@/features/10-management/hooks/useOptimizedSubscription";
+import { useNextBillingFromPayments } from "@/features/10-management/hooks/useNextBillingFromPayments";
+import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { MobileCurrentPlanCard } from "./section/management/MobileCurrentPlanCard";
 import { MobileSubscriptionStats } from "./section/management/MobileSubscriptionStats";
 import { MobilePaymentHistory } from "./section/management/MobilePaymentHistory";
@@ -20,7 +22,11 @@ const ManagementTabPage = memo(() => {
   useOptimizedPerformanceMonitor("ManagementTabPageMobile");
   const { t } = useAppTranslation();
   const { activeTab, handleTabChange, setActiveTabOnLocationChange } = useSubscriptionTabs("management");
+  const { organizationId } = useCurrentOrg();
   const { subscriptionStatus, isLoading, statusError, refreshSubscriptionStatus } = useOptimizedSubscription();
+  const { nextBillingDate, daysUntilExpiry, paymentsLoading } = useNextBillingFromPayments(organizationId ?? undefined);
+  const nextBillingOverride =
+    nextBillingDate != null ? { date: nextBillingDate, daysRemaining: daysUntilExpiry } : null;
 
   useEffect(() => {
     setActiveTabOnLocationChange();
@@ -70,8 +76,14 @@ const ManagementTabPage = memo(() => {
           subscriptionStatus={subscriptionStatus}
           onRefresh={refreshSubscriptionStatus}
           isRefreshing={isLoading}
+          nextBillingOverride={nextBillingOverride}
+          nextBillingLoading={paymentsLoading}
         />
-        <MobileSubscriptionStats subscriptionStatus={subscriptionStatus} />
+        <MobileSubscriptionStats
+          subscriptionStatus={subscriptionStatus}
+          nextBillingOverride={nextBillingOverride}
+          nextBillingLoading={paymentsLoading}
+        />
         <MobilePaymentHistory />
       </div>
     );

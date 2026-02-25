@@ -10,9 +10,16 @@ export const PersonalInfoStep = ({ formData, handleInputChange }: PersonalDataSt
   return (
     <ScrollArea className="h-[600px] pr-4">
       <div className="space-y-8">
-        <PersonalDetailsSection formData={formData} handleInputChange={handleInputChange} />
-        <IdentitySection formData={formData} handleInputChange={handleInputChange} />
-        <AddressSection formData={formData} handleInputChange={handleInputChange} />
+        {/* Personal Information — single 2-column grid for consistent layout */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+            <PersonalDetailsSection formData={formData} handleInputChange={handleInputChange} />
+            <IdentitySection formData={formData} handleInputChange={handleInputChange} />
+            <AddressSection formData={formData} handleInputChange={handleInputChange} />
+          </div>
+        </div>
+
         <DocumentUploadSection formData={formData} handleInputChange={handleInputChange} />
       </div>
     </ScrollArea>

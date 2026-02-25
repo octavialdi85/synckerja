@@ -20,6 +20,18 @@ declare module "jsr:@supabase/functions-js/edge-runtime.d.ts" {
   // Edge runtime types; no exports needed for global Deno
 }
 
+declare module "https://deno.land/std@0.168.0/http/server.ts" {
+  export function serve(
+    handler: (req: Request) => Promise<Response> | Response,
+    options?: { port?: number }
+  ): void;
+}
+
+declare module "https://esm.sh/date-fns@2" {
+  export function addMonths(date: Date | number, amount: number): Date;
+  export function addYears(date: Date | number, amount: number): Date;
+}
+
 declare module "jsr:@negrel/webpush@0.5.0" {
   export function importVapidKeys(
     exported: { publicKey: JsonWebKey; privateKey: JsonWebKey },

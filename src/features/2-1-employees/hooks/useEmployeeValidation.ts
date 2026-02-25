@@ -5,10 +5,9 @@ import { EmployeeFormData } from '@/types/forms';
 export const useEmployeeValidation = (formData: EmployeeFormData) => {
   const validatePersonalData = () => {
     return !!(
-      formData.name &&
-      formData.email &&
-      formData.mobile_phone &&
-      formData.nik
+      formData.name?.trim() &&
+      formData.email?.trim() &&
+      formData.mobile_phone?.trim()
     );
   };
 

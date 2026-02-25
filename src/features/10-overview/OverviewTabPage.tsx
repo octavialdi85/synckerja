@@ -5,8 +5,9 @@ import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { Skeleton } from '@/features/ui/skeleton';
 import { LoadingDots } from '@/components/LoadingDots';
 import { useOptimizedSubscription } from '@/features/10-management/hooks/useOptimizedSubscription';
-import { useSubscriptionAnalytics } from '@/features/10-overview/hooks/useSubscriptionAnalytics';
+import { useNextBillingFromPayments } from '@/features/10-management/hooks/useNextBillingFromPayments';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useSubscriptionAnalytics } from '@/features/10-overview/hooks/useSubscriptionAnalytics';
 import {
   HeaderAndTab,
   CurrentSubscription,
@@ -19,7 +20,7 @@ import {
   OverviewSidebarFooter
 } from './section';
 
-const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoading, refreshSubscriptionStatus }: any) => {
+const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoading, refreshSubscriptionStatus, nextBillingOverride, nextBillingLoading }: any) => {
   const [lastUpdated] = useState(new Date());
 
   return (
@@ -42,7 +43,7 @@ const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoadi
               <div className="p-4 space-y-4">
                 {/* Current Subscription Overview */}
                 {subscriptionStatus && (
-                  <CurrentSubscription subscriptionStatus={subscriptionStatus} />
+                  <CurrentSubscription subscriptionStatus={subscriptionStatus} nextBillingOverride={nextBillingOverride} nextBillingLoading={nextBillingLoading} />
                 )}
 
                 {/* Quick Stats Metric Cards */}
@@ -64,7 +65,7 @@ const OverviewTabContent = memo(({ subscriptionStatus, analytics, analyticsLoadi
                       </button>
                     </div>
                   </div>
-                  <MetricCards subscriptionStatus={subscriptionStatus} />
+                  <MetricCards subscriptionStatus={subscriptionStatus} daysRemainingOverride={nextBillingOverride?.daysRemaining} nextBillingLoading={nextBillingLoading} />
                 </div>
 
                 {/* Analytics Charts */}
@@ -139,6 +140,11 @@ const OverviewTabPage = memo(() => {
     refreshSubscriptionStatus
   } = useOptimizedSubscription();
   
+  const { nextBillingDate, daysUntilExpiry, paymentsLoading } = useNextBillingFromPayments(organizationId ?? undefined);
+  const nextBillingOverride = nextBillingDate != null
+    ? { date: nextBillingDate, daysRemaining: daysUntilExpiry }
+    : null;
+
   const {
     analytics,
     isLoading: analyticsLoading
@@ -217,6 +223,8 @@ const OverviewTabPage = memo(() => {
                       analytics={analytics}
                       analyticsLoading={analyticsLoading}
                       refreshSubscriptionStatus={refreshSubscriptionStatus}
+                      nextBillingOverride={nextBillingOverride}
+                      nextBillingLoading={paymentsLoading}
                     />
                   </Suspense>
                 </div>

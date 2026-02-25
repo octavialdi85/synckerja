@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
@@ -9,6 +9,7 @@ import { Separator } from "@/mobile/components/ui/separator";
 import { Skeleton } from "@/mobile/components/ui/skeleton";
 import { formatIDR } from "@/features/10-management/utils/subscriptionUtils";
 import { format } from "date-fns";
+import { addMonths, addYears } from "date-fns";
 import { id as localeID } from "date-fns/locale";
 import { toast } from "sonner";
 import { Download, History, Loader2 } from "lucide-react";
@@ -77,8 +78,53 @@ export const MobilePaymentHistory = memo(() => {
     },
   });
 
+  // Next Payment Date: early → next = scheduled_due + 1 month; on-time/late → next = payment_date + 1 month. Same as desktop.
+  const nextPaymentDateByPaymentId = useMemo(() => {
+    const sorted = [...payments].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    const nextMap = new Map<string, Date>();
+    const periodStartMap = new Map<string, Date>();
+    const periodEndMap = new Map<string, Date>();
+    let prevNext: Date | null = null;
+    for (const p of sorted) {
+      const created = p.created_at ? new Date(p.created_at) : null;
+      const cycle = p.billing_cycle === "yearly" ? 12 : 1;
+      const addOne = (d: Date) => (cycle === 12 ? addYears(d, 1) : addMonths(d, 1));
+      let next: Date | null = null;
+      const startFromDb = p.subscription_start_date ? new Date(p.subscription_start_date) : null;
+      const endFromDb = p.subscription_end_date ? new Date(p.subscription_end_date) : null;
+      const useDb = endFromDb && startFromDb && created && startFromDb.getTime() <= created.getTime();
+      if (useDb) {
+        next = endFromDb;
+        periodStartMap.set(p.id, startFromDb);
+        periodEndMap.set(p.id, endFromDb);
+      } else if (created) {
+        if (prevNext && created.getTime() < prevNext.getTime()) {
+          next = addOne(prevNext);
+          periodStartMap.set(p.id, prevNext);
+        } else {
+          next = addOne(created);
+          periodStartMap.set(p.id, created);
+        }
+        if (next) periodEndMap.set(p.id, next);
+      }
+      if (next) nextMap.set(p.id, next);
+      prevNext = next;
+    }
+    return { nextMap, periodStartMap, periodEndMap };
+  }, [payments]);
+
+  const paymentsForDisplay = useMemo(
+    () => [...payments].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [payments],
+  );
+
   const handleDownloadReceipt = useCallback(
-    async (payment: PaymentRecord) => {
+    async (
+      payment: PaymentRecord,
+      precomputed?: { nextPaymentDate: Date | null; periodStart: Date | null; periodEnd: Date | null },
+    ) => {
       if (!organizationId) return;
       setDownloadingId(payment.id);
       try {
@@ -87,6 +133,48 @@ export const MobilePaymentHistory = memo(() => {
           .select("company_name, email, address")
           .eq("id", organizationId)
           .single();
+
+        const { data: subscriptionData } = await supabase
+          .from("organization_subscriptions")
+          .select("subscription_start_date, subscription_end_date, billing_cycle")
+          .eq("last_payment_id", payment.id)
+          .maybeSingle();
+
+        const nextBillingDateStr = precomputed?.nextPaymentDate
+          ? format(precomputed.nextPaymentDate, "dd MMMM yyyy", { locale: localeID })
+          : (() => {
+              const endFromDb = payment.subscription_end_date ?? subscriptionData?.subscription_end_date;
+              if (endFromDb) return format(new Date(endFromDb), "dd MMMM yyyy", { locale: localeID });
+              if (payment.created_at) {
+                const d = new Date(payment.created_at);
+                const end = payment.billing_cycle === "yearly" ? addYears(d, 1) : addMonths(d, 1);
+                return format(end, "dd MMMM yyyy", { locale: localeID });
+              }
+              return "-";
+            })();
+
+        const periodStartDate = precomputed?.periodStart
+          ? precomputed.periodStart
+          : payment.subscription_start_date
+            ? new Date(payment.subscription_start_date)
+            : subscriptionData?.subscription_start_date
+              ? new Date(subscriptionData.subscription_start_date)
+              : payment.created_at
+                ? new Date(payment.created_at)
+                : null;
+        const periodEndDate = precomputed?.periodEnd
+          ? precomputed.periodEnd
+          : payment.subscription_end_date
+            ? new Date(payment.subscription_end_date)
+            : subscriptionData?.subscription_end_date
+              ? new Date(subscriptionData.subscription_end_date)
+              : payment.created_at
+                ? (payment.billing_cycle === "yearly"
+                    ? addYears(new Date(payment.created_at), 1)
+                    : addMonths(new Date(payment.created_at), 1))
+                : null;
+        const periodStart = periodStartDate ? format(periodStartDate, "MMM dd, yyyy", { locale: localeID }) : "-";
+        const periodEnd = periodEndDate ? format(periodEndDate, "MMM dd, yyyy", { locale: localeID }) : "-";
 
         const doc = new jsPDF();
         const margin = 20;
@@ -110,6 +198,7 @@ export const MobilePaymentHistory = memo(() => {
         doc.text(`Invoice #: ${payment.order_id}`, infoX, 41);
         doc.text(`Tanggal: ${payment.created_at ? formatDateTime(payment.created_at) : "-"}`, infoX, 47);
         doc.text(`Status: ${payment.status}`, infoX, 53);
+        doc.text(`Next Billing Date: ${nextBillingDateStr}`, infoX, 59);
 
         doc.text("Tagihan untuk:", margin, 70);
         doc.setFont("helvetica", "bold");
@@ -119,15 +208,13 @@ export const MobilePaymentHistory = memo(() => {
         if (orgData?.address) doc.text(orgData.address, margin, 88);
 
         doc.text("Ringkasan Pembayaran", margin, 105);
+        const planName = payment.subscription_plans?.name || "Subscription";
+        const billingCycle = payment.billing_cycle || "monthly";
+        const description = `${planName} (${billingCycle})\nPeriod: ${periodStart} to ${periodEnd}`;
         autoTable(doc, {
           startY: 110,
           head: [["Deskripsi", "Jumlah"]],
-          body: [
-            [
-              `${payment.subscription_plans?.name || "Subscription"} (${payment.billing_cycle})`,
-              formatIDR(payment.amount),
-            ],
-          ],
+          body: [[description, formatIDR(payment.amount)]],
           theme: "grid",
           styles: { fontSize: 10 },
           headStyles: { fillColor: [59, 130, 246] },
@@ -209,8 +296,9 @@ export const MobilePaymentHistory = memo(() => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2.5 pt-0 px-3 pb-3">
-        {payments.map((payment) => {
+        {paymentsForDisplay.map((payment) => {
           const badge = statusBadgeVariant(payment.status, t);
+          const nextDate = nextPaymentDateByPaymentId.nextMap.get(payment.id);
           return (
             <div
               key={payment.id}
@@ -238,6 +326,12 @@ export const MobilePaymentHistory = memo(() => {
                   <span>{t("subscription.management.billingCycle")}</span>
                   <span className="font-medium text-foreground capitalize">{payment.billing_cycle}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>{t("subscription.management.nextPaymentDate", "Next Payment Date")}</span>
+                  <span className="font-medium text-foreground">
+                    {nextDate ? format(nextDate, "dd MMM yyyy", { locale: localeID }) : "-"}
+                  </span>
+                </div>
               </div>
               {payment.notes && (
                 <div className="rounded-lg border border-border bg-background/60 p-1.5 text-[11px] text-muted-foreground">
@@ -249,7 +343,13 @@ export const MobilePaymentHistory = memo(() => {
                 variant="outline"
                 size="sm"
                 className="w-full justify-center gap-2 text-xs"
-                onClick={() => handleDownloadReceipt(payment)}
+                onClick={() =>
+                  handleDownloadReceipt(payment, {
+                    nextPaymentDate: nextPaymentDateByPaymentId.nextMap.get(payment.id) ?? null,
+                    periodStart: nextPaymentDateByPaymentId.periodStartMap.get(payment.id) ?? null,
+                    periodEnd: nextPaymentDateByPaymentId.periodEndMap.get(payment.id) ?? null,
+                  })
+                }
                 disabled={downloadingId === payment.id}
               >
                 {downloadingId === payment.id ? (

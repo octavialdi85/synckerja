@@ -1,5 +1,7 @@
+/// <reference path="../edge-runtime.d.ts" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { addMonths, addYears } from "https://esm.sh/date-fns@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,14 +9,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const addBillingInterval = (baseDate: Date, billingCycle: string) => {
-  const result = new Date(baseDate);
+const addBillingInterval = (baseDate: Date, billingCycle: string): Date => {
   if (billingCycle === "yearly") {
-    result.setFullYear(result.getFullYear() + 1);
-  } else {
-    result.setMonth(result.getMonth() + 1);
+    return addYears(baseDate, 1);
   }
-  return result;
+  return addMonths(baseDate, 1);
 };
 
 serve(async (req) => {
@@ -107,7 +106,7 @@ serve(async (req) => {
 
       const baseStartDate = existingSubscription?.subscription_end_date
         ? new Date(existingSubscription.subscription_end_date)
-        : new Date();
+        : new Date(payment.created_at);
 
       const startDate = baseStartDate;
       const endDate = addBillingInterval(startDate, payment.billing_cycle);
@@ -142,6 +141,15 @@ serve(async (req) => {
           is_trial: false,
         });
       }
+
+      await supabase
+        .from("payments")
+        .update({
+          subscription_start_date: startDate.toISOString(),
+          subscription_end_date: endDate.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
 
       await supabase
         .from("organizations")

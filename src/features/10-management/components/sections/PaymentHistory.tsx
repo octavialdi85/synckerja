@@ -1,4 +1,5 @@
 
+import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/features/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/features/ui/table';
 import { Badge } from '@/features/ui/badge';
@@ -8,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { formatIDR } from '../../utils/subscriptionUtils';
-import { format } from 'date-fns';
+import { format, addMonths, addYears } from 'date-fns';
 import { id } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -116,6 +117,50 @@ const PaymentHistory = () => {
     },
   });
 
+  // Next Payment Date: early payment → next = scheduled_due + 1 month; on-time/late → next = payment_date + 1 month.
+  // Period: start = scheduled_due for this payment, end = next (so receipt and table stay in sync).
+  const nextPaymentDateByPaymentId = useMemo(() => {
+    const sorted = [...payments].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const nextMap = new Map<string, Date>();
+    const periodStartMap = new Map<string, Date>();
+    const periodEndMap = new Map<string, Date>();
+    let prevNext: Date | null = null;
+    for (const p of sorted) {
+      const created = p.created_at ? new Date(p.created_at) : null;
+      const cycle = p.billing_cycle === 'yearly' ? 12 : 1;
+      const addOne = (d: Date) => (cycle === 12 ? addYears(d, 1) : addMonths(d, 1));
+      let next: Date | null = null;
+      const startFromDb = p.subscription_start_date ? new Date(p.subscription_start_date) : null;
+      const endFromDb = p.subscription_end_date ? new Date(p.subscription_end_date) : null;
+      const useDb = endFromDb && startFromDb && created && startFromDb.getTime() <= created.getTime();
+      if (useDb) {
+        next = endFromDb;
+        periodStartMap.set(p.id, startFromDb);
+        periodEndMap.set(p.id, endFromDb);
+      } else if (created) {
+        if (prevNext && created.getTime() < prevNext.getTime()) {
+          next = addOne(prevNext);
+          periodStartMap.set(p.id, prevNext);
+        } else {
+          next = addOne(created);
+          periodStartMap.set(p.id, created);
+        }
+        if (next) periodEndMap.set(p.id, next);
+      }
+      if (next) nextMap.set(p.id, next);
+      prevNext = next;
+    }
+    return { nextMap, periodStartMap, periodEndMap };
+  }, [payments]);
+
+  // Table always shows newest first regardless of cache order (hook may cache ASC when Overview loads first).
+  const paymentsForDisplay = useMemo(
+    () => [...payments].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [payments]
+  );
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'settlement':
@@ -132,7 +177,7 @@ const PaymentHistory = () => {
     }
   };
 
-  const downloadReceipt = async (payment: any) => {
+  const downloadReceipt = async (payment: any, precomputed?: { nextPaymentDate: Date | null; periodStart: Date | null; periodEnd: Date | null }) => {
     // Fetch organization data
     let orgData = null;
     let subscriptionData = null;
@@ -203,29 +248,24 @@ const PaymentHistory = () => {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
     
-    const invoiceDate = new Date().toLocaleDateString('id-ID', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    const paymentDate = payment.created_at ? 
-      format(new Date(payment.created_at), 'dd MMMM yyyy', { locale: id }) : 
-      '-';
+    // Invoice Issued = date the invoice was issued (payment/transaction date), not today
+    const invoiceIssuedDate = payment.created_at
+      ? format(new Date(payment.created_at), 'dd MMMM yyyy', { locale: id })
+      : new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
     
-    // Calculate next billing date - use same format as invoiceDate
-    const nextBillingDate = subscriptionData?.subscription_end_date
-      ? format(new Date(subscriptionData.subscription_end_date), 'dd MMMM yyyy', { locale: id })
-      : payment.created_at
-        ? format(
-            new Date(
-              new Date(payment.created_at).setMonth(
-                new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1)
-              )
-            ),
-            'dd MMMM yyyy',
-            { locale: id }
-          )
-        : '-';
+    // Next Billing Date: use precomputed (same logic as table) or fallback with addMonths/addYears
+    const nextBillingDate = precomputed?.nextPaymentDate
+      ? format(precomputed.nextPaymentDate, 'dd MMMM yyyy', { locale: id })
+      : (() => {
+          const endFromDb = payment.subscription_end_date ?? subscriptionData?.subscription_end_date;
+          if (endFromDb) return format(new Date(endFromDb), 'dd MMMM yyyy', { locale: id });
+          if (payment.created_at) {
+            const d = new Date(payment.created_at);
+            const end = payment.billing_cycle === 'yearly' ? addYears(d, 1) : addMonths(d, 1);
+            return format(end, 'dd MMMM yyyy', { locale: id });
+          }
+          return '-';
+        })();
     
     // Invoice details (right side) - calculate proper position to avoid truncation
     const invoiceDetailsStartX = pageWidth / 2 + 10; // Start from middle + offset
@@ -253,9 +293,9 @@ const PaymentHistory = () => {
     doc.text('Invoice Issued:', invoiceDetailsStartX, currentY);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
-    const invoiceDateWidth = doc.getTextWidth(invoiceDate);
-    const invoiceDateX = Math.min(invoiceDetailsStartX + labelColumnWidth, pageWidth - margin - invoiceDateWidth);
-    doc.text(invoiceDate, invoiceDateX, currentY);
+    const invoiceIssuedDateWidth = doc.getTextWidth(invoiceIssuedDate);
+    const invoiceIssuedDateX = Math.min(invoiceDetailsStartX + labelColumnWidth, pageWidth - margin - invoiceIssuedDateWidth);
+    doc.text(invoiceIssuedDate, invoiceIssuedDateX, currentY);
     
     currentY += 6;
     // Next Billing Date (moved below Invoice Issued)
@@ -326,20 +366,25 @@ const PaymentHistory = () => {
                             payment.billing_cycle === 'monthly' ? 'billed every month' : 
                             'billed every month';
     
-    const periodStartDate = subscriptionData?.subscription_start_date
-      ? new Date(subscriptionData.subscription_start_date)
-      : payment.created_at
-        ? new Date(payment.created_at)
-        : null;
-    const periodEndDate = subscriptionData?.subscription_end_date
-      ? new Date(subscriptionData.subscription_end_date)
-      : payment.created_at
-        ? new Date(
-            new Date(payment.created_at).setMonth(
-              new Date(payment.created_at).getMonth() + (payment.billing_cycle === 'yearly' ? 12 : 1)
-            )
-          )
-        : null;
+    // Period for line items: use precomputed (same as table) or payment/subscriptionData/fallback with addMonths
+    const periodStartDate = precomputed?.periodStart
+      ? precomputed.periodStart
+      : payment.subscription_start_date
+        ? new Date(payment.subscription_start_date)
+        : subscriptionData?.subscription_start_date
+          ? new Date(subscriptionData.subscription_start_date)
+          : payment.created_at
+            ? new Date(payment.created_at)
+            : null;
+    const periodEndDate = precomputed?.periodEnd
+      ? precomputed.periodEnd
+      : payment.subscription_end_date
+        ? new Date(payment.subscription_end_date)
+        : subscriptionData?.subscription_end_date
+          ? new Date(subscriptionData.subscription_end_date)
+          : payment.created_at
+            ? (payment.billing_cycle === 'yearly' ? addYears(new Date(payment.created_at), 1) : addMonths(new Date(payment.created_at), 1))
+            : null;
 
     const periodStart = periodStartDate ? format(periodStartDate, 'MMM dd, yyyy', { locale: id }) : '-';
     const periodEnd = periodEndDate ? format(periodEndDate, 'MMM dd, yyyy', { locale: id }) : '-';
@@ -511,8 +556,8 @@ const PaymentHistory = () => {
             </p>
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
+          <div className="overflow-x-auto overflow-y-visible seamless-scroll nested-scroll-touch-chain min-w-0 rounded-md border">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
@@ -522,12 +567,13 @@ const PaymentHistory = () => {
                   <TableHead>Billing Cycle</TableHead>
                   <TableHead>Payment Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="whitespace-nowrap">Date</TableHead>
+                  <TableHead className="whitespace-nowrap">Next Payment Date</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((payment) => (
+                {paymentsForDisplay.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-mono text-sm">
                       {payment.order_id}
@@ -552,7 +598,7 @@ const PaymentHistory = () => {
                         {payment.status || 'Pending'}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {payment.created_at ? (
                         <div className="flex items-center gap-1">
                           📅 {format(new Date(payment.created_at), 'dd MMM yyyy', { locale: id })}
@@ -561,12 +607,28 @@ const PaymentHistory = () => {
                         'N/A'
                       )}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {(() => {
+                        const endDate = nextPaymentDateByPaymentId.nextMap.get(payment.id) ?? null;
+                        return endDate ? (
+                          <div className="flex items-center gap-1">
+                            📅 {format(endDate, 'dd MMM yyyy', { locale: id })}
+                          </div>
+                        ) : (
+                          '-'
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => downloadReceipt(payment)}
+                          onClick={() => downloadReceipt(payment, {
+                          nextPaymentDate: nextPaymentDateByPaymentId.nextMap.get(payment.id) ?? null,
+                          periodStart: nextPaymentDateByPaymentId.periodStartMap.get(payment.id) ?? null,
+                          periodEnd: nextPaymentDateByPaymentId.periodEndMap.get(payment.id) ?? null,
+                        })}
                           className="flex items-center gap-1"
                         >
                           <Download className="h-4 w-4" />

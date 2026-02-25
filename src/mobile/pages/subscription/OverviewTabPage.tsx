@@ -9,6 +9,7 @@ import { Button } from "@/mobile/components/ui/button";
 import { OverviewTabPageSkeleton } from "./OverviewTabPageSkeleton";
 import { useOptimizedPerformanceMonitor } from "@/features/10-management/hooks/useOptimizedPerformanceMonitor";
 import { useOptimizedSubscription } from "@/features/10-management/hooks/useOptimizedSubscription";
+import { useNextBillingFromPayments } from "@/features/10-management/hooks/useNextBillingFromPayments";
 import { useSubscriptionAnalytics } from "@/features/10-overview/hooks/useSubscriptionAnalytics";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { CurrentSubscription, EmployeeGrowthChart, UsageMetricsCards } from "@/features/10-overview/section";
@@ -23,6 +24,9 @@ const OverviewTabPage = memo(() => {
   const { organizationId } = useCurrentOrg();
 
   const { subscriptionStatus, isLoading, statusError, refreshSubscriptionStatus } = useOptimizedSubscription();
+  const { nextBillingDate, daysUntilExpiry, paymentsLoading } = useNextBillingFromPayments(organizationId ?? undefined);
+  const nextBillingOverride =
+    nextBillingDate != null ? { date: nextBillingDate, daysRemaining: daysUntilExpiry } : null;
   const { analytics, isLoading: analyticsLoading, isError: analyticsError, refetch: refetchAnalytics } = useSubscriptionAnalytics();
 
   const isInitialLoading = isLoading && !subscriptionStatus;
@@ -71,7 +75,13 @@ const OverviewTabPage = memo(() => {
           </Card>
         )}
 
-        {!statusError && subscriptionStatus && <CurrentSubscription subscriptionStatus={subscriptionStatus} />}
+        {!statusError && subscriptionStatus && (
+          <CurrentSubscription
+            subscriptionStatus={subscriptionStatus}
+            nextBillingOverride={nextBillingOverride}
+            nextBillingLoading={paymentsLoading}
+          />
+        )}
         {analyticsError && (
           <Card className="border-destructive/40 bg-destructive/5">
             <CardHeader>

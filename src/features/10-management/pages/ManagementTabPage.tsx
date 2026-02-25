@@ -7,10 +7,16 @@ import { HeaderAndTab } from '@/features/10-management/components/sections/Heade
 import { CreditCard } from 'lucide-react';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useOptimizedSubscription } from '../hooks/useOptimizedSubscription';
+import { useNextBillingFromPayments } from '../hooks/useNextBillingFromPayments';
 import { CurrentPlanSection, QuickActionsPanel, PaymentHistory } from '../components/sections';
 
 const ManagementContent = memo(() => {
+  const { organizationId } = useCurrentOrg();
   const { subscriptionStatus, refreshSubscriptionStatus } = useOptimizedSubscription();
+  const { nextBillingDate, daysUntilExpiry, paymentsLoading } = useNextBillingFromPayments(organizationId ?? undefined);
+  const nextBillingOverride = nextBillingDate != null
+    ? { date: nextBillingDate, daysRemaining: daysUntilExpiry }
+    : null;
 
   return (
     <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 h-full">
@@ -36,7 +42,7 @@ const ManagementContent = memo(() => {
               {/* Enhanced Subscription Management */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Current Plan Section */}
-                <CurrentPlanSection subscriptionStatus={subscriptionStatus} />
+                <CurrentPlanSection subscriptionStatus={subscriptionStatus} nextBillingOverride={nextBillingOverride} nextBillingLoading={paymentsLoading} />
 
                 {/* Action Panel */}
                 <QuickActionsPanel 

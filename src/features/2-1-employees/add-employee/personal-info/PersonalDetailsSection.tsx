@@ -26,127 +26,119 @@ const religionOptions = [
   { value: 'other', label: 'Other' },
 ];
 
+const fieldClass = 'space-y-2';
+const inputClass = 'border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm';
+
 export const PersonalDetailsSection = ({ formData, handleInputChange }: PersonalDataStepProps) => {
   return (
-    <div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Full Name */}
-        <div className="space-y-2">
-          <Label htmlFor="name" className="text-sm font-medium">
-            Full Name <span className="text-red-500">*</span>
-          </Label>
-          <Input 
-            id="name" 
-            value={formData.name || ''} 
-            onChange={e => handleInputChange('name', e.target.value)} 
-            placeholder="Enter full name" 
-            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
-          />
-        </div>
-
-        {/* Email */}
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-sm font-medium">
-            Email <span className="text-red-500">*</span>
-          </Label>
-          <Input 
-            id="email" 
-            type="email" 
-            value={formData.email || ''} 
-            onChange={e => handleInputChange('email', e.target.value)} 
-            placeholder="Enter email address" 
-            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
-          />
-        </div>
-
-        {/* Mobile Phone */}
-        <div className="space-y-2">
-          <Label htmlFor="mobile_phone" className="text-sm font-medium">
-            Mobile Phone <span className="text-red-500">*</span>
-          </Label>
-          <Input 
-            id="mobile_phone" 
-            value={formData.mobile_phone || ''} 
-            onChange={e => handleInputChange('mobile_phone', e.target.value)} 
-            placeholder="Enter mobile phone number" 
-            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
-          />
-        </div>
-
-        {/* Religion */}
-        <div className="space-y-2">
-          <Label htmlFor="religion" className="text-sm font-medium">
-            Religion
-          </Label>
-          <Select value={formData.religion || ''} onValueChange={value => handleInputChange('religion', value)}>
-            <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-              <SelectValue placeholder="Select religion" />
-            </SelectTrigger>
-            <SelectContent>
-              {religionOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Birth Date */}
-        <div className="space-y-2">
-          <Label htmlFor="birth_date" className="text-sm font-medium">
-            Birth Date
-          </Label>
-          <Input 
-            id="birth_date" 
-            type="date" 
-            value={formData.birth_date || ''} 
-            onChange={e => handleInputChange('birth_date', e.target.value)} 
-            placeholder="mm/dd/yyyy" 
-            className="border-gray-300 focus:border-blue-500 focus:ring-blue-500" 
-          />
-        </div>
-
-        {/* Gender */}
-        <div className="space-y-2">
-          <Label htmlFor="gender" className="text-sm font-medium">
-            Gender
-          </Label>
-          <Select value={formData.gender || ''} onValueChange={value => handleInputChange('gender', value)}>
-            <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-              <SelectValue placeholder="Select gender" />
-            </SelectTrigger>
-            <SelectContent>
-              {genderOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Marital Status */}
-        <div className="space-y-2">
-          <Label htmlFor="marital_status" className="text-sm font-medium">
-            Marital Status
-          </Label>
-          <Select value={formData.marital_status || ''} onValueChange={value => handleInputChange('marital_status', value)}>
-            <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-              <SelectValue placeholder="Select marital status" />
-            </SelectTrigger>
-            <SelectContent>
-              {maritalStatusOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <>
+      <div className={fieldClass}>
+        <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+          Full Name <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="name"
+          value={formData.name || ''}
+          onChange={e => handleInputChange('name', e.target.value)}
+          placeholder="Enter full name"
+          className={inputClass}
+        />
       </div>
-    </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+          Email <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          value={formData.email || ''}
+          onChange={e => handleInputChange('email', e.target.value)}
+          placeholder="Enter email address"
+          className={inputClass}
+        />
+      </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="mobile_phone" className="text-sm font-medium text-gray-700">
+          Mobile Phone <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="mobile_phone"
+          value={formData.mobile_phone || ''}
+          onChange={e => handleInputChange('mobile_phone', e.target.value)}
+          placeholder="Enter mobile phone number"
+          className={inputClass}
+        />
+      </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="religion" className="text-sm font-medium text-gray-700">
+          Religion
+        </Label>
+        <Select value={formData.religion || ''} onValueChange={value => handleInputChange('religion', value)}>
+          <SelectTrigger className={inputClass}>
+            <SelectValue placeholder="Select religion" />
+          </SelectTrigger>
+          <SelectContent>
+            {religionOptions.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="birth_date" className="text-sm font-medium text-gray-700">
+          Birth Date
+        </Label>
+        <Input
+          id="birth_date"
+          type="date"
+          value={formData.birth_date || ''}
+          onChange={e => handleInputChange('birth_date', e.target.value)}
+          className={inputClass}
+        />
+      </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="gender" className="text-sm font-medium text-gray-700">
+          Gender
+        </Label>
+        <Select value={formData.gender || ''} onValueChange={value => handleInputChange('gender', value)}>
+          <SelectTrigger className={inputClass}>
+            <SelectValue placeholder="Select gender" />
+          </SelectTrigger>
+          <SelectContent>
+            {genderOptions.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className={fieldClass}>
+        <Label htmlFor="marital_status" className="text-sm font-medium text-gray-700">
+          Marital Status
+        </Label>
+        <Select value={formData.marital_status || ''} onValueChange={value => handleInputChange('marital_status', value)}>
+          <SelectTrigger className={inputClass}>
+            <SelectValue placeholder="Select marital status" />
+          </SelectTrigger>
+          <SelectContent>
+            {maritalStatusOptions.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </>
   );
 };
 

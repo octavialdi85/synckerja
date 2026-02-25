@@ -1,6 +1,8 @@
+/// <reference path="../edge-runtime.d.ts" />
 // deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { addMonths, addYears } from "https://esm.sh/date-fns@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,14 +10,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const addBillingInterval = (baseDate: Date, billingCycle: string) => {
-  const result = new Date(baseDate);
+const addBillingInterval = (baseDate: Date, billingCycle: string): Date => {
   if (billingCycle === "yearly") {
-    result.setFullYear(result.getFullYear() + 1);
-  } else {
-    result.setMonth(result.getMonth() + 1);
+    return addYears(baseDate, 1);
   }
-  return result;
+  return addMonths(baseDate, 1);
 };
 
 serve(async (req) => {
@@ -145,7 +144,7 @@ serve(async (req) => {
 
       const baseStartDate = existingSubscription?.subscription_end_date
         ? new Date(existingSubscription.subscription_end_date)
-        : new Date();
+        : new Date(payment.created_at);
 
       const startDate = baseStartDate;
       const endDate = addBillingInterval(startDate, payment.billing_cycle);
@@ -182,6 +181,15 @@ serve(async (req) => {
       }
 
       await supabase
+        .from("payments")
+        .update({
+          subscription_start_date: startDate.toISOString(),
+          subscription_end_date: endDate.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+
+      await supabase
         .from("organizations")
         .update({
           has_active_subscription: true,
@@ -190,6 +198,48 @@ serve(async (req) => {
         .eq("id", payment.organization_id);
 
       console.log("✅ Subscription activated successfully");
+
+      // Process employee removals if any employees are marked for removal
+      console.log("🔍 Checking for employees marked for removal...");
+      const { data: employeesToRemove, error: employeesError } = await supabase
+        .from("employees")
+        .select("id, full_name, email")
+        .eq("organization_id", payment.organization_id)
+        .eq("pending_removal", true);
+
+      if (employeesError) {
+        console.error("❌ Error fetching employees for removal:", employeesError);
+        // Don't throw - continue even if we can't process removals
+      } else if (employeesToRemove && employeesToRemove.length > 0) {
+        console.log(`🗑️ Processing removal of ${employeesToRemove.length} employee(s)...`);
+        
+        const employeeIds = employeesToRemove.map(emp => emp.id);
+        
+        // Update employee status to terminated and clear pending removal flags
+        const { error: updateEmployeesError } = await supabase
+          .from("employees")
+          .update({
+            status: "terminated",
+            pending_removal: false,
+            pending_removal_reason: null,
+            pending_removal_date: null,
+            updated_at: new Date().toISOString(),
+          })
+          .in("id", employeeIds)
+          .eq("organization_id", payment.organization_id);
+
+        if (updateEmployeesError) {
+          console.error("❌ Error updating employee status:", updateEmployeesError);
+          // Don't throw - log error but continue
+        } else {
+          console.log(`✅ Successfully removed ${employeesToRemove.length} employee(s) from organization`);
+          employeesToRemove.forEach(emp => {
+            console.log(`   - Removed: ${emp.full_name} (${emp.email})`);
+          });
+        }
+      } else {
+        console.log("ℹ️ No employees marked for removal");
+      }
     }
 
     return new Response(

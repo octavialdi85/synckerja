@@ -13,7 +13,7 @@ export const DocumentUploadSection = ({ formData, handleInputChange }: PersonalD
           value={formData.id_card_file}
           onChange={(value) => handleInputChange('id_card_file', value || '')}
           accept=".pdf,.jpg,.jpeg,.png"
-          required={true}
+          required={false}
         />
 
         <FileUpload

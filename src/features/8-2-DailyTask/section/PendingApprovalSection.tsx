@@ -37,9 +37,11 @@ function getEntityTypeLabel(entityType: string, t: (k: string, fallback: string)
 export interface PendingApprovalSectionProps {
   /** When 'jobdesc-overview', title click navigates to Daily Task Summary view instead of task list. */
   variant?: 'sidebar' | 'jobdesc-overview';
+  /** When provided, "View Content" opens the preview modal instead of navigating to /review (Task Summary only). */
+  onOpenPreview?: (planId: string, callbacks?: { onClose: () => void }) => void;
 }
 
-export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps = {}) => {
+export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprovalSectionProps = {}) => {
   const { t } = useAppTranslation();
   const navigate = useNavigate();
   const { getOrCreate } = usePublicReviewToken();
@@ -152,6 +154,14 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
   const handleViewContent = async (row: CompletionApprovalRow) => {
     const planId = row.entity_type === 'step' ? row.task_steps?.social_media_plan_id : null;
     if (!planId) return;
+
+    // Task Summary: open preview modal in-page (same as Comment Notifications on dashboard)
+    if (onOpenPreview && variant !== 'jobdesc-overview') {
+      onOpenPreview(planId, { onClose: refresh });
+      return;
+    }
+
+    // Job Desc overview (mobile): navigate to /review page
     setViewContentLoadingRowId(row.id);
     try {
       // Use maybeSingle() to avoid 406 when RLS returns 0 rows (single() expects exactly one row)
@@ -208,8 +218,10 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
           <span className="text-xl font-bold text-amber-600">{pending.length}</span>
         </div>
 
-        {/* List of items to approve (seamless vertical scroll; nested-scroll-touch so finger scroll works inside box) */}
-        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch min-h-0 min-w-0">
+        {/* List of items to approve (seamless vertical scroll; scroll chaining per .cursor/rules/scroll-chaining.mdc) */}
+        <div
+          className={`mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 min-w-0 ${variant === 'jobdesc-overview' ? 'nested-scroll-touch' : 'nested-scroll-touch-chain'}`}
+        >
           {fetchError ? (
             <p className="text-xs text-red-600 py-2">
               {t('dailyTask.approval.fetchError', 'Failed to load approvals. Please try again.')}
@@ -280,8 +292,8 @@ export const PendingApprovalSection = ({ variant }: PendingApprovalSectionProps 
                         {t('dailyTask.approval.viewContent', 'View Content')}
                       </Button>
                     )}
-                    {/* On Job Desc overview, Approve/Reject are on /review page — hide when View Content is shown */}
-                    {!(variant === 'jobdesc-overview' && showViewContent(row)) && (
+                    {/* When card has "View Content", Approve/Reject are in the Preview modal (or /review for jobdesc) — hide on card */}
+                    {!showViewContent(row) && (
                       <>
                         <Button
                           size="sm"

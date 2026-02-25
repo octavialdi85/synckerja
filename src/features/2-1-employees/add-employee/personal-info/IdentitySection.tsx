@@ -61,8 +61,8 @@ export const IdentitySection = ({ formData, handleInputChange }: PersonalDataSte
   }, [formData.nik]);
 
   const getInputClassName = () => {
-    let baseClass = "border-gray-300 focus:border-blue-500 focus:ring-blue-500";
-    
+    let baseClass = "border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm";
+
     if (nikValidation.isChecking) {
       return `${baseClass} border-yellow-300`;
     } else if (nikValidation.isValid === true) {
@@ -70,7 +70,7 @@ export const IdentitySection = ({ formData, handleInputChange }: PersonalDataSte
     } else if (nikValidation.isValid === false) {
       return `${baseClass} border-red-500`;
     }
-    
+
     return baseClass;
   };
 
@@ -86,36 +86,34 @@ export const IdentitySection = ({ formData, handleInputChange }: PersonalDataSte
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-      <div className="space-y-2">
-        <Label htmlFor="nik" className="text-sm font-medium">
-          NIK (16 digit) <span className="text-red-500">*</span>
-        </Label>
-        <div className="relative">
-          <Input 
-            id="nik" 
-            value={formData.nik || ''} 
-            onChange={e => handleInputChange('nik', e.target.value.replace(/\D/g, ''))} // Only allow digits
-            placeholder="Enter NIK (16 digits)" 
-            maxLength={16} 
-            className={getInputClassName()}
-          />
-          {getValidationIcon() && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              {getValidationIcon()}
-            </div>
-          )}
-        </div>
-        {nikValidation.message && (
-          <p className={`text-xs ${
-            nikValidation.isValid === true ? 'text-green-600' : 
-            nikValidation.isValid === false ? 'text-red-600' : 
-            'text-gray-600'
-          }`}>
-            {nikValidation.message}
-          </p>
+    <div className="space-y-2">
+      <Label htmlFor="nik" className="text-sm font-medium text-gray-700">
+        NIK (16 digit)
+      </Label>
+      <div className="relative">
+        <Input
+          id="nik"
+          value={formData.nik || ''}
+          onChange={e => handleInputChange('nik', e.target.value.replace(/\D/g, ''))}
+          placeholder="Enter NIK (16 digits)"
+          maxLength={16}
+          className={getInputClassName()}
+        />
+        {getValidationIcon() && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            {getValidationIcon()}
+          </div>
         )}
       </div>
+      {nikValidation.message && (
+        <p className={`text-xs ${
+          nikValidation.isValid === true ? 'text-green-600' :
+          nikValidation.isValid === false ? 'text-red-600' :
+          'text-gray-600'
+        }`}>
+          {nikValidation.message}
+        </p>
+      )}
     </div>
   );
 };

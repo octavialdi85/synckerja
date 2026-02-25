@@ -5,9 +5,16 @@ import type { SubscriptionStatus } from '../../hooks/useOptimizedSubscription';
 
 interface CurrentPlanSectionProps {
   subscriptionStatus?: SubscriptionStatus | null;
+  /** When set, overrides Next Billing Date and days remaining to match Payment History logic */
+  nextBillingOverride?: { date: Date | null; daysRemaining: number } | null;
+  /** When true, show loading for next billing instead of RPC fallback (avoids wrong 58 days on first paint). */
+  nextBillingLoading?: boolean;
 }
 
-export const CurrentPlanSection = memo(({ subscriptionStatus }: CurrentPlanSectionProps) => {
+export const CurrentPlanSection = memo(({ subscriptionStatus, nextBillingOverride, nextBillingLoading }: CurrentPlanSectionProps) => {
+  const effectiveNextDate = nextBillingOverride?.date ?? (subscriptionStatus?.subscription_end_date ? new Date(subscriptionStatus.subscription_end_date) : null);
+  const effectiveDaysRemaining = nextBillingOverride != null ? nextBillingOverride.daysRemaining : (subscriptionStatus?.days_until_expiry ?? 0);
+  const showLoading = nextBillingLoading && nextBillingOverride == null;
   return (
     <div className="lg:col-span-2 space-y-2">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -72,14 +79,18 @@ export const CurrentPlanSection = memo(({ subscriptionStatus }: CurrentPlanSecti
           </div>
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
             <p className="text-lg font-semibold text-orange-900">
-              {subscriptionStatus?.subscription_end_date 
-                ? new Date(subscriptionStatus.subscription_end_date).toLocaleDateString('id-ID')
+              {showLoading
+                ? '...'
+                : effectiveNextDate
+                ? effectiveNextDate.toLocaleDateString('id-ID')
                 : 'N/A'
               }
             </p>
             <p className="text-sm text-orange-700 mt-1">
-              {subscriptionStatus?.days_until_expiry 
-                ? `${subscriptionStatus.days_until_expiry} days remaining`
+              {showLoading
+                ? 'Loading...'
+                : effectiveNextDate && effectiveDaysRemaining != null
+                ? `${effectiveDaysRemaining} days remaining`
                 : 'No expiry date'
               }
             </p>

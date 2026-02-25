@@ -8,10 +8,24 @@ import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface MobileSubscriptionStatsProps {
   subscriptionStatus: SubscriptionStatus;
+  /** Override next billing date/days to match Payment History (sync with desktop) */
+  nextBillingOverride?: { date: Date | null; daysRemaining: number } | null;
+  /** When true and no override, show loading for period/days */
+  nextBillingLoading?: boolean;
 }
 
-export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubscriptionStatsProps) => {
+export const MobileSubscriptionStats = memo(({ subscriptionStatus, nextBillingOverride, nextBillingLoading }: MobileSubscriptionStatsProps) => {
   const { t } = useAppTranslation();
+  const periodEndValue =
+    nextBillingLoading && !nextBillingOverride
+      ? "..."
+      : formatSubscriptionDate(
+          nextBillingOverride?.date?.toISOString() ?? subscriptionStatus.subscription_end_date ?? subscriptionStatus.end_date,
+          { month: "short" },
+        );
+  const daysLeftValue =
+    nextBillingLoading && !nextBillingOverride ? "..." : `${nextBillingOverride?.daysRemaining ?? subscriptionStatus.days_until_expiry ?? 0} ${t("subscription.management.daysUnit")}`;
+
   const stats = useMemo(
     () => [
       {
@@ -27,7 +41,7 @@ export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubsc
       {
         icon: Calendar,
         title: t("subscription.management.periodEnd"),
-        value: formatSubscriptionDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date, { month: "short" }),
+        value: periodEndValue,
         accent: "bg-blue-100 text-blue-700",
       },
       {
@@ -39,11 +53,11 @@ export const MobileSubscriptionStats = memo(({ subscriptionStatus }: MobileSubsc
       {
         icon: Clock3,
         title: t("subscription.management.daysLeft"),
-        value: `${subscriptionStatus.days_until_expiry ?? 0} ${t("subscription.management.daysUnit")}`,
+        value: daysLeftValue,
         accent: "bg-purple-100 text-purple-700",
       },
     ],
-    [subscriptionStatus, t],
+    [subscriptionStatus, t, periodEndValue, daysLeftValue],
   );
 
   const billingSummary = useMemo(() => {

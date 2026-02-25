@@ -8,10 +8,16 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface CurrentSubscriptionProps {
   subscriptionStatus: SubscriptionStatus;
+  /** When set, overrides renewal/next payment date and days remaining to match Payment History */
+  nextBillingOverride?: { date: Date | null; daysRemaining: number } | null;
+  /** When true and no override, show loading for renewal/days (avoids wrong 58 on first paint). */
+  nextBillingLoading?: boolean;
 }
 
 export const CurrentSubscription = memo(({
-  subscriptionStatus
+  subscriptionStatus,
+  nextBillingOverride,
+  nextBillingLoading
 }: CurrentSubscriptionProps) => {
   const { t } = useAppTranslation();
   const formatDate = (dateString: string) => {
@@ -29,9 +35,13 @@ export const CurrentSubscription = memo(({
   const employeeUsagePercentage = (subscriptionStatus.current_employees / maxEmployees) * 100;
   const isNearLimit = employeeUsagePercentage >= 80;
   
-  const expiryDate = subscriptionStatus.is_trial 
-    ? subscriptionStatus.trial_end_date || subscriptionStatus.end_date
-    : subscriptionStatus.subscription_end_date || subscriptionStatus.end_date;
+  const expiryDate = nextBillingOverride?.date
+    ? nextBillingOverride.date.toISOString()
+    : subscriptionStatus.is_trial 
+    ? (subscriptionStatus.trial_end_date || subscriptionStatus.end_date)
+    : (subscriptionStatus.subscription_end_date || subscriptionStatus.end_date);
+  const daysRemaining = nextBillingOverride != null ? nextBillingOverride.daysRemaining : subscriptionStatus.days_until_expiry;
+  const showNextBillingLoading = nextBillingLoading && nextBillingOverride == null;
 
   return (
     <Card>
@@ -91,14 +101,16 @@ export const CurrentSubscription = memo(({
             </div>
             <div className="text-sm">
               <p className="text-gray-700">
-                {subscriptionStatus.is_trial ? t('subscription.overview.endsOn') : t('subscription.overview.renewsOn')} {expiryDate && formatDate(expiryDate)}
+                {subscriptionStatus.is_trial ? t('subscription.overview.endsOn') : t('subscription.overview.renewsOn')} {showNextBillingLoading ? '...' : (expiryDate && formatDate(expiryDate))}
               </p>
-              <p className={`text-xs ${(subscriptionStatus.days_until_expiry || 0) <= 3 ? 'text-red-600' : 'text-gray-500'}`}>
-                {subscriptionStatus.days_until_expiry < 0
-                  ? t('subscription.overview.expiredDaysAgo', 'Expired X days ago', { count: Math.abs(subscriptionStatus.days_until_expiry) })
-                  : subscriptionStatus.days_until_expiry === 0
+              <p className={`text-xs ${(daysRemaining || 0) <= 3 ? 'text-red-600' : 'text-gray-500'}`}>
+                {showNextBillingLoading
+                  ? t('subscription.overview.loading', 'Loading...')
+                  : daysRemaining < 0
+                  ? t('subscription.overview.expiredDaysAgo', 'Expired X days ago', { count: Math.abs(daysRemaining) })
+                  : daysRemaining === 0
                   ? t('subscription.overview.expiresToday', 'Expires today')
-                  : t('subscription.overview.daysRemaining', 'X days remaining', { count: subscriptionStatus.days_until_expiry })
+                  : t('subscription.overview.daysRemaining', 'X days remaining', { count: daysRemaining })
                 }
               </p>
             </div>
@@ -116,7 +128,11 @@ export const CurrentSubscription = memo(({
                   {subscriptionStatus.billing_cycle} billing
                 </p>
                 <p className="text-xs text-gray-500">
-                  {subscriptionStatus.next_payment_date
+                  {showNextBillingLoading
+                    ? t('subscription.overview.loading', 'Loading...')
+                    : nextBillingOverride?.date
+                    ? t('subscription.overview.nextPayment', 'Next payment: X', { date: formatDate(nextBillingOverride.date.toISOString()) })
+                    : subscriptionStatus.next_payment_date
                     ? t('subscription.overview.nextPayment', 'Next payment: X', { date: formatDate(subscriptionStatus.next_payment_date) })
                     : t('subscription.overview.nextPaymentDue', 'Next payment due')
                   }

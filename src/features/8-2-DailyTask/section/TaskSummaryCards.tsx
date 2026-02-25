@@ -17,7 +17,12 @@ interface SummaryData {
   isPercent?: boolean;
 }
 
-const TaskSummaryCards = () => {
+interface TaskSummaryCardsProps {
+  /** When provided, "View Content" in Pending Approval opens the preview modal (Task Summary desktop). */
+  onOpenPreview?: (planId: string, callbacks?: { onClose: () => void }) => void;
+}
+
+const TaskSummaryCards = ({ onOpenPreview }: TaskSummaryCardsProps) => {
   const { t } = useAppTranslation();
   const { summaryData, isLoading, fetchRecentStepUpdates } = useDailyTask();
 
@@ -69,7 +74,7 @@ const TaskSummaryCards = () => {
       </div>
 
       {/* Pending your approval (assigner) + Rejected (assignee) */}
-      <PendingApprovalSection />
+      <PendingApprovalSection onOpenPreview={onOpenPreview} />
 
       {/* Recent Step Updates */}
       <div className="mt-4">

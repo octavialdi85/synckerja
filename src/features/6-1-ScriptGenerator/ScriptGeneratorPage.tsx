@@ -66,8 +66,8 @@ const ScriptGeneratorContent: React.FC = () => {
               {/* Grid: Section utama (form) + Sidebar kanan (result) — scroll-chaining rule 3.1: satu scroll per panel */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0 h-full overflow-hidden">
-                  {/* Section utama (form): satu scroll container — rule 3.1 */}
-                  <div className="lg:col-span-8 flex flex-col min-h-0 overflow-hidden">
+                  {/* Section utama (form): satu scroll container — rule 3.1 — 50% lebar */}
+                  <div className="lg:col-span-6 flex flex-col min-h-0 overflow-hidden">
                     <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
                         <div className="p-6 w-full min-w-0">
@@ -82,8 +82,8 @@ const ScriptGeneratorContent: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Sidebar kanan (hasil prompt): satu scroll container — rule 3.1 */}
-                  <div className="lg:col-span-4 flex flex-col min-h-0 overflow-hidden">
+                  {/* Sidebar kanan (hasil prompt): satu scroll container — rule 3.1 — 50% lebar */}
+                  <div className="lg:col-span-6 flex flex-col min-h-0 overflow-hidden">
                     <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
                         <div className="p-6 w-full min-w-0">

@@ -12,10 +12,14 @@ interface MobileCurrentPlanCardProps {
   subscriptionStatus: SubscriptionStatus;
   onRefresh: () => void;
   isRefreshing?: boolean;
+  /** Override next billing date/days to match Payment History logic (sync with desktop) */
+  nextBillingOverride?: { date: Date | null; daysRemaining: number } | null;
+  /** When true and no override, show loading for next/ends (avoids wrong RPC date) */
+  nextBillingLoading?: boolean;
 }
 
 export const MobileCurrentPlanCard = memo(
-  ({ subscriptionStatus, onRefresh, isRefreshing }: MobileCurrentPlanCardProps) => {
+  ({ subscriptionStatus, onRefresh, isRefreshing, nextBillingOverride, nextBillingLoading }: MobileCurrentPlanCardProps) => {
     const { t } = useAppTranslation();
     const usagePercent =
       subscriptionStatus.member_count > 0
@@ -99,14 +103,26 @@ export const MobileCurrentPlanCard = memo(
             <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
               <span>{t("subscription.management.endsOn")}</span>
               <span className="font-semibold text-foreground">
-                {formatSubscriptionDate(subscriptionStatus.subscription_end_date || subscriptionStatus.end_date, { month: "long" })}
+                {nextBillingLoading && !nextBillingOverride
+                  ? "..."
+                  : formatSubscriptionDate(
+                      nextBillingOverride?.date?.toISOString() ?? subscriptionStatus.subscription_end_date ?? subscriptionStatus.end_date,
+                      { month: "long" },
+                    )}
               </span>
             </div>
             <div className="mt-2 flex items-center gap-2 rounded-lg bg-card p-2.5 text-xs text-muted-foreground">
               <CalendarDays className="h-4 w-4 text-primary" />
               <div>
                 <p className="font-semibold text-foreground">{t("subscription.management.nextPayment")}</p>
-                <p>{formatSubscriptionDate(subscriptionStatus.next_payment_date, { month: "long" })}</p>
+                <p>
+                  {nextBillingLoading && !nextBillingOverride
+                    ? "..."
+                    : formatSubscriptionDate(
+                        nextBillingOverride?.date?.toISOString() ?? subscriptionStatus.next_payment_date,
+                        { month: "long" },
+                      )}
+                </p>
               </div>
             </div>
           </div>
