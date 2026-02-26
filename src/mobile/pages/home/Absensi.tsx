@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { AttendanceHeader } from "@/mobile/components/AttendanceHeader";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Bell } from "lucide-react";
 import { TimeDisplay } from "@/mobile/components/TimeDisplay";
 import { LocationChecker, LocationButton } from "@/mobile/components/LocationChecker";
 import { AttendanceStatus } from "@/mobile/components/AttendanceStatus";
@@ -25,6 +26,8 @@ import { LiveChatAppBadgeSync } from "@/features/5-3-whatsapp/components/LiveCha
 import { getCurrentPosition } from "@/mobile/utils/geolocation";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { useProfile } from "@/mobile/hooks/useProfile";
+import { NotificationsModal } from "@/mobile/components/NotificationsModal";
+import { useNotificationBadgeCount } from "@/mobile/hooks/useNotificationBadgeCount";
 
 function getGreetingKey(hour: number): 'morning' | 'noon' | 'afternoon' | 'night' {
   if (hour >= 18) return 'night';
@@ -63,6 +66,19 @@ const Absensi = () => {
     scheduledTime: '',
     pendingClockIn: false
   });
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [initialNotificationsTab, setInitialNotificationsTab] = useState<"comments" | "tasks" | "updates" | undefined>(undefined);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const state = location.state as { reopenNotifications?: boolean; openNotificationsTab?: "comments" | "tasks" | "updates" } | null;
+    if (state?.reopenNotifications) {
+      setNotificationsOpen(true);
+      setInitialNotificationsTab(state.openNotificationsTab);
+      navigate(".", { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
   
   const lastCheckInTimeRef = useRef<string | null>(null);
 
@@ -84,6 +100,7 @@ const Absensi = () => {
   const { onlineUsers, totalOnline } = useRealtimePresence(organizationId, userForPresence ?? undefined);
 
   const { profile, loading: profileLoading } = useProfile();
+  const { totalCount: notificationBadgeCount } = useNotificationBadgeCount();
   const currentHour = new Date().getHours();
   const greetingKey = getGreetingKey(currentHour);
   const greeting = t(`home.greeting.${greetingKey}`);
@@ -689,12 +706,25 @@ const Absensi = () => {
                 <p className="text-base font-semibold text-foreground truncate">{displayName}</p>
               </div>
             </div>
-            <div className="shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <RealtimeStatusIndicator
                 isConnected={realtimeConnected}
                 onlineUsers={totalOnline}
                 className="text-xs"
               />
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(true)}
+                className="relative p-2 hover:bg-muted rounded-lg transition-colors"
+                aria-label={t("mobileHome.notificationsTitle", "Notifikasi")}
+              >
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                {notificationBadgeCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-semibold">
+                    {notificationBadgeCount > 99 ? '99+' : notificationBadgeCount}
+                  </span>
+                )}
+              </button>
             </div>
           </header>
 
@@ -796,6 +826,15 @@ const Absensi = () => {
           onSubmit={handleLateClockIn}
           lateMinutes={lateModal.lateMinutes}
           scheduledTime={lateModal.scheduledTime}
+        />
+
+        <NotificationsModal
+          open={notificationsOpen}
+          onOpenChange={(open) => {
+            if (!open) setInitialNotificationsTab(undefined);
+            setNotificationsOpen(open);
+          }}
+          initialTab={initialNotificationsTab}
         />
       </div>
     </SidebarProvider>

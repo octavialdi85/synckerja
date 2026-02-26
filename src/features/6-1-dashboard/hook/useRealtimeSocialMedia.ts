@@ -32,11 +32,11 @@ export const useRealtimeSocialMedia = () => {
           filter: `organization_id=eq.${organizationId}`
         },
         (payload) => {
-          // Smart cache update - invalidate only, let React Query handle refetch on next render
+          // Refetch so STATUS/APPROVED (Concept + Production) stay in sync when changed from
+          // modal Preview, /review/ page, or another tab/device
           if (organizationId) {
-            queryClient.invalidateQueries({ 
+            queryClient.refetchQueries({
               queryKey: ['social-media-plans', organizationId],
-              refetchType: 'none' // Don't auto-refetch, let component decide when to fetch
             });
           }
         }

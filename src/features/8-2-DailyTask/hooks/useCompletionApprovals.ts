@@ -112,7 +112,7 @@ export function useCompletionApprovals(refreshDeps: unknown[] = []) {
           table: 'completion_approvals',
           filter: `assigner_employee_id=eq.${currentEmployee.id}`,
         },
-        () => {
+        (payload: { eventType?: string }) => {
           refreshRef.current();
         }
       )

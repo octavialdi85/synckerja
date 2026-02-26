@@ -1,14 +1,18 @@
 import { Bell } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/mobile/components/ui/avatar";
+import { SidebarTrigger } from "@/mobile/components/ui/sidebar";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 
 interface AttendanceHeaderProps {
   userName: string;
   userEmail: string;
   userAvatar?: string;
+  onBellClick?: () => void;
 }
 
-export const AttendanceHeader = ({ userName, userEmail, userAvatar }: AttendanceHeaderProps) => {
+export const AttendanceHeader = ({ userName, userEmail, userAvatar, onBellClick }: AttendanceHeaderProps) => {
+  const { t } = useAppTranslation();
+
   return (
     <div className="flex items-center justify-between p-3 bg-card border-b border-border">
       <div className="flex items-center gap-3">
@@ -24,10 +28,17 @@ export const AttendanceHeader = ({ userName, userEmail, userAvatar }: Attendance
           <p className="text-sm text-muted-foreground">{userEmail}</p>
         </div>
       </div>
-      
-      <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-        <Bell className="h-5 w-5 text-muted-foreground" />
-      </button>
+
+      {onBellClick && (
+        <button
+          type="button"
+          onClick={onBellClick}
+          className="p-2 hover:bg-muted rounded-lg transition-colors"
+          aria-label={t("mobileHome.notificationsTitle", "Notifikasi")}
+        >
+          <Bell className="h-5 w-5 text-muted-foreground" />
+        </button>
+      )}
     </div>
   );
 };

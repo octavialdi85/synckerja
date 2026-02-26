@@ -1,31 +1,15 @@
 /**
  * Global realtime subscription for inbound messages.
- * - When app visible (mobile Live Chat): shows in-app toast (WhatsApp-style).
- * - When app in background: shows system/browser notification.
+ * - Web: toast with sound when visible; Web Notification when tab hidden.
+ * - Native: only FCM triggers sound + banner; Realtime shows toast without sound for in-app feedback.
  */
 import { useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
+import { playNotificationSound } from '@/lib/notificationSound';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
-
-function getNotificationSoundUrl(): string {
-  if (typeof window === 'undefined') return '/notification-bell.wav';
-  return `${window.location.origin}/notification-bell.wav`;
-}
-
-function playInboundSound(): void {
-  if (typeof document === 'undefined') return;
-  try {
-    if (navigator.vibrate) navigator.vibrate(200);
-    const url = getNotificationSoundUrl();
-    const audio = new Audio(url);
-    audio.volume = 1;
-    audio.play().catch(() => {});
-  } catch {
-    // ignore
-  }
-}
 
 function showInboundNotification(
   title: string,
@@ -35,7 +19,7 @@ function showInboundNotification(
   if (typeof document === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
-    playInboundSound();
+    playNotificationSound({ vibrate: true });
     const n = new Notification(title, {
       body,
       tag: 'livechat-inbound',
@@ -65,9 +49,14 @@ function getMessagePreview(row: Record<string, unknown>): string {
 
 type TFunction = (key: string, fallback: string) => string;
 
-/** Toast bergaya WhatsApp: eksplisit [Channel] + preview pesan */
-function showInboundToast(channelLabel: string, messagePreview: string, t: TFunction) {
-  playInboundSound();
+/** Toast bergaya WhatsApp. On native no sound (FCM handles sound+banner). */
+function showInboundToast(
+  channelLabel: string,
+  messagePreview: string,
+  t: TFunction,
+  playSound: boolean
+) {
+  if (playSound) playNotificationSound({ vibrate: true });
   const newMessageLabel = t('livechat.inboundNewMessage', 'Pesan baru');
   toast(`[${channelLabel}] ${newMessageLabel}`, {
     description: messagePreview || newMessageLabel,
@@ -108,10 +97,11 @@ export function useLiveChatInboundNotification(currentConversationId: string | n
 
       const channelLabel = getChannelLabel(table);
       const messagePreview = getMessagePreview((payload?.new ?? {}) as Record<string, unknown>);
-      // Toast in-app selalu ditampilkan (saat foreground maupun background — saat user kembali akan terlihat)
-      showInboundToast(channelLabel, messagePreview || newMessageLabel, t);
-      // Saat tab di background, tambahkan notifikasi sistem agar user bisa diingatkan
-      if (document.visibilityState === 'hidden') {
+      const isNative = Capacitor.isNativePlatform();
+      // Native: only FCM triggers sound + banner; Realtime shows toast without sound
+      showInboundToast(channelLabel, messagePreview || newMessageLabel, t, !isNative);
+      // Web: when tab hidden show system notification. Native background: FCM handles it
+      if (!isNative && document.visibilityState === 'hidden') {
         showInboundNotification(
           `[${channelLabel}] ${newMessageLabel}`,
           messagePreview || openAppHint,

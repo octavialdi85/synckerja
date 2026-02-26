@@ -276,8 +276,8 @@ export function LiveChatListView({
               </div>
             </div>
 
-            {/* Spacer so list doesn't scroll under the fixed footer; footer uses safe-area-bottom */}
-            <NavigationFooter className="safe-area-bottom-lower" />
+            {/* Footer bar without nav icons; space for custom livechat navigation */}
+            <NavigationFooter hideItems className="safe-area-bottom-lower" />
           </main>
         </div>
       </SidebarProvider>

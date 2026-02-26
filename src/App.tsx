@@ -23,7 +23,7 @@ import EmployeeWelcome from "./features/1-login/pages/EmployeeWelcome";
 import TermsAndConditions from "./features/1-login/pages/TermsAndConditions";
 import { TermsOfServicePage, PrivacyPolicyPage } from "./features/policy";
 import NotFound from "./features/1-login/pages/NotFound";
-import { useIsMobile } from "./mobile/hooks/use-mobile";
+import { useDesktopLayout } from "./mobile/hooks/use-device-orientation";
 import ModernHomePage from "./features/1_home/pages/ModernHomePage";
 import MobileHome from "./mobile/pages/home/Absensi";
 import MobileProfile from "./mobile/pages/home/Profile";
@@ -97,6 +97,9 @@ import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPag
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import MobileLiveChatPage from "./mobile/pages/livechat/LiveChatPage";
 import { NativeSafeAreaWrapper } from "./mobile/components/NativeSafeAreaWrapper";
+import { useAppNotificationsFCM } from "./mobile/hooks/useAppNotificationsFCM";
+import { usePushNotificationHandlers } from "./mobile/hooks/usePushNotificationHandlers";
+import { useLiveChatFCM } from "./mobile/pages/livechat/hooks/useLiveChatFCM";
 import { CalculatorServicesPage } from "./features/8-3-calculator/services";
 import { CalculatorSalesPage } from "./features/8-3-calculator/Sales";
 import { PPh21Calculator as PPh21CalculatorPage } from "./features/8-4-pph-21/pages";
@@ -161,19 +164,25 @@ const SecurityWrapper = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Native FCM: register token for app notifications (general) + livechat and handle push taps
+const NativePushSetup = () => {
+  useAppNotificationsFCM();
+  useLiveChatFCM();
+  usePushNotificationHandlers();
+  return null;
+};
+
 // Route element selector for Login: uses viewport hook + UA heuristics
 // Always use the feature-based Login.ts for all devices (mobile and desktop)
 const LoginRouteElement = () => {
   return <Login />;
 };
 
-// Route element selector for Home: uses viewport hook + UA heuristics
+// Route element selector for Home: desktop/tablet landscape = desktop version; handphone/tablet portrait = mobile
 const HomeRouteElement = () => {
   const location = useLocation();
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileHome key={location.pathname} /> : <ModernHomePage key={location.pathname} />;
+  const useDesktop = useDesktopLayout();
+  return useDesktop ? <ModernHomePage key={location.pathname} /> : <MobileHome key={location.pathname} />;
 };
 
 // Route element selector for EmployeeWelcome
@@ -181,20 +190,15 @@ const HomeRouteElement = () => {
 const EmployeeWelcomeRouteElement = () => {
   return <EmployeeWelcome />;
 };
-// Route element selector for Create Organization
-// Use mobile version if detected on smartphone, otherwise use desktop version
+// Route element selector for Create Organization: desktop/tablet landscape = desktop; handphone/tablet portrait = mobile
 const CreateOrganizationRouteElement = () => {
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  const isMobile = isViewportMobile || isMobileUserAgent;
-  return isMobile ? <MobileCreateOrganization /> : <CreateOrganization />;
+  const useDesktop = useDesktopLayout();
+  return useDesktop ? <CreateOrganization /> : <MobileCreateOrganization />;
 };
 
-// Route element selector for Profile
+// Mobile = handphone or tablet portrait; Desktop = desktop or tablet landscape
 const useMobileDetection = () => {
-  const isViewportMobile = useIsMobile();
-  const isMobileUserAgent = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-  return isViewportMobile || isMobileUserAgent;
+  return !useDesktopLayout();
 };
 
 const DailyTaskRouteElement = () => {
@@ -264,6 +268,7 @@ const App = () => (
                 v7_relativeSplatPath: true
               }}
             >
+              <NativePushSetup />
               <NativeSafeAreaWrapper>
                 <SecurityWrapper>
                   <SubscriptionExpiryGuard>

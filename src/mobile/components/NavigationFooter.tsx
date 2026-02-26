@@ -15,9 +15,11 @@ const navItems = [
 interface NavigationFooterProps {
   /** Optional class to e.g. reduce bottom padding (safe-area-bottom-lower) on specific pages */
   className?: string;
+  /** When true, render only the footer bar (no nav icons). Use e.g. on livechat to reserve space for custom nav. */
+  hideItems?: boolean;
 }
 
-export const NavigationFooter = ({ className }: NavigationFooterProps) => {
+export const NavigationFooter = ({ className, hideItems }: NavigationFooterProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -36,8 +38,8 @@ export const NavigationFooter = ({ className }: NavigationFooterProps) => {
     <nav
       className="fixed left-0 right-0 bottom-0 bg-card border-t border-border z-30"
     >
-      <div className={`grid grid-cols-5 max-w-md mx-auto ${className ? className : "safe-area-padding-bottom"}`.trim()}>
-        {navItems.map(({ icon: Icon, label, path }) => {
+      <div className={`grid max-w-md mx-auto ${hideItems ? 'min-h-[52px]' : 'grid-cols-5'} ${className ? className : "safe-area-padding-bottom"}`.trim()}>
+        {!hideItems && navItems.map(({ icon: Icon, label, path }) => {
           const isActive = location.pathname === path;
 
           return (

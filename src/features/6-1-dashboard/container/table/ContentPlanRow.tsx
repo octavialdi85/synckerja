@@ -971,20 +971,22 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
         }} isSelected={isSelected} />
         </td>
 
-        {/* POINT 3: Production Status - No longer locked when production approved */}
+        {/* POINT 3: Production Status - No longer locked when production approved; display in sync with APPROVED */}
         <td style={{
         width: '180px',
         minWidth: '180px',
         maxWidth: '180px'
       }} className="px-2 py-1 border-r border-gray-200 border-b border-gray-200">
-          <Select value={plan.production_status || 'none'} onValueChange={value => {
-          if (value === 'none') {
-            // Standardize: Save as null instead of empty string for consistency
-            onProductionStatusChange(plan.id, null);
-          } else {
-            onProductionStatusChange(plan.id, value);
-          }
-        }}>
+          <Select
+            value={plan.production_approved ? 'Approved' : (plan.production_status || 'none')}
+            onValueChange={value => {
+              if (value === 'none') {
+                onProductionStatusChange(plan.id, null);
+              } else {
+                onProductionStatusChange(plan.id, value);
+              }
+            }}
+          >
               <SelectTrigger className="h-8 text-xs border-gray-200 text-left">
                 <SelectValue placeholder="No Status" />
               </SelectTrigger>

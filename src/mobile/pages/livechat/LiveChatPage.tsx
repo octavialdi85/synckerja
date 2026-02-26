@@ -16,7 +16,6 @@ import { getConversationTicketId } from './shared/getConversationTicketId';
 import { LiveChatListView } from './LiveChatListView';
 import { LiveChatChatView } from './LiveChatChatView';
 import { useLiveChatInboundNotification } from './hooks/useLiveChatInboundNotification';
-import { useLiveChatFCM } from './hooks/useLiveChatFCM';
 import { LiveChatAppBadgeSync } from '@/features/5-3-whatsapp/components/LiveChatAppBadgeSync';
 import { useStatusBarStyle } from '@/mobile/hooks/useStatusBarStyle';
 
@@ -164,7 +163,6 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
 
   // Global realtime: show system notification on inbound message (list view or app in background)
   useLiveChatInboundNotification(selectedConversation?.id ?? null);
-  useLiveChatFCM();
 
   const isLoading = waLoading || igLoading || emailLoading;
   const invalidTicketId = !!(ticketId?.trim() && !isLoading && !selectedConversation);

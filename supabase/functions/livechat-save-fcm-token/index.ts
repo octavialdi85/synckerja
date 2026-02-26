@@ -51,6 +51,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const fcmToken = typeof body.token === "string" ? body.token.trim() : "";
     const platform = typeof body.platform === "string" ? body.platform.toLowerCase() : "";
+    const rawContext = typeof body.context === "string" ? body.context.trim().toLowerCase() : "livechat";
+    const context = rawContext === "general" ? "general" : "livechat";
     if (!fcmToken || !platform) {
       return new Response(
         JSON.stringify({ error: "Missing token or platform" }),
@@ -71,9 +73,10 @@ Deno.serve(async (req: Request) => {
           user_id: user.id,
           token: fcmToken,
           platform,
+          context,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,token" }
+        { onConflict: "user_id,token,context" }
       );
 
     if (upsertError) {

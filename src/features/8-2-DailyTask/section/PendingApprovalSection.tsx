@@ -18,6 +18,7 @@ import { useToast } from '@/features/ui/use-toast';
 import type { CompletionApprovalRow } from '../services/completionApprovalService';
 import { supabase } from '@/integrations/supabase/client';
 import { usePublicReviewToken } from '@/features/6-1-dashboard/hook/usePublicReviewToken';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 
 function getDisplayTitle(row: CompletionApprovalRow): string {
   const taskTitle = row.daily_tasks?.title ?? 'Task';
@@ -44,6 +45,7 @@ export interface PendingApprovalSectionProps {
 export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprovalSectionProps = {}) => {
   const { t } = useAppTranslation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { getOrCreate } = usePublicReviewToken();
   const { pending, rejected, loading, fetchError, approve, reject, refresh } = useCompletionApprovals([]);
   const { refetchTasks, uncheckCompletionLocally, setPendingApprovalFocus, navigateToTask } = useDailyTask();
@@ -155,13 +157,14 @@ export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprov
     const planId = row.entity_type === 'step' ? row.task_steps?.social_media_plan_id : null;
     if (!planId) return;
 
-    // Task Summary: open preview modal in-page (same as Comment Notifications on dashboard)
-    if (onOpenPreview && variant !== 'jobdesc-overview') {
+    // Mobile: always navigate to /review (same experience as guest/public review link; desktop uses modal)
+    const useModal = !isMobile && onOpenPreview && variant !== 'jobdesc-overview';
+    if (useModal) {
       onOpenPreview(planId, { onClose: refresh });
       return;
     }
 
-    // Job Desc overview (mobile): navigate to /review page
+    // Navigate to /review page (mobile, or desktop Job Desc, or when no modal handler)
     setViewContentLoadingRowId(row.id);
     try {
       // Use maybeSingle() to avoid 406 when RLS returns 0 rows (single() expects exactly one row)
@@ -218,10 +221,8 @@ export const PendingApprovalSection = ({ variant, onOpenPreview }: PendingApprov
           <span className="text-xl font-bold text-amber-600">{pending.length}</span>
         </div>
 
-        {/* List of items to approve (seamless vertical scroll; scroll chaining per .cursor/rules/scroll-chaining.mdc) */}
-        <div
-          className={`mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 min-w-0 ${variant === 'jobdesc-overview' ? 'nested-scroll-touch' : 'nested-scroll-touch-chain'}`}
-        >
+        {/* List of items to approve (seamless vertical scroll; per .cursor/rules/scroll-chaining.mdc: chain on all views including jobdesc) */}
+        <div className="mt-2 max-h-[min(40vh,320px)] overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0 min-w-0">
           {fetchError ? (
             <p className="text-xs text-red-600 py-2">
               {t('dailyTask.approval.fetchError', 'Failed to load approvals. Please try again.')}

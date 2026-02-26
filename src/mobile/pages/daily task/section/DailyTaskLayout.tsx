@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Filter, RefreshCw } from 'lucide-react';
+import { Filter, RefreshCw, Bell } from 'lucide-react';
 import { SidebarTrigger } from '@/mobile/components/ui/sidebar';
 import {
   Drawer,
@@ -16,12 +16,16 @@ import { TaskList } from './TaskList';
 import { DailyTaskPageSkeleton } from '../DailyTaskPageSkeleton';
 import { MobileTaskFilterDrawerContent } from './MobileTaskFilterDrawer';
 import { hasActiveFilters } from './filterUtils';
+import { useNotificationBadgeCount } from '@/mobile/hooks/useNotificationBadgeCount';
+import { NotificationsModal } from '@/mobile/components/NotificationsModal';
 
 export function DailyTaskLayout() {
   const { t } = useAppTranslation();
   const { toast } = useToast();
   const { filters, resetFilters, refetchTasks, isLoading } = useDailyTask();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { totalCount: notificationBadgeCount } = useNotificationBadgeCount();
   const activeFilters = hasActiveFilters(filters);
   const listScrollRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +70,20 @@ export function DailyTaskLayout() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 relative"
+            aria-label={t('mobileHome.notificationsTitle', 'Notifikasi')}
+            onClick={() => setNotificationsOpen(true)}
+          >
+            <Bell className="h-5 w-5 text-muted-foreground" />
+            {notificationBadgeCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-medium px-1">
+                {notificationBadgeCount > 99 ? '99+' : notificationBadgeCount}
+              </span>
+            )}
+          </Button>
           {activeFilters && (
             <Button
               variant="ghost"
@@ -107,6 +125,8 @@ export function DailyTaskLayout() {
           </Drawer>
         </div>
       </header>
+
+      <NotificationsModal open={notificationsOpen} onOpenChange={setNotificationsOpen} initialTab="tasks" />
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         <div

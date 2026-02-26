@@ -742,8 +742,14 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
             <button
             type="button"
             onClick={() => {
-              const fromJobDesc = (location.state as { from?: string } | null)?.from === 'jobdesc';
-              // On Android (showBackToHome) always go to daily-task so header stays visible and user returns to Job Desc; on web use state.
+              const state = location.state as { from?: string } | null;
+              const fromNotificationsModal = state?.from === 'notifications-modal';
+              const fromJobDesc = state?.from === 'jobdesc';
+              if (fromNotificationsModal) {
+                navigate('/', { replace: true, state: { reopenNotifications: true } });
+                return;
+              }
+              // On Android (showBackToHome) go to daily-task when from jobdesc; else home
               const target = showBackToHome ? '/tools/daily-task?view=jobdesc' : (fromJobDesc ? '/tools/daily-task?view=jobdesc' : '/');
               navigate(target, { replace: true });
             }}

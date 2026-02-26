@@ -328,7 +328,8 @@ Deno.serve(async (req: Request) => {
     const { data: fcmRows } = await supabase
       .from("fcm_tokens")
       .select("id, token")
-      .in("user_id", userIds);
+      .in("user_id", userIds)
+      .eq("context", "livechat");
     const fcmTokensList = (fcmRows ?? []) as { id: string; token: string }[];
     if (fcmServiceAccountJson && fcmTokensList.length > 0) {
       try {
