@@ -158,6 +158,11 @@ serve(async (req) => {
       },
     };
 
+    const webhookUrl = supabaseUrl ? `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/process-midtrans-payment` : "";
+    if (webhookUrl) {
+      console.log("Configure this Notification URL in Midtrans Dashboard (Settings > Config):", webhookUrl);
+    }
+
     console.log("=== MIDTRANS REQUEST DEBUG ===");
     console.log("Enabled payments:", JSON.stringify(midtransPayload.enabled_payments));
     console.log("GoPay config:", JSON.stringify(midtransPayload.gopay));

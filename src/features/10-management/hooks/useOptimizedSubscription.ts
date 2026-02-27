@@ -254,13 +254,16 @@ export const useOptimizedSubscription = () => {
   }, [checkEmployeeLimitMutation]);
 
   // Memoized refresh function - force refetch from Supabase
+  // Also invalidate payment-history and payment-history-next-billing so Next Billing Date updates
   const refreshSubscriptionStatus = useCallback(() => {
     if (organizationId) {
       logger.debug('🔄 [refreshSubscriptionStatus] Manually refreshing subscription for org:', organizationId);
       queryClient.invalidateQueries({ 
         queryKey: optimizedQueryKeys.subscription.status(organizationId),
-        refetchType: 'active' // Immediately refetch active queries
+        refetchType: 'active'
       });
+      queryClient.invalidateQueries({ queryKey: ['payment-history', organizationId], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['payment-history-next-billing', organizationId], refetchType: 'active' });
     }
   }, [organizationId, queryClient]);
 

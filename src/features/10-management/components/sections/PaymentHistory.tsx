@@ -8,6 +8,7 @@ import { Download, History, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { optimizedQueryKeys } from '@/features/10-management/hooks/useOptimizedQueryConfig';
 import { formatIDR } from '../../utils/subscriptionUtils';
 import { format, addMonths, addYears } from 'date-fns';
 import { id } from 'date-fns/locale';
@@ -102,10 +103,11 @@ const PaymentHistory = () => {
       } else {
         toast.info(`Payment status: ${data.status}. Please wait for payment confirmation.`);
       }
-      // Invalidate and refetch payment history
+      // Invalidate payment history and next billing (useNextBillingFromPayments)
       queryClient.invalidateQueries({ queryKey: ['payment-history', organizationId] });
-      // Also invalidate subscription status
-      queryClient.invalidateQueries({ queryKey: ['subscription-status', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['payment-history-next-billing', organizationId] });
+      // Invalidate subscription status (correct key from useOptimizedSubscription)
+      queryClient.invalidateQueries({ queryKey: optimizedQueryKeys.subscription.status(organizationId ?? '') });
     },
     onError: (error: Error) => {
       const errorMessage = error.message || 'Unknown error';

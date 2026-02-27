@@ -134,10 +134,31 @@ export const useMidtransPayment = (options?: UseMidtransPaymentOptions) => {
       const successPath = '/subscription/overview';
       const fallbackPath = '/subscription/plans';
 
+      // Check real status from Midtrans API when user returns - more reliable than webhook
+      const checkPaymentStatusFromMidtrans = async (orderId: string) => {
+        try {
+          const { data, error } = await supabase.functions.invoke('check-midtrans-payment-status', {
+            body: { order_id: orderId }
+          });
+          if (!error && data?.success) {
+            return data.status;
+          }
+        } catch {
+          // Fallback to process-midtrans-payment with result from Snap callback
+        }
+        return null;
+      };
+
       const syncPaymentStatus = async (result: any, statusOverride?: 'success' | 'pending' | 'failed') => {
         try {
+          const orderId = result?.order_id || data.order_id;
+          // Prefer: query Midtrans API for real status
+          const realStatus = await checkPaymentStatusFromMidtrans(orderId);
+          if (realStatus) return;
+
+          // Fallback: sync with process-midtrans-payment using Snap callback result
           const payload = {
-            order_id: result?.order_id || data.order_id,
+            order_id: orderId,
             transaction_status: statusOverride || result?.transaction_status || 'pending',
             transaction_id: result?.transaction_id || '',
             fraud_status: result?.fraud_status || 'accept',

@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/features/1-login/hooks/useCurrentOrg";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mobile/components/ui/card";
@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import { addMonths, addYears } from "date-fns";
 import { id as localeID } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, History, Loader2 } from "lucide-react";
+import { Download, History, Loader2, RefreshCw } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Tables } from "@/mobile/integrations/supabase/types";
@@ -49,7 +49,32 @@ const formatDateTime = (value: string) =>
 export const MobilePaymentHistory = memo(() => {
   const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
+  const queryClient = useQueryClient();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const refreshPaymentStatus = useMutation({
+    mutationFn: async (payment: PaymentRecord) => {
+      const { data, error } = await supabase.functions.invoke("check-midtrans-payment-status", {
+        body: { order_id: payment.order_id },
+      });
+      if (error || !data?.success) {
+        throw new Error(error?.message || "Failed to check payment status");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.status === "success") {
+        toast.success(t("subscription.management.refreshSuccess", "Status pembayaran berhasil diperbarui."));
+      } else {
+        toast.info(t("subscription.management.refreshPending", "Status masih pending. Tunggu konfirmasi."));
+      }
+      queryClient.invalidateQueries({ queryKey: ["payment-history", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-status", organizationId] });
+    },
+    onError: (error: Error) => {
+      toast.error(t("subscription.management.refreshError", "Gagal memperbarui status."));
+    },
+  });
 
   const { data: payments = [], isLoading, isError, refetch } = useQuery<PaymentRecord[]>({
     queryKey: ["payment-history", organizationId],
@@ -339,26 +364,44 @@ export const MobilePaymentHistory = memo(() => {
                 </div>
               )}
               <Separator className="my-1.5" />
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-center gap-2 text-xs"
-                onClick={() =>
-                  handleDownloadReceipt(payment, {
-                    nextPaymentDate: nextPaymentDateByPaymentId.nextMap.get(payment.id) ?? null,
-                    periodStart: nextPaymentDateByPaymentId.periodStartMap.get(payment.id) ?? null,
-                    periodEnd: nextPaymentDateByPaymentId.periodEndMap.get(payment.id) ?? null,
-                  })
-                }
-                disabled={downloadingId === payment.id}
-              >
-                {downloadingId === payment.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
+              <div className="flex gap-2">
+                {payment.status?.toLowerCase() === "pending" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 justify-center gap-2 text-xs"
+                    onClick={() => refreshPaymentStatus.mutate(payment)}
+                    disabled={refreshPaymentStatus.isPending}
+                  >
+                    {refreshPaymentStatus.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    {t("subscription.management.refreshStatus", "Perbarui Status")}
+                  </Button>
                 )}
-                {downloadingId === payment.id ? t("subscription.management.downloadingReceipt") : t("subscription.management.downloadReceipt")}
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 justify-center gap-2 text-xs"
+                  onClick={() =>
+                    handleDownloadReceipt(payment, {
+                      nextPaymentDate: nextPaymentDateByPaymentId.nextMap.get(payment.id) ?? null,
+                      periodStart: nextPaymentDateByPaymentId.periodStartMap.get(payment.id) ?? null,
+                      periodEnd: nextPaymentDateByPaymentId.periodEndMap.get(payment.id) ?? null,
+                    })
+                  }
+                  disabled={downloadingId === payment.id}
+                >
+                  {downloadingId === payment.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {downloadingId === payment.id ? t("subscription.management.downloadingReceipt") : t("subscription.management.downloadReceipt")}
+                </Button>
+              </div>
             </div>
           );
         })}

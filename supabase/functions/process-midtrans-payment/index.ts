@@ -59,8 +59,13 @@ serve(async (req) => {
     }
 
     // Determine final status
+    // Accept "success" from frontend sync (useMidtransPayment onSuccess) in addition to Midtrans webhook values
     let finalStatus = "pending";
-    if (transaction_status === "settlement" || transaction_status === "capture") {
+    if (
+      transaction_status === "settlement" ||
+      transaction_status === "capture" ||
+      transaction_status === "success"
+    ) {
       finalStatus = "success";
     } else if (transaction_status === "pending") {
       finalStatus = "pending";
