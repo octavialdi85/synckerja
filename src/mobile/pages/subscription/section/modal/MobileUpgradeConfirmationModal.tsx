@@ -65,7 +65,8 @@ export const MobileUpgradeConfirmationModal = ({
   isLoading,
   isBillingCycleUpgradeOnly = false,
 }: MobileUpgradeConfirmationModalProps) => {
-  const { t } = useAppTranslation();
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === "id" ? "id-ID" : "en-US";
   const isYearly = billingCycle === "yearly";
   const calculation = proRatedData?.calculation;
   const isScheduled = calculation && !calculation.charge_now;
@@ -74,7 +75,7 @@ export const MobileUpgradeConfirmationModal = ({
     ? newPlan.base_price_per_member * newMemberCount * 12 * (1 - (newPlan.annual_discount_percentage || 0) / 100)
     : newPlan.base_price_per_member * newMemberCount;
 
-  const summaryLine = `${newPlan.name} • ${newMemberCount} member • ${billingCycle === "yearly" ? "Tahunan" : "Bulanan"}`;
+  const summaryLine = `${newPlan.name} • ${newMemberCount} ${t("subscription.plans.unit.member", "member")} • ${billingCycle === "yearly" ? t("subscription.plans.modal.details.billingYearly", "Tahunan") : t("subscription.plans.modal.details.billingMonthly", "Bulanan")}`;
 
   const renderProrateInfo = () => {
     // Billing cycle upgrade: show full yearly payment info, not prorate
@@ -91,7 +92,7 @@ export const MobileUpgradeConfirmationModal = ({
     if (!calculation) {
       return (
         <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-          Tidak ada biaya tambahan. Perubahan akan diproses setelah Anda konfirmasi.
+          {t("subscription.plans.modal.confirm.noCostProcess", "Tidak ada biaya tambahan. Perubahan akan diproses setelah Anda konfirmasi.")}
         </div>
       );
     }
@@ -100,9 +101,9 @@ export const MobileUpgradeConfirmationModal = ({
       return (
         <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-700">
           <h4 className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-orange-800">
-            Perubahan dijadwalkan
+            {t("subscription.plans.modal.confirm.scheduledTitle", "Perubahan dijadwalkan")}
             <Badge variant="secondary" className="bg-white text-orange-700">
-              {new Date(calculation.scheduled_date).toLocaleDateString("id-ID", {
+              {new Date(calculation.scheduled_date).toLocaleDateString(dateLocale, {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
@@ -110,11 +111,11 @@ export const MobileUpgradeConfirmationModal = ({
             </Badge>
           </h4>
           <ul className="space-y-1 text-xs">
-            <li>Sisa hari periode berjalan: {calculation.remaining_days} hari</li>
-            <li>Perubahan akan diterapkan di akhir periode saat ini</li>
+            <li>{t("subscription.plans.modal.confirm.remainingDaysPeriod", "Sisa hari periode berjalan: {{days}} hari", { days: calculation.remaining_days })}</li>
+            <li>{t("subscription.plans.modal.confirm.applyEndPeriod", "Perubahan akan diterapkan di akhir periode saat ini")}</li>
           </ul>
           <p className="mt-2 rounded-lg bg-white/70 p-2 text-[11px] text-orange-700">
-            Tidak ada biaya tambahan. Sistem akan otomatis menerapkan perubahan.
+            {t("subscription.plans.modal.confirm.autoApply", "Tidak ada biaya tambahan. Sistem akan otomatis menerapkan perubahan.")}
           </p>
         </div>
       );
@@ -124,21 +125,21 @@ export const MobileUpgradeConfirmationModal = ({
       return (
         <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-primary">
           <div className="flex items-center justify-between text-sm font-semibold">
-            <span>Total biaya prorate</span>
+            <span>{t("subscription.plans.modal.confirm.totalProrateCost", "Total biaya prorate")}</span>
             <span>{formatIDR(calculation.prorate_amount)}</span>
           </div>
           <ul className="space-y-1 text-xs text-primary/80">
-            <li>Sisa hari subscription: {calculation.remaining_days} hari</li>
-            <li>Persentase prorate: {calculation.prorate_percentage.toFixed(1)}%</li>
+            <li>{t("subscription.plans.modal.prorate.remainingDays", "Sisa hari subscription:")} {calculation.remaining_days} {t("subscription.plans.modal.scheduled.days", "hari")}</li>
+            <li>{t("subscription.plans.modal.prorate.percentage", "Persentase prorate:")} {calculation.prorate_percentage.toFixed(1)}%</li>
             {calculation.plan_change_charge > 0 && (
-              <li>Biaya perubahan plan: {formatIDR(calculation.plan_change_charge)}</li>
+              <li>{t("subscription.plans.modal.prorate.planChangeCost", "Biaya perubahan plan:")} {formatIDR(calculation.plan_change_charge)}</li>
             )}
             {calculation.member_change_charge > 0 && (
-              <li>Biaya tambahan member: {formatIDR(calculation.member_change_charge)}</li>
+              <li>{t("subscription.plans.modal.prorate.memberCost", "Biaya tambahan member:")} {formatIDR(calculation.member_change_charge)}</li>
             )}
           </ul>
           <p className="rounded-lg bg-primary/10 p-2 text-[11px] text-primary-foreground/80">
-            Anda hanya akan membayar sesuai sisa periode subscription saat ini.
+            {t("subscription.plans.modal.confirm.payRemainingPeriod", "Anda hanya akan membayar sesuai sisa periode subscription saat ini.")}
           </p>
         </div>
       );
@@ -160,13 +161,13 @@ export const MobileUpgradeConfirmationModal = ({
             {isBillingCycleUpgradeOnly
               ? t("subscription.plans.modal.title.confirmYearlyUpgrade", "Konfirmasi Upgrade ke Tahunan")
               : isScheduled
-                ? "Jadwalkan Perubahan Plan"
+                ? t("subscription.plans.modal.title.schedulePlan", "Jadwalkan Perubahan Plan")
                 : isImmediateCharge
-                  ? "Konfirmasi Pembayaran Prorate"
-                  : "Konfirmasi Upgrade"}
+                  ? t("subscription.plans.modal.confirm.titleProrate", "Konfirmasi Pembayaran Prorate")
+                  : t("subscription.plans.modal.confirm.titleUpgrade", "Konfirmasi Upgrade")}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Pastikan detail di bawah sudah sesuai sebelum melanjutkan ke pembayaran.
+            {t("subscription.plans.modal.confirm.description", "Pastikan detail di bawah sudah sesuai sebelum melanjutkan ke pembayaran.")}
           </DialogDescription>
         </DialogHeader>
         <Separator />
@@ -174,27 +175,27 @@ export const MobileUpgradeConfirmationModal = ({
           <div className="space-y-4 text-sm text-muted-foreground">
             <div className="rounded-xl border border-border bg-muted/30 p-4">
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Ringkasan perubahan
+                {t("subscription.plans.modal.confirm.summaryTitle", "Ringkasan perubahan")}
               </h4>
               <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span>Plan saat ini</span>
+                  <span>{t("subscription.plans.modal.details.currentPlan", "Plan saat ini:").replace(":", "")}</span>
                   <span className="font-medium text-foreground">{currentPlan.name}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Plan baru</span>
+                  <span>{t("subscription.plans.modal.details.newPlan", "Plan baru:").replace(":", "")}</span>
                   <span className="font-medium text-primary">{newPlan.name}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Member</span>
+                  <span>{t("subscription.plans.modal.details.member", "Member:").replace(":", "")}</span>
                   <span className="font-medium text-foreground">
                     {currentMemberCount} → {newMemberCount}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Pembayaran</span>
+                  <span>{t("subscription.plans.modal.details.billing", "Pembayaran:").replace(":", "")}</span>
                   <span className="font-medium text-foreground">
-                    {billingCycle === "yearly" ? "Tahunan" : "Bulanan"}
+                    {billingCycle === "yearly" ? t("subscription.plans.modal.details.billingYearly", "Tahunan") : t("subscription.plans.modal.details.billingMonthly", "Bulanan")}
                   </span>
                 </div>
               </div>
@@ -204,16 +205,16 @@ export const MobileUpgradeConfirmationModal = ({
 
             <div className="rounded-xl border border-border bg-muted/40 p-4">
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Total pembayaran
+                {t("subscription.plans.modal.confirm.totalPayment", "Total pembayaran")}
               </h4>
               <div className="flex items-center justify-between text-base font-semibold text-foreground">
-                <span>{isScheduled ? "Biaya tambahan" : "Total dibayarkan"}</span>
+                <span>{isScheduled ? t("subscription.plans.modal.confirm.additionalCost", "Biaya tambahan") : t("subscription.plans.modal.confirm.totalPaid", "Total dibayarkan")}</span>
                 <span>{isScheduled ? formatIDR(0) : formatIDR(totalAmount)}</span>
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {isScheduled
-                  ? "Tidak ada biaya tambahan. Perubahan akan berlaku otomatis pada akhir periode."
-                  : "Pembayaran akan diproses melalui Midtrans dan aktif setelah konfirmasi."}
+                  ? t("subscription.plans.modal.payment.noAdditionalCost", "Tidak ada biaya tambahan. Perubahan akan berlaku otomatis pada akhir periode.")
+                  : t("subscription.plans.modal.confirm.midtransNote", "Pembayaran akan diproses melalui Midtrans dan aktif setelah konfirmasi.")}
               </p>
             </div>
           </div>
@@ -221,7 +222,7 @@ export const MobileUpgradeConfirmationModal = ({
         <div className="space-y-3 border-t border-border bg-background px-6 pb-6 pt-4">
           <div className="rounded-xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide">
-              <span>Ringkasan</span>
+              <span>{t("subscription.plans.modal.confirm.summary", "Ringkasan")}</span>
               <Badge variant="outline" className="text-[10px] font-semibold">
                 {summaryLine}
               </Badge>
@@ -234,7 +235,7 @@ export const MobileUpgradeConfirmationModal = ({
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
             >
-              Batal
+              {t("subscription.plans.modal.button.cancel", "Batal")}
             </Button>
             <Button
               className={cn(
@@ -247,9 +248,9 @@ export const MobileUpgradeConfirmationModal = ({
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Memproses...</span>
+                  <span>{t("subscription.plans.modal.button.processing", "Memproses...")}</span>
                 </>
-              ) : isScheduled ? "Jadwalkan Perubahan" : t("subscription.plans.modal.button.confirmPay", "Konfirmasi & Bayar")}
+              ) : isScheduled ? t("subscription.plans.modal.button.schedule", "Jadwalkan Perubahan") : t("subscription.plans.modal.button.confirmPay", "Konfirmasi & Bayar")}
             </Button>
           </div>
         </div>

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import type { Locale } from "date-fns";
+import { id as idLocale, enUS } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/features/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/features/ui/tabs";
 import { Alert, AlertDescription } from "@/features/ui/alert";
@@ -16,10 +18,10 @@ import { JobDescFilters } from "./JobDescFilters";
 import { JobDescEmployeeCard } from "./JobDescEmployeeCard";
 import { PendingApprovalSection } from "@/features/8-2-DailyTask/section/PendingApprovalSection";
 
-const formatRangeLabel = (range: DateRangeValue) => {
+const formatRangeLabel = (range: DateRangeValue, locale: Locale) => {
   if (!range.start || !range.end) return "-";
   try {
-    return `${format(range.start, "dd MMM")} - ${format(range.end, "dd MMM yyyy")}`;
+    return `${format(range.start, "dd MMM", { locale })} - ${format(range.end, "dd MMM yyyy", { locale })}`;
   } catch (_error) {
     return "-";
   }
@@ -46,7 +48,8 @@ const sortSummaries = (summaries: JobDescEmployeeSummary[]) => {
 };
 
 export const JobDescTracker = () => {
-  const { t } = useAppTranslation();
+  const { t, language } = useAppTranslation();
+  const dateLocale: Locale = language === "id" ? idLocale : enUS;
   const [timeframe, setTimeframe] = useState<JobDescTimeframe>("weekly");
   const [customRange, setCustomRange] = useState<DateRangeValue>({
     start: null,
@@ -148,7 +151,7 @@ export const JobDescTracker = () => {
         </CardTitle>
         <p className="text-xs text-gray-500">
           {t("dailyTask.jobDesc.rangeLabel", "Rentang: {{range}}", {
-            range: formatRangeLabel(range),
+            range: formatRangeLabel(range, dateLocale),
           })}
         </p>
       </CardHeader>

@@ -107,23 +107,26 @@ const getPlanButtonText = (
   memberCount: number,
   billingCycle: BillingCycle,
   subscriptionStatus: ReturnType<typeof useOptimizedSubscription>["subscriptionStatus"],
+  t: (key: string, fallback: string) => string,
 ) => {
-  if (!subscriptionStatus) return "Pilih Plan";
+  if (!subscriptionStatus) return t("subscription.plans.button.select", "Pilih Plan");
 
   const currentMemberLimit = subscriptionStatus.member_count || 0;
   const currentBillingCycle = (subscriptionStatus.billing_cycle as BillingCycle) || "monthly";
 
   if (isCurrent) {
-    if (memberCount > currentMemberLimit) return "Upgrade Plan";
-    if (memberCount < currentMemberLimit) return "Sesuaikan Limit";
+    if (memberCount > currentMemberLimit) return t("subscription.plans.button.upgrade", "Upgrade Plan");
+    if (memberCount < currentMemberLimit) return t("subscription.plans.button.adjustLimit", "Sesuaikan Limit");
     if (billingCycle !== currentBillingCycle) {
-      return billingCycle === "yearly" ? "Upgrade ke Tahunan" : "Ganti ke Bulanan";
+      return billingCycle === "yearly"
+        ? t("subscription.plans.button.upgradeToYearly", "Upgrade ke Tahunan")
+        : t("subscription.plans.button.switchToMonthly", "Ganti ke Bulanan");
     }
-    return "Plan Aktif";
+    return t("subscription.plans.button.planActive", "Plan Aktif");
   }
 
-  if (plan.demo_required) return "Hubungi Kami";
-  return "Pilih Plan";
+  if (plan.demo_required) return t("subscription.plans.button.contactUs", "Hubungi Kami");
+  return t("subscription.plans.button.select", "Pilih Plan");
 };
 
 const canChangePlan = (
@@ -147,7 +150,8 @@ const canChangePlan = (
 };
 
 const MobilePendingChangesCard = memo(() => {
-  const { t } = useAppTranslation();
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === "id" ? "id-ID" : "en-US";
   const { data: pendingChanges, isLoading } = usePendingSubscriptionChanges();
   const cancelScheduledChange = useCancelScheduledChange();
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -178,7 +182,7 @@ const MobilePendingChangesCard = memo(() => {
       setCancelTargetId(null);
     } catch (error) {
       console.error(error);
-      toast.error("Gagal membatalkan perubahan.");
+      toast.error(t("subscription.plans.error.cancelFailedShort", "Gagal membatalkan perubahan."));
     }
   };
 
@@ -189,10 +193,10 @@ const MobilePendingChangesCard = memo(() => {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-base font-semibold text-blue-900">
-              Perubahan Terjadwal
+              {t("subscription.plans.pendingChanges.title", "Perubahan Terjadwal")}
             </CardTitle>
             <CardDescription className="text-xs text-blue-700">
-              {pendingChanges.length} perubahan akan diterapkan otomatis
+              {t("subscription.plans.pendingChanges.descriptionAuto", "{{count}} perubahan akan diterapkan otomatis", { count: pendingChanges.length })}
             </CardDescription>
           </div>
           <CalendarDays className="h-5 w-5 text-blue-600" />
@@ -208,17 +212,17 @@ const MobilePendingChangesCard = memo(() => {
               <div className="flex items-center gap-2">
                 <Badge className="bg-blue-100 text-blue-700">
                   {change.change_type === "upgrade"
-                    ? "Upgrade"
+                    ? t("subscription.plans.pendingChanges.changeType.upgrade", "Upgrade")
                     : change.change_type === "downgrade"
-                      ? "Downgrade"
+                      ? t("subscription.plans.pendingChanges.changeType.downgrade", "Downgrade")
                       : change.change_type === "member_increase"
-                        ? "Tambah Member"
+                        ? t("subscription.plans.pendingChanges.changeType.memberIncrease", "Tambah Member")
                         : change.change_type === "member_decrease"
-                          ? "Kurangi Member"
-                          : "Perubahan Plan"}
+                          ? t("subscription.plans.pendingChanges.changeType.memberDecrease", "Kurangi Member")
+                          : t("subscription.plans.pendingChanges.changeType.planChange", "Perubahan Plan")}
                 </Badge>
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  {new Date(change.scheduled_date).toLocaleDateString("id-ID", {
+                  {new Date(change.scheduled_date).toLocaleDateString(dateLocale, {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
@@ -232,7 +236,7 @@ const MobilePendingChangesCard = memo(() => {
                 onClick={() => handleCancelClick(change.id)}
                 disabled={cancelScheduledChange.isPending}
               >
-                <span className="sr-only">Batalkan</span>
+                <span className="sr-only">{t("subscription.plans.button.cancel", "Batalkan")}</span>
                 ×
               </Button>
             </div>
@@ -244,7 +248,7 @@ const MobilePendingChangesCard = memo(() => {
               </div>
               {change.current_member_count !== change.target_member_count && (
                 <div>
-                  Member:{" "}
+                  {t("subscription.plans.pendingChanges.member", "Member:")}{" "}
                   <span className="font-medium text-foreground">{change.current_member_count}</span>{" "}
                   →{" "}
                   <span className="font-medium text-blue-700">{change.target_member_count}</span>
@@ -252,14 +256,14 @@ const MobilePendingChangesCard = memo(() => {
               )}
               {change.prorate_amount > 0 && (
                 <div className="text-green-600">
-                  Biaya tambahan: {formatIDR(change.prorate_amount)}
+                  {t("subscription.plans.pendingChanges.additionalCost", "Biaya tambahan:")} {formatIDR(change.prorate_amount)}
                 </div>
               )}
             </div>
           </div>
         ))}
         <p className="text-center text-xs text-blue-700">
-          Sistem akan menerapkan perubahan sesuai jadwal yang dipilih.
+          {t("subscription.plans.pendingChanges.footerNote", "Sistem akan menerapkan perubahan sesuai jadwal yang dipilih.")}
         </p>
       </CardContent>
     </Card>
@@ -267,17 +271,17 @@ const MobilePendingChangesCard = memo(() => {
     <Dialog open={!!cancelTargetId} onOpenChange={(open) => !open && setCancelTargetId(null)}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Batalkan perubahan</DialogTitle>
+          <DialogTitle>{t("subscription.plans.pendingChanges.cancelTitle", "Batalkan perubahan")}</DialogTitle>
           <DialogDescription>
             {t("subscription.plans.pendingChanges.cancelConfirm", "Apakah Anda yakin ingin membatalkan perubahan terjadwal ini?")}
           </DialogDescription>
         </DialogHeader>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" size="sm" onClick={() => setCancelTargetId(null)} disabled={cancelScheduledChange.isPending}>
-            Batal
+            {t("subscription.plans.button.cancel", "Batal")}
           </Button>
           <Button size="sm" onClick={handleCancelConfirm} disabled={cancelScheduledChange.isPending}>
-            {cancelScheduledChange.isPending ? "Memproses..." : "Konfirmasi"}
+            {cancelScheduledChange.isPending ? t("subscription.plans.button.processing", "Memproses...") : t("subscription.plans.button.confirm", "Konfirmasi")}
           </Button>
         </div>
       </DialogContent>
@@ -385,10 +389,12 @@ const PlanCard = memo(
           <div className="space-y-1 text-left">
             <div className="text-2xl font-bold text-foreground">{formatIDR(totalPrice)}</div>
             <div className="text-xs text-muted-foreground">
-              {billingCycle === "yearly" ? "per tahun" : "per bulan"} untuk {memberCount} member
+              {billingCycle === "yearly"
+                ? t("subscription.plans.pricing.perYear", "per tahun untuk {{count}} member", { count: memberCount })
+                : t("subscription.plans.pricing.perMonth", "per bulan untuk {{count}} member", { count: memberCount })}
             </div>
             <div className="text-[11px] text-muted-foreground">
-              Setara {formatIDR(monthlyPrice)} per bulan
+              {t("subscription.plans.mobile.equivalentPerMonth", "Setara {{amount}} per bulan", { amount: formatIDR(monthlyPrice) })}
             </div>
           </div>
         </CardHeader>
@@ -398,16 +404,15 @@ const PlanCard = memo(
               <Info className="h-3.5 w-3.5" />
               <span>
                 {isTrial
-                  ? `Plan ini maksimal ${maxMembers} member`
-                  : `Tidak ada batas member (rekomendasi hingga ${maxMembers})`}
+                  ? t("subscription.plans.mobile.trialMaxMembers", "Plan ini maksimal {{max}} member", { max: maxMembers })
+                  : t("subscription.plans.mobile.noMemberLimit", "Tidak ada batas member (rekomendasi hingga {{max}})", { max: maxMembers })}
               </span>
             </div>
             {!membersWithinLimit && (
               <div className="flex items-start gap-2 rounded-lg bg-orange-50 p-3 text-xs text-orange-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                 <span>
-                  Jumlah member melebihi batas plan ini. Kurangi jumlah member atau pilih plan
-                  yang lebih tinggi.
+                  {t("subscription.plans.mobile.memberExceedsLimit", "Jumlah member melebihi batas plan ini. Kurangi jumlah member atau pilih plan yang lebih tinggi.")}
                 </span>
               </div>
             )}
@@ -417,7 +422,7 @@ const PlanCard = memo(
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>{t("subscription.plans.memberCount.label", "Jumlah member: {{count}}", { count: memberCount })}</span>
-                <span className="text-sm font-semibold text-foreground">{memberCount} anggota</span>
+                <span className="text-sm font-semibold text-foreground">{t("subscription.plans.mobile.membersUnit", "{{count}} anggota", { count: memberCount })}</span>
               </div>
               <Slider
                 value={[memberCount]}
@@ -430,17 +435,17 @@ const PlanCard = memo(
                 disabled={isTrial}
               />
               <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-                <span>1 member</span>
-                <span>{maxMembers} member</span>
+                <span>{t("subscription.plans.memberCount.min", "1 member")}</span>
+                <span>{t("subscription.plans.memberCount.maxDisplay", "{{max}} member", { max: maxMembers })}</span>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Pembayaran Tahunan</p>
+                <p className="text-xs font-medium text-muted-foreground">{t("subscription.plans.billingCycle.yearly", "Pembayaran Tahunan")}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {plan.annual_discount_percentage
-                    ? `Hemat hingga ${plan.annual_discount_percentage}%`
-                    : "Bayar bulanan atau tahunan"}
+                    ? t("subscription.plans.mobile.savingsUpTo", "Hemat hingga {{percentage}}%", { percentage: plan.annual_discount_percentage })
+                    : t("subscription.plans.mobile.payMonthlyOrYearly", "Bayar bulanan atau tahunan")}
                 </p>
               </div>
               <Switch
@@ -453,7 +458,7 @@ const PlanCard = memo(
 
           <div className="rounded-xl border border-border bg-card/60 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Fitur yang disertakan
+              {t("subscription.plans.mobile.featuresTitle", "Fitur yang disertakan")}
             </p>
             <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
               {plan.features?.map((feature) => (
@@ -467,14 +472,14 @@ const PlanCard = memo(
 
           <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
             <div className="flex items-center justify-between">
-              <span>Harga dasar per member</span>
+              <span>{t("subscription.plans.mobile.basePricePerMember", "Harga dasar per member")}</span>
               <span className="font-semibold text-foreground">
                 {formatIDR(plan.base_price_per_member)}
               </span>
             </div>
             {billingCycle === "yearly" && plan.annual_discount_percentage ? (
               <div className="mt-2 flex items-center justify-between text-green-600">
-                <span>Diskon paket tahunan</span>
+                <span>{t("subscription.plans.mobile.yearlyDiscount", "Diskon paket tahunan")}</span>
                 <span className="font-semibold">
                   {plan.annual_discount_percentage}% ({formatIDR(monthlyPrice * 12 * (plan.annual_discount_percentage / 100))})
                 </span>
@@ -484,7 +489,7 @@ const PlanCard = memo(
 
           {isCurrent && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-700">
-              Limit member saat ini {currentMemberCount} • {isEmployeeCountError ? "Jumlah karyawan tidak tersedia" : `${currentEmployeeCount} karyawan aktif`}
+              {t("subscription.plans.mobile.currentMemberLimit", "Limit member saat ini {{count}}", { count: currentMemberCount })} • {isEmployeeCountError ? t("subscription.plans.mobile.employeeCountUnavailable", "Jumlah karyawan tidak tersedia") : t("subscription.plans.mobile.activeEmployees", "{{count}} karyawan aktif", { count: currentEmployeeCount })}
             </div>
           )}
 
@@ -497,12 +502,12 @@ const PlanCard = memo(
           </Button>
           {disabled && !membersWithinLimit && (
             <p className="text-center text-xs text-destructive">
-              Kurangi jumlah member agar plan dapat dipilih.
+              {t("subscription.plans.mobile.reduceMembersToSelect", "Kurangi jumlah member agar plan dapat dipilih.")}
             </p>
           )}
           {isComingSoon && (
             <p className="text-center text-[11px] text-muted-foreground">
-              Paket ini belum tersedia. Hubungi tim kami untuk informasi lebih lanjut.
+              {t("subscription.plans.mobile.comingSoonContact", "Paket ini belum tersedia. Hubungi tim kami untuk informasi lebih lanjut.")}
             </p>
           )}
         </CardContent>
@@ -609,7 +614,7 @@ const HRISSubscriptionPlansTab = () => {
         subscriptionPlans?.find((p) => p.name === plan.name)?.id ||
         null;
       if (!targetPlanId) {
-        toast.error("Plan tidak valid.");
+        toast.error(t("subscription.plans.error.planInvalid", "Plan tidak valid."));
         return;
       }
 
@@ -755,7 +760,7 @@ const HRISSubscriptionPlansTab = () => {
       setProRatedData(null);
     } catch (error) {
       console.error(error);
-      toast.error("Gagal memproses pembayaran.");
+      toast.error(t("subscription.plans.error.paymentFailedShort", "Gagal memproses pembayaran."));
     }
   }, [
     selectedPlan,
@@ -766,6 +771,7 @@ const HRISSubscriptionPlansTab = () => {
     subscriptionStatus,
     subscriptionPlans,
     schedulePlanChange,
+    t,
   ]);
 
   const handleChooseImmediate = useCallback(async () => {
@@ -800,9 +806,9 @@ const HRISSubscriptionPlansTab = () => {
       setProRatedData(null);
     } catch (error) {
       console.error(error);
-      toast.error("Gagal menjadwalkan perubahan.");
+      toast.error(t("subscription.plans.error.scheduleFailedShort", "Gagal menjadwalkan perubahan."));
     }
-  }, [schedulePlanChange, proRatedData, selectedPlan, subscriptionStatus, handleConfirmUpgrade]);
+  }, [schedulePlanChange, proRatedData, selectedPlan, subscriptionStatus, handleConfirmUpgrade, t]);
 
   if (isLoading) {
     return (
@@ -818,9 +824,9 @@ const HRISSubscriptionPlansTab = () => {
     return (
       <Card className="border border-destructive/40 bg-destructive/5">
         <CardHeader>
-          <CardTitle className="text-destructive">Gagal memuat data</CardTitle>
+          <CardTitle className="text-destructive">{t("subscription.plans.error.loadFailed", "Gagal memuat data")}</CardTitle>
           <CardDescription>
-            Kami tidak dapat memuat daftar paket saat ini. Silakan coba beberapa saat lagi.
+            {t("subscription.plans.error.loadFailedDescription", "Kami tidak dapat memuat daftar paket saat ini. Silakan coba beberapa saat lagi.")}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -852,6 +858,7 @@ const HRISSubscriptionPlansTab = () => {
               memberCount,
               billingCycle,
               subscriptionStatus,
+              t,
             );
             const beings = plan.description?.toLowerCase() ?? "";
             const isComingSoonRaw =
@@ -860,12 +867,13 @@ const HRISSubscriptionPlansTab = () => {
               plan.demo_required ||
               plan.name.toLowerCase().includes("business");
             const isComingSoon = !isCurrent && isComingSoonRaw;
+            const isPlanActiveNoChanges =
+              isCurrent &&
+              memberCount === (subscriptionStatus?.member_count || 0) &&
+              (billingCycle || "monthly") === (subscriptionStatus?.billing_cycle || "monthly");
             const disabled =
               (!membersWithinLimit && !isCurrent) ||
-              (isCurrent &&
-                buttonText === "Plan Aktif" &&
-                billingCycle === subscriptionStatus?.billing_cycle &&
-                memberCount === (subscriptionStatus?.member_count || memberCount)) ||
+              isPlanActiveNoChanges ||
               isComingSoon;
 
             return (
@@ -900,12 +908,12 @@ const HRISSubscriptionPlansTab = () => {
         <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Shield className="h-4 w-4 text-primary" />
-            Kenapa memilih ProfitLoop?
+            {t("subscription.plans.mobile.whyChooseUs", "Kenapa memilih ProfitLoop?")}
           </h3>
           <ul className="space-y-2 text-xs text-muted-foreground">
-            <li>✅ Data real-time dan sinkron dengan Supabase.</li>
-            <li>✅ Dukungan langsung dari tim customer success kami.</li>
-            <li>✅ Sistem prorate otomatis untuk perubahan plan/members.</li>
+            <li>✅ {t("subscription.plans.mobile.feature1", "Data real-time dan sinkron dengan Supabase.")}</li>
+            <li>✅ {t("subscription.plans.mobile.feature2", "Dukungan langsung dari tim customer success kami.")}</li>
+            <li>✅ {t("subscription.plans.mobile.feature3", "Sistem prorate otomatis untuk perubahan plan/members.")}</li>
           </ul>
         </div>
       </div>

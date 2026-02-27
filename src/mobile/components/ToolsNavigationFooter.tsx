@@ -1,12 +1,21 @@
 import { CheckSquare, ClipboardList, FileBarChart, NotebookPen, Target } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+
+const NAV_LABELS: Record<string, string> = {
+  "toolsNav.dailyTask": "Daily Task",
+  "toolsNav.initiative": "Initiative",
+  "toolsNav.jobDesc": "Job Desc",
+  "toolsNav.report": "Report",
+  "toolsNav.notes": "Notes",
+};
 
 const navItems = [
-  { icon: CheckSquare, label: "Daily Task", path: "/tools/daily-task" },
-  { icon: Target, label: "Initiative", path: "/tools/daily-task?view=initiative" },
-  { icon: ClipboardList, label: "Job Desc", path: "/tools/daily-task?view=jobdesc" },
-  { icon: FileBarChart, label: "Report", path: "/tools/daily-task-report" },
-  { icon: NotebookPen, label: "Notes", path: "/tools/meeting-notes" },
+  { icon: CheckSquare, labelKey: "toolsNav.dailyTask", path: "/tools/daily-task" },
+  { icon: Target, labelKey: "toolsNav.initiative", path: "/tools/daily-task?view=initiative" },
+  { icon: ClipboardList, labelKey: "toolsNav.jobDesc", path: "/tools/daily-task?view=jobdesc" },
+  { icon: FileBarChart, labelKey: "toolsNav.report", path: "/tools/daily-task-report" },
+  { icon: NotebookPen, labelKey: "toolsNav.notes", path: "/tools/meeting-notes" },
 ];
 
 interface ToolsNavigationFooterProps {
@@ -17,21 +26,23 @@ interface ToolsNavigationFooterProps {
 export const ToolsNavigationFooter = ({ className }: ToolsNavigationFooterProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useAppTranslation();
 
   return (
     <nav
       className="fixed left-0 right-0 bottom-0 bg-card border-t border-border z-30"
     >
       <div className={`grid grid-cols-5 max-w-md mx-auto ${className ? className : "safe-area-padding-bottom"}`.trim()}>
-        {navItems.map(({ icon: Icon, label, path }) => {
+        {navItems.map(({ icon: Icon, labelKey, path }) => {
+          const label = t(labelKey, NAV_LABELS[labelKey] ?? labelKey);
           // Check if current path matches
           let isActive = false;
           
-          if (label === "Initiative") {
+          if (labelKey === "toolsNav.initiative") {
             isActive = location.pathname === "/tools/daily-task" && new URLSearchParams(location.search).get('view') === 'initiative';
-          } else if (label === "Job Desc") {
+          } else if (labelKey === "toolsNav.jobDesc") {
             isActive = location.pathname === "/tools/daily-task" && new URLSearchParams(location.search).get('view') === 'jobdesc';
-          } else if (label === "Daily Task") {
+          } else if (labelKey === "toolsNav.dailyTask") {
             const view = new URLSearchParams(location.search).get('view');
             isActive = location.pathname === "/tools/daily-task" && view !== 'initiative' && view !== 'jobdesc';
           } else {

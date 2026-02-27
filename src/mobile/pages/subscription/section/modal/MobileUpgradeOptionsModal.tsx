@@ -3,6 +3,7 @@ import { Button } from "@/mobile/components/ui/button";
 import { Card, CardContent } from "@/mobile/components/ui/card";
 import { Separator } from "@/mobile/components/ui/separator";
 import { formatIDR } from "@/features/1-login/utils/subscriptionUtils";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { CalendarDays, DollarSign, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,8 +40,10 @@ export const MobileUpgradeOptionsModal = ({
   memberChange,
   proRateData,
 }: MobileUpgradeOptionsModalProps) => {
+  const { t, language } = useAppTranslation();
+  const dateLocale = language === "id" ? "id-ID" : "en-US";
   const formattedDate = scheduledDate
-    ? new Date(scheduledDate).toLocaleDateString("id-ID", {
+    ? new Date(scheduledDate).toLocaleDateString(dateLocale, {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -56,9 +59,9 @@ export const MobileUpgradeOptionsModal = ({
         )}
       >
         <DialogHeader className="px-6 pb-3 pt-6 text-left">
-          <DialogTitle className="text-lg font-semibold text-foreground">Pilih format perubahan</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-foreground">{t("subscription.plans.modal.options.formatTitle", "Pilih format perubahan")}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Anda dapat menerapkan perubahan sekarang atau menjadwalkannya di akhir periode berjalan.
+            {t("subscription.plans.modal.options.formatDescription", "Anda dapat menerapkan perubahan sekarang atau menjadwalkannya di akhir periode berjalan.")}
           </DialogDescription>
         </DialogHeader>
         <Separator />
@@ -68,19 +71,19 @@ export const MobileUpgradeOptionsModal = ({
               <CardContent className="space-y-3 p-4">
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Ringkasan perubahan
+                    {t("subscription.plans.modal.confirm.summaryTitle", "Ringkasan perubahan")}
                   </h4>
                   <div className="mt-2 space-y-1 text-xs">
                     <div className="flex items-center justify-between">
-                      <span>Plan saat ini</span>
+                      <span>{t("subscription.plans.modal.details.currentPlan", "Plan saat ini:").replace(":", "")}</span>
                       <span className="font-medium text-foreground">{currentPlanName}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Plan baru</span>
+                      <span>{t("subscription.plans.modal.details.newPlan", "Plan baru:").replace(":", "")}</span>
                       <span className="font-medium text-primary">{planName}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Member</span>
+                      <span>{t("subscription.plans.modal.details.member", "Member:").replace(":", "")}</span>
                       <span className="font-medium text-foreground">
                         {memberChange.from} → {memberChange.to}
                       </span>
@@ -91,13 +94,13 @@ export const MobileUpgradeOptionsModal = ({
                 <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-primary">
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4" />
-                    <span className="font-semibold">Kalkulasi prorate langsung</span>
+                    <span className="font-semibold">{t("subscription.plans.modal.options.prorateImmediate", "Kalkulasi prorate langsung")}</span>
                   </div>
                   <ul className="space-y-1 text-primary/80">
-                    <li>Sisa hari subscription: {proRateData?.remainingDays ?? 30} hari</li>
-                    <li>Persentase prorate: {(proRateData?.proRatePercentage ?? 100).toFixed(1)}%</li>
+                    <li>{t("subscription.plans.modal.prorate.remainingDays", "Sisa hari subscription:")} {proRateData?.remainingDays ?? 30} {t("subscription.plans.modal.scheduled.days", "hari")}</li>
+                    <li>{t("subscription.plans.modal.prorate.percentage", "Persentase prorate:")} {(proRateData?.proRatePercentage ?? 100).toFixed(1)}%</li>
                     <li>
-                      Perkiraan biaya tambahan:{" "}
+                      {t("subscription.plans.modal.options.estimatedCost", "Perkiraan biaya tambahan:")}{" "}
                       <span className="font-semibold text-primary">
                         {formatIDR(immediateAmount)}
                       </span>
@@ -113,12 +116,11 @@ export const MobileUpgradeOptionsModal = ({
                   <Users className="h-4 w-4" />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Jalur cepat cocok digunakan jika Anda ingin perubahan berlaku langsung. Sistem akan memproses
-                  pembayaran sesuai perhitungan prorate di atas.
+                  {t("subscription.plans.modal.options.fastTrackDesc", "Jalur cepat cocok digunakan jika Anda ingin perubahan berlaku langsung. Sistem akan memproses pembayaran sesuai perhitungan prorate di atas.")}
                 </div>
               </div>
               <Button className="h-12 w-full rounded-full text-sm font-semibold" onClick={onChooseImmediate}>
-                Konfirmasi &amp; Bayar Sekarang ({formatIDR(immediateAmount)})
+                {t("subscription.plans.modal.options.confirmPayNow", "Konfirmasi & Bayar Sekarang")} ({formatIDR(immediateAmount)})
               </Button>
             </div>
 
@@ -128,11 +130,11 @@ export const MobileUpgradeOptionsModal = ({
                   <CalendarDays className="h-4 w-4" />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Jadwalkan perubahan agar otomatis diaplikasikan pada akhir periode berjalan tanpa biaya tambahan.
+                  {t("subscription.plans.modal.options.scheduleDesc", "Jadwalkan perubahan agar otomatis diaplikasikan pada akhir periode berjalan tanpa biaya tambahan.")}
                 </div>
               </div>
               <div className="rounded-xl border border-border bg-background/60 p-3 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground">Tanggal efektif</p>
+                <p className="font-semibold text-foreground">{t("subscription.plans.modal.scheduled.effectiveDate", "Tanggal efektif:").replace(":", "")}</p>
                 <p>{formattedDate}</p>
               </div>
               <Button
@@ -140,7 +142,7 @@ export const MobileUpgradeOptionsModal = ({
                 className="h-12 w-full rounded-full text-sm font-semibold"
                 onClick={onChooseScheduled}
               >
-                Jadwalkan di akhir periode
+                {t("subscription.plans.modal.options.scheduleEndPeriod", "Jadwalkan di akhir periode")}
               </Button>
             </div>
           </div>
@@ -151,7 +153,7 @@ export const MobileUpgradeOptionsModal = ({
             className="h-12 w-full rounded-full text-sm font-semibold"
             onClick={() => onOpenChange(false)}
           >
-            Tutup
+            {t("subscription.plans.modal.options.close", "Tutup")}
           </Button>
         </div>
       </DialogContent>
