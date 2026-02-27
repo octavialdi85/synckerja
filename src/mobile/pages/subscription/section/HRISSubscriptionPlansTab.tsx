@@ -631,6 +631,21 @@ const HRISSubscriptionPlansTab = () => {
           }
         }
 
+        // ✅ Billing cycle upgrade only: same plan, same members, monthly→yearly.
+        // Override charge_now so we show "Confirm & Pay" instead of "Schedule Member Change"
+        const currentPlanId = subscriptionPlans?.find(
+          (p) => p.name === subscriptionStatus?.plan_name
+        )?.id;
+        const currentMemberCount = subscriptionStatus?.member_count || 0;
+        const isBillingCycleUpgradeOnly =
+          currentPlanId === targetPlanId &&
+          currentMemberCount === memberCount &&
+          (subscriptionStatus?.billing_cycle || "monthly") === "monthly" &&
+          billingCycle === "yearly";
+        if (isBillingCycleUpgradeOnly && calculation?.success && calculation.calculation) {
+          calculation.calculation.charge_now = true;
+        }
+
         setProRatedData(calculation);
         if (calculation?.success) {
           const info = calculation.calculation;
@@ -653,15 +668,69 @@ const HRISSubscriptionPlansTab = () => {
   const handleConfirmUpgrade = useCallback(async () => {
     if (!selectedPlan) return;
     try {
+      const currentPlanId = subscriptionPlans?.find(
+        (p) => p.name === subscriptionStatus?.plan_name
+      )?.id;
+      const currentMemberCount = subscriptionStatus?.member_count || 0;
+
+      // ✅ Billing cycle upgrade only: same plan, same members, monthly→yearly.
+      // Skip schedule, proceed with full yearly payment (no proRateDetails)
+      const isBillingCycleUpgradeOnly =
+        currentPlanId === selectedPlan.id &&
+        currentMemberCount === selectedMemberCount &&
+        (subscriptionStatus?.billing_cycle || "monthly") === "monthly" &&
+        isYearly;
+      if (isBillingCycleUpgradeOnly) {
+        const fullYearlyPrice = getYearlyPriceForMembers(
+          selectedPlan.base_price_per_member,
+          selectedMemberCount,
+          selectedPlan.annual_discount_percentage
+        );
+        await initiateMidtransPayment({
+          planId: selectedPlan.id,
+          planName: selectedPlan.name,
+          amount: fullYearlyPrice,
+          memberCount: selectedMemberCount,
+          billingCycle: "yearly",
+        });
+        setConfirmationOpen(false);
+        setSelectedPlan(null);
+        setProRatedData(null);
+        return;
+      }
+
+      // ✅ If prorate says no charge now AND subscription is NOT expired, schedule the change
+      const isExpired = subscriptionStatus?.is_expired || false;
+      if (
+        proRatedData?.calculation &&
+        proRatedData.calculation.charge_now === false &&
+        !isExpired
+      ) {
+        await schedulePlanChange.mutateAsync({
+          current_plan_id: proRatedData.current_plan.id,
+          target_plan_id: proRatedData.target_plan.id,
+          current_member_count: proRatedData.current_plan.member_count,
+          target_member_count: proRatedData.calculation.new_member_count,
+          change_type: (proRatedData.calculation.change_type || "downgrade") as any,
+          scheduled_date: proRatedData.calculation.scheduled_date,
+          prorate_amount: 0,
+          charge_now: false,
+        });
+        setConfirmationOpen(false);
+        setSelectedPlan(null);
+        setProRatedData(null);
+        return;
+      }
+
+      // Otherwise, proceed with immediate payment
       const basePrice = selectedPlan.base_price_per_member;
-      // Use prorate_amount if it exists and > 0, otherwise use full price
       const prorateAmount = proRatedData?.calculation?.prorate_amount;
       const fullPrice = isYearly
         ? getYearlyPriceForMembers(basePrice, selectedMemberCount, selectedPlan.annual_discount_percentage)
         : getMonthlyPriceForMembers(basePrice, selectedMemberCount);
       const amount = (prorateAmount !== undefined && prorateAmount > 0) ? prorateAmount : fullPrice;
 
-       await initiateMidtransPayment({
+      await initiateMidtransPayment({
         planId: selectedPlan.id,
         planName: selectedPlan.name,
         amount,
@@ -695,6 +764,8 @@ const HRISSubscriptionPlansTab = () => {
     initiateMidtransPayment,
     proRatedData,
     subscriptionStatus,
+    subscriptionPlans,
+    schedulePlanChange,
   ]);
 
   const handleChooseImmediate = useCallback(async () => {
@@ -854,6 +925,12 @@ const HRISSubscriptionPlansTab = () => {
           newMemberCount={selectedMemberCount}
           proRatedData={proRatedData}
           isLoading={isPaymentLoading}
+          isBillingCycleUpgradeOnly={
+            subscriptionPlans?.find((p) => p.name === subscriptionStatus.plan_name)?.id === selectedPlan.id &&
+            (subscriptionStatus.member_count || 0) === selectedMemberCount &&
+            (subscriptionStatus?.billing_cycle || "monthly") === "monthly" &&
+            isYearly
+          }
         />
       )}
 

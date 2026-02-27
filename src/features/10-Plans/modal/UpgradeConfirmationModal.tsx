@@ -52,6 +52,7 @@ interface UpgradeConfirmationModalProps {
   currentEmployeeCount?: number;
   proRatedData?: ProRatedData;
   isLoading?: boolean;
+  isBillingCycleUpgradeOnly?: boolean;
 }
 
 export const UpgradeConfirmationModal = ({
@@ -66,7 +67,8 @@ export const UpgradeConfirmationModal = ({
   newMemberCount,
   currentEmployeeCount: propCurrentEmployeeCount = 0,
   proRatedData,
-  isLoading
+  isLoading,
+  isBillingCycleUpgradeOnly = false
 }: UpgradeConfirmationModalProps) => {
   const { t, language } = useAppTranslation();
   const isYearly = billingCycle === 'yearly';
@@ -131,6 +133,7 @@ export const UpgradeConfirmationModal = ({
       if (isPlanChange) return t('subscription.plans.modal.title.schedulePlan', 'Schedule Plan Change');
       return t('subscription.plans.modal.title.scheduleMember', 'Schedule Member Change');
     }
+    if (isBillingCycleUpgradeOnly) return t('subscription.plans.modal.title.confirmYearlyUpgrade', 'Confirm Upgrade to Yearly');
     if (isPlanChange) return t('subscription.plans.modal.title.confirmPlan', 'Confirm Plan Change');
     return t('subscription.plans.modal.title.confirmMember', 'Confirm Member Upgrade');
   };

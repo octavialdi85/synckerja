@@ -139,6 +139,17 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           calculation.calculation.remaining_days = 0;
         }
 
+        // ✅ Billing cycle upgrade only: same plan, same members, monthly→yearly.
+        // Override charge_now so we show "Confirm & Pay" instead of "Schedule Member Change"
+        const isBillingCycleUpgradeOnly =
+          currentPlanId === plan.id &&
+          currentMemberCount === memberCount &&
+          (subscriptionStatus?.billing_cycle || 'monthly') === 'monthly' &&
+          selectedBillingCycle === 'yearly';
+        if (isBillingCycleUpgradeOnly && calculation.calculation) {
+          calculation.calculation.charge_now = true;
+        }
+
         setProRatedData(calculation);
 
         // Check if this is a member increase (scale-up) without plan change
@@ -162,7 +173,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
       setProRatedData(null);
       setIsModalOpen(true);
     }
-  }, [proRateCalculation, billingCycles, subscriptionStatus]);
+  }, [proRateCalculation, billingCycles, subscriptionStatus, currentPlanId, currentMemberCount]);
 
   const schedulePlanChange = useSchedulePlanChange();
 
@@ -192,6 +203,32 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     if (!selectedPlan) return;
 
     try {
+      // ✅ Billing cycle upgrade only: same plan, same members, monthly→yearly.
+      // Skip schedule, proceed with full yearly payment (no proRateDetails)
+      const isBillingCycleUpgradeOnly =
+        currentPlanId === selectedPlan.id &&
+        currentMemberCount === selectedMemberCount &&
+        (subscriptionStatus?.billing_cycle || 'monthly') === 'monthly' &&
+        isYearly;
+      if (isBillingCycleUpgradeOnly) {
+        const fullYearlyPrice = getYearlyPriceForMembers(
+          selectedPlan.base_price_per_member,
+          selectedMemberCount,
+          selectedPlan.annual_discount_percentage
+        );
+        await initiateMidtransPayment({
+          planId: selectedPlan.id,
+          planName: selectedPlan.name,
+          amount: fullYearlyPrice,
+          memberCount: selectedMemberCount,
+          billingCycle: 'yearly',
+        });
+        setIsModalOpen(false);
+        setSelectedPlan(null);
+        setProRatedData(null);
+        return;
+      }
+
       // ✅ FIX: Jika subscription sudah expired, jangan schedule, langsung proses
       const isExpired = subscriptionStatus?.is_expired || false;
       
@@ -245,7 +282,7 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
     } catch {
       // Error surfaced via toast from payment/schedule
     }
-  }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData, schedulePlanChange, subscriptionStatus]);
+  }, [selectedPlan, selectedMemberCount, isYearly, initiateMidtransPayment, proRatedData, schedulePlanChange, subscriptionStatus, currentPlanId, currentMemberCount]);
 
   const handleChooseImmediate = useCallback(async () => {
     setIsOptionsModalOpen(false);
@@ -566,6 +603,12 @@ const calculatePlanPrice = (plan: any, memberCount: number, isYearly: boolean) =
           newMemberCount={selectedMemberCount}
           currentEmployeeCount={currentEmployeeCount}
           proRatedData={proRatedData}
+          isBillingCycleUpgradeOnly={
+            currentPlanId === selectedPlan.id &&
+            currentMemberCount === selectedMemberCount &&
+            (subscriptionStatus?.billing_cycle || 'monthly') === 'monthly' &&
+            isYearly
+          }
         />
       )}
 

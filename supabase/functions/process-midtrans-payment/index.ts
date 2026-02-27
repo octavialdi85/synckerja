@@ -98,58 +98,85 @@ serve(async (req) => {
     if (finalStatus === "success") {
       console.log("✅ Payment successful, activating subscription...");
 
+      const prorateDetails = payment.prorate_details as { is_member_upgrade?: boolean } | null;
+      const isMemberUpgradeOnly = prorateDetails?.is_member_upgrade === true;
+
       const { data: existingSubscription } = await supabase
         .from("organization_subscriptions")
-        .select("id, subscription_end_date")
+        .select("id, subscription_start_date, subscription_end_date")
         .eq("organization_id", payment.organization_id)
         .maybeSingle();
 
-      const baseStartDate = existingSubscription?.subscription_end_date
-        ? new Date(existingSubscription.subscription_end_date)
-        : new Date(payment.created_at);
-
-      const startDate = baseStartDate;
-      const endDate = addBillingInterval(startDate, payment.billing_cycle);
-
-      if (existingSubscription) {
+      if (existingSubscription && isMemberUpgradeOnly) {
+        // Member increase only: user paid prorate for additional members until next billing.
+        // Only update member_count and plan_id; do NOT extend subscription_end_date.
+        console.log("📋 Member upgrade only - updating member count without extending subscription");
         await supabase
           .from("organization_subscriptions")
           .update({
             subscription_plan_id: payment.plan_id,
             member_count: payment.member_count,
-            billing_cycle: payment.billing_cycle,
-            status: "active",
-            subscription_start_date: startDate.toISOString(),
-            subscription_end_date: endDate.toISOString(),
             last_payment_id: payment.id,
-            is_trial: false,
-            trial_start_date: null,
-            trial_end_date: null,
             updated_at: new Date().toISOString(),
           })
           .eq("organization_id", payment.organization_id);
-      } else {
-        await supabase.from("organization_subscriptions").insert({
-          organization_id: payment.organization_id,
-          subscription_plan_id: payment.plan_id,
-          status: "active",
-          subscription_start_date: startDate.toISOString(),
-          subscription_end_date: endDate.toISOString(),
-          member_count: payment.member_count,
-          billing_cycle: payment.billing_cycle,
-          last_payment_id: payment.id,
-          is_trial: false,
-        });
-      }
 
-      await supabase
-        .from("payments")
-        .update({
-          subscription_start_date: startDate.toISOString(),
-          subscription_end_date: endDate.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", payment.id);
+        await supabase
+          .from("payments")
+          .update({
+            subscription_start_date: existingSubscription.subscription_start_date,
+            subscription_end_date: existingSubscription.subscription_end_date,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.id);
+      } else {
+        const baseStartDate = existingSubscription?.subscription_end_date
+          ? new Date(existingSubscription.subscription_end_date)
+          : new Date(payment.created_at);
+
+        const startDate = baseStartDate;
+        const endDate = addBillingInterval(startDate, payment.billing_cycle);
+
+        if (existingSubscription) {
+          await supabase
+            .from("organization_subscriptions")
+            .update({
+              subscription_plan_id: payment.plan_id,
+              member_count: payment.member_count,
+              billing_cycle: payment.billing_cycle,
+              status: "active",
+              subscription_start_date: startDate.toISOString(),
+              subscription_end_date: endDate.toISOString(),
+              last_payment_id: payment.id,
+              is_trial: false,
+              trial_start_date: null,
+              trial_end_date: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("organization_id", payment.organization_id);
+        } else {
+          await supabase.from("organization_subscriptions").insert({
+            organization_id: payment.organization_id,
+            subscription_plan_id: payment.plan_id,
+            status: "active",
+            subscription_start_date: startDate.toISOString(),
+            subscription_end_date: endDate.toISOString(),
+            member_count: payment.member_count,
+            billing_cycle: payment.billing_cycle,
+            last_payment_id: payment.id,
+            is_trial: false,
+          });
+        }
+
+        await supabase
+          .from("payments")
+          .update({
+            subscription_start_date: startDate.toISOString(),
+            subscription_end_date: endDate.toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.id);
+      }
 
       await supabase
         .from("organizations")

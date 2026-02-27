@@ -4,6 +4,7 @@ import { Badge } from "@/mobile/components/ui/badge";
 import { Separator } from "@/mobile/components/ui/separator";
 import { formatIDR } from "@/features/1-login/utils/subscriptionUtils";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/features/10-management/hooks/useOptimizedSubscription";
+import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
 import { cn } from "@/lib/utils";
 
 interface ProRatedData {
@@ -47,6 +48,7 @@ interface MobileUpgradeConfirmationModalProps {
   newMemberCount: number;
   proRatedData?: ProRatedData;
   isLoading?: boolean;
+  isBillingCycleUpgradeOnly?: boolean;
 }
 
 export const MobileUpgradeConfirmationModal = ({
@@ -61,7 +63,9 @@ export const MobileUpgradeConfirmationModal = ({
   newMemberCount,
   proRatedData,
   isLoading,
+  isBillingCycleUpgradeOnly = false,
 }: MobileUpgradeConfirmationModalProps) => {
+  const { t } = useAppTranslation();
   const isYearly = billingCycle === "yearly";
   const calculation = proRatedData?.calculation;
   const isScheduled = calculation && !calculation.charge_now;
@@ -73,6 +77,17 @@ export const MobileUpgradeConfirmationModal = ({
   const summaryLine = `${newPlan.name} • ${newMemberCount} member • ${billingCycle === "yearly" ? "Tahunan" : "Bulanan"}`;
 
   const renderProrateInfo = () => {
+    // Billing cycle upgrade: show full yearly payment info, not prorate
+    if (isBillingCycleUpgradeOnly) {
+      return (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-primary">
+          <p className="text-sm font-medium">
+            {t("subscription.plans.modal.billingUpgrade.note", "Bayar penuh untuk 1 tahun. Next billing date akan diperpanjang 1 tahun dari tanggal saat ini.")}
+          </p>
+        </div>
+      );
+    }
+
     if (!calculation) {
       return (
         <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
@@ -142,11 +157,13 @@ export const MobileUpgradeConfirmationModal = ({
       >
         <DialogHeader className="px-6 pb-3 pt-6 text-left">
           <DialogTitle className="text-lg font-semibold text-foreground">
-            {isScheduled
-              ? "Jadwalkan Perubahan Plan"
-              : isImmediateCharge
-                ? "Konfirmasi Pembayaran Prorate"
-                : "Konfirmasi Upgrade"}
+            {isBillingCycleUpgradeOnly
+              ? t("subscription.plans.modal.title.confirmYearlyUpgrade", "Konfirmasi Upgrade ke Tahunan")
+              : isScheduled
+                ? "Jadwalkan Perubahan Plan"
+                : isImmediateCharge
+                  ? "Konfirmasi Pembayaran Prorate"
+                  : "Konfirmasi Upgrade"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Pastikan detail di bawah sudah sesuai sebelum melanjutkan ke pembayaran.
@@ -232,7 +249,7 @@ export const MobileUpgradeConfirmationModal = ({
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Memproses...</span>
                 </>
-              ) : isScheduled ? "Jadwalkan Perubahan" : "Konfirmasi & Bayar"}
+              ) : isScheduled ? "Jadwalkan Perubahan" : t("subscription.plans.modal.button.confirmPay", "Konfirmasi & Bayar")}
             </Button>
           </div>
         </div>
