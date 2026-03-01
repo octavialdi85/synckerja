@@ -230,19 +230,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     return String(targetAudience).trim();
   };
   
-  // Get unique customer personas from product knowledge filtered by selected service
+  // Get unique customer personas from product knowledge filtered by selected service AND feature
   const customerPersonas = useMemo(() => {
-    // Only show personas if service is selected
-    if (!selectedServiceId) {
+    // Only show personas if service and feature are selected
+    if (!selectedServiceId || !formData.feature_name?.trim()) {
       return [];
     }
     
     const personasSet = new Set<string>();
+    const selectedFeature = formData.feature_name.trim();
     
-    // Filter product knowledge by selected service
+    // Filter product knowledge by selected service AND selected feature
     productKnowledgeData.forEach((pk) => {
-      // Check if service_id matches selected service
-      if (pk.service_id === selectedServiceId && pk.target_audience) {
+      if (pk.service_id === selectedServiceId && pk.feature_name?.trim() === selectedFeature && pk.target_audience) {
         const personaStr = extractTargetAudienceAsString(pk.target_audience);
         if (personaStr && personaStr.trim() !== '') {
           personasSet.add(personaStr);
@@ -251,8 +251,47 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     });
     
     return Array.from(personasSet).sort();
+  }, [productKnowledgeData, selectedServiceId, formData.feature_name]);
+
+  // Unique feature names from product_knowledge, filtered by selected service, sorted alphabetically
+  const featureOptions = useMemo(() => {
+    if (!selectedServiceId) return [];
+    const names = new Set<string>();
+    productKnowledgeData
+      .filter((pk) => pk.service_id === selectedServiceId && pk.feature_name?.trim())
+      .forEach((pk) => names.add(pk.feature_name.trim()));
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [productKnowledgeData, selectedServiceId]);
-  
+
+  // Reset Customer Insights when Customer Persona is not selected (safety net)
+  useEffect(() => {
+    if (!formData.target_market?.trim()) {
+      setFormData((prev) => {
+        const hasInsights =
+          prev.keinginan ||
+          prev.kebutuhan ||
+          prev.hidden_needs ||
+          prev.problem ||
+          prev.impact ||
+          prev.false_belief ||
+          prev.false_belief_impact ||
+          prev.what_makes_them_stop;
+        if (!hasInsights) return prev;
+        return {
+          ...prev,
+          keinginan: '',
+          kebutuhan: '',
+          hidden_needs: '',
+          problem: '',
+          impact: '',
+          false_belief: '',
+          false_belief_impact: '',
+          what_makes_them_stop: '',
+        };
+      });
+    }
+  }, [formData.target_market]);
+
   // Helper function to parse hidden_needs string into array
   const parseHiddenNeeds = (hiddenNeeds: string | null | undefined): string[] => {
     if (!hiddenNeeds || hiddenNeeds.trim() === '') return [];
@@ -683,7 +722,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     handleInputChange('service_name', selectedService?.name || '');
                     handleInputChange('sub_service_name', ''); // Reset sub service
                     handleInputChange('target_market', ''); // Reset Customer Persona when service changes
+                    handleInputChange('keinginan', ''); // Reset Customer Insights when service changes
+                    handleInputChange('kebutuhan', '');
+                    handleInputChange('hidden_needs', '');
+                    handleInputChange('problem', '');
+                    handleInputChange('impact', '');
+                    handleInputChange('false_belief', '');
+                    handleInputChange('false_belief_impact', '');
+                    handleInputChange('what_makes_them_stop', '');
                     handleInputChange('keywords', []); // Reset keywords when service changes
+                    handleInputChange('feature_name', ''); // Reset Product/Service Details when service changes
+                    handleInputChange('feature_description', '');
+                    handleInputChange('solution', '');
+                    handleInputChange('competitive_advantage', '');
                   }}
                 >
                   <SelectTrigger>
@@ -830,29 +881,162 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           </AccordionContent>
         </AccordionItem>
 
-        {/* Section 2: Target Audience & Customer Insights (combined - lihat insight saat persona dipilih) */}
-        <AccordionItem value="target-audience" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+        {/* Section 2: Product/Service Details */}
+        <AccordionItem value="product-details" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
           <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
+            Product/Service Details
+          </AccordionTrigger>
+          <AccordionContent className="pb-2 pt-0">
+            <div className="space-y-2 pt-1">
+              <div className="space-y-1">
+                <Label htmlFor="feature_name">Feature</Label>
+                <Select
+                  value={!selectedServiceId ? '__need_service__' : (formData.feature_name?.trim() || '__none__')}
+                  onValueChange={(value) => {
+                    if (value === '__need_service__' || value === '__none__' || !value) {
+                      handleInputChange('feature_name', '');
+                      handleInputChange('target_market', '');
+                      handleInputChange('feature_description', '');
+                      handleInputChange('solution', '');
+                      handleInputChange('competitive_advantage', '');
+                      handleInputChange('keinginan', '');
+                      handleInputChange('kebutuhan', '');
+                      handleInputChange('hidden_needs', '');
+                      handleInputChange('problem', '');
+                      handleInputChange('impact', '');
+                      handleInputChange('false_belief', '');
+                      handleInputChange('false_belief_impact', '');
+                      handleInputChange('what_makes_them_stop', '');
+                      return;
+                    }
+                    const selectedPK = productKnowledgeData.find(
+                      (pk) =>
+                        pk.service_id === selectedServiceId &&
+                        pk.feature_name?.trim() === value
+                    );
+                    handleInputChange('target_market', ''); // Reset Customer Persona when Feature changes
+                    handleInputChange('keinginan', ''); // Reset Customer Insights when Feature changes
+                    handleInputChange('kebutuhan', '');
+                    handleInputChange('hidden_needs', '');
+                    handleInputChange('problem', '');
+                    handleInputChange('impact', '');
+                    handleInputChange('false_belief', '');
+                    handleInputChange('false_belief_impact', '');
+                    handleInputChange('what_makes_them_stop', '');
+                    if (selectedPK) {
+                      handleInputChange('feature_name', selectedPK.feature_name?.trim() || '');
+                      handleInputChange('feature_description', selectedPK.feature_description?.trim() || '');
+                      handleInputChange('solution', selectedPK.solusi?.trim() || '');
+                      handleInputChange(
+                        'competitive_advantage',
+                        selectedPK.competitive_advantage
+                          ? parseCompetitiveAdvantage(selectedPK.competitive_advantage)
+                          : ''
+                      );
+                    }
+                  }}
+                  disabled={!selectedServiceId}
+                >
+                  <SelectTrigger className={!selectedServiceId ? 'opacity-70' : ''}>
+                    <SelectValue placeholder="Pilih Feature" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!selectedServiceId && (
+                      <SelectItem value="__need_service__">Pilih Service terlebih dahulu</SelectItem>
+                    )}
+                    <SelectItem value="__none__">Pilih Feature</SelectItem>
+                    {featureOptions.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="feature_description">Feature Description</Label>
+                  <Textarea
+                    id="feature_description"
+                    value={formData.feature_description || ''}
+                    onChange={(e) => handleInputChange('feature_description', e.target.value)}
+                    placeholder="Deskripsi detail fitur produk/layanan"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="solution">Solution</Label>
+                  <Textarea
+                    id="solution"
+                    value={formData.solution || ''}
+                    onChange={(e) => handleInputChange('solution', e.target.value)}
+                    placeholder="Solusi yang ditawarkan"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="competitive_advantage">Competitive Advantage</Label>
+                <Textarea
+                  id="competitive_advantage"
+                  value={formData.competitive_advantage || ''}
+                  onChange={(e) => handleInputChange('competitive_advantage', e.target.value)}
+                  placeholder="Keunggulan kompetitif produk/layanan"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Section 3: Target Audience & Customer Insights (combined - lihat insight saat persona dipilih) */}
+        <AccordionItem value="target-audience" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-gray-50 data-[state=open]:border-gray-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-gray-800 data-[state=closed]:text-gray-700">
             Target Audience & Customer Insights
           </AccordionTrigger>
           <AccordionContent className="pb-2 pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {/* Target Audience - warna indigo/slate */}
+            <div className="rounded-lg bg-indigo-50/80 border border-indigo-100 px-4 py-3 mb-4">
+              <h4 className="text-sm font-semibold text-indigo-800 mb-3">Target Audience</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Customer Persona */}
               <div className="space-y-1">
                 <Label htmlFor="target_market">
                   Customer Persona <span className="text-red-500">*</span>
                 </Label>
                 <Select
-                  value={formData.target_market || ""}
+                  value={formData.target_market?.trim() || "__none__"}
                   onValueChange={(value) => {
                     // Clear error when value changes
                     if (errors.target_market) {
                       setErrors(prev => ({ ...prev, target_market: undefined }));
                     }
                     
+                    // When user selects "Pilih Customer Persona" (clear), reset all Customer Insights
+                    if (value === '__none__') {
+                      setFormData((prev) => ({
+                        ...prev,
+                        target_market: '',
+                        keinginan: '',
+                        kebutuhan: '',
+                        hidden_needs: '',
+                        problem: '',
+                        impact: '',
+                        false_belief: '',
+                        false_belief_impact: '',
+                        what_makes_them_stop: '',
+                      }));
+                      return;
+                    }
+                    
                     const normalizePersona = (s: string) => (s || '').trim();
+                    const selectedFeature = formData.feature_name?.trim() || '';
                     const matchingPKs = productKnowledgeData.filter((pk) => {
                       if (pk.service_id !== selectedServiceId) return false;
+                      if (pk.feature_name?.trim() !== selectedFeature) return false;
                       if (!pk.target_audience) return false;
                       const pkPersonaStr = normalizePersona(extractTargetAudienceAsString(pk.target_audience));
                       return pkPersonaStr === normalizePersona(value);
@@ -860,6 +1044,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     
                     const matchingWithWantsNeeds = productKnowledgeWithWantsNeeds.filter((pk) => {
                       if (pk.service_id !== selectedServiceId) return false;
+                      if (pk.feature_name?.trim() !== selectedFeature) return false;
                       if (!pk.target_audience) return false;
                       const pkPersonaStr = normalizePersona(extractTargetAudienceAsString(pk.target_audience));
                       return pkPersonaStr === normalizePersona(value);
@@ -873,8 +1058,9 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     
                     if (matchingPKs.length > 0 && selectedPK) {
                       const wantsVal = selectedPK.wants?.trim() || '';
-                      const needsVal = selectedPK.needs?.trim()
+                      const rawNeeds = selectedPK.needs?.trim()
                         || (matchingPKs.find((pk) => pk.needs?.trim())?.needs?.trim() || '');
+                      const needsVal = rawNeeds ? rawNeeds.replace(/\r\n/g, '\n') : '';
                       
                       updates.keinginan = wantsVal;
                       updates.kebutuhan = needsVal;
@@ -913,13 +1099,22 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     
                     setFormData((prev) => ({ ...prev, ...updates }));
                   }}
-                  disabled={!selectedServiceId}
+                  disabled={!selectedServiceId || !formData.feature_name?.trim()}
                 >
                   <SelectTrigger className={cn(
                     'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
+                    (!selectedServiceId || !formData.feature_name?.trim()) && 'opacity-70',
                     errors.target_market && 'border-red-500'
                   )}>
-                    <SelectValue placeholder={selectedServiceId ? "Pilih Customer Persona" : "Pilih Service terlebih dahulu"} />
+                    <SelectValue placeholder={
+                      !selectedServiceId
+                        ? "Pilih Service terlebih dahulu"
+                        : !formData.feature_name?.trim()
+                        ? "Pilih Feature terlebih dahulu"
+                        : customerPersonas.length === 0
+                        ? "Tidak ada Customer Persona untuk Feature ini"
+                        : "Pilih Customer Persona"
+                    } />
                   </SelectTrigger>
                   <SelectContent
                     className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
@@ -929,12 +1124,20 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       <SelectItem value="select-service-first" disabled>
                         Pilih Service terlebih dahulu
                       </SelectItem>
+                    ) : !formData.feature_name?.trim() ? (
+                      <SelectItem value="select-feature-first" disabled>
+                        Pilih Feature terlebih dahulu
+                      </SelectItem>
                     ) : customerPersonas.length === 0 ? (
                       <SelectItem value="no-data" disabled>
-                        Tidak ada Customer Persona tersedia untuk Service ini
+                        Tidak ada Customer Persona untuk Feature ini
                       </SelectItem>
                     ) : (
-                      customerPersonas.map((persona, index) => (
+                      <>
+                        <SelectItem value="__none__">
+                          Pilih Customer Persona
+                        </SelectItem>
+                        {customerPersonas.map((persona, index) => (
                         <SelectItem
                           key={index}
                           value={persona}
@@ -944,7 +1147,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                             {persona}
                           </span>
                         </SelectItem>
-                      ))
+                      ))}
+                      </>
                     )}
                   </SelectContent>
                 </Select>
@@ -1111,11 +1315,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     Maksimal 3 keyword sudah tercapai
                   </p>
                 )}
-                {!useKeyword && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Centang checkbox "Gunakan Keyword" untuk mengaktifkan field keyword
-                  </p>
-                )}
                 {useKeyword && !selectedServiceId && (
                   <p className="text-xs text-gray-500 mt-1">
                     Pilih Service terlebih dahulu untuk memilih keyword
@@ -1126,16 +1325,18 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 )}
               </div>
             </div>
+            </div>
 
-            {/* Customer Insights - langsung terlihat saat Customer Persona dipilih */}
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-4">Customer Insights</h4>
+            {/* Customer Insights - warna teal/emerald, pemisah jelas */}
+            <div className="rounded-lg bg-teal-50/80 border border-teal-100 px-4 py-3">
+              <h4 className="text-sm font-semibold text-teal-800 mb-4">Customer Insights</h4>
               <div className="space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="keinginan">Keinginan</Label>
                   <Select
                     value={formData.keinginan || ""}
+                    disabled={!formData.target_market?.trim()}
                     onValueChange={(value) => {
                       // Update keinginan first
                       handleInputChange('keinginan', value);
@@ -1253,8 +1454,11 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       }
                     }}
                   >
-                    <SelectTrigger className="min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate">
-                      <SelectValue placeholder="Pilih Keinginan dari Product Knowledge" />
+                    <SelectTrigger className={cn(
+                      'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
+                      !formData.target_market?.trim() && 'bg-gray-100 opacity-70'
+                    )}>
+                      <SelectValue placeholder={formData.target_market?.trim() ? "Pilih Keinginan dari Product Knowledge" : "Pilih Customer Persona terlebih dahulu"} />
                     </SelectTrigger>
                     <SelectContent
                       className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
@@ -1291,34 +1495,66 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   <Select
                     value={formData.kebutuhan || ""}
                     onValueChange={(value) => handleInputChange('kebutuhan', value)}
-                    disabled={!formData.keinginan}
+                    disabled={!formData.target_market?.trim()}
                   >
                     <SelectTrigger className={cn(
                       'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
-                      !formData.keinginan && 'bg-gray-100'
+                      !formData.target_market?.trim() && 'bg-gray-100 opacity-70'
                     )}>
-                      <SelectValue placeholder={formData.keinginan ? (formData.kebutuhan ? "" : "Pilih Kebutuhan") : "Pilih Keinginan terlebih dahulu"} />
+                      <SelectValue placeholder={formData.target_market?.trim() ? (formData.kebutuhan ? "" : "Pilih Kebutuhan") : "Pilih Customer Persona terlebih dahulu"} />
                     </SelectTrigger>
                     <SelectContent
                       className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
                       position="popper"
                     >
-                      {formData.keinginan ? (
-                        // Show needs that match the selected wants
+                      {formData.target_market?.trim() ? (
+                        // Show needs: from wants match, or from Customer Persona match when target_market is set
                         (() => {
-                          // Find all product knowledge items with matching wants
                           const keinginanTrim = (formData.keinginan || '').trim();
-                          const matchingPKs = productKnowledgeWithWantsNeeds.filter(
-                            (pk) => (pk.wants || '').trim() === keinginanTrim
-                          );
+                          const personaTrim = (formData.target_market || '').trim();
+                          const selectedFeature = formData.feature_name?.trim() || '';
                           
-                          // Collect all unique needs from matching product knowledge
                           const uniqueNeeds = new Map<string, string>();
+                          
+                          // CRITICAL: Add auto-filled kebutuhan FIRST so it's always available as SelectItem
+                          // Radix Select requires value to match a SelectItem - without this, auto-fill won't display
+                          const kebutuhanValue = (formData.kebutuhan || '').replace(/\r\n/g, '\n').trim();
+                          if (kebutuhanValue) {
+                            uniqueNeeds.set(kebutuhanValue, 'autofilled');
+                          }
+                          
+                          let matchingPKs = productKnowledgeWithWantsNeeds;
+                          
+                          if (keinginanTrim) {
+                            matchingPKs = matchingPKs.filter(
+                              (pk) => (pk.wants || '').trim() === keinginanTrim
+                            );
+                          }
+                          
+                          if (selectedServiceId) {
+                            matchingPKs = matchingPKs.filter(
+                              (pk) => pk.service_id === selectedServiceId
+                            );
+                          }
+                          if (selectedFeature) {
+                            matchingPKs = matchingPKs.filter(
+                              (pk) => pk.feature_name?.trim() === selectedFeature
+                            );
+                          }
+                          
+                          if (personaTrim) {
+                            const normalizePersona = (s: string) => (s || '').trim();
+                            matchingPKs = matchingPKs.filter((pk) => {
+                              if (!pk.target_audience) return false;
+                              const pkPersonaStr = normalizePersona(extractTargetAudienceAsString(pk.target_audience));
+                              return pkPersonaStr === normalizePersona(personaTrim);
+                            });
+                          }
                           
                           if (matchingPKs.length > 0) {
                             matchingPKs.forEach((pk) => {
                               if (pk.needs) {
-                                const needsValue = pk.needs.trim();
+                                const needsValue = (pk.needs || '').replace(/\r\n/g, '\n').trim();
                                 if (needsValue && !uniqueNeeds.has(needsValue)) {
                                   uniqueNeeds.set(needsValue, pk.id);
                                 }
@@ -1326,20 +1562,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                             });
                           }
                           
-                          // CRITICAL: Always ensure the current kebutuhan value is available as SelectItem
-                          // This ensures autofilled values are always displayed correctly
-                          if (formData.kebutuhan) {
-                            const kebutuhanValue = (formData.kebutuhan || '').trim();
-                            if (kebutuhanValue && !uniqueNeeds.has(kebutuhanValue)) {
-                              // Pastikan nilai auto-fill selalu ada sebagai opsi (cari di semua PK)
-                              const pkWithKebutuhan = productKnowledgeData.find(
-                                (pk) => (pk.needs || '').trim() === kebutuhanValue
-                              );
-                              uniqueNeeds.set(kebutuhanValue, pkWithKebutuhan?.id || 'autofilled');
-                            }
-                          }
-                          
-                          // If no matches found, show all needs as fallback
                           if (uniqueNeeds.size === 0) {
                             productKnowledgeWithWantsNeeds.forEach((pk) => {
                               if (pk.needs) {
@@ -1365,7 +1587,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                         })()
                       ) : (
                         <SelectItem value="select-wants-first" disabled>
-                          Pilih Keinginan terlebih dahulu
+                          Pilih Keinginan atau Customer Persona terlebih dahulu
                         </SelectItem>
                       )}
                     </SelectContent>
@@ -1379,8 +1601,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   id="hidden_needs"
                   value={formData.hidden_needs || ''}
                   onChange={(e) => handleInputChange('hidden_needs', e.target.value)}
-                  placeholder="Kebutuhan tersembunyi (pisahkan dengan baris kosong untuk multiple needs)"
+                  placeholder={formData.target_market?.trim() ? "Kebutuhan tersembunyi (pisahkan dengan baris kosong untuk multiple needs)" : "Pilih Customer Persona terlebih dahulu"}
                   rows={4}
+                  disabled={!formData.target_market?.trim()}
+                  className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                 />
               </div>
 
@@ -1391,8 +1615,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     id="problem"
                     value={formData.problem || ''}
                     onChange={(e) => handleInputChange('problem', e.target.value)}
-                    placeholder="Masalah yang dihadapi (pisahkan dengan baris kosong untuk multiple problems)"
+                    placeholder={formData.target_market?.trim() ? "Masalah yang dihadapi (pisahkan dengan baris kosong untuk multiple problems)" : "Pilih Customer Persona terlebih dahulu"}
                     rows={4}
+                    disabled={!formData.target_market?.trim()}
+                    className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                   />
                 </div>
 
@@ -1402,8 +1628,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     id="impact"
                     value={formData.impact || ''}
                     onChange={(e) => handleInputChange('impact', e.target.value)}
-                    placeholder="Dampak dari masalah (pisahkan dengan baris kosong untuk multiple impacts)"
+                    placeholder={formData.target_market?.trim() ? "Dampak dari masalah (pisahkan dengan baris kosong untuk multiple impacts)" : "Pilih Customer Persona terlebih dahulu"}
                     rows={4}
+                    disabled={!formData.target_market?.trim()}
+                    className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                   />
                 </div>
               </div>
@@ -1415,8 +1643,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     id="false_belief"
                     value={formData.false_belief || ''}
                     onChange={(e) => handleInputChange('false_belief', e.target.value)}
-                    placeholder="Keyakinan salah yang dimiliki pelanggan"
+                    placeholder={formData.target_market?.trim() ? "Keyakinan salah yang dimiliki pelanggan" : "Pilih Customer Persona terlebih dahulu"}
                     rows={2}
+                    disabled={!formData.target_market?.trim()}
+                    className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                   />
                 </div>
 
@@ -1426,8 +1656,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     id="false_belief_impact"
                     value={formData.false_belief_impact || ''}
                     onChange={(e) => handleInputChange('false_belief_impact', e.target.value)}
-                    placeholder="Dampak dari keyakinan salah terhadap perilaku pelanggan"
+                    placeholder={formData.target_market?.trim() ? "Dampak dari keyakinan salah terhadap perilaku pelanggan" : "Pilih Customer Persona terlebih dahulu"}
                     rows={2}
+                    disabled={!formData.target_market?.trim()}
+                    className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                   />
                 </div>
               </div>
@@ -1438,65 +1670,12 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   id="what_makes_them_stop"
                   value={formData.what_makes_them_stop || ''}
                   onChange={(e) => handleInputChange('what_makes_them_stop', e.target.value)}
-                  placeholder="Apa yang membuat pelanggan berhenti atau ragu-ragu"
+                  placeholder={formData.target_market?.trim() ? "Apa yang membuat pelanggan berhenti atau ragu-ragu" : "Pilih Customer Persona terlebih dahulu"}
                   rows={2}
+                  disabled={!formData.target_market?.trim()}
+                  className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
                 />
               </div>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Section 3: Product/Service Details (was Section 4) */}
-        <AccordionItem value="product-details" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
-            Product/Service Details
-          </AccordionTrigger>
-          <AccordionContent className="pb-2 pt-0">
-            <div className="space-y-2 pt-1">
-              <div className="space-y-1">
-                <Label htmlFor="feature_name">Feature</Label>
-                <Input
-                  id="feature_name"
-                  value={formData.feature_name || ''}
-                  onChange={(e) => handleInputChange('feature_name', e.target.value)}
-                  placeholder="Nama fitur produk/layanan"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="feature_description">Feature Description</Label>
-                  <Textarea
-                    id="feature_description"
-                    value={formData.feature_description || ''}
-                    onChange={(e) => handleInputChange('feature_description', e.target.value)}
-                    placeholder="Deskripsi detail fitur produk/layanan"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="solution">Solution</Label>
-                  <Textarea
-                    id="solution"
-                    value={formData.solution || ''}
-                    onChange={(e) => handleInputChange('solution', e.target.value)}
-                    placeholder="Solusi yang ditawarkan"
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="competitive_advantage">Competitive Advantage</Label>
-                <Textarea
-                  id="competitive_advantage"
-                  value={formData.competitive_advantage || ''}
-                  onChange={(e) => handleInputChange('competitive_advantage', e.target.value)}
-                  placeholder="Keunggulan kompetitif produk/layanan"
-                  rows={3}
-                />
               </div>
             </div>
           </AccordionContent>

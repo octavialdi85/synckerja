@@ -101,8 +101,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     startIndex?: number;
     endIndex?: number;
     sectionType: SectionType;
-    tableCell?: { rowIndex: number; colIndex: number; tableStartIndex: number; tableEndIndex: number };
-    tableRow?: { rowIndex: number; tableStartIndex: number; tableEndIndex: number };
+    tableCell?: { rowIndex: number; colIndex: number; tableStartIndex: number; tableEndIndex: number; tableData?: string[][] };
+    tableRow?: { rowIndex: number; tableStartIndex: number; tableEndIndex: number; tableData?: string[][] };
   } | null>(null);
   const [isRevising, setIsRevising] = useState(false);
   const [selectionRevisi, setSelectionRevisi] = useState<string | null>(null);
@@ -142,12 +142,13 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     colIndex: number,
     value: string,
     tableStartIndex: number,
-    tableEndIndex: number
+    tableEndIndex: number,
+    tableData?: string[][]
   ) => {
     setRevisiTarget({
       originalText: value,
       sectionType: 'table',
-      tableCell: { rowIndex, colIndex, tableStartIndex, tableEndIndex },
+      tableCell: { rowIndex, colIndex, tableStartIndex, tableEndIndex, tableData },
     });
     setRevisiModalOpen(true);
   };
@@ -167,12 +168,13 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     rowIndex: number,
     rowContent: string,
     tableStartIndex: number,
-    tableEndIndex: number
+    tableEndIndex: number,
+    tableData?: string[][]
   ) => {
     setRevisiTarget({
       originalText: rowContent,
       sectionType: 'table',
-      tableRow: { rowIndex, tableStartIndex, tableEndIndex },
+      tableRow: { rowIndex, tableStartIndex, tableEndIndex, tableData },
     });
     setRevisiModalOpen(true);
   };
@@ -209,6 +211,7 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
           rowIndex: revisiTarget.tableCell.rowIndex,
           colIndex: revisiTarget.tableCell.colIndex,
           revisedCellValue: result.script,
+          tableData: revisiTarget.tableCell.tableData,
         });
       } else if (revisiTarget.tableRow) {
         newScript = mergeTableRowRevision(script, {
@@ -216,6 +219,7 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
           tableEndIndex: revisiTarget.tableRow.tableEndIndex,
           rowIndex: revisiTarget.tableRow.rowIndex,
           revisedRowMarkdown: result.script,
+          tableData: revisiTarget.tableRow.tableData,
         });
       } else {
         newScript = mergeRevisedPart(
@@ -226,8 +230,15 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
           revisiTarget.endIndex
         );
       }
+      // Fallback: when table cell/row merge returns unchanged (parse/indices mismatch), try text-based replace
+      if ((revisiTarget.tableCell || revisiTarget.tableRow) && newScript === script && revisiTarget.originalText?.trim()) {
+        const fallback = mergeRevisedPart(script, revisiTarget.originalText, result.script);
+        if (fallback !== script) newScript = fallback;
+      }
       if (newScript === script) {
-        toast.error('Teks tidak ditemukan untuk diganti. Coba pilih ulang.');
+        toast.error(
+          'Teks tidak ditemukan untuk diganti. Pastikan: 1) Isi instruksi revisi, 2) Script belum berubah sejak memilih, 3) Pilih ulang teks/bagian yang ingin direvisi.'
+        );
         throw new Error('Replace failed');
       }
       onScriptChange(newScript);
@@ -349,7 +360,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
                       colIndex,
                       value,
                       seg.section!.startIndex,
-                      seg.section!.endIndex
+                      seg.section!.endIndex,
+                      seg.section!.tableData
                     )
                   }
                   onRevisiRow={({ rowIndex, rowContent }) =>
@@ -357,7 +369,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
                       rowIndex,
                       rowContent,
                       seg.section!.startIndex,
-                      seg.section!.endIndex
+                      seg.section!.endIndex,
+                      seg.section!.tableData
                     )
                   }
                   onRevisiSection={handleRevisiTableSection}

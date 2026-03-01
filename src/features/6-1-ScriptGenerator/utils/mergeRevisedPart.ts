@@ -1,6 +1,15 @@
 import { stringifyMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
 import { parseMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
 
+/** Normalize whitespace for matching: collapse multiple spaces/newlines to single space, trim */
+function normalizeForMatch(s: string): string {
+  return s
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Merge revised part back into full script.
  * @param fullScript - The complete script
@@ -17,7 +26,9 @@ export function mergeRevisedPart(
   startIndex?: number,
   endIndex?: number
 ): string {
-  if (startIndex !== undefined && endIndex !== undefined) {
+  // When we have indices from section parser, ALWAYS use them - section content may be
+  // transformed (trimmed, stripped) for display but indices point to the correct range
+  if (startIndex !== undefined && endIndex !== undefined && startIndex >= 0 && endIndex <= fullScript.length) {
     return fullScript.slice(0, startIndex) + revisedText + fullScript.slice(endIndex);
   }
 
@@ -36,6 +47,24 @@ export function mergeRevisedPart(
     }
   }
 
+  // Fallback: try normalized - search for original with flexible whitespace
+  const normOriginal = normalizeForMatch(originalText);
+  if (normOriginal.length >= 10 && normOriginal.length < 5000) {
+    try {
+      const pattern = normOriginal
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
+      const regex = new RegExp(pattern);
+      const match = fullScript.match(regex);
+      if (match && match.index !== undefined) {
+        const matchEnd = match.index + match[0].length;
+        return fullScript.slice(0, match.index) + revisedText + fullScript.slice(matchEnd);
+      }
+    } catch {
+      // Regex too complex or invalid - skip
+    }
+  }
+
   // Could not find - return fullScript unchanged (caller should handle error)
   return fullScript;
 }
@@ -46,6 +75,8 @@ export interface TableCellRevision {
   rowIndex: number;
   colIndex: number;
   revisedCellValue: string;
+  /** Optional: use section's tableData when re-parse yields fewer rows (avoids rowIndex mismatch) */
+  tableData?: string[][];
 }
 
 export interface TableRowRevision {
@@ -53,6 +84,8 @@ export interface TableRowRevision {
   tableEndIndex: number;
   rowIndex: number;
   revisedRowMarkdown: string;
+  /** Optional: use section's tableData when re-parse yields fewer rows (avoids rowIndex mismatch) */
+  tableData?: string[][];
 }
 
 /**
@@ -73,10 +106,14 @@ export function mergeTableRowRevision(
   fullScript: string,
   params: TableRowRevision
 ): string {
-  const { tableStartIndex, tableEndIndex, rowIndex, revisedRowMarkdown } = params;
+  const { tableStartIndex, tableEndIndex, rowIndex, revisedRowMarkdown, tableData } = params;
   const tableMarkdown = fullScript.slice(tableStartIndex, tableEndIndex);
   const parsed = parseMarkdownTable(tableMarkdown);
-  if (!parsed || !parsed.table[rowIndex]) return fullScript;
+  // Prefer section tableData when rowIndex valid there (avoids re-parse mismatch)
+  const baseTable = tableData && rowIndex < tableData.length
+    ? tableData
+    : parsed?.table;
+  if (!baseTable || !baseTable[rowIndex]) return fullScript;
 
   const lines = revisedRowMarkdown.trim().split('\n').filter((l) => l.trim());
   let newCells: string[] = [];
@@ -88,13 +125,22 @@ export function mergeTableRowRevision(
       newCells = cells;
     }
   }
+  // Fallback: AI returned plain text without table format - use as VO cell (column 1)
+  if (newCells.length === 0 && revisedRowMarkdown.trim()) {
+    const existingRow = baseTable[rowIndex] ?? [];
+    if (existingRow.length > 0) {
+      newCells = [...existingRow];
+      const voCol = existingRow.length > 1 ? 1 : 0;
+      newCells[voCol] = revisedRowMarkdown.trim();
+    }
+  }
   if (newCells.length === 0) return fullScript;
 
-  const colCount = parsed.table[0]?.length ?? newCells.length;
+  const colCount = baseTable[0]?.length ?? newCells.length;
   while (newCells.length < colCount) newCells.push('');
   if (newCells.length > colCount) newCells = newCells.slice(0, colCount);
 
-  const newTable = parsed.table.map((r, ri) =>
+  const newTable = baseTable.map((r, ri) =>
     ri === rowIndex ? newCells : r
   );
   const newTableMarkdown = stringifyMarkdownTable(newTable);
@@ -108,15 +154,19 @@ export function mergeTableCellRevision(
   fullScript: string,
   params: TableCellRevision
 ): string {
-  const { tableStartIndex, tableEndIndex, rowIndex, colIndex, revisedCellValue } = params;
+  const { tableStartIndex, tableEndIndex, rowIndex, colIndex, revisedCellValue, tableData } = params;
   const tableMarkdown = fullScript.slice(tableStartIndex, tableEndIndex);
   const parsed = parseMarkdownTable(tableMarkdown);
-  if (!parsed || !parsed.table[rowIndex]) return fullScript;
+  // Prefer section tableData when rowIndex valid there (avoids re-parse mismatch)
+  const baseTable = tableData && rowIndex < tableData.length
+    ? tableData
+    : parsed?.table;
+  if (!baseTable || !baseTable[rowIndex]) return fullScript;
 
-  const row = parsed.table[rowIndex];
+  const row = baseTable[rowIndex];
   if (colIndex >= row.length) return fullScript;
 
-  const newTable = parsed.table.map((r, ri) =>
+  const newTable = baseTable.map((r, ri) =>
     ri === rowIndex
       ? r.map((c, ci) => (ci === colIndex ? revisedCellValue : c))
       : r
