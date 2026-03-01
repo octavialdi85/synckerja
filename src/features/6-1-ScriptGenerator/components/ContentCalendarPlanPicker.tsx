@@ -118,7 +118,7 @@ export const ContentCalendarPlanPicker: React.FC<ContentCalendarPlanPickerProps>
                     <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.contentType', 'Content Type')}</th>
                     <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.service', 'Service')}</th>
                     <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.subService', 'Sub Service')}</th>
-                    <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.title', 'Title')}</th>
+                    <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.titleField', 'Title')}</th>
                     <th className="text-left p-3 font-medium">{t('scriptGenerator.saveToPlanModal.contentPillar', 'Content Pillar')}</th>
                   </tr>
                 </thead>

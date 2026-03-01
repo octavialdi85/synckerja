@@ -389,7 +389,7 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
                           <span>{selectedPlan.service?.name ?? '-'}</span>
                           <span className="text-muted-foreground">{t('scriptGenerator.saveToPlanModal.subService', 'Sub Service')}:</span>
                           <span>{selectedPlan.sub_service?.name ?? '-'}</span>
-                          <span className="text-muted-foreground">{t('scriptGenerator.saveToPlanModal.title', 'Title')}:</span>
+                          <span className="text-muted-foreground">{t('scriptGenerator.saveToPlanModal.titleField', 'Title')}:</span>
                           <span className="font-medium">{selectedPlan.title?.trim() || '-'}</span>
                           <span className="text-muted-foreground">{t('scriptGenerator.saveToPlanModal.contentPillar', 'Content Pillar')}:</span>
                           <span>{selectedPlan.content_pillar?.name ?? '-'}</span>
@@ -408,11 +408,11 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
                     ) : (
                       <>
                         <div className="space-y-2">
-                          <LabelWithTooltip label={t('scriptGenerator.saveToPlanModal.title', 'Title')} tooltip={t('scriptGenerator.saveToPlanModal.tooltipTitle', 'Content plan title')} />
+                          <LabelWithTooltip label={t('scriptGenerator.saveToPlanModal.titleField', 'Title')} tooltip={t('scriptGenerator.saveToPlanModal.tooltipTitle', 'Content plan title')} />
                           <Input
                             value={newPlanForm.title}
                             onChange={(e) => setNewPlanForm((p) => ({ ...p, title: e.target.value }))}
-                            placeholder={t('scriptGenerator.saveToPlanModal.title', 'Title')}
+                            placeholder={t('scriptGenerator.saveToPlanModal.titleField', 'Title')}
                             required
                           />
                         </div>
