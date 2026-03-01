@@ -404,7 +404,24 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
   const handleTableSave = (newTableData: string[][]) => {
     if (!parsedTable) return;
-    const newTableMarkdown = stringifyMarkdownTable(newTableData);
+    // Pastikan baris pertama adalah header (bukan data). Jika cell pertama seperti "0-3s", header hilang - prepend header standar.
+    const firstCell = newTableData[0]?.[0]?.trim() ?? '';
+    const isFirstRowData = /^\d+-\d+s$/i.test(firstCell) || /^\d+-\d+\s*s$/i.test(firstCell);
+    let dataToSave = newTableData;
+    if (isFirstRowData && newTableData.length > 0) {
+      const originalHeader = parsedTable.table[0];
+      const headerRow = originalHeader && !/^\d+-\d+s$/i.test((originalHeader[0] ?? '').trim())
+        ? originalHeader
+        : ['Timing', 'VO (Voice Over)', 'Visual', 'Element Lainnya', 'Tagging'];
+      const colCount = Math.max(headerRow.length, ...newTableData.map((r) => r.length));
+      const pad = (arr: string[]) => {
+        const a = [...arr];
+        while (a.length < colCount) a.push('');
+        return a.slice(0, colCount);
+      };
+      dataToSave = [pad(headerRow), ...newTableData.map(pad)];
+    }
+    const newTableMarkdown = stringifyMarkdownTable(dataToSave);
     const newBrief = replaceTableInMarkdown(
       briefText,
       newTableMarkdown,
@@ -467,8 +484,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
         <div className="flex flex-col h-full min-h-0">
           <div className="flex flex-1 min-h-0 overflow-hidden">
-            {/* Left Section - Comments (Narrower); disembunyikan di layar sempit agar Brief Content dapat lebar penuh */}
-            <div className="w-1/4 max-lg:hidden border-r border-gray-200 flex flex-col min-h-0">
+            {/* Left Section - Comments (Fixed width agar tidak berubah saat klik Approved/checklist) */}
+            <div className="w-96 flex-shrink-0 max-lg:hidden border-r border-gray-200 flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-gray-600" />
@@ -524,13 +541,13 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                   </div>
 
                   {/* Add Comment Field - Moved to Bottom */}
-                  <div className="p-4 border-t border-gray-100 flex-shrink-0">
-                    <div className="flex gap-2">
+                  <div className="p-4 border-t border-gray-100 flex-shrink-0 min-w-0 overflow-hidden">
+                    <div className="flex gap-2 min-w-0">
                       <Textarea
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         placeholder="Add a comment..."
-                        className="min-h-[60px] resize-none text-sm"
+                        className="min-h-[60px] resize-none text-sm flex-1 min-w-0"
                       />
                       <Button
                         onClick={handleAddComment}
@@ -546,8 +563,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
               )}
             </div>
 
-            {/* Right Section - Brief Content & Preview (Wider); full width di layar sempit */}
-            <div className="w-3/4 max-lg:w-full flex flex-col min-h-0">
+            {/* Right Section - Brief Content & Preview (Flex-1 mengambil sisa ruang); full width di layar sempit */}
+            <div className="flex-1 min-w-0 max-lg:w-full flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between min-h-0">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <FileText className="h-4 w-4 text-gray-600 shrink-0" />
@@ -627,7 +644,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                           primitiveClassName="data-[state=open]:!h-full"
                           className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[max(400px,45vh)] h-full"
                         >
-                          <div className="min-h-[max(360px,40vh)] flex-1 flex flex-col overflow-hidden h-full overflow-y-auto seamless-scroll">
+                          <div
+                            className="min-h-[max(360px,40vh)] flex-1 flex flex-col overflow-hidden h-full overflow-y-auto seamless-scroll"
+                            style={{ overflowAnchor: 'none' } as React.CSSProperties}
+                          >
                             {briefViewMode === 'raw' ? (
                               <Textarea
                                 value={briefText}

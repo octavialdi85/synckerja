@@ -42,6 +42,10 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
     { marker: /\*\*Caption\*\*\s*:?\s*\n([\s\S]*?)(?=\n##\s*Struktur|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
     { marker: /\*\*CAPTION\*\*\s*:?\s*\n([\s\S]*?)(?=\n##\s*Struktur|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
     { marker: /###\s*CAPTION\s*:?\s*\n([\s\S]*?)(?=\n##|\n###|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
+    // Variants: single #, CAPTION with ## at end, extra whitespace
+    { marker: /#\s*CAPTION\s*:?\s*\n([\s\S]*?)(?=\n#|\n##|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
+    { marker: /##\s*CAPTION\s*##\s*\n([\s\S]*?)(?=\n##|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
+    { marker: /^\s*CAPTION\s*:?\s*[\r\n]+([\s\S]*?)(?=\n\s*#\s+\w|\n##|$)/im, contentGroup: 1 },
     // Marker-only (legacy): extract by slicing after marker
     { marker: /##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:##\s*)?\n/is },
     { marker: /##\s*Caption\s*:?\s*(?:##\s*)?\n/is },

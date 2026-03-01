@@ -116,6 +116,9 @@ export function stringifyMarkdownTable(rows: string[][]): string {
 
 /**
  * Replace a table in the markdown string with new table content.
+ * Ensures a newline between content-before and the new table when the content
+ * before ends without newline (e.g. "---" horizontal rule), so the parser
+ * does not see "---| Timing |" as one malformed line.
  */
 export function replaceTableInMarkdown(
   brief: string,
@@ -123,5 +126,12 @@ export function replaceTableInMarkdown(
   startIndex: number,
   endIndex: number
 ): string {
-  return brief.slice(0, startIndex) + newTableMarkdown + brief.slice(endIndex);
+  const before = brief.slice(0, startIndex);
+  const after = brief.slice(endIndex);
+  const needsNewline =
+    before.length > 0 &&
+    !before.endsWith('\n') &&
+    newTableMarkdown.length > 0 &&
+    !newTableMarkdown.startsWith('\n');
+  return before + (needsNewline ? '\n' : '') + newTableMarkdown + after;
 }

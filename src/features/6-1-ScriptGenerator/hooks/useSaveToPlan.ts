@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { parseAIScriptOutput } from '../utils/parseAIScriptOutput';
+import { getCaptionFallback } from '../utils/parseScriptSections';
 import { stripBreakdownScriptLabel, stripScriptKontenDigitalMarketing } from '@/features/share/utils/briefUtils';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { toast } from 'sonner';
@@ -60,10 +61,13 @@ export function useSaveToPlan() {
         return false;
       }
 
-      const { brief: rawBrief, caption, concept } = parseAIScriptOutput(script);
+      const { brief: rawBrief, caption: parsedCaption, concept } = parseAIScriptOutput(script);
       const brief = saveBrief
         ? stripScriptKontenDigitalMarketing(stripBreakdownScriptLabel(rawBrief))
         : rawBrief;
+
+      // Use caption from parseAIScriptOutput, fallback to getCaptionFallback when format differs
+      const caption = parsedCaption.trim() || getCaptionFallback(script);
 
       if (saveBrief && !brief.trim()) {
         toast.error(t('scriptGenerator.saveToPlanModal.errorNoBrief', 'No Brief content to save'));

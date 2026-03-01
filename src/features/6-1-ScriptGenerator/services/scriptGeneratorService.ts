@@ -770,13 +770,25 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('');
 
   // Template Konsep Konten Sederhana - agar tujuan pembuatan konten lebih clear
-  if (request.target_market || request.keinginan || request.kebutuhan || request.hidden_needs || request.problem || request.solution) {
+  const hasProductDetails = request.feature_name || request.feature_description || request.solution || request.competitive_advantage;
+  if (request.target_market || request.keinginan || request.kebutuhan || request.hidden_needs || request.problem || request.solution || hasProductDetails) {
     promptParts.push('');
     promptParts.push('## Concept of Content ##');
     promptParts.push('=========================================');
     promptParts.push('Buatkan narasi konsep PADAT (max 2-3 kalimat) yang mencakup semua elemen di bawah. Format: 1 paragraf singkat, tidak bertele-tele.');
     promptParts.push('');
     promptParts.push('**Template konsep (ringkaskan ke dalam 1 paragraf):**');
+    // Product/Service Details - produk yang sedang dibahas
+    if (hasProductDetails) {
+      const productName = request.feature_name || request.service_name || '[produk/layanan]';
+      promptParts.push(`- **Produk/Layanan yang dibahas:** ${productName}`);
+      if (request.feature_description) {
+        promptParts.push(`  - Deskripsi: ${request.feature_description}`);
+      }
+      if (request.competitive_advantage) {
+        promptParts.push(`  - Keunggulan: ${request.competitive_advantage}`);
+      }
+    }
     promptParts.push(`- Target: Menargetkan${request.target_market || '[isi target]'}`);
     promptParts.push(`- Keinginan: yang ingin ${request.keinginan || '[isi keinginan]'}`);
     promptParts.push(`- Kebutuhan: dan butuh ${request.kebutuhan || '[isi kebutuhan]'}`);
@@ -784,7 +796,11 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push(`- Masalah: Tapi ${request.problem || '[isi masalah]'}`);
     promptParts.push(`- Solusi: ${request.solution || '[isi solusi]'}`);
     promptParts.push('');
-    promptParts.push('**⚠️ WAJIB:** Konsep harus PADAT (3-4 kalimat saja). Gabungkan semua poin jadi satu paragraf singkat. Jangan ulangi detail. Script utama tetap mengacu pada konsep ini.');
+    promptParts.push('**⚠️ WAJIB:** Konsep harus PADAT (2-3 kalimat saja). Gabungkan semua poin jadi satu paragraf singkat. Jangan ulangi detail. Script utama tetap mengacu pada konsep ini.');
+    if (hasProductDetails) {
+      promptParts.push('');
+      promptParts.push('**⚠️ WAJIB - FITUR:** Jika ada Produk/Layanan yang dibahas di atas, konsep HARUS juga menyebutkan fitur-fitur utama produk/layanan tersebut #dengan singkat dan padat# secara natural dalam paragraf. Jangan hanya narasi target-masalah-solusi umum; sertakan apa yang ditawarkan produk (fitur, benefit) agar konsep jelas membahas produk yang dimaksud.');
+    }
     promptParts.push('');
     promptParts.push('**Format output:** Awali script dengan ## Konsep Konten ## (atau ## Concept of Content ##) diikuti paragraf konsep, lalu baris kosong, baru Judul Script dan section lainnya.');
     promptParts.push('');

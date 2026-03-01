@@ -75,9 +75,11 @@ function findJudulSection(script: string): { content: string; startIndex: number
  */
 function findCaptionSection(script: string): { content: string; startIndex: number; endIndex: number } | null {
   const captionPatterns = [
-    /(##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
-    /(##\s*Caption\s*:?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
+    /(##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:##\s*)?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
+    /(##\s*Caption\s*:?\s*(?:##\s*)?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
     /(\*\*Caption\*\*\s*:?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
+    /(\*\*CAPTION\*\*\s*:?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
+    /(###\s*CAPTION\s*:?\s*\n[\s\S]*?)(?=\n##|\n###|$)/is,
   ];
   for (const pattern of captionPatterns) {
     const match = script.match(pattern);
@@ -92,6 +94,37 @@ function findCaptionSection(script: string): { content: string; startIndex: numb
     }
   }
   return null;
+}
+
+/**
+ * Extract caption text from caption section content (strips header like ## CAPTION ##).
+ * Used as fallback when parseAIScriptOutput returns empty caption.
+ */
+export function extractCaptionFromSection(sectionContent: string): string {
+  if (!sectionContent?.trim()) return '';
+  const headerPatterns = [
+    /^#+\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:#+\s*)?\s*\n?/i,
+    /^\*\*CAPTION\*\*\s*:?\s*\n?/i,
+    /^\*\*Caption\*\*\s*:?\s*\n?/i,
+    /^###\s*CAPTION\s*:?\s*\n?/i,
+  ];
+  let text = sectionContent.trim();
+  for (const p of headerPatterns) {
+    text = text.replace(p, '');
+  }
+  return text.trim();
+}
+
+/**
+ * Get caption from script using findCaptionSection as fallback.
+ * Returns caption text (without header) when parseAIScriptOutput might miss it.
+ */
+export function getCaptionFallback(script: string): string {
+  const trimmed = script?.trim() || '';
+  if (!trimmed) return '';
+  const section = findCaptionSection(trimmed);
+  if (!section?.content) return '';
+  return extractCaptionFromSection(section.content);
 }
 
 /**
@@ -196,9 +229,10 @@ export function parseScriptSections(script: string): ParseScriptSectionsResult {
     }
   }
 
-  // 5. Caption
+  // 5. Caption - add section when findCaptionSection finds it (even if parseAIScriptOutput missed)
   const captionSection = findCaptionSection(fullScript);
-  if (captionSection && caption) {
+  const captionContent = captionSection ? extractCaptionFromSection(captionSection.content) : '';
+  if (captionSection && (caption || captionContent)) {
     sections.push({
       id: 'caption',
       type: 'caption',

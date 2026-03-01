@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from '@/features/ui/dialog';
 import { parseAIScriptOutput } from '../utils/parseAIScriptOutput';
+import { getCaptionFallback } from '../utils/parseScriptSections';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface SaveToPlanPreviewDialogProps {
@@ -27,9 +28,13 @@ export const SaveToPlanPreviewDialog: React.FC<SaveToPlanPreviewDialogProps> = (
 }) => {
   const { t } = useAppTranslation();
 
-  const { brief, caption, concept } = useMemo(
+  const { brief, caption: parsedCaption, concept } = useMemo(
     () => parseAIScriptOutput(script),
     [script]
+  );
+  const caption = useMemo(
+    () => parsedCaption.trim() || getCaptionFallback(script),
+    [script, parsedCaption]
   );
 
   const showAny = saveBrief || saveCaption || saveConcept;
