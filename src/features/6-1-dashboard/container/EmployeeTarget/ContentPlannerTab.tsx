@@ -40,8 +40,14 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
   const { data: digitalEmployeesFromHook = [] } = useDigitalMarketingEmployees();
   const digitalEmployees = digitalEmployeesProp?.length ? digitalEmployeesProp : digitalEmployeesFromHook;
   const { selectedJobPositionId } = usePICFilter();
-  const { contentPlans } = useOptimizedSocialMedia();
+  const { contentPlans, refreshContentPlans } = useOptimizedSocialMedia();
   const { targets } = useEmployeeTargets();
+
+  // Refetch content plans on mount so Content Planner shows current data (fixes stale count after deletes)
+  useEffect(() => {
+    refreshContentPlans?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filter employees based on selected job position
   const filteredEmployees = selectedJobPositionId 
@@ -141,41 +147,51 @@ const ContentPlannerTab: React.FC<ContentPlannerTabProps> = ({
   };
 
   // Calculate daily approved count for specific PIC and exact date
-  // Logic matches SocialMediaDashboardPage metrics: filter by completion_date or post_date
+  // Rule: Plan always belongs to month of post_date. Use completion_date for the day ONLY if
+  // completion_date is in the same month as post_date. If completion_date is outside post_date's
+  // month, use post_date for the day (plan never "jumps" to another month).
   const calculateDailyApproved = (picId: string, targetDate: Date) => {
-    // Use local date to avoid timezone issues (same as ProductionTab)
-    const year = targetDate.getFullYear();
-    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-    const day = String(targetDate.getDate()).padStart(2, '0');
-    const targetDateString = `${year}-${month}-${day}`;
-    
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    const targetDateString = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
     return contentPlans.filter(plan => {
-      // Must have pic_id
-      if (!plan.pic_id || plan.pic_id !== picId) {
+      if (!plan.pic_id || plan.pic_id !== picId || plan.approved !== true || !plan.post_date) {
         return false;
       }
 
-      // Must be approved
-      if (plan.approved !== true) {
+      const postDateStr = getDateString(plan.post_date);
+      if (!postDateStr) return false;
+
+      const postDate = new Date(postDateStr + 'T00:00:00');
+      const postYear = postDate.getFullYear();
+      const postMonth = postDate.getMonth();
+
+      // Plan must belong to target month (by post_date) - never count in another month
+      if (postYear !== targetYear || postMonth !== targetMonth) {
         return false;
       }
 
-      // Priority: completion_date > post_date (if approved)
-      // Check completion_date first (most reliable - this is when content planner approved)
+      // For the day: use completion_date only if it's in same month as post_date
       const completionDateStr = getDateString(plan.completion_date);
-      if (completionDateStr && completionDateStr === targetDateString) {
-        return true;
-      }
+      let effectiveDateStr: string;
 
-      // Fallback: if approved is true and post_date matches target date
-      if (plan.post_date) {
-        const postDateStr = getDateString(plan.post_date);
-        if (postDateStr && postDateStr === targetDateString) {
-          return true;
+      if (completionDateStr) {
+        const completionDate = new Date(completionDateStr + 'T00:00:00');
+        const compYear = completionDate.getFullYear();
+        const compMonth = completionDate.getMonth();
+        // completion_date in same month as post_date? use it for the day
+        if (compYear === postYear && compMonth === postMonth) {
+          effectiveDateStr = completionDateStr;
+        } else {
+          // completion_date outside post_date month -> use post_date
+          effectiveDateStr = postDateStr;
         }
+      } else {
+        effectiveDateStr = postDateStr;
       }
 
-      return false;
+      return effectiveDateStr === targetDateString;
     }).length;
   };
 

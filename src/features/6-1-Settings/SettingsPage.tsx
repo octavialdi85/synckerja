@@ -7,6 +7,7 @@ import { HeaderAndTab } from './section/HeaderAndTab';
 import { SettingsSidebar } from './section/SettingsSidebar';
 import { ApprovalAccessSection } from './section/ApprovalAccessSection';
 import { ContentSchedulingSection } from './section/ContentSchedulingSection';
+import { ScriptAIConfigSection } from './section/ScriptAIConfigSection';
 import { ComingSoonSection } from './section/ComingSoonSection';
 import { ApprovalAccessModal } from './modal/ApprovalAccessModal';
 
@@ -188,6 +189,8 @@ export const SettingsPage: React.FC = () => {
         );
       case 'scheduling':
         return <ContentSchedulingSection />;
+      case 'script-ai':
+        return <ScriptAIConfigSection />;
       default:
         return <ComingSoonSection />;
     }
@@ -242,11 +245,13 @@ export const SettingsPage: React.FC = () => {
                           <div className="min-w-0 flex-1">
                             <h2 className="text-sm font-semibold text-gray-900 truncate">
                               {activeSection === 'approval-access' ? 'Approval Access' : 
-                               activeSection === 'scheduling' ? 'Content Scheduling' : 'Settings'}
+                               activeSection === 'scheduling' ? 'Content Scheduling' : 
+                               activeSection === 'script-ai' ? 'Script AI Configuration' : 'Settings'}
                             </h2>
                             <p className="text-xs text-gray-500 mt-1">
                               {activeSection === 'approval-access' ? 'Manage approval access configurations' : 
                                activeSection === 'scheduling' ? 'Configure required platforms for content scheduling' : 
+                               activeSection === 'script-ai' ? 'Konfigurasi Google AI API untuk Script Generator' : 
                                'Configure social media settings'}
                             </p>
                           </div>

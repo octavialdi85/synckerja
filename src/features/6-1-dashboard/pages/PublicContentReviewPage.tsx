@@ -947,11 +947,11 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           );
         })()}
 
-        {/* Target Audience - hanya tampil jika ada isi (data dari RPC yang sama, tanpa request tambahan) */}
+        {/* Concept - hanya tampil jika ada isi (data dari RPC yang sama, tanpa request tambahan) */}
         {briefExtended?.target_audience?.trim() ? (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 overflow-hidden min-w-0">
             <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 border-l-4 border-l-blue-500">
-              <h4 className="font-medium text-sm text-blue-900">{t('briefDialog.sectionTargetAudience', 'Target Audience')}</h4>
+              <h4 className="font-medium text-sm text-blue-900">{t('briefDialog.sectionTargetAudience', 'Concept')}</h4>
             </div>
             <div className="h-32 sm:h-40 overflow-y-auto p-2 sm:p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
               {briefExtended.target_audience}
@@ -971,7 +971,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
           </div>
         ) : null}
 
-        {/* Comments - selalu ditampilkan (border sama seperti Target Audience) */}
+        {/* Comments - selalu ditampilkan (border sama seperti Concept) */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col flex-shrink-0 min-h-[320px] min-w-0 overflow-visible">
           <div className="p-2 sm:p-3 border-b border-blue-200/80 bg-blue-50 flex-shrink-0 flex items-center gap-2 border-l-4 border-l-blue-500">
             <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />

@@ -7,6 +7,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/features/ui/select';
@@ -40,6 +41,7 @@ import { useProductKnowledgeHooks } from '@/features/6-1-ProductKnowledge/hooks/
 import { useKeywords } from '@/features/6-1-ProductKnowledge/hooks/useKeywords';
 import { toast } from 'sonner';
 import { Checkbox } from '@/features/ui/checkbox';
+import { cn } from '@/lib/utils';
 
 interface ScriptGeneratorFormProps {
   onGenerate: (data: ScriptGeneratorRequest) => Promise<void>;
@@ -145,7 +147,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     duration_minutes: undefined,
     slide: undefined,
     duration_value: undefined,
-    duration_unit: 'menit',
+    duration_unit: 'detik',
     target_market: '',
     gender: '',
     age: '',
@@ -179,11 +181,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const [selectedHookName, setSelectedHookName] = useState<string>('');
   const [selectedStyleName, setSelectedStyleName] = useState<string>('');
   const [selectedJudulTemplate, setSelectedJudulTemplate] = useState<string>('');
-  const [isSellingApproachLocked, setIsSellingApproachLocked] = useState<boolean>(false);
   const [errors, setErrors] = useState<{ target_market?: string; keywords?: string }>({});
   const [keywordSearchOpen, setKeywordSearchOpen] = useState<boolean>(false);
   const [keywordSearchQuery, setKeywordSearchQuery] = useState<string>('');
-  const [useKeyword, setUseKeyword] = useState<boolean>(true);
+  const [useKeyword, setUseKeyword] = useState<boolean>(false);
 
   // Master data
   const [contentTypes, setContentTypes] = useState<any[]>([]);
@@ -375,42 +376,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     }
   }, [selectedServiceId, subServices]);
 
-  // Auto-select and lock Hard Selling for specific content pillars
-  useEffect(() => {
-    const pillarName = (formData.content_pillar || '').toLowerCase().trim();
-    const promoPillars = ['attractive offers', 'buy 1 get 1', 'promo'];
-    
-    // Check if the pillar name matches any of the promo pillars (case-insensitive, partial match)
-    const isPromoPillar = pillarName && promoPillars.some(promo => {
-      const promoLower = promo.toLowerCase();
-      // Check for exact match or if pillar name contains the promo keyword
-      return pillarName === promoLower || pillarName.includes(promoLower);
-    });
-    
-    if (isPromoPillar) {
-      // Auto-select Hard Selling and lock the field for promo pillars
-      setFormData(prev => ({
-        ...prev,
-        selling_approach: 'Hard Selling' as const
-      }));
-      setIsSellingApproachLocked(true);
-    } else {
-      // Unlock the field if pillar changes to non-promo or is cleared
-      setIsSellingApproachLocked(false);
-      
-      // Clear Hard Selling if it was selected and pillar is not promo
-      setFormData(prev => {
-        if (prev.selling_approach === 'Hard Selling') {
-          return {
-            ...prev,
-            selling_approach: undefined
-          };
-        }
-        return prev;
-      });
-    }
-  }, [formData.content_pillar]);
-
   // Clear selected style if it doesn't match the selected content pillar
   useEffect(() => {
     if (!formData.content_pillar || !formData.style_name) {
@@ -448,23 +413,6 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       handleInputChange('structure', '');
     }
   }, [formData.content_pillar, formData.style_name, productKnowledgeStyles, contentPillars]);
-
-  // Clear CTA based on selling approach
-  useEffect(() => {
-    if (formData.selling_approach === 'Tanpa Produk' && formData.cta_type === 'use_solution') {
-      // Clear CTA Solution if selling approach is "Tanpa Produk"
-      setFormData(prev => ({
-        ...prev,
-        cta_type: undefined
-      }));
-    } else if (formData.selling_approach === 'Hard Selling' && formData.cta_type === 'use_comment') {
-      // Clear CTA Comment if selling approach is "Hard Selling" (Soft Selling is exception - can use both)
-      setFormData(prev => ({
-        ...prev,
-        cta_type: undefined
-      }));
-    }
-  }, [formData.selling_approach]);
 
   const handleInputChange = (field: keyof ScriptGeneratorRequest, value: any) => {
     setFormData(prev => ({
@@ -505,8 +453,20 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     
     // Clear errors if validation passes
     setErrors({});
-    // Pass useKeyword flag to the service
-    await onGenerate({ ...formData, useKeyword });
+    // Compute plan IDs for Save to Plan auto-fill
+    const content_type_id = contentTypes.find((ct: { name: string }) => ct.name === formData.content_type)?.id ?? '';
+    const service_id = selectedServiceId || '';
+    const sub_service_id = filteredSubServices.find((ss: { name: string }) => ss.name === formData.sub_service_name)?.id ?? '';
+    const content_pillar_id = contentPillars.find((cp: { name: string }) => cp.name === formData.content_pillar)?.id ?? '';
+    // Pass useKeyword flag and plan IDs to the service
+    await onGenerate({
+      ...formData,
+      useKeyword,
+      content_type_id,
+      service_id,
+      sub_service_id,
+      content_pillar_id,
+    });
   };
 
   const handleReset = () => {
@@ -518,7 +478,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       duration_minutes: undefined,
       slide: undefined,
       duration_value: undefined,
-      duration_unit: 'menit',
+      duration_unit: 'detik',
       target_market: '',
       gender: '',
       age: '',
@@ -551,8 +511,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     setSelectedHookName('');
     setSelectedStyleName('');
     setSelectedJudulTemplate('');
-    setIsSellingApproachLocked(false);
-    setUseKeyword(true);
+    setUseKeyword(false);
     setErrors({});
   };
 
@@ -624,17 +583,17 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const isReelStoryYoutube = contentTypeLower === 'reel' || contentTypeLower === 'story' || contentTypeLower === 'youtube';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <Accordion type="single" defaultValue="basic-info" collapsible className="w-full space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <Accordion type="single" defaultValue="basic-info" collapsible className="w-full space-y-2">
         {/* Section 1: Basic Information */}
-        <AccordionItem value="basic-info" className="border rounded-lg px-4 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
-            Informasi Dasar
+        <AccordionItem value="basic-info" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
+            {t('scriptGenerator.form.basicInfo', 'Informasi Dasar')}
           </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <AccordionContent className="pb-2 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               {/* Content Type */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="content_type">Content Type</Label>
                 <Select
                   value={formData.content_type || ""}
@@ -646,7 +605,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       content_type: value,
                       slide: undefined,
                       duration_value: undefined,
-                      duration_unit: 'menit'
+                      duration_unit: 'detik'
                     }));
                   }}
                 >
@@ -673,7 +632,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
 
               {/* Slide or Duration - conditional based on Content Type */}
               {isPostOrCarousel ? (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="slide">Slide</Label>
                   <Input
                     id="slide"
@@ -685,7 +644,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   />
                 </div>
               ) : isReelStoryYoutube ? (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="duration_value">Durasi</Label>
                   <div className="flex gap-2">
                     <Input
@@ -698,7 +657,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       className="flex-1"
                     />
                     <Select
-                      value={formData.duration_unit || 'menit'}
+                      value={formData.duration_unit || 'detik'}
                       onValueChange={(value) => handleInputChange('duration_unit', value as 'menit' | 'detik')}
                     >
                       <SelectTrigger className="w-32">
@@ -714,7 +673,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               ) : null}
 
               {/* Service */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="service_name">Service</Label>
                 <Select
                   value={selectedServiceId || ""}
@@ -750,7 +709,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               </div>
 
               {/* Sub Service */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="sub_service_name">Sub Service</Label>
                 <Select
                   value={formData.sub_service_name || ""}
@@ -778,225 +737,194 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </Select>
               </div>
 
-              {/* Content Pillar */}
-              <div className="space-y-2">
-                <Label htmlFor="content_pillar">Content Pillar</Label>
-                <Select
-                  value={formData.content_pillar || ""}
-                  onValueChange={(value) => handleInputChange('content_pillar', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih Content Pillar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contentPillars
-                      .filter((pillar) => {
-                        const name = pillar?.name;
-                        return name && typeof name === 'string' && name.trim() !== '' && pillar?.id;
-                      })
-                      .map((pillar) => {
-                        const value = String(pillar.name).trim();
-                        return (
-                          <SelectItem key={pillar.id} value={value}>
-                            {pillar.name}
-                          </SelectItem>
-                        );
-                      })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Selling Approach */}
-              <div className="space-y-2">
-                <Label htmlFor="selling_approach">
-                  Pendekatan Penjualan
-                </Label>
-                <Select
-                  value={formData.selling_approach || ""}
-                  onValueChange={(value) => handleInputChange('selling_approach', value as 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling')}
-                  disabled={isSellingApproachLocked}
-                >
-                  <SelectTrigger className={isSellingApproachLocked ? 'bg-gray-100 cursor-not-allowed' : ''}>
-                    <SelectValue placeholder="Pilih Pendekatan Penjualan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Tanpa Produk">
-                      Tanpa Produk - Tidak membahas produk sama sekali
-                    </SelectItem>
-                    <SelectItem value="Soft Selling">
-                      Soft Selling - Bicara produk tetapi sangat soft
-                    </SelectItem>
-                    <SelectItem 
-                      value="Hard Selling"
-                      disabled={!isSellingApproachLocked}
-                      className={!isSellingApproachLocked ? 'opacity-50 cursor-not-allowed' : ''}
+              {/* Content Pillar & Pendekatan Content - sejajar dalam satu baris, keduanya punya wrapper */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch md:col-span-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1 flex flex-col min-h-[72px]">
+                  <Label htmlFor="content_pillar">{t('scriptGenerator.form.contentPillar', 'Content Pillar')}</Label>
+                  <Select
+                    value={formData.content_pillar || ""}
+                    onValueChange={(value) => handleInputChange('content_pillar', value)}
+                  >
+                    <SelectTrigger id="content_pillar" className="flex-1 min-h-[40px]">
+                      <SelectValue placeholder={t('scriptGenerator.form.contentPillarPlaceholder', 'Pilih Content Pillar')} />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                      position="popper"
                     >
-                      Hard Selling - 100% bicara Produk, keunggulan dan fitur
-                      {!isSellingApproachLocked && formData.content_pillar && (
-                        <span className="ml-2 text-xs text-gray-400">(Hanya untuk pillar Promo)</span>
-                      )}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                      {contentPillars
+                        .filter((pillar) => {
+                          const name = pillar?.name;
+                          return name && typeof name === 'string' && name.trim() !== '' && pillar?.id;
+                        })
+                        .flatMap((pillar, index) => {
+                          const value = String(pillar.name).trim();
+                          return [
+                            index > 0 && <SelectSeparator key={`sep-${pillar.id}`} className="my-1 bg-gray-200" />,
+                            <SelectItem
+                              key={pillar.id}
+                              value={value}
+                              className={cn(
+                                "break-words whitespace-normal",
+                                index % 2 === 1 && "bg-gray-50/80"
+                              )}
+                            >
+                              {pillar.name}
+                            </SelectItem>
+                          ];
+                        }).filter(Boolean)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Pendekatan Content - wrapper dengan warna: Tanpa Produk=hijau, Soft Selling=kuning, Hard Selling=merah */}
+                {(() => {
+                  const sellingApproach = formData.selling_approach;
+                  const wrapperClasses = cn(
+                    'rounded-lg border p-3 space-y-1 transition-colors flex flex-col min-h-[72px]',
+                    sellingApproach === 'Tanpa Produk' && 'bg-green-50 border-green-200',
+                    sellingApproach === 'Soft Selling' && 'bg-amber-50 border-amber-200',
+                    sellingApproach === 'Hard Selling' && 'bg-red-50 border-red-200',
+                    !sellingApproach && 'bg-gray-50 border-gray-200'
+                  );
+                  const triggerClasses = cn(
+                    'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate flex-1 min-h-[40px]',
+                    sellingApproach === 'Tanpa Produk' && 'border-green-300 bg-white focus:ring-green-500',
+                    sellingApproach === 'Soft Selling' && 'border-amber-300 bg-white focus:ring-amber-500',
+                    sellingApproach === 'Hard Selling' && 'border-red-300 bg-white focus:ring-red-500'
+                  );
+                  return (
+                    <div className={wrapperClasses}>
+                      <Label htmlFor="selling_approach">
+                        {t('scriptGenerator.form.approachLabel', 'Pendekatan Content')}
+                      </Label>
+                      <Select
+                        value={formData.selling_approach || ""}
+                        onValueChange={(value) => handleInputChange('selling_approach', value as 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling')}
+                      >
+                        <SelectTrigger id="selling_approach" className={triggerClasses}>
+                          <SelectValue placeholder={t('scriptGenerator.form.approachPlaceholder', 'Pilih Pendekatan Content')} />
+                        </SelectTrigger>
+                        <SelectContent
+                          className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                          position="popper"
+                        >
+                          <SelectItem value="Tanpa Produk" className="break-words whitespace-normal text-green-800 data-[highlighted]:bg-green-100 data-[state=checked]:bg-green-100">
+                            {t('scriptGenerator.form.approachTanpaProduk', 'Tanpa Produk - Tidak membahas produk sama sekali')}
+                          </SelectItem>
+                          <SelectSeparator className="my-1 bg-gray-200" />
+                          <SelectItem value="Soft Selling" className="break-words whitespace-normal text-amber-800 data-[highlighted]:bg-amber-100 data-[state=checked]:bg-amber-100 bg-gray-50/80">
+                            {t('scriptGenerator.form.approachSoftSelling', 'Soft Selling - Bicara produk tetapi sangat soft')}
+                          </SelectItem>
+                          <SelectSeparator className="my-1 bg-gray-200" />
+                          <SelectItem value="Hard Selling" className="break-words whitespace-normal text-red-800 data-[highlighted]:bg-red-100 data-[state=checked]:bg-red-100">
+                            {t('scriptGenerator.form.approachHardSelling', 'Hard Selling - 100% bicara Produk, keunggulan dan fitur')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Section 2: Target Audience */}
-        <AccordionItem value="target-audience" className="border rounded-lg px-4 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
-            Target Audience
+        {/* Section 2: Target Audience & Customer Insights (combined - lihat insight saat persona dipilih) */}
+        <AccordionItem value="target-audience" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
+            Target Audience & Customer Insights
           </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <AccordionContent className="pb-2 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               {/* Customer Persona */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="target_market">
                   Customer Persona <span className="text-red-500">*</span>
                 </Label>
                 <Select
                   value={formData.target_market || ""}
                   onValueChange={(value) => {
-                    handleInputChange('target_market', value);
                     // Clear error when value changes
                     if (errors.target_market) {
                       setErrors(prev => ({ ...prev, target_market: undefined }));
                     }
                     
-                    // Find product knowledge items with matching target_audience AND service_id
+                    const normalizePersona = (s: string) => (s || '').trim();
                     const matchingPKs = productKnowledgeData.filter((pk) => {
-                      // Must match both service and target_audience
                       if (pk.service_id !== selectedServiceId) return false;
                       if (!pk.target_audience) return false;
-                      const pkPersonaStr = extractTargetAudienceAsString(pk.target_audience);
-                      return pkPersonaStr === value;
+                      const pkPersonaStr = normalizePersona(extractTargetAudienceAsString(pk.target_audience));
+                      return pkPersonaStr === normalizePersona(value);
                     });
                     
-                    // If found, auto-fill all fields from the first matching product knowledge
-                    if (matchingPKs.length > 0) {
-                      const selectedPK = matchingPKs[0]; // Use first match
+                    const matchingWithWantsNeeds = productKnowledgeWithWantsNeeds.filter((pk) => {
+                      if (pk.service_id !== selectedServiceId) return false;
+                      if (!pk.target_audience) return false;
+                      const pkPersonaStr = normalizePersona(extractTargetAudienceAsString(pk.target_audience));
+                      return pkPersonaStr === normalizePersona(value);
+                    });
+                    
+                    const selectedPK = matchingWithWantsNeeds.length > 0
+                      ? matchingWithWantsNeeds[0]
+                      : matchingPKs[0];
+                    
+                    const updates: Partial<ScriptGeneratorRequest> = { target_market: value };
+                    
+                    if (matchingPKs.length > 0 && selectedPK) {
+                      const wantsVal = selectedPK.wants?.trim() || '';
+                      const needsVal = selectedPK.needs?.trim()
+                        || (matchingPKs.find((pk) => pk.needs?.trim())?.needs?.trim() || '');
                       
-                      // Auto-fill keinginan (wants)
-                      if (selectedPK.wants) {
-                        handleInputChange('keinginan', selectedPK.wants.trim());
-                      }
-                      
-                      // Auto-fill kebutuhan (needs)
-                      if (selectedPK.needs) {
-                        handleInputChange('kebutuhan', selectedPK.needs.trim());
-                      }
-                      
-                      // Auto-fill hidden needs
-                      if (selectedPK.hidden_needs) {
-                        const hiddenNeedsArray = parseHiddenNeeds(selectedPK.hidden_needs);
-                        if (hiddenNeedsArray.length > 0) {
-                          const hiddenNeedsStr = hiddenNeedsArray.join('\n\n');
-                          handleInputChange('hidden_needs', hiddenNeedsStr);
-                        } else {
-                          handleInputChange('hidden_needs', '');
-                        }
-                      } else {
-                        handleInputChange('hidden_needs', '');
-                      }
-                      
-                      // Auto-fill problems
-                      if (selectedPK.problems_solved && Array.isArray(selectedPK.problems_solved) && selectedPK.problems_solved.length > 0) {
-                        const problemsArray = selectedPK.problems_solved.filter(Boolean);
-                        if (problemsArray.length > 0) {
-                          const problemsStr = problemsArray.join('\n\n');
-                          handleInputChange('problem', problemsStr);
-                        } else {
-                          handleInputChange('problem', '');
-                        }
-                      } else {
-                        handleInputChange('problem', '');
-                      }
-                      
-                      // Auto-fill impact
-                      if (selectedPK.impact) {
-                        const impactArray = parseImpact(selectedPK.impact);
-                        if (impactArray.length > 0) {
-                          const impactStr = impactArray.join('\n\n');
-                          handleInputChange('impact', impactStr);
-                        } else {
-                          handleInputChange('impact', '');
-                        }
-                      } else {
-                        handleInputChange('impact', '');
-                      }
-                      
-                      // Auto-fill false_belief
-                      if (selectedPK.false_belief) {
-                        handleInputChange('false_belief', selectedPK.false_belief.trim());
-                      } else {
-                        handleInputChange('false_belief', '');
-                      }
-                      
-                      // Auto-fill false_belief_impact
-                      if (selectedPK.false_belief_impact) {
-                        handleInputChange('false_belief_impact', selectedPK.false_belief_impact.trim());
-                      } else {
-                        handleInputChange('false_belief_impact', '');
-                      }
-                      
-                      // Auto-fill what_makes_them_stop
-                      if (selectedPK.what_makes_them_stop) {
-                        handleInputChange('what_makes_them_stop', selectedPK.what_makes_them_stop.trim());
-                      } else {
-                        handleInputChange('what_makes_them_stop', '');
-                      }
-                      
-                      // Auto-fill solution
-                      if (selectedPK.solusi) {
-                        handleInputChange('solution', selectedPK.solusi.trim());
-                      } else {
-                        handleInputChange('solution', '');
-                      }
-                      
-                      // Auto-fill feature_name
-                      if (selectedPK.feature_name) {
-                        handleInputChange('feature_name', selectedPK.feature_name.trim());
-                      } else {
-                        handleInputChange('feature_name', '');
-                      }
-                      
-                      // Auto-fill feature_description
-                      if (selectedPK.feature_description) {
-                        handleInputChange('feature_description', selectedPK.feature_description.trim());
-                      } else {
-                        handleInputChange('feature_description', '');
-                      }
-                      
-                      // Auto-fill competitive_advantage
-                      if (selectedPK.competitive_advantage) {
-                        const competitiveAdvantageStr = parseCompetitiveAdvantage(selectedPK.competitive_advantage);
-                        handleInputChange('competitive_advantage', competitiveAdvantageStr);
-                      } else {
-                        handleInputChange('competitive_advantage', '');
-                      }
+                      updates.keinginan = wantsVal;
+                      updates.kebutuhan = needsVal;
+                      updates.hidden_needs = selectedPK.hidden_needs
+                        ? (parseHiddenNeeds(selectedPK.hidden_needs).join('\n\n') || '')
+                        : '';
+                      updates.problem = selectedPK.problems_solved && Array.isArray(selectedPK.problems_solved)
+                        ? selectedPK.problems_solved.filter(Boolean).join('\n\n')
+                        : '';
+                      updates.impact = selectedPK.impact
+                        ? (parseImpact(selectedPK.impact).join('\n\n') || '')
+                        : '';
+                      updates.false_belief = selectedPK.false_belief?.trim() || '';
+                      updates.false_belief_impact = selectedPK.false_belief_impact?.trim() || '';
+                      updates.what_makes_them_stop = selectedPK.what_makes_them_stop?.trim() || '';
+                      updates.solution = selectedPK.solusi?.trim() || '';
+                      updates.feature_name = selectedPK.feature_name?.trim() || '';
+                      updates.feature_description = selectedPK.feature_description?.trim() || '';
+                      updates.competitive_advantage = selectedPK.competitive_advantage
+                        ? parseCompetitiveAdvantage(selectedPK.competitive_advantage)
+                        : '';
                     } else {
-                      // Clear all fields if no matching product knowledge found
-                      handleInputChange('keinginan', '');
-                      handleInputChange('kebutuhan', '');
-                      handleInputChange('hidden_needs', '');
-                      handleInputChange('problem', '');
-                      handleInputChange('impact', '');
-                      handleInputChange('false_belief', '');
-                      handleInputChange('false_belief_impact', '');
-                      handleInputChange('what_makes_them_stop', '');
-                      handleInputChange('solution', '');
-                      handleInputChange('feature_name', '');
-                      handleInputChange('feature_description', '');
-                      handleInputChange('competitive_advantage', '');
+                      updates.keinginan = '';
+                      updates.kebutuhan = '';
+                      updates.hidden_needs = '';
+                      updates.problem = '';
+                      updates.impact = '';
+                      updates.false_belief = '';
+                      updates.false_belief_impact = '';
+                      updates.what_makes_them_stop = '';
+                      updates.solution = '';
+                      updates.feature_name = '';
+                      updates.feature_description = '';
+                      updates.competitive_advantage = '';
                     }
+                    
+                    setFormData((prev) => ({ ...prev, ...updates }));
                   }}
                   disabled={!selectedServiceId}
                 >
-                  <SelectTrigger className={errors.target_market ? 'border-red-500' : ''}>
+                  <SelectTrigger className={cn(
+                    'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
+                    errors.target_market && 'border-red-500'
+                  )}>
                     <SelectValue placeholder={selectedServiceId ? "Pilih Customer Persona" : "Pilih Service terlebih dahulu"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
+                    position="popper"
+                  >
                     {!selectedServiceId ? (
                       <SelectItem value="select-service-first" disabled>
                         Pilih Service terlebih dahulu
@@ -1007,8 +935,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       </SelectItem>
                     ) : (
                       customerPersonas.map((persona, index) => (
-                        <SelectItem key={index} value={persona}>
-                          {persona}
+                        <SelectItem
+                          key={index}
+                          value={persona}
+                          className="break-words whitespace-normal items-start py-2"
+                        >
+                          <span className="block break-words line-clamp-3" title={persona}>
+                            {persona}
+                          </span>
                         </SelectItem>
                       ))
                     )}
@@ -1020,7 +954,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               </div>
 
               {/* Gender */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="gender">Gender</Label>
                 <Select
                   value={formData.gender || ""}
@@ -1029,16 +963,21 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih Gender" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                    position="popper"
+                  >
                     <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                    <SelectItem value="Perempuan">Perempuan</SelectItem>
+                    <SelectSeparator className="my-1 bg-gray-200" />
+                    <SelectItem value="Perempuan" className="bg-gray-50/80">Perempuan</SelectItem>
+                    <SelectSeparator className="my-1 bg-gray-200" />
                     <SelectItem value="Semua">Semua</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Age */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="age">Umur</Label>
                 <Input
                   id="age"
@@ -1049,7 +988,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               </div>
 
               {/* Buying Roles */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="buying_roles">Buying Roles</Label>
                 <Input
                   id="buying_roles"
@@ -1187,18 +1126,13 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 )}
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
 
-        {/* Section 3: Customer Insights */}
-        <AccordionItem value="customer-insights" className="border rounded-lg px-4 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
-            Customer Insights
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+            {/* Customer Insights - langsung terlihat saat Customer Persona dipilih */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-4">Customer Insights</h4>
+              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
                   <Label htmlFor="keinginan">Keinginan</Label>
                   <Select
                     value={formData.keinginan || ""}
@@ -1319,10 +1253,13 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate">
                       <SelectValue placeholder="Pilih Keinginan dari Product Knowledge" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent
+                      className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
+                      position="popper"
+                    >
                       {productKnowledgeWithWantsNeeds.length === 0 ? (
                         <SelectItem value="no-data" disabled>
                           Tidak ada data Product Knowledge dengan Wants dan Needs
@@ -1333,8 +1270,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                           .map((pk) => {
                             const wantsValue = pk.wants!.trim();
                             return (
-                              <SelectItem key={pk.id} value={wantsValue}>
-                                {wantsValue}
+                              <SelectItem
+                                key={pk.id}
+                                value={wantsValue}
+                                className="break-words whitespace-normal items-start py-2"
+                              >
+                                <span className="block break-words line-clamp-3" title={wantsValue}>
+                                  {wantsValue}
+                                </span>
                               </SelectItem>
                             );
                           })
@@ -1343,23 +1286,30 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="kebutuhan">Kebutuhan</Label>
                   <Select
                     value={formData.kebutuhan || ""}
                     onValueChange={(value) => handleInputChange('kebutuhan', value)}
                     disabled={!formData.keinginan}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={cn(
+                      'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
+                      !formData.keinginan && 'bg-gray-100'
+                    )}>
                       <SelectValue placeholder={formData.keinginan ? (formData.kebutuhan ? "" : "Pilih Kebutuhan") : "Pilih Keinginan terlebih dahulu"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent
+                      className="max-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
+                      position="popper"
+                    >
                       {formData.keinginan ? (
                         // Show needs that match the selected wants
                         (() => {
                           // Find all product knowledge items with matching wants
+                          const keinginanTrim = (formData.keinginan || '').trim();
                           const matchingPKs = productKnowledgeWithWantsNeeds.filter(
-                            (pk) => pk.wants?.trim() === formData.keinginan
+                            (pk) => (pk.wants || '').trim() === keinginanTrim
                           );
                           
                           // Collect all unique needs from matching product knowledge
@@ -1379,11 +1329,11 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                           // CRITICAL: Always ensure the current kebutuhan value is available as SelectItem
                           // This ensures autofilled values are always displayed correctly
                           if (formData.kebutuhan) {
-                            const kebutuhanValue = formData.kebutuhan.trim();
+                            const kebutuhanValue = (formData.kebutuhan || '').trim();
                             if (kebutuhanValue && !uniqueNeeds.has(kebutuhanValue)) {
-                              // Find the PK that has this kebutuhan value (might be from autofill)
-                              const pkWithKebutuhan = productKnowledgeWithWantsNeeds.find(
-                                (pk) => pk.needs?.trim() === kebutuhanValue
+                              // Pastikan nilai auto-fill selalu ada sebagai opsi (cari di semua PK)
+                              const pkWithKebutuhan = productKnowledgeData.find(
+                                (pk) => (pk.needs || '').trim() === kebutuhanValue
                               );
                               uniqueNeeds.set(kebutuhanValue, pkWithKebutuhan?.id || 'autofilled');
                             }
@@ -1402,8 +1352,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                           }
                           
                           return Array.from(uniqueNeeds.entries()).map(([needsValue, pkId]) => (
-                            <SelectItem key={pkId} value={needsValue}>
-                              {needsValue}
+                            <SelectItem
+                              key={pkId}
+                              value={needsValue}
+                              className="break-words whitespace-normal items-start py-2"
+                            >
+                              <span className="block break-words line-clamp-3" title={needsValue}>
+                                {needsValue}
+                              </span>
                             </SelectItem>
                           ));
                         })()
@@ -1417,7 +1373,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="hidden_needs">Hidden Needs</Label>
                 <Textarea
                   id="hidden_needs"
@@ -1428,8 +1384,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
                   <Label htmlFor="problem">Problem</Label>
                   <Textarea
                     id="problem"
@@ -1440,7 +1396,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="impact">Impact</Label>
                   <Textarea
                     id="impact"
@@ -1452,8 +1408,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
                   <Label htmlFor="false_belief">False Belief</Label>
                   <Textarea
                     id="false_belief"
@@ -1464,7 +1420,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="false_belief_impact">False Belief Impact</Label>
                   <Textarea
                     id="false_belief_impact"
@@ -1476,7 +1432,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="what_makes_them_stop">What Makes Them Stop?</Label>
                 <Textarea
                   id="what_makes_them_stop"
@@ -1486,18 +1442,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   rows={2}
                 />
               </div>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Section 4: Product/Service Details */}
-        <AccordionItem value="product-details" className="border rounded-lg px-4 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
+        {/* Section 3: Product/Service Details (was Section 4) */}
+        <AccordionItem value="product-details" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
             Product/Service Details
           </AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
+          <AccordionContent className="pb-2 pt-0">
+            <div className="space-y-2 pt-1">
+              <div className="space-y-1">
                 <Label htmlFor="feature_name">Feature</Label>
                 <Input
                   id="feature_name"
@@ -1507,8 +1464,8 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
                   <Label htmlFor="feature_description">Feature Description</Label>
                   <Textarea
                     id="feature_description"
@@ -1519,7 +1476,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="solution">Solution</Label>
                   <Textarea
                     id="solution"
@@ -1531,7 +1488,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="competitive_advantage">Competitive Advantage</Label>
                 <Textarea
                   id="competitive_advantage"
@@ -1545,14 +1502,14 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
           </AccordionContent>
         </AccordionItem>
 
-        {/* Section 5: Content Structure */}
-        <AccordionItem value="content-structure" className="border rounded-lg px-4 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
-          <AccordionTrigger className="text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
+        {/* Section 4: Content Structure */}
+        <AccordionItem value="content-structure" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">
+          <AccordionTrigger className="py-2 text-base font-semibold data-[state=open]:text-blue-700 data-[state=closed]:text-gray-700">
             Content Structure
           </AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
+          <AccordionContent className="pb-2 pt-0">
+            <div className="space-y-2 pt-1">
+              <div className="space-y-1">
                 <Label htmlFor="hook_name">Hook Name</Label>
                 <Select
                   value={selectedHookName || ""}
@@ -1580,26 +1537,37 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih Hook Name" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                    position="popper"
+                  >
                     {productKnowledgeHooks.length === 0 ? (
-                      <SelectItem value="no-data" disabled>
+                      <SelectItem value="no-data" disabled className="break-words whitespace-normal">
                         Tidak ada Hook tersedia
                       </SelectItem>
                     ) : (
                       productKnowledgeHooks
                         .filter((hook) => hook.name && hook.name.trim() !== '')
-                        .map((hook) => (
-                          <SelectItem key={hook.id} value={hook.name}>
+                        .flatMap((hook, index) => [
+                          index > 0 && <SelectSeparator key={`sep-${hook.id}`} className="my-1 bg-gray-200" />,
+                          <SelectItem
+                            key={hook.id}
+                            value={hook.name}
+                            className={cn(
+                              "break-words whitespace-normal",
+                              index % 2 === 1 && "bg-gray-50/80"
+                            )}
+                          >
                             {hook.name}
                           </SelectItem>
-                        ))
+                        ]).filter(Boolean)
                     )}
                   </SelectContent>
                 </Select>
               </div>
 
               {formData.hook_description && (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="hook_description">Hook Description</Label>
                   <Textarea
                     id="hook_description"
@@ -1613,7 +1581,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
               )}
 
               {formData.hook_content && (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="hook_content">Hook Content</Label>
                   <Textarea
                     id="hook_content"
@@ -1626,7 +1594,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               )}
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="style_name">Style Name</Label>
                 <Select
                   value={selectedStyleName || ""}
@@ -1662,7 +1630,10 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih Style Name" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                    position="popper"
+                  >
                     {(() => {
                       // Filter styles based on selected content pillar
                       const filteredStyles = productKnowledgeStyles.filter((style) => {
@@ -1698,7 +1669,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                       
                       if (filteredStyles.length === 0) {
                         return (
-                          <SelectItem value="no-data" disabled>
+                          <SelectItem value="no-data" disabled className="break-words whitespace-normal">
                             {formData.content_pillar 
                               ? `Tidak ada Style tersedia untuk pillar "${formData.content_pillar}"`
                               : 'Tidak ada Style tersedia'}
@@ -1706,18 +1677,26 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                         );
                       }
                       
-                      return filteredStyles.map((style) => (
-                        <SelectItem key={style.id} value={style.name}>
+                      return filteredStyles.flatMap((style, index) => [
+                        index > 0 && <SelectSeparator key={`sep-${style.id}`} className="my-1 bg-gray-200" />,
+                        <SelectItem
+                          key={style.id}
+                          value={style.name}
+                          className={cn(
+                            "break-words whitespace-normal",
+                            index % 2 === 1 && "bg-gray-50/80"
+                          )}
+                        >
                           {style.name}
                         </SelectItem>
-                      ));
+                      ]).filter(Boolean);
                     })()}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
                   <Label htmlFor="style_instruksi">Style Instruksi</Label>
                   <Textarea
                     id="style_instruksi"
@@ -1728,7 +1707,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="structure">Structure</Label>
                   <Textarea
                     id="structure"
@@ -1740,63 +1719,46 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="cta_type">CTA (Call to Action)</Label>
-                {formData.selling_approach === 'Tanpa Produk' && (
-                  <p className="text-xs text-amber-600 mb-2">
-                    ⚠️ CTA "Menggunakan Solution" tidak tersedia karena Pendekatan Penjualan adalah "Tanpa Produk"
-                  </p>
-                )}
-                {formData.selling_approach === 'Hard Selling' && (
-                  <p className="text-xs text-amber-600 mb-2">
-                    ⚠️ CTA "Menggunakan Comment" tidak tersedia karena Pendekatan Penjualan adalah "Hard Selling"
-                  </p>
-                )}
                 <Select
                   value={formData.cta_type || ""}
                   onValueChange={(value) => handleInputChange('cta_type', value as 'use_solution' | 'use_comment')}
                   disabled={!formData.selling_approach}
                 >
-                  <SelectTrigger className={!formData.selling_approach ? 'bg-gray-100 cursor-not-allowed' : ''}>
-                    <SelectValue placeholder={
-                      formData.selling_approach === 'Tanpa Produk' 
-                        ? "Hanya Comment tersedia untuk Pendekatan Tanpa Produk"
-                        : formData.selling_approach === 'Hard Selling'
-                        ? "Hanya Solution tersedia untuk Pendekatan Hard Selling"
-                        : "Pilih Tipe CTA"
-                    } />
+                  <SelectTrigger className={cn(
+                    'min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate',
+                    !formData.selling_approach && 'bg-gray-100 cursor-not-allowed'
+                  )}>
+                    <SelectValue placeholder="Pilih Tipe CTA" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem 
+                  <SelectContent
+                    className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                    position="popper"
+                  >
+                    <SelectItem
                       value="use_solution"
-                      disabled={formData.selling_approach === 'Tanpa Produk'}
-                      className={formData.selling_approach === 'Tanpa Produk' ? 'opacity-50 cursor-not-allowed' : ''}
+                      className="break-words whitespace-normal"
                     >
                       Menggunakan Solution - CTA akan menggunakan field Solution dari Product/Service Details
-                      {formData.selling_approach === 'Tanpa Produk' && (
-                        <span className="ml-2 text-xs text-gray-400">(Tidak tersedia untuk Pendekatan Tanpa Produk)</span>
-                      )}
                     </SelectItem>
-                    <SelectItem 
+                    <SelectSeparator className="my-1 bg-gray-200" />
+                    <SelectItem
                       value="use_comment"
-                      disabled={formData.selling_approach === 'Hard Selling'}
-                      className={formData.selling_approach === 'Hard Selling' ? 'opacity-50 cursor-not-allowed' : ''}
+                      className="break-words whitespace-normal bg-gray-50/80"
                     >
                       Menggunakan Comment - CTA meminta comment untuk mendapatkan engagement dan leads
-                      {formData.selling_approach === 'Hard Selling' && (
-                        <span className="ml-2 text-xs text-gray-400">(Tidak tersedia untuk Pendekatan Hard Selling)</span>
-                      )}
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                {formData.cta_type === 'use_solution' && !formData.solution && formData.selling_approach !== 'Tanpa Produk' && (
+                {formData.cta_type === 'use_solution' && !formData.solution && (
                   <p className="text-xs text-amber-600 mt-1">
                     ⚠️ Pastikan field "Solution" di accordion "Product/Service Details" sudah diisi
                   </p>
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="judul">Judul</Label>
                 <Select
                   value={selectedJudulTemplate || ""}
@@ -1816,15 +1778,28 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-0 overflow-hidden [&>span]:min-w-0 [&>span]:truncate">
                     <SelectValue placeholder="Pilih Template Judul" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {judulTemplates.map((template) => (
-                      <SelectItem key={template.value} value={template.value}>
-                        {template.label}
+                  <SelectContent
+                    className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] border-2 border-gray-200 bg-white shadow-lg"
+                    position="popper"
+                  >
+                    {judulTemplates.flatMap((template, index) => [
+                      index > 0 && <SelectSeparator key={`sep-${template.value}`} className="my-1 bg-gray-200" />,
+                      <SelectItem
+                        key={template.value}
+                        value={template.value}
+                        className={cn(
+                          "break-words whitespace-normal items-start py-2",
+                          index % 2 === 1 && "bg-gray-50/80"
+                        )}
+                      >
+                        <span className="block break-words line-clamp-3" title={template.label}>
+                          {template.label}
+                        </span>
                       </SelectItem>
-                    ))}
+                    ]).filter(Boolean)}
                   </SelectContent>
                 </Select>
                 {formData.judul && (
@@ -1864,7 +1839,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
       </Accordion>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-4">
+      <div className="flex gap-3 pt-2">
         <Button
           type="submit"
           disabled={isGenerating}

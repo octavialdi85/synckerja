@@ -57,10 +57,10 @@ export function getContentPlansQueryOptions(organizationId: string | undefined) 
       if (error) throw error;
       return data || [];
     },
-    staleTime: 30000,
+    staleTime: 10000,
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     refetchInterval: false,
     retry: 1,
     retryDelay: (attemptIndex: number) => Math.min(500 * 2 ** attemptIndex, 5000),

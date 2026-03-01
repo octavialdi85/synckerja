@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Shield, Users, Calendar, FileText, Bell, Lock } from 'lucide-react';
+import { Settings, Shield, Users, Calendar, FileText, Bell, Lock, Sparkles } from 'lucide-react';
 
 interface SettingsSidebarProps {
   activeSection: string;
@@ -54,6 +54,13 @@ const settingsSections = [
     title: 'General Settings',
     description: 'Basic application settings and preferences',
     icon: Settings,
+    status: 'active'
+  },
+  {
+    id: 'script-ai',
+    title: 'Script AI Generator',
+    description: 'Google Gemini API & rate limit',
+    icon: Sparkles,
     status: 'active'
   }
 ];

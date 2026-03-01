@@ -134,48 +134,51 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
   };
 
   // Calculate daily production count for specific PIC and exact date
-  // Logic matches SocialMediaDashboardPage metrics: filter by production_approved_date or production_completion_date
-  // Use useCallback to memoize function and ensure it updates when dependencies change
+  // Rule: Plan always belongs to month of post_date. Use production_approved_date or production_completion_date
+  // for the day ONLY if they are in the same month as post_date. If outside post_date's month, use post_date
+  // (plan never "jumps" to another month).
   const calculateDailyProduction = useCallback((picId: string, targetDate: Date) => {
-    // Use local date to avoid timezone issues (same as metrics)
-    const year = targetDate.getFullYear();
-    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-    const day = String(targetDate.getDate()).padStart(2, '0');
-    const targetDateString = `${year}-${month}-${day}`;
-    
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    const targetDateString = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
     return contentPlans.filter(plan => {
-      // Must have pic_production_id
-      if (!plan.pic_production_id || plan.pic_production_id !== picId) {
+      if (!plan.pic_production_id || plan.pic_production_id !== picId || plan.production_approved !== true || !plan.post_date) {
         return false;
       }
 
-      // Must be approved
-      if (plan.production_approved !== true) {
+      const postDateStr = getDateString(plan.post_date);
+      if (!postDateStr) return false;
+
+      const postDate = new Date(postDateStr + 'T00:00:00');
+      const postYear = postDate.getFullYear();
+      const postMonth = postDate.getMonth();
+
+      // Plan must belong to target month (by post_date) - never count in another month
+      if (postYear !== targetYear || postMonth !== targetMonth) {
         return false;
       }
 
-      // Priority: production_approved_date > production_completion_date > post_date (if approved)
-      // Check production_approved_date first (most reliable)
+      // For the day: use approval/completion date only if in same month as post_date
       const approvedDateStr = getDateString(plan.production_approved_date);
-      if (approvedDateStr && approvedDateStr === targetDateString) {
-        return true;
-      }
-
-      // Check production_completion_date second
       const completionDateStr = getDateString(plan.production_completion_date);
-      if (completionDateStr && completionDateStr === targetDateString) {
-        return true;
-      }
+      const candidateDateStr = approvedDateStr || completionDateStr;
+      let effectiveDateStr: string;
 
-      // Fallback: if production_approved is true and post_date is today
-      if (plan.post_date) {
-        const postDateStr = getDateString(plan.post_date);
-        if (postDateStr && postDateStr === targetDateString) {
-          return true;
+      if (candidateDateStr) {
+        const candidateDate = new Date(candidateDateStr + 'T00:00:00');
+        const candYear = candidateDate.getFullYear();
+        const candMonth = candidateDate.getMonth();
+        if (candYear === postYear && candMonth === postMonth) {
+          effectiveDateStr = candidateDateStr;
+        } else {
+          effectiveDateStr = postDateStr;
         }
+      } else {
+        effectiveDateStr = postDateStr;
       }
 
-      return false;
+      return effectiveDateStr === targetDateString;
     }).length;
   }, [contentPlans]);
 

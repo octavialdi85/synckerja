@@ -254,19 +254,19 @@ export const useOptimizedSocialMediaMutations = () => {
       return id;
     },
     onSuccess: (deletedId) => {
-      // Google Sheets style - remove from cache directly without refetch
       if (organizationId) {
-        // Optimistic update - remove deleted item from cache
+        // Optimistic update - remove deleted item from cache immediately
         queryClient.setQueryData(
           ['social-media-plans', organizationId],
           (oldData: any) => {
             if (!oldData) return oldData;
-            // Filter out the deleted plan
             return oldData.filter((plan: any) => plan.id !== deletedId);
           }
         );
-        
-        devLog.debug('Data removed from cache without reload');
+        // Force refetch immediately - invalidate alone may not refetch when refetchOnMount is false
+        queryClient.refetchQueries({ queryKey: ['social-media-plans', organizationId] });
+        queryClient.invalidateQueries({ queryKey: ['social-media-plans-by-date'] });
+        devLog.debug('Data removed from cache, refetched for sync');
       }
     },
   });
@@ -277,7 +277,7 @@ export const useOptimizedSocialMediaMutations = () => {
     addContentPlan: (newPlan: Partial<ContentPlan>) => 
       addContentPlanMutation.mutate(newPlan),
     deleteContentPlan: (id: string) => 
-      deleteContentPlanMutation.mutate(id),
+      deleteContentPlanMutation.mutateAsync(id),
     
     // Loading states
     isUpdating: updateContentPlanMutation.isPending,

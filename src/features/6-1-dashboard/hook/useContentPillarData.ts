@@ -53,6 +53,15 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           const filterDate = selectedMonth != null ? selectedMonth : new Date();
           const filterMonthStart = startOfMonth(filterDate);
           const filterMonthEnd = endOfMonth(filterDate);
+          // Use local date format (YYYY-MM-DD) to match table filter - avoid timezone shift from toISOString()
+          const toLocalDateStr = (d: Date) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+          };
+          const monthStartStr = toLocalDateStr(filterMonthStart);
+          const monthEndStr = toLocalDateStr(filterMonthEnd);
           
           // Fetching usage data for selected month
           let currentUsageQuery = supabase
@@ -60,8 +69,8 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
             .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
             .not('content_pillar_id', 'is', null)
-            .gte('post_date', filterMonthStart.toISOString().split('T')[0])
-            .lte('post_date', filterMonthEnd.toISOString().split('T')[0]);
+            .gte('post_date', monthStartStr)
+            .lte('post_date', monthEndStr);
           
           // Apply service filter if provided
           if (serviceFilter && serviceFilter !== 'all') {
@@ -81,6 +90,8 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
           const prevMonthStart = new Date(filterMonthStart);
           prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
           const prevMonthEnd = endOfMonth(prevMonthStart);
+          const prevMonthStartStr = toLocalDateStr(prevMonthStart);
+          const prevMonthEndStr = toLocalDateStr(prevMonthEnd);
           
           devLog.debug('Fetching usage for previous month');
 
@@ -88,8 +99,8 @@ export const useContentPillarData = (selectedMonth?: Date, serviceFilter?: strin
             .from('social_media_plans')
             .select('content_pillar_id, post_date')
             .eq('organization_id', organizationId)
-            .gte('post_date', prevMonthStart.toISOString().split('T')[0])
-            .lte('post_date', prevMonthEnd.toISOString().split('T')[0])
+            .gte('post_date', prevMonthStartStr)
+            .lte('post_date', prevMonthEndStr)
             .not('content_pillar_id', 'is', null);
           
           // Apply service filter if provided

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { PanelLeftOpen, PanelLeftClose } from 'lucide-react';
 import { StandardLayout } from '@/features/1-layouts/StandardLayout';
 import { HeaderAndTab } from '../6-1-ContentCalendar/container/HeaderAndTab';
 import { RealtimeSocialMediaProvider } from '@/features/6-1-dashboard/hook/RealtimeSocialMediaProvider';
@@ -7,16 +8,29 @@ import OptimizedErrorBoundary from '@/features/6-1-dashboard/OptimizedErrorBound
 import { PICFilterProvider } from '@/features/6-1-dashboard/PICFilterContext';
 import { ScriptGeneratorForm } from './components/ScriptGeneratorForm';
 import { ScriptResult } from './components/ScriptResult';
+import { AIScriptResult } from './components/AIScriptResult';
 import { generateScript, ScriptGeneratorRequest } from './services/scriptGeneratorService';
+import { generateScriptWithAI } from './services/scriptGeneratorAIService';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { useScriptAIConfig } from './hooks/useScriptAIConfig';
 
 const ScriptGeneratorContent: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useAppTranslation();
   const [activeMainTab, setActiveMainTab] = useState('script-generator');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedScript, setGeneratedScript] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
+  const [aiGeneratedScript, setAiGeneratedScript] = useState<string | null>(null);
+  const [lastFormDataForPlan, setLastFormDataForPlan] = useState<{
+    content_type_id?: string;
+    service_id?: string;
+    sub_service_id?: string;
+    content_pillar_id?: string;
+  } | null>(null);
+  const [formPanelHidden, setFormPanelHidden] = useState(false);
+  const { data: aiConfig, isLoading: aiConfigLoading, isError: aiConfigError, refetch: refetchAiConfig } = useScriptAIConfig();
 
   const handleTabChange = (newTab: string) => {
     setActiveMainTab(newTab);
@@ -25,17 +39,23 @@ const ScriptGeneratorContent: React.FC = () => {
 
   const handleGenerate = async (data: ScriptGeneratorRequest) => {
     setIsGenerating(true);
-    setGeneratedScript(null);
+    setGeneratedPrompt(null);
+    setAiGeneratedScript(null);
+    // Store form data for Save to Plan auto-fill
+    setLastFormDataForPlan({
+      content_type_id: data.content_type_id,
+      service_id: data.service_id,
+      sub_service_id: data.sub_service_id,
+      content_pillar_id: data.content_pillar_id,
+    });
 
-    // Small delay to show loading state
     await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
-      // Generate ChatGPT prompt
       const result = await generateScript(data);
 
       if (result.success && result.script) {
-        setGeneratedScript(result.script);
+        setGeneratedPrompt(result.script);
         toast.success('Prompt berhasil di-generate!');
       } else {
         toast.error(result.error || 'Gagal generate prompt');
@@ -45,6 +65,37 @@ const ScriptGeneratorContent: React.FC = () => {
       toast.error('Terjadi error saat generate prompt');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateWithAI = async (prompt: string) => {
+    if (!prompt.trim()) {
+      toast.error('Prompt kosong');
+      return;
+    }
+    if (!aiConfig?.is_active || !aiConfig?.api_key_configured) {
+      toast.error(t('scriptGenerator.settings.configNotFound', 'Script AI belum dikonfigurasi. Buka Settings > Script AI Generator.'));
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    setAiGeneratedScript(null);
+
+    try {
+      const result = await generateScriptWithAI(prompt);
+
+      if (result.success && result.script) {
+        setAiGeneratedScript(result.script);
+        setFormPanelHidden(true);
+        toast.success('Script berhasil di-generate oleh AI!');
+      } else {
+        toast.error(result.error || 'Gagal generate script dengan AI');
+      }
+    } catch (error) {
+      console.error('Error generating script with AI:', error);
+      toast.error('Terjadi error saat generate script dengan AI');
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -63,36 +114,123 @@ const ScriptGeneratorContent: React.FC = () => {
                 />
               </div>
 
-              {/* Grid: Section utama (form) + Sidebar kanan (result) — scroll-chaining rule 3.1: satu scroll per panel */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0 h-full overflow-hidden">
-                  {/* Section utama (form): satu scroll container — rule 3.1 — 50% lebar */}
-                  <div className="lg:col-span-6 flex flex-col min-h-0 overflow-hidden">
+              {/* Grid: 3 kolom saat form visible; 2 kolom full width saat form hidden */}
+              <div className="flex-1 min-h-0 overflow-hidden w-full min-w-0">
+                <div className={`grid gap-2 flex-1 min-h-0 h-full w-full min-w-0 overflow-hidden ${formPanelHidden ? 'grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.33fr)]'}`}>
+                  {/* Panel 1: Form — tidak di-render saat hidden agar 2 kolom (Prompt+AI) full width */}
+                  {!formPanelHidden && (
+                  <div className="flex flex-col min-h-0 overflow-hidden min-w-0">
                     <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => setFormPanelHidden(true)}
+                          className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors"
+                          title={t('scriptGenerator.hideForm', 'Sembunyikan form')}
+                        >
+                          <PanelLeftClose className="h-4 w-4" />
+                          {t('scriptGenerator.hideForm', 'Sembunyikan Form')}
+                        </button>
+                      </div>
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
-                        <div className="p-6 w-full min-w-0">
-                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <ScriptGeneratorForm
-                              onGenerate={handleGenerate}
-                              isGenerating={isGenerating}
-                            />
-                          </div>
+                        <div className="p-4 w-full min-w-0">
+                          <ScriptGeneratorForm
+                            onGenerate={handleGenerate}
+                            isGenerating={isGenerating}
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
+                  )}
 
-                  {/* Sidebar kanan (hasil prompt): satu scroll container — rule 3.1 — 50% lebar */}
-                  <div className="lg:col-span-6 flex flex-col min-h-0 overflow-hidden">
+                  {/* Panel 2: Prompt (QC + Generate dengan AI) — 3fr (30%) full width saat form hidden */}
+                  <div className="flex flex-col min-h-0 overflow-hidden min-w-0">
+                    <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                      {formPanelHidden && (
+                        <div className="flex-shrink-0 px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => setFormPanelHidden(false)}
+                            className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-md transition-colors"
+                            title={t('scriptGenerator.showForm', 'Tampilkan form')}
+                          >
+                            <PanelLeftOpen className="h-4 w-4" />
+                            {t('scriptGenerator.showForm', 'Tampilkan Form')}
+                          </button>
+                        </div>
+                      )}
+                      <div className={generatedPrompt
+                        ? "flex-1 min-h-0 flex flex-col overflow-hidden p-4 min-w-0"
+                        : "flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0"
+                      }>
+                        {generatedPrompt ? (
+                          <div className="flex flex-col flex-1 min-h-0 gap-2">
+                            {!aiConfig?.is_active || !aiConfig?.api_key_configured ? (
+                              <div className="flex-shrink-0 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-sm text-amber-800">
+                                  {aiConfigLoading && 'Memuat konfigurasi AI...'}
+                                  {!aiConfigLoading && aiConfigError && 'Gagal memuat konfigurasi. Coba refresh.'}
+                                  {!aiConfigLoading && !aiConfigError && !aiConfig && (
+                                    <>
+                                      Konfigurasi AI tidak ditemukan. Pastikan organisasi aktif benar (jika punya banyak org). Lalu buka{' '}
+                                      <Link to="/digital-marketing/social-media/settings" className="text-amber-700 hover:text-amber-900 font-medium underline">
+                                        Settings → Script AI Generator
+                                      </Link>
+                                      .
+                                    </>
+                                  )}
+                                  {!aiConfigLoading && !aiConfigError && aiConfig && !aiConfig.api_key_configured && 'API key belum dikonfigurasi di Settings.'}
+                                  {!aiConfigLoading && !aiConfigError && aiConfig && !aiConfig.is_active && 'Enable AI dimatikan di Settings.'}
+                                </span>
+                                {!aiConfigLoading && (
+                                  <button
+                                    type="button"
+                                    onClick={() => refetchAiConfig()}
+                                    className="text-sm text-amber-700 hover:text-amber-900 font-medium underline"
+                                  >
+                                    Refresh konfigurasi
+                                  </button>
+                                )}
+                              </div>
+                            ) : null}
+                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                              <ScriptResult
+                                script={generatedPrompt}
+                                onGenerateWithAI={handleGenerateWithAI}
+                                isGeneratingAI={isGeneratingAI}
+                                isAIConfigured={!!(aiConfig?.is_active && aiConfig?.api_key_configured)}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 w-full min-w-0">
+                            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 border-dashed text-center min-h-[200px] flex items-center justify-center">
+                              <p className="text-gray-500 text-sm">
+                                Prompt akan muncul di sini setelah Anda mengisi form dan klik &quot;Generate Script&quot;
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel 3: AI Result — 70% saat form hidden, 40% saat 3 panel */}
+                  <div className="flex flex-col min-h-0 overflow-hidden min-w-0">
                     <div className="flex-1 min-h-0 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-180px)] min-w-0">
-                        <div className="p-6 w-full min-w-0">
-                          {generatedScript ? (
-                            <ScriptResult script={generatedScript} />
+                        <div className="p-4 w-full min-w-0">
+                          {aiGeneratedScript ? (
+                            <AIScriptResult
+                              script={aiGeneratedScript}
+                              formDataForPlan={lastFormDataForPlan}
+                              onScriptChange={setAiGeneratedScript}
+                            />
                           ) : (
-                            <div className="bg-gray-50 rounded-lg p-8 border border-gray-200 border-dashed text-center min-h-[200px] flex items-center justify-center">
+                            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 border-dashed text-center min-h-[200px] flex items-center justify-center">
                               <p className="text-gray-500 text-sm">
-                                Hasil prompt untuk ChatGPT akan muncul di sini setelah Anda mengisi form dan klik &quot;Generate Script&quot;
+                                {t('scriptGenerator.aiEmptyState', 'Hasil script dari AI akan muncul di sini setelah Anda QC prompt di panel tengah dan klik "Generate dengan AI"')}
                               </p>
                             </div>
                           )}

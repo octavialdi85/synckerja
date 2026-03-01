@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { useContentPillarData } from '../../hook/useContentPillarData';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { useOptimizedSocialMedia } from '../../hook/useOptimizedSocialMediaState';
 
 const FUNNEL_CONFIG = {
   top: {
@@ -49,17 +48,13 @@ export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ sele
     error,
     refetch
   } = useContentPillarData(selectedMonth, serviceFilter);
-  const {
-    contentPlans
-  } = useOptimizedSocialMedia();
 
   const handleManualRefresh = async () => {
-    // Invalidate both content pillar data and social media plans to ensure sync
     await queryClient.invalidateQueries({
       queryKey: ['contentPillarData', organizationId]
     });
     await queryClient.invalidateQueries({
-      queryKey: ['contentPlans', organizationId]
+      queryKey: ['social-media-plans', organizationId]
     });
     refetch();
     toast.success('Data refreshed');
@@ -79,76 +74,29 @@ export const ContentPillarTracker: React.FC<ContentPillarTrackerProps> = ({ sele
     toast.success('Content pillar data exported successfully');
   };
 
-  // Calculate funnel percentages based on selected month's content
-  const calculateFunnelPercentages = () => {
-    const filterDate = selectedMonth || new Date();
-    const filterYear = filterDate.getFullYear();
-    const filterMonth = filterDate.getMonth();
-
-    // Filter content plans for selected month and service
-    const filteredMonthContent = contentPlans.filter(plan => {
-      if (!plan.post_date) return false;
-      const planDate = new Date(plan.post_date);
-      const matchesMonth = planDate.getFullYear() === filterYear && planDate.getMonth() === filterMonth;
-      
-      // Apply service filter if provided
-      if (serviceFilter && serviceFilter !== 'all') {
-        return matchesMonth && plan.service_id === serviceFilter;
-      }
-      
-      return matchesMonth;
-    });
-    const totalContent = filteredMonthContent.length;
-    if (totalContent === 0) {
-      return {
-        total: 0,
-        top: {
-          count: 0,
-          percentage: 0
-        },
-        middle: {
-          count: 0,
-          percentage: 0
-        },
-        bottom: {
-          count: 0,
-          percentage: 0
-        }
-      };
-    }
-
-    // Count content by funnel stage
-    const funnelCounts = {
-      top: 0,
-      middle: 0,
-      bottom: 0
-    };
-    filteredMonthContent.forEach(plan => {
-      if (plan.content_pillar_id) {
-        const pillar = pillarData.find(p => p.pillar_id === plan.content_pillar_id);
-        if (pillar) {
-          funnelCounts[pillar.funnel]++;
-        }
-      }
+  // Calculate funnel stats from pillarData (single source of truth - same as table filter)
+  const funnelStats = React.useMemo(() => {
+    const totalContent = pillarData.reduce((sum, p) => sum + p.count, 0);
+    const funnelCounts = { top: 0, middle: 0, bottom: 0 };
+    pillarData.forEach(p => {
+      funnelCounts[p.funnel] += p.count;
     });
     return {
       total: totalContent,
       top: {
         count: funnelCounts.top,
-        percentage: Math.round(funnelCounts.top / totalContent * 100)
+        percentage: totalContent > 0 ? Math.round((funnelCounts.top / totalContent) * 100) : 0
       },
       middle: {
         count: funnelCounts.middle,
-        percentage: Math.round(funnelCounts.middle / totalContent * 100)
+        percentage: totalContent > 0 ? Math.round((funnelCounts.middle / totalContent) * 100) : 0
       },
       bottom: {
         count: funnelCounts.bottom,
-        percentage: Math.round(funnelCounts.bottom / totalContent * 100)
+        percentage: totalContent > 0 ? Math.round((funnelCounts.bottom / totalContent) * 100) : 0
       }
     };
-  };
-
-  const funnelStats = calculateFunnelPercentages();
+  }, [pillarData]);
 
   if (isLoading) {
     return <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm">

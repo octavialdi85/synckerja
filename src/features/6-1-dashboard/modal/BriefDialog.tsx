@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Textarea } from '@/features/ui/textarea';
 import { MessageCircle, Send, Trash2, FileText, Globe, RotateCcw, CheckCircle, ExternalLink, CircleCheck } from 'lucide-react';
+import { parseMarkdownTable, stringifyMarkdownTable, replaceTableInMarkdown } from '../utils/markdownTableUtils';
+import { stripBriefIntroductorySentence, extractBriefTitle, removeBriefTitleFromStart, stripBreakdownScriptLabel, makeBriefSectionsInline } from '@/features/share/utils/briefUtils';
+import { EditableBriefTable } from './EditableBriefTable';
 import { useLinkComments } from '../hook/useLinkComments';
 import { useBriefExtended } from '../hook/useBriefExtended';
 import { formatDistanceToNow } from 'date-fns';
@@ -44,6 +49,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const [newComment, setNewComment] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState<string>('brief');
+  const [briefViewMode, setBriefViewMode] = useState<'rendered' | 'raw'>('rendered');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
   const skipNextAutoSaveRef = useRef(false);
@@ -73,9 +79,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
       setNewComment('');
       setShowPreview(false);
       setAccordionOpen('brief');
+      setBriefViewMode('rendered');
       return;
     }
-    setBriefText(brief || '');
+    setBriefText(stripBriefIntroductorySentence(brief || ''));
     setNewComment('');
     setShowPreview(false);
     setAccordionOpen('brief');
@@ -392,6 +399,21 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     }
   };
 
+  const parsedTable = useMemo(() => parseMarkdownTable(briefText), [briefText]);
+  const briefTitle = useMemo(() => extractBriefTitle(briefText), [briefText]);
+
+  const handleTableSave = (newTableData: string[][]) => {
+    if (!parsedTable) return;
+    const newTableMarkdown = stringifyMarkdownTable(newTableData);
+    const newBrief = replaceTableInMarkdown(
+      briefText,
+      newTableMarkdown,
+      parsedTable.startIndex,
+      parsedTable.endIndex
+    );
+    setBriefText(newBrief);
+  };
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !socialMediaPlanId) return;
     
@@ -401,6 +423,32 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
   const handleDeleteComment = async (commentId: string) => {
     await deleteComment(commentId);
+  };
+
+  // ReactMarkdown components — padat agar table utama dapat lebih banyak ruang
+  const briefMarkdownComponents = {
+    h1: ({ children }: { children?: React.ReactNode }) => (
+      <h1 className="text-base font-semibold text-gray-900 mt-1 mb-0.5 first:mt-0 pb-0.5 border-b border-gray-100">{children}</h1>
+    ),
+    h2: ({ children }: { children?: React.ReactNode }) => (
+      <h2 className="text-sm font-semibold text-gray-900 mt-1 mb-0.5 first:mt-0 pb-0.5">{children}</h2>
+    ),
+    h3: ({ children }: { children?: React.ReactNode }) => (
+      <h3 className="text-sm font-semibold text-gray-800 mt-1 mb-0.5 first:mt-0 pb-0.5">{children}</h3>
+    ),
+    p: ({ children }: { children?: React.ReactNode }) => (
+      <p className="my-0.5 text-gray-700 leading-snug text-sm">{children}</p>
+    ),
+    ul: ({ children }: { children?: React.ReactNode }) => (
+      <ul className="my-0.5 ml-4 list-disc space-y-0.5 text-gray-700 text-sm">{children}</ul>
+    ),
+    ol: ({ children }: { children?: React.ReactNode }) => (
+      <ol className="my-0.5 ml-4 list-decimal space-y-0.5 text-gray-700 text-sm">{children}</ol>
+    ),
+    hr: () => <hr className="my-1 border-t border-dashed border-gray-200" />,
+    blockquote: ({ children }: { children?: React.ReactNode }) => (
+      <blockquote className="my-0.5 pl-3 border-l-2 border-gray-300 text-gray-600 italic text-sm">{children}</blockquote>
+    ),
   };
 
   // Check if brief contains Google Docs links
@@ -419,8 +467,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
         <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
         <div className="flex flex-col h-full min-h-0">
           <div className="flex flex-1 min-h-0 overflow-hidden">
-            {/* Left Section - Comments (Narrower) */}
-            <div className="w-1/4 border-r border-gray-200 flex flex-col min-h-0">
+            {/* Left Section - Comments (Narrower); disembunyikan di layar sempit agar Brief Content dapat lebar penuh */}
+            <div className="w-1/4 max-lg:hidden border-r border-gray-200 flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-gray-600" />
@@ -498,12 +546,19 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
               )}
             </div>
 
-            {/* Right Section - Brief Content & Preview (Wider) */}
-            <div className="w-3/4 flex flex-col min-h-0">
-              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-gray-600" />
-                  <span className="font-medium text-sm text-gray-800">{t('briefDialog.sectionBriefContent', 'Brief Content')}</span>
+            {/* Right Section - Brief Content & Preview (Wider); full width di layar sempit */}
+            <div className="w-3/4 max-lg:w-full flex flex-col min-h-0">
+              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between min-h-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FileText className="h-4 w-4 text-gray-600 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-sm text-gray-800">{t('briefDialog.sectionBriefContent', 'Brief Content')}</span>
+                    {briefTitle && (
+                      <span className="block text-sm font-semibold text-gray-900 truncate mt-0.5" title={briefTitle}>
+                        {briefTitle}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasGoogleDocsLink && (
@@ -545,26 +600,87 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                     >
                       <AccordionItem value="brief" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
                         <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 flex-1">
                             {briefText.trim() ? (
                               <CircleCheck className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
                             ) : (
                               <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
                             )}
                             {t('briefDialog.sectionBriefContent', 'Brief Content')}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBriefViewMode(briefViewMode === 'rendered' ? 'raw' : 'rendered');
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-auto py-0 px-1 -ml-1"
+                            >
+                              {briefViewMode === 'rendered'
+                                ? t('briefDialog.editFullMarkdown', 'Edit full markdown')
+                                : t('briefDialog.viewRendered', 'View rendered')}
+                            </Button>
                           </span>
                         </AccordionTrigger>
                         <AccordionContent
                           primitiveClassName="data-[state=open]:!h-full"
-                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[280px] h-full"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[max(400px,45vh)] h-full"
                         >
-                          <div className="min-h-[260px] flex-1 flex flex-col overflow-hidden h-full">
-                            <Textarea
-                              value={briefText}
-                              onChange={(e) => setBriefText(e.target.value)}
-                              placeholder={t('briefDialog.placeholderBrief', 'Enter brief content here...')}
-                              className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
-                            />
+                          <div className="min-h-[max(360px,40vh)] flex-1 flex flex-col overflow-hidden h-full overflow-y-auto seamless-scroll">
+                            {briefViewMode === 'raw' ? (
+                              <Textarea
+                                value={briefText}
+                                onChange={(e) => setBriefText(e.target.value)}
+                                placeholder={t('briefDialog.placeholderBrief', 'Enter brief content here...')}
+                                className="w-full h-full min-h-[240px] resize-none border-gray-200 text-sm"
+                              />
+                            ) : parsedTable ? (
+                              <>
+                                {parsedTable.startIndex > 0 && (
+                                  <div className="prose prose-sm max-w-none mb-1 prose-p:my-0.5 prose-headings:mt-1 prose-headings:mb-0.5 prose-ul:my-0.5 prose-ol:my-0.5 flex-shrink-0">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      components={briefMarkdownComponents}
+                                    >
+                                      {makeBriefSectionsInline(stripBreakdownScriptLabel(removeBriefTitleFromStart(briefText.slice(0, parsedTable.startIndex))))}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                                <div className="flex-shrink-0">
+                                <EditableBriefTable
+                                  tableData={parsedTable.table}
+                                  onSave={handleTableSave}
+                                  className="!my-1"
+                                />
+                                </div>
+                                {parsedTable.endIndex < briefText.length && (
+                                  <div className="prose prose-sm max-w-none mt-1 flex-shrink-0 prose-p:my-0.5 prose-headings:mt-1 prose-headings:mb-0.5">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      components={briefMarkdownComponents}
+                                    >
+                                      {briefText.slice(parsedTable.endIndex)}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="prose prose-sm max-w-none">
+                                {briefText ? (
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={briefMarkdownComponents}
+                                  >
+                                    {makeBriefSectionsInline(stripBreakdownScriptLabel(removeBriefTitleFromStart(briefText)))}
+                                  </ReactMarkdown>
+                                ) : (
+                                  <p className="text-gray-500 italic my-2">
+                                    {t('briefDialog.placeholderBrief', 'Enter brief content here...')}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </AccordionContent>
                       </AccordionItem>
@@ -576,7 +692,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                             ) : (
                               <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
                             )}
-                            {t('briefDialog.sectionTargetAudience', 'Target Audience')}
+                            {t('briefDialog.sectionTargetAudience', 'Concept')}
                           </span>
                         </AccordionTrigger>
                         <AccordionContent

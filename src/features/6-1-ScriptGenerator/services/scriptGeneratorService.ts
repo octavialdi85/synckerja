@@ -35,6 +35,11 @@ export interface ScriptGeneratorRequest {
   judul_custom?: string; // Custom title if user wants to edit the template
   selling_approach?: 'Tanpa Produk' | 'Soft Selling' | 'Hard Selling'; // Selling approach: no product, soft selling, or hard selling
   cta_type?: 'use_solution' | 'use_comment'; // CTA type: use solution or use comment for engagement and leads
+  // IDs for Save to Plan auto-fill (from form selection)
+  content_type_id?: string;
+  service_id?: string;
+  sub_service_id?: string;
+  content_pillar_id?: string;
 }
 
 export interface ScriptGeneratorResponse {
@@ -664,13 +669,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('## ⚠️ CTA HARUS sangat jelas, urgent, dan actionable: ##');
     promptParts.push('======================================================');
     if (request.cta_type === 'use_solution') {
-      // Validate: CTA Solution tidak boleh digunakan jika selling approach is "Tanpa Produk"
-      if (request.selling_approach === 'Tanpa Produk') {
-        promptParts.push('  - **TIPE CTA: Menggunakan Comment** (CTA Solution tidak tersedia untuk Pendekatan Tanpa Produk)');
-        promptParts.push('  - CTA harus meminta audience untuk memberikan comment/komentar');
-        promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
-        promptParts.push('  - Contoh CTA comment: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan"');
-      } else if (request.solution) {
+      if (request.solution) {
         promptParts.push('  - **TIPE CTA: Menggunakan Solution** - CTA harus mengarahkan ke Solution yang sudah dijelaskan');
         promptParts.push(`  - Solution yang digunakan: ${request.solution}`);
         promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
@@ -679,24 +678,12 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push('  - **TIPE CTA: Menggunakan Solution** - ⚠️ PERINGATAN: Field Solution belum diisi, pastikan Solution sudah diisi di accordion "Product/Service Details"');
       }
     } else if (request.cta_type === 'use_comment') {
-      // Validate: CTA Comment tidak boleh digunakan jika selling approach is "Hard Selling" (Soft Selling is exception)
-      if (request.selling_approach === 'Hard Selling') {
-        promptParts.push('  - **TIPE CTA: Menggunakan Solution** (CTA Comment tidak tersedia untuk Pendekatan Hard Selling)');
-        if (request.solution) {
-          promptParts.push('  - CTA harus mengarahkan ke Solution yang sudah dijelaskan');
-          promptParts.push(`  - Solution yang digunakan: ${request.solution}`);
-          promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
-        } else {
-          promptParts.push('  - ⚠️ PERINGATAN: Field Solution belum diisi, pastikan Solution sudah diisi di accordion "Product/Service Details"');
-        }
-      } else {
-        promptParts.push('  - **TIPE CTA: Menggunakan Comment untuk Engagement dan Leads**');
-        promptParts.push('  - CTA harus meminta audience untuk memberikan comment/komentar');
-        promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
-        promptParts.push('  - Contoh CTA comment: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan", "Share di comment jika kamu pernah mengalami hal ini"');
-        promptParts.push('  - CTA comment harus spesifik dan mudah diikuti, hindari generic seperti "Komentar di bawah"');
-        promptParts.push('  - Tambahkan sense of urgency atau value (contoh: "KOMEN sekarang, saya akan reply semua!", "KOMEN \'YA\' jika setuju, saya akan share tips lebih lanjut")');
-      }
+      promptParts.push('  - **TIPE CTA: Menggunakan Comment untuk Engagement dan Leads**');
+      promptParts.push('  - CTA harus meminta audience untuk memberikan comment/komentar');
+      promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+      promptParts.push('  - Contoh CTA comment: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan", "Share di comment jika kamu pernah mengalami hal ini"');
+      promptParts.push('  - CTA comment harus spesifik dan mudah diikuti, hindari generic seperti "Komentar di bawah"');
+      promptParts.push('  - Tambahkan sense of urgency atau value (contoh: "KOMEN sekarang, saya akan reply semua!", "KOMEN \'YA\' jika setuju, saya akan share tips lebih lanjut")');
     } else {
       // Default CTA instructions if no cta_type selected
       promptParts.push('  - Sebutkan benefit spesifik dari CTA (contoh: "FREE ROI Calculator", "FREE 30 menit strategy session")');
@@ -744,11 +731,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('');
   promptParts.push('[CTA yang jelas dan actionable]');
   if (request.cta_type === 'use_solution') {
-    if (request.selling_approach === 'Tanpa Produk') {
-      promptParts.push('  - **CTA Type: Menggunakan Comment** (CTA Solution tidak tersedia untuk Pendekatan Tanpa Produk)');
-      promptParts.push('  - CTA caption harus meminta audience untuk memberikan comment');
-      promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
-    } else if (request.solution) {
+    if (request.solution) {
       promptParts.push('  - **CTA Type: Menggunakan Solution** - CTA caption harus mengarahkan ke Solution yang sudah dijelaskan');
       promptParts.push(`  - Solution: ${request.solution}`);
       promptParts.push('  - CTA harus mengajak audience untuk mengambil tindakan berdasarkan Solution tersebut');
@@ -756,19 +739,9 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
       promptParts.push('  - **CTA Type: Menggunakan Solution** - ⚠️ PERINGATAN: Field Solution belum diisi');
     }
   } else if (request.cta_type === 'use_comment') {
-    if (request.selling_approach === 'Hard Selling') {
-      promptParts.push('  - **CTA Type: Menggunakan Solution** (CTA Comment tidak tersedia untuk Pendekatan Hard Selling)');
-      if (request.solution) {
-        promptParts.push(`  - Solution: ${request.solution}`);
-        promptParts.push('  - CTA caption harus mengarahkan ke Solution yang sudah dijelaskan');
-      } else {
-        promptParts.push('  - ⚠️ PERINGATAN: Field Solution belum diisi');
-      }
-    } else {
-      promptParts.push('  - **CTA Type: Menggunakan Comment** - CTA caption harus meminta audience untuk memberikan comment');
-      promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
-      promptParts.push('  - Contoh: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan"');
-    }
+    promptParts.push('  - **CTA Type: Menggunakan Comment** - CTA caption harus meminta audience untuk memberikan comment');
+    promptParts.push('  - Fokus pada engagement: ajak audience untuk share pengalaman, pertanyaan, atau pendapat mereka');
+    promptParts.push('  - Contoh: "KOMEN di bawah pengalaman kamu!", "Tulis di comment apa yang ingin kamu tanyakan"');
   }
   promptParts.push('');
   
@@ -795,7 +768,28 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   promptParts.push('');
   promptParts.push('**Format Caption:** Gunakan emoji relevan, paragraf jelas, tone sesuai style.');
   promptParts.push('');
-  
+
+  // Template Konsep Konten Sederhana - agar tujuan pembuatan konten lebih clear
+  if (request.target_market || request.keinginan || request.kebutuhan || request.hidden_needs || request.problem || request.solution) {
+    promptParts.push('');
+    promptParts.push('## Concept of Content ##');
+    promptParts.push('=========================================');
+    promptParts.push('Buatkan narasi konsep PADAT (max 2-3 kalimat) yang mencakup semua elemen di bawah. Format: 1 paragraf singkat, tidak bertele-tele.');
+    promptParts.push('');
+    promptParts.push('**Template konsep (ringkaskan ke dalam 1 paragraf):**');
+    promptParts.push(`- Target: Menargetkan${request.target_market || '[isi target]'}`);
+    promptParts.push(`- Keinginan: yang ingin ${request.keinginan || '[isi keinginan]'}`);
+    promptParts.push(`- Kebutuhan: dan butuh ${request.kebutuhan || '[isi kebutuhan]'}`);
+    promptParts.push(`- Hidden Needs: Biar ${request.hidden_needs || '[isi kebutuhan tersembunyi]'}`);
+    promptParts.push(`- Masalah: Tapi ${request.problem || '[isi masalah]'}`);
+    promptParts.push(`- Solusi: ${request.solution || '[isi solusi]'}`);
+    promptParts.push('');
+    promptParts.push('**⚠️ WAJIB:** Konsep harus PADAT (3-4 kalimat saja). Gabungkan semua poin jadi satu paragraf singkat. Jangan ulangi detail. Script utama tetap mengacu pada konsep ini.');
+    promptParts.push('');
+    promptParts.push('**Format output:** Awali script dengan ## Konsep Konten ## (atau ## Concept of Content ##) diikuti paragraf konsep, lalu baris kosong, baru Judul Script dan section lainnya.');
+    promptParts.push('');
+  }
+
   return promptParts.join('\n');
 }
 

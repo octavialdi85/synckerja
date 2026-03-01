@@ -435,6 +435,69 @@ export interface Database {
         }
         Relationships: []
       }
+      organization_script_ai_config: {
+        Row: {
+          id: string
+          organization_id: string
+          google_ai_api_key: string | null
+          api_key_configured: boolean
+          daily_limit: number
+          model: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          google_ai_api_key?: string | null
+          api_key_configured?: boolean
+          daily_limit?: number
+          model?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          google_ai_api_key?: string | null
+          api_key_configured?: boolean
+          daily_limit?: number
+          model?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      script_ai_daily_usage: {
+        Row: {
+          id: string
+          organization_id: string
+          usage_date: string
+          count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          usage_date: string
+          count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          usage_date?: string
+          count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       organization_whatsapp_accounts: {
         Row: {
           id: string
@@ -728,7 +791,6 @@ export interface Database {
           has_more?: boolean
         }>
       }
-      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
