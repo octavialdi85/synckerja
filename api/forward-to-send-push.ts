@@ -1,56 +1,44 @@
 /**
  * Relay: Supabase Database Webhook → this URL → forward to Edge Function app-notifications-send-push.
- * Use when pg_net gets "Couldn't resolve host name" calling the Edge Function directly.
+ * Uses Vercel Edge Runtime so DNS may resolve (Node serverless had ENOTFOUND for *.supabase.co).
  *
  * Env (Vercel): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Webhook URL in Supabase: https://<your-vercel-domain>/api/forward-to-send-push
  */
 
-const baseUrl = (process.env.SUPABASE_URL ?? "").trim().replace(/\/$/, "");
-const EDGE_URL =
-  (baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`) +
-  "/functions/v1/app-notifications-send-push";
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+export const config = { runtime: "edge" };
 
-function getRawBody(req: import("http").IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
-}
+const getEdgeUrl = () => {
+  const baseUrl = (process.env.SUPABASE_URL ?? "").trim().replace(/\/$/, "");
+  return (baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`) + "/functions/v1/app-notifications-send-push";
+};
 
-export default async function handler(
-  req: import("http").IncomingMessage & { method?: string },
-  res: import("http").ServerResponse
-): Promise<void> {
+export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") {
-    res.statusCode = 405;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Method not allowed" }));
-    return;
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
+  const EDGE_URL = getEdgeUrl();
+  const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
   if (!EDGE_URL || !SERVICE_ROLE_KEY) {
-    res.statusCode = 500;
-    res.setHeader("Content-Type", "application/json");
-    res.end(
-      JSON.stringify({
-        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-      })
+    return new Response(
+      JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
-    return;
   }
 
   let body: string;
   try {
-    body = await getRawBody(req);
+    body = await req.text();
   } catch {
-    res.statusCode = 400;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Invalid body" }));
-    return;
+    return new Response(JSON.stringify({ error: "Invalid body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   let response: Response;
@@ -66,23 +54,25 @@ export default async function handler(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause ? String(err.cause) : "";
-    res.statusCode = 502;
-    res.setHeader("Content-Type", "application/json");
-    res.end(
+    return new Response(
       JSON.stringify({
         error: "Relay failed to call Edge Function",
         details: msg,
         cause: cause || undefined,
-        hint:
-          "Check SUPABASE_URL is https://<project-ref>.supabase.co and project is not paused.",
-      })
+        hint: "Check SUPABASE_URL and that project is not paused. If still ENOTFOUND, use cron + app-notifications-process-pending instead.",
+      }),
+      {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      }
     );
-    return;
   }
 
   const text = await response.text();
-  res.statusCode = response.status;
-  const contentType = response.headers.get("Content-Type");
-  if (contentType) res.setHeader("Content-Type", contentType);
-  res.end(text);
+  return new Response(text, {
+    status: response.status,
+    headers: {
+      "Content-Type": response.headers.get("Content-Type") || "application/json",
+    },
+  });
 }
