@@ -6,8 +6,9 @@
  * Webhook URL in Supabase: https://<your-vercel-domain>/api/forward-to-send-push
  */
 
+const baseUrl = (process.env.SUPABASE_URL ?? "").trim().replace(/\/$/, "");
 const EDGE_URL =
-  (process.env.SUPABASE_URL ?? "").replace(/\/$/, "") +
+  (baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`) +
   "/functions/v1/app-notifications-send-push";
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
@@ -52,14 +53,32 @@ export default async function handler(
     return;
   }
 
-  const response = await fetch(EDGE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    },
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(EDGE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause ? String(err.cause) : "";
+    res.statusCode = 502;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "Relay failed to call Edge Function",
+        details: msg,
+        cause: cause || undefined,
+        hint:
+          "Check SUPABASE_URL is https://<project-ref>.supabase.co and project is not paused.",
+      })
+    );
+    return;
+  }
 
   const text = await response.text();
   res.statusCode = response.status;
