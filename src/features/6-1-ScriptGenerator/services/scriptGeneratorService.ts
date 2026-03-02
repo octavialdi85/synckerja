@@ -92,7 +92,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   
   // Opening - Concise and clear
   promptParts.push('Anda adalah ahli copywriter digital marketing. Buatkan script konten digital marketing berdasarkan informasi di bawah ini.');
-  promptParts.push('======================================================================================');
+  promptParts.push('=======================================================');
   promptParts.push('');
   promptParts.push('PENTING:');
   promptParts.push('1. Baca semua informasi sebelum membuat script');
@@ -774,7 +774,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
   if (request.target_market || request.keinginan || request.kebutuhan || request.hidden_needs || request.problem || request.solution || hasProductDetails) {
     promptParts.push('');
     promptParts.push('## Concept of Content ##');
-    promptParts.push('=========================================');
+    promptParts.push('=========================');
     promptParts.push('Buatkan narasi konsep PADAT (max 2-3 kalimat) yang mencakup semua elemen di bawah. Format: 1 paragraf singkat, tidak bertele-tele.');
     promptParts.push('');
     promptParts.push('**Template konsep (ringkaskan ke dalam 1 paragraf):**');
@@ -789,7 +789,7 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
         promptParts.push(`  - Keunggulan: ${request.competitive_advantage}`);
       }
     }
-    promptParts.push(`- Target: Menargetkan${request.target_market || '[isi target]'}`);
+    promptParts.push(`- Target: Menargetkan ${request.target_market || '[isi target]'}`);
     promptParts.push(`- Keinginan: yang ingin ${request.keinginan || '[isi keinginan]'}`);
     promptParts.push(`- Kebutuhan: dan butuh ${request.kebutuhan || '[isi kebutuhan]'}`);
     promptParts.push(`- Hidden Needs: Biar ${request.hidden_needs || '[isi kebutuhan tersembunyi]'}`);
