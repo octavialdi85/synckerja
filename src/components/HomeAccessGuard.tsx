@@ -97,6 +97,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [subscriptionRetryCount, setSubscriptionRetryCount] = useState(0);
   const [loadingStartTime, setLoadingStartTime] = useState<number>(Date.now());
   const [showSlowConnectionWarning, setShowSlowConnectionWarning] = useState(false);
 
@@ -134,6 +135,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
   // atau oleh EmployeeWelcome setelah user selesai onboarding
 
   // Load subscription status: use session cache to avoid 2 queries on every home open
+  // When subscriptionRetryCount >= 1, skip cache so we get a fresh result after retry
   useEffect(() => {
     const checkSubscription = async () => {
       if (!organization?.id) {
@@ -141,7 +143,11 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
         return;
       }
 
-      const cached = getSubscriptionCache(organization.id);
+      if (subscriptionRetryCount >= 1) {
+        clearHomeSubscriptionCache(organization.id);
+      }
+
+      const cached = subscriptionRetryCount < 1 ? getSubscriptionCache(organization.id) : null;
       if (cached) {
         setHasActiveSubscription(cached.hasActiveSubscription);
         setSubscriptionStatus(cached.subscriptionStatus);
@@ -191,7 +197,7 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
     };
 
     checkSubscription();
-  }, [organization?.id]);
+  }, [organization?.id, subscriptionRetryCount]);
 
   const isMobile = useIsMobile();
 
@@ -344,9 +350,23 @@ export const HomeAccessGuard = ({ children }: HomeAccessGuardProps) => {
       logger.debug('HomeAccessGuard: has_active_subscription is null and subscription status is not active:', subscriptionStatus, 'redirecting to create-plan');
       return <Navigate to="/create-plan" replace />;
     }
-    // If both are null/undefined, redirect to create-plan for safety
+    // If both are null/undefined: retry subscription check once before redirecting (avoids redirect while data still loading)
+    if (subscriptionRetryCount < 1 && organization?.id) {
+      clearHomeSubscriptionCache(organization.id);
+      setSubscriptionRetryCount(1);
+      setLoadingSubscription(true);
+      if (isMobile) return <RouteLoadingSkeleton />;
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center space-y-4">
+            <LoadingDots size="lg" />
+            <p className="text-sm text-gray-600">Loading page...</p>
+          </div>
+        </div>
+      );
+    }
     clearHomeSubscriptionCache(organization?.id);
-    logger.debug('HomeAccessGuard: has_active_subscription is null and no subscription status found, redirecting to create-plan');
+    logger.debug('HomeAccessGuard: has_active_subscription is null and no subscription status found after retry, redirecting to create-plan');
     return <Navigate to="/create-plan" replace />;
   }
 

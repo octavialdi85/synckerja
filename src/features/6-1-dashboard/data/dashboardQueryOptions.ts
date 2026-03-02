@@ -59,7 +59,7 @@ export function getContentPlansQueryOptions(organizationId: string | undefined) 
     },
     staleTime: 10000,
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Dihilangkan: tidak refetch saat pindah window/tab (script-generator & halaman social media lain)
     refetchOnMount: true,
     refetchInterval: false,
     retry: 1,

@@ -1,5 +1,9 @@
 -- Plan status change notifications: table, RLS, RPC, trigger on social_media_plans
 -- Notify all org members (employees with user_id) when status, production_status, or done changes.
+-- FCM (push banner + sound on Android): create Database Webhook in Supabase Dashboard:
+--   Table: public.plan_status_change_notifications, Event: Insert,
+--   URL: https://<project-ref>.supabase.co/functions/v1/app-notifications-send-push
+--   (see supabase/functions/app-notifications-send-push/README.md)
 
 CREATE TABLE IF NOT EXISTS public.plan_status_change_notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

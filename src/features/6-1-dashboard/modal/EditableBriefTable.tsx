@@ -33,13 +33,18 @@ function AutoResizeTextarea({
 
 interface EditableBriefTableProps {
   tableData: string[][];
-  onSave: (newTableData: string[][]) => void;
+  onSave?: (newTableData: string[][]) => void;
+  onChange?: (newTableData: string[][]) => void;
+  /** When true, table is always editable (no Edit button), onChange called on every cell change */
+  alwaysEditable?: boolean;
   className?: string;
 }
 
 export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   tableData,
   onSave,
+  onChange,
+  alwaysEditable = false,
   className = '',
 }) => {
   const { t } = useAppTranslation();
@@ -103,6 +108,23 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   };
 
   const updateCell = (rowIdx: number, cellIdx: number, value: string) => {
+    if (alwaysEditable && onChange) {
+      const tableColCount = Math.max(...tableData.map((r) => r.length), 1);
+      const padToTableCols = (arr: string[]) => {
+        const a = [...arr];
+        while (a.length < tableColCount) a.push('');
+        return a.slice(0, tableColCount);
+      };
+      const newData = tableData.map((r, i) => {
+        if (i !== rowIdx + 1) return [...r]; // +1 because rowIdx is body row index
+        const newRow = [...r];
+        while (newRow.length <= cellIdx) newRow.push('');
+        newRow[cellIdx] = value;
+        return padToTableCols(newRow);
+      });
+      onChange(newData);
+      return;
+    }
     setEditData((prev) => {
       const next = prev.map((r) => [...r]);
       const row = next[rowIdx];
@@ -118,12 +140,13 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   if (displayData.length === 0) return null;
 
   const headerRow = padRow(displayData[0]);
-  const bodyRows = displayData.slice(1).map(padRow);
+  const bodyRowsSource = alwaysEditable ? tableData.slice(1) : (isEditing ? editData : displayData.slice(1));
+  const bodyRows = bodyRowsSource.map(padRow);
 
   return (
     <div
       ref={scrollContainerRef}
-      className={`my-1 overflow-auto rounded-lg border-2 border-gray-300 min-h-[200px] max-h-[min(500px,70vh)] seamless-scroll nested-scroll-touch-chain ${className}`}
+      className={`my-1 overflow-auto rounded-lg border-2 border-gray-300 min-h-0 max-h-[min(500px,70vh)] seamless-scroll nested-scroll-touch-chain ${className}`}
       style={{ overflowAnchor: 'none' } as React.CSSProperties}
     >
       <table className="min-w-[720px] w-full text-sm">
@@ -140,7 +163,8 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                 {cell}
               </th>
             ))}
-            <th className="sticky top-0 z-10 w-[72px] min-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800">
+            {!alwaysEditable && (
+            <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
               {isEditing ? (
                 <div className="flex gap-1 justify-start">
                   <Button
@@ -174,10 +198,11 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                 </Button>
               )}
             </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
-          {(isEditing ? editData : bodyRows).map((row, rowIdx) => {
+          {bodyRows.map((row, rowIdx) => {
             const displayRow = padRow(row);
             return (
               <tr
@@ -192,7 +217,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                       cellIdx === 0 && 'w-[80px] min-w-[80px] max-w-[80px]'
                     )}
                   >
-                    {isEditing ? (
+                    {(isEditing || alwaysEditable) ? (
                       <AutoResizeTextarea
                         value={cell}
                         onChange={(e) => updateCell(rowIdx, cellIdx, e.target.value)}
@@ -204,7 +229,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                     )}
                   </td>
                 ))}
-                <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px]" />
+                {!alwaysEditable && <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px] max-w-[72px] whitespace-nowrap overflow-hidden" />}
               </tr>
             );
           })}

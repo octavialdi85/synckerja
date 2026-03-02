@@ -9,7 +9,6 @@ export function useScriptAIConfig() {
     queryKey: ['script-ai-config', organizationId],
     queryFn: async () => {
       if (!organizationId) {
-        console.log('[ScriptAI] No organizationId, skipping config fetch');
         return null;
       }
       const { data, error } = await supabase
@@ -18,18 +17,11 @@ export function useScriptAIConfig() {
         .eq('organization_id', organizationId)
         .maybeSingle();
 
-      console.log('[ScriptAI] Config fetch:', {
-        organizationId,
-        hasData: !!data,
-        data: data ? { is_active: data.is_active, api_key_configured: data.api_key_configured } : null,
-        error: error?.message ?? null,
-      });
       if (error) throw error;
       return data as { is_active: boolean; api_key_configured: boolean } | null;
     },
     enabled: !!organizationId,
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }

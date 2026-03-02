@@ -162,7 +162,13 @@ export async function generateScriptWithAI(
       body: JSON.stringify({ prompt: prompt.trim() }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => null);
+    if (data === null || typeof data !== 'object') {
+      return {
+        success: false,
+        error: 'Response server tidak valid. Coba lagi.',
+      };
+    }
 
     if (!res.ok) {
       const errMsg = typeof data?.error === 'string' ? data.error : null;

@@ -86,11 +86,18 @@ export function parseMarkdownTable(
 
 /**
  * Convert 2D array to markdown table string.
+ * Trims trailing fully-empty rows so save does not duplicate bottom rows.
  */
 export function stringifyMarkdownTable(rows: string[][]): string {
   if (rows.length === 0) return '';
 
   const colCount = Math.max(...rows.map((r) => r.length));
+  const isRowEmpty = (r: string[]) => r.length <= 0 || r.every((c) => (c ?? '').trim() === '');
+  let trimmedRows = rows;
+  while (trimmedRows.length > 1 && isRowEmpty(trimmedRows[trimmedRows.length - 1])) {
+    trimmedRows = trimmedRows.slice(0, -1);
+  }
+
   const pad = (arr: string[]) => {
     const a = [...arr];
     while (a.length < colCount) a.push('');
@@ -101,7 +108,7 @@ export function stringifyMarkdownTable(rows: string[][]): string {
     return String(s ?? '').replace(/\n/g, ' ');
   };
 
-  const padded = rows.map((r) => pad(r.map(escapeCell)));
+  const padded = trimmedRows.map((r) => pad(r.map(escapeCell)));
   const header = padded[0];
   const body = padded.slice(1);
 

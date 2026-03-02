@@ -51,7 +51,7 @@ export const ContentCalendarPlanPicker: React.FC<ContentCalendarPlanPickerProps>
   const { t } = useAppTranslation();
   const { organizationId } = useCurrentOrg();
 
-  const { data: plans = [], isLoading } = useQuery({
+  const { data: plans = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['social-media-plans-by-date', organizationId, selectedDate],
     queryFn: async () => {
       if (!organizationId || !selectedDate) return [];
@@ -65,6 +65,7 @@ export const ContentCalendarPlanPicker: React.FC<ContentCalendarPlanPickerProps>
       return (data ?? []) as unknown as PlanForPicker[];
     },
     enabled: !!organizationId && !!selectedDate && open,
+    refetchOnWindowFocus: false, // Dihilangkan: tidak refetch saat pindah window/tab
   });
 
   const handleRowClick = (plan: PlanForPicker) => {
@@ -103,6 +104,13 @@ export const ContentCalendarPlanPicker: React.FC<ContentCalendarPlanPickerProps>
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              </div>
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-center text-muted-foreground">
+                <p>{error instanceof Error ? error.message : 'Gagal memuat daftar plan'}</p>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  {t('common.retry', 'Coba lagi')}
+                </Button>
               </div>
             ) : plans.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">

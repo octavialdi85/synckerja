@@ -192,6 +192,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   const [subServices, setSubServices] = useState<any[]>([]);
   const [contentPillars, setContentPillars] = useState<any[]>([]);
   const [filteredSubServices, setFilteredSubServices] = useState<any[]>([]);
+  const [masterError, setMasterError] = useState<string | null>(null);
   
   // Fetch product knowledge for wants and needs
   const { data: productKnowledgeData = [] } = useProductKnowledge();
@@ -361,6 +362,7 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
   useEffect(() => {
     const loadMasterData = async () => {
       if (!organizationId) return;
+      setMasterError(null);
 
       try {
         const [contentTypesResult, servicesResult, subServicesResult, contentPillarsResult] = await Promise.all([
@@ -390,13 +392,26 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
             .order('name')
         ]);
 
+        const ctErr = contentTypesResult.error;
+        const svcErr = servicesResult.error;
+        const subErr = subServicesResult.error;
+        const cpErr = contentPillarsResult.error;
+        if (ctErr || svcErr || subErr || cpErr) {
+          const msg = ctErr?.message || svcErr?.message || subErr?.message || cpErr?.message || 'Gagal memuat data';
+          setMasterError(msg);
+          toast.error('Gagal memuat data form. Coba refresh halaman.');
+          return;
+        }
+
         // Filter out any items with empty/null names to prevent SelectItem error
         setContentTypes((contentTypesResult.data || []).filter((t: any) => t?.name && typeof t.name === 'string' && t.name.trim() !== ''));
         setServices((servicesResult.data || []).filter((s: any) => s?.name && typeof s.name === 'string' && s.name.trim() !== '' && s?.id));
         setSubServices((subServicesResult.data || []).filter((ss: any) => ss?.name && typeof ss.name === 'string' && ss.name.trim() !== '' && ss?.id));
         setContentPillars((contentPillarsResult.data || []).filter((cp: any) => cp?.name && typeof cp.name === 'string' && cp.name.trim() !== ''));
       } catch (error) {
-        console.error('Error loading master data:', error);
+        const msg = error instanceof Error ? error.message : 'Gagal memuat data';
+        setMasterError(msg);
+        toast.error('Gagal memuat data form. Coba refresh halaman.');
       }
     };
 
@@ -447,9 +462,12 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
     // If style is not universal and doesn't include selected pillar, clear it
     if (!isUniversal && !includesSelectedPillar) {
       setSelectedStyleName('');
-      handleInputChange('style_name', '');
-      handleInputChange('style_instruksi', '');
-      handleInputChange('structure', '');
+      setFormData((prev) => ({
+        ...prev,
+        style_name: '',
+        style_instruksi: '',
+        structure: '',
+      }));
     }
   }, [formData.content_pillar, formData.style_name, productKnowledgeStyles, contentPillars]);
 
@@ -623,6 +641,11 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {masterError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {masterError}
+        </div>
+      )}
       <Accordion type="single" defaultValue="basic-info" collapsible className="w-full space-y-2">
         {/* Section 1: Basic Information */}
         <AccordionItem value="basic-info" className="border rounded-lg px-3 transition-colors data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 data-[state=closed]:bg-white data-[state=closed]:border-gray-200">

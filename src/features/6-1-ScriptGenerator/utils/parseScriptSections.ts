@@ -75,6 +75,8 @@ function findJudulSection(script: string): { content: string; startIndex: number
  */
 function findCaptionSection(script: string): { content: string; startIndex: number; endIndex: number } | null {
   const captionPatterns = [
+    /(>\s*###\s*CAPTION\s*###\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
+    /(###\s*CAPTION\s*###\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
     /(##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:##\s*)?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
     /(##\s*Caption\s*:?\s*(?:##\s*)?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
     /(\*\*Caption\*\*\s*:?\s*\n[\s\S]*?)(?=\n##\s*Struktur|$)/is,
@@ -103,6 +105,8 @@ function findCaptionSection(script: string): { content: string; startIndex: numb
 export function extractCaptionFromSection(sectionContent: string): string {
   if (!sectionContent?.trim()) return '';
   const headerPatterns = [
+    /^>\s*###\s*CAPTION\s*###\s*\n?/i,
+    /^###\s*CAPTION\s*###\s*\n?/i,
     /^#+\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:#+\s*)?\s*\n?/i,
     /^\*\*CAPTION\*\*\s*:?\s*\n?/i,
     /^\*\*Caption\*\*\s*:?\s*\n?/i,
@@ -112,6 +116,8 @@ export function extractCaptionFromSection(sectionContent: string): string {
   for (const p of headerPatterns) {
     text = text.replace(p, '');
   }
+  // Strip blockquote prefix from each line if present
+  text = text.replace(/^\s*>\s*/gm, '').trim();
   return text.trim();
 }
 
@@ -256,6 +262,18 @@ export function parseScriptSections(script: string): ParseScriptSectionsResult {
 
   // Sort by startIndex
   sections.sort((a, b) => a.startIndex - b.startIndex);
+
+  // Resolve overlaps so manual-edit save does not duplicate caption/hashtag.
+  // Caption often matches to end of script (no "## Struktur") and then hashtag section
+  // also matches the tail, so caption and hashtag overlap → save produces duplicate.
+  for (let i = 0; i < sections.length - 1; i++) {
+    const curr = sections[i];
+    const next = sections[i + 1];
+    if (curr.endIndex > next.startIndex) {
+      curr.endIndex = next.startIndex;
+      curr.content = fullScript.slice(curr.startIndex, curr.endIndex).trim();
+    }
+  }
 
   return { sections, fullScript };
 }

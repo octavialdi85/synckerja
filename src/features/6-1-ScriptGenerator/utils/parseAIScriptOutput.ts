@@ -36,6 +36,9 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
 
   // Match caption block and extract content (robust: same logic as findCaptionSection in parseScriptSections)
   const captionBlockPatterns: Array<{ marker: RegExp; contentGroup?: number }> = [
+    // Three hashes (tiga tagar): ### CAPTION ### and blockquote > ### CAPTION ###
+    { marker: />\s*###\s*CAPTION\s*###\s*\n([\s\S]*?)(?=\n##|\n###|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
+    { marker: /###\s*CAPTION\s*###\s*\n([\s\S]*?)(?=\n##|\n###|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
     // Full block: ## CAPTION ... \n [content] until ## Struktur or end
     { marker: /##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:##\s*)?\n([\s\S]*?)(?=\n##\s*Struktur|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
     { marker: /##\s*Caption\s*:?\s*(?:##\s*)?\n([\s\S]*?)(?=\n##\s*Struktur|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
@@ -47,6 +50,8 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
     { marker: /##\s*CAPTION\s*##\s*\n([\s\S]*?)(?=\n##|\n\*\*⚠️\s*HASHTAG|$)/is, contentGroup: 1 },
     { marker: /^\s*CAPTION\s*:?\s*[\r\n]+([\s\S]*?)(?=\n\s*#\s+\w|\n##|$)/im, contentGroup: 1 },
     // Marker-only (legacy): extract by slicing after marker
+    { marker: />\s*###\s*CAPTION\s*###\s*\n/is },
+    { marker: /###\s*CAPTION\s*###\s*\n/is },
     { marker: /##\s*CAPTION\s*(?:[-–—]\s*WAJIB\s*DIBUAT)?\s*:?\s*(?:##\s*)?\n/is },
     { marker: /##\s*Caption\s*:?\s*(?:##\s*)?\n/is },
     { marker: /\*\*Caption\*\*\s*:?\s*\n/is },
@@ -85,7 +90,8 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
       // Remove trailing "Struktur:", "Hashtag" instruction lines if present
       caption = caption.replace(/\n##\s*Struktur\s*:.*$/is, '').trim();
       caption = caption.replace(/\n\*\*⚠️\s*HASHTAG.*$/is, '').trim();
-
+      // Strip blockquote prefix from each line if present (e.g. "> line" -> "line")
+      caption = caption.replace(/^\s*>\s*/gm, '').trim();
       return { brief, caption, concept };
     }
   }

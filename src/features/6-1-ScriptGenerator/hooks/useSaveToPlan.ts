@@ -94,17 +94,21 @@ export function useSaveToPlan() {
         let targetPlanId: string;
 
         if (planId === 'new') {
+          if (!newPlanData) {
+            toast.error(t('scriptGenerator.saveToPlanModal.errorNewPlanRequired', 'Complete all fields to create new plan'));
+            return false;
+          }
           // Create new plan
-          const picId = newPlanData!.pic_id;
+          const picId = newPlanData.pic_id;
           const newPlanDataInsert = {
             organization_id: organizationId,
             post_date: postDate,
-            content_type_id: newPlanData!.content_type_id,
+            content_type_id: newPlanData.content_type_id,
             pic_id: picId,
-            service_id: newPlanData!.service_id,
-            sub_service_id: newPlanData!.sub_service_id,
-            title: newPlanData!.title.trim(),
-            content_pillar_id: newPlanData!.content_pillar_id,
+            service_id: newPlanData.service_id,
+            sub_service_id: newPlanData.sub_service_id,
+            title: newPlanData.title.trim(),
+            content_pillar_id: newPlanData.content_pillar_id,
             brief: saveBrief ? brief.trim() : null,
             status: '',
             revision_count: 0,

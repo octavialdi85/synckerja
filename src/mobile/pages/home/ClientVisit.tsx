@@ -864,9 +864,6 @@ export default function ClientVisit() {
                   </div>
 
                   <div>
-                    <p className="text-xs text-muted-foreground px-1 pb-1">
-                      {t("clientVisit.showingTodayOnly", "Menampilkan kunjungan hari ini")}
-                    </p>
                     <VisitNotifications
                       headerAction={
                         <Drawer open={periodDrawerOpen} onOpenChange={setPeriodDrawerOpen}>

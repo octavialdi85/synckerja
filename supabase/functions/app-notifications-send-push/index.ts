@@ -117,6 +117,9 @@ async function sendFcmMessage(
 }
 
 Deno.serve(async (req: Request) => {
+  // Log every request immediately to verify webhook reaches this function
+  console.log("app-notifications-send-push: request received", req.method, req.url);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
@@ -272,6 +275,13 @@ Deno.serve(async (req: Request) => {
     }
     if (fcmToDelete.length > 0) {
       await supabase.from("fcm_tokens").delete().in("id", fcmToDelete);
+    }
+
+    if (table === "plan_status_change_notifications" && typeof record.id === "string" && record.id) {
+      await supabase
+        .from("plan_status_change_notifications")
+        .update({ push_sent_at: new Date().toISOString() })
+        .eq("id", record.id);
     }
 
     console.log("app-notifications-send-push: done", { table, sent, removed: fcmToDelete.length });

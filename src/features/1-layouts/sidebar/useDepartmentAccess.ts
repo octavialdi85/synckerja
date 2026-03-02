@@ -11,6 +11,7 @@ const FALLBACK_EMPLOYEE_RESTRICTED_PAGES: string[] = [];
 // IMPORTANT: These pages follow the PRINCIPLE that access control is determined ONLY by database configuration
 // If no restrictions are configured in the database, ANY AUTHENTICATED USER can access these pages
 const UNRESTRICTED_DURING_LOADING = [
+  '/',                               // Home – let HomeAccessGuard handle subscription/org checks
   '/access-permissions/page-access',  // System administration - access determined by DB config only
   '/access-permissions/overview',
   '/access-permissions/roles',

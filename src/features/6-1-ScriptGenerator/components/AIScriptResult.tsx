@@ -1,8 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/features/ui/button';
-import { Save, RefreshCw } from 'lucide-react';
+import { Textarea } from '@/features/ui/textarea';
+import { Save, RefreshCw, Pencil, X } from 'lucide-react';
+import { stringifyMarkdownTable } from '@/features/6-1-dashboard/utils/markdownTableUtils';
+import { EditableBriefTable } from '@/features/6-1-dashboard/modal/EditableBriefTable';
 import { toast } from 'sonner';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { SaveToPlanModal } from './SaveToPlanModal';
@@ -14,8 +17,62 @@ import { parseScriptSections, type ScriptSection, type SectionType } from '../ut
 import { mergeRevisedPart, mergeTableCellRevision, mergeTableRowRevision } from '../utils/mergeRevisedPart';
 import { reviseScriptPart, regenerateScriptWithDifferentProblem } from '../services/scriptGeneratorAIService';
 
+/** Remove trailing empty columns so header stays row 0 and we don't get an extra "action" column from markdown trailing pipe */
+function trimEmptyTableColumns(rows: string[][]): string[][] {
+  if (rows.length === 0) return rows;
+  const colCount = Math.max(...rows.map((r) => r.length));
+  let lastNonEmptyCol = -1;
+  for (let c = 0; c < colCount; c++) {
+    const hasContent = rows.some((r) => (r[c] ?? '').trim() !== '');
+    if (hasContent) lastNonEmptyCol = c;
+  }
+  if (lastNonEmptyCol < 0) return rows;
+  return rows.map((r) => r.slice(0, lastNonEmptyCol + 1));
+}
+
+/** True if text looks like only table rows (every non-empty line is |...|), used to skip duplicate bottom-of-table in save */
+function looksLikeTableRowsOnly(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return false;
+  return lines.every((line) => line.startsWith('|') && line.endsWith('|'));
+}
+
+/** True if part is table markdown (has header and alignment row) */
+function isTablePart(part: string): boolean {
+  const p = part.trim();
+  return p.startsWith('|') && p.includes('\n') && /\|[\s\-:]+\|/.test(p);
+}
+
+/** True if text starts with Format & Style section marker (## Format, **Format & Style**, etc.) */
+function startsWithFormatStyleMarker(text: string): boolean {
+  const t = text.trim();
+  return /^#+\s*Format/i.test(t) || /^\*\*Format\s*&\s*Style\*\*/i.test(t);
+}
+
 const PROSE_CLASS =
   'prose prose-sm max-w-none prose-headings:font-semibold prose-headings:text-gray-900 prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-p:text-gray-700 prose-p:leading-relaxed prose-p:my-3 prose-p:mb-4 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-gray-900 prose-hr:my-4 prose-hr:border-gray-200';
+
+/** Textarea that auto-expands height to fit content (no scroll inside field) */
+function AutoResizeSectionTextarea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
+) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(80, el.scrollHeight)}px`;
+  }, [props.value]);
+  return (
+    <Textarea
+      ref={ref}
+      {...props}
+      className={(props.className || '') + ' resize-none overflow-hidden'}
+    />
+  );
+}
 
 const MARKDOWN_COMPONENTS = {
   table: ({ children }: { children?: React.ReactNode }) => (
@@ -106,6 +163,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
   } | null>(null);
   const [isRevising, setIsRevising] = useState(false);
   const [selectionRevisi, setSelectionRevisi] = useState<string | null>(null);
+  const [isManualEdit, setIsManualEdit] = useState(false);
+  const [manualEditBlocks, setManualEditBlocks] = useState<Array<{ type: 'text' | 'table'; content: string | string[][]; label?: string }>>([]);
 
   const { sections, fullScript } = useMemo(() => parseScriptSections(script), [script]);
 
@@ -125,6 +184,71 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     }
     return segs;
   }, [sections, fullScript]);
+
+  const startManualEdit = () => {
+    const blocks: Array<{ type: 'text' | 'table'; content: string | string[][]; label?: string }> = [];
+    for (const seg of segments) {
+      const slice = fullScript.slice(seg.start, seg.end);
+      const label = seg.section ? SECTION_LABELS[seg.section.type] : undefined;
+      if (seg.section?.type === 'table' && seg.section.tableData && seg.section.tableData.length > 0) {
+        const tableData = trimEmptyTableColumns(seg.section.tableData);
+        blocks.push({ type: 'table', content: tableData, label: SECTION_LABELS.table });
+      } else {
+        blocks.push({ type: 'text', content: slice, label });
+      }
+    }
+    setManualEditBlocks(blocks);
+    setIsManualEdit(true);
+  };
+  const cancelManualEdit = () => {
+    setIsManualEdit(false);
+    setManualEditBlocks([]);
+  };
+  const saveManualEdit = () => {
+    if (!onScriptChange) return;
+    const parts: string[] = [];
+    for (const block of manualEditBlocks) {
+      if (block.type === 'table') {
+        const tableRows = block.content as string[][];
+        if (tableRows.length > 0) {
+          const trimmed = trimEmptyTableColumns(tableRows);
+          const part = stringifyMarkdownTable(trimmed);
+          if (part.trim() && part.trim() !== parts[parts.length - 1]?.trim()) {
+            parts.push(part);
+          }
+        }
+      } else {
+        const part = block.content as string;
+        const t = part.trim();
+        // Skip empty and skip duplicate of previous part (prevents redundant caption/hashtag after overlap)
+        if (!t) continue;
+        if (t === parts[parts.length - 1]?.trim()) continue;
+        // Skip text block that is only table rows when previous part is table (prevents duplicate bottom-of-table)
+        const prev = parts[parts.length - 1];
+        if (prev && isTablePart(prev) && looksLikeTableRowsOnly(t)) continue;
+        // Skip duplicate Format & Style section (prevents redundant Format & Style after save)
+        if (prev && startsWithFormatStyleMarker(prev) && startsWithFormatStyleMarker(t)) continue;
+        parts.push(part);
+      }
+    }
+    const newScript = parts.join('\n\n').trim() || script;
+    onScriptChange(newScript);
+    toast.success(t('scriptGenerator.manualEditSaved', 'Perubahan berhasil disimpan'));
+    setIsManualEdit(false);
+    setManualEditBlocks([]);
+  };
+  const updateManualEditBlock = (index: number, content: string | string[][]) => {
+    setManualEditBlocks((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const normalized = typeof content === 'string' ? content : trimEmptyTableColumns(content);
+      next[index] = { ...next[index], content: normalized };
+      return next;
+    });
+  };
+
+  const getBlockLabel = (block: { label?: string }, idx: number) =>
+    block.label || `${t('scriptGenerator.editManualTextLabel', 'Konten')} ${idx + 1}`;
 
   const handleRevisiSection = (sectionId: string, content: string, sectionType: SectionType) => {
     const sec = sections.find((s) => s.id === sectionId);
@@ -245,8 +369,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
       toast.success('Revisi berhasil');
       setRevisiModalOpen(false);
       setRevisiTarget(null);
-    } catch {
-      // Error handled above
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Revisi gagal. Coba lagi.');
     } finally {
       setIsRevising(false);
     }
@@ -279,14 +403,37 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-col gap-2">
+      <div className="sticky top-0 z-10 flex flex-col gap-2 bg-white pb-2 -mt-0 pt-0 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
         <h3 className="text-lg font-semibold">{t('scriptGenerator.aiResultTitle', 'Hasil Script dari AI (Gemini)')}</h3>
         <div className="flex gap-2 flex-nowrap overflow-x-auto seamless-scroll">
+          {onScriptChange && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={isManualEdit ? cancelManualEdit : startManualEdit}
+              disabled={!script?.trim()}
+              title={isManualEdit ? t('common.cancel', 'Batal') : t('scriptGenerator.editManual', 'Edit manual')}
+            >
+              {isManualEdit ? <X className="h-4 w-4 mr-2" /> : <Pencil className="h-4 w-4 mr-2" />}
+              {isManualEdit ? t('common.cancel', 'Batal') : t('scriptGenerator.editManual', 'Edit manual')}
+            </Button>
+          )}
+          {isManualEdit && onScriptChange && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={saveManualEdit}
+              title={t('common.save', 'Simpan')}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {t('common.save', 'Simpan')}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setReframeModalOpen(true)}
-            disabled={!script?.trim() || !onScriptChange || isRegenerating}
+            disabled={!script?.trim() || !onScriptChange || isRegenerating || isManualEdit}
             title={t('scriptGenerator.reframe.button', 'Regenerate dengan masalah berbeda')}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -333,8 +480,47 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
 
       <div
         className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden"
-        onMouseUp={handleMouseUp}
+        onMouseUp={isManualEdit ? undefined : handleMouseUp}
       >
+        {isManualEdit ? (
+          <div className="px-4 pt-4 pb-4 flex flex-col gap-4 min-h-0">
+            <p className="text-sm text-gray-600 flex-shrink-0">
+              {t('scriptGenerator.editManualHint', 'Edit script secara manual. Tabel dan teks dapat diedit langsung.')}
+            </p>
+            <div className="space-y-4 min-w-0">
+              {manualEditBlocks.map((block, idx) => (
+                <div key={idx} className="space-y-2">
+                  {block.type === 'table' ? (
+                    <>
+                      <h4 className="text-sm font-semibold text-gray-800">
+                        {getBlockLabel(block, idx)}
+                      </h4>
+                      <EditableBriefTable
+                        tableData={block.content as string[][]}
+                        alwaysEditable
+                        onChange={(newData) => updateManualEditBlock(idx, newData)}
+                        className="max-h-[min(450px,60vh)] min-h-0 flex-shrink-0"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <h4 className="text-sm font-semibold text-gray-800">
+                        {getBlockLabel(block, idx)}
+                      </h4>
+                      <AutoResizeSectionTextarea
+                        value={block.content as string}
+                        onChange={(e) => updateManualEditBlock(idx, e.target.value)}
+                        className="min-h-[80px] font-mono text-sm"
+                        placeholder={t('scriptGenerator.editManualPlaceholder', 'Teks...')}
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+        <>
         {selectionRevisi && onScriptChange && (
           <div className="sticky top-0 z-10 flex justify-center py-2 bg-primary/10 border-b">
             <Button size="sm" onClick={handleRevisiSelection}>
@@ -342,7 +528,7 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
             </Button>
           </div>
         )}
-        <div className={`p-4 ${PROSE_CLASS}`}>
+        <div className={`px-4 pt-4 pb-4 ${PROSE_CLASS} [&>*:last-child]:!mb-0`}>
           {segments.map((seg, idx) => {
             const slice = fullScript.slice(seg.start, seg.end);
             if (!slice.trim()) return null;
@@ -401,6 +587,8 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

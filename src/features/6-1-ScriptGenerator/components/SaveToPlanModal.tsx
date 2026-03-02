@@ -29,6 +29,7 @@ import { ContentCalendarPlanPicker, type PlanForPicker } from './ContentCalendar
 import { SaveToPlanPreviewDialog } from './SaveToPlanPreviewDialog';
 import { format } from 'date-fns';
 import { CalendarIcon, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface FormDataForPlan {
   content_type_id?: string;
@@ -90,10 +91,12 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
   const [contentPillars, setContentPillars] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [masterLoading, setMasterLoading] = useState(false);
+  const [masterError, setMasterError] = useState<string | null>(null);
 
   const loadMasterData = useCallback(async () => {
     if (!organizationId) return;
     setMasterLoading(true);
+    setMasterError(null);
     try {
       const [ct, svc, sub, cp, emp] = await Promise.all([
         supabase.from('content_types').select('*').or(`organization_id.eq.${organizationId},organization_id.is.null`).eq('is_active', true).order('name'),
@@ -113,11 +116,13 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
       setContentPillars(cp.data || []);
       setEmployees(emp.data || []);
     } catch (e) {
-      console.error('Error loading master data:', e);
+      const msg = e instanceof Error ? e.message : 'Gagal memuat data';
+      setMasterError(msg);
+      toast.error(t('scriptGenerator.saveToPlanModal.errorLoadMaster', 'Gagal memuat data. Tutup modal dan coba lagi.'));
     } finally {
       setMasterLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, t]);
 
   useEffect(() => {
     if (isOpen) {
@@ -280,6 +285,7 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
   const canSubmit =
     (saveBrief || saveCaption || saveConcept) &&
     (planMode === 'existing' ? !!selectedPlan : !!(
+      !masterError &&
       newPlanForm.title.trim() &&
       newPlanForm.pic_id &&
       newPlanForm.content_type_id &&
@@ -401,6 +407,11 @@ export const SaveToPlanModal: React.FC<SaveToPlanModalProps> = ({
 
                 {planMode === 'new' && (
                   <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                    {masterError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                        {masterError}
+                      </div>
+                    )}
                     {masterLoading ? (
                       <div className="flex justify-center py-4">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />

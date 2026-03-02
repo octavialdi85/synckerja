@@ -128,28 +128,25 @@ if (import.meta.env.DEV) {
   import('./utils/testRouteProtection').catch(() => {});
 }
 
-// Disable React Query focusManager globally to prevent any refetch on window focus
-// This is the most aggressive way to prevent reloads when switching windows
-// We completely disable the focus event listener to prevent any refetch on window focus
-focusManager.setEventListener((onFocus) => {
-  // Completely ignore focus events - do not call onFocus at all
-  // This prevents React Query from refetching queries when window regains focus
-  // Return a cleanup function that does nothing
-  return () => {
-    // Cleanup - do nothing
-  };
+// HILANGKAN refetch/reload saat pindah window/tab: nonaktifkan focusManager sepenuhnya
+// TanStack Query v5 memakai visibilitychange; dengan tidak memanggil handleFocus(), refetch tidak pernah terjadi
+focusManager.setEventListener((handleFocus) => {
+  // Jangan pasang listener apa pun dan jangan panggil handleFocus() — refetch on window focus dihilangkan
+  return () => {};
 });
 
-// Configure QueryClient with default options to prevent automatic refetch on window focus
-// This prevents unwanted reloads when switching between windows, especially when copying links
+// Opsi: kunci state "focused" agar tidak ada transisi yang memicu refetch
+focusManager.setFocused(true);
+
+// Konfigurasi QueryClient: refetch on window focus dihilangkan secara global
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // Disabled globally to prevent reload when switching windows
-      refetchOnMount: false, // Disabled to prevent flicker on refresh; opt-in per query where needed
-      staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
-      gcTime: 5 * 60 * 1000, // 5 minutes - keep cached data for 5 minutes
-      retry: 1, // Reduced retry attempts
+      refetchOnWindowFocus: false, // Dihilangkan: tidak refetch saat pindah window/tab
+      refetchOnMount: false,
+      staleTime: 30 * 1000,
+      gcTime: 5 * 60 * 1000,
+      retry: 1,
     },
     mutations: {
       retry: 1,

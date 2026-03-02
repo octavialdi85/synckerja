@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/features/1-login';
 import { Navigate, useLocation } from 'react-router-dom';
 import { XCircle } from 'lucide-react';
@@ -53,7 +53,33 @@ export const ProtectedRoute = ({
   // Unified loading state - combine all loading checks into one simple message
   const isLoading = loading || (requiresPermissions && configLoading) || isLoadingOrgData;
   
-  if (isLoading) {
+  // Debounce loading UI: tampilkan LoadingDots hanya jika loading berlangsung >= 250ms.
+  // Saat kembali ke tab, loading sering hanya sebentar sehingga loading dots tidak perlu tampil.
+  const [showLoadingUI, setShowLoadingUI] = useState(false);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingTimeoutRef.current = setTimeout(() => setShowLoadingUI(true), 250);
+      return () => {
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
+      };
+    } else {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      setShowLoadingUI(false);
+    }
+  }, [isLoading]);
+
+  // Tampilkan loading hanya bila benar-benar loading dan sudah lewat debounce (atau auth awal tanpa user)
+  const shouldShowLoading = showLoadingUI && isLoading;
+  
+  if (shouldShowLoading) {
     if (isMobile) {
       return <RouteLoadingSkeleton />;
     }
