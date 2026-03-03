@@ -858,6 +858,7 @@ const SocialMediaContent = () => {
           pending.updates['production_completion_date'] = null;
           pending.updates['production_approved'] = false;
           pending.updates['production_approved_date'] = null;
+          pending.updates['google_drive_link'] = null;
         }
 
         // Very short debounce (30ms) for immediate feel while still batching rapid changes
@@ -918,6 +919,12 @@ const SocialMediaContent = () => {
         });
       } else if (field === 'google_drive_link' && (!value || value.trim().length === 0)) {
         // When Google Drive Link is cleared
+        // Avoid double UPDATE: if a pending batch already has production_status = 'Request Revision'
+        // (which includes google_drive_link: null), let the batch send one update instead.
+        const pending = pendingBatchUpdatesRef.current.get(id);
+        if (pending?.updates?.production_status === 'Request Revision') {
+          return;
+        }
         const plan = contentPlans.find(p => p.id === id);
         
         if (plan?.pic_production_source === 'google_drive_link') {

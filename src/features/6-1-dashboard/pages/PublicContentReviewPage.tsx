@@ -570,6 +570,7 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         production_completion_date: null,
         production_approved: false,
         production_approved_date: null,
+        google_drive_link: null,
       };
       if (shouldIncrement) {
         updateData.production_revision_count = newProductionRevisionCount;

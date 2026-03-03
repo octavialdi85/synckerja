@@ -375,6 +375,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         production_completion_date: null, // POINT 2: Clear completion date when requesting revision
         production_approved: false, // Reset approval status
         production_approved_date: null, // Clear approved date
+        google_drive_link: null, // Clear link so production must re-upload
       };
 
       // Only update revision count if we're incrementing it
@@ -415,6 +416,10 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         devLog.debug('onRevision callback executed', { planId: socialMediaPlanId });
       }
 
+      if (onSave) {
+        onSave(null);
+      }
+
       // Optimistic update cache immediately for instant UI feedback
       if (queryClient && organizationId) {
         const queryKey = ['social-media-plans', organizationId];
@@ -434,7 +439,8 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                   production_completion_date: null,
                   production_approved: false,
                   production_approved_date: null,
-                  production_revision_count: newProductionRevisionCount
+                  production_revision_count: newProductionRevisionCount,
+                  google_drive_link: null,
                 };
               }
               return plan;

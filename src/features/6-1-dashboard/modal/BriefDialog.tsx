@@ -328,7 +328,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
           status: 'Request Revision',
           revision_count: newRevisionCount,
           approved: false,
-          completion_date: null // Clear completion date when requesting revision
+          completion_date: null, // Clear completion date when requesting revision
+          google_drive_link: null,
         })
         .eq('id', socialMediaPlanId);
 
