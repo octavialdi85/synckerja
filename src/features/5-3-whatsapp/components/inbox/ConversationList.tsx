@@ -121,13 +121,27 @@ function formatTime(iso: string | null) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-/** Strip HTML tags so preview shows plain text (e.g. email body). */
-function stripHtmlForPreview(html: string | null | undefined): string {
+/** Strip HTML tags and comments so preview shows plain text only (no raw HTML/code on cards). Exported for use in search popup and elsewhere. */
+export function stripHtmlForPreview(html: string | null | undefined): string {
   if (html == null || html === '') return '';
-  return String(html)
-    .replace(/<[^>]*>/g, ' ')
+  let s = String(html)
+    .replace(/<!--[\s\S]*?-->/g, ' ')   // HTML comments (closed)
+    .replace(/<!--[\s\S]*/g, ' ')      // unclosed comment to end (e.g. truncated "<!-- --")
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')  // closed style blocks
+    .replace(/<style[\s\S]*/gi, ' ')            // unclosed <style> to end (e.g. truncated "p { color:#000; ...")
+    .replace(/<[^>]*>/g, ' ')          // full tags
+    .replace(/<[^>]*$/g, ' ')          // unclosed tag at end (e.g. truncated "<meta ...")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ')
     .trim();
+  // If what's left looks like raw CSS (e.g. "p { color:#000; font-family: ..."), treat as empty so UI can show subject
+  if (s.length > 0 && /^\s*\w+\s*\{[\s\S]*/.test(s) && /\b(color|font-family|font-size|margin|padding|background)\s*:/i.test(s)) s = '';
+  return s;
 }
 
 /** Truncate at quoted-reply block so preview shows only the core message (no "Pada Rab, ..." / "On ... wrote:"). */
@@ -414,13 +428,19 @@ export function ConversationList({
                   )}
                 </span>
               )}
-              {conv.last_message_body != null && conv.last_message_body !== '' ? (
-                <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body)}>
-                  {isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body)}
-                </span>
-              ) : (
-                <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
-              )}
+              {(() => {
+                const preview = isEmail ? getEmailPreviewSnippet(conv.last_message_body) : stripHtmlForPreview(conv.last_message_body);
+                const subject = isEmail ? (conv as { thread_subject?: string | null }).thread_subject?.trim() ?? '' : '';
+                const displayText = preview !== '' ? preview : (subject !== '' ? subject : '');
+                const showSomething = (conv.last_message_body != null && conv.last_message_body !== '' && preview !== '') || (isEmail && subject !== '');
+                return showSomething ? (
+                  <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={displayText}>
+                    {displayText}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
+                );
+              })()}
               {isEmail ? (
                 <span className="text-xs text-gray-400 truncate max-w-[140px] shrink-0 min-w-0 text-right" title={conv.email_connection_display ?? undefined}>
                   {conv.email_connection_display ?? '—'}

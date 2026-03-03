@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Filter, RefreshCw, Bell } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Filter, RefreshCw, Bell, Loader2 } from 'lucide-react';
 import { SidebarTrigger } from '@/mobile/components/ui/sidebar';
 import {
   Drawer,
@@ -19,15 +19,37 @@ import { hasActiveFilters } from './filterUtils';
 import { useNotificationBadgeCount } from '@/mobile/hooks/useNotificationBadgeCount';
 import { NotificationsModal } from '@/mobile/components/NotificationsModal';
 
+const PULL_THRESHOLD = 52;
+const MAX_PULL = 72;
+const INDICATOR_HEIGHT = 56;
+/** Softer resistance: follow finger with slight damping for natural feel */
+const PULL_RESISTANCE = 0.55;
+
 export function DailyTaskLayout() {
   const { t } = useAppTranslation();
   const { toast } = useToast();
-  const { filters, resetFilters, refetchTasks, isLoading } = useDailyTask();
+  const { filters, resetFilters, refetchTasks, isLoading, tasks } = useDailyTask();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef(0);
+  const pullDistanceRef = useRef(0);
+  const didRecoveryRefetch = useRef(false);
   const { totalCount: notificationBadgeCount } = useNotificationBadgeCount();
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
   const activeFilters = hasActiveFilters(filters);
   const listScrollRef = useRef<HTMLDivElement>(null);
+
+  // When navigating from another page (e.g. Initiative), ensure we load data if still empty after initial load
+  useEffect(() => {
+    if (didRecoveryRefetch.current || isLoading || tasks.length > 0) return;
+    didRecoveryRefetch.current = true;
+    refetchTasks().catch(() => {});
+  }, [isLoading, tasks.length, refetchTasks]);
 
   // Scroll list to top when date/plan filter changes so the updated list is visible
   useEffect(() => {
@@ -54,6 +76,63 @@ export function DailyTaskLayout() {
       });
     }
   };
+
+  const handlePullRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setPullDistance(0);
+    try {
+      await refetchTasks();
+    } catch {
+      toast({
+        title: t('dailyTask.filters.refresh', 'Refresh'),
+        description: 'Failed to refresh tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetchTasks, isRefreshing, toast, t]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    const el = listScrollRef.current;
+    if (el?.scrollTop <= 2) setIsPulling(true);
+  }, []);
+
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const el = listScrollRef.current;
+      if (!el || isRefreshing) return;
+      if (el.scrollTop > 2) {
+        setIsPulling(false);
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+        return;
+      }
+      const y = e.touches[0].clientY;
+      const delta = y - touchStartY.current;
+      if (delta > 0) {
+        const d = Math.min(delta * PULL_RESISTANCE, MAX_PULL);
+        setPullDistance(d);
+        pullDistanceRef.current = d;
+      } else {
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+      }
+    },
+    [isRefreshing]
+  );
+
+  const onTouchEnd = useCallback(() => {
+    setIsPulling(false);
+    const d = pullDistanceRef.current;
+    setPullDistance(0);
+    pullDistanceRef.current = 0;
+    if (d >= PULL_THRESHOLD) {
+      handlePullRefresh();
+    }
+  }, [handlePullRefresh]);
 
   return (
     <>
@@ -132,9 +211,41 @@ export function DailyTaskLayout() {
         <div
           ref={listScrollRef}
           className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
+          <div
+            className="shrink-0 overflow-hidden flex items-center justify-center text-muted-foreground text-sm"
+            style={{
+              height:
+                pullDistance > 0 ? Math.min(pullDistance, MAX_PULL) : isRefreshing ? INDICATOR_HEIGHT : 0,
+              minHeight: 0,
+              transition: isPulling
+                ? 'none'
+                : 'height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94), min-height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            }}
+          >
+            {isRefreshing ? (
+              <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" aria-hidden />
+            ) : pullDistance >= PULL_THRESHOLD ? (
+              <span className="text-xs font-medium text-primary whitespace-nowrap">
+                {t('common.pullToRefresh.release', 'Lepas untuk refresh')}
+              </span>
+            ) : (
+              <RefreshCw
+                className="h-5 w-5 opacity-80 shrink-0"
+                style={{
+                  transform: `rotate(${Math.min((pullDistance / PULL_THRESHOLD) * 180, 180)}deg)`,
+                  transition: isPulling ? 'none' : 'transform 0.2s ease-out',
+                }}
+                aria-hidden
+              />
+            )}
+          </div>
           <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-daily-task">
-            {isLoading ? <DailyTaskPageSkeleton /> : <TaskList />}
+            {/* Skeleton only on initial load; during pull-to-refresh keep showing content to avoid flicker (same as Initiative) */}
+            {isLoading && !isRefreshing ? <DailyTaskPageSkeleton /> : <TaskList />}
           </div>
         </div>
       </div>

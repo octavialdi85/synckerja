@@ -19,7 +19,7 @@ import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelect
 
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
-  { title: "Live Chat", url: "/operations/consultant/all/livechat", icon: MessageCircle },
+  { title: "CRM", url: "/operations/consultant/all/livechat", icon: MessageCircle },
   { title: "Daily Task", url: "/tools/daily-task", icon: Clock },
   { title: "Subscription", url: "/subscription/overview", icon: CreditCard },
 ];
@@ -34,10 +34,10 @@ export function AppSidebar() {
   const organizationDisplayName = activeOrganization?.company_name ?? "Organisasi";
 
   return (
-    <Sidebar className="border-r border-primary/20 bg-background">
-      <SidebarContent className="bg-background">
+    <Sidebar className="border-r border-primary/20 bg-background overflow-x-hidden">
+      <SidebarContent className="bg-background overflow-x-hidden min-w-0">
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 text-foreground px-4 py-2">
+          <SidebarGroupLabel className="flex items-center gap-2 text-foreground px-4 py-2 min-w-0">
             {isMobile ? (
               <>
                 <span
@@ -78,15 +78,31 @@ export function AppSidebar() {
                     end
                     className={({ isActive }) =>
                       [
-                        "flex items-center gap-3 px-3 py-2 rounded-lg w-full transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                          : "text-foreground hover:bg-primary/10",
+                        "flex items-center gap-3 px-3 py-2 rounded-lg w-full min-w-0 transition-colors",
+                        isActive ? "text-primary font-medium" : "text-foreground hover:bg-primary/10",
                       ].join(" ")
                     }
                   >
-                    <item.icon className="h-4 w-4 flex-shrink-0" />
-                    <span className="font-medium">{item.title}</span>
+                    {({ isActive }) => (
+                      <>
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                        <span className="font-medium truncate min-w-0 flex-1">{item.title}</span>
+                        <span
+                          className={`flex-shrink-0 flex items-center justify-center rounded-full p-1 transition-colors ${
+                            isActive ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted/40 ring-1 ring-border/50"
+                          }`}
+                          aria-hidden
+                        >
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full border-2 transition-colors ${
+                              isActive
+                                ? "bg-primary border-primary shadow-sm"
+                                : "bg-transparent border-muted-foreground/30"
+                            }`}
+                          />
+                        </span>
+                      </>
+                    )}
                   </NavLink>
                 </SidebarMenuItem>
               ))}

@@ -1124,14 +1124,15 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
 
       const rawLeads = leadsData ?? [];
 
-      // Fetch all lead statuses for this organization (for both leads and WhatsApp conversations)
+      // Fetch all lead statuses for this organization + global (org_id null) so Resolve/Unread etc. resolve correctly
       let statusMap = new Map<string, { id: string; name: string; color: string }>();
       const { data: statusesData, error: statusesError } = await supabase
         .from('lead_statuses')
         .select('id, name, color, is_active')
-        .eq('organization_id', organizationId);
+        .or(`organization_id.eq.${organizationId},organization_id.is.null`);
 
       const normId = (id: string | null | undefined) => (id == null ? '' : String(id));
+      const normTicket = (t: string | null | undefined) => (t == null ? '' : String(t).trim().toUpperCase());
       if (!statusesError && statusesData) {
         statusesData.forEach((status: any) => {
           const id = normId(status.id);
@@ -1191,6 +1192,47 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         assignee: (lead.assignee && String(lead.assignee).trim()) ? lead.assignee : (lead.assignee_id ? assigneeNameMap.get(normId(lead.assignee_id)) ?? null : null),
       }));
 
+      // Ensure statusMap has all statuses used by WhatsApp/Instagram so overwrite below can resolve Resolve/Closed etc.
+      if (whatsappConvs && whatsappConvs.length > 0) {
+        const waStatusIds = [...new Set(whatsappConvs.map((c: any) => c.lead_status_id).filter(Boolean))].filter((id: string) => !statusMap.has(normId(id)));
+        if (waStatusIds.length > 0) {
+          const { data: waStatuses, error: waErr } = await supabase
+            .from('lead_statuses')
+            .select('id, name, color, is_active')
+            .in('id', waStatusIds);
+          if (!waErr && waStatuses) {
+            waStatuses.forEach((status: any) => {
+              const id = normId(status.id);
+              statusMap.set(id, { id: status.id, name: status.name, color: status.color });
+            });
+          }
+        }
+      }
+
+      // Sync status and assignee from WhatsApp/Instagram conversation when lead has matching ticket_id (table utama = quick action)
+      if (whatsappConvs && whatsappConvs.length > 0) {
+        const convByTicketId = new Map<string, { lead_status_id: string | null; assignee_id: string | null }>();
+        whatsappConvs.forEach((c: any) => {
+          const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
+          const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
+          convByTicketId.set(normTicket(waTicketId), { lead_status_id: c.lead_status_id ?? null, assignee_id: c.assignee_id ?? null });
+        });
+        leadsWithStatus = leadsWithStatus.map((lead: any) => {
+          const key = normTicket(lead.ticket_id);
+          if (!key) return lead;
+          const conv = convByTicketId.get(key);
+          if (!conv) return lead;
+          const status = conv.lead_status_id ? statusMap.get(normId(conv.lead_status_id)) ?? null : null;
+          return {
+            ...lead,
+            status_id: conv.lead_status_id ?? lead.status_id,
+            lead_status: status || lead.lead_status,
+            assignee_id: conv.assignee_id ?? lead.assignee_id,
+            assignee: conv.assignee_id != null ? (assigneeNameMap.get(normId(conv.assignee_id)) ?? lead.assignee) : lead.assignee,
+          };
+        });
+      }
+
       const defaultStatusId = statusesData?.[0]?.id ?? '';
 
       // 3) Fetch email conversations early so we can build ticket_id list for lead lookup
@@ -1220,28 +1262,14 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
         });
       }
 
-      // Ticket IDs that already have a row in table "leads" — jangan tampilkan duplikat dari virtual conv
-      const ticketIdsInLeadsTable = new Set((rawLeads as any[]).map((l: any) => l.ticket_id).filter(Boolean));
+      // Ticket IDs that already have a row in table "leads" — jangan tampilkan duplikat dari virtual conv (normalize case)
+      const ticketIdsInLeadsTable = new Set((rawLeads as any[]).map((l: any) => normTicket(l.ticket_id)).filter(Boolean));
 
       if (!whatsappError && whatsappConvs && whatsappConvs.length > 0) {
-        // Ensure statusMap has all statuses used by WhatsApp (for Report Summary "Converted" count)
-        const waStatusIds = [...new Set(whatsappConvs.map((c: any) => c.lead_status_id).filter(Boolean))].filter((id: string) => !statusMap.has(normId(id)));
-        if (waStatusIds.length > 0) {
-          const { data: waStatuses, error: waErr } = await supabase
-            .from('lead_statuses')
-            .select('id, name, color, is_active')
-            .in('id', waStatusIds);
-          if (!waErr && waStatuses) {
-            waStatuses.forEach((status: any) => {
-              const id = normId(status.id);
-              statusMap.set(id, { id: status.id, name: status.name, color: status.color });
-            });
-          }
-        }
         const waConvsWithoutLead = whatsappConvs.filter((c: any) => {
           const isInstagram = (c.channel ?? '').toLowerCase() === 'instagram';
           const waTicketId = c.ticket_id ?? ((isInstagram ? 'IG-' : 'WA-') + String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase());
-          return !ticketIdsInLeadsTable.has(waTicketId);
+          return !ticketIdsInLeadsTable.has(normTicket(waTicketId));
         });
         const whatsappAsLeads = waConvsWithoutLead.map((c: any) => {
           const statusId = c.lead_status_id ?? '';
@@ -1509,11 +1537,25 @@ export const useLeads = (options?: { scope?: LeadsScope }) => {
             updated_at: new Date().toISOString(),
           };
           if (safeStatusId != null) leadUpdatePayload.status_id = safeStatusId;
-          await supabase
+          // Find lead row by ticket_id (case-insensitive) so update always hits the correct row
+          const { data: leadRowByTicket } = await supabase
             .from('leads')
-            .update(leadUpdatePayload)
+            .select('id')
             .eq('organization_id', orgId)
-            .eq('ticket_id', ticketId);
+            .ilike('ticket_id', ticketId)
+            .maybeSingle();
+          if (leadRowByTicket?.id) {
+            await supabase
+              .from('leads')
+              .update(leadUpdatePayload)
+              .eq('id', leadRowByTicket.id);
+          } else {
+            await supabase
+              .from('leads')
+              .update(leadUpdatePayload)
+              .eq('organization_id', orgId)
+              .eq('ticket_id', ticketId);
+          }
         }
         if (newStatusName?.trim().toLowerCase() === 'converted' && orgId) {
           const { data: leadRow } = await supabase

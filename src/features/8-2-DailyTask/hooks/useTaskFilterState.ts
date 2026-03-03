@@ -11,7 +11,7 @@ const defaultFilters: TaskFilters = {
   dateRange: undefined,
   customStartDate: undefined,
   customEndDate: undefined,
-  planDateRange: 'this_month_plan', // Default "This Month Plan" for date/plan filter
+  planDateRange: undefined, // Default "All Dates & Plans" so task list is not empty; user can switch to "This Month Plan" etc.
   customPlanMonth: undefined,
   pic: '',
   myTask: 'all', // Default to "All" so users see all org tasks; switch to "My Task" to filter

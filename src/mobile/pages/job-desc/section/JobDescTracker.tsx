@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 import { id as idLocale, enUS } from "date-fns/locale";
@@ -47,7 +47,11 @@ const sortSummaries = (summaries: JobDescEmployeeSummary[]) => {
   });
 };
 
-export const JobDescTracker = () => {
+interface JobDescTrackerProps {
+  refetchRef?: React.MutableRefObject<(() => void) | null>;
+}
+
+export const JobDescTracker = ({ refetchRef }: JobDescTrackerProps) => {
   const { t, language } = useAppTranslation();
   const dateLocale: Locale = language === "id" ? idLocale : enUS;
   const [timeframe, setTimeframe] = useState<JobDescTimeframe>("weekly");
@@ -66,6 +70,13 @@ export const JobDescTracker = () => {
     customRange,
     includeOverdue,
   });
+
+  useEffect(() => {
+    if (refetchRef) refetchRef.current = refetch;
+    return () => {
+      if (refetchRef) refetchRef.current = null;
+    };
+  }, [refetch, refetchRef]);
 
   const summaries = data?.summaries ?? [];
   const filteredSummaries = useMemo(() => {

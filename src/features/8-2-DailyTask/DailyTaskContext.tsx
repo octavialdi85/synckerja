@@ -504,8 +504,50 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       }
 
-      // Combine task-level, step-level, and sub-step-level assignments
-      const allAssignedTaskIds = [...new Set([...assignedTaskIds, ...stepAssignedTaskIds, ...subStepAssignedTaskIds])];
+      // Include tasks where current user is assigner (so assigner still sees task after rejecting, not only when "Pending approval")
+      let assignerTaskIds: string[] = [];
+      if (currentEmployee?.id) {
+        try {
+          const [stepAssignerRes, subStepAssignerRes] = await Promise.all([
+            supabase.from('task_steps_assigned').select('task_step_id').eq('assigned_by', currentEmployee.id).limit(1000),
+            supabase.from('task_steps_to_steps_assigned').select('task_steps_to_steps_id').eq('assigned_by', currentEmployee.id).limit(1000),
+          ]);
+          const stepIds = (stepAssignerRes.data || []).map((r: { task_step_id: string }) => r.task_step_id).filter(Boolean);
+          const subStepIds = (subStepAssignerRes.data || []).map((r: { task_steps_to_steps_id: string }) => r.task_steps_to_steps_id).filter(Boolean);
+          const stepTaskIds =
+            stepIds.length > 0
+              ? (await supabase.from('task_steps').select('task_id').in('id', stepIds)).data?.map((r: { task_id: string }) => r.task_id).filter(Boolean) ?? []
+              : [];
+          let subStepTaskIds: string[] = [];
+          if (subStepIds.length > 0) {
+            const subSteps = (await supabase.from('task_steps_to_steps').select('parent_step_id').in('id', subStepIds)).data ?? [];
+            const parentStepIds = subSteps.map((r: { parent_step_id: string }) => r.parent_step_id).filter(Boolean);
+            if (parentStepIds.length > 0) {
+              subStepTaskIds = (await supabase.from('task_steps').select('task_id').in('id', parentStepIds)).data?.map((r: { task_id: string }) => r.task_id).filter(Boolean) ?? [];
+            }
+          }
+          assignerTaskIds = [...new Set([...stepTaskIds, ...subStepTaskIds])];
+        } catch (err) {
+          if (isDev) console.warn('Assigner task IDs fetch failed', err);
+        }
+      }
+
+      // Include tasks created by current user (so unassigned tasks they just created appear in the list)
+      let creatorTaskIds: string[] = [];
+      try {
+        const { data: createdTasks } = await supabase
+          .from('daily_tasks')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('created_by', user.id)
+          .limit(500);
+        creatorTaskIds = (createdTasks || []).map((r: { id: string }) => r.id).filter(Boolean);
+      } catch (err) {
+        if (isDev) console.warn('Creator task IDs fetch failed', err);
+      }
+
+      // Combine task-level, step-level, sub-step-level (assignee), assigner, and creator task IDs
+      const allAssignedTaskIds = [...new Set([...assignedTaskIds, ...stepAssignedTaskIds, ...subStepAssignedTaskIds, ...assignerTaskIds, ...creatorTaskIds])];
       // Only log if data changed
       if (isDev) {
         const prevIds = prevTaskIdsRef.current.combined;
@@ -520,12 +562,16 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           prevTaskIdsRef.current.combined = allAssignedTaskIds;
         }
       }
-      
-      // ULTRA-SIMPLIFIED QUERY: No nested joins to prevent timeout (error 57014)
-      // Strategy: Fetch basic data only, load related data separately if needed
-      // FILTER: Show tasks in organization (filtering by PIC will be handled by client-side filter)
-      // LIMIT: Added limit to prevent statement timeout
-      const { data, error } = await supabase
+
+      // OPTIMIZATION: Fetch only tasks relevant to user when they have assignments (faster load, especially on mobile).
+      // When user has no assignments we still fetch org tasks so owners/admins see the full list.
+      const MAX_ASSIGNED_TASK_IDS = 500; // Cap to avoid URL/query size limits
+      const taskIdsToFetch =
+        allAssignedTaskIds.length > 0
+          ? allAssignedTaskIds.slice(0, MAX_ASSIGNED_TASK_IDS)
+          : null;
+
+      const dailyTasksQuery = supabase
         .from('daily_tasks')
         .select(`
           id,
@@ -547,8 +593,11 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
           updated_at
         `)
         .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false })
-        .limit(1000); // Limit to prevent statement timeout
+        .order('created_at', { ascending: false });
+
+      const { data, error } = taskIdsToFetch
+        ? await dailyTasksQuery.in('id', taskIdsToFetch)
+        : await dailyTasksQuery.limit(1000);
 
       if (error) {
         console.error('❌ Error fetching tasks:', error);
@@ -1577,16 +1626,36 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       if (afterCompleted && taskId && organizationId) {
         const { data: { user } } = await supabase.auth.getUser();
         const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
-        const { data: stepAssignment } = await supabase.from('task_steps_assigned').select('employee_id, assigned_by').eq('task_step_id', stepId).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
-        if (currentEmp?.id && stepAssignment && stepAssignment.employee_id === currentEmp.id) {
+        const { data: stepAssignment } = await supabase
+          .from('task_steps_assigned')
+          .select('employee_id, assigned_by')
+          .eq('task_step_id', stepId)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Fallback: if step is not explicitly assigned, use task-level assignment.
+        // This matches user expectation: when Octa assigns the task to Milda, completing any step should notify Octa.
+        const effectiveAssignment =
+          stepAssignment?.employee_id && stepAssignment?.assigned_by
+            ? stepAssignment
+            : (await supabase
+                .from('daily_tasks_assigned')
+                .select('employee_id, assigned_by')
+                .eq('daily_task_id', taskId)
+                .order('assigned_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()).data;
+
+        if (currentEmp?.id && effectiveAssignment && effectiveAssignment.employee_id === currentEmp.id && effectiveAssignment.assigned_by) {
           const completedAt = (updateData as any).completed_at || new Date().toISOString();
           await createCompletionApprovalIfAssignee({
             organizationId,
             entityType: 'step',
             dailyTaskId: taskId,
             taskStepId: stepId,
-            assigneeEmployeeId: stepAssignment.employee_id,
-            assignerEmployeeId: stepAssignment.assigned_by,
+            assigneeEmployeeId: effectiveAssignment.employee_id,
+            assignerEmployeeId: effectiveAssignment.assigned_by,
             completedAt,
           });
         }
@@ -2589,25 +2658,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   useEffect(() => {
     if (!organizationId) return;
 
-    // Skip duplicate run from React Strict Mode (double-mount in dev)
-    const now = Date.now();
-    if (
-      initialLoadState &&
-      initialLoadState.orgId === organizationId &&
-      now - initialLoadState.at < INITIAL_LOAD_DEDUPE_MS
-    ) {
-      if (import.meta.env.DEV) {
-        logger.debug('⏭️ Skipping duplicate daily-task load for org:', organizationId);
-      }
-      return;
-    }
-    initialLoadState = { orgId: organizationId, at: now };
     let cancelled = false;
 
     const loadData = async () => {
-      // Show loading until fetchTasks (or cache) completes; do not clear here.
-
-      // Non-blocking cache check: don't wait, run in background
+      // Non-blocking cache check in background
       (async () => {
         try {
           const getUserPromise = supabase.auth.getUser();
@@ -2628,11 +2682,28 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
         }
       })();
 
-      // Start fetching immediately - don't wait for cache check (recent step updates loaded lazily when Summary tab is opened)
       fetchTasks().catch((err) => {
         logger.warn('Initial fetchTasks failed', err);
       });
     };
+
+    // Skip duplicate run from React Strict Mode (double-mount in dev).
+    // When we skip, still run loadData() so the current mount gets data (avoids empty screen after nav from Initiative etc).
+    const now = Date.now();
+    if (
+      initialLoadState &&
+      initialLoadState.orgId === organizationId &&
+      now - initialLoadState.at < INITIAL_LOAD_DEDUPE_MS
+    ) {
+      if (import.meta.env.DEV) {
+        logger.debug('⏭️ Skipping duplicate daily-task load for org:', organizationId);
+      }
+      loadData();
+      return () => {
+        cancelled = true;
+      };
+    }
+    initialLoadState = { orgId: organizationId, at: now };
 
     loadData();
     return () => {

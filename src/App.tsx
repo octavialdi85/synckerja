@@ -108,6 +108,7 @@ import { DefaultPricesPage } from "./features/8_2_1_default_prices/pages";
 import { PromoSimulationPage } from "./features/8_2_2_promo-simulation/pages";
 import { SalesOperationsPage } from "./features/5-2-activities/SalesOperationsPage";
 import { ConsultantDashboardPage } from "./features/5-3-dashboard/ConsultantDashboardPage";
+import { LeadsManagementPage } from "./mobile/pages/leads-management";
 import { CRMDashboardPage } from "./features/5-3-dashboard/CRMDashboardPage";
 import { WhatsAppConnectPage, WhatsAppInboxPage, InstagramConnectPage, EmailConnectPage, MetaOAuthCallbackPage } from "./features/5-3-whatsapp";
 import { IncomeDashboard } from "./features/4-1-dashboard";
@@ -248,6 +249,11 @@ const SubscriptionManagementRouteElement = () => {
 const LivechatRouteElement = () => {
   const isMobile = useMobileDetection();
   return isMobile ? <MobileLiveChatPage /> : <WhatsAppInboxPage />;
+};
+
+const LeadsManagementRouteElement = () => {
+  const isMobile = useMobileDetection();
+  return isMobile ? <LeadsManagementPage /> : <ConsultantDashboardPage />;
 };
 
 const App = () => (
@@ -605,7 +611,7 @@ const App = () => (
               } />
               <Route path="/operations/consultant/leads-management" element={
                 <ProtectedRoute>
-                  <ConsultantDashboardPage />
+                  <LeadsManagementRouteElement />
                 </ProtectedRoute>
               } />
               <Route path="/operations/consultant/whatsapp/connect" element={

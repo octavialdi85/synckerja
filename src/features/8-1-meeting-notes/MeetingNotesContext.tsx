@@ -101,6 +101,8 @@ interface MeetingNotesContextType {
   updateSolution: (solutionId: string, solutionDescription: string) => Promise<void>;
   updateSolutionNotes: (solutionId: string, notes: string) => Promise<void>;
   deleteSolution: (solutionId: string) => Promise<void>;
+  /** Refresh meeting points and recent updates (e.g. for pull-to-refresh). Does not set isLoading. */
+  refreshMeetingPoints: () => Promise<void>;
 }
 
 const MeetingNotesContext = createContext<MeetingNotesContextType | undefined>(undefined);
@@ -855,6 +857,10 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     };
   }, [organizationId]);
 
+  const refreshMeetingPoints = useCallback(async () => {
+    await Promise.all([fetchMeetingPoints(), fetchRecentUpdates()]);
+  }, []);
+
   const value: MeetingNotesContextType = {
     meetingPoints,
     summaryData,
@@ -881,7 +887,8 @@ export const MeetingNotesProvider = ({ children }: MeetingNotesProviderProps) =>
     addSolution,
     updateSolution,
     updateSolutionNotes,
-    deleteSolution
+    deleteSolution,
+    refreshMeetingPoints,
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/config/logger';
 import { useToast } from '@/mobile/components/ui/use-toast';
@@ -19,17 +19,19 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
   const [isConnected, setIsConnected] = useState(false);
   const { toast } = useToast();
 
-  // Memoize configurations by primitive deps (table + filter) to avoid deep comparison
+  // Memoize configurations by primitive deps (table + filter) so effect only re-runs when these change.
+  // Store latest configs in a ref so channel callbacks always see current handlers without re-subscribing.
   const configDeps = configs.map(c => `${c.table}:${c.filter?.column ?? ''}:${c.filter?.eq ?? ''}:${(c.filter?.in ?? []).join(',')}`).join('|');
-  const stableConfigs = useMemo(() => {
+  const configsRef = useRef<RealtimeConfig[]>(configs);
+  configsRef.current = configs;
+
+  const stableConfigsForEffect = useMemo(() => {
     return configs.map(config => ({
-      ...config,
-      onInsert: config.onInsert,
-      onUpdate: config.onUpdate,
-      onDelete: config.onDelete,
+      table: config.table,
+      filter: config.filter,
+      // Callbacks are read from configsRef.current in the effect
     }));
-  // configDeps is primitive; configs included so callbacks stay current when parent memo updates
-  }, [configDeps, configs]);
+  }, [configDeps]);
 
   // Stable error handler
   const handleError = useCallback((table: string, error: any) => {
@@ -47,34 +49,30 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
       `Real-time connection failed for ${table}. ` +
       'Ensure the table is in the Supabase Realtime publication if you need live updates.'
     );
-    // No toast: realtime is best-effort; avoid alarming the user for optional live updates
   }, []);
 
   useEffect(() => {
-    if (!stableConfigs.length) return;
+    const currentConfigs = configsRef.current;
+    if (!currentConfigs.length) return;
 
-    logger.realtime('Setting up realtime channels for tables:', stableConfigs.map(c => c.table));
+    logger.realtime('Setting up realtime channels for tables:', stableConfigsForEffect.map(c => c.table));
 
-    // Create channels for each table configuration
-    const channels = stableConfigs.map((config, index) => {
+    const channels = stableConfigsForEffect.map((config, index) => {
       const channelName = `realtime-${config.table}-${index}-${Date.now()}`;
       logger.realtime(`Setting up realtime for table: ${config.table}`);
       
       let channelBuilder = supabase.channel(channelName);
 
-      // Configure postgres changes listener
-      let changeConfig: any = {
-        event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+      const changeConfig: any = {
+        event: '*',
         schema: 'public',
         table: config.table
       };
 
-      // Add filter if specified - with null validation
       if (config.filter) {
         if (config.filter.eq !== undefined && config.filter.eq !== null && config.filter.eq !== 'null' && config.filter.eq !== '') {
           changeConfig.filter = `${config.filter.column}=eq.${config.filter.eq}`;
         } else if (config.filter.in && config.filter.in.length > 0) {
-          // Filter out null/invalid values from array
           const validValues = config.filter.in.filter(val => val !== null && val !== 'null' && val !== '' && val !== undefined);
           if (validValues.length > 0) {
             changeConfig.filter = `${config.filter.column}=in.(${validValues.join(',')})`;
@@ -82,24 +80,27 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
         }
       }
 
+      const fullConfig = currentConfigs[index];
+      if (!fullConfig) return channelBuilder.subscribe(() => {});
+
       channelBuilder = channelBuilder.on('postgres_changes', changeConfig, (payload) => {
-        logger.realtime(`Realtime event for ${config.table}:`, payload);
-        logger.realtime('Realtime filter config:', changeConfig);
-        
+        const latest = configsRef.current[index];
+        if (!latest) return;
+        logger.realtime(`Realtime event for ${latest.table}:`, payload);
         try {
           switch (payload.eventType) {
             case 'INSERT':
-              config.onInsert?.(payload);
+              latest.onInsert?.(payload);
               break;
             case 'UPDATE':
-              config.onUpdate?.(payload);
+              latest.onUpdate?.(payload);
               break;
             case 'DELETE':
-              config.onDelete?.(payload);
+              latest.onDelete?.(payload);
               break;
           }
         } catch (error) {
-          handleError(config.table, error);
+          handleError(latest.table, error);
         }
       });
 
@@ -115,7 +116,6 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
       });
     });
 
-    // Cleanup function
     return () => {
       logger.realtime('Cleaning up realtime channels');
       channels.forEach(channel => {
@@ -123,7 +123,7 @@ export const useRealtimeData = (configs: RealtimeConfig[]) => {
       });
       setIsConnected(false);
     };
-  }, [stableConfigs, handleError, handleConnectionError]);
+  }, [stableConfigsForEffect, handleError, handleConnectionError]);
 
   return { isConnected };
 };

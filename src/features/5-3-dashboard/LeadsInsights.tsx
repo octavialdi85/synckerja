@@ -30,6 +30,14 @@ interface LeadsInsightsProps {
   allEmployees?: Array<{ id: string; full_name: string; email: string }>;
   /** When provided, fetch WhatsApp cycle metrics (response time, time to resolve) per assignee. */
   organizationId?: string;
+  /** Controlled active tab (overview | source-performance | consultant-performance). When set, onActiveTabChange is required. */
+  activeTab?: string;
+  /** Callback when tab changes (for mobile drawer). */
+  onActiveTabChange?: (tab: string) => void;
+  /** When true, hide the tab dropdown (e.g. when tab is controlled from a drawer). */
+  hideTabDropdown?: boolean;
+  /** When true (e.g. mobile report view), sections use tighter spacing and stronger borders. */
+  denserSections?: boolean;
 }
 
 export const LeadsInsights = ({
@@ -38,10 +46,25 @@ export const LeadsInsights = ({
   clientStatuses = {},
   clientProfiles = {},
   allEmployees = [],
-  organizationId
+  organizationId,
+  activeTab: activeTabProp,
+  onActiveTabChange,
+  hideTabDropdown = false,
+  denserSections = false,
 }: LeadsInsightsProps) => {
+  const [internalTab, setInternalTab] = useState('overview');
+  const isControlled = activeTabProp !== undefined;
+  const activeTab = isControlled ? activeTabProp : internalTab;
+  const setActiveTab = isControlled ? (onActiveTabChange ?? (() => {})) : setInternalTab;
+
+  const sectionCardClass = (base: string) => {
+    if (!denserSections) return base;
+    return base
+      .replace('border-none', 'border-2 border-slate-200')
+      .replace('shadow-sm', 'shadow');
+  };
+
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
 
   const { data: cycleRows = [], isError: isCycleMetricsError } = useQuery({
     queryKey: ['whatsapp-cycle-metrics', organizationId],
@@ -51,6 +74,25 @@ export const LeadsInsights = ({
       const { data, error } = await supabase.rpc('get_whatsapp_cycle_metrics', { p_organization_id: organizationId });
       if (error) throw error;
       return (data ?? []) as Array<{ conversation_id: string; assignee_id: string | null; cycle_started_at: string; first_response_at: string | null; resolved_at: string | null }>;
+    },
+  });
+
+  // Status list sama dengan sidebar quick action & tabel leads: dari lead_statuses (is_active, sort_order)
+  const { data: leadStatusesFromDb = [] } = useQuery({
+    queryKey: ['lead-statuses', organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      let q = supabase
+        .from('lead_statuses')
+        .select('id, name, color')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (organizationId) {
+        q = q.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; color: string }>;
     },
   });
 
@@ -210,27 +252,28 @@ export const LeadsInsights = ({
     };
   }).sort((a, b) => b.count - a.count);
 
-  // Status analysis - handle cases where lead_status might not be available
+  // Status analysis — sinkron dengan sidebar quick action & kolom status tabel leads: urutan dan daftar dari lead_statuses (DB)
   const statusAnalysis = (() => {
-    // Group leads by status name, including leads without status
+    if (organizationId && leadStatusesFromDb.length > 0) {
+      const rows: { status: string; count: number }[] = leadStatusesFromDb.map((s) => ({
+        status: s.name,
+        count: leads.filter((l) => (l.lead_status?.name ?? '').trim() === s.name.trim()).length,
+      }));
+      const notSpecifiedCount = leads.filter((l) => !l.lead_status?.name || (l.lead_status.name ?? '').trim() === '').length;
+      if (notSpecifiedCount > 0) {
+        rows.push({ status: 'Not Specified', count: notSpecifiedCount });
+      }
+      return rows;
+    }
+    // Fallback tanpa organizationId: kelompokkan dari leads saja (urutan by count)
     const statusMap = new Map<string, number>();
-    
-    leads.forEach(lead => {
-      // Get status name from lead_status object, or use 'Not Specified' as fallback
+    leads.forEach((lead) => {
       const statusName = lead.lead_status?.name || 'Not Specified';
       statusMap.set(statusName, (statusMap.get(statusName) || 0) + 1);
     });
-    
-    // Convert map to array and sort by count (descending)
-    const result = Array.from(statusMap.entries())
-      .map(([status, count]) => ({
-        status,
-        count
-      }))
+    return Array.from(statusMap.entries())
+      .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count);
-    
-    // Debug logging
-    return result;
   })();
 
   // Employee performance analysis with conversion tracking
@@ -393,7 +436,8 @@ export const LeadsInsights = ({
     }
   };
   return <div className="space-y-4">
-      {/* Dropdown for different views */}
+      {/* Dropdown for different views - hidden on mobile when tab is controlled via drawer */}
+      {!hideTabDropdown && (
       <div className="w-full">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -416,10 +460,11 @@ export const LeadsInsights = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        
+        </div>
+      )}
         {activeTab === 'overview' && <div className="space-y-3 mt-4">
           {/* Conversion Metrics */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-emerald-50 to-green-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-emerald-50 to-green-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Target className="h-4 w-4 text-emerald-600" />
@@ -469,7 +514,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Date Range Info */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-slate-600" />
@@ -487,7 +532,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Source Analysis */}
-          {sourceAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-purple-50 to-pink-50">
+          {sourceAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-purple-50 to-pink-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-purple-600" />
@@ -508,7 +553,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Data Overview */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-blue-600" />
@@ -534,7 +579,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Services Analysis */}
-          {servicesAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-amber-50 to-yellow-50">
+          {servicesAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-amber-50 to-yellow-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-amber-600" />
@@ -552,7 +597,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Category Analysis */}
-          {categoryAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-indigo-50 to-blue-50">
+          {categoryAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-indigo-50 to-blue-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-indigo-600" />
@@ -573,7 +618,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Gender Distribution Analysis */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-pink-50 to-rose-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-pink-50 to-rose-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Users className="h-4 w-4 text-pink-600" />
@@ -618,7 +663,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Enhanced Location Analysis */}
-          {enhancedLocationAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-orange-50 to-red-50">
+          {enhancedLocationAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-orange-50 to-red-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-orange-600" />
@@ -639,7 +684,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Priority Analysis */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-green-50 to-emerald-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-green-50 to-emerald-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Target className="h-4 w-4 text-green-600" />
@@ -669,7 +714,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Employee Performance */}
-          {employeeAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-violet-50 to-purple-50">
+          {employeeAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-violet-50 to-purple-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <User2 className="h-4 w-4 text-violet-600" />
@@ -722,7 +767,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Status Analysis - Always displayed below Employee Performance */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-teal-50 to-cyan-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-teal-50 to-cyan-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <Users className="h-4 w-4 text-teal-600" />
@@ -748,7 +793,7 @@ export const LeadsInsights = ({
         
         {activeTab === 'source-performance' && <div className="space-y-3 mt-4">
           {/* Source Performance Header */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <LineChart className="h-4 w-4 text-slate-600" />
@@ -766,7 +811,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Source Performance Analysis */}
-          {sourcePerformanceAnalysis.length > 0 ? <Card className="border-none shadow-sm bg-gradient-to-r from-emerald-50 to-teal-50">
+          {sourcePerformanceAnalysis.length > 0 ? <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-emerald-50 to-teal-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-emerald-600" />
@@ -885,7 +930,7 @@ export const LeadsInsights = ({
                     </div>
                   </div>)}
               </CardContent>
-            </Card> : <Card className="border-none shadow-sm bg-gradient-to-r from-gray-50 to-slate-50">
+            </Card> : <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-gray-50 to-slate-50")}>
               <CardContent className="p-6 text-center">
                 <div className="text-sm text-slate-600">No source performance data available</div>
                 <div className="text-xs text-slate-500 mt-1">Data will appear when leads have assigned sources</div>
@@ -893,7 +938,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Top performing source highlight */}
-          {sourcePerformanceAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-yellow-50 to-orange-50">
+          {sourcePerformanceAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-yellow-50 to-orange-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <Target className="h-4 w-4 text-yellow-600" />
@@ -918,7 +963,7 @@ export const LeadsInsights = ({
         
         {activeTab === 'consultant-performance' && <div className="space-y-3 mt-4">
           {/* Consultant Performance Header */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-slate-50 to-gray-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <User2 className="h-4 w-4 text-slate-600" />
@@ -937,7 +982,7 @@ export const LeadsInsights = ({
           </Card>
 
           {/* Consultant Performance Analysis */}
-          {employeeAnalysis.length > 0 ? <Card className="border-none shadow-sm bg-gradient-to-r from-indigo-50 to-purple-50">
+          {employeeAnalysis.length > 0 ? <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-indigo-50 to-purple-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <Users className="h-4 w-4 text-indigo-600" />
@@ -1079,7 +1124,7 @@ export const LeadsInsights = ({
                   </div>;
                 })}
               </CardContent>
-            </Card> : <Card className="border-none shadow-sm bg-gradient-to-r from-gray-50 to-slate-50">
+            </Card> : <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-gray-50 to-slate-50")}>
               <CardContent className="p-6 text-center">
                 <div className="text-sm text-slate-600">No consultant performance data available</div>
                 <div className="text-xs text-slate-500 mt-1">Data will appear when leads have assigned consultants</div>
@@ -1087,7 +1132,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Top performing consultant highlight */}
-          {employeeAnalysis.length > 0 && <Card className="border-none shadow-sm bg-gradient-to-r from-yellow-50 to-orange-50">
+          {employeeAnalysis.length > 0 && <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-yellow-50 to-orange-50")}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                   <Target className="h-4 w-4 text-yellow-600" />
@@ -1110,7 +1155,7 @@ export const LeadsInsights = ({
             </Card>}
 
           {/* Overall consultant statistics */}
-          <Card className="border-none shadow-sm bg-gradient-to-r from-teal-50 to-cyan-50">
+          <Card className={sectionCardClass("border-none shadow-sm bg-gradient-to-r from-teal-50 to-cyan-50")}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-teal-600" />
@@ -1133,6 +1178,5 @@ export const LeadsInsights = ({
             </CardContent>
           </Card>
           </div>}
-      </div>
     </div>;
 };

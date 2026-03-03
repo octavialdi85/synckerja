@@ -142,6 +142,8 @@ export interface EmailConversation {
   from_email: string | null;
   /** Sender display name from From header (e.g. "Octa Vialdi"). Shown in list/thread instead of email when set. */
   from_display_name?: string | null;
+  /** Thread subject (email subject). Shown in list when body preview is empty. */
+  thread_subject?: string | null;
   last_message_at: string | null;
   last_message_body: string | null;
   last_message_direction: string | null;

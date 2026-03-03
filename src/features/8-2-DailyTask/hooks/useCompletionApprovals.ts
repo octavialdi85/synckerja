@@ -24,10 +24,20 @@ function getRejectionKeyForRow(row: CompletionApprovalRow): string {
 /** Exclude steps whose linked social_media_plan is already Prod Approved, or has Request Revision (approve/reject happens on /review). */
 function filterPendingExcludingProdApproved(rows: CompletionApprovalRow[]): CompletionApprovalRow[] {
   return rows.filter((row) => {
-    if (row.entity_type !== 'step') return true;
-    if (!row.task_steps?.social_media_plan_id) return true;
-    if (row.task_steps?.social_media_plans?.production_approved === true) return false;
-    if (row.task_steps?.social_media_plans?.production_status === 'Request Revision') return false;
+    // 1) Exclude steps linked to plans that are already handled via /review (Prod Approved or Request Revision)
+    if (row.entity_type === 'step' && row.task_steps?.social_media_plan_id) {
+      if (row.task_steps?.social_media_plans?.production_approved === true) return false;
+      if (row.task_steps?.social_media_plans?.production_status === 'Request Revision') return false;
+    }
+
+    // 2) Exclude approvals for steps/sub-steps that have been reopened (is_completed = false)
+    if (row.entity_type === 'step' && row.task_steps && row.task_steps.is_completed === false) {
+      return false;
+    }
+    if (row.entity_type === 'substep' && row.task_steps_to_steps && row.task_steps_to_steps.is_completed === false) {
+      return false;
+    }
+
     return true;
   });
 }

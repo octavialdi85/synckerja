@@ -518,11 +518,26 @@ const PlanCard = memo(
 
 PlanCard.displayName = "PlanCard";
 
-const HRISSubscriptionPlansTab = () => {
+interface HRISSubscriptionPlansTabProps {
+  /** When set, parent can trigger refetch (e.g. pull-to-refresh). */
+  refetchRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+}
+
+const HRISSubscriptionPlansTab = ({ refetchRef }: HRISSubscriptionPlansTabProps) => {
   const navigate = useNavigate();
   const { t } = useAppTranslation();
-  const { data: plans, isLoading, error } = useSubscriptionPlans();
-  const { subscriptionStatus, subscriptionPlans } = useOptimizedSubscription();
+  const { data: plans, isLoading, error, refetch: refetchPlans } = useSubscriptionPlans();
+  const { subscriptionStatus, subscriptionPlans, refreshSubscriptionStatus } = useOptimizedSubscription();
+
+  useEffect(() => {
+    if (!refetchRef) return;
+    refetchRef.current = async () => {
+      await Promise.all([refetchPlans(), refreshSubscriptionStatus()]);
+    };
+    return () => {
+      refetchRef.current = null;
+    };
+  }, [refetchRef, refetchPlans, refreshSubscriptionStatus]);
   const { data: currentEmployeeCount = 0, isError: isEmployeeCountError } = useEmployeeCount();
   const { initiateMidtransPayment, isLoading: isPaymentLoading } = useMidtransPayment({
     onPaymentClose: (path) => navigate(path),

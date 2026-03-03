@@ -292,7 +292,7 @@ const Login = () => {
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">Email Address *</Label>
                   <div className="relative">
-                    <Input type="email" id="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary" />
+                    <Input type="email" id="email" name="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary" />
                   </div>
                 </div>
 
@@ -304,7 +304,7 @@ const Login = () => {
                     </Link>
                   </div>
                   <div className="relative">
-                    <Input type={showPwd ? "text" : "password"} id="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary pr-10" />
+                    <Input type={showPwd ? "text" : "password"} id="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="" disabled={loading} className="h-12 rounded-md border-border focus:border-primary pr-10" />
                     <button type="button" aria-label={showPwd ? "Sembunyikan password" : "Tampilkan password"} onClick={() => setShowPwd(v => !v)} className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground" tabIndex={-1}>
                       {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>

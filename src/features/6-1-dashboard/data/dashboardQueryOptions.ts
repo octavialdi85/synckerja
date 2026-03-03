@@ -42,6 +42,9 @@ const CONTENT_PLANS_SELECT = `
   post_link_creator:employees!social_media_plans_post_link_created_by_fkey(id, full_name)
 `;
 
+/** Initial load limit: smaller = faster first paint. Refresh fetches again with same limit. */
+const INITIAL_PLANS_LIMIT = 200;
+
 export function getContentPlansQueryOptions(organizationId: string | undefined) {
   return {
     queryKey: ['social-media-plans', organizationId || 'no-org'] as QueryKey,
@@ -53,13 +56,13 @@ export function getContentPlansQueryOptions(organizationId: string | undefined) 
         .eq('organization_id', organizationId)
         .order('post_date', { ascending: false, nullsFirst: true })
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(INITIAL_PLANS_LIMIT);
       if (error) throw error;
       return data || [];
     },
-    staleTime: 10000,
+    staleTime: 30 * 1000, // 30s: revisits show cache immediately while refetch runs in background
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Dihilangkan: tidak refetch saat pindah window/tab (script-generator & halaman social media lain)
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchInterval: false,
     retry: 1,

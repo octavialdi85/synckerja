@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -42,9 +42,9 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
   const [scrollToTextInChat, setScrollToTextInChat] = useState<string | null>(null);
   const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
 
-  const { data: waConversations = [], isLoading: waLoading, error: waError } = useWhatsAppConversations();
-  const { data: igConversations = [], isLoading: igLoading, error: igError } = useInstagramConversations();
-  const { data: emailConversations = [], isLoading: emailLoading, error: emailError } = useEmailConversations();
+  const { data: waConversations = [], isLoading: waLoading, error: waError, refetch: refetchWa } = useWhatsAppConversations();
+  const { data: igConversations = [], isLoading: igLoading, error: igError, refetch: refetchIg } = useInstagramConversations();
+  const { data: emailConversations = [], isLoading: emailLoading, error: emailError, refetch: refetchEmail } = useEmailConversations();
   const { accounts: waAccounts } = useWhatsAppAccounts();
   const { accounts: igAccounts } = useInstagramAccounts();
   const { connections: emailConnections } = useEmailConnections();
@@ -196,6 +196,10 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
     navigate('/operations/consultant/all/livechat');
   };
 
+  const refreshLiveChat = useCallback(() => {
+    return Promise.all([refetchWa(), refetchIg(), refetchEmail()]);
+  }, [refetchWa, refetchIg, refetchEmail]);
+
   if (ticketId && selectedConversation) {
     return (
       <LiveChatChatView
@@ -226,6 +230,7 @@ function LiveChatPageInner({ t }: { t: (key: string, fallback: string) => string
       onSelectConversation={handleSelectConversation}
       onSelectFromSearch={handleSelectFromSearch}
       invalidTicketId={showInvalidTicketBanner}
+      onRefetch={refreshLiveChat}
     />
   );
 }

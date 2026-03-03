@@ -16,8 +16,16 @@ export interface CompletionApprovalRow {
   reject_reason: string | null;
   rejected_at?: string | null;
   daily_tasks?: { title: string } | null;
-  task_steps?: { title: string; social_media_plan_id?: string | null; social_media_plans?: { production_approved: boolean | null; production_status?: string | null } | null } | null;
-  task_steps_to_steps?: { title: string } | null;
+  task_steps?: {
+    title: string;
+    is_completed?: boolean | null;
+    social_media_plan_id?: string | null;
+    social_media_plans?: { production_approved: boolean | null; production_status?: string | null } | null;
+  } | null;
+  task_steps_to_steps?: {
+    title: string;
+    is_completed?: boolean | null;
+  } | null;
   assignee?: { id: string; full_name: string } | null;
 }
 
@@ -53,7 +61,11 @@ export async function createCompletionApprovalIfAssignee(params: {
 }
 
 const PENDING_APPROVAL_SELECT =
-  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, daily_tasks(title), task_steps(title, social_media_plan_id, social_media_plans(production_approved, production_status)), task_steps_to_steps(title), assignee:employees!assignee_employee_id(id, full_name)';
+  'id, entity_type, daily_task_id, task_step_id, task_steps_to_steps_id, assignee_employee_id, assigner_employee_id, status, completed_at, reject_reason, ' +
+  'daily_tasks(title), ' +
+  'task_steps(title, is_completed, social_media_plan_id, social_media_plans(production_approved, production_status)), ' +
+  'task_steps_to_steps(title, is_completed), ' +
+  'assignee:employees!assignee_employee_id(id, full_name)';
 
 /**
  * Fetch pending approvals for the current user as assigner (to show "Pending your approval").

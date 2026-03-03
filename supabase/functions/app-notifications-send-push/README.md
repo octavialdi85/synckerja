@@ -7,7 +7,7 @@ Edge function that sends FCM push notifications when app-relevant rows are inser
 - **review_comment_notifications** (INSERT): notify the `user_id` of the new comment (title/body for "Komentar baru pada review").
 - **completion_approvals** (INSERT, `status = 'pending'`): resolve `assigner_employee_id` → `employees.user_id`, then notify that user ("Pending approval" / "Item baru menunggu persetujuan Anda").
 - **plan_status_change_notifications** (INSERT): when **social_media_plans** column `status`, `production_status`, or `done` changes, a DB trigger inserts one row per org member into this table; this webhook then sends FCM (banner + sound on Android). Notify the `user_id` of each record; title/body from the record (fallback "Update status" / "Plan status updated"); FCM data includes `notificationType: plan_status_change` and `social_media_plan_id` for tap-to-review.
-- **daily_task_notifications** (INSERT): notify the `user_id` of the record; title/body from the record (fallback "Daily Task update"); FCM data includes `notificationType: daily_task`, `daily_task_id`, `task_step_id`, and `view` for tap-to-daily-task.
+- **daily_task_notifications** (INSERT): notify the `user_id` of the record (only the assignee). Covers: **(1) Step assigned** (step langsung di bawah task) — trigger on `task_steps_assigned`; **(2) Sub-step assigned** — trigger on `task_steps_to_steps_assigned`; plus task status change, task assigned, step/substep reopened, completion approved/rejected. Title/body from the record; FCM data includes `notificationType: daily_task`, `daily_task_id`, `task_step_id`, `task_steps_to_steps_id`, and `view` for tap-to-daily-task.
 
 Notifications are sent only to FCM tokens with **context = 'general'** (same `fcm_tokens` table as Live Chat; Live Chat uses `context = 'livechat'`).
 
@@ -93,6 +93,29 @@ If changing the **STATUS** column (or production status) on `social_media_plans`
 - **FCM_PROJECT_ID** (optional): Override project ID if not present in the service account JSON.
 
 Deploy with `--no-verify-jwt` so the Database Webhook (using service role) can call the function without JWT.
+
+## Fix: Only assignee receives notification (no notification for unassigned user)
+
+When a step is **reassigned** from user A to user B, only user B (the new assignee) should receive a notification. User A must **not** receive any notification (no push, no in-app "Step unassigned").
+
+**1. Disable unassign triggers in the database**  
+Run this SQL once in **Supabase Dashboard → SQL Editor** (if migration `20260303120000_disable_unassign_notifications.sql` was not applied via `supabase db push`):
+
+```sql
+DROP TRIGGER IF EXISTS after_task_steps_assigned_delete_notify ON public.task_steps_assigned;
+DROP TRIGGER IF EXISTS after_task_steps_to_steps_assigned_delete_notify ON public.task_steps_to_steps_assigned;
+```
+
+**2. Deploy this Edge Function**  
+The function skips sending push for unassign notifications (type/title/body). Ensure the latest version is deployed:
+
+```bash
+supabase functions deploy app-notifications-send-push --no-verify-jwt
+```
+
+After both steps, only the assignee receives "Step assigned" / "Sub-step assigned"; the unassigned user receives nothing.
+
+**Verification:** Reassign a step from user A to user B (e.g. Milda → Octa). Only B should get a notification (push and in-app). User A must not see any new notification.
 
 ## Adding new notification sources
 

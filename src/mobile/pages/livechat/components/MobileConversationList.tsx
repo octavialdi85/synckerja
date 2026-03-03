@@ -13,11 +13,15 @@ interface MobileConversationListProps {
   accountFilter?: string;
   waAccountsForHint?: WhatsAppAccountForHint[];
   isLoading?: boolean;
+  /** When true (pull-to-refresh), do not show skeleton so content stays visible (anti-flicker). */
+  isRefreshing?: boolean;
   error?: Error | null;
 }
 
 export function MobileConversationList(props: MobileConversationListProps) {
-  if (props.isLoading) {
+  const { isRefreshing = false, ...rest } = props;
+  const showSkeleton = rest.isLoading && !isRefreshing;
+  if (showSkeleton) {
     return (
       <div className="min-h-0">
         <ConversationListSkeleton />
@@ -26,7 +30,7 @@ export function MobileConversationList(props: MobileConversationListProps) {
   }
   return (
     <div className="min-h-0">
-      <ConversationList {...props} />
+      <ConversationList {...rest} />
     </div>
   );
 }

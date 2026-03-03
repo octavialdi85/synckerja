@@ -66,6 +66,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Satu perangkat (satu FCM token) hanya boleh terdaftar untuk satu user.
+    // Hapus token ini dari SEMUA user dulu, lalu daftarkan untuk user saat ini.
+    // Jadi saat Octa login di HP yang dulu dipakai Milda, token langsung hanya punya Octa.
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    await supabaseAdmin
+      .from("fcm_tokens")
+      .delete()
+      .eq("token", fcmToken)
+      .eq("context", context);
+
     const { error: upsertError } = await supabaseWithUser
       .from("fcm_tokens")
       .upsert(

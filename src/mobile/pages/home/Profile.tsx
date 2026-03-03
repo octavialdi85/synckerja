@@ -4,14 +4,14 @@ import { AppSidebar } from "@/mobile/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/mobile/components/ui/sidebar";
 import { Card } from "@/mobile/components/ui/card";
 import { Button } from "@/mobile/components/ui/button";
-import { User, MapPin, Phone, Mail, Calendar, LogOut, ChevronDown, Building2, Check, Loader2, KeyRound } from "lucide-react";
+import { User, MapPin, Phone, Mail, Calendar, LogOut, ChevronDown, Building2, Check, Loader2, KeyRound, RefreshCw } from "lucide-react";
 import { ProfileSkeleton } from "./ProfileSkeleton";
 import { useProfile } from "@/mobile/hooks/useProfile";
 import { useVisualViewport } from "@/mobile/hooks/useVisualViewport";
 import { useStatusBarStyle } from "@/mobile/hooks/useStatusBarStyle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/features/ui/use-toast";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ProfilePhotoUpload } from "@/mobile/components/ProfilePhotoUpload";
 import { useOrganizationList } from "@/mobile/hooks/useOrganizationList";
@@ -19,6 +19,7 @@ import { OrganizationSelectDrawer } from "@/mobile/components/OrganizationSelect
 import { useOrganizationSwitchCallback } from "@/mobile/hooks/useOrganizationSwitchCallback";
 import { useLanguage } from "@/features/share/i18n/LanguageProvider";
 import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { useCentralizedUserData } from "@/features/1-login/contexts/CentralizedUserDataContext";
 import type { AppLanguage } from "@/features/share/i18n/translations";
 import {
   Drawer,
@@ -30,6 +31,12 @@ import {
 } from "@/mobile/components/ui/drawer";
 import { ChangePasswordModal } from "@/mobile/components/ChangePasswordModal";
 import { cn } from "@/lib/utils";
+
+const PULL_THRESHOLD = 52;
+const MAX_PULL = 72;
+const INDICATOR_HEIGHT = 56;
+const PULL_RESISTANCE = 0.55;
+
 const Profile = () => {
   const {
     profile,
@@ -56,6 +63,18 @@ const Profile = () => {
   const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const { language, setLanguage } = useLanguage();
   const { t } = useAppTranslation();
+  const { userRole } = useCentralizedUserData();
+
+  const getRoleDisplayText = (role: string | null) => {
+    if (!role) return "—";
+    switch (role) {
+      case "owner": return t("profile.role.owner", "Owner");
+      case "admin": return t("profile.role.admin", "Admin");
+      case "employee": return t("profile.role.employee", "Employee");
+      case "hr": return t("profile.role.hr", "HR");
+      default: return role;
+    }
+  };
   const handleLogout = async () => {
     try {
       await logout();
@@ -75,7 +94,82 @@ const Profile = () => {
 
   const canOpenOrgDrawer = organizations.length > 1 && !switchingOrganization;
 
-  if (loading) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef(0);
+  const pullDistanceRef = useRef(0);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const didRecoveryRefetch = useRef(false);
+
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
+
+  useEffect(() => {
+    if (didRecoveryRefetch.current || loading || profile) return;
+    didRecoveryRefetch.current = true;
+    refetch().catch(() => {});
+  }, [loading, profile, refetch]);
+
+  const handlePullRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setPullDistance(0);
+    try {
+      await refetch();
+    } catch {
+      toast({
+        title: t("profile.error", "Error"),
+        description: t("profile.refreshFailed", "Gagal memperbarui"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch, isRefreshing, toast, t]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    const el = listScrollRef.current;
+    if (el?.scrollTop <= 2) setIsPulling(true);
+  }, []);
+
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const el = listScrollRef.current;
+      if (!el || isRefreshing) return;
+      if (el.scrollTop > 2) {
+        setIsPulling(false);
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+        return;
+      }
+      const y = e.touches[0].clientY;
+      const delta = y - touchStartY.current;
+      if (delta > 0) {
+        const d = Math.min(delta * PULL_RESISTANCE, MAX_PULL);
+        setPullDistance(d);
+        pullDistanceRef.current = d;
+      } else {
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+      }
+    },
+    [isRefreshing]
+  );
+
+  const onTouchEnd = useCallback(() => {
+    setIsPulling(false);
+    const d = pullDistanceRef.current;
+    setPullDistance(0);
+    pullDistanceRef.current = 0;
+    if (d >= PULL_THRESHOLD) {
+      handlePullRefresh();
+    }
+  }, [handlePullRefresh]);
+
+  if (loading && !isRefreshing) {
     return (
       <DesktopWarning>
         <SidebarProvider>
@@ -178,7 +272,38 @@ const Profile = () => {
             </header>
 
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col">
+              <div
+                ref={listScrollRef}
+                className="flex-1 overflow-y-auto overflow-x-hidden seamless-scroll min-h-0 flex flex-col"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+              >
+                <div
+                  className="shrink-0 overflow-hidden flex items-center justify-center text-muted-foreground text-sm"
+                  style={{
+                    height: pullDistance > 0 ? Math.min(pullDistance, MAX_PULL) : isRefreshing ? INDICATOR_HEIGHT : 0,
+                    minHeight: 0,
+                    transition: isPulling ? 'none' : 'height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94), min-height 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  }}
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" aria-hidden />
+                  ) : pullDistance >= PULL_THRESHOLD ? (
+                    <span className="text-xs font-medium text-primary whitespace-nowrap">
+                      {t('common.pullToRefresh.release', 'Lepas untuk refresh')}
+                    </span>
+                  ) : (
+                    <RefreshCw
+                      className="h-5 w-5 opacity-80 shrink-0"
+                      style={{
+                        transform: `rotate(${Math.min((pullDistance / PULL_THRESHOLD) * 180, 180)}deg)`,
+                        transition: isPulling ? 'none' : 'transform 0.2s ease-out',
+                      }}
+                      aria-hidden
+                    />
+                  )}
+                </div>
                 <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-default space-y-1">
                   <div>
                     <Card className="bg-gradient-card border border-border">
@@ -312,8 +437,7 @@ const Profile = () => {
                         <p className="text-sm font-medium text-foreground truncate">
                           {organizationsLoading ? t("profile.loading", "Memuat...") : switchingOrganization ? t("profile.switchingOrg", "Beralih organisasi...") : activeOrganization?.company_name || t("profile.selectOrganization", "Pilih Organisasi")}
                         </p>
-                        {/* TODO: tampilkan role dari API ketika tersedia. */}
-                        <p className="text-xs text-muted-foreground">{t("profile.role.owner", "Owner")}</p>
+                        <p className="text-xs text-muted-foreground">{getRoleDisplayText(userRole)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

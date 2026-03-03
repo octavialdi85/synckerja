@@ -9,6 +9,8 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import type { LiveChatConversation, WhatsAppConversation } from '../../types';
+import type { EmailConversation } from '../../types';
+import { stripHtmlForPreview } from './ConversationList';
 
 /** WhatsApp icon for platform label */
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -183,7 +185,7 @@ export function SearchConversationPopup({
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
         const displayName = conv ? (conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown')) : '—';
-        const body = row.body ?? '';
+        const body = stripHtmlForPreview(row.body ?? '');
         const isOutbound = row.direction === 'outbound';
         return (
           <li
@@ -230,8 +232,11 @@ export function SearchConversationPopup({
           const unread = unreadByConversation[conv.id] ?? 0;
           const displayName = conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown');
           const isSelected = selectedId === conv.id;
-          const lastBody = conv.last_message_body ?? '';
-          const showHighlight = searchQuery.trim() && lastBody.toLowerCase().includes(searchQuery.trim().toLowerCase());
+          const lastBodyRaw = conv.last_message_body ?? '';
+          const lastBody = stripHtmlForPreview(lastBodyRaw);
+          const subject = conv.source === 'email' ? (conv as EmailConversation).thread_subject?.trim() ?? '' : '';
+          const displayText = lastBody !== '' ? lastBody : subject;
+          const showHighlight = searchQuery.trim() && displayText.toLowerCase().includes(searchQuery.trim().toLowerCase());
           return (
             <li
               key={conv.id}
@@ -266,11 +271,11 @@ export function SearchConversationPopup({
                       )}
                     </span>
                   )}
-                  {lastBody ? (
+                  {lastBody || subject ? (
                     showHighlight ? (
-                      <HighlightSnippet text={lastBody} query={searchQuery.trim()} />
+                      <HighlightSnippet text={displayText} query={searchQuery.trim()} />
                     ) : (
-                      <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={lastBody}>{lastBody}</span>
+                      <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={displayText}>{displayText}</span>
                     )
                   ) : (
                     <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>
@@ -295,7 +300,7 @@ export function SearchConversationPopup({
       {messageResults.map((row) => {
         const conv = convById[row.conversation_id];
         const displayName = conv ? (conv.source === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.source === 'instagram' ? (conv as { customer_ig_id?: string }).customer_ig_id : conv.customer_wa_id) || 'Unknown')) : '—';
-        const body = row.body ?? '';
+        const body = stripHtmlForPreview(row.body ?? '');
         const isOutbound = row.direction === 'outbound';
         return (
           <li
@@ -330,8 +335,11 @@ export function SearchConversationPopup({
         const unread = unreadByConversation[conv.id] ?? 0;
         const displayName = conv.channel === 'instagram' && !conv.customer_name?.trim() ? t('whatsappInbox.instagramContact', 'Kontak Instagram') : (conv.customer_name || maskPhoneLast4(conv.customer_wa_id) || 'Unknown');
         const isSelected = selectedId === conv.id;
-        const lastBody = conv.last_message_body ?? '';
-        const showHighlight = searchQuery.trim() && lastBody.toLowerCase().includes(searchQuery.trim().toLowerCase());
+        const lastBodyRaw = conv.last_message_body ?? '';
+        const lastBody = stripHtmlForPreview(lastBodyRaw);
+        const subject = conv.source === 'email' ? (conv as EmailConversation).thread_subject?.trim() ?? '' : '';
+        const displayText = lastBody !== '' ? lastBody : subject;
+        const showHighlight = searchQuery.trim() && displayText.toLowerCase().includes(searchQuery.trim().toLowerCase());
         return (
           <li
             key={`conv-${conv.id}`}
@@ -366,11 +374,11 @@ export function SearchConversationPopup({
                     )}
                   </span>
                 )}
-                {lastBody ? (
+                {lastBody || subject ? (
                   showHighlight ? (
-                    <HighlightSnippet text={lastBody} query={searchQuery.trim()} />
+                    <HighlightSnippet text={displayText} query={searchQuery.trim()} />
                   ) : (
-                    <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={lastBody}>{lastBody}</span>
+                    <span className="text-xs text-gray-500 truncate flex-1 min-w-0" title={displayText}>{displayText}</span>
                   )
                 ) : (
                   <span className="text-xs text-gray-500 italic flex-1 min-w-0">—</span>

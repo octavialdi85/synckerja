@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LeadsFilters, LeadsFilters as LeadsFiltersType } from './LeadsFilters';
 import { LeadsMetricsCards } from './LeadsMetricsCards';
 import LeadsTableNew from './LeadsTableNew';
@@ -9,7 +9,7 @@ import { LeadsSidebarFooter } from './LeadsSidebarFooter';
 import { useLeads } from '@/hooks/organized/sales';
 import { useAvailableEmployees } from '@/features/share/hooks/useAvailableEmployees';
 import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
-import { supabase } from '@/integrations/supabase/client';
+import { useLeadClientStatuses } from './useLeadClientStatuses';
 import { Button } from '@/features/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { generateLeadsPDF } from './LeadsPDFGenerator';
@@ -35,6 +35,7 @@ export const ConsultantsPageContent = () => {
   const { leads, loading, createLead, updateLead, deleteLead, refetch } = useLeads({ scope: 'all' });
   const { data: employees = [] } = useAvailableEmployees();
   const { organizationId } = useCurrentOrg();
+  const { clientStatuses, clientProfiles } = useLeadClientStatuses(leads);
 
   const handleNewLeadClick = () => {
     setIsCreateDialogOpen(true);
@@ -56,73 +57,6 @@ export const ConsultantsPageContent = () => {
       setIsSubmitting(false);
     }
   };
-
-  // State to manage client profile statuses and data
-  const [clientStatuses, setClientStatuses] = useState<Record<string, 'full' | 'partial' | 'empty'>>({});
-  const [clientProfiles, setClientProfiles] = useState<Record<string, any>>({});
-
-  // Fetch client profile statuses (leads + WhatsApp conversations)
-  useEffect(() => {
-    const fetchStatuses = async () => {
-      if (leads.length === 0) return;
-
-      const statusMap: Record<string, 'full' | 'partial' | 'empty'> = {};
-      const profileMap: Record<string, any> = {};
-
-      for (const lead of leads) {
-        try {
-          const isWhatsApp = String(lead.id).startsWith('wa-');
-          const isEmail = String(lead.id).startsWith('email-');
-          const conversationId = isWhatsApp ? String(lead.id).replace(/^wa-/, '') : null;
-
-          // Email leads: no client profile table; lead_id is synthetic (not UUID) — skip DB query
-          if (isEmail) {
-            statusMap[lead.id] = 'empty';
-            profileMap[lead.id] = null;
-            continue;
-          }
-
-          const { data } = isWhatsApp && conversationId
-            ? await supabase
-                .from('whatsapp_conversation_client_profiles')
-                .select('*')
-                .eq('conversation_id', conversationId)
-                .maybeSingle()
-            : await supabase
-                .from('lead_client_profiles')
-                .select('*')
-                .eq('lead_id', lead.id)
-                .maybeSingle();
-
-          if (!data) {
-            statusMap[lead.id] = 'empty';
-            profileMap[lead.id] = null;
-          } else {
-            profileMap[lead.id] = data;
-            const fields = [data.name, (data as any).code, data.gender, data.age, data.occupation, data.location, (data as any).phone_number, (data as any).email];
-            const filledFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
-
-            if (filledFields === 0) {
-              statusMap[lead.id] = 'empty';
-            } else if (filledFields === fields.length) {
-              statusMap[lead.id] = 'full';
-            } else {
-              statusMap[lead.id] = 'partial';
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch client profile for lead', lead.id, error);
-          statusMap[lead.id] = 'empty';
-          profileMap[lead.id] = null;
-        }
-      }
-
-      setClientStatuses(statusMap);
-      setClientProfiles(profileMap);
-    };
-
-    fetchStatuses();
-  }, [leads]);
 
   // Filter leads based on selected filters
   const filteredLeads = useMemo(() => {

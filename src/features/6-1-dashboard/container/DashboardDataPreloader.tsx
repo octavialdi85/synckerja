@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
-import { LoadingDots } from '@/components/LoadingDots';
 import { toast } from 'sonner';
 import {
   getContentPlansQueryOptions,
@@ -14,21 +13,18 @@ interface DashboardDataPreloaderProps {
 }
 
 /**
- * Prefetches all critical dashboard queries once in parallel, then renders children.
- * Children's hooks (useOptimizedSocialMediaData, useDigitalMarketingEmployees) read from cache,
- * so no duplicate fetches and one smooth loading phase.
+ * Prefetches critical dashboard queries in the background. Renders children immediately
+ * so the page shell (header, tabs) appears without waiting for data. Children's hooks
+ * (useOptimizedSocialMediaData, useDigitalMarketingEmployees) use the same query keys,
+ * so they read from cache or share the in-flight request—no duplicate fetches.
+ * Loading state is shown only in the content area (DashboardLoadingWrapper), not full-screen.
  */
 export const DashboardDataPreloader: React.FC<DashboardDataPreloaderProps> = ({ children }) => {
   const { organizationId } = useCurrentOrg();
   const queryClient = useQueryClient();
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!organizationId) {
-      setReady(false);
-      return;
-    }
-    let cancelled = false;
+    if (!organizationId) return;
     const opts = {
       contentPlans: getContentPlansQueryOptions(organizationId),
       master: getMasterDataQueryOptions(organizationId),
@@ -38,28 +34,10 @@ export const DashboardDataPreloader: React.FC<DashboardDataPreloaderProps> = ({ 
       queryClient.prefetchQuery({ queryKey: opts.contentPlans.queryKey, queryFn: opts.contentPlans.queryFn }),
       queryClient.prefetchQuery({ queryKey: opts.master.queryKey, queryFn: opts.master.queryFn }),
       queryClient.prefetchQuery({ queryKey: opts.employees.queryKey, queryFn: opts.employees.queryFn }),
-    ])
-      .then(() => {
-        if (!cancelled) setReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setReady(true);
-          toast.error('Failed to load dashboard data. Refresh the page to retry.');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+    ]).catch(() => {
+      toast.error('Failed to load dashboard data. Refresh the page to retry.');
+    });
   }, [organizationId, queryClient]);
-
-  if (!organizationId || !ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <LoadingDots size="lg" />
-      </div>
-    );
-  }
 
   return <>{children}</>;
 };

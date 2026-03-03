@@ -356,10 +356,44 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
       if (willBeCompleted && organizationId) {
         const { data: { user } } = await supabase.auth.getUser();
         const { data: currentEmp } = await supabase.from('employees').select('id').eq('user_id', user?.id).eq('organization_id', organizationId).maybeSingle();
-        const { data: subAssignment } = await supabase.from('task_steps_to_steps_assigned').select('employee_id, assigned_by').eq('task_steps_to_steps_id', id).order('assigned_at', { ascending: false }).limit(1).maybeSingle();
-        if (currentEmp?.id && subAssignment && subAssignment.employee_id === currentEmp.id) {
-          const { data: parentStep } = await supabase.from('task_steps').select('task_id').eq('id', parentStepId).single();
-          const dailyTaskId = (parentStep as any)?.task_id;
+        const { data: subAssignment } = await supabase
+          .from('task_steps_to_steps_assigned')
+          .select('employee_id, assigned_by')
+          .eq('task_steps_to_steps_id', id)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Fallback: if sub-step is not explicitly assigned, use step-level assignment; then task-level assignment.
+        const stepFallback = await supabase
+          .from('task_steps_assigned')
+          .select('employee_id, assigned_by')
+          .eq('task_step_id', parentStepId)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { data: parentStep } = await supabase.from('task_steps').select('task_id').eq('id', parentStepId).single();
+        const dailyTaskId = (parentStep as any)?.task_id;
+
+        const taskFallback = dailyTaskId
+          ? (await supabase
+              .from('daily_tasks_assigned')
+              .select('employee_id, assigned_by')
+              .eq('daily_task_id', dailyTaskId)
+              .order('assigned_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()).data
+          : null;
+
+        const effectiveAssignment =
+          subAssignment?.employee_id && subAssignment?.assigned_by
+            ? subAssignment
+            : stepFallback.data?.employee_id && stepFallback.data?.assigned_by
+              ? stepFallback.data
+              : taskFallback;
+
+        if (currentEmp?.id && effectiveAssignment && effectiveAssignment.employee_id === currentEmp.id && effectiveAssignment.assigned_by) {
           if (dailyTaskId) {
             await createCompletionApprovalIfAssignee({
               organizationId,
@@ -367,8 +401,8 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
               dailyTaskId,
               taskStepId: parentStepId,
               taskStepsToStepsId: id,
-              assigneeEmployeeId: subAssignment.employee_id,
-              assignerEmployeeId: subAssignment.assigned_by,
+              assigneeEmployeeId: effectiveAssignment.employee_id,
+              assignerEmployeeId: effectiveAssignment.assigned_by,
               completedAt: updateData.completed_at || new Date().toISOString(),
             });
           }

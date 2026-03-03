@@ -8,6 +8,8 @@ import { useAuth } from '@/features/1-login';
 import { LoadingDots } from './LoadingDots';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { RouteLoadingSkeleton } from '@/mobile/components/RouteLoadingSkeleton';
+import { AccessDeniedPage } from '@/mobile/pages/access-denied';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { logger } from '@/config/logger';
 
 interface UniversalProtectedRouteProps {
@@ -33,6 +35,7 @@ export const UniversalProtectedRoute = ({
   redirectTo = '/login'
 }: UniversalProtectedRouteProps) => {
   const { user, loading } = useAuth();
+  const { t } = useAppTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [isValidating, setIsValidating] = useState(true);
@@ -56,11 +59,20 @@ export const UniversalProtectedRoute = ({
   const { userRole, isOwner, isAdmin, employee, organization } = useCentralizedUserData();
 
   // Universal access validation
+  const denyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const DENY_DEBOUNCE_MS = 180;
+
   useEffect(() => {
     const validateUniversalAccess = async () => {
       const currentPath = location.pathname;
       const currentUserId = user?.id ?? '';
       const isDev = import.meta.env.DEV;
+
+      // Clear any pending "deny" timer so we don't show denied after grant
+      if (denyTimerRef.current) {
+        clearTimeout(denyTimerRef.current);
+        denyTimerRef.current = null;
+      }
 
       // Optimization: skip re-validation when access already granted and path/user/config unchanged
       if (
@@ -72,6 +84,7 @@ export const UniversalProtectedRoute = ({
         if (isDev) {
           logger.debug('🌍 UNIVERSAL ROUTE PROTECTION (skipped – already granted, unchanged)');
         }
+        setAccessDenied(false);
         return;
       }
 
@@ -135,9 +148,13 @@ export const UniversalProtectedRoute = ({
           logger.debug('🚨 ACCESS DENIED by Page Access Configuration');
           logger.debug('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
         }
-        
-        setAccessDenied(true);
-        setDeniedReason(getDepartmentRestrictionMessage() || 'You do not have permission to access this page');
+        // Debounce: only show "Akses Ditolak" after access has been false for DENY_DEBOUNCE_MS.
+        // Prevents brief flash of denied when config/role resolve slightly after loading.
+        denyTimerRef.current = setTimeout(() => {
+          denyTimerRef.current = null;
+          setAccessDenied(true);
+          setDeniedReason(getDepartmentRestrictionMessage() || 'You do not have permission to access this page');
+        }, DENY_DEBOUNCE_MS);
         setIsValidating(false);
         return;
       }
@@ -156,6 +173,12 @@ export const UniversalProtectedRoute = ({
     };
 
     validateUniversalAccess();
+    return () => {
+      if (denyTimerRef.current) {
+        clearTimeout(denyTimerRef.current);
+        denyTimerRef.current = null;
+      }
+    };
   }, [
     location.pathname,
     user,
@@ -200,49 +223,46 @@ export const UniversalProtectedRoute = ({
 
   // Access denied state
   if (accessDenied) {
+    if (isMobile) {
+      return <AccessDeniedPage deniedReason={deniedReason || undefined} />;
+    }
     return (
       <StandardLayout>
-        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-          <div className="flex flex-1 min-h-0">
-            <div className="flex-1 flex flex-col min-h-0">
-              <main className="flex-1 px-4 pt-16 pb-4 min-h-0">
-                <div className="h-full flex flex-col overflow-hidden">
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="max-w-lg mx-auto">
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-x-hidden">
+          <div className="flex flex-1 min-h-0 min-w-0">
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
+              <main className="flex-1 px-4 pt-16 pb-4 min-h-0 overflow-x-hidden">
+                <div className="h-full flex flex-col overflow-hidden min-w-0">
+                  <div className="flex-1 flex items-center justify-center min-w-0">
+                    <div className="max-w-lg mx-auto w-full min-w-0">
                       <div className="text-center">
-                        {/* Universal protection icon */}
                         <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
                           <Shield className="h-12 w-12 text-red-500" />
                         </div>
-                        
-                        {/* Access denied card */}
-                        <div className="bg-white rounded-lg shadow-lg border border-red-200 p-8">
+                        <div className="bg-white rounded-lg shadow-lg border border-red-200 p-8 min-w-0">
                           <div className="flex items-center justify-center mb-4">
                             <XCircle className="h-6 w-6 text-red-500 mr-2" />
                             <h2 className="text-2xl font-bold text-red-600">
-                              Akses Ditolak
+                              {t('accessDenied.title', 'Akses Ditolak')}
                             </h2>
                           </div>
-                          
                           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
                             <div className="text-red-800 text-sm">
                               <p className="font-semibold mb-2">Universal Route Protection</p>
                               <p>
-                                Halaman ini dikontrol oleh sistem Page Access Configuration. 
-                                Akses Anda telah dibatasi berdasarkan role dan konfigurasi organisasi.
+                                {deniedReason || t('accessDenied.message', 'Halaman ini dikontrol oleh sistem Page Access Configuration. Akses Anda telah dibatasi berdasarkan role dan konfigurasi organisasi.')}
                               </p>
                             </div>
                           </div>
-
                           <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
                             <div className="text-sm text-gray-700 space-y-2">
                               <p><span className="font-semibold">Path:</span> {location.pathname}</p>
-                              <p><span className="font-semibold">Role Anda:</span> 
+                              <p><span className="font-semibold">Role Anda:</span>
                                 <span className="ml-2 px-2 py-1 bg-gray-200 rounded text-xs">
                                   {userRole}
                                 </span>
                               </p>
-                              <p><span className="font-semibold">Level Akses:</span> {getAccessLevel()}</p>
+                              <p><span className="font-semibold">{t('accessDenied.accessLevel', 'Level Akses')}:</span> {getAccessLevel()}</p>
                               {deniedReason && (
                                 <p className="text-red-600">
                                   <span className="font-semibold">Alasan:</span> {deniedReason}
@@ -250,25 +270,15 @@ export const UniversalProtectedRoute = ({
                               )}
                             </div>
                           </div>
-                          
-                          <div className="flex gap-3">
-                            <button 
-                              onClick={() => navigate('/', { replace: true })} 
-                              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold"
-                            >
-                              Kembali ke Beranda
-                            </button>
-                            <button 
-                              onClick={() => window.history.back()} 
-                              className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-semibold"
-                            >
-                              Kembali
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => navigate('/', { replace: true })}
+                            className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold"
+                          >
+                            {t('accessDenied.backToHome', 'Kembali ke Beranda')}
+                          </button>
                         </div>
-                        
                         <p className="text-sm text-gray-500 mt-6">
-                          Hubungi administrator untuk mendapatkan akses ke halaman ini
+                          {t('accessDenied.contactAdmin', 'Hubungi administrator untuk mendapatkan akses ke halaman ini')}
                         </p>
                       </div>
                     </div>

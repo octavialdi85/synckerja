@@ -4,6 +4,7 @@ import { useUserData } from "@/features/1-login/hooks/useUserData";
 import UserProfile from "./UserProfile";
 import UserDropdown from "@/features/1-layouts/header/UserDropdown";
 import OrganizationSwitcher from "./OrganizationSwitcher";
+import { HeaderNotificationsBell } from "./HeaderNotificationsBell";
 
 const isDev = import.meta.env.DEV;
 const shouldLog = isDev && Math.random() < 0.02; // Only log 2% in dev
@@ -44,7 +45,8 @@ const Header = memo(() => {
         </div>
 
         {/* Profile Section - positioned at the right */}
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          <HeaderNotificationsBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div>

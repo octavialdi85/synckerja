@@ -2,6 +2,12 @@
  * Registers FCM token with context "general" for app notifications (comments, pending approvals, etc.)
  * so push is sent when app is in background. Call once at app shell when on native.
  * When app is in foreground: shows system banner only (same style as background), no sound, no toast.
+ *
+ * Satu perangkat = satu user: token selalu di-save untuk user yang sedang login. Saat ganti akun
+ * (Octa → Milda atau sebaliknya), token di backend dipindah ke user baru; re-save saat user berubah
+ * dan saat app ke foreground agar notifikasi tidak salah kirim.
+ *
+ * Does not use useAppTranslation so it can run outside LanguageProvider (e.g. during HMR or at app shell).
  */
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,15 +17,23 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
 import { showLocalNotification } from "@/mobile/utils/showLocalNotification";
-import { playNotificationSound } from "@/lib/notificationSound";
 import { devLog } from "@/config/logger";
 import { toast } from "sonner";
-import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+import { useAuth } from "@/features/1-login/contexts/AuthContext";
+
+const FALLBACK = {
+  fcmTokenSaveFailed: "Gagal menyimpan token notifikasi. Coba lagi nanti.",
+  fcmTokenSaveError: "Token notifikasi gagal disimpan.",
+  newNotification: "Notifikasi",
+} as const;
 
 export function useAppNotificationsFCM() {
-  const { t } = useAppTranslation();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const handlesRef = useRef<PluginListenerHandle[]>([]);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -42,11 +56,11 @@ export function useAppNotificationsFCM() {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           devLog.error("app-notifications FCM token save failed", res.status, err);
-          toast.error(t("livechat.fcmTokenSaveFailed", "Gagal menyimpan token notifikasi. Coba lagi nanti."));
+          toast.error(FALLBACK.fcmTokenSaveFailed);
         }
       } catch (e) {
         devLog.error("app-notifications FCM token save error", e);
-        toast.error(t("livechat.fcmTokenSaveError", "Token notifikasi gagal disimpan."));
+        toast.error(FALLBACK.fcmTokenSaveError);
       }
     };
 
@@ -60,9 +74,34 @@ export function useAppNotificationsFCM() {
       }
     };
 
+    // Re-register when app comes to foreground; re-save token untuk user saat ini (event registration
+    // kadang tidak fire lagi jika token di-cache, jadi kita panggil saveToken dengan token yang tersimpan).
+    let lastRegisterAt = 0;
+    const REGISTER_THROTTLE_MS = 30_000;
+    const handleAppActive = async () => {
+      const now = Date.now();
+      if (now - lastRegisterAt < REGISTER_THROTTLE_MS) return;
+      lastRegisterAt = now;
+      try {
+        const perm = await PushNotifications.checkPermissions();
+        if (perm.receive !== "granted") return;
+        await PushNotifications.register();
+        if (lastTokenRef.current) await saveToken(lastTokenRef.current);
+      } catch (e) {
+        devLog.error("PushNotifications re-register on app active error", e);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") handleAppActive();
+    };
+
     const setup = async () => {
       const h1 = await PushNotifications.addListener("registration", (ev: { value: string }) => {
-        if (ev.value) saveToken(ev.value);
+        if (ev.value) {
+          lastTokenRef.current = ev.value;
+          saveToken(ev.value);
+        }
       });
       const h2 = await PushNotifications.addListener(
         "pushNotificationReceived",
@@ -70,9 +109,8 @@ export function useAppNotificationsFCM() {
           const data = ev.data ?? {};
           const isAppNotification = data.openNotifications === "true" || data.url === "/";
           if (!isAppNotification) return;
-          // Foreground: play sound, then show system banner (same as background)
-          playNotificationSound({ vibrate: true });
-          const title = ev.title ?? t("notifications.newNotification", "Notifikasi");
+          // Foreground: show system banner only (sound from FCM/OS)
+          const title = ev.title ?? FALLBACK.newNotification;
           const body = ev.body ?? "";
           showLocalNotification({ title, body });
           queryClient.invalidateQueries({ queryKey: ["review-comment-notifications"] });
@@ -83,12 +121,33 @@ export function useAppNotificationsFCM() {
       );
       handlesRef.current = [h1, h2];
       run();
+
+      document.addEventListener("visibilitychange", onVisibilityChange);
+
+      // Satu kali re-register setelah app ready agar token pasti di-save untuk user yang login
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(handleAppActive, 2000);
+
+      // Saat user ganti (switch akun), re-save token untuk user baru agar notif tidak ke device user lama
+      if (user?.id && lastTokenRef.current) {
+        if (userSaveTimeoutRef.current) clearTimeout(userSaveTimeoutRef.current);
+        userSaveTimeoutRef.current = setTimeout(() => saveToken(lastTokenRef.current!), 500);
+      }
     };
 
     setup();
     return () => {
       handlesRef.current.forEach((h) => h.remove());
       handlesRef.current = [];
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      if (userSaveTimeoutRef.current) {
+        clearTimeout(userSaveTimeoutRef.current);
+        userSaveTimeoutRef.current = null;
+      }
     };
-  }, [t, queryClient]);
+  }, [queryClient, user?.id]);
 }

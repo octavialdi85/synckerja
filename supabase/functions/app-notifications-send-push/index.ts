@@ -138,7 +138,17 @@ Deno.serve(async (req: Request) => {
     const record = (payload?.record ?? {}) as Record<string, unknown>;
 
     // Log every invocation so we can confirm webhook is calling this function
-    console.log("app-notifications-send-push: invoked", { type, table, hasRecord: !!payload?.record });
+    console.log("app-notifications-send-push: invoked", {
+      type,
+      table,
+      hasRecord: !!payload?.record,
+      ...(table === "daily_task_notifications" && {
+        recordType: record.type,
+        recordTitle: record.title,
+        recordBody: record.body,
+        recordUserId: record.user_id,
+      }),
+    });
 
     if (type !== "INSERT" || !["review_comment_notifications", "completion_approvals", "plan_status_change_notifications", "daily_task_notifications"].includes(table)) {
       console.log("app-notifications-send-push: skipped", { table, type });
@@ -205,12 +215,15 @@ Deno.serve(async (req: Request) => {
       dataPayload = { url: "/", openNotifications: "true", notificationType: "plan_status_change", social_media_plan_id: planId };
     } else if (table === "daily_task_notifications") {
       targetUserId = typeof record.user_id === "string" ? record.user_id : null;
-      title = typeof record.title === "string" && record.title.trim() ? record.title.trim() : "Daily Task update";
-      body = typeof record.body === "string" && record.body.trim() ? record.body.trim() : "Daily Task update";
+      const notifTitle = typeof record.title === "string" ? record.title.trim() : "";
+      const notifBody = typeof record.body === "string" ? record.body.trim() : "";
+      title = notifTitle || "Daily Task update";
+      body = notifBody || "Daily Task update";
       const dailyTaskId = typeof record.daily_task_id === "string" ? record.daily_task_id : "";
       const taskStepId = typeof record.task_step_id === "string" ? record.task_step_id : "";
+      const taskStepsToStepsId = typeof record.task_steps_to_steps_id === "string" ? record.task_steps_to_steps_id : "";
       const viewVal = typeof record.view === "string" ? record.view : "";
-      dataPayload = { url: "/", openNotifications: "true", notificationType: "daily_task", daily_task_id: dailyTaskId, task_step_id: taskStepId, view: viewVal };
+      dataPayload = { url: "/", openNotifications: "true", notificationType: "daily_task", daily_task_id: dailyTaskId, task_step_id: taskStepId, task_steps_to_steps_id: taskStepsToStepsId, view: viewVal };
     } else {
       return new Response(JSON.stringify({ ok: true, skipped: "unknown_table" }), {
         status: 200,
@@ -224,6 +237,17 @@ Deno.serve(async (req: Request) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Untuk daily_task_notifications: ambil email penerima agar log bisa dipakai debug (Milda vs Octa)
+    let targetUserEmail: string | null = null;
+    if (table === "daily_task_notifications") {
+      try {
+        const { data: { user } } = await supabase.auth.admin.getUserById(targetUserId);
+        targetUserEmail = user?.email ?? null;
+      } catch {
+        // ignore
+      }
     }
 
     const { data: fcmRows } = await supabase
@@ -284,7 +308,18 @@ Deno.serve(async (req: Request) => {
         .eq("id", record.id);
     }
 
-    console.log("app-notifications-send-push: done", { table, sent, removed: fcmToDelete.length });
+    console.log("app-notifications-send-push: done", {
+      table,
+      targetUserId,
+      ...(table === "daily_task_notifications" && {
+        notificationType: record.type,
+        title,
+        body,
+        targetUserEmail: targetUserEmail ?? "(email not resolved)",
+      }),
+      sent,
+      removed: fcmToDelete.length,
+    });
     return new Response(
       JSON.stringify({ ok: true, sent, removed: fcmToDelete.length }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

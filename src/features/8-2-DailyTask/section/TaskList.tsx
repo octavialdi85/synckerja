@@ -30,6 +30,7 @@ export const TaskList = () => {
     getVisibleStepsEffective,
     filters,
     setFilters,
+    refetchTasks,
     updateTask,
     deleteTask,
     reorderTaskSteps,
@@ -299,14 +300,21 @@ export const TaskList = () => {
                             <p className="text-sm text-gray-400">
                               {filters.planDateRange === 'custom_month_plan' && filters.customPlanMonth
                                 ? t('dailyTask.emptyState.noTasksForSelectedMonth', 'No tasks for the selected month.')
-                                : 'No tasks match your current filters. Try "All tasks" or clear filters.'}
+                                : t('dailyTask.emptyState.noTasksMatchFilters', 'No tasks match your current filters. Change the Plan filter (calendar icon) to "All Dates & Plans", or click below.')}
                             </p>
                             <button
                               type="button"
-                              onClick={() => setFilters((prev) => ({ ...prev, myTask: 'all', pic: '', search: '', status: '', priority: '', dateRange: undefined, planDateRange: undefined, objectiveLink: 'all' }))}
+                              onClick={async () => {
+                                setFilters((prev) => ({ ...prev, myTask: 'all', pic: '', search: '', status: '', priority: '', dateRange: undefined, planDateRange: undefined, objectiveLink: 'all' }));
+                                try {
+                                  await refetchTasks();
+                                } catch {
+                                  // Filters already cleared; list will update from current cache
+                                }
+                              }}
                               className="text-sm text-primary hover:underline"
                             >
-                              Show all tasks
+                              {t('dailyTask.emptyState.showAllTasks', 'Show all tasks')}
                             </button>
                           </>
                         ) : (
