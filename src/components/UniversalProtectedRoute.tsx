@@ -47,6 +47,8 @@ export const UniversalProtectedRoute = ({
   const lastValidatedPathRef = useRef<string>('');
   const lastValidatedUserIdRef = useRef<string>('');
   const lastValidatedConfigHashRef = useRef<string>('');
+  // Dedupe: only run validation once per (path, user, configHash); skip second run with same key
+  const lastValidationRunKeyRef = useRef<string>('');
 
   const {
     canAccessPage,
@@ -88,6 +90,12 @@ export const UniversalProtectedRoute = ({
         return;
       }
 
+      // Dedupe: only run validation once per (path, user, configHash); skip without log or validation
+      const currentRunKey = `${currentPath}|${currentUserId}|${configHash ?? ''}`;
+      if (lastValidationRunKeyRef.current === currentRunKey) {
+        return;
+      }
+
       if (isDev) {
         logger.debug('🌍 UNIVERSAL ROUTE PROTECTION');
         logger.debug('Validating Path:', currentPath);
@@ -118,7 +126,7 @@ export const UniversalProtectedRoute = ({
               currentPath
             });
           }
-          
+          lastValidationRunKeyRef.current = currentRunKey;
           setAccessDenied(true);
           setDeniedReason('Status karyawan Anda adalah Terminated/Inactive. Anda tidak memiliki akses ke organisasi ini.');
           setIsValidating(false);
@@ -148,6 +156,7 @@ export const UniversalProtectedRoute = ({
           logger.debug('🚨 ACCESS DENIED by Page Access Configuration');
           logger.debug('Denied Reason:', getDepartmentRestrictionMessage() || 'Insufficient permissions');
         }
+        lastValidationRunKeyRef.current = currentRunKey;
         // Debounce: only show "Akses Ditolak" after access has been false for DENY_DEBOUNCE_MS.
         // Prevents brief flash of denied when config/role resolve slightly after loading.
         denyTimerRef.current = setTimeout(() => {
@@ -163,6 +172,7 @@ export const UniversalProtectedRoute = ({
       if (isDev) {
         logger.debug('✅ ACCESS GRANTED by Page Access Configuration');
       }
+      lastValidationRunKeyRef.current = currentRunKey;
       accessGrantedRef.current = true;
       lastValidatedPathRef.current = currentPath;
       lastValidatedUserIdRef.current = currentUserId;
@@ -201,6 +211,7 @@ export const UniversalProtectedRoute = ({
     lastValidatedPathRef.current = '';
     lastValidatedUserIdRef.current = '';
     lastValidatedConfigHashRef.current = '';
+    lastValidationRunKeyRef.current = '';
   }, [location.pathname, user?.id]);
 
   // Unified loading state - after first grant, don't show loading again for configLoading flicker (avoids double mount)

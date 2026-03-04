@@ -2245,6 +2245,15 @@ const idTranslations: TranslationDictionary = {
   "publicReview.preview.openYouTube": "Buka di YouTube",
   "publicReview.preview.unavailable": "Preview tidak tersedia",
   "publicReview.preview.openLink": "Buka link",
+  "publicReview.preview.noCarousel": "Belum ada gambar carousel",
+  "publicReview.preview.download": "Unduh gambar",
+  "publicReview.preview.downloaded": "Gambar berhasil diunduh",
+  "publicReview.preview.downloadFallback": "Unduh gagal, dibuka di tab baru",
+
+  "socialMediaDashboard.carousel.clearAll": "Hapus semua gambar carousel",
+  "socialMediaDashboard.carousel.clearAllHint": "Untuk mengunggah hasil revisi, hapus semua gambar terlebih dahulu.",
+  "socialMediaDashboard.carousel.clearing": "Menghapus...",
+  "socialMediaDashboard.carousel.clearAllFirst": "Hapus semua gambar terlebih dahulu",
 
   "subscription.overview.pageTitle": "Ringkasan Langganan",
   "subscription.overview.pageSubtitle": "Status paket dan penggunaan",
@@ -5492,6 +5501,15 @@ const enTranslations: TranslationDictionary = {
   "publicReview.preview.openYouTube": "Open in YouTube",
   "publicReview.preview.unavailable": "Preview not available",
   "publicReview.preview.openLink": "Open link",
+  "publicReview.preview.noCarousel": "No carousel images yet",
+  "publicReview.preview.download": "Download image",
+  "publicReview.preview.downloaded": "Image downloaded",
+  "publicReview.preview.downloadFallback": "Download failed, opened in new tab",
+
+  "socialMediaDashboard.carousel.clearAll": "Clear all carousel images",
+  "socialMediaDashboard.carousel.clearAllHint": "To upload revision result, clear all images first.",
+  "socialMediaDashboard.carousel.clearing": "Clearing...",
+  "socialMediaDashboard.carousel.clearAllFirst": "Clear all images first",
 
   "subscription.overview.pageTitle": "Subscription Overview",
   "subscription.overview.pageSubtitle": "Plan status and usage",

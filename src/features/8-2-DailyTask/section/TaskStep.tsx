@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { CheckSquare, Square, Edit, Trash2, GripVertical, Paperclip, Upload, FileText, X, Users, Link, History, Plus, ListChecks, FileEdit } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
@@ -37,6 +37,10 @@ import { MobileAssignStepDialog } from '@/mobile/pages/daily task/components/Mob
 import { formatDateTime } from '@/features/share/utils/dateFormatter';
 import { useToast } from '@/features/ui/use-toast';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import type { TaskStep as TaskStepData } from '../types/taskTypes';
+
+/** Smooth transition when step settles after reorder drop */
+const SORT_DROP_TRANSITION = 'transform 0.38s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.2s ease-out';
 
 interface TaskFile {
   id: string;
@@ -55,48 +59,134 @@ interface TaskLink {
   created_at: string;
 }
 
+/** Row shape for meeting_point_solutions (Supabase type may not infer). */
+interface MeetingPointSolutionRow {
+  id: string;
+  meeting_point_id: string;
+  solution_description?: string | null;
+}
+
+/** Row shape for meeting_points (Supabase type may not infer). */
+interface MeetingPointRow {
+  id: string;
+  discussion_point?: string | null;
+  organization_id: string;
+}
+
+/** Row shape for social_media_plans (Supabase type may not infer). */
+interface SocialMediaPlanRow {
+  approved?: boolean | null;
+  google_drive_link?: string | null;
+  production_approved?: boolean | null;
+}
+
 interface TaskStepProps {
-  step: {
-    id: string;
-    task_id: string;
-    title: string;
-    description?: string | null;
-    is_completed: boolean;
-    order: number;
-    created_at: string;
-    updated_at?: string;
-    completed_at?: string | null;
-    created_by?: string | null;
-    assigned_to?: string | null;
-    assigned_at?: string | null; // Assignment date/time
-    assigned_by?: string | null; // User who assigned the step
-    status?: string;
-    priority?: string;
-    files?: TaskFile[];
-    links?: TaskLink[];
-    assigned_due_date?: string | null;
-    has_assigned_substeps?: boolean; // True if this step has sub-steps assigned to current user
-    social_media_plan_id?: string | null;
-    is_concept_step?: boolean; // true for Concept step, false for Content step
-    // Relations
-    assigned_employee?: {
-      id: string;
-      full_name: string;
-      email?: string;
-    };
-    assigned_by_employee?: {
-      id: string;
-      full_name: string;
-      email?: string;
-    };
-  };
+  step: TaskStepData;
   index: number;
   taskCreatedBy?: string; // Task creator user ID for permission check
   taskTitle?: string; // Task title for modal display
   autoReorder?: boolean; // Enable auto-reorder when step completion changes (for mobile)
+  /** When provided, swipe-to-reveal actions on mobile (icons in strip, close by swiping right) */
+  isRevealed?: boolean;
+  onReveal?: () => void;
+  onClose?: () => void;
+  /** When true, only row content is rendered (no swipe, no action buttons). Used by mobile wrapper. */
+  contentOnly?: boolean;
+  /** Called when the Sub Step modal opens or closes. Used by parent (e.g. TaskDetailModal) to block back from closing the wrong dialog. */
+  onSubStepModalOpenChange?: (open: boolean) => void;
+  /** When this value changes, close the Sub Step modal (used when parent receives back and wants to close inner modal first). */
+  closeSubStepRequested?: number;
+  /** When provided with contentOnly, parent (e.g. MobileTaskStep) owns the sortable node; only grip drag handle is used. */
+  sortableHandleProps?: { attributes: Record<string, unknown>; listeners: Record<string, unknown> };
 }
 
-export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReorder = false }: TaskStepProps) => {
+export interface TaskStepHandle {
+  openEdit: () => void;
+  openDelete: () => void;
+  openAssign: () => void;
+  openHistory: () => void;
+  openSubSteps: () => void;
+  toggleFiles: () => void;
+  toggleLinks: () => void;
+  openUpdateHistory: () => void;
+}
+
+export const TaskStep = forwardRef<TaskStepHandle, TaskStepProps>(function TaskStep(
+  props,
+  ref
+) {
+  const { contentOnly = false, sortableHandleProps } = props;
+  if (contentOnly && sortableHandleProps) {
+    return <TaskStepContentOnly ref={ref} {...props} />;
+  }
+  return <TaskStepWithSortable ref={ref} {...props} />;
+});
+
+/** Renders step when parent owns the sortable node; no useSortable, grip uses sortableHandleProps. */
+const TaskStepContentOnly = forwardRef<TaskStepHandle, TaskStepProps>(function TaskStepContentOnly(
+  props,
+  ref
+) {
+  const { sortableHandleProps } = props;
+  return (
+    <TaskStepInner
+      ref={ref}
+      {...props}
+      sortableHandleProps={sortableHandleProps!}
+    />
+  );
+});
+
+/** Calls useSortable and passes result to TaskStepInner. */
+const TaskStepWithSortable = forwardRef<TaskStepHandle, TaskStepProps>(function TaskStepWithSortable(
+  props,
+  ref
+) {
+  const { step } = props;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `step-${step.id}` });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? 'none' : (transition || SORT_DROP_TRANSITION),
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <TaskStepInner
+      ref={ref}
+      {...props}
+      sortableNodeRef={setNodeRef}
+      sortableNodeStyle={style}
+      sortableHandleAttributes={attributes}
+      sortableHandleListeners={listeners}
+      sortableIsDragging={isDragging}
+    />
+  );
+});
+
+type TaskStepInnerProps = TaskStepProps & {
+  sortableHandleProps?: { attributes: Record<string, unknown>; listeners: Record<string, unknown> };
+  sortableNodeRef?: (node: HTMLElement | null) => void;
+  sortableNodeStyle?: React.CSSProperties;
+  sortableHandleAttributes?: Record<string, unknown>;
+  sortableHandleListeners?: Record<string, unknown>;
+  sortableIsDragging?: boolean;
+};
+
+const TaskStepInner = forwardRef<TaskStepHandle, TaskStepInnerProps>(function TaskStepInner(
+  { step, index, taskCreatedBy, taskTitle = '', autoReorder = false, isRevealed = false, onReveal, onClose, contentOnly = false, onSubStepModalOpenChange, closeSubStepRequested, sortableHandleProps, sortableNodeRef, sortableNodeStyle, sortableHandleAttributes, sortableHandleListeners, sortableIsDragging },
+  ref
+) {
+  const handleAttrs = sortableHandleProps ? sortableHandleProps.attributes : (sortableHandleAttributes ?? {});
+  const handleListeners = sortableHandleProps ? sortableHandleProps.listeners : (sortableHandleListeners ?? {});
+  const nodeRef = sortableHandleProps ? undefined : sortableNodeRef;
+  const nodeStyle = sortableHandleProps ? undefined : sortableNodeStyle;
+
   const { updateTaskStep, deleteTaskStep, uploadTaskStepFile, deleteTaskFile, assignTaskStep, rejectedReasonsByStepId, highlightFromPendingApproval, pendingApprovalFocus, setPendingApprovalFocus } = useDailyTask();
   const stepRejectReason = rejectedReasonsByStepId[step.id];
   const isHighlightedFromPendingApproval = Boolean(highlightFromPendingApproval && pendingApprovalFocus?.stepId === step.id);
@@ -109,14 +199,52 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isViewSubStepsOpen, setIsViewSubStepsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
 
-  // Open sub-step modal when pending approval sub-step title was clicked (from sidebar)
+  /** Mobile expandable card: collapse = title + description one line each; tap content to expand; auto-collapse after 5s */
+  const isMobileExpandableCard = Boolean(contentOnly && isMobile);
+  const [cardExpanded, setCardExpanded] = useState(false);
+  const autoCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    onSubStepModalOpenChange?.(isViewSubStepsOpen);
+  }, [isViewSubStepsOpen, onSubStepModalOpenChange]);
+  useEffect(() => {
+    if (closeSubStepRequested != null && closeSubStepRequested > 0 && isViewSubStepsOpen) {
+      onSubStepModalOpenChange?.(false);
+      setIsViewSubStepsOpen(false);
+    }
+  }, [closeSubStepRequested, isViewSubStepsOpen, onSubStepModalOpenChange]);
+
+  /** Auto-collapse mobile expandable card after 5s when expanded */
+  useEffect(() => {
+    if (!isMobileExpandableCard || !cardExpanded) {
+      if (autoCollapseTimerRef.current) {
+        clearTimeout(autoCollapseTimerRef.current);
+        autoCollapseTimerRef.current = null;
+      }
+      return;
+    }
+    autoCollapseTimerRef.current = setTimeout(() => {
+      setCardExpanded(false);
+      autoCollapseTimerRef.current = null;
+    }, 5000);
+    return () => {
+      if (autoCollapseTimerRef.current) {
+        clearTimeout(autoCollapseTimerRef.current);
+        autoCollapseTimerRef.current = null;
+      }
+    };
+  }, [isMobileExpandableCard, cardExpanded]);
+
+  // Open sub-step modal when pending approval
   useEffect(() => {
     if (pendingApprovalFocus?.openSubStepModalForStepId === step.id) {
+      onSubStepModalOpenChange?.(true);
       setIsViewSubStepsOpen(true);
-      setPendingApprovalFocus((prev) => (prev ? { ...prev, openSubStepModalForStepId: undefined } : null));
+      setPendingApprovalFocus(pendingApprovalFocus ? { ...pendingApprovalFocus, openSubStepModalForStepId: undefined } : null);
     }
-  }, [pendingApprovalFocus?.openSubStepModalForStepId, step.id, setPendingApprovalFocus]);
+  }, [pendingApprovalFocus?.openSubStepModalForStepId, pendingApprovalFocus, step.id, setPendingApprovalFocus, onSubStepModalOpenChange]);
   const [subStepCount, setSubStepCount] = useState<number>(0);
   const [subStepCompletedCount, setSubStepCompletedCount] = useState<number>(0);
   const [historyCount, setHistoryCount] = useState<number>(0);
@@ -159,9 +287,6 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   // Check if current user is assigned to this step
   const isAssignedToMe = step.assigned_to === user?.id;
 
-  // Check if mobile device
-  const isMobile = useIsMobile();
-
   // Permission: Creator can do everything, assigned user can only complete
   const canEdit = isTaskCreator;
   const canDelete = isTaskCreator;
@@ -170,20 +295,105 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
   // Check if step has notifications (files)
   const fileCount = step.files?.length || 0;
 
-  // Use sortable hook for drag and drop
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `step-${step.id}` });
+  const hasSwipe = (onReveal != null && onClose != null) && !contentOnly;
+  const ACTION_STRIP_WIDTH = 140;
+  const SWIPE_THRESHOLD = 28;
+  const DIRECTION_LOCK_PX = 8;
+  const [translateX, setTranslateX] = useState(0);
+  const [isSwipeDragging, setIsSwipeDragging] = useState(false);
+  const touchStartRef = useRef<{
+    startX: number;
+    startY: number;
+    startTranslateX: number;
+    lockHorizontal: boolean | null;
+  } | null>(null);
+  const translateXRef = useRef(0);
+  const slidingRowRef = useRef<HTMLDivElement>(null);
+  const lockHorizontalRef = useRef(false);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+  translateXRef.current = translateX;
+  lockHorizontalRef.current = touchStartRef.current?.lockHorizontal === true;
+
+  useImperativeHandle(ref, () => ({
+    openEdit: () => setIsEditModalOpen(true),
+    openDelete: () => setDeleteStepDialogOpen(true),
+    openAssign: () => setShowAssignDialog(true),
+    openHistory: () => setShowHistoryModal(true),
+    openSubSteps: () => {
+      onSubStepModalOpenChange?.(true);
+      setIsViewSubStepsOpen(true);
+    },
+    toggleFiles: () => setShowFiles((f) => !f),
+    toggleLinks: () => setShowLinks((l) => !l),
+    openUpdateHistory: () => setIsUpdateHistoryOpen(true),
+  }), []);
+
+  useEffect(() => {
+    if (!hasSwipe || !slidingRowRef.current) return;
+    const el = slidingRowRef.current;
+    const onMove = (e: TouchEvent) => {
+      if (lockHorizontalRef.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onMove);
+  }, [hasSwipe]);
+
+  useEffect(() => {
+    if (hasSwipe && !isRevealed && translateX !== 0) setTranslateX(0);
+  }, [hasSwipe, isRevealed, translateX]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!hasSwipe) return;
+    setIsSwipeDragging(true);
+    touchStartRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, startTranslateX: translateX, lockHorizontal: null };
+    const el = slidingRowRef.current;
+    if (el) {
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${translateX}px)`;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    if (!hasSwipe || !start) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - start.startX;
+    const deltaY = currentY - start.startY;
+    if (start.lockHorizontal === null) {
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+        start.lockHorizontal = absX >= absY;
+        lockHorizontalRef.current = start.lockHorizontal;
+      }
+    }
+    if (start.lockHorizontal === true) {
+      const next = Math.min(0, Math.max(-ACTION_STRIP_WIDTH, start.startTranslateX + deltaX));
+      translateXRef.current = next;
+      const el = slidingRowRef.current;
+      if (el) el.style.transform = `translateX(${next}px)`;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!hasSwipe) return;
+    setIsSwipeDragging(false);
+    lockHorizontalRef.current = false;
+    touchStartRef.current = null;
+    const el = slidingRowRef.current;
+    if (el) {
+      el.style.transition = '';
+      el.style.transform = '';
+    }
+    const current = translateXRef.current;
+    if (current < -SWIPE_THRESHOLD) {
+      setTranslateX(-ACTION_STRIP_WIDTH);
+      onReveal?.();
+    } else {
+      setTranslateX(0);
+      onClose?.();
+    }
   };
 
   // Removed auto-expand effect - files section now defaults to collapsed
@@ -204,12 +414,15 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     // on time means finish is on/before 23:59:59 of due date
     dueEnd.setHours(23, 59, 59, 999);
     if (finish.getTime() <= dueEnd.getTime()) {
-      return { text: `${assigneeName} · ontime`, className: 'text-[10px] text-green-600' };
+      return { text: contentOnly ? 'Ontime' : `${assigneeName} ontime`, className: 'text-[10px] text-green-600' };
     }
     const diffMs = finish.getTime() - dueEnd.getTime();
     const dayMs = 24 * 60 * 60 * 1000;
     const lateDays = Math.ceil(diffMs / dayMs);
-    return { text: `${assigneeName} · late ${lateDays} day${lateDays > 1 ? 's' : ''}` , className: 'text-[10px] text-red-600' };
+    const lateText = contentOnly
+      ? `Late ${lateDays} day${lateDays > 1 ? 's' : ''}`
+      : `${assigneeName} late ${lateDays} day${lateDays > 1 ? 's' : ''}`;
+    return { text: lateText, className: 'text-[10px] text-red-600' };
   };
 
   // Compute overdue days label for active (not completed) steps
@@ -337,11 +550,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       setIsCheckingMeetingPoint(true);
       try {
         // First, query solution with solution_description that matches step.title
-        const { data: solution, error: solutionError } = await supabase
+        const { data: solutionRaw, error: solutionError } = await supabase
           .from('meeting_point_solutions')
           .select('id, meeting_point_id, solution_description')
           .eq('solution_description', step.title)
           .maybeSingle();
+        const solution = solutionRaw as unknown as MeetingPointSolutionRow | null;
 
         if (solutionError) {
           console.error('Error checking meeting point solution:', solutionError);
@@ -355,12 +569,13 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
         }
 
         // Found solution - now verify it belongs to current organization
-        const { data: meetingPoint, error: meetingPointError } = await supabase
+        const { data: meetingPointRaw, error: meetingPointError } = await supabase
           .from('meeting_points')
           .select('id, discussion_point, organization_id')
           .eq('id', solution.meeting_point_id)
           .eq('organization_id', organizationId)
           .maybeSingle();
+        const meetingPoint = meetingPointRaw as unknown as MeetingPointRow | null;
 
         if (meetingPointError) {
           console.error('Error checking meeting point:', meetingPointError);
@@ -460,11 +675,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       if (step.is_completed) return;
 
       try {
-        const { data: planData, error: planError } = await supabase
+        const { data: planDataRaw, error: planError } = await supabase
           .from('social_media_plans')
           .select('approved')
           .eq('id', step.social_media_plan_id)
           .single();
+        const planData = planDataRaw as SocialMediaPlanRow | null;
 
         if (planError) {
           console.error('Error fetching plan data for auto-complete:', planError);
@@ -501,11 +717,12 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     if (step.social_media_plan_id && subStepCount === 0) {
       try {
         // Fetch social media plan data
-        const { data: planData, error: planError } = await supabase
+        const { data: planDataRaw, error: planError } = await supabase
           .from('social_media_plans')
           .select('approved, google_drive_link, production_approved')
           .eq('id', step.social_media_plan_id)
           .single();
+        const planData = planDataRaw as SocialMediaPlanRow | null;
 
         if (planError) {
           console.error('Error fetching social media plan:', planError);
@@ -856,28 +1073,32 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     </>
   );
 
-  return (
-    <div className="space-y-2">
-      <div
-        ref={setNodeRef}
-        style={style}
-        data-step-id={step.id}
-        className={`flex items-start md:items-center gap-2 p-2 rounded-md transition-colors border ${
-          isHighlightedFromPendingApproval
-            ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
-            : isDragging
-              ? 'shadow-lg bg-blue-100 border-blue-100'
-              : 'bg-white hover:bg-blue-50 border-blue-100'
-        }`}
-      >
-      <div className="flex items-start gap-2 flex-shrink-0 pt-0.5">
+  const rowClass = contentOnly
+    ? `flex flex-col gap-0 px-3 py-2 rounded-lg shadow-sm transition-colors border ${
+        isHighlightedFromPendingApproval
+          ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+          : sortableIsDragging
+            ? 'shadow-lg bg-blue-100 border-blue-100'
+            : 'bg-white hover:bg-blue-50 border-blue-100'
+      }`
+    : `flex flex-col gap-0 px-2 py-1.5 rounded-md transition-colors border ${
+        isHighlightedFromPendingApproval
+          ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+          : sortableIsDragging
+            ? 'shadow-lg bg-blue-100 border-blue-100'
+            : 'bg-white hover:bg-blue-50 border-blue-100'
+      }`;
+      const rowContent = (
+        <>
+      {/* Baris: checkbox, grip, title */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={handleToggleComplete}
           disabled={
             (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
             (subStepCount > 0 && isCompleted)
           }
-          className={`transition-colors ${
+          className={`transition-colors flex-shrink-0 ${
             (subStepCount > 0 && subStepCompletedCount < subStepCount && !isCompleted) ||
             (subStepCount > 0 && isCompleted)
               ? 'text-gray-300 cursor-not-allowed opacity-50'
@@ -901,20 +1122,40 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
         </button>
 
         <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing mt-0.5"
+          {...handleAttrs}
+          {...handleListeners}
+          className="cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
         >
           <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500" />
         </div>
-      </div>
 
-      <>
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div
+          className="flex-1 min-w-0 flex flex-col overflow-hidden"
+          {...(isMobileExpandableCard
+            ? {
+                role: 'button' as const,
+                tabIndex: 0,
+                'aria-expanded': cardExpanded,
+                onClick: () => setCardExpanded((prev) => !prev),
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setCardExpanded((prev) => !prev);
+                  }
+                },
+              }
+            : {})}
+        >
             <div className="min-w-0 flex flex-wrap items-center gap-2">
-              <span className={`text-sm line-clamp-2 md:truncate min-w-0 block ${
-                isCompleted ? 'line-through text-gray-500' : 'text-gray-900'
-              }`}>
+              <span
+                className={`text-sm min-w-0 block ${
+                  isMobileExpandableCard
+                    ? cardExpanded
+                      ? 'break-words'
+                      : 'truncate'
+                    : 'line-clamp-2 md:truncate'
+                } ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}
+              >
                 {step.title}
               </span>
               {stepRejectReason && (
@@ -934,11 +1175,18 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
             {/* Description with see more functionality */}
             {step.description && step.description.trim() && (
               <div className="mt-1 min-w-0 max-w-full">
-                <div className="flex items-start gap-1">
-                  <p className="text-xs text-gray-600 break-words line-clamp-1 overflow-hidden flex-1">
+                {isMobileExpandableCard && cardExpanded ? (
+                  <p className="text-xs text-gray-600 break-words whitespace-pre-wrap">
                     {step.description}
                   </p>
-                  {step.description.length > 50 && (
+                ) : (
+                <div className="flex items-start gap-1">
+                  <p
+                    className="text-xs text-gray-600 break-words line-clamp-1 overflow-hidden flex-1"
+                  >
+                    {step.description}
+                  </p>
+                  {step.description.length > 50 && !isMobileExpandableCard && (
                     isMobile ? (
                       <Dialog open={isDescriptionPopoverOpen} onOpenChange={setIsDescriptionPopoverOpen}>
                         <DialogTrigger asChild>
@@ -1000,13 +1248,19 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
                     )
                   )}
                 </div>
+                )}
               </div>
             )}
-            {/* Icons below title when no sub-steps */}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 my-1 w-full" aria-hidden />
+
+      {/* Icons below title when no sub-steps */}
             {subStepCount === 0 && (
-              <div className="mt-1 flex items-end justify-between gap-2 flex-wrap">
-                {(step.assigned_due_date || step.assigned_at || isAssignedToMe || (step.assigned_to && isStepCreator) || step.has_assigned_substeps || getOverdueLabel() || getFinishStatusLabel()) && (
-                  <div className="flex flex-wrap items-end gap-2 text-[10px] text-gray-500 min-w-0">
+              contentOnly ? (
+                (step.assigned_due_date || step.assigned_at || isAssignedToMe || (step.assigned_to && isStepCreator) || step.has_assigned_substeps || getOverdueLabel() || getFinishStatusLabel()) && (
+                  <div className="flex flex-wrap items-end gap-x-2 gap-y-0.5 text-[10px] text-gray-500 min-w-0">
                     {isAssignedToMe && (
                       <span className="text-[10px] text-green-600">
                         Assigned to you
@@ -1028,7 +1282,39 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
                     {step.assigned_at && (
                       <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
                     )}
-                    {/* Overdue badge for active steps - placed to the right of Assigned */}
+                    {getOverdueLabel() && (
+                      <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
+                    )}
+                    {getFinishStatusLabel() && (
+                      <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
+                    )}
+                  </div>
+                )
+              ) : (
+              <div className="flex items-end justify-between gap-2 flex-wrap">
+                {(step.assigned_due_date || step.assigned_at || isAssignedToMe || (step.assigned_to && isStepCreator) || step.has_assigned_substeps || getOverdueLabel() || getFinishStatusLabel()) && (
+                  <div className="flex flex-wrap items-end gap-x-2 gap-y-0.5 text-[10px] text-gray-500 min-w-0">
+                    {isAssignedToMe && (
+                      <span className="text-[10px] text-green-600">
+                        Assigned to you
+                      </span>
+                    )}
+                    {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                      <span className="text-[10px] text-blue-600">
+                        Assigned to {step.assigned_employee?.full_name || 'other'}
+                      </span>
+                    )}
+                    {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                      <span className="text-[10px] text-purple-600">
+                        Sub-step assigned to you
+                      </span>
+                    )}
+                    {step.assigned_due_date && (
+                      <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                    )}
+                    {step.assigned_at && (
+                      <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                    )}
                     {getOverdueLabel() && (
                       <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
                     )}
@@ -1038,80 +1324,199 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
                   </div>
                 )}
                 <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm flex-shrink-0">
-                  {renderActionButtons()}
+                  {!hasSwipe && renderActionButtons()}
                 </div>
               </div>
+              )
             )}
             {subStepCount > 0 && (
-              <div>
-                <div className="flex items-end gap-1">
-                  <div className="flex-1 min-w-0">
-                    <div className="h-1.5 bg-blue-100 rounded">
+              <>
+                {/* Progress bar full width di bawah checkbox */}
+                {contentOnly ? (
+                  <div className="w-full h-1.5 overflow-hidden rounded bg-gray-200">
+                    <div
+                      className="h-full rounded bg-blue-500 transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full flex items-center gap-2">
+                    <div className="flex-1 min-w-0 h-1.5 overflow-hidden rounded bg-gray-200">
                       <div
-                        className="h-1.5 bg-blue-500 rounded"
+                        className="h-full rounded bg-blue-500 transition-all duration-300"
                         style={{ width: `${Math.min(100, Math.round((subStepCompletedCount / subStepCount) * 100))}%` }}
                       />
                     </div>
-                    <div className="flex items-end justify-between gap-1 text-[10px] text-gray-500 min-w-0">
-                      <div className="flex flex-wrap items-end gap-1 min-w-0">
-                        {isAssignedToMe && (
-                          <span className="text-[10px] text-green-600">
-                            Assigned to you
-                          </span>
-                        )}
-                        {!isAssignedToMe && step.assigned_to && isStepCreator && (
-                          <span className="text-[10px] text-blue-600">
-                            Assigned to {step.assigned_employee?.full_name || 'other'}
-                          </span>
-                        )}
-                        {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
-                          <span className="text-[10px] text-purple-600">
-                            Sub-step assigned to you
-                          </span>
-                        )}
-                        {step.assigned_due_date && (
-                          <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
-                        )}
-                        {/* Assigned at */}
-                        {step.assigned_at && (
-                          <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
-                        )}
-                        {/* Sub-step count - placed to the right of Assigned at */}
-                        {step.assigned_at && (
-                          <span>{subStepCompletedCount}/{subStepCount}</span>
-                        )}
-                        {/* Overdue badge for active steps - placed to the right of Assigned */}
-                        {getOverdueLabel() && (
-                          <span className={`ml-0 ${getOverdueLabel()!.className}`}>{getOverdueLabel()!.text}</span>
-                        )}
-                        {/* Finished timestamp - only show when completed */}
-                        {/* Use completed_at from task_steps table for finished date */}
-                        {isCompleted && completedAt && (
-                          <span className="text-gray-500">Finished: {formatDateTime(completedAt)}</span>
-                        )}
-                        {getFinishStatusLabel() && (
-                          <span className={`ml-0 ${getFinishStatusLabel()!.className}`}>{getFinishStatusLabel()!.text}</span>
-                        )}
+                    <span className="text-[10px] font-medium text-gray-500 flex-shrink-0">
+                      {Math.round((subStepCompletedCount / subStepCount) * 100)}%
+                    </span>
+                    {!contentOnly && (
+                      <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm flex-shrink-0">
+                        {!hasSwipe && renderActionButtons()}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <span className="font-medium">
-                          {Math.round((subStepCompletedCount / subStepCount) * 100)}%
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
-                  <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-300 rounded-lg shadow-sm flex-shrink-0">
-                    {renderActionButtons()}
+                )}
+                <div className={`flex justify-between gap-1 text-[10px] text-gray-500 min-w-0 ${contentOnly ? 'mt-0.5 items-start' : 'mt-1 items-end'}`}>
+                  <div className="flex flex-wrap min-w-0 items-end gap-x-1 gap-y-0.5">
+                    {isAssignedToMe && (
+                      <span className="text-[10px] text-green-600">
+                        Assigned to you
+                      </span>
+                    )}
+                    {!isAssignedToMe && step.assigned_to && isStepCreator && (
+                      <span className="text-[10px] text-blue-600">
+                        Assigned to {step.assigned_employee?.full_name || 'other'}
+                      </span>
+                    )}
+                    {!isAssignedToMe && !step.assigned_to && step.has_assigned_substeps && (
+                      <span className="text-[10px] text-purple-600">
+                        Sub-step assigned to you
+                      </span>
+                    )}
+                    {step.assigned_due_date && (
+                      <span>Due: {new Date(step.assigned_due_date).toLocaleDateString()}</span>
+                    )}
+                    {step.assigned_at && (
+                      <span className="text-gray-500">Assigned: {formatDateTime(step.assigned_at)}</span>
+                    )}
+                    {step.assigned_at && (
+                      <span>{subStepCompletedCount}/{subStepCount}</span>
+                    )}
+                    {getOverdueLabel() && (
+                      <span className={getOverdueLabel()!.className}>{getOverdueLabel()!.text}</span>
+                    )}
+                    {isCompleted && completedAt && (
+                      <span className="text-gray-500">Finished: {formatDateTime(completedAt)}</span>
+                    )}
+                    {getFinishStatusLabel() && (
+                      <span className={getFinishStatusLabel()!.className}>{getFinishStatusLabel()!.text}</span>
+                    )}
                   </div>
+                  {contentOnly && (
+                    <span className="text-[10px] font-medium text-gray-500 flex-shrink-0">
+                      {Math.round((subStepCompletedCount / subStepCount) * 100)}%
+                    </span>
+                  )}
                 </div>
-              </div>
+              </>
             )}
-          </div>
         </>
-      </div>
+      );
+
+  return (
+    <div className="space-y-2">
+      {hasSwipe ? (
+        <div ref={nodeRef} style={nodeStyle} data-step-id={step.id}>
+          <div className="relative overflow-hidden rounded-md">
+            <div
+              className="absolute right-0 top-0 bottom-0 flex-shrink-0 flex items-stretch rounded-r-md border-l-2 border-slate-300 bg-slate-200 overflow-hidden"
+              style={{ width: ACTION_STRIP_WIDTH }}
+            >
+              {renderActionButtons()}
+            </div>
+            <div
+              ref={slidingRowRef}
+              className={rowClass}
+              style={{
+                minWidth: '100%',
+                transform: `translateX(${translateX}px)`,
+                touchAction: 'pan-y',
+                ...(isSwipeDragging
+                  ? { transition: 'none', willChange: 'transform' as const }
+                  : { transition: 'transform 0.22s cubic-bezier(0.33, 1, 0.68, 1)' }),
+              }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+            >
+              {rowContent}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div ref={nodeRef} style={nodeStyle} data-step-id={step.id} className={rowClass}>
+          {rowContent}
+        </div>
+      )}
 
       {/* File Upload and Display Section - Moved outside main container */}
+      {/* Saat contentOnly (mobile swipe), tampilkan di modal agar baris tidak memanjang ke bawah */}
     {showFiles && (
+      contentOnly ? (
+        <Dialog open={showFiles} onOpenChange={(open) => !open && setShowFiles(false)}>
+          <DialogContent
+            className="max-w-[min(96vw,24rem)] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
+            hideCloseButton={false}
+          >
+            <DialogTitle className="sr-only">Files</DialogTitle>
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
+              <h4 className="text-sm font-semibold">Attachments</h4>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll p-4 space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                className="hidden"
+                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar,.wav,.mp3,.m4a,.aac,.ogg,.flac,.mp4,.avi,.mov,.wmv,.flv,.webm,.mkv,.m4v"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="w-full"
+              >
+                {isUploading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    Uploading...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    Upload File
+                  </div>
+                )}
+              </Button>
+              <div className="space-y-2">
+                {step.files && step.files.length > 0 ? (
+                  step.files.map((file) => (
+                    <div key={file.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200">
+                      <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{file.filename}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(file.file_url, '_blank')}
+                          className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                          title="View file"
+                        >
+                          <FileText className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteFile(file.id)}
+                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                          title="Delete file"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 italic text-center">No files attached</p>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
       <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
         {/* File Upload */}
         <div className="mb-3">
@@ -1178,10 +1583,41 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
           )}
         </div>
       </div>
+    )
     )}
 
     {/* Links Section */}
     {showLinks && (
+      contentOnly ? (
+        <Dialog open={showLinks} onOpenChange={(open) => !open && setShowLinks(false)}>
+          <DialogContent
+            className="max-w-[min(96vw,24rem)] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
+            hideCloseButton={false}
+          >
+            <DialogTitle className="sr-only">Links</DialogTitle>
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
+              <h4 className="text-sm font-semibold">Links</h4>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll p-4">
+              <StepLinks
+                taskStepId={step.id}
+                isExpanded={true}
+                onLinksChange={async () => {
+                  try {
+                    const { count: linksCount } = await supabase
+                      .from('task_step_links')
+                      .select('*', { count: 'exact', head: true })
+                      .eq('task_step_id', step.id);
+                    setLinkCount(linksCount || 0);
+                  } catch (error) {
+                    console.error('Error refreshing link count:', error);
+                  }
+                }}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
       <StepLinks
         taskStepId={step.id}
         isExpanded={showLinks}
@@ -1198,6 +1634,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
           }
         }}
       />
+      )
     )}
 
     {/* Assignment Dialog - mobile: keep mounted so close animation can run */}
@@ -1252,6 +1689,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
       parentStepId={step.id}
       parentStepTitle={step.title}
       taskCreatedBy={taskCreatedBy}
+      preferSwipeLayout={contentOnly}
       onParentCompletionChange={async (completed) => {
         try {
           const payload: any = { is_completed: completed };
@@ -1338,7 +1776,7 @@ export const TaskStep = ({ step, index, taskCreatedBy, taskTitle = '', autoReord
     />
     </div>
   );
-};
+});
 
 
 

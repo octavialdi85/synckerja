@@ -624,20 +624,26 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                               <span className="w-4 h-4 shrink-0 rounded-full border-2 border-gray-300" aria-hidden />
                             )}
                             {t('briefDialog.sectionBriefContent', 'Brief Content')}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-auto py-0 px-1 -ml-1 cursor-pointer rounded"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setBriefViewMode(briefViewMode === 'rendered' ? 'raw' : 'rendered');
                               }}
-                              className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-auto py-0 px-1 -ml-1"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setBriefViewMode(briefViewMode === 'rendered' ? 'raw' : 'rendered');
+                                }
+                              }}
                             >
                               {briefViewMode === 'rendered'
                                 ? t('briefDialog.editFullMarkdown', 'Edit full markdown')
                                 : t('briefDialog.viewRendered', 'View rendered')}
-                            </Button>
+                            </span>
                           </span>
                         </AccordionTrigger>
                         <AccordionContent

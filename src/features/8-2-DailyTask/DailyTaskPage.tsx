@@ -317,6 +317,11 @@ const DailyTaskContent = () => {
             contentTitle={previewPlan.title ?? undefined}
             contentType={previewPlan.content_type?.name}
             postDate={previewPlan.post_date ?? undefined}
+            onCarouselChange={() => {
+              queryClient.invalidateQueries({ queryKey: ['social-media-plan', previewPlan.id] });
+              queryClient.invalidateQueries({ queryKey: ['social-media-carousel', previewPlan.id] });
+              pendingApprovalRefreshRef.current?.();
+            }}
             onApprove={() => {
               pendingApprovalRefreshRef.current?.();
             }}

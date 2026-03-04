@@ -2,6 +2,8 @@
  * Registers for FCM push notifications on native (Android/iOS) and saves the token
  * to the backend so Live Chat can send notifications when the app is in background.
  * Call this when the user is on Live Chat (or app shell) so token is saved.
+ * Uses fallback strings for toasts so this hook does not require LanguageProvider
+ * (NativePushSetup is mounted at app root and may run before context is ready, e.g. on HMR).
  */
 import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -12,10 +14,11 @@ import { SUPABASE_URL } from "@/integrations/supabase/client";
 import { showLocalNotification } from "@/mobile/utils/showLocalNotification";
 import { devLog } from "@/config/logger";
 import { toast } from "sonner";
-import { useAppTranslation } from "@/features/share/i18n/useAppTranslation";
+
+const FALLBACK_SAVE_FAILED = "Gagal menyimpan token notifikasi. Coba lagi nanti.";
+const FALLBACK_SAVE_ERROR = "Token notifikasi gagal disimpan.";
 
 export function useLiveChatFCM() {
-  const { t } = useAppTranslation();
   const handlesRef = useRef<PluginListenerHandle[]>([]);
 
   useEffect(() => {
@@ -37,11 +40,11 @@ export function useLiveChatFCM() {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           devLog.error("livechat-save-fcm-token failed", res.status, err);
-          toast.error(t("livechat.fcmTokenSaveFailed", "Gagal menyimpan token notifikasi. Coba lagi nanti."));
+          toast.error(FALLBACK_SAVE_FAILED);
         }
       } catch (e) {
         devLog.error("livechat-save-fcm-token error", e);
-        toast.error(t("livechat.fcmTokenSaveError", "Token notifikasi gagal disimpan."));
+        toast.error(FALLBACK_SAVE_ERROR);
       }
     };
 
@@ -93,5 +96,5 @@ export function useLiveChatFCM() {
       handlesRef.current.forEach((h) => h.remove());
       handlesRef.current = [];
     };
-  }, [t]);
+  }, []);
 }

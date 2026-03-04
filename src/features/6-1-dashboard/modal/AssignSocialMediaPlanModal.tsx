@@ -369,26 +369,26 @@ export const AssignSocialMediaPlanModal: React.FC<AssignSocialMediaPlanModalProp
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Assignment</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>Please confirm the following assignment details:</p>
-              <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium">Employee:</span>
-                  <span>{selectedEmployee?.full_name || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Assignment Date:</span>
-                  <span>{formatDateTime(getTodayAssignedAt())}</span>
-                </div>
-                {dueDate && (
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Due Date:</span>
-                    <span>{formattedDueDate}</span>
-                  </div>
-                )}
-              </div>
+            <AlertDialogDescription asChild>
+              <span className="block">Please confirm the following assignment details:</span>
             </AlertDialogDescription>
+            <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm mt-2">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <span className="font-medium">Employee:</span>
+                <span>{selectedEmployee?.full_name || 'N/A'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Assignment Date:</span>
+                <span>{formatDateTime(getTodayAssignedAt())}</span>
+              </div>
+              {dueDate && (
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Due Date:</span>
+                  <span>{formattedDueDate}</span>
+                </div>
+              )}
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isAssigning}>Cancel</AlertDialogCancel>

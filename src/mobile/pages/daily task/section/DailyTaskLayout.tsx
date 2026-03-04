@@ -64,19 +64,6 @@ export function DailyTaskLayout() {
     filters.customEndDate,
   ]);
 
-  const handleRefresh = async () => {
-    resetFilters();
-    try {
-      await refetchTasks();
-    } catch {
-      toast({
-        title: t('dailyTask.filters.refresh', 'Refresh'),
-        description: 'Failed to refresh tasks',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handlePullRefresh = useCallback(async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -163,18 +150,18 @@ export function DailyTaskLayout() {
               </span>
             )}
           </Button>
-          {activeFilters && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={handleRefresh}
-              title={t('dailyTask.filters.refreshShowAll', 'Refresh to show all tasks')}
-              aria-label={t('dailyTask.filters.refresh', 'Refresh')}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            aria-label={t('dailyTask.filters.resetFilters', 'Reset filter')}
+            onClick={() => {
+              resetFilters();
+              setDrawerOpen(false);
+            }}
+          >
+            <RefreshCw className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </Button>
           <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
             <DrawerTrigger asChild>
               <Button
@@ -244,8 +231,8 @@ export function DailyTaskLayout() {
             )}
           </div>
           <div className="mx-auto w-full max-w-md px-2 pt-2 content-padding-above-nav-daily-task">
-            {/* Skeleton only on initial load; during pull-to-refresh keep showing content to avoid flicker (same as Initiative) */}
-            {isLoading && !isRefreshing ? <DailyTaskPageSkeleton /> : <TaskList />}
+            {/* Skeleton only on initial load when we have no data; once we have tasks, keep TaskList mounted so modal state (e.g. Sub Step) is not lost on refetch */}
+            {isLoading && !isRefreshing && tasks.length === 0 ? <DailyTaskPageSkeleton /> : <TaskList />}
           </div>
         </div>
       </div>

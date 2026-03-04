@@ -3,9 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { Badge } from '@/features/ui/badge';
-import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2 } from 'lucide-react';
+import { ExternalLink, Check, RotateCcw, LinkIcon, Calendar, FileText, Tag, Lock, Share2, Upload, GripVertical, Trash2, ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OptimizedCommentPanel } from './OptimizedCommentPanel';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/features/ui/collapsible';
 import GoogleDriveFolderCarousel from './GoogleDriveFolderCarousel';
 import GoogleDriveAuthButton from '@/components/6-1-dashboard/GoogleDriveAuthButton';
 import { toast } from 'sonner';
@@ -16,6 +17,8 @@ import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { usePublicReviewToken } from '../hook/usePublicReviewToken';
 import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
+import { useCarouselImages, getCarouselImagePublicUrl, CAROUSEL_QUERY_KEY } from '../hook/useCarouselImages';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
 import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
 
@@ -24,6 +27,7 @@ const getEmbedUrl = (url: string) => {
   if (url.includes('youtube.com') || url.includes('youtu.be')) return null;
   return u || null;
 };
+const CAROUSEL_MAX_IMAGES = 10;
 
 // Component to handle Google Drive file preview: try HTML5 video (one-click play), fallback to iframe
 const GoogleDriveFilePreview: React.FC<{ link: string }> = ({ link }) => {
@@ -165,7 +169,12 @@ interface GoogleDriveLinkDialogProps {
   contentType?: string;
   postDate?: string;
   productionApproved?: boolean; // Lock input field if production is approved
+  productionStatus?: string | null; // When 'Request Revision', show "Clear all carousel" button
+  onCarouselChange?: () => void; // Called after carousel images change (for cache invalidation)
+  onCarouselFirstUploadSuccess?: (planId: string) => void; // Called when first carousel image is uploaded (to auto-populate PIC Production)
+  onCarouselAllRemoved?: (planId: string) => void; // Called when all carousel images are removed (to reset PIC Production)
 }
+const isCarouselContentType = (t: string | undefined) => t === 'Post' || t === 'Carousel';
 
 const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   isOpen,
@@ -180,14 +189,45 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   contentTitle,
   contentType,
   postDate,
-  productionApproved = false
+  productionApproved = false,
+  productionStatus,
+  onCarouselChange,
+  onCarouselFirstUploadSuccess,
+  onCarouselAllRemoved
 }) => {
+  const { t } = useAppTranslation();
+  const isCarouselMode = isCarouselContentType(contentType);
   const [currentLink, setCurrentLink] = useState(googleDriveLink);
+  const [carouselPreviewIndex, setCarouselPreviewIndex] = useState(0);
+  const [carouselSectionExpanded, setCarouselSectionExpanded] = useState(true);
+  const carouselFileInputRef = useRef<HTMLInputElement>(null);
   const { canShowApprovalButtons } = useProdApprovalAccess(isOpen);
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
   const { data: currentEmployee } = useCurrentEmployee();
   const { getOrCreate, isPending: isPublicLinkPending } = usePublicReviewToken();
+  const {
+    images: carouselImages,
+    isLoading: carouselLoading,
+    upload: carouselUpload,
+    remove: carouselRemove,
+    reorder: carouselReorder,
+    removeAll: carouselRemoveAll,
+    isUploading: carouselIsUploading,
+    isDeleting: carouselIsDeleting,
+    isReordering: carouselIsReordering,
+    isRemovingAll: carouselIsRemovingAll,
+    refetch: carouselRefetch,
+    count: carouselCount,
+  } = useCarouselImages(isCarouselMode ? socialMediaPlanId : undefined);
+
+  useEffect(() => {
+    if (isCarouselMode && carouselImages.length > 0) {
+      setCarouselPreviewIndex((i) => (i >= carouselImages.length ? carouselImages.length - 1 : i));
+    } else if (isCarouselMode) {
+      setCarouselPreviewIndex(0);
+    }
+  }, [isCarouselMode, carouselImages.length]);
 
   // Track previous link to only log on actual changes
   const prevLinkRef = useRef<string | undefined>(undefined);
@@ -215,10 +255,9 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
     setCurrentLink(googleDriveLink);
   }, [googleDriveLink, socialMediaPlanId]);
 
-  // Auto-save functionality with debouncing (disabled when production is approved)
+  // Auto-save functionality with debouncing (disabled when production is approved or carousel mode)
   useEffect(() => {
-    // Don't auto-save if production is approved (field is locked)
-    if (productionApproved) {
+    if (productionApproved || isCarouselMode) {
       return;
     }
 
@@ -244,6 +283,11 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
   // POINT 1: Handle close with production status update
   const handleClose = async () => {
+    if (isCarouselMode) {
+      onCarouselChange?.();
+      onClose();
+      return;
+    }
     // Don't save if production is approved (field is locked)
     if (productionApproved) {
       onClose();
@@ -512,7 +556,12 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
       toast.error('You do not have permission to approve content');
       return;
     }
-
+    if (isCarouselMode) {
+      if (carouselCount < 1) {
+        toast.error('Add at least one carousel image before approving.');
+        return;
+      }
+    }
     if (onApprove) {
       onApprove();
     }
@@ -553,6 +602,14 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   const isYouTubeLink = (url: string) => {
     return url.includes('youtube.com') || url.includes('youtu.be');
   };
+  const formatDisplayDate = (date: string) => {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
   const getStatusBadge = () => {
     const statusConfig = {
       draft: {
@@ -581,16 +638,92 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         {config.label}
       </Badge>;
   };
-  const formatDisplayDate = (date: string) => {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
+
+  const handleCarouselFileSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files?.length || !isCarouselMode) return;
+      if (carouselCount >= CAROUSEL_MAX_IMAGES) {
+        toast.error(`Maximum ${CAROUSEL_MAX_IMAGES} images allowed.`);
+        return;
+      }
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isJpg = file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name);
+        if (!isJpg) {
+          toast.error('Only JPG files are allowed.');
+          continue;
+        }
+        if (carouselCount + i >= CAROUSEL_MAX_IMAGES) {
+          toast.error(`Maximum ${CAROUSEL_MAX_IMAGES} images allowed.`);
+          break;
+        }
+        try {
+          await carouselUpload(file);
+          if (carouselCount === 0) {
+            onCarouselFirstUploadSuccess?.(socialMediaPlanId);
+          }
+          onCarouselChange?.();
+        } catch (_) {
+          // toast from hook
+        }
+      }
+      e.target.value = '';
+    },
+    [isCarouselMode, carouselCount, carouselUpload, onCarouselFirstUploadSuccess, onCarouselChange, socialMediaPlanId]
+  );
+
+  const handleCarouselDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!isCarouselMode || productionApproved) return;
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) => f.type === 'image/jpeg' || /\.jpe?g$/i.test(f.name)
+      );
+      const nonJpg = e.dataTransfer.files.length - files.length;
+      if (nonJpg > 0) toast.error('Only JPG files are allowed.');
+      let added = 0;
+      (async () => {
+        for (const file of files) {
+          if (carouselCount + added >= CAROUSEL_MAX_IMAGES) {
+            toast.error(`Maximum ${CAROUSEL_MAX_IMAGES} images allowed.`);
+            break;
+          }
+          try {
+            await carouselUpload(file);
+            added++;
+            if (carouselCount === 0 && added === 1) {
+              onCarouselFirstUploadSuccess?.(socialMediaPlanId);
+            }
+            onCarouselChange?.();
+          } catch (_) {}
+        }
+      })();
+    },
+    [isCarouselMode, productionApproved, carouselCount, carouselUpload, onCarouselFirstUploadSuccess, onCarouselChange, socialMediaPlanId]
+  );
+
+  const handleCarouselDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
 
   const handleSharePublicLink = async () => {
+    if (isCarouselMode) {
+      if (carouselCount < 1) {
+        toast.error('Upload at least one carousel image before sharing review link.');
+        return;
+      }
+      try {
+        const { publicReviewUrl } = await getOrCreate({ socialMediaPlanId, linkUrl: 'carousel' });
+        await navigator.clipboard.writeText(publicReviewUrl);
+        toast.success('Link review publik disalin ke clipboard');
+      } catch (e) {
+        devLog.debug('Share public link failed:', e);
+        toast.error('Gagal membuat atau menyalin link review publik');
+      }
+      return;
+    }
     const linkToUse = currentLink?.trim() || googleDriveLink?.trim();
     if (!linkToUse) {
       toast.error('Tambahkan Google Drive link terlebih dahulu');
@@ -639,8 +772,50 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex-1 bg-white min-h-0 p-4 flex items-center justify-center">
-                {currentLink ? <>
+              <div className="flex-1 bg-white min-h-0 min-w-0 p-4 flex items-center justify-center overflow-hidden">
+                {isCarouselMode ? (
+                  carouselImages.length > 0 ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 min-h-0 overflow-hidden">
+                      <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+                        <img
+                          src={getCarouselImagePublicUrl(carouselImages[carouselPreviewIndex]?.storage_path)}
+                          alt={`Carousel ${carouselPreviewIndex + 1}`}
+                          className="max-w-full max-h-full object-contain rounded-lg"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={carouselPreviewIndex <= 0}
+                          onClick={() => setCarouselPreviewIndex((i) => Math.max(0, i - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-sm text-gray-600">
+                          {carouselPreviewIndex + 1} / {carouselImages.length}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={carouselPreviewIndex >= carouselImages.length - 1}
+                          onClick={() => setCarouselPreviewIndex((i) => Math.min(carouselImages.length - 1, i + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  ) : carouselLoading ? (
+                    <p className="text-sm text-gray-500">Loading...</p>
+                  ) : (
+                    <div className="text-center p-8">
+                      <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-700">Upload JPG untuk preview carousel</p>
+                    </div>
+                  )
+                ) : currentLink ? <>
                     {isFolderLink(currentLink) ? <div className="w-full h-full">
                         <GoogleDriveFolderCarousel folderUrl={currentLink} />
                       </div> : isYouTubeLink(currentLink) ? <div className="w-full h-full flex items-center justify-center bg-gray-50">
@@ -682,11 +857,158 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
 
           {/* Right side - Comments Panel (larger width) */}
           <div className="w-[540px] min-w-[540px] border-l border-gray-200 flex flex-col min-h-0">
+            {isCarouselMode && (
+            <Collapsible open={carouselSectionExpanded} onOpenChange={setCarouselSectionExpanded} className="flex-shrink-0 border-b border-gray-200">
+              <div className="p-3">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between gap-2 text-left rounded hover:bg-gray-50 transition-colors py-0.5"
+                  >
+                    <h4 className="font-medium text-sm text-gray-900">Carousel images (JPG, max {CAROUSEL_MAX_IMAGES})</h4>
+                    <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                      {carouselCount} image{carouselCount !== 1 ? 's' : ''}
+                      {carouselSectionExpanded ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+                    </span>
+                  </button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <div className="px-3 pb-3 space-y-2">
+                  {productionStatus === 'Request Revision' && carouselCount > 0 && (
+                    <div className="flex flex-col gap-1.5 rounded border border-amber-200 bg-amber-50/80 p-2">
+                      <p className="text-xs text-amber-800">
+                        {t('socialMediaDashboard.carousel.clearAllHint', 'Untuk mengunggah hasil revisi, hapus semua gambar terlebih dahulu.')}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="w-fit"
+                        disabled={productionApproved || carouselIsRemovingAll}
+                        onClick={() => {
+                          carouselRemoveAll()
+                            .then(() => {
+                              onCarouselChange?.();
+                              onCarouselAllRemoved?.(socialMediaPlanId);
+                            })
+                            .catch(() => {});
+                        }}
+                      >
+                        {carouselIsRemovingAll
+                          ? t('socialMediaDashboard.carousel.clearing', 'Menghapus...')
+                          : t('socialMediaDashboard.carousel.clearAll', 'Hapus semua gambar carousel')}
+                      </Button>
+                    </div>
+                  )}
+                  <input
+                    ref={carouselFileInputRef}
+                    type="file"
+                    accept=".jpg,.jpeg,image/jpeg"
+                    multiple
+                    className="hidden"
+                    onChange={handleCarouselFileSelect}
+                  />
+                  <div
+                    onDrop={productionStatus === 'Request Revision' && carouselCount > 0 ? undefined : handleCarouselDrop}
+                    onDragOver={productionStatus === 'Request Revision' && carouselCount > 0 ? undefined : handleCarouselDragOver}
+                    onClick={() => {
+                      const revisionBlock = productionStatus === 'Request Revision' && carouselCount > 0;
+                      if (productionApproved || revisionBlock || carouselCount >= CAROUSEL_MAX_IMAGES) return;
+                      carouselFileInputRef.current?.click();
+                    }}
+                    className={cn(
+                      'border-2 border-dashed rounded-lg p-4 text-center text-sm transition-colors',
+                      productionApproved || carouselCount >= CAROUSEL_MAX_IMAGES || (productionStatus === 'Request Revision' && carouselCount > 0)
+                        ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        : 'border-gray-300 bg-gray-50/50 hover:bg-gray-100 text-gray-600 cursor-pointer'
+                    )}
+                  >
+                    <Upload className="h-5 w-5 mx-auto mb-1 text-gray-500" />
+                    {productionStatus === 'Request Revision' && carouselCount > 0
+                      ? t('socialMediaDashboard.carousel.clearAllFirst', 'Hapus semua gambar terlebih dahulu')
+                      : carouselCount >= CAROUSEL_MAX_IMAGES
+                      ? `Maximum ${CAROUSEL_MAX_IMAGES} images`
+                      : 'Click or drop JPG files'}
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                    {carouselImages.map((img, idx) => (
+                      <div
+                        key={img.id}
+                        className="flex items-center gap-2 rounded border border-gray-200 bg-white p-2"
+                      >
+                        <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0" aria-hidden />
+                        <img
+                          src={getCarouselImagePublicUrl(img.storage_path)}
+                          alt={`#${idx + 1}`}
+                          className="h-10 w-10 object-cover rounded flex-shrink-0"
+                        />
+                        <span className="text-xs text-gray-600 flex-1 truncate">#{idx + 1}</span>
+                        <div className="flex items-center gap-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={productionApproved || idx <= 0 || carouselIsReordering}
+                            onClick={() => {
+                              const ids = carouselImages.map((i) => i.id);
+                              const next = [...ids];
+                              next[idx] = ids[idx - 1];
+                              next[idx - 1] = ids[idx];
+                              carouselReorder(next);
+                            }}
+                            title="Move up"
+                          >
+                            ↑
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={productionApproved || idx >= carouselImages.length - 1 || carouselIsReordering}
+                            onClick={() => {
+                              const ids = carouselImages.map((i) => i.id);
+                              const next = [...ids];
+                              next[idx] = ids[idx + 1];
+                              next[idx + 1] = ids[idx];
+                              carouselReorder(next);
+                            }}
+                            title="Move down"
+                          >
+                            ↓
+                          </Button>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                          disabled={productionApproved}
+                          onClick={() => {
+                            carouselRemove(img.id).then(() => {
+                              onCarouselChange?.();
+                              if (carouselCount === 1) {
+                                onCarouselAllRemoved?.(socialMediaPlanId);
+                              }
+                            }).catch(() => {});
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
             {/* Comments panel - flexible height, no horizontal scroll */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <OptimizedCommentPanel 
                 socialMediaPlanId={socialMediaPlanId} 
-                linkUrl={googleDriveLink || 'default-link'}
+                linkUrl={isCarouselMode ? 'carousel' : (googleDriveLink || 'default-link')}
               />
             </div>
           </div>
@@ -695,9 +1017,9 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         {/* Footer - Fixed at bottom with horizontally aligned controls */}
         <div className="px-3 py-2 border-t border-gray-200 flex-shrink-0 bg-gray-50">
           <div className="flex items-center justify-between gap-3">
-            {/* Left side - Link input section with content information */}
+            {/* Left side - Link input (hidden for Post/Carousel) */}
             <div className="flex-1 max-w-2xl">
-
+              {!isCarouselMode && (
               <div className="space-y-1">
                 {productionApproved && (
                   <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
@@ -724,6 +1046,10 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                   </Button>
                 </div>
               </div>
+              )}
+              {isCarouselMode && (
+                <p className="text-sm text-gray-600">Carousel: {carouselCount} / {CAROUSEL_MAX_IMAGES} images</p>
+              )}
             </div>
 
             {/* Right side - Action buttons */}
@@ -731,7 +1057,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
               <Button
                 variant="outline"
                 onClick={handleSharePublicLink}
-                disabled={!(currentLink?.trim() || googleDriveLink?.trim()) || isPublicLinkPending}
+                disabled={isCarouselMode ? carouselCount < 1 || isPublicLinkPending : !(currentLink?.trim() || googleDriveLink?.trim()) || isPublicLinkPending}
                 className="h-9 px-4 border-gray-200 hover:bg-gray-50 rounded-lg"
                 title="Buat / Bagikan link publik untuk review tanpa login"
               >
@@ -747,7 +1073,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                 <>
                   <Button 
                     onClick={handleApprove} 
-                    disabled={status === 'approved'} 
+                    disabled={isCarouselMode ? carouselCount < 1 || status === 'approved' : status === 'approved'} 
                     className="h-9 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium px-4 disabled:opacity-50"
                   >
                     <Check className="h-4 w-4 mr-1" />

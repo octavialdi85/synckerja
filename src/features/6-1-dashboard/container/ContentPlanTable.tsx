@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { devLog } from '@/config/logger';
 import { ContentPlan, ContentType, Service, SubService, ContentPillar } from '../types/social-media';
+import { useCarouselCountsMap } from '../hook/useCarouselImages';
 import { TableHeader } from './table/TableHeader';
 import { ContentPlanRow } from './table/ContentPlanRow';
 import { LoadingDots } from '@/components/LoadingDots';
@@ -35,6 +36,8 @@ interface ContentPlanTableProps {
   approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
   requestApproval?: (plan: ContentPlan, oldStatus: string | null, oldApproved?: boolean, oldCompletionDate?: string | null) => boolean; // Hook untuk approval dengan task step
   handleUnapproval?: (planId: string) => Promise<void>; // Hook untuk un-approval dengan task step deletion
+  onCarouselFirstUploadSuccess?: (planId: string) => void; // When first carousel image uploaded, auto-populate PIC Production
+  onCarouselAllRemoved?: (planId: string) => void; // When all carousel images removed, reset PIC Production
 }
 
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
@@ -54,8 +57,16 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   loading = false,
   approvalAccess,
   requestApproval,
-  handleUnapproval
+  handleUnapproval,
+  onCarouselFirstUploadSuccess,
+  onCarouselAllRemoved
 }) => {
+  const planIds = useMemo(() => contentPlans.map((p) => p.id), [contentPlans]);
+  const { countsMap: carouselCountsMap, refetch: refetchCarouselCounts } = useCarouselCountsMap(planIds);
+  const onCarouselChange = useCallback(() => {
+    refetchCarouselCounts();
+  }, [refetchCarouselCounts]);
+
   // Helper function to filter sub-services based on service
   const getFilteredSubServices = useCallback(
     (serviceId: string | null): SubService[] => {
@@ -269,6 +280,10 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
               formatDateTime={formatDateTime}
               formatDateOnly={formatDateOnly}
               approvalAccess={approvalAccess}
+              carouselImageCount={carouselCountsMap[plan.id] ?? 0}
+              onCarouselChange={onCarouselChange}
+              onCarouselFirstUploadSuccess={onCarouselFirstUploadSuccess}
+              onCarouselAllRemoved={onCarouselAllRemoved}
             />
           ))}
         </tbody>

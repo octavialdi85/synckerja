@@ -6,13 +6,14 @@ import { Textarea } from '@/features/ui/textarea';
 import { Alert, AlertDescription } from '@/features/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Check, ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, RotateCcw, Trash2, User, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, LinkIcon, Tag, Calendar, MessageSquare, Send, Briefcase, Layers, Pencil, RotateCcw, Trash2, User, Loader2, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { defaultTranslations, applyVariables } from '@/features/share/i18n/translations';
 import { devLog } from '@/config/logger';
 import { getEmbedUrl, getDirectVideoUrl, isFolderLink, isFileLink, isYouTubeLink } from '../utils/previewUtils';
+import { getCarouselImagePublicUrl } from '../hook/useCarouselImages';
 import GoogleDriveFolderCarousel from '../modal/GoogleDriveFolderCarousel';
 import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { useAuth } from '@/features/1-login/contexts/AuthContext';
@@ -50,6 +51,7 @@ interface PublicReviewContent {
   service_name: string | null;
   sub_service_name: string | null;
   pic_production_name: string | null;
+  carousel_image_paths?: string[];
 }
 
 interface PublicReviewComment {
@@ -141,6 +143,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
   const [videoUseIframe, setVideoUseIframe] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [carouselPreviewIndex, setCarouselPreviewIndex] = useState(0);
+  const [carouselDownloading, setCarouselDownloading] = useState(false);
   /** True only after user has successfully sent at least one comment this session (enables Request Revision) */
   const [hasSuccessfullySentCommentThisSession, setHasSuccessfullySentCommentThisSession] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -151,6 +155,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
   );
   const videoRef = useRef<HTMLVideoElement>(null);
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  /** Touch start position for carousel swipe on mobile */
+  const carouselTouchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   /** Header fixed when keyboard is open OR user is in "Write a comment" input */
   const headerFixed = showBackToHome && (keyboardOpen || commentInputFocused);
@@ -624,6 +630,10 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
   const embedUrl = getEmbedUrl(link);
   const directVideoUrl = isFileLink(link) ? getDirectVideoUrl(link) : '';
 
+  useEffect(() => {
+    setCarouselPreviewIndex(0);
+  }, [content?.social_media_plan_id, content?.carousel_image_paths?.length]);
+
   const handleVideoPlay = useCallback(() => {
     videoRef.current?.play();
   }, []);
@@ -860,21 +870,167 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                 className="flex-1 p-2 sm:p-4 flex items-center justify-center bg-white touch-pan-y min-w-0 min-h-0"
                 style={videoWrapperMinHeight}
               >
-                {!link ? (
-                  <div className="text-center text-gray-500 text-sm">{t('publicReview.preview.noLink', 'No link')}</div>
-                ) : isFolderLink(link) ? (
+                {(() => {
+                  const isPostOrCarousel = content?.content_type_name === 'Post' || content?.content_type_name === 'Carousel';
+                  const carouselPaths = content?.carousel_image_paths ?? [];
+                  if (isPostOrCarousel && carouselPaths.length > 0) {
+                    const urls = carouselPaths.map((p) => getCarouselImagePublicUrl(p));
+                    const idx = Math.min(carouselPreviewIndex, urls.length - 1);
+                    const SWIPE_THRESHOLD = 50;
+                    const handleCarouselTouchStart = (e: React.TouchEvent) => {
+                      carouselTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    };
+                    const handleCarouselTouchEnd = (e: React.TouchEvent) => {
+                      const start = carouselTouchStartRef.current;
+                      carouselTouchStartRef.current = null;
+                      if (!start || urls.length <= 1) return;
+                      const end = e.changedTouches[0];
+                      const dx = end.clientX - start.x;
+                      const dy = end.clientY - start.y;
+                      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
+                        if (dx > 0) {
+                          setCarouselPreviewIndex((i) => Math.max(0, i - 1));
+                        } else {
+                          setCarouselPreviewIndex((i) => Math.min(urls.length - 1, i + 1));
+                        }
+                      }
+                    };
+                    const handleDownloadCurrent = async () => {
+                      const url = urls[idx];
+                      setCarouselDownloading(true);
+                      try {
+                        const res = await fetch(url, { mode: 'cors' });
+                        if (!res.ok) throw new Error('Fetch failed');
+                        const blob = await res.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = `carousel-${idx + 1}.jpg`;
+                        a.click();
+                        URL.revokeObjectURL(blobUrl);
+                        toast.success(t('publicReview.preview.downloaded', 'Image downloaded'));
+                      } catch {
+                        window.open(url, '_blank');
+                        toast.info(t('publicReview.preview.downloadFallback', 'Download failed, opened in new tab'));
+                      } finally {
+                        setCarouselDownloading(false);
+                      }
+                    };
+                    return (
+                      <div
+                        className="w-full flex flex-col items-center gap-2"
+                        {...(isMobileViewport
+                          ? {
+                              onTouchStart: handleCarouselTouchStart,
+                              onTouchEnd: handleCarouselTouchEnd,
+                              style: { touchAction: 'pan-y' } as React.CSSProperties,
+                            }
+                          : {})}
+                      >
+                        <div className="relative flex-1 min-h-0 w-full flex items-center justify-center">
+                          <img
+                            src={urls[idx]}
+                            alt={`Carousel ${idx + 1}`}
+                            className="max-w-full max-h-[min(70vh,568px)] object-contain rounded-lg select-none"
+                            draggable={false}
+                            style={isMobileViewport ? { touchAction: 'pan-y' } : undefined}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="absolute top-1.5 right-1.5 h-8 w-8 rounded-full shadow-md border border-gray-200/80 bg-white/90 hover:bg-white"
+                            disabled={carouselDownloading}
+                            onClick={handleDownloadCurrent}
+                            title={t('publicReview.preview.download', 'Download image')}
+                            aria-label={t('publicReview.preview.download', 'Download image')}
+                          >
+                            {carouselDownloading ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 flex-shrink-0">
+                          {isMobileViewport ? (
+                            <div className="flex items-center gap-1.5" role="tablist" aria-label="Carousel slides">
+                              {urls.map((_, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={i === idx}
+                                  aria-label={`Slide ${i + 1}`}
+                                  onClick={() => setCarouselPreviewIndex(i)}
+                                  className={cn(
+                                    'rounded-full transition-all',
+                                    i === idx
+                                      ? 'h-2.5 w-2.5 bg-gray-800'
+                                      : 'h-2 w-2 bg-gray-300 hover:bg-gray-400'
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={idx <= 0}
+                                onClick={() => setCarouselPreviewIndex((i) => Math.max(0, i - 1))}
+                              >
+                                Previous
+                              </Button>
+                              <span className="text-sm text-gray-600">
+                                {idx + 1} / {urls.length}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={idx >= urls.length - 1}
+                                onClick={() => setCarouselPreviewIndex((i) => Math.min(urls.length - 1, i + 1))}
+                              >
+                                Next
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (isPostOrCarousel) {
+                    return (
+                      <div className="text-center text-gray-500 text-sm">
+                        {t('publicReview.preview.noCarousel', 'No carousel images yet')}
+                      </div>
+                    );
+                  }
+                  if (!link) {
+                    return <div className="text-center text-gray-500 text-sm">{t('publicReview.preview.noLink', 'No link')}</div>;
+                  }
+                  if (isFolderLink(link)) {
+                    return (
                   <div className="w-full min-h-[200px] rounded-lg overflow-hidden touch-pan-y">
                     <GoogleDriveFolderCarousel folderUrl={link} />
                   </div>
-                ) : isYouTubeLink(link) ? (
-                  <div className="text-center">
+                    );
+                  }
+                  if (isYouTubeLink(link)) {
+                    return (
+                <div className="text-center">
                     <p className="text-sm text-gray-700 mb-4">{t('publicReview.preview.youtubeUnavailable', 'YouTube preview is not available here.')}</p>
                     <Button variant="outline" size="sm" onClick={() => window.open(link, '_blank')}>
                       <ExternalLink className="h-4 w-4 mr-2" />
                       {t('publicReview.preview.openYouTube', 'Open in YouTube')}
                     </Button>
                   </div>
-                ) : isFileLink(link) && embedUrl ? (
+                    );
+                  }
+                  if (isFileLink(link) && embedUrl) {
+                    return (
                   (() => {
                     const useIframe = videoUseIframe || !directVideoUrl;
                     const portraitVideoStyle = isPortrait
@@ -955,7 +1111,9 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                       </div>
                     );
                   })()
-                ) : (
+                    );
+                  }
+                  return (
                   <div className="text-center">
                     <LinkIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-700 mb-4">{t('publicReview.preview.unavailable', 'Preview not available')}</p>
@@ -964,7 +1122,8 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
                       {t('publicReview.preview.openLink', 'Open link')}
                     </Button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           );

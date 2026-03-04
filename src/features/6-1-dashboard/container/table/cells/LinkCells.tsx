@@ -9,14 +9,26 @@ interface GoogleDriveLinkCellProps {
   isDisabled: boolean;
   onClick: () => void;
   isSelected?: boolean;
+  contentType?: string;
+  carouselImageCount?: number;
 }
 
 export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
   googleDriveLink,
   isDisabled,
   onClick,
-  isSelected = false
+  isSelected = false,
+  contentType,
+  carouselImageCount = 0
 }) => {
+  const isPostOrCarousel = contentType === 'Post' || contentType === 'Carousel';
+  const hasContent = isPostOrCarousel
+    ? carouselImageCount > 0
+    : (googleDriveLink && googleDriveLink.trim().length > 0);
+  const label = isPostOrCarousel
+    ? (hasContent ? `Carousel (${carouselImageCount} images)` : 'Click to add carousel images...')
+    : (hasContent ? 'Google Drive Link Added' : 'Click to add Google Drive link...');
+
   if (isDisabled) {
     return (
       <div className={`h-8 px-3 bg-gray-100 border border-gray-200 rounded text-xs flex items-center justify-center cursor-not-allowed ${isSelected ? 'text-white' : 'text-gray-500'}`}>
@@ -25,10 +37,6 @@ export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
     );
   }
 
-  // Normalize: Treat both null and empty string as empty for consistent display
-  // This ensures consistent placeholder regardless of whether value is null or ''
-  const hasLink = googleDriveLink && googleDriveLink.trim().length > 0;
-
   return (
     <Button
       variant="ghost"
@@ -36,9 +44,9 @@ export const GoogleDriveLinkCell: React.FC<GoogleDriveLinkCellProps> = ({
       onClick={onClick}
     >
       <span className={`truncate ${isSelected ? 'text-white' : ''}`}>
-        {hasLink ? 'Google Drive Link Added' : 'Click to add Google Drive link...'}
+        {label}
       </span>
-      {hasLink && (
+      {hasContent && !isPostOrCarousel && (
         <ExternalLink className={`h-3 w-3 ml-1 flex-shrink-0 ${isSelected ? 'text-white' : ''}`} />
       )}
     </Button>

@@ -3,6 +3,7 @@ import { Badge } from '@/features/ui/badge';
 import { Flag } from 'lucide-react';
 import { differenceInDays, startOfDay } from 'date-fns';
 import type { Task } from '../../types';
+import { getEffectiveProgressAndCount } from '../../utils/taskUtils';
 
 export function getStatusBadge(status: string) {
   const variants: Record<string, string> = {
@@ -91,11 +92,10 @@ export function isTaskFullyCompleteBySteps(task: Task): boolean {
 
 export function calculateAssignedStepsProgress(
   task: Task,
-  visibleSteps: { is_completed: boolean }[]
+  visibleSteps: { is_completed: boolean; sub_steps?: Array<{ is_completed: boolean }> }[]
 ): number {
   if (visibleSteps.length === 0) {
     return task.status === 'completed' ? 100 : 0;
   }
-  const completedVisibleSteps = visibleSteps.filter((s) => s.is_completed).length;
-  return Math.round((completedVisibleSteps / visibleSteps.length) * 100);
+  return getEffectiveProgressAndCount(visibleSteps).progress;
 }

@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/features/ui/use-toast';
 import { logger } from '@/config/logger';
 import { filterValidCycleIds } from '@/utils/uuidValidation';
+import { globalIndividualObjectivesManager } from './globalIndividualObjectivesManager';
 
 export interface IndividualObjective {
   id: string;
@@ -45,61 +46,11 @@ interface CreateIndividualObjectiveData {
 
 export const useIndividualObjectives = (organizationId?: string, cycleIds?: string[]) => {
   const queryClient = useQueryClient();
-  const subscriptionRef = useRef<any>(null);
 
-  // Real-time subscription for individual objectives
   useEffect(() => {
     if (!organizationId) return;
-
-    // Prevent duplicate subscriptions
-    if (subscriptionRef.current) {
-      return;
-    }
-
-    logger.realtime('🔄 Setting up real-time subscription for individual objectives with org:', organizationId);
-
-    subscriptionRef.current = supabase
-      .channel(`individual_objectives_realtime_${organizationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'individual_objectives',
-          filter: `organization_id=eq.${organizationId}`
-        },
-        (payload) => {
-          logger.realtime('📡 REAL-TIME UPDATE for individual objectives:', {
-            event: payload.eventType,
-            table: payload.table,
-            new: payload.new,
-            old: payload.old
-          });
-          
-          // Force immediate invalidation
-          queryClient.invalidateQueries({ 
-            queryKey: ['individual-objectives'],
-            exact: false 
-          });
-          
-          // Also invalidate specific org queries
-          queryClient.invalidateQueries({ 
-            queryKey: ['individual-objectives', organizationId],
-            exact: false 
-          });
-        }
-      )
-      .subscribe((status) => {
-        logger.realtime('📊 Individual objectives subscription status:', status);
-      });
-
-    return () => {
-      if (subscriptionRef.current) {
-        logger.realtime('🔄 Cleaning up individual objectives subscription');
-        supabase.removeChannel(subscriptionRef.current);
-        subscriptionRef.current = null;
-      }
-    };
+    const unsubscribe = globalIndividualObjectivesManager.subscribe(organizationId, queryClient);
+    return () => unsubscribe();
   }, [organizationId, queryClient]);
 
   return useQuery({

@@ -161,12 +161,17 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
 
-export const useLanguage = () => {
+export const useLanguage = (): LanguageContextValue => {
   const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error("useLanguage must be used within a LanguageProvider");
-  }
-  return context;
+  // Always call useMemo so hook order is stable (Rules of Hooks). Never return before all hooks run.
+  const fallback = useMemo<LanguageContextValue>(
+    () => ({
+      language: loadInitialLanguage(),
+      setLanguage: () => {},
+    }),
+    []
+  );
+  return context ?? fallback;
 };
 
 

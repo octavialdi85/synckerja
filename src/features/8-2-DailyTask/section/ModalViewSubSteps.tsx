@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/features/ui/dialog';
 import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Badge } from '@/features/ui/badge';
 import { Input } from '@/features/ui/input';
+import { Textarea } from '@/features/ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,9 +62,295 @@ interface ModalViewSubStepsProps {
   parentStepTitle: string;
   onParentCompletionChange?: (completed: boolean) => void;
   taskCreatedBy?: string; // Task creator user ID for permission check
+  /** When true, use slide-to-reveal layout for sub-step rows (e.g. when opened from mobile step). Overrides viewport check. */
+  preferSwipeLayout?: boolean;
 }
 
-export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStepTitle, onParentCompletionChange, taskCreatedBy }: ModalViewSubStepsProps) => {
+/** Slide-to-reveal constants (same pattern as MobileTaskStep) */
+const SUBSTEP_ACTION_STRIP_WIDTH = 200;
+const SWIPE_THRESHOLD = 28;
+const DIRECTION_LOCK_PX = 8;
+const DIRECTION_LOCK_PX_WHEN_OPEN = 4;
+const MIN_SWIPE_MOVEMENT = 24;
+const SNAP_TRANSITION = 'transform 0.25s cubic-bezier(0.33, 1, 0.68, 1)';
+
+interface MobileSubStepRowProps {
+  subStep: SubStep;
+  isRevealed: boolean;
+  onReveal: () => void;
+  onClose: () => void;
+  onToggleCompleted: (id: string, current: boolean) => void;
+  onAssignClick: (s: SubStep) => void;
+  onHistoryClick: (id: string) => void;
+  onEditClick: (id: string, title: string) => void;
+  onDeleteClick: (id: string) => void;
+  editingId: string | null;
+  editTitle: string;
+  onEditTitleChange: (v: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  isTaskCreator: boolean;
+  rejectedReason: string | undefined;
+  historyCount: number;
+  t: (key: string, fallback?: string) => string;
+  /** When true, edit is shown in a dialog instead of inline in the row */
+  useEditDialog?: boolean;
+}
+
+const MobileSubStepRow: React.FC<MobileSubStepRowProps> = ({
+  subStep: s,
+  isRevealed,
+  onReveal,
+  onClose,
+  onToggleCompleted,
+  onAssignClick,
+  onHistoryClick,
+  onEditClick,
+  onDeleteClick,
+  editingId,
+  editTitle,
+  onEditTitleChange,
+  onSaveEdit,
+  onCancelEdit,
+  isTaskCreator,
+  rejectedReason,
+  historyCount,
+  t,
+  useEditDialog = false,
+}) => {
+  const [translateX, setTranslateX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [cardExpanded, setCardExpanded] = useState(false);
+  const autoCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{
+    startX: number;
+    startY: number;
+    startTranslateX: number;
+    lockHorizontal: boolean | null;
+    didSwipe: boolean;
+  } | null>(null);
+  const translateXRef = useRef(0);
+  const slidingRef = useRef<HTMLDivElement>(null);
+  const lockHorizontalRef = useRef(false);
+
+  if (touchStartRef.current == null) translateXRef.current = translateX;
+  lockHorizontalRef.current = touchStartRef.current?.lockHorizontal === true;
+
+  useEffect(() => {
+    if (!isRevealed && translateX !== 0) {
+      setTranslateX(0);
+      translateXRef.current = 0;
+    }
+  }, [isRevealed, translateX]);
+
+  useEffect(() => {
+    if (!slidingRef.current) return;
+    const el = slidingRef.current;
+    const onMove = (e: TouchEvent) => {
+      if (lockHorizontalRef.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onMove);
+  }, []);
+
+  // Auto-collapse after 5s when expanded (same as TaskStep mobile)
+  useEffect(() => {
+    if (!cardExpanded) {
+      if (autoCollapseTimerRef.current) {
+        clearTimeout(autoCollapseTimerRef.current);
+        autoCollapseTimerRef.current = null;
+      }
+      return;
+    }
+    autoCollapseTimerRef.current = setTimeout(() => {
+      setCardExpanded(false);
+      autoCollapseTimerRef.current = null;
+    }, 5000);
+    return () => {
+      if (autoCollapseTimerRef.current) {
+        clearTimeout(autoCollapseTimerRef.current);
+        autoCollapseTimerRef.current = null;
+      }
+    };
+  }, [cardExpanded]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    touchStartRef.current = {
+      startX: e.touches[0].clientX,
+      startY: e.touches[0].clientY,
+      startTranslateX: translateX,
+      lockHorizontal: null,
+      didSwipe: false,
+    };
+    const el = slidingRef.current;
+    if (el) {
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${translateX}px)`;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    if (!start) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - start.startX;
+    const deltaY = currentY - start.startY;
+
+    if (start.lockHorizontal === null) {
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      const stripWasOpen = start.startTranslateX < -SWIPE_THRESHOLD;
+      if (stripWasOpen) {
+        if (absX > DIRECTION_LOCK_PX_WHEN_OPEN) {
+          start.lockHorizontal = true;
+          lockHorizontalRef.current = true;
+        } else if (absY > DIRECTION_LOCK_PX) {
+          start.lockHorizontal = false;
+          lockHorizontalRef.current = false;
+        }
+      } else {
+        if (absX > DIRECTION_LOCK_PX || absY > DIRECTION_LOCK_PX) {
+          start.lockHorizontal = absX >= absY;
+          lockHorizontalRef.current = start.lockHorizontal;
+        }
+      }
+    }
+
+    if (start.lockHorizontal === true) {
+      const next = Math.min(0, Math.max(-SUBSTEP_ACTION_STRIP_WIDTH, start.startTranslateX + deltaX));
+      if (Math.abs(deltaX) >= MIN_SWIPE_MOVEMENT) start.didSwipe = true;
+      translateXRef.current = next;
+      const el = slidingRef.current;
+      if (el) el.style.transform = `translateX(${next}px)`;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const start = touchStartRef.current;
+    const el = slidingRef.current;
+    lockHorizontalRef.current = false;
+    touchStartRef.current = null;
+    const current = translateXRef.current;
+    const wasOpen = start != null && start.startTranslateX < -SWIPE_THRESHOLD;
+    const closedBySwipe = wasOpen && current > -SWIPE_THRESHOLD;
+    const openedBySwipe = start?.didSwipe === true && current < -SWIPE_THRESHOLD && !closedBySwipe;
+    const targetX = openedBySwipe ? -SUBSTEP_ACTION_STRIP_WIDTH : 0;
+
+    if (el) {
+      el.style.transition = SNAP_TRANSITION;
+      el.style.transform = `translateX(${targetX}px)`;
+    }
+    translateXRef.current = targetX;
+    setIsDragging(false);
+    setTranslateX(targetX);
+    if (openedBySwipe) onReveal();
+    else onClose();
+  };
+
+  const actionStrip = (
+    <div
+      className="absolute right-0 top-0 bottom-0 flex-shrink-0 flex items-stretch rounded-r-md border-l-2 border-slate-300 bg-slate-200 overflow-hidden"
+      style={{ width: SUBSTEP_ACTION_STRIP_WIDTH }}
+    >
+      <div className="flex items-center justify-center flex-1 border-r-2 border-slate-300 bg-green-200/80 px-1">
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAssignClick(s); }} className="h-8 w-8 min-w-8 min-h-8 rounded-none border-0 border-transparent text-green-900 hover:bg-green-300" title={s.assigned_to ? `Assigned to ${s.assigned_employee?.full_name || 'Unknown'}` : 'Assign'} disabled={!isTaskCreator}>
+          <Users className="w-3 h-3" />
+        </Button>
+      </div>
+      <div className="flex items-center justify-center flex-1 border-r-2 border-slate-300 bg-purple-200/80 px-1">
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onHistoryClick(s.id); }} className="h-8 w-8 min-w-8 min-h-8 rounded-none border-0 border-transparent text-purple-900 hover:bg-purple-300 relative" title="History & Blockers">
+          <History className="w-3 h-3" />
+          {historyCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-purple-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{historyCount}</span>
+          )}
+        </Button>
+      </div>
+      <div className="flex items-center justify-center flex-1 border-r-2 border-slate-300 bg-blue-200/80 px-1">
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onEditClick(s.id, s.title); }} className="h-8 w-8 min-w-8 min-h-8 rounded-none border-0 border-transparent text-blue-900 hover:bg-blue-300" title="Edit" disabled={!isTaskCreator}>
+          <Edit className="w-3 h-3" />
+        </Button>
+      </div>
+      <div className="flex items-center justify-center flex-1 bg-red-200/80 px-1">
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDeleteClick(s.id); }} className="h-8 w-8 min-w-8 min-h-8 rounded-none border-0 border-transparent text-red-900 hover:bg-red-300" title="Delete" disabled={!isTaskCreator}>
+          <Trash2 className="w-3 h-3" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      {actionStrip}
+      <div
+        ref={slidingRef}
+        className="min-w-full bg-white rounded-lg flex items-center gap-2 px-3 py-2"
+        style={{
+          minWidth: '100%',
+          transform: `translateX(${translateX}px)`,
+          touchAction: 'pan-y',
+          ...(isDragging ? { transition: 'none', willChange: 'transform' as const } : { transition: SNAP_TRANSITION }),
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        <Checkbox
+          checked={s.is_completed}
+          onCheckedChange={() => onToggleCompleted(s.id, s.is_completed)}
+          className="text-gray-400 hover:text-gray-600"
+        />
+        {!useEditDialog && editingId === s.id ? (
+          <div className="flex items-center gap-2 flex-1">
+            <Input value={editTitle} onChange={(e) => onEditTitleChange(e.target.value)} className="flex-1 h-8 text-sm" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(); else if (e.key === 'Escape') onCancelEdit(); }} />
+            <Button variant="ghost" size="sm" onClick={onSaveEdit} className="h-8 px-2 text-green-600">Save</Button>
+            <Button variant="ghost" size="sm" onClick={onCancelEdit} className="h-8 px-2 text-gray-500">Cancel</Button>
+          </div>
+        ) : (
+          <>
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              role="button"
+              tabIndex={0}
+              aria-expanded={cardExpanded}
+              onClick={() => setCardExpanded((prev) => !prev)}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setCardExpanded((prev) => !prev);
+                }
+              }}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`text-sm min-w-0 block ${
+                    cardExpanded ? 'break-words' : 'truncate'
+                  } ${s.is_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}
+                >
+                  {s.title}
+                </span>
+                {rejectedReason && <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">{t('dailyTask.approval.revisionBadge', 'Revision')}</Badge>}
+              </div>
+              {rejectedReason && (
+                <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
+                  <p className="font-medium text-amber-800">{t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}</p>
+                  <p className="text-gray-700 mt-0.5">{rejectedReason}</p>
+                </div>
+              )}
+              {s.is_completed && s.updated_at && (
+                <div className="text-[10px] text-gray-400 mt-0.5">Completed: {new Date(s.updated_at).toLocaleString()}</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStepTitle, onParentCompletionChange, taskCreatedBy, preferSwipeLayout }: ModalViewSubStepsProps) => {
   const [loading, setLoading] = useState(false);
   const [subSteps, setSubSteps] = useState<SubStep[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -81,10 +368,15 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const dailyTaskContext = useDailyTaskOptional();
   const rejectedReasonsBySubStepId = dailyTaskContext?.rejectedReasonsBySubStepId ?? {};
   const isMobile = useIsMobile();
+  /** Use slide-to-reveal for sub-step rows when opened from mobile step (contentOnly) or when viewport is mobile */
+  const useSwipeLayout = preferSwipeLayout === true || isMobile;
   const [parentPlan, setParentPlan] = useState<ParentPlanInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubStepId, setPendingSubStepId] = useState<string | null>(null);
   const [pendingSubStepCurrent, setPendingSubStepCurrent] = useState<boolean | null>(null);
+  const [revealedSubStepId, setRevealedSubStepId] = useState<string | null>(null);
+  /** When true (mobile), edit sub-step opens a dialog instead of inline */
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Check if current user is the creator of the task
   const isTaskCreator = taskCreatedBy === user?.id;
@@ -666,6 +958,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 
   useEffect(() => {
     if (open) fetchSubSteps();
+    if (!open) setRevealedSubStepId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, parentStepId, organizationId]);
 
@@ -674,12 +967,13 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
   const completedCount = visibleSubSteps.filter(s => s.is_completed).length;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
           'p-0 flex flex-col gap-0',
           isMobile
-            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area'
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none h-dvh min-h-0 rounded-none modal-above-safe-area'
             : 'w-[620px] max-w-[90vw] max-h-[90vh] h-[600px]'
         )}
         fullscreenAnimation={isMobile}
@@ -714,8 +1008,8 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 
         <div
           className={cn(
-            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-4 seamless-scroll',
-            isMobile ? 'px-6 pt-4 pb-6' : 'px-6 py-6'
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll',
+            isMobile ? 'px-2 pt-2 pb-2 space-y-4' : 'px-6 py-6 space-y-4'
           )}
           style={
             !isMobile
@@ -744,18 +1038,45 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
             </Button>
           </div>
 
-		  <div className="flex-1 min-h-0 seamless-scroll overflow-auto">
+		  <div className="min-h-0">
 		  {loading ? (
 					<div className="text-sm text-gray-500">Loading...</div>
 				) : visibleSubSteps.length === 0 ? (
 					<div className="text-sm text-gray-500 italic">No steps yet</div>
 				) : (
-					<ul className="space-y-2">
-						{visibleSubSteps.map((s) => (
+					<ul className="space-y-1">
+						{visibleSubSteps.map((s) =>
+              useSwipeLayout ? (
+                <li key={s.id}>
+                  <MobileSubStepRow
+                    subStep={s}
+                    isRevealed={revealedSubStepId === s.id}
+                    onReveal={() => setRevealedSubStepId(s.id)}
+                    onClose={() => setRevealedSubStepId(null)}
+                    onToggleCompleted={toggleCompleted}
+                    onAssignClick={setAssignDialogSubStep}
+                    onHistoryClick={setShowHistoryForSubStep}
+                    onEditClick={(id, title) => {
+                      startEdit(id, title);
+                      setEditDialogOpen(true);
+                    }}
+                    onDeleteClick={deleteSubStep}
+                    editingId={editingId}
+                    editTitle={editTitle}
+                    onEditTitleChange={setEditTitle}
+                    onSaveEdit={saveEdit}
+                    onCancelEdit={cancelEdit}
+                    isTaskCreator={!!isTaskCreator}
+                    rejectedReason={rejectedReasonsBySubStepId[s.id]}
+                    historyCount={historyCounts[s.id] ?? 0}
+                    t={t}
+                    useEditDialog={true}
+                  />
+                </li>
+              ) : (
                 <li key={s.id} className="flex items-center gap-2 p-2 bg-white rounded-md border border-gray-200 hover:bg-gray-50">
-								{/* Fixed: Removed button wrapper to prevent button nesting - Checkbox is already a button */}
-								<Checkbox 
-									checked={s.is_completed} 
+								<Checkbox
+									checked={s.is_completed}
 									onCheckedChange={() => toggleCompleted(s.id, s.is_completed)}
 									className="text-gray-400 hover:text-gray-600"
 								/>
@@ -767,11 +1088,8 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
 											className="flex-1 h-8 text-sm"
 											autoFocus
 											onKeyDown={(e) => {
-												if (e.key === 'Enter') {
-													saveEdit();
-												} else if (e.key === 'Escape') {
-													cancelEdit();
-												}
+												if (e.key === 'Enter') saveEdit();
+												else if (e.key === 'Escape') cancelEdit();
 											}}
 										/>
 										<Button variant="ghost" size="sm" onClick={saveEdit} className="h-8 px-2 text-green-600 hover:text-green-700">Save</Button>
@@ -790,9 +1108,7 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
                         </div>
                         {rejectedReasonsBySubStepId[s.id] && (
                           <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-[11px]">
-                            <p className="font-medium text-amber-800">
-                              {t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}
-                            </p>
+                            <p className="font-medium text-amber-800">{t('dailyTask.approval.reasonForRejectionLabel', 'Reason for Rejection')}</p>
                             <p className="text-gray-700 mt-0.5">{rejectedReasonsBySubStepId[s.id]}</p>
                           </div>
                         )}
@@ -801,74 +1117,32 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
                         )}
                       </div>
 										<div className="flex items-center gap-1">
-                      {/* Assign - Locked for non-task-creators */}
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => isTaskCreator && setAssignDialogSubStep(s)}
-                        disabled={!isTaskCreator}
-                        className={`h-6 w-6 p-0 relative ${
-                          isTaskCreator
-                            ? `hover:text-gray-600 ${s.assigned_to ? 'text-green-500' : 'text-gray-400'}`
-                            : 'opacity-40 cursor-not-allowed text-gray-400'
-                        }`}
-                        title={
-                          isTaskCreator
-                            ? (s.assigned_to ? `Assigned to ${s.assigned_employee?.full_name || 'Unknown'}` : 'Assign sub-step')
-                            : '🔒 Only task creator can assign sub-steps'
-                        }
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => isTaskCreator && setAssignDialogSubStep(s)} disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 relative ${isTaskCreator ? `hover:text-gray-600 ${s.assigned_to ? 'text-green-500' : 'text-gray-400'}` : 'opacity-40 cursor-not-allowed text-gray-400'}`}
+                        title={isTaskCreator ? (s.assigned_to ? `Assigned to ${s.assigned_employee?.full_name || 'Unknown'}` : 'Assign sub-step') : '🔒 Only task creator can assign sub-steps'}>
                         <Users className="w-3 h-3" />
-                        {s.assigned_to && (
-                          <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                            1
-                          </div>
-                        )}
+                        {s.assigned_to && <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">1</div>}
                       </Button>
-                      {/* History */}
                       <Button variant="ghost" size="sm" onClick={() => setShowHistoryForSubStep(s.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-purple-600 relative" title="History & Blockers">
                         <History className="w-3 h-3" />
-                        {historyCounts[s.id] ? (
-                          <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                            {historyCounts[s.id]}
-                          </div>
-                        ) : null}
+                        {historyCounts[s.id] ? <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">{historyCounts[s.id]}</div> : null}
                       </Button>
-                      {/* Edit - Locked for assigned users */}
-											<Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => isTaskCreator && startEdit(s.id, s.title)}
-                        disabled={!isTaskCreator}
-                        className={`h-6 w-6 p-0 ${
-                          isTaskCreator 
-                            ? 'text-gray-400 hover:text-gray-600 cursor-pointer' 
-                            : 'text-gray-300 opacity-40 cursor-not-allowed'
-                        }`}
-                        title={isTaskCreator ? 'Edit sub-step' : '🔒 Only task creator can edit sub-steps'}
-                      >
-												<Edit className="w-3 h-3" />
-											</Button>
-                      {/* Delete - Locked for assigned users */}
-											<Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => isTaskCreator && deleteSubStep(s.id)}
-                        disabled={!isTaskCreator}
-                        className={`h-6 w-6 p-0 ${
-                          isTaskCreator 
-                            ? 'text-gray-400 hover:text-red-600 cursor-pointer' 
-                            : 'text-gray-300 opacity-40 cursor-not-allowed'
-                        }`}
-                        title={isTaskCreator ? 'Delete sub-step' : '🔒 Only task creator can delete sub-steps'}
-                      >
-												<Trash2 className="w-3 h-3" />
-											</Button>
+                      <Button variant="ghost" size="sm" onClick={() => isTaskCreator && startEdit(s.id, s.title)} disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 ${isTaskCreator ? 'text-gray-400 hover:text-gray-600 cursor-pointer' : 'text-gray-300 opacity-40 cursor-not-allowed'}`}
+                        title={isTaskCreator ? 'Edit sub-step' : '🔒 Only task creator can edit sub-steps'}>
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => isTaskCreator && deleteSubStep(s.id)} disabled={!isTaskCreator}
+                        className={`h-6 w-6 p-0 ${isTaskCreator ? 'text-gray-400 hover:text-red-600 cursor-pointer' : 'text-gray-300 opacity-40 cursor-not-allowed'}`}
+                        title={isTaskCreator ? 'Delete sub-step' : '🔒 Only task creator can delete sub-steps'}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
 										</div>
 									</>
 								)}
 							</li>
-						))}
+              )
+						)}
 						</ul>
 				)}
 				</div>
@@ -966,6 +1240,66 @@ export const ModalViewSubSteps = ({ open, onOpenChange, parentStepId, parentStep
         </AlertDialog>
       </DialogContent>
     </Dialog>
+
+    {useSwipeLayout && (
+      <Dialog
+        open={editDialogOpen && !!editingId}
+        onOpenChange={(openState) => {
+          if (!openState) {
+            cancelEdit();
+            setEditDialogOpen(false);
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-[90vw] w-[320px] h-[320px] max-h-[85vh] gap-4 z-[60] flex flex-col"
+          overlayClassName="z-[60]"
+        >
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>{t('dailyTask.editSubStep.title', 'Edit sub-step')}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <Textarea
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder={t('dailyTask.editSubStep.placeholder', 'Sub-step title')}
+              className="min-h-[140px] max-h-full w-full resize-none overflow-y-auto text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelEdit();
+                  setEditDialogOpen(false);
+                }
+              }}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                cancelEdit();
+                setEditDialogOpen(false);
+              }}
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                await saveEdit();
+                setEditDialogOpen(false);
+              }}
+              disabled={!editTitle.trim()}
+            >
+              {t('common.save', 'Save')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 };
 

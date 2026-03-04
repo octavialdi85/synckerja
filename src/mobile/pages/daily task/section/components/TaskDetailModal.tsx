@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, CheckSquare, Paperclip, User, Flag, Bell, AlertTriangle, History, Clock3, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/features/ui/dialog';
@@ -10,7 +10,10 @@ import {
 } from '@/features/ui/dropdown-menu';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TaskStep as TaskStepItem } from '@/features/8-2-DailyTask/section/TaskStep';
+import { MobileTaskStep } from './MobileTaskStep';
 import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/DailyTaskContext';
+import { getEffectiveProgressAndCount } from '@/features/8-2-DailyTask/utils/taskUtils';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { formatDate, formatDaysRemaining, getStatusLabel, getPriorityLabel, isTaskCreator } from '../utils/taskUtils';
 
 interface TaskDetailModalProps {
@@ -50,11 +53,42 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   onPriorityChange,
   onAddStep,
 }) => {
+  const isMobile = useIsMobile();
+  const [revealedStepId, setRevealedStepId] = useState<string | null>(null);
   const userIsCreator = isTaskCreator(task, userId);
-  const completedStepsCount = visibleSteps.filter((s) => s.is_completed).length;
+  const { progress: effectiveProgress, completedCount: effectiveCompleted, totalCount: effectiveTotal } = getEffectiveProgressAndCount(visibleSteps);
+  const displayProgress = visibleSteps.length === 0 ? progress : effectiveProgress;
+  const displayCompleted = visibleSteps.length === 0 ? visibleSteps.filter((s) => s.is_completed).length : effectiveCompleted;
+  const displayTotal = visibleSteps.length === 0 ? visibleSteps.length : effectiveTotal;
+
+  /** Count of open Sub Step modals (any step can open one). When > 0, back button must not close this modal. */
+  const [openSubStepModalCount, setOpenSubStepModalCount] = useState(0);
+  const openSubStepModalCountRef = useRef(0);
+  useEffect(() => {
+    openSubStepModalCountRef.current = openSubStepModalCount;
+  }, [openSubStepModalCount]);
+
+  const handleSubStepModalOpenChange = useCallback((open: boolean) => {
+    setOpenSubStepModalCount((c) => (open ? c + 1 : Math.max(0, c - 1)));
+  }, []);
+
+  /** When back is pressed and a Sub Step modal is open, request that modal to close. */
+  const [closeSubStepRequested, setCloseSubStepRequested] = useState(0);
+
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open && openSubStepModalCountRef.current > 0) {
+      setCloseSubStepRequested((t) => t + 1);
+      return;
+    }
+    if (!open) handleClose();
+  }, [handleClose]);
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
         hideCloseButton
         fullscreenAnimation
@@ -65,7 +99,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         <div className="flex-shrink-0 flex items-center gap-3 border-b border-border px-4 py-3 safe-area-top">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-md p-1 hover:bg-muted"
             aria-label="Close task details"
           >
@@ -73,14 +107,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </button>
           <div className="flex flex-1 flex-col min-w-0">
             <span className="text-sm font-semibold text-foreground break-words max-w-full">{task.title}</span>
-            <span className="text-xs text-muted-foreground">{progress}% complete</span>
+            <span className="text-xs text-muted-foreground">{displayProgress}% complete</span>
           </div>
         </div>
 
         <div
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3"
+          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll py-3 space-y-3 min-w-0 ${isMobile ? 'px-2' : 'px-4'}`}
           style={{
-            paddingBottom: 'calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))',
+            paddingBottom: isMobile
+              ? 'calc(1rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))'
+              : 'calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)))',
           }}
         >
           {task.description && (
@@ -97,20 +133,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">Progress</span>
-              <span className="text-xs font-semibold text-muted-foreground">{progress}%</span>
+              <span className="text-xs font-semibold text-muted-foreground">{displayProgress}%</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
+                  displayProgress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
                 }`}
-                style={{ width: `${progress}%` }}
+                style={{ width: `${displayProgress}%` }}
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <CheckSquare className="h-3.5 w-3.5" />
-                {completedStepsCount}/{visibleSteps.length}
+                {displayCompleted}/{displayTotal}
               </span>
               {task.files.length > 0 && (
                 <span className="inline-flex items-center gap-1">
@@ -325,7 +361,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-primary" />
-                Steps ({completedStepsCount}/{visibleSteps.length})
+                Steps ({displayCompleted}/{displayTotal})
               </h4>
               <Button
                 variant="ghost"
@@ -359,15 +395,33 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 ) : (
                   visibleSteps
                     .sort((a, b) => a.order - b.order)
-                    .map((step, index) => (
-                      <TaskStepItem
-                        key={step.id}
-                        step={step}
-                        index={index}
-                        taskCreatedBy={task.created_by}
-                        autoReorder={true}
-                      />
-                    ))
+                    .map((step, index) =>
+                      isMobile ? (
+                        <MobileTaskStep
+                          key={step.id}
+                          step={step}
+                          index={index}
+                          taskCreatedBy={task.created_by}
+                          taskTitle={task.title}
+                          autoReorder={true}
+                          isRevealed={revealedStepId === step.id}
+                          onReveal={() => setRevealedStepId(step.id)}
+                          onClose={() => setRevealedStepId(null)}
+                          onSubStepModalOpenChange={handleSubStepModalOpenChange}
+                          closeSubStepRequested={closeSubStepRequested}
+                        />
+                      ) : (
+                        <TaskStepItem
+                          key={step.id}
+                          step={step}
+                          index={index}
+                          taskCreatedBy={task.created_by}
+                          autoReorder={true}
+                          onSubStepModalOpenChange={handleSubStepModalOpenChange}
+                          closeSubStepRequested={closeSubStepRequested}
+                        />
+                      )
+                    )
                 )}
               </div>
             </SortableContext>

@@ -18,6 +18,42 @@ export const calculateProgress = (steps: TaskStep[], taskStatus?: string): numbe
 };
 
 /**
+ * Result of effective progress (considering sub-steps) for consistent badge and progress bar.
+ */
+export interface EffectiveProgressResult {
+  progress: number;
+  completedCount: number;
+  totalCount: number;
+}
+
+/**
+ * Calculate progress and counts considering sub-steps so badge (X/Y) and progress bar stay in sync.
+ * - Step without sub_steps: 1 item, completed = 1 if step.is_completed else 0.
+ * - Step with sub_steps: total = sub_steps.length, completed = count of sub_steps where is_completed.
+ */
+export function getEffectiveProgressAndCount(
+  steps: Array<{ is_completed: boolean; sub_steps?: Array<{ is_completed: boolean }> }>
+): EffectiveProgressResult {
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    return { progress: 0, completedCount: 0, totalCount: 0 };
+  }
+  let completed = 0;
+  let total = 0;
+  for (const step of steps) {
+    if (!step) continue;
+    if (step.sub_steps && step.sub_steps.length > 0) {
+      completed += step.sub_steps.filter((s) => s.is_completed).length;
+      total += step.sub_steps.length;
+    } else {
+      completed += step.is_completed ? 1 : 0;
+      total += 1;
+    }
+  }
+  const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
+  return { progress, completedCount: completed, totalCount: total };
+}
+
+/**
  * Determine task status from progress
  */
 export const determineStatusFromProgress = (progress: number, currentStatus: string): string => {

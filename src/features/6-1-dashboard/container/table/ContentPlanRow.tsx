@@ -58,6 +58,10 @@ interface ContentPlanRowProps {
   digitalEmployees?: DigitalMarketingEmployee[];
   creativeEmployees?: CreativeEmployee[];
   currentUserRole?: string | null;
+  carouselImageCount?: number;
+  onCarouselChange?: () => void;
+  onCarouselFirstUploadSuccess?: (planId: string) => void;
+  onCarouselAllRemoved?: (planId: string) => void;
 }
 export const ContentPlanRow = memo<ContentPlanRowProps>(({
   plan,
@@ -81,7 +85,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
   approvalAccess,
   digitalEmployees = [],
   creativeEmployees = [],
-  currentUserRole = null
+  currentUserRole = null,
+  carouselImageCount = 0,
+  onCarouselChange,
+  onCarouselFirstUploadSuccess,
+  onCarouselAllRemoved
 }) => {
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
   const [isSocialLinksDialogOpen, setIsSocialLinksDialogOpen] = useState(false);
@@ -638,16 +646,31 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       }
 
       // Validate: Cannot set production_approved to true if google_drive_link is NULL or EMPTY
+      // For Post/Carousel: require at least one carousel image instead
       if (checked) {
-        const googleDriveLink = plan.google_drive_link;
-        if (!googleDriveLink || googleDriveLink.trim() === '') {
-          toast({
-            variant: "destructive",
-            title: "Cannot Approve Production",
-            description: "Please provide a Google Drive link before approving production. The Google Drive link is required for production approval."
-          });
-          setIsUpdatingProductionApproved(false);
-          return;
+        const contentTypeName = contentTypes.find(type => type.id === plan.content_type_id)?.name || '';
+        const isPostOrCarousel = contentTypeName === 'Post' || contentTypeName === 'Carousel';
+        if (isPostOrCarousel) {
+          if (carouselImageCount < 1) {
+            toast({
+              variant: "destructive",
+              title: "Cannot Approve Production",
+              description: "Please add at least one carousel image before approving production."
+            });
+            setIsUpdatingProductionApproved(false);
+            return;
+          }
+        } else {
+          const googleDriveLink = plan.google_drive_link;
+          if (!googleDriveLink || googleDriveLink.trim() === '') {
+            toast({
+              variant: "destructive",
+              title: "Cannot Approve Production",
+              description: "Please provide a Google Drive link before approving production. The Google Drive link is required for production approval."
+            });
+            setIsUpdatingProductionApproved(false);
+            return;
+          }
         }
       }
 
@@ -968,7 +991,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           <GoogleDriveLinkCell googleDriveLink={plan.google_drive_link} isDisabled={isGoogleDriveLinkDisabled} onClick={() => {
           if (!plan.approved) return; // Don't open if not approved
           setIsGoogleDriveDialogOpen(true);
-        }} isSelected={isSelected} />
+        }} isSelected={isSelected} contentType={contentTypeName} carouselImageCount={carouselImageCount} />
         </td>
 
         {/* POINT 3: Production Status - No longer locked when production approved; display in sync with APPROVED */}
@@ -1131,7 +1154,7 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
       </tr>
 
       {/* POINT 3: Google Drive Link Dialog - Pass sync handlers for production approval */}
-      <GoogleDriveLinkDialog isOpen={isGoogleDriveDialogOpen} onClose={() => setIsGoogleDriveDialogOpen(false)} googleDriveLink={plan.google_drive_link || ''} productionApproved={plan.production_approved || false} onSave={link => {
+      <GoogleDriveLinkDialog isOpen={isGoogleDriveDialogOpen} onClose={() => setIsGoogleDriveDialogOpen(false)} googleDriveLink={plan.google_drive_link || ''} productionApproved={plan.production_approved || false} productionStatus={plan.production_status ?? undefined} onSave={link => {
         // Normalize: Convert empty string to null for consistency
         const normalizedLink = link && link.trim().length > 0 ? link : null;
         devLog.debug('📝 GoogleDriveLinkDialog onSave called:', {
@@ -1146,6 +1169,9 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
           onProductionStatusChange(plan.id, null);
         }
     }} socialMediaPlanId={plan.id} planTitle={plan.title} contentTitle={plan.title} contentType={contentTypeName} postDate={plan.post_date}
+    onCarouselChange={onCarouselChange}
+    onCarouselFirstUploadSuccess={onCarouselFirstUploadSuccess}
+    onCarouselAllRemoved={onCarouselAllRemoved}
     // POINT 3: Add handlers for production approval sync
     onApprove={() => {
       const approvedDate = new Date().toISOString();

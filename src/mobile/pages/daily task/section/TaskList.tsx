@@ -32,11 +32,11 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 
 // Utils
 import {
-  calculateProgress,
   isOverdue,
   getDaysRemaining,
   isTaskCreator as checkIsTaskCreator,
 } from './utils/taskUtils';
+import { getEffectiveProgressAndCount } from '@/features/8-2-DailyTask/utils/taskUtils';
 
 export const TaskList = () => {
   const {
@@ -62,19 +62,14 @@ export const TaskList = () => {
 
   const calculateAssignedStepsProgress = useCallback(
     (task: Task): number => {
-      // Jika task tidak punya step dan sudah completed, progress = 100%
-      if (task.has_substeps === false && task.status === 'completed') {
-        return 100;
-      }
-      // Jika task tidak punya step dan belum completed, progress = 0%
-      if (task.has_substeps === false && task.status !== 'completed') {
-        return 0;
-      }
-      // Jika task punya step, hitung berdasarkan step yang completed
       const visibleSteps = getVisibleSteps(task);
-      return calculateProgress(visibleSteps);
+      const { progress, totalCount } = getEffectiveProgressAndCount(visibleSteps);
+      if (totalCount > 0) return progress;
+      if (task.has_substeps === false && task.status === 'completed') return 100;
+      if (task.has_substeps === false && task.status !== 'completed') return 0;
+      return progress;
     },
-    [getVisibleSteps, calculateProgress]
+    [getVisibleSteps]
   );
 
   const { activeTask, activeVisibleSteps, activeProgress, openTaskModal, closeTaskModal } =
@@ -123,6 +118,7 @@ export const TaskList = () => {
     taskTitle: string;
   }>({ isOpen: false, taskId: null, taskTitle: '' });
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
+  const [revealedTaskId, setRevealedTaskId] = useState<string | null>(null);
 
   // Computed values for active task
   const activeIsOverdue = activeTask ? isOverdue(activeTask.due_date, activeTask.status) : false;
@@ -340,7 +336,11 @@ export const TaskList = () => {
                 sortedTasks.map((task) => {
                   const isHighlighted = highlightedTask === task.id;
                   const visibleSteps = getVisibleSteps(task);
-                  const progress = calculateAssignedStepsProgress(task);
+                  const { progress, completedCount, totalCount } = getEffectiveProgressAndCount(visibleSteps);
+                  // Use effective progress when we have steps (so bar matches badge); else fallback by status
+                  const progressPct = totalCount > 0
+                    ? progress
+                    : (task.has_substeps === false ? (task.status === 'completed' ? 100 : 0) : progress);
                   const blockerCount = blockerCountByTask[task.id] || 0;
 
                   return (
@@ -349,7 +349,9 @@ export const TaskList = () => {
                       task={task}
                       isHighlighted={isHighlighted}
                       visibleSteps={visibleSteps}
-                      progress={progress}
+                      progress={progressPct}
+                      completedCount={completedCount}
+                      totalCount={totalCount}
                       blockerCount={blockerCount}
                       isTaskCreator={isTaskCreator(task)}
                       onToggleStatus={handleStatusToggle}
@@ -364,6 +366,9 @@ export const TaskList = () => {
                       taskRef={(el) => {
                         taskRefs.current[task.id] = el;
                       }}
+                      isRevealed={revealedTaskId === task.id}
+                      onReveal={() => setRevealedTaskId(task.id)}
+                      onClose={() => setRevealedTaskId(null)}
                     />
                   );
                 })

@@ -24,7 +24,7 @@ import {
 } from './types';
 export type { Task, TaskStep } from './types';
 
-import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps } from './utils/taskUtils';
+import { calculateProgress, determineStatusFromProgress, autoReorderTaskSteps, getEffectiveProgressAndCount } from './utils/taskUtils';
 import { filterRecentStepUpdates } from './utils/filterUtils';
 import { fetchRecentStepUpdates as fetchRecentStepUpdatesService } from './services/recentStepUpdateService';
 import { createCompletionApprovalIfAssignee, fetchRejectedForAssignee } from './services/completionApprovalService';
@@ -172,7 +172,7 @@ export interface DailyTaskContextType {
   addTaskStep: (taskId: string, title: string, description?: string) => Promise<void>;
   updateTaskStep: (stepId: string, data: Partial<TaskStep>, options?: { autoReorder?: boolean }) => Promise<void>;
   deleteTaskStep: (stepId: string) => Promise<void>;
-  assignTaskStep: (stepId: string, employeeId: string | null) => Promise<void>;
+  assignTaskStep: (stepId: string, employeeId: string | null, dueDateIso?: string | null) => Promise<void>;
   reorderTaskSteps: (taskId: string, stepIds: string[]) => Promise<void>;
   uploadTaskFile: (taskId: string, file: File) => Promise<void>;
   uploadTaskStepFile: (taskStepId: string, file: File) => Promise<void>;
@@ -986,9 +986,10 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
       // Calculate progress for each task and synchronize status
       const tasksWithProgress = (data || []).map((task: any) => {
         const taskSteps = stepsByTaskId[task.id] || [];
-        // Pass task status to calculateProgress for tasks without steps
-        // If no steps exist, progress is based on status (completed = 100%, not completed = 0%)
-        const progress = calculateProgress(taskSteps, task.status);
+        const progress =
+          taskSteps.length > 0
+            ? getEffectiveProgressAndCount(taskSteps).progress
+            : (task.status === 'completed' ? 100 : 0);
         
         // For tasks without substeps (has_substeps = false), respect the manual status
         // Don't auto-synchronize status based on progress since they can be checked directly
@@ -2279,9 +2280,31 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
   };
 
   const reorderTaskSteps = async (taskId: string, stepIds: string[]) => {
+    let previousTasks: Task[] | null = null;
     try {
-      // Update order for each step
-      const updatePromises = stepIds.map((stepId, index) => 
+      // Optimistic update: reorder steps in memory so UI updates immediately (no snap-back)
+      setTasks((prevTasks) => {
+        previousTasks = prevTasks;
+        const taskIndex = prevTasks.findIndex((t) => t.id === taskId);
+        if (taskIndex === -1) return prevTasks;
+        const task = prevTasks[taskIndex];
+        const steps = task.steps ?? [];
+        const stepMap = new Map(steps.map((s) => [s.id, s]));
+        const reorderedSteps = stepIds
+          .map((id, index) => {
+            const step = stepMap.get(id);
+            if (!step) return null;
+            return { ...step, order: index + 1 };
+          })
+          .filter((s): s is TaskStep => s != null);
+        if (reorderedSteps.length !== steps.length) return prevTasks;
+        const next = [...prevTasks];
+        next[taskIndex] = { ...task, steps: reorderedSteps };
+        return next;
+      });
+
+      // Persist to Supabase in background (no refetch on success to avoid reload/snap-back)
+      const updatePromises = stepIds.map((stepId, index) =>
         supabase
           .from('task_steps')
           .update({ order: index + 1 })
@@ -2290,19 +2313,20 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
 
       await Promise.all(updatePromises);
 
+      clearCache(`tasks_${organizationId}_*`);
       toast({
         title: 'Success',
-        description: 'Steps reordered successfully'
+        description: 'Steps reordered successfully',
       });
-      
-      clearCache(`tasks_${organizationId}_*`);
-      await fetchTasks(true);
     } catch (error) {
       console.error('Error reordering steps:', error);
+      if (previousTasks != null) {
+        setTasks(previousTasks);
+      }
       toast({
         title: 'Error',
         description: 'Failed to reorder steps',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     }
   };

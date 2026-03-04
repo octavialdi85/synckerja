@@ -969,6 +969,50 @@ const SocialMediaContent = () => {
     }
   }, [updateContentPlan, currentEmployee?.id, contentPlans, syncPicProduction, requestApproval]);
 
+  const handleCarouselFirstUploadSuccess = useCallback(
+    (planId: string) => {
+      const plan = contentPlans.find((p) => p.id === planId);
+      if (plan?.pic_production_source === 'task_steps_assigned') {
+        devLog.debug('Carousel first upload: PIC Production already set from task_steps_assigned', { planId });
+        return;
+      }
+      const employeeId = currentEmployee?.id;
+      if (!employeeId) {
+        devLog.debug('Carousel first upload: cannot auto-assign PIC Production (employee not found)');
+        return;
+      }
+      const completionDate = new Date().toISOString();
+      devLog.debug('Carousel first upload: auto-populating PIC Production', { planId, employeeId });
+      updateContentPlan(planId, {
+        pic_production_id: employeeId,
+        pic_production_source: 'google_drive_link',
+        production_status: 'Need Review',
+        production_completion_date: completionDate,
+      });
+    },
+    [contentPlans, currentEmployee?.id, updateContentPlan]
+  );
+
+  const handleCarouselAllRemoved = useCallback(
+    async (planId: string) => {
+      const plan = contentPlans.find((p) => p.id === planId);
+      if (!plan) return;
+      if (plan.pic_production_source === 'task_steps_assigned') {
+        devLog.debug('Carousel all removed: PIC Production from task_steps_assigned, syncing only', { planId });
+      }
+      try {
+        await syncPicProduction(planId, null, plan.pic_production_id, plan.pic_production_source);
+        updateContentPlan(planId, {
+          production_status: null,
+          production_completion_date: null,
+        });
+      } catch (error) {
+        devLog.error('Error resetting PIC Production after carousel all removed:', error);
+      }
+    },
+    [contentPlans, syncPicProduction, updateContentPlan]
+  );
+
   const handleAddContent = useCallback(async () => {
     if (!organizationId) {
       toast.error("Organization not found");
@@ -1248,6 +1292,8 @@ const SocialMediaContent = () => {
                                     approvalAccess={approvalAccess}
                                     requestApproval={requestApproval}
                                     handleUnapproval={handleUnapproval}
+                                    onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
+                                    onCarouselAllRemoved={handleCarouselAllRemoved}
                                   />
                                 </SocialMediaErrorBoundary>
                               </div>
@@ -1311,6 +1357,7 @@ const SocialMediaContent = () => {
               onClose={() => setNotificationPreviewPlanId(null)}
               googleDriveLink={notificationPreviewPlan.google_drive_link || ''}
               productionApproved={notificationPreviewPlan.production_approved || false}
+              productionStatus={notificationPreviewPlan.production_status ?? undefined}
               onSave={(link) => {
                 const normalized = link?.trim() ? link : null;
                 handleFieldChange(notificationPreviewPlan.id, 'google_drive_link', normalized);
@@ -1334,6 +1381,12 @@ const SocialMediaContent = () => {
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved', false);
                 handleFieldChange(notificationPreviewPlan.id, 'production_approved_date', null);
               }}
+              onCarouselChange={() => {
+                queryClient.invalidateQueries({ queryKey: ['social-media-carousel'] });
+                queryClient.invalidateQueries({ queryKey: ['social-media-plans'] });
+              }}
+              onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
+              onCarouselAllRemoved={handleCarouselAllRemoved}
             />
           )}
 
