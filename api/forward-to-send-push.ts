@@ -53,9 +53,10 @@ export default async function handler(req: Request): Promise<Response> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const cause = err instanceof Error && (err as Error & { cause?: unknown }).cause != null
-      ? String((err as Error & { cause?: unknown }).cause)
-      : "";
+    const cause =
+      err != null && typeof err === "object" && "cause" in err && (err as { cause: unknown }).cause != null
+        ? String((err as { cause: unknown }).cause)
+        : "";
     return new Response(
       JSON.stringify({
         error: "Relay failed to call Edge Function",
