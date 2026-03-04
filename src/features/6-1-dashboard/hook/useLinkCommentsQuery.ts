@@ -87,6 +87,14 @@ export const useLinkCommentsQuery = (socialMediaPlanId: string, _linkUrl?: strin
         throw error;
       }
 
+      // Optional diagnostic: if no comments returned and RLS might hide rows, hint to check active_organization_id
+      if ((data?.length ?? 0) === 0) {
+        devLog.debug(
+          'Link comments empty for plan. If others see comments here, check profiles.active_organization_id matches plan org.',
+          { socialMediaPlanId }
+        );
+      }
+
       const displayNameFromRow = (c: { commenter_display_name?: string | null }) =>
         (c.commenter_display_name && c.commenter_display_name.trim()) || null;
 
