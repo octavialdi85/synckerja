@@ -19,6 +19,7 @@ import { useAuth } from '@/features/1-login/contexts/AuthContext';
 import { useUnifiedProfile } from '@/hooks/useUnifiedProfile';
 import { useSafeAreaInsets } from '@/mobile/contexts/SafeAreaInsetsContext';
 import { useIsMobile } from '@/mobile/hooks/use-mobile';
+import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
 
 const REVIEW_COMMENTER_STORAGE_KEY = 'review_commenter_';
 
@@ -570,7 +571,6 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         production_completion_date: null,
         production_approved: false,
         production_approved_date: null,
-        google_drive_link: null,
       };
       if (shouldIncrement) {
         updateData.production_revision_count = newProductionRevisionCount;
@@ -585,6 +585,28 @@ const PublicContentReviewPage: React.FC<PublicContentReviewPageProps> = ({ showB
         devLog.error('Error updating production status for revision:', error);
         toast.error(t('publicReview.toast.revisionFailed', 'Failed to update production status'));
         return;
+      }
+      // Uncomplete production step via RPC (without clearing link)
+      const { data: planRow } = await supabase
+        .from('social_media_plans')
+        .select('organization_id')
+        .eq('id', planId)
+        .single();
+      if (planRow?.organization_id) {
+        revertStepCompletionFromDriveLinkRemovalWithRpc({
+          organizationId: planRow.organization_id,
+          socialMediaPlanId: planId,
+          rejectedByEmployeeId: undefined,
+        }).then(({ error: rpcErr }) => {
+          if (rpcErr) {
+            devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+              planId,
+              message: rpcErr.message,
+            });
+          }
+        }).catch((err) => {
+          devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
+        });
       }
       toast.success(t('publicReview.toast.revisionSuccess', 'Production status updated to Request Revision'));
       if (showBackToHome) {

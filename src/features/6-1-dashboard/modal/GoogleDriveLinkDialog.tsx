@@ -13,9 +13,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { devLog } from '@/config/logger';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useCurrentEmployee } from '@/features/share/hooks/useCurrentEmployee';
 import { usePublicReviewToken } from '../hook/usePublicReviewToken';
 import { useProdApprovalAccess } from '../hook/useProdApprovalAccess';
 import { getEmbedUrl as getEmbedUrlFromUtils, getDirectVideoUrl, isFileLink } from '../utils/previewUtils';
+import { revertStepCompletionFromDriveLinkRemovalWithRpc } from '@/features/8-2-DailyTask/services/completionApprovalService';
 
 const getEmbedUrl = (url: string) => {
   const u = getEmbedUrlFromUtils(url);
@@ -184,6 +186,7 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
   const { canShowApprovalButtons } = useProdApprovalAccess(isOpen);
   const queryClient = useQueryClient();
   const { organizationId } = useCurrentOrg();
+  const { data: currentEmployee } = useCurrentEmployee();
   const { getOrCreate, isPending: isPublicLinkPending } = usePublicReviewToken();
 
   // Track previous link to only log on actual changes
@@ -369,13 +372,12 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         ? (currentPlan.production_revision_count || 0) + 1
         : (currentPlan.production_revision_count || 0);
 
-      // Update production status and related fields
+      // Update production status and related fields (do not clear google_drive_link)
       const updateData: any = {
         production_status: 'Request Revision',
         production_completion_date: null, // POINT 2: Clear completion date when requesting revision
         production_approved: false, // Reset approval status
         production_approved_date: null, // Clear approved date
-        google_drive_link: null, // Clear link so production must re-upload
       };
 
       // Only update revision count if we're incrementing it
@@ -404,6 +406,24 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
         });
       }
 
+      // Uncomplete production step via RPC (without clearing link)
+      if (organizationId) {
+        revertStepCompletionFromDriveLinkRemovalWithRpc({
+          organizationId,
+          socialMediaPlanId,
+          rejectedByEmployeeId: currentEmployee?.id ?? undefined,
+        }).then(({ error }) => {
+          if (error) {
+            devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+              planId: socialMediaPlanId,
+              message: error.message,
+            });
+          }
+        }).catch((err) => {
+          devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
+        });
+      }
+
       toast.success('Production status updated to Request Revision');
       devLog.debug('Production completion date cleared and status set to Request Revision', {
         planId: socialMediaPlanId,
@@ -414,10 +434,6 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
       if (onRevision) {
         onRevision();
         devLog.debug('onRevision callback executed', { planId: socialMediaPlanId });
-      }
-
-      if (onSave) {
-        onSave(null);
       }
 
       // Optimistic update cache immediately for instant UI feedback
@@ -440,7 +456,6 @@ const GoogleDriveLinkDialog: React.FC<GoogleDriveLinkDialogProps> = ({
                   production_approved: false,
                   production_approved_date: null,
                   production_revision_count: newProductionRevisionCount,
-                  google_drive_link: null,
                 };
               }
               return plan;

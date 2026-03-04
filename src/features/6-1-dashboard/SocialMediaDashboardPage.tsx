@@ -858,7 +858,6 @@ const SocialMediaContent = () => {
           pending.updates['production_completion_date'] = null;
           pending.updates['production_approved'] = false;
           pending.updates['production_approved_date'] = null;
-          pending.updates['google_drive_link'] = null;
         }
 
         // Very short debounce (30ms) for immediate feel while still batching rapid changes

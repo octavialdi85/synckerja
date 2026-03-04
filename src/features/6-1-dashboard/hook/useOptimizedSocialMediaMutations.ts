@@ -168,6 +168,25 @@ export const useOptimizedSocialMediaMutations = () => {
               toast.error('Action failed.');
             });
           }
+
+          // When production_status becomes Request Revision: uncomplete production step (without clearing link)
+          if (organizationId && updates.production_status === 'Request Revision') {
+            revertStepCompletionFromDriveLinkRemovalWithRpc({
+              organizationId,
+              socialMediaPlanId: variables.id,
+              rejectedByEmployeeId: currentEmployee?.id ?? undefined,
+            }).then(({ error }) => {
+              if (error) {
+                devLog.warn('revertStepCompletionFromDriveLinkRemovalWithRpc failed', {
+                  planId: variables.id,
+                  message: error.message,
+                });
+              }
+            }).catch((err) => {
+              devLog.error('revertStepCompletionFromDriveLinkRemovalWithRpc rejected', err);
+              toast.error('Action failed.');
+            });
+          }
           
           devLog.debug('✅ Data updated in cache without reload');
         }

@@ -179,7 +179,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
           onFieldChange(id, 'production_approved', false);
           onFieldChange(id, 'production_approved_date', null);
           
-          // google_drive_link is cleared in the batch by handleFieldChange when production_status is Request Revision
+          // google_drive_link is NOT cleared on Request Revision; step uncomplete is triggered by mutation onSuccess
 
           devLog.debug('All fields queued for update (batched in 30ms)');
         } else {
