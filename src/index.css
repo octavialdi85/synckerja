@@ -334,6 +334,11 @@ All colors MUST be HSL.
   padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
 }
 
+/* Habits (mobile): section terakhir 4rem ke nav footer. */
+.content-padding-above-nav-habits {
+  padding-bottom: calc(4rem + max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px))) !important;
+}
+
 @layer base {
   :root {
     --background: 210 20% 98%;

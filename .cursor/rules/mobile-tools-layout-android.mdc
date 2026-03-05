@@ -157,6 +157,7 @@ Contoh:
   - **Schedule:** **4rem** — `content-padding-above-nav-default` (section Holidays tidak tertutup nav footer; sama seperti Reports)
   - **Client Visit:** **4rem** — `content-padding-above-nav-client-visit` (section terakhir mis. Visit Analysis tidak menempel ke nav footer).
   - **Leads Management (mobile):** **4rem** — `content-padding-above-nav-leads-management`
+  - **Habits (mobile):** **4rem** — `content-padding-above-nav-habits`
   - **Subscription overview:** **4rem** — `content-padding-above-nav-default`
   - **Subscription plans:** **4rem** — `content-padding-above-nav-default`
   - **Subscription management:** **4rem** — `content-padding-above-nav-default`
@@ -196,6 +197,7 @@ Contoh:
 | Schedule | 4rem + safe-area-bottom | `content-padding-above-nav-default` (sama seperti Reports) |
 | Client Visit | 4rem + safe-area-bottom | `content-padding-above-nav-client-visit` |
 | Leads Management (mobile) | 4rem + safe-area-bottom | `content-padding-above-nav-leads-management` |
+| Habits (mobile) | 4rem + safe-area-bottom | `content-padding-above-nav-habits` |
 | Subscription overview | 4rem + safe-area-bottom | `content-padding-above-nav-default` |
 | Subscription plans | 4rem + safe-area-bottom | `content-padding-above-nav-default` |
 | Subscription management | 4rem + safe-area-bottom | `content-padding-above-nav-default` |

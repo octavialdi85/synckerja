@@ -27,8 +27,9 @@ import {
 } from 'recharts';
 import { HabitFormModal } from './HabitFormModal';
 import { HabitTargetCountModal } from './HabitTargetCountModal';
+import { isHabitActiveOnDay, isHabitCompletedOnDay } from '../utils/habitDayUtils';
 import { LoadingDots } from '@/components/LoadingDots';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday, isAfter, isSameMonth } from 'date-fns';
 import { useToast } from '@/features/ui/use-toast';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
@@ -59,7 +60,15 @@ export const HabitSpreadsheetView = () => {
   const [targetCountModal, setTargetCountModal] = useState<{ habitId: string; date: Date } | null>(null);
   const [monthlyHabitConfirmModal, setMonthlyHabitConfirmModal] = useState<{ habitId: string; date: Date; newDate: number; oldDate: number | null } | null>(null);
   const [selectedOldDate, setSelectedOldDate] = useState<number | null>(null);
-  
+  const [expandedHabitId, setExpandedHabitId] = useState<string | null>(null);
+
+  const HABIT_NAME_CELL_WIDTH = 250;
+  const ACTIONS_WIDTH = 56;
+  const ACTIONS_PADDING_RIGHT = 12;
+  const ACTIONS_TOTAL_WIDTH = ACTIONS_WIDTH + ACTIONS_PADDING_RIGHT;
+  const handleToggleActionsReveal = (habitId: string) => {
+    setExpandedHabitId((prev) => (prev === habitId ? null : habitId));
+  };
   // Single ref for unified scroll container
   const unifiedScrollRef = useRef<HTMLDivElement>(null);
 
@@ -144,68 +153,6 @@ export const HabitSpreadsheetView = () => {
 
     return { goal, actual, progress };
   };
-
-  // Helper function to check if a habit is active on a specific day
-  const isHabitActiveOnDay = React.useCallback((habit: any, day: Date): boolean => {
-    // First check if habit is globally active
-    if (!habit.is_active) return false;
-    
-    if (habit.frequency === 'weekly') {
-      if (habit.weekly_days && Array.isArray(habit.weekly_days) && habit.weekly_days.length > 0) {
-        const dayOfWeek = day.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-        // Ensure weekly_days contains numbers
-        const weeklyDaysNumbers = habit.weekly_days.map((d: any) => Number(d));
-        return weeklyDaysNumbers.includes(dayOfWeek);
-      }
-      return true; // If no weekly_days specified, assume active all days
-    }
-    
-    if (habit.frequency === 'monthly') {
-      // For monthly habits, only active on dates specified in monthly_dates
-      if (habit.monthly_dates && Array.isArray(habit.monthly_dates) && habit.monthly_dates.length > 0) {
-        const dayOfMonth = parseInt(format(day, 'd'));
-        // Ensure monthly_dates contains numbers and check if dayOfMonth is included
-        const monthlyDatesNumbers = habit.monthly_dates.map((d: any) => Number(d));
-        const isIncluded = monthlyDatesNumbers.includes(dayOfMonth);
-        return isIncluded;
-      }
-      // If no monthly_dates specified, assume not active (monthly habits need specific dates)
-      return false;
-    }
-    
-    // Daily habits are active every day
-    return true;
-  }, []);
-
-  // Helper function to check if a habit is completed on a specific day
-  const isHabitCompletedOnDay = React.useCallback((habit: any, day: Date, entriesList: any[]): boolean => {
-    // If habit is not active, it cannot be completed
-    if (!habit.is_active) return false;
-    
-    const dateStr = format(day, 'yyyy-MM-dd');
-    const dayEntries = entriesList.filter((e) => e.habit_id === habit.id && e.entry_date === dateStr);
-    
-    // For monthly habits: target_count is for the whole month, not per day
-    // If there's at least one entry on this date, the habit is completed for this day
-    if (habit.frequency === 'monthly') {
-      return dayEntries.length > 0;
-    }
-    
-    // For weekly habits: target_count is for the whole week, not per day
-    // If there's at least one entry on this date, the habit is completed for this day
-    if (habit.frequency === 'weekly') {
-      return dayEntries.length > 0;
-    }
-    
-    // For daily habits with target_count > 1: 
-    // Must reach target_count entries on this specific day
-    if (habit.target_count > 1) {
-      return dayEntries.length >= habit.target_count;
-    }
-    
-    // For daily habits with target_count = 1, check if there's at least one entry
-    return dayEntries.length > 0;
-  }, []);
 
   // Calculate daily progress for a specific date
   const getDailyProgress = (date: Date) => {
@@ -313,16 +260,33 @@ export const HabitSpreadsheetView = () => {
       
       const done = completedHabits.length;
       const left = Math.max(0, totalHabits - done);
+      const pct = totalHabits > 0 ? Math.round((done / totalHabits) * 100) : 0;
 
       return {
         date: format(day, 'd'),
         dayName: format(day, 'EEE'),
-        done: Math.round(done), // Round to integer
-        left: Math.round(left), // Round to integer
+        done: Math.round(done),
+        left: Math.round(left),
         total: totalHabits,
+        pct,
       };
     });
-  }, [monthDays, entries, filteredHabits, isHabitActiveOnDay, isHabitCompletedOnDay]);
+  }, [monthDays, entries, filteredHabits]);
+
+  // Cumulative consistency rate: from day 1 to today (in current month only)
+  const cumulativeConsistencyRate = useMemo(() => {
+    const today = new Date();
+    let totalCompleted = 0;
+    let totalExpected = 0;
+    chartData.forEach((row, index) => {
+      const day = monthDays[index];
+      if (!isSameMonth(day, currentMonth) || isAfter(day, today)) return;
+      totalCompleted += row.done;
+      totalExpected += row.total;
+    });
+    if (totalExpected === 0) return 0;
+    return (totalCompleted / totalExpected) * 100;
+  }, [chartData, monthDays, currentMonth]);
 
 
   // Handle click on monthly habit checkbox that is not in monthly_dates
@@ -663,44 +627,75 @@ export const HabitSpreadsheetView = () => {
                       onClick={() => setSelectedHabit(habit.id)}
                       style={{ height: '45px' }}
                     >
-                      {/* Habit Name Cell - Sticky */}
+                      {/* Habit Name Cell - Sticky; chevron reveals Edit/Delete (same as mobile) */}
                       <td
-                        className={`sticky left-0 z-10 border-r border-gray-300 border-b border-gray-300 px-4 shadow-[2px_0_4px_rgba(0,0,0,0.1)] transition-colors ${
+                        className={`sticky left-0 z-10 border-r border-gray-300 border-b border-gray-300 p-0 shadow-[2px_0_4px_rgba(0,0,0,0.1)] transition-colors ${
                           isSelected ? 'bg-blue-50' : 'bg-white'
                         } group-hover:bg-gray-50`}
-                        style={{ width: '250px', minWidth: '250px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}
+                        style={{ width: '250px', minWidth: '250px', height: '45px', verticalAlign: 'middle', overflow: 'hidden' }}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="overflow-hidden" style={{ width: HABIT_NAME_CELL_WIDTH }}>
                           <div
-                            className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
-                            style={{ backgroundColor: habit.color || '#3b82f6' }}
-                          />
-                          <span className="font-medium text-sm text-gray-900 flex-1 truncate">
-                            {habit.name}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 hover:bg-gray-200"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingHabit(habit.id);
-                              }}
+                            className="flex items-stretch transition-transform duration-150 ease-out"
+                            style={{
+                              width: HABIT_NAME_CELL_WIDTH + ACTIONS_TOTAL_WIDTH,
+                              transform: expandedHabitId === habit.id ? `translateX(-${ACTIONS_TOTAL_WIDTH}px)` : 'translateX(0)',
+                            }}
+                          >
+                            <div
+                              className="flex items-center gap-2 flex-shrink-0 py-1.5 pl-3 pr-0"
+                              style={{ width: HABIT_NAME_CELL_WIDTH }}
                             >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setHabitToDelete({ id: habit.id, name: habit.name });
-                              }}
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300"
+                                style={{ backgroundColor: habit.color || '#3b82f6' }}
+                              />
+                              <span className="font-medium text-sm text-gray-900 flex-1 truncate min-w-0">
+                                {habit.name}
+                              </span>
+                              <button
+                                type="button"
+                                className="flex-shrink-0 ml-auto p-0.5 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleActionsReveal(habit.id);
+                                }}
+                                aria-label={expandedHabitId === habit.id ? t('habitTracker.closeActions', 'Tutup aksi') : t('habitTracker.revealActions', 'Tampilkan edit & hapus')}
+                              >
+                                <ChevronRight
+                                  className={`h-4 w-4 transition-transform duration-200 ${expandedHabitId === habit.id ? 'rotate-90' : ''}`}
+                                />
+                              </button>
+                            </div>
+                            <div
+                              className="flex items-center flex-shrink-0 bg-gray-100 border-l border-gray-300 pr-3"
+                              style={{ width: ACTIONS_TOTAL_WIDTH }}
                             >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-none hover:bg-gray-200"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedHabitId(null);
+                                  setEditingHabit(habit.id);
+                                }}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-none text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedHabitId(null);
+                                  setHabitToDelete({ id: habit.id, name: habit.name });
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -716,21 +711,9 @@ export const HabitSpreadsheetView = () => {
                         const isFull = entriesCount === habit.target_count;
                         const isPartial = entriesCount > 0 && entriesCount < habit.target_count;
                         const isEmpty = entriesCount === 0;
-                        
-                        // Check if day is allowed for weekly habits
-                        let isDayAllowed = true;
-                        if (isWeeklyHabit && habit.weekly_days && habit.weekly_days.length > 0) {
-                          // Get day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-                          const dayOfWeek = day.getDay();
-                          isDayAllowed = habit.weekly_days.includes(dayOfWeek);
-                        }
-                        
-                        // Check if date is allowed for monthly habits
-                        if (isMonthlyHabit && habit.monthly_dates && habit.monthly_dates.length > 0) {
-                          // Get day of month (1-31)
-                          const dayOfMonth = parseInt(format(day, 'd'));
-                          isDayAllowed = habit.monthly_dates.includes(dayOfMonth);
-                        }
+
+                        // Use shared logic: day allowed = habit active on this day (same as daily % calculation)
+                        const isDayAllowed = isHabitActiveOnDay(habit, day);
                         
                         // Determine checkbox state
                         // For multi-entry habits: indeterminate if partial, checked if full, unchecked if empty
@@ -940,10 +923,15 @@ export const HabitSpreadsheetView = () => {
             <div className="flex flex-col" style={{ minWidth: `calc(250px + ${monthDays.length * 45}px + 280px)` }}>
               {/* Chart Row */}
               <div className="flex border-t border-gray-300 py-4">
-                {/* Spacer for Habit Name column (250px) - Sticky */}
-                <div className="sticky left-0 z-10 flex-shrink-0 px-4 border-r border-gray-300 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ width: '250px', minWidth: '250px' }}>
-                  <div className="mb-2">
-                    <span className="text-xs font-semibold text-gray-700">Daily Progress Chart</span>
+                {/* Consistency Rate column (250px) - Sticky, centered */}
+                <div className="sticky left-0 z-10 flex-shrink-0 flex flex-col items-center justify-center border-r border-gray-300 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[250px] min-w-[250px] self-stretch">
+                  <div className="flex flex-col items-center justify-center flex-1 w-full py-4">
+                    <div className="text-sm font-semibold text-gray-700 mb-2">
+                      {t('habitTracker.consistencyRateHeader', 'Consistency Rate')}
+                    </div>
+                    <div className="text-4xl font-bold text-gray-900 w-full text-center">
+                      {Math.round(cumulativeConsistencyRate)}%
+                    </div>
                   </div>
                 </div>
                 
@@ -952,7 +940,7 @@ export const HabitSpreadsheetView = () => {
               <ResponsiveContainer width="100%" height={150}>
                 <LineChart 
                   data={chartData} 
-                  margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
+                  margin={{ top: 5, right: 22.5, left: 0, bottom: 5 }}
                   barCategoryGap={0}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -966,15 +954,17 @@ export const HabitSpreadsheetView = () => {
                     tickMargin={8}
                     type="category"
                     scale="point"
-                    padding={{ left: 0, right: 0 }}
+                    padding={{ left: 0.5, right: 0.5 }}
                   />
                   <YAxis 
                     tick={{ fontSize: 10 }}
                     stroke="#6b7280"
-                    width={40}
-                    domain={[0, 'dataMax']}
+                    width={20}
+                    domain={[0, 100]}
                     allowDecimals={false}
-                    tickFormatter={(value) => Math.round(value).toString()}
+                    ticks={[0, 25, 50, 75, 100]}
+                    tickFormatter={() => ''}
+                    label={{ value: '%', position: 'insideTopLeft', style: { fontSize: 10, fill: '#6b7280' } }}
                   />
                   <Tooltip 
                     contentStyle={{ 
@@ -983,12 +973,12 @@ export const HabitSpreadsheetView = () => {
                       borderRadius: '6px',
                       fontSize: '12px'
                     }}
-                    formatter={(value: number) => [Math.round(value), 'Done']}
+                    formatter={(value: number) => [`${value}%`, t('habitTracker.dailyProgressChart', 'Progress Harian')]}
                     labelFormatter={(label) => `Day ${label}`}
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="done" 
+                    dataKey="pct" 
                     stroke="#10b981" 
                     strokeWidth={2.5}
                     dot={{ fill: '#10b981', strokeWidth: 2, r: 3 }}

@@ -93,6 +93,7 @@ import { Settings, Users, UserCheck, FileText, Briefcase } from "lucide-react";
 import DesktopDailyTaskReportPage from "./features/8-2-DailyTaskReport/pages/DailyTaskReportPage";
 import MobileDailyTaskReportPage from "./mobile/pages/daily task report/DailyTaskReportPage";
 import HabitTrackerPage from "./features/8-2-HabitTracker/pages/HabitTrackerPage";
+import MobileHabitTrackerPage from "./mobile/pages/habits/HabitTrackerMobilePage";
 import MobileMeetingNotesPage from "./mobile/pages/meeting notes/MeetingNotesPage";
 import MobileInitiativePage from "./mobile/pages/Initiative/InitiativePage";
 import MobileLiveChatPage from "./mobile/pages/livechat/LiveChatPage";
@@ -214,7 +215,8 @@ const DailyTaskRouteElement = () => {
 };
 
 const HabitTrackerRouteElement = () => {
-  return <HabitTrackerPage />;
+  const isMobile = useMobileDetection();
+  return isMobile ? <MobileHabitTrackerPage /> : <HabitTrackerPage />;
 };
 
 const DailyTaskReportRouteElement = () => {

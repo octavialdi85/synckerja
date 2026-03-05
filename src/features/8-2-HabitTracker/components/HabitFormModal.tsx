@@ -7,6 +7,7 @@ import { Textarea } from '@/features/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/features/ui/select';
 import { Label } from '@/features/ui/label';
 import { useToast } from '@/features/ui/use-toast';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { startOfMonth, getDaysInMonth, getDay, format } from 'date-fns';
 import { id } from 'date-fns/locale';
 
@@ -17,6 +18,7 @@ interface HabitFormModalProps {
 }
 
 export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps) => {
+  const isMobile = useIsMobile();
   const { habits, addHabit, updateHabit } = useHabitTracker();
   const { toast } = useToast();
   const [name, setName] = useState('');
@@ -415,16 +417,31 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
   ];
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[600px] h-[600px] max-w-[600px] max-h-[600px] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-200">
-          <DialogTitle>{habitId ? 'Edit Habit' : 'Create New Habit'}</DialogTitle>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className={
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden'
+            : 'w-[600px] h-[600px] max-w-[600px] max-h-[600px] flex flex-col p-0 overflow-hidden'
+        }
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={
+            isMobile
+              ? 'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3'
+              : 'flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-200'
+          }
+        >
+          <DialogTitle className={isMobile ? 'text-lg font-semibold' : undefined}>
+            {habitId ? 'Edit Habit' : 'Create New Habit'}
+          </DialogTitle>
           <DialogDescription>
             {habitId ? 'Update your habit details' : 'Track your habits and build better routines'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto seamless-scroll px-6 py-4 space-y-4 min-h-0">
+          <div className={`flex-1 overflow-y-auto seamless-scroll space-y-4 min-h-0 ${isMobile ? 'px-4 py-4' : 'px-6 py-4'}`}>
             <div>
               <Label htmlFor="name">Habit Name *</Label>
               <Input
@@ -433,6 +450,7 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Exercise, Read, Meditate"
                 required
+                className={isMobile ? 'text-sm' : undefined}
               />
             </div>
             <div>
@@ -443,13 +461,14 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional description"
                 rows={3}
+                className={isMobile ? 'text-sm' : undefined}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="frequency">Frequency</Label>
                 <Select value={frequency} onValueChange={(value: any) => setFrequency(value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className={isMobile ? 'text-sm' : undefined}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -467,6 +486,7 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                   min="1"
                   value={targetCount}
                   onChange={(e) => setTargetCount(parseInt(e.target.value) || 1)}
+                  className={isMobile ? 'text-sm' : undefined}
                 />
               </div>
             </div>
@@ -497,7 +517,7 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
                             setChecklistNames(newNames);
                           }}
                           placeholder={`e.g., ${index === 0 ? 'Solat Subuh' : index === 1 ? 'Solat Zuhur' : index === 2 ? 'Solat Ashar' : index === 3 ? 'Solat Maghrib' : 'Solat Isya'}`}
-                          className="flex-1"
+                          className={isMobile ? 'flex-1 text-sm' : 'flex-1'}
                         />
                       </div>
                     );
@@ -676,14 +696,36 @@ export const HabitFormModal = ({ isOpen, onClose, habitId }: HabitFormModalProps
               <Label htmlFor="isActive">Active</Label>
             </div>
           </div>
-          <DialogFooter className="flex-shrink-0 px-6 pt-4 pb-6 border-t border-gray-200 mt-auto">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : habitId ? 'Update' : 'Create'}
-            </Button>
-          </DialogFooter>
+          {isMobile ? (
+            <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={loading} className="min-w-[120px] flex items-center justify-center gap-1.5">
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{habitId ? 'Updating...' : 'Creating...'}</span>
+                    </>
+                  ) : habitId ? (
+                    'Update'
+                  ) : (
+                    'Create'
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <DialogFooter className="flex-shrink-0 px-6 pt-4 pb-6 border-t border-gray-200 mt-auto">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Saving...' : habitId ? 'Update' : 'Create'}
+              </Button>
+            </DialogFooter>
+          )}
         </form>
       </DialogContent>
     </Dialog>

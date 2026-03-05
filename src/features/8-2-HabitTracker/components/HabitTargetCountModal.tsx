@@ -5,6 +5,7 @@ import { Button } from '@/features/ui/button';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Label } from '@/features/ui/label';
 import { useToast } from '@/features/ui/use-toast';
+import { useIsMobile } from '@/mobile/hooks/use-mobile';
 import { format } from 'date-fns';
 
 interface HabitTargetCountModalProps {
@@ -15,6 +16,7 @@ interface HabitTargetCountModalProps {
 }
 
 export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitTargetCountModalProps) => {
+  const isMobile = useIsMobile();
   const { habits, entries, addEntry, deleteEntry, refreshData } = useHabitTracker();
   const { toast } = useToast();
   const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
@@ -132,10 +134,25 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
   if (!habit) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Log Habit Entries</DialogTitle>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className={
+          isMobile
+            ? 'fixed left-0 right-0 top-0 translate-x-0 translate-y-0 w-full max-w-none max-h-none rounded-none modal-above-safe-area flex flex-col p-0 gap-0 overflow-hidden'
+            : 'max-w-md'
+        }
+        fullscreenAnimation={isMobile}
+      >
+        <DialogHeader
+          className={
+            isMobile
+              ? 'flex-shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 text-left safe-area-top px-4 pt-4 pb-3'
+              : undefined
+          }
+        >
+          <DialogTitle className={isMobile ? 'text-lg font-semibold' : undefined}>
+            Log Habit Entries
+          </DialogTitle>
           <DialogDescription>
             Select which completions you've done for "{habit.name}" on {format(date, 'MMM d, yyyy')}
             <br />
@@ -144,7 +161,7 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
             </span>
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
+        <div className={`space-y-4 py-4 ${isMobile ? 'flex-1 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain min-h-0 px-4' : ''}`}>
           <div className="space-y-3">
             {targetCount > 0 && Array.from({ length: targetCount }, (_, index) => {
               const isChecked = checkedItems.length > index ? checkedItems[index] : false;
@@ -190,14 +207,34 @@ export const HabitTargetCountModal = ({ isOpen, onClose, habitId, date }: HabitT
             </p>
           </div>
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={loading}>
-            {loading ? 'Saving...' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isMobile ? (
+          <div className="px-4 pt-3 pb-3 flex-shrink-0 border-t bg-muted/30">
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" onClick={handleSave} disabled={loading} className="min-w-[120px] flex items-center justify-center gap-1.5">
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={loading}>
+              {loading ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

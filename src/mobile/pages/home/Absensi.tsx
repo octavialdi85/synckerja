@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, RefreshCw, Loader2 } from "lucide-react";
+import { Bell, RefreshCw, Loader2, CircleCheck, ClipboardList, NotebookPen } from "lucide-react";
 import { TimeDisplay } from "@/mobile/components/TimeDisplay";
 import { LocationChecker, LocationButton } from "@/mobile/components/LocationChecker";
 import { AttendanceStatus } from "@/mobile/components/AttendanceStatus";
@@ -898,6 +898,44 @@ const Absensi = () => {
                       />
 
                       <AttendanceActions onClockIn={handleClockIn} onClockOut={handleClockOut} />
+                    </div>
+                  </div>
+
+                  {/* Shortcuts: max 4 per row, modern icons, small text */}
+                  <div>
+                    <div className="bg-card rounded-lg border border-border p-3">
+                      <div className="grid grid-cols-4 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/tools/habits-tracker")}
+                          className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl text-primary hover:bg-primary/10 active:bg-primary/15 transition-colors"
+                        >
+                          <CircleCheck className="h-6 w-6 mb-1" strokeWidth={1.75} />
+                          <span className="text-[10px] font-medium text-foreground text-center leading-tight">
+                            {t("mobileHome.shortcuts.habits", "Habits")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/tools/daily-task")}
+                          className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl text-primary hover:bg-primary/10 active:bg-primary/15 transition-colors"
+                        >
+                          <ClipboardList className="h-6 w-6 mb-1" strokeWidth={1.75} />
+                          <span className="text-[10px] font-medium text-foreground text-center leading-tight">
+                            {t("mobileHome.shortcuts.dailyTask", "Daily Task")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/tools/meeting-notes")}
+                          className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl text-primary hover:bg-primary/10 active:bg-primary/15 transition-colors"
+                        >
+                          <NotebookPen className="h-6 w-6 mb-1" strokeWidth={1.75} />
+                          <span className="text-[10px] font-medium text-foreground text-center leading-tight">
+                            {t("mobileHome.shortcuts.notes", "Meeting Notes")}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
