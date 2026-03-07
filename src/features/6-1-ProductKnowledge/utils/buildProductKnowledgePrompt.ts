@@ -1,5 +1,7 @@
 import type { ProductKnowledge } from '../hooks/useProductKnowledge';
 
+export type AudienceMode = 'B2B' | 'B2C';
+
 function formatCompetitiveAdvantage(competitiveAdvantage: unknown): string {
   if (competitiveAdvantage == null) return '';
   if (typeof competitiveAdvantage === 'string') return competitiveAdvantage;
@@ -9,18 +11,8 @@ function formatCompetitiveAdvantage(competitiveAdvantage: unknown): string {
   return JSON.stringify(competitiveAdvantage);
 }
 
-/**
- * Builds the full prompt for Product Knowledge AI generate: template + industri + all rows (Feature, Feature Description, Solution, Competitive Advantage).
- * AI will derive Customer Persona from this data and return a markdown table with 3 rows.
- */
-export function buildProductKnowledgePrompt(
-  industri: string,
-  rows: ProductKnowledge[]
-): string {
-  const industryPlaceholder = industri.trim() || '[ISI INDUSTRI]';
+function buildSharedBody(rows: ProductKnowledge[]): string[] {
   const lines: string[] = [];
-
-  lines.push(`Anda adalah konsultan bisnis dan analis pasar untuk industri ${industryPlaceholder}. Buatkan 3 permasalahan yang sering dihadapi oleh pelanggan/pasar dalam bentuk tabel dengan struktur yang RAPIH dan DETAIL.`);
   lines.push('');
   lines.push('**KONSTRAIN UTAMA (WAJIB DIPATUHI):**');
   lines.push('- Semua output HARUS mengacu HANYA pada kolom Feature dan Feature Description (serta Solution dan Competitive Advantage bila ada) dari product knowledge yang disediakan di bawah.');
@@ -63,23 +55,49 @@ export function buildProductKnowledgePrompt(
   lines.push('');
   lines.push('10. **What Makes Them Stop?** Titik kritis dimana mereka akhirnya menyerah/berhenti.');
   lines.push('');
-  lines.push('**KRITERIA TAMBAHAN:**');
-  lines.push('- RANGE MASALAH: Cakup berbagai aspek (administratif, operasional, pemasaran, teknis) tetapi SEMUA harus bisa diselesaikan oleh Feature yang sama dari product knowledge.');
-  lines.push('- TINGKAT KEDALAMAN: Problem spesifik; Impact terukur dan realistis; False Belief Impact lebih parah dari Impact awal.');
-  lines.push('- PRINSIP ESKALASI: False Belief → Blind Spot → Tidak ada pencegahan → Masalah muncul → Impact lebih besar.');
-  lines.push('- KONTEKS INDUSTRI: Sesuaikan dengan realitas industri ' + industryPlaceholder + '.');
-  lines.push('- FORMAT OUTPUT: Tabel markdown dengan header persis seperti di atas, baris pemisah, lalu tepat 3 baris data. Satu baris per row; jangan wrap teks di dalam cell.');
-  lines.push('- PENTING: Setiap baris hasil = satu variasi masalah/persona yang BERBEDA, tetapi Solution dan kemampuan penyelesaian tetap dari Feature/Feature Description yang sama. Jangan keluar dari acuan product knowledge.');
-  lines.push('');
-  lines.push('**PRODUCT KNOWLEDGE YANG WAJIB DIJADIKAN ACUAN:**');
-  lines.push('==================================================');
-  lines.push('Semua kolom Solution di hasil Anda harus merepresentasikan fitur/solusi dari data di bawah. Problem, Impact, Wants, Needs yang Anda generate harus merupakan masalah yang DAPAT diselesaikan oleh Feature dan Feature Description ini. Jangan menambah fitur atau solusi di luar data berikut.');
-  lines.push('');
+  return lines;
+}
 
+function buildKriteriaB2B(placeholder: string): string[] {
+  return [
+    '**KRITERIA TAMBAHAN:**',
+    '- RANGE MASALAH: Cakup berbagai aspek (administratif, operasional, pemasaran, teknis) tetapi SEMUA harus bisa diselesaikan oleh Feature yang sama dari product knowledge.',
+    '- TINGKAT KEDALAMAN: Problem spesifik; Impact terukur dan realistis; False Belief Impact lebih parah dari Impact awal.',
+    '- PRINSIP ESKALASI: False Belief → Blind Spot → Tidak ada pencegahan → Masalah muncul → Impact lebih besar.',
+    '- KONTEKS INDUSTRI: Sesuaikan dengan realitas industri ' + placeholder + '.',
+    '- FORMAT OUTPUT: Tabel markdown dengan header persis seperti di atas, baris pemisah, lalu tepat 3 baris data. Satu baris per row; jangan wrap teks di dalam cell.',
+    '- PENTING: Setiap baris hasil = satu variasi masalah/persona yang BERBEDA, tetapi Solution dan kemampuan penyelesaian tetap dari Feature/Feature Description yang sama. Jangan keluar dari acuan product knowledge.',
+  ];
+}
+
+function buildKriteriaB2C(placeholder: string): string[] {
+  return [
+    '**KRITERIA TAMBAHAN:**',
+    '- RANGE MASALAH: Cakup berbagai aspek (administratif, operasional, pemasaran, teknis) tetapi SEMUA harus bisa diselesaikan oleh Feature yang sama dari product knowledge.',
+    '- TINGKAT KEDALAMAN: Problem spesifik; Impact terukur dan realistis; False Belief Impact lebih parah dari Impact awal.',
+    '- PRINSIP ESKALASI: False Belief → Blind Spot → Tidak ada pencegahan → Masalah muncul → Impact lebih besar.',
+    '- KONTEKS KONSUMEN: Sesuaikan dengan realitas segmen konsumen ' + placeholder + '.',
+    '- FORMAT OUTPUT: Tabel markdown dengan header persis seperti di atas, baris pemisah, lalu tepat 3 baris data. Satu baris per row; jangan wrap teks di dalam cell.',
+    '- PENTING: Setiap baris hasil = satu variasi masalah/persona yang BERBEDA, tetapi Solution dan kemampuan penyelesaian tetap dari Feature/Feature Description yang sama. Jangan keluar dari acuan product knowledge.',
+  ];
+}
+
+function buildProductKnowledgeRows(rows: ProductKnowledge[]): string[] {
+  const lines: string[] = [];
   if (rows.length === 0) {
     lines.push('(Tidak ada data product knowledge. Isi minimal Feature dan Feature Description di tabel.)');
   } else {
-    rows.forEach((row, idx) => {
+    // Deduplicate by feature: satu baris per unik Feature + Feature Description (hindari pengulangan sama di prompt)
+    const seen = new Set<string>();
+    const uniqueRows: ProductKnowledge[] = [];
+    for (const row of rows) {
+      const key = `${row.feature_id ?? ''}|${(row.feature_name ?? '').trim()}|${(row.feature_description ?? '').trim()}`;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniqueRows.push(row);
+      }
+    }
+    uniqueRows.forEach((row, idx) => {
       const solutionLabel = row.solusi?.trim()
         ? row.solusi
         : '(kosong - berikan ide solusi berdasarkan Feature dan Feature Description yang sudah di sediakan)';
@@ -92,7 +110,42 @@ export function buildProductKnowledgePrompt(
       lines.push('');
     });
   }
+  return lines;
+}
 
+/**
+ * Builds the full prompt for Product Knowledge AI generate.
+ * When targetRowId is provided, only that row is included in "PRODUCT KNOWLEDGE YANG WAJIB DIJADIKAN ACUAN" (baris yang diklik "Generate prompt tanpa AI").
+ * When targetRowId is null/undefined, all rows are included (deduplicated by feature).
+ */
+export function buildProductKnowledgePrompt(
+  mode: AudienceMode,
+  contextValue: string,
+  rows: ProductKnowledge[],
+  targetRowId?: string | null
+): string {
+  const rowsForPrompt =
+    targetRowId != null
+      ? rows.filter((r) => r.id === targetRowId)
+      : rows;
+
+  const trimmed = contextValue.trim();
+  const placeholderB2B = trimmed || '[ISI INDUSTRI]';
+  const placeholderB2C = trimmed || '[SEGMEN KONSUMEN]';
+
+  const introB2B = `Anda adalah konsultan bisnis dan analis pasar untuk industri ${placeholderB2B}. Buatkan 3 permasalahan yang sering dihadapi oleh pelanggan/pasar dalam bentuk tabel dengan struktur yang RAPIH dan DETAIL.`;
+  const introB2C = `Anda adalah konsultan untuk segmen konsumen ${placeholderB2C}. Buatkan 3 permasalahan yang sering dihadapi oleh konsumen dalam bentuk tabel dengan struktur yang RAPIH dan DETAIL.`;
+
+  const lines: string[] = [];
+  lines.push(mode === 'B2B' ? introB2B : introB2C);
+  lines.push(...buildSharedBody(rowsForPrompt));
+  lines.push(...(mode === 'B2B' ? buildKriteriaB2B(placeholderB2B) : buildKriteriaB2C(placeholderB2C)));
+  lines.push('');
+  lines.push('**PRODUCT KNOWLEDGE YANG WAJIB DIJADIKAN ACUAN:**');
+  lines.push('==================================================');
+  lines.push('Semua kolom Solution di hasil Anda harus merepresentasikan fitur/solusi dari data di bawah. Problem, Impact, Wants, Needs yang Anda generate harus merupakan masalah yang DAPAT diselesaikan oleh Feature dan Feature Description ini. Jangan menambah fitur atau solusi di luar data berikut.');
+  lines.push('');
+  lines.push(...buildProductKnowledgeRows(rowsForPrompt));
   lines.push('**HASIL AKHIR YANG DIHARAPKAN:**');
   lines.push('- Tabel markdown dengan tepat 3 baris (3 variasi masalah/persona berbeda).');
   lines.push('- Solution setiap baris HARUS mengacu pada Feature dan Feature Description di atas; Problem, Impact, Wants, Needs harus konsisten: masalah yang bisa diselesaikan oleh fitur tersebut.');

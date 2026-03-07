@@ -205,7 +205,7 @@ const ProductKnowledgeContent: React.FC = () => {
 
   const handleGeneratePromptForRow = useCallback(
     (rowId: string) => {
-      const prompt = buildProductKnowledgePrompt(industri.trim(), productKnowledgeData);
+      const prompt = buildProductKnowledgePrompt('B2B', industri.trim(), productKnowledgeData, rowId);
       setEditedPrompt(prompt);
       setDefaultRowIdForAdd(rowId);
       setHasUpdatedTargetOnce(false);

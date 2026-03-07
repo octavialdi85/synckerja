@@ -14,11 +14,12 @@ import {
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useScriptAIConfig } from '@/features/6-1-ScriptGenerator/hooks/useScriptAIConfig';
 import { generateScriptWithAI } from '@/features/6-1-ScriptGenerator/services/scriptGeneratorAIService';
-import { buildProductKnowledgePrompt } from '../utils/buildProductKnowledgePrompt';
+import { buildProductKnowledgePrompt, type AudienceMode } from '../utils/buildProductKnowledgePrompt';
 import { parseProductKnowledgeAiTable, type ProductKnowledgeAiRow } from '../utils/parseProductKnowledgeAiTable';
 import { ProductKnowledgeAiResultTable } from './ProductKnowledgeAiResultTable';
 import type { ProductKnowledge } from '../hooks/useProductKnowledge';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Sparkles, FileText, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 interface ProductKnowledgeGeneratePanelProps {
@@ -49,6 +50,8 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
 }) => {
   const { t } = useAppTranslation();
   const [industriInternal, setIndustriInternal] = useState('');
+  const [segmenKonsumen, setSegmenKonsumen] = useState('');
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>('B2B');
   const [promptModalOpenInternal, setPromptModalOpenInternal] = useState(false);
   const [editedPromptInternal, setEditedPromptInternal] = useState('');
   const industri = industriProp ?? industriInternal;
@@ -69,7 +72,9 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
     (row) => row.feature_name?.trim() && row.feature_description?.trim()
   );
   const canGenerateAI = Boolean(
-    industri.trim() && aiConfig?.is_active && aiConfig?.api_key_configured
+    (audienceMode === 'B2B' ? industri.trim() : segmenKonsumen.trim()) &&
+    aiConfig?.is_active &&
+    aiConfig?.api_key_configured
   );
 
   const handleGeneratePromptNoAI = () => {
@@ -77,7 +82,8 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
       toast.error(t('productKnowledge.generate.fillFeatureFirst', 'Isi minimal Feature dan Feature Description di satu baris.'));
       return;
     }
-    const prompt = buildProductKnowledgePrompt(industri.trim(), productKnowledgeData);
+    const contextValue = audienceMode === 'B2B' ? industri : segmenKonsumen;
+    const prompt = buildProductKnowledgePrompt(audienceMode, contextValue, productKnowledgeData, defaultRowIdForAdd ?? undefined);
     setEditedPrompt(prompt);
     setDefaultRowIdForAdd?.(null);
     setPromptModalOpen(true);
@@ -91,8 +97,13 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
       toast.error(t('productKnowledge.generate.promptEmpty', 'Prompt kosong.'));
       return;
     }
-    if (!industri.trim()) {
-      toast.error(t('productKnowledge.generate.fillIndustri', 'Isi field Industri.'));
+    const requiredFilled = audienceMode === 'B2B' ? industri.trim() : segmenKonsumen.trim();
+    if (!requiredFilled) {
+      toast.error(
+        audienceMode === 'B2B'
+          ? t('productKnowledge.generate.fillIndustri', 'Isi field Industri.')
+          : t('productKnowledge.generate.fillSegmenKonsumen', 'Isi field Segmen konsumen.')
+      );
       return;
     }
     if (!aiConfig?.is_active || !aiConfig?.api_key_configured) {
@@ -106,7 +117,10 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
     setAiResultRows([]);
 
     try {
-      const promptToSend = editedPrompt.replace(/\[ISI INDUSTRI\]/g, industri.trim() || '(tidak disebutkan)');
+      const promptToSend =
+        audienceMode === 'B2B'
+          ? editedPrompt.replace(/\[ISI INDUSTRI\]/g, industri.trim() || '(tidak disebutkan)')
+          : editedPrompt.replace(/\[SEGMEN KONSUMEN\]/g, segmenKonsumen.trim() || '(tidak disebutkan)');
       const result = await generateScriptWithAI(promptToSend);
       if (result.success && result.script) {
         setRawResponse(result.script);
@@ -270,20 +284,79 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
           <p className="text-xs text-gray-500">
             {t('productKnowledge.generate.promptModalHint', 'Edit prompt jika perlu, lalu klik "Generate dengan AI".')}
           </p>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs font-medium text-gray-700">
+              {t('productKnowledge.generate.audienceModeLabel', 'Target:')}
+            </span>
+            <div className="flex rounded-md border border-gray-200 p-0.5 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setAudienceMode('B2B');
+                  const prompt = buildProductKnowledgePrompt('B2B', industri, productKnowledgeData, defaultRowIdForAdd ?? undefined);
+                  setEditedPrompt(prompt);
+                }}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded transition-colors',
+                  audienceMode === 'B2B'
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                )}
+              >
+                {t('productKnowledge.generate.audienceModeB2B', 'B2B')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAudienceMode('B2C');
+                  const prompt = buildProductKnowledgePrompt('B2C', segmenKonsumen, productKnowledgeData, defaultRowIdForAdd ?? undefined);
+                  setEditedPrompt(prompt);
+                }}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded transition-colors',
+                  audienceMode === 'B2C'
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                )}
+              >
+                {t('productKnowledge.generate.audienceModeB2C', 'B2C')}
+              </button>
+            </div>
+          </div>
           <div className="space-y-2 flex-shrink-0">
-            <Label htmlFor="pk-modal-industri">
-              {t('productKnowledge.generate.industri', 'Industri')} <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="pk-modal-industri"
-              value={industri}
-              onChange={(e) => setIndustri(e.target.value)}
-              placeholder={t('productKnowledge.generate.industriPlaceholder', 'Contoh: Event Organizer, F&B, Retail')}
-              className="w-full"
-            />
-            <p className="text-xs text-gray-500">
-              {t('productKnowledge.generate.industriRequiredForAI', 'Isi Industri agar tombol Generate dengan AI aktif.')}
-            </p>
+            {audienceMode === 'B2B' ? (
+              <>
+                <Label htmlFor="pk-modal-industri">
+                  {t('productKnowledge.generate.industri', 'Industri')} <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="pk-modal-industri"
+                  value={industri}
+                  onChange={(e) => setIndustri(e.target.value)}
+                  placeholder={t('productKnowledge.generate.industriPlaceholder', 'Contoh: Event Organizer, F&B, Retail')}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-500">
+                  {t('productKnowledge.generate.industriRequiredForAI', 'Isi Industri agar tombol Generate dengan AI aktif.')}
+                </p>
+              </>
+            ) : (
+              <>
+                <Label htmlFor="pk-modal-segmen">
+                  {t('productKnowledge.generate.segmenKonsumen', 'Segmen konsumen')} <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="pk-modal-segmen"
+                  value={segmenKonsumen}
+                  onChange={(e) => setSegmenKonsumen(e.target.value)}
+                  placeholder={t('productKnowledge.generate.segmenKonsumenPlaceholder', 'Contoh: young professionals, orang tua dengan anak')}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-500">
+                  {t('productKnowledge.generate.segmenKonsumenRequiredForAI', 'Isi Segmen konsumen agar tombol Generate dengan AI aktif.')}
+                </p>
+              </>
+            )}
           </div>
           <div className="flex-1 min-h-0 flex flex-col gap-2">
             <Textarea
@@ -299,7 +372,13 @@ export const ProductKnowledgeGeneratePanel: React.FC<ProductKnowledgeGeneratePan
             </Button>
             <Button
               onClick={handleGenerateWithAI}
-              disabled={!industri.trim() || !aiConfig?.is_active || !aiConfig?.api_key_configured || !editedPrompt.trim() || isGeneratingAI}
+              disabled={
+                !(audienceMode === 'B2B' ? industri.trim() : segmenKonsumen.trim()) ||
+                !aiConfig?.is_active ||
+                !aiConfig?.api_key_configured ||
+                !editedPrompt.trim() ||
+                isGeneratingAI
+              }
               className="gap-2"
             >
               {isGeneratingAI ? (
