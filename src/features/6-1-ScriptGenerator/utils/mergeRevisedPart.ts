@@ -174,3 +174,30 @@ export function mergeTableCellRevision(
   const newTableMarkdown = stringifyMarkdownTable(newTable);
   return fullScript.slice(0, tableStartIndex) + newTableMarkdown + fullScript.slice(tableEndIndex);
 }
+
+export interface TableRowDelete {
+  tableStartIndex: number;
+  tableEndIndex: number;
+  /** 1-based: 0 = header, 1 = first data row. Header cannot be deleted. */
+  rowIndex: number;
+  tableData?: string[][];
+}
+
+/**
+ * Remove a single table row from the full script.
+ * rowIndex: 0 = header, 1 = first data row. Only data rows (rowIndex >= 1) are removed.
+ */
+export function deleteTableRow(fullScript: string, params: TableRowDelete): string {
+  const { tableStartIndex, tableEndIndex, rowIndex, tableData } = params;
+  if (rowIndex < 1) return fullScript;
+  const tableMarkdown = fullScript.slice(tableStartIndex, tableEndIndex);
+  const parsed = parseMarkdownTable(tableMarkdown);
+  const baseTable =
+    tableData && rowIndex < tableData.length ? tableData : parsed?.table;
+  if (!baseTable || !baseTable[rowIndex]) return fullScript;
+
+  const newTable = baseTable.filter((_, i) => i !== rowIndex);
+  if (newTable.length === 0) return fullScript;
+  const newTableMarkdown = stringifyMarkdownTable(newTable);
+  return fullScript.slice(0, tableStartIndex) + newTableMarkdown + fullScript.slice(tableEndIndex);
+}

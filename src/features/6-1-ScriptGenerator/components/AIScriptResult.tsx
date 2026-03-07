@@ -14,7 +14,7 @@ import { ReframeModal } from './ReframeModal';
 import { RevisionSectionWrapper } from './RevisionSectionWrapper';
 import { RevisionTable } from './RevisionTable';
 import { parseScriptSections, type ScriptSection, type SectionType } from '../utils/parseScriptSections';
-import { mergeRevisedPart, mergeTableCellRevision, mergeTableRowRevision } from '../utils/mergeRevisedPart';
+import { mergeRevisedPart, mergeTableCellRevision, mergeTableRowRevision, deleteTableRow } from '../utils/mergeRevisedPart';
 import { reviseScriptPart, regenerateScriptWithDifferentProblem } from '../services/scriptGeneratorAIService';
 
 /** Remove trailing empty columns so header stays row 0 and we don't get an extra "action" column from markdown trailing pipe */
@@ -303,6 +303,25 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     setRevisiModalOpen(true);
   };
 
+  const handleDeleteTableRow = (
+    rowIndex: number,
+    tableStartIndex: number,
+    tableEndIndex: number,
+    tableData?: string[][]
+  ) => {
+    if (!onScriptChange) return;
+    const newScript = deleteTableRow(script, {
+      tableStartIndex,
+      tableEndIndex,
+      rowIndex,
+      tableData,
+    });
+    if (newScript !== script) {
+      onScriptChange(newScript);
+      toast.success(t('scriptGenerator.revisi.deleteRowSuccess', 'Baris berhasil dihapus'));
+    }
+  };
+
   const handleRevisiSelection = () => {
     if (selectionRevisi) {
       setRevisiTarget({
@@ -558,6 +577,17 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
                       seg.section!.endIndex,
                       seg.section!.tableData
                     )
+                  }
+                  onDeleteRow={
+                    onScriptChange
+                      ? ({ rowIndex }) =>
+                          handleDeleteTableRow(
+                            rowIndex,
+                            seg.section!.startIndex,
+                            seg.section!.endIndex,
+                            seg.section!.tableData
+                          )
+                      : undefined
                   }
                   onRevisiSection={handleRevisiTableSection}
                   disabled={!onScriptChange || isRevising}

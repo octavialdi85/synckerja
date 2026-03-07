@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/features/ui/button';
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface RevisionTableProps {
@@ -11,6 +11,7 @@ interface RevisionTableProps {
   onRevisiCell: (params: { rowIndex: number; colIndex: number; value: string }) => void;
   onRevisiRow: (params: { rowIndex: number; rowContent: string }) => void;
   onRevisiSection: (content: string) => void;
+  onDeleteRow?: (params: { rowIndex: number }) => void;
   disabled?: boolean;
 }
 
@@ -34,6 +35,7 @@ export const RevisionTable: React.FC<RevisionTableProps> = ({
   onRevisiCell,
   onRevisiRow,
   onRevisiSection,
+  onDeleteRow,
   disabled = false,
 }) => {
   const { t } = useAppTranslation();
@@ -96,22 +98,40 @@ export const RevisionTable: React.FC<RevisionTableProps> = ({
                 ))}
                 <td className="px-2 py-3 align-middle">
                   {!disabled && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1.5 h-7 text-xs"
-                      onClick={() =>
-                        onRevisiRow({
-                          rowIndex: ri + 1,
-                          rowContent: buildRowMarkdown(header, row),
-                        })
-                      }
-                      title={t('scriptGenerator.revisi.revisiRow', 'Revisi seluruh baris (VO, Visual, Element, Tagging menyesuaikan)')}
-                    >
-                      <Pencil className="h-3 w-3 mr-1" />
-                      {t('scriptGenerator.revisi.revisiRowShort', 'Baris')}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1.5 h-7 text-xs"
+                        onClick={() =>
+                          onRevisiRow({
+                            rowIndex: ri + 1,
+                            rowContent: buildRowMarkdown(header, row),
+                          })
+                        }
+                        title={t('scriptGenerator.revisi.revisiRow', 'Revisi seluruh baris (VO, Visual, Element, Tagging menyesuaikan)')}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        {t('scriptGenerator.revisi.revisiRowShort', 'Baris')}
+                      </Button>
+                      {onDeleteRow && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (window.confirm(t('scriptGenerator.revisi.deleteRowConfirm', 'Hapus baris ini?'))) {
+                              onDeleteRow({ rowIndex: ri + 1 });
+                            }
+                          }}
+                          title={t('scriptGenerator.revisi.deleteRow', 'Hapus baris')}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>
