@@ -212,10 +212,10 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {/* Main Content Area - Grid: sidebar kiri + section utama kanan — scroll-chaining rule 3.1: satu scroll per panel */}
-              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 overflow-hidden">
+              <div className="flex-1 grid grid-cols-12 gap-2 min-h-0 max-h-[calc(100vh-120px)] overflow-hidden">
                 {/* Left Column - Sidebar (menu) - 3 columns — rule 3.1 */}
                 <div className="col-span-3 flex flex-col min-h-0 overflow-hidden">
-                  <div className="bg-white border rounded-lg shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="bg-white border rounded-lg shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden max-h-full">
                     <div className="px-4 py-1.5 border-b flex-shrink-0">
                       <h3 className="text-sm font-semibold text-gray-900">Pengaturan Social Media</h3>
                       <p className="text-xs text-gray-500 mt-1">Konfigurasi sistem social media</p>
@@ -237,8 +237,8 @@ export const SettingsPage: React.FC = () => {
 
                 {/* Right Column - Section utama (konten) - 9 columns — rule 3.1 */}
                 <div className="col-span-9 flex flex-col min-h-0 overflow-hidden">
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden max-h-full">
+                    <div className="h-full bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col overflow-hidden max-h-full">
                       {/* Content Header */}
                       <div className="flex-shrink-0 px-4 py-2 border-b border-gray-200">
                         <div className="flex items-center justify-between">

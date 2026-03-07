@@ -17,6 +17,43 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/features/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/features/ui/tooltip';
+import { cn } from '@/lib/utils';
+
+/** Cell content: max 2 lines, ellipsis; tooltip with white background shows full text. */
+function CellWithTooltip({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  const display = text || '-';
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            'line-clamp-2 break-words cursor-default max-w-full overflow-hidden text-ellipsis',
+            className
+          )}
+        >
+          {display}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="max-w-sm bg-white text-gray-900 border border-gray-200 shadow-lg"
+      >
+        <p className="whitespace-pre-wrap">{display}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface ResolvedBlockerRow {
   id: string;
@@ -369,10 +406,18 @@ export const PerformanceTable = () => {
               ) : (
                 rows.map((r, idx) => (
                   <tr key={idx} className="border-t">
-                    <td className="px-3 py-2 text-left text-gray-900" style={{ width: '120px', minWidth: '120px' }}>{r.employeeName}</td>
-                    <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.taskTitle}</td>
-                    <td className="px-3 py-2 text-left text-gray-700" style={{ minWidth: '150px' }}>{r.stepTitle}</td>
-                    <td className="px-3 py-2 text-left text-gray-600" style={{ minWidth: '150px' }}>{r.subStepTitle || '-'}</td>
+                    <td className="px-3 py-2 text-left text-gray-900 align-top" style={{ width: '120px', minWidth: '120px' }}>
+                      <CellWithTooltip text={r.employeeName} />
+                    </td>
+                    <td className="px-3 py-2 text-left text-gray-700 align-top" style={{ minWidth: '150px' }}>
+                      <CellWithTooltip text={r.taskTitle} />
+                    </td>
+                    <td className="px-3 py-2 text-left text-gray-700 align-top" style={{ minWidth: '150px' }}>
+                      <CellWithTooltip text={r.stepTitle} />
+                    </td>
+                    <td className="px-3 py-2 text-left text-gray-600 align-top" style={{ minWidth: '150px' }}>
+                      <CellWithTooltip text={r.subStepTitle || '-'} />
+                    </td>
                     <td className="px-3 py-2 text-left align-middle" style={{ width: '140px', minWidth: '140px' }}>
                       {(() => {
                         // Get blockers for step (includes sub-step blockers mapped to parent step)
@@ -382,31 +427,57 @@ export const PerformanceTable = () => {
                           ? stepBlockers.filter((b: any) => b.task_steps_to_steps_id === r.subStepId)
                           : stepBlockers.filter((b: any) => !b.task_steps_to_steps_id || b.task_step_id === r.stepId);
                         const count = items.length;
+                        const blockerLabel = count > 0 ? `Found ${count} Blocker${count > 1 ? 's' : ''}` : '-';
                         return count > 0 ? (
-                          <button 
-                            onClick={() => setOpenForStep(r.stepId || '')} 
-                            className="text-xs font-medium text-purple-700 hover:underline m-0 p-0 text-left"
-                            style={{ textAlign: 'left' }}
-                          >
-                            Found {count} Blocker{count > 1 ? 's' : ''}
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => setOpenForStep(r.stepId || '')}
+                                className="text-xs font-medium text-purple-700 hover:underline m-0 p-0 text-left line-clamp-2 break-words max-w-full overflow-hidden text-ellipsis cursor-pointer"
+                                style={{ textAlign: 'left' }}
+                              >
+                                {blockerLabel}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-sm bg-white text-gray-900 border border-gray-200 shadow-lg">
+                              <p>{blockerLabel}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         ) : (
                           <span className="text-xs text-gray-400">-</span>
                         );
                       })()}
                     </td>
-                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '140px', minWidth: '140px' }}>
-                      {r.assignedAt ? formatDateTime(r.assignedAt) : '-'}
+                    <td className="px-3 py-2 text-left text-gray-600 align-top" style={{ width: '140px', minWidth: '140px' }}>
+                      <CellWithTooltip text={r.assignedAt ? formatDateTime(r.assignedAt) : '-'} />
                     </td>
-                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '100px', minWidth: '100px' }}>{r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}</td>
-                    <td className="px-3 py-2 text-left text-gray-600 whitespace-nowrap" style={{ width: '160px', minWidth: '160px' }}>{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '-'}</td>
-                    <td className="px-3 py-2 text-left whitespace-nowrap" style={{ width: '112px', minWidth: '112px' }}>
+                    <td className="px-3 py-2 text-left text-gray-600 align-top" style={{ width: '100px', minWidth: '100px' }}>
+                      <CellWithTooltip text={r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'} />
+                    </td>
+                    <td className="px-3 py-2 text-left text-gray-600 align-top overflow-hidden">
+                      {r.finishedAt ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="cursor-default text-sm leading-tight">
+                              <span className="block">{new Date(r.finishedAt).toLocaleDateString()}</span>
+                              <span className="block">{new Date(r.finishedAt).toLocaleTimeString()}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-sm bg-white text-gray-900 border border-gray-200 shadow-lg">
+                            <p>{new Date(r.finishedAt).toLocaleString()}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span>-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left align-top" style={{ width: '112px', minWidth: '112px' }}>
                       {r.isOnTime === null ? (
                         <span className="text-xs text-gray-500">N/A</span>
                       ) : r.isOnTime ? (
-                        <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5 whitespace-nowrap">On-Time</span>
+                        <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded px-2 py-0.5 line-clamp-2">On-Time</span>
                       ) : (
-                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5 whitespace-nowrap">Late {r.lateDays}d</span>
+                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5 line-clamp-2">Late {r.lateDays}d</span>
                       )}
                     </td>
                   </tr>
@@ -437,30 +508,38 @@ export const PerformanceTable = () => {
               ) : (
                 resolvedRows.map((row) => (
                   <tr key={row.id} className="border-t hover:bg-gray-50">
-                    <td className="px-3 py-2 text-gray-900">{row.taskTitle}</td>
-                    <td className="px-3 py-2 text-gray-700">{row.stepTitle}</td>
-                    <td className="px-3 py-2 text-gray-600 font-medium">{row.subStepTitle || '-'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
-                      {new Date(row.resolved_at).toLocaleString('id-ID', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                    <td className="px-3 py-2 text-gray-900 align-top">
+                      <CellWithTooltip text={row.taskTitle} />
                     </td>
-                    <td className="px-3 py-2 text-gray-700" title={row.blocker_description}>
-                      <div className="line-clamp-2">{row.blocker_description}</div>
+                    <td className="px-3 py-2 text-gray-700 align-top">
+                      <CellWithTooltip text={row.stepTitle} />
                     </td>
-                    <td className="px-3 py-2 text-gray-900" title={row.resolution_details}>
-                      <div className="line-clamp-2">{row.resolution_details}</div>
+                    <td className="px-3 py-2 text-gray-600 font-medium align-top">
+                      <CellWithTooltip text={row.subStepTitle || '-'} />
                     </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 rounded-md">
+                    <td className="px-3 py-2 text-gray-600 align-top">
+                      <CellWithTooltip
+                        text={new Date(row.resolved_at).toLocaleString('id-ID', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-gray-700 align-top">
+                      <CellWithTooltip text={row.blocker_description} />
+                    </td>
+                    <td className="px-3 py-2 text-gray-900 align-top">
+                      <CellWithTooltip text={row.resolution_details} />
+                    </td>
+                    <td className="px-3 py-2 text-center align-top">
+                      <span className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 rounded-md line-clamp-2">
                         {row.days_to_resolve} {row.days_to_resolve === 1 ? 'day' : 'days'}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => handleEditResolution(row)}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Square, Target, User, Calendar, Bell, AlertTriangle, Clock3, Edit, Trash2 } from 'lucide-react';
+import { CheckSquare, Square, Target, User, Calendar, Bell, AlertTriangle, Clock3, Edit, Trash2, Building2 } from 'lucide-react';
 import { Button } from '@/features/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/features/ui/tooltip';
 import type { Task, TaskStep as TaskStepEntity } from '@/features/8-2-DailyTask/types';
@@ -20,6 +20,8 @@ interface TaskCardProps {
   completedCount?: number;
   totalCount?: number;
   blockerCount?: number;
+  /** Department for this task (same as desktop – from departmentMap). */
+  department?: { id: string; name: string } | undefined;
   isTaskCreator: boolean;
   onToggleStatus: (task: Task) => void;
   onOpenModal: (taskId: string) => void;
@@ -43,6 +45,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   completedCount,
   totalCount,
   blockerCount = 0,
+  department,
   isTaskCreator,
   onToggleStatus,
   onOpenModal,
@@ -337,6 +340,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               ? `${completedCount}/${totalCount}`
               : `${visibleSteps.filter((s) => s.is_completed).length}/${visibleSteps.length}`}
           </span>
+          {department && (
+            <span className="inline-flex items-center gap-1 text-foreground">
+              <Building2 className="h-3.5 w-3.5 text-blue-500" />
+              <span className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={department.name}>
+                {department.name}
+              </span>
+            </span>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex items-center gap-1 text-foreground">

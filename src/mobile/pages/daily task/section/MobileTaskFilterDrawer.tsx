@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Building2 } from 'lucide-react';
 import { Input } from '@/features/ui/input';
 import {
   Select,
@@ -14,6 +14,9 @@ import { useDailyTask } from '@/features/8-2-DailyTask/DailyTaskContext';
 import { useActiveEmployeeIds } from '@/features/8-2-DailyTask/hooks/useActiveEmployeeIds';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { useCentralizedUserData } from '@/features/1-login/contexts/CentralizedUserDataContext';
+import { useCurrentOrg } from '@/features/share/hooks/useCurrentOrg';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { CustomDatePicker } from '@/mobile/components/CustomDatePicker';
 import { MonthPicker } from '@/features/share/calendar';
 import { format, startOfMonth } from 'date-fns';
@@ -32,8 +35,34 @@ export interface MobileTaskFilterDrawerContentProps {
 export function MobileTaskFilterDrawerContent({ onAfterCustomMonthSelect, onAfterCustomDateRangeSelect, onAfterDueDatePresetSelect }: MobileTaskFilterDrawerContentProps = {}) {
   const { t } = useAppTranslation();
   const { filters, setFilters, tasks } = useDailyTask();
+  const { organizationId } = useCurrentOrg();
   const { isOwner } = useCentralizedUserData();
   const activeEmployeeIds = useActiveEmployeeIds();
+
+  // Fetch departments (same as desktop TaskFilters - same codebase)
+  const { data: departments = [], isError: departmentsError, refetch: refetchDepartments } = useQuery({
+    queryKey: ['departments', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organizationId,
+  });
+
+  const handleDepartmentChange = (value: string) => {
+    if (value === '__retry__') {
+      refetchDepartments();
+      return;
+    }
+    setFilters(prev => ({ ...prev, department: value === 'all' ? undefined : value }));
+  };
 
   // Clear PIC if selected employee is no longer active (e.g. resigned)
   useEffect(() => {
@@ -240,6 +269,48 @@ export function MobileTaskFilterDrawerContent({ onAfterCustomMonthSelect, onAfte
             className="pl-9 h-10"
           />
         </div>
+      </div>
+
+      <div className="grid gap-1.5 px-4 pb-4 text-left">
+        <label className="text-sm font-medium text-foreground">
+          {t('dailyTask.filters.department', 'Department')}
+        </label>
+        <Select
+          value={departmentsError ? 'all' : (filters.department || 'all')}
+          onValueChange={handleDepartmentChange}
+        >
+          <SelectTrigger className="h-10">
+            <SelectValue placeholder={t('dailyTask.filters.allDepartments', 'All Departments')}>
+              {departmentsError ? (
+                <span className="text-amber-600">{t('dailyTask.filters.failedToLoad', 'Failed to load')}</span>
+              ) : filters.department ? (
+                <span className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary shrink-0" />
+                  <span className="truncate">{departments.find(d => d.id === filters.department)?.name ?? t('dailyTask.filters.allDepartments', 'All Departments')}</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>{t('dailyTask.filters.allDepartments', 'All Departments')}</span>
+                </span>
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('dailyTask.filters.allDepartments', 'All Departments')}</SelectItem>
+            {departmentsError && (
+              <SelectItem value="__retry__">{t('dailyTask.filters.retry', 'Retry')}</SelectItem>
+            )}
+            {!departmentsError && departments.map((dept) => (
+              <SelectItem key={dept.id} value={dept.id}>
+                <span className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  {dept.name}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-1.5 px-4 pb-4 text-left">

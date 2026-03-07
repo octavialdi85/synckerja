@@ -7,6 +7,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/features/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/features/ui/select';
 import { Button } from '@/features/ui/button';
 import { Input } from '@/features/ui/input';
 import { MoreVertical, Plus, Edit, Trash2, Search } from 'lucide-react';
@@ -16,6 +23,7 @@ import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import type { ProductKnowledge } from '../hooks/useProductKnowledge';
 import type { ProductKnowledgeFeature } from '../hooks/useProductKnowledgeFeatures';
 import { useProductKnowledgeFeaturesMutations } from '../hooks/useProductKnowledgeFeatures';
+import type { Service } from '../hooks/useServices';
 
 function formatCompetitiveAdvantage(value: any): string {
   if (!value) return '';
@@ -33,6 +41,7 @@ function parseCompetitiveAdvantage(value: string): any {
 interface FeatureManagerProps {
   masterFeatures: ProductKnowledgeFeature[];
   allProductKnowledgeRows: ProductKnowledge[];
+  services: Service[];
   onDataChange: () => void;
   onMasterFeatureUpdated?: (featureId: string, payload: { feature_name: string; feature_description: string | null; solution: string | null; competitive_advantage: unknown }) => void;
 }
@@ -40,6 +49,7 @@ interface FeatureManagerProps {
 export const FeatureManager: React.FC<FeatureManagerProps> = ({
   masterFeatures,
   allProductKnowledgeRows = [],
+  services = [],
   onDataChange,
   onMasterFeatureUpdated,
 }) => {
@@ -64,6 +74,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
     open: boolean;
     mode: 'add' | 'edit';
     item: ProductKnowledgeFeature | null;
+    service_id: string | null;
     feature_name: string;
     feature_description: string;
     solution: string;
@@ -72,6 +83,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
     open: false,
     mode: 'add',
     item: null,
+    service_id: null,
     feature_name: '',
     feature_description: '',
     solution: '',
@@ -83,6 +95,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
       open: true,
       mode: 'add',
       item: null,
+      service_id: null,
       feature_name: '',
       feature_description: '',
       solution: '',
@@ -96,6 +109,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
       open: true,
       mode: 'edit',
       item,
+      service_id: item.service_id ?? null,
       feature_name: item.feature_name || '',
       feature_description: item.feature_description || '',
       solution: item.solution || '',
@@ -128,14 +142,19 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
   );
 
   const handleSave = useCallback(async () => {
-    const { feature_name, feature_description, solution, competitive_advantage_raw } = modalData;
+    const { feature_name, feature_description, solution, competitive_advantage_raw, service_id } = modalData;
     if (!feature_name.trim()) {
+      return;
+    }
+    if (modalData.mode === 'add' && !service_id) {
+      toast.error(t('productKnowledge.masterData.selectServiceRequired', 'Pilih Service untuk feature baru.'));
       return;
     }
     const competitive_advantage = parseCompetitiveAdvantage(competitive_advantage_raw);
 
     if (modalData.mode === 'add') {
       await createFeature({
+        service_id: service_id ?? null,
         feature_name: feature_name.trim(),
         feature_description: feature_description.trim() || null,
         solution: solution.trim() || null,
@@ -145,6 +164,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
       await updateFeature({
         id: modalData.item.id,
         input: {
+          service_id: service_id ?? null,
           feature_name: feature_name.trim(),
           feature_description: feature_description.trim() || null,
           solution: solution.trim() || null,
@@ -162,7 +182,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
     queryClient.invalidateQueries({ queryKey: ['product-knowledge-features'] });
     onDataChange();
     setModalData((prev) => ({ ...prev, open: false }));
-  }, [modalData, createFeature, updateFeature, queryClient, onDataChange, onMasterFeatureUpdated]);
+  }, [modalData, createFeature, updateFeature, queryClient, onDataChange, onMasterFeatureUpdated, t]);
 
   const handleCloseModal = useCallback(() => {
     setModalData((prev) => ({ ...prev, open: false }));
@@ -261,6 +281,34 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
                 <div className="space-y-4 pb-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">
+                      {t('productKnowledge.masterData.service', 'Service')} *
+                    </label>
+                    <Select
+                      value={modalData.service_id ?? 'placeholder'}
+                      onValueChange={(value) =>
+                        setModalData((prev) => ({ ...prev, service_id: value === 'placeholder' ? null : value }))
+                      }
+                    >
+                      <SelectTrigger className="w-full h-9 text-sm border rounded">
+                        <SelectValue placeholder={t('productKnowledge.masterData.selectService', 'Pilih Service')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="placeholder" disabled>
+                          {t('productKnowledge.masterData.selectService', 'Pilih Service')}
+                        </SelectItem>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('productKnowledge.masterData.serviceFeatureHint', 'Feature hanya muncul di baris yang memilih Service ini.')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
                       {t('productKnowledge.masterData.featureName', 'Feature name')} *
                     </label>
                     <input
@@ -313,7 +361,7 @@ export const FeatureManager: React.FC<FeatureManagerProps> = ({
                 <Button variant="outline" onClick={handleCloseModal} disabled={loading}>
                   {t('productKnowledge.masterData.cancel', 'Cancel')}
                 </Button>
-                <Button onClick={handleSave} disabled={loading || !modalData.feature_name.trim()}>
+                <Button onClick={handleSave} disabled={loading || !modalData.feature_name.trim() || (modalData.mode === 'add' && !modalData.service_id)}>
                   {loading ? t('productKnowledge.masterData.saving', 'Saving...') : t('productKnowledge.masterData.save', 'Save')}
                 </Button>
               </div>

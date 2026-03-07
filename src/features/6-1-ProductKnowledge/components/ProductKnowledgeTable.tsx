@@ -626,9 +626,11 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             if (value === 'placeholder') {
               onFieldChange(item.id, 'service_id', null);
               onFieldChange(item.id, 'sub_service_id', null);
+              onFeatureSelect(item.id, null);
             } else {
               onFieldChange(item.id, 'service_id', value);
               onFieldChange(item.id, 'sub_service_id', null);
+              onFeatureSelect(item.id, null);
             }
           }}
         >
@@ -703,11 +705,13 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
               <SelectItem value="placeholder" disabled>
                 {t('productKnowledge.table.selectFeature', 'Select Feature')}
               </SelectItem>
-              {masterFeatures.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.feature_name || '-'}
-                </SelectItem>
-              ))}
+              {masterFeatures
+                .filter((m) => (m.service_id ?? null) === (item.service_id ?? null))
+                .map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.feature_name || '-'}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

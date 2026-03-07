@@ -1,8 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/features/ui/button';
-import { Pencil, Check, X } from 'lucide-react';
+import { Pencil, Check, X, MoreVertical, Trash2, Plus } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/features/ui/dropdown-menu';
 
 /** Auto-resize textarea to fit content height */
 function AutoResizeTextarea({
@@ -99,12 +105,61 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
       while (a.length < finalColCount) a.push('');
       return a.slice(0, finalColCount);
     });
-    onSave(padded);
+    onSave?.(padded);
     setIsEditing(false);
     setEditData([]);
     setTimeout(() => {
       scrollContainerRef.current?.scrollTo({ top: scrollTop });
     }, 0);
+  };
+
+  /** Remove row at body index and persist via onSave */
+  const handleDeleteRow = (rowIdx: number) => {
+    const tableColCount = Math.max(...tableData.map((r) => r.length), 1);
+    const padToTableCols = (arr: string[]) => {
+      const a = [...arr];
+      while (a.length < tableColCount) a.push('');
+      return a.slice(0, tableColCount);
+    };
+    const headerRow = (tableData[0] ?? displayData[0] ?? []).slice(0, tableColCount);
+    const body = isEditing ? editData : displayData.slice(1);
+    const newBody = body.filter((_, i) => i !== rowIdx).map(padToTableCols);
+    const newData = [padToTableCols(headerRow), ...newBody];
+    const finalColCount = Math.max(...newData.map((r) => r.length));
+    const padded = newData.map((r) => {
+      const a = [...r];
+      while (a.length < finalColCount) a.push('');
+      return a.slice(0, finalColCount);
+    });
+    onSave?.(padded);
+    if (isEditing) {
+      setEditData(newBody);
+    }
+  };
+
+  /** Insert empty row below rowIdx and persist via onSave */
+  const handleAddRow = (rowIdx: number) => {
+    const tableColCount = Math.max(...tableData.map((r) => r.length), 1);
+    const padToTableCols = (arr: string[]) => {
+      const a = [...arr];
+      while (a.length < tableColCount) a.push('');
+      return a.slice(0, tableColCount);
+    };
+    const headerRow = (tableData[0] ?? displayData[0] ?? []).slice(0, tableColCount);
+    const body = isEditing ? editData : displayData.slice(1);
+    const emptyRow = Array.from({ length: tableColCount }, () => '');
+    const newBody = [...body.slice(0, rowIdx + 1), emptyRow, ...body.slice(rowIdx + 1)].map(padToTableCols);
+    const newData = [padToTableCols(headerRow), ...newBody];
+    const finalColCount = Math.max(...newData.map((r) => r.length));
+    const padded = newData.map((r) => {
+      const a = [...r];
+      while (a.length < finalColCount) a.push('');
+      return a.slice(0, finalColCount);
+    });
+    onSave?.(padded);
+    if (isEditing) {
+      setEditData(newBody);
+    }
   };
 
   const updateCell = (rowIdx: number, cellIdx: number, value: string) => {
@@ -146,7 +201,7 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
   return (
     <div
       ref={scrollContainerRef}
-      className={`my-1 overflow-auto rounded-lg border-2 border-gray-300 min-h-0 max-h-[min(500px,70vh)] seamless-scroll nested-scroll-touch-chain ${className}`}
+      className={`my-1 overflow-x-auto overflow-y-auto rounded-lg border-2 border-gray-300 min-h-0 max-h-[min(720px,78vh)] seamless-scroll nested-scroll-touch-chain ${className}`}
       style={{ overflowAnchor: 'none' } as React.CSSProperties}
     >
       <table className="min-w-[720px] w-full text-sm">
@@ -163,42 +218,42 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                 {cell}
               </th>
             ))}
-            {!alwaysEditable && (
-            <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
-              {isEditing ? (
-                <div className="flex gap-1 justify-start">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={saveEdit}
-                    className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                    title={t('common.save', 'Save')}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={cancelEdit}
-                    className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                    title={t('common.cancel', 'Cancel')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={startEdit}
-                  className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                  title={t('common.edit', 'Edit')}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-            </th>
-            )}
+                {!alwaysEditable && (
+                <th className="sticky top-0 z-10 w-[72px] min-w-[72px] max-w-[72px] bg-gray-50 px-2 py-3 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] font-semibold text-gray-800 whitespace-nowrap overflow-hidden">
+                  {isEditing ? (
+                    <div className="flex gap-1 justify-start">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={saveEdit}
+                        className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        title={t('common.save', 'Save')}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelEdit}
+                        className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                        title={t('common.cancel', 'Cancel')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={startEdit}
+                      className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                      title={t('common.edit', 'Edit')}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                </th>
+                )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
@@ -229,7 +284,41 @@ export const EditableBriefTable: React.FC<EditableBriefTableProps> = ({
                     )}
                   </td>
                 ))}
-                {!alwaysEditable && <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px] max-w-[72px] whitespace-nowrap overflow-hidden" />}
+                {!alwaysEditable && (
+                  <td className="px-2 py-3 border-b border-gray-200 w-[72px] min-w-[72px] max-w-[72px] whitespace-nowrap overflow-hidden align-middle">
+                    {onSave && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                            title={t('common.actions', 'Actions')}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleAddRow(rowIdx)}
+                            className="gap-2"
+                          >
+                            <Plus className="h-4 w-4" />
+                            {t('briefDialog.addRow', 'Add row')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteRow(rowIdx)}
+                            className="gap-2 text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {t('briefDialog.deleteRow', 'Delete row')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}

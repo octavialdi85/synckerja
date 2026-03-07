@@ -30,9 +30,6 @@ function buildRowMarkdown(header: string[], row: string[]): string {
 export const RevisionTable: React.FC<RevisionTableProps> = ({
   tableData,
   tableMarkdown,
-  startIndex,
-  endIndex,
-  onRevisiCell,
   onRevisiRow,
   onRevisiSection,
   onDeleteRow,
@@ -80,20 +77,8 @@ export const RevisionTable: React.FC<RevisionTableProps> = ({
             {body.map((row, ri) => (
               <tr key={ri} className="divide-x divide-gray-200 hover:bg-gray-50/50 transition-colors group/row">
                 {row.map((cell, ci) => (
-                  <td key={ci} className="px-4 py-3 text-gray-700 align-top group/cell relative">
-                    <span className="pr-8">{cell}</span>
-                    {!disabled && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute top-1 right-1 opacity-0 group-hover/cell:opacity-100 transition-opacity p-1 h-6 w-6"
-                        onClick={() => onRevisiCell({ rowIndex: ri + 1, colIndex: ci, value: cell })}
-                        title={t('scriptGenerator.revisi.button', 'Revisi')}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    )}
+                  <td key={ci} className="px-4 py-3 text-gray-700 align-top">
+                    {cell}
                   </td>
                 ))}
                 <td className="px-2 py-3 align-middle">

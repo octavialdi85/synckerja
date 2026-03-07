@@ -47,6 +47,7 @@ export const ProductKnowledgeTableFooter: React.FC<ProductKnowledgeTableFooterPr
             <FeatureManager
               masterFeatures={masterFeatures}
               allProductKnowledgeRows={allProductKnowledgeRows}
+              services={services}
               onDataChange={onDataChange}
               onMasterFeatureUpdated={onMasterFeatureUpdated}
             />

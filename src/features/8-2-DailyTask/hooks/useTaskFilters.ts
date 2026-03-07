@@ -426,11 +426,11 @@ export const useTaskFilters = ({
       }
 
       // Early exit 8: Department filter
-      // Only exclude when we have department data and it doesn't match.
-      // When departmentMap is still loading (taskDepartment undefined), include task so list isn't empty.
+      // When a department is selected, show ONLY tasks that belong to that department.
+      // Tasks without department (taskDepartment undefined) are excluded so they don't appear under the filter.
       if (filters.department) {
         const taskDepartment = departmentMap?.[task.id];
-        if (taskDepartment && taskDepartment.id !== filters.department) {
+        if (!taskDepartment || taskDepartment.id !== filters.department) {
           return false;
         }
       }

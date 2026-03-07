@@ -479,10 +479,10 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent hideCloseButton className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden">
+      <DialogContent hideCloseButton className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] p-0 overflow-hidden flex flex-col">
         <DialogTitle className="sr-only absolute">Content Brief</DialogTitle>
         <DialogDescription className="sr-only absolute">Edit content brief and manage comments</DialogDescription>
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {/* Left Section - Comments (Fixed width agar tidak berubah saat klik Approved/checklist) */}
             <div className="w-96 flex-shrink-0 max-lg:hidden border-r border-gray-200 flex flex-col min-h-0">
@@ -563,9 +563,9 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
               )}
             </div>
 
-            {/* Right Section - Brief Content & Preview (Flex-1 mengambil sisa ruang); full width di layar sempit */}
-            <div className="flex-1 min-w-0 max-lg:w-full flex flex-col min-h-0">
-              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between min-h-0">
+            {/* Right Section - Brief Content & Preview: full height dengan batas max-h, table punya batas tinggi dan bisa di-scroll */}
+            <div className="flex-1 min-w-0 max-lg:w-full flex flex-col min-h-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0 min-h-0">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <FileText className="h-4 w-4 text-gray-600 shrink-0" />
                   <div className="min-w-0 flex-1">
@@ -607,15 +607,15 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                 {showPreview && hasGoogleDocsLink ? (
                   <LinkPreviewPanel brief={briefText} />
                 ) : (
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-4">
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-3 py-2">
                     <Accordion
                       type="single"
                       collapsible
                       value={accordionOpen}
                       onValueChange={(v) => setAccordionOpen(v ?? '')}
-                      className="w-full flex-1 flex flex-col min-h-0 gap-1"
+                      className="w-full flex-1 flex flex-col min-h-0 gap-1 overflow-y-auto overflow-x-hidden seamless-scroll"
                     >
-                      <AccordionItem value="brief" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col data-[state=open]:flex-1 data-[state=open]:min-h-0">
+                      <AccordionItem value="brief" className="border border-gray-200 rounded-lg px-4 bg-white flex flex-col flex-shrink-0 data-[state=open]:flex-1 data-[state=open]:min-h-[calc(95vh-10rem)]">
                         <AccordionTrigger className="text-sm font-medium text-gray-800 hover:no-underline py-3 flex-shrink-0">
                           <span className="flex items-center gap-2 flex-1">
                             {briefText.trim() ? (
@@ -647,11 +647,11 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
                           </span>
                         </AccordionTrigger>
                         <AccordionContent
-                          primitiveClassName="data-[state=open]:!h-full"
-                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 min-h-[max(400px,45vh)] h-full"
+                          primitiveClassName="data-[state=open]:!flex-1 data-[state=open]:!min-h-0"
+                          className="flex-1 min-h-0 overflow-hidden flex flex-col pb-4 pt-0 data-[state=open]:flex data-[state=open]:min-h-0 data-[state=open]:flex-1"
                         >
                           <div
-                            className="min-h-[max(360px,40vh)] flex-1 flex flex-col overflow-hidden h-full overflow-y-auto seamless-scroll"
+                            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(95vh-12rem)]"
                             style={{ overflowAnchor: 'none' } as React.CSSProperties}
                           >
                             {briefViewMode === 'raw' ? (

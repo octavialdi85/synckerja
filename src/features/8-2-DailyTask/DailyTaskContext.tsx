@@ -208,6 +208,8 @@ export interface DailyTaskContextType {
   getVisibleStepsEffective: (task: Task) => TaskStep[];
   /** Lazy-load recent step updates (e.g. when Summary tab is opened). */
   fetchRecentStepUpdates: () => Promise<void>;
+  /** Map task id -> department { id, name } for display and filter (same source as desktop). */
+  departmentMap: Record<string, { id: string; name: string }>;
 }
 
 const DailyTaskContext = createContext<DailyTaskContextType | undefined>(undefined);
@@ -2944,6 +2946,7 @@ export const DailyTaskProvider = ({ children }: DailyTaskProviderProps) => {
     effectiveFilteredTasks,
     getVisibleStepsEffective,
     fetchRecentStepUpdates,
+    departmentMap,
   };
 
   return (

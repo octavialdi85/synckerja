@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 export interface ProductKnowledgeFeature {
   id: string;
   organization_id: string;
+  service_id: string | null;
   feature_name: string;
   feature_description: string | null;
   solution: string | null;
@@ -45,6 +46,7 @@ export const useProductKnowledgeFeaturesMutations = () => {
 
   const createMutation = useMutation({
     mutationFn: async (input: {
+      service_id?: string | null;
       feature_name: string;
       feature_description?: string | null;
       solution?: string | null;
@@ -56,6 +58,7 @@ export const useProductKnowledgeFeaturesMutations = () => {
         .from('product_knowledge_features')
         .insert({
           organization_id: organizationId,
+          service_id: input.service_id ?? null,
           feature_name: input.feature_name.trim(),
           feature_description: input.feature_description ?? null,
           solution: input.solution ?? null,
@@ -83,6 +86,7 @@ export const useProductKnowledgeFeaturesMutations = () => {
     }: {
       id: string;
       input: {
+        service_id?: string | null;
         feature_name?: string;
         feature_description?: string | null;
         solution?: string | null;
@@ -95,6 +99,7 @@ export const useProductKnowledgeFeaturesMutations = () => {
       const updates: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
+      if (input.service_id !== undefined) updates.service_id = input.service_id ?? null;
       if (input.feature_name !== undefined) updates.feature_name = input.feature_name?.trim() ?? null;
       if (input.feature_description !== undefined) updates.feature_description = input.feature_description ?? null;
       if (input.solution !== undefined) updates.solution = input.solution ?? null;

@@ -28,6 +28,7 @@ import {
 import { HabitFormModal } from './HabitFormModal';
 import { HabitTargetCountModal } from './HabitTargetCountModal';
 import { isHabitActiveOnDay, isHabitCompletedOnDay } from '../utils/habitDayUtils';
+import { getHabitAnalysis, getTotalMonthlyGoal } from '../utils/habitAnalysisUtils';
 import { LoadingDots } from '@/components/LoadingDots';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isToday, isAfter, isSameMonth } from 'date-fns';
 import { useToast } from '@/features/ui/use-toast';
@@ -114,45 +115,11 @@ export const HabitSpreadsheetView = () => {
     ).length;
   };
 
-  // Calculate goal, actual, and progress for a habit
-  const getHabitAnalysis = (habit: any) => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const totalDays = monthDays.length;
-    
-    // Calculate goal based on frequency
-    let goal = 0;
-    if (habit.frequency === 'daily') {
-      // Daily: target_count per day × total days in month
-      goal = totalDays * habit.target_count;
-    } else if (habit.frequency === 'weekly') {
-      // Weekly: calculate number of weeks in the month
-      // Count weeks that have at least 1 day in this month
-      const firstDay = monthStart.getDay(); // 0 = Sunday, 6 = Saturday
-      const daysInFirstWeek = 7 - firstDay;
-      const remainingDays = totalDays - daysInFirstWeek;
-      const fullWeeks = Math.floor(remainingDays / 7);
-      const daysInLastWeek = remainingDays % 7;
-      const weeksInMonth = (daysInFirstWeek > 0 ? 1 : 0) + fullWeeks + (daysInLastWeek > 0 ? 1 : 0);
-      goal = weeksInMonth * habit.target_count;
-    } else if (habit.frequency === 'monthly') {
-      // Monthly: just the target_count for the whole month
-      goal = habit.target_count;
-    }
+  // Calculate goal, actual, and progress for a habit (shared with mobile)
+  const getHabitAnalysisForRow = (habit: any) => getHabitAnalysis(habit, monthDays, entries);
 
-    // Calculate actual entries for this month
-    const monthEntries = entries.filter((e) => {
-      if (e.habit_id !== habit.id) return false;
-      const entryDate = new Date(e.entry_date);
-      return entryDate >= monthStart && entryDate <= monthEnd;
-    });
-    const actual = monthEntries.length;
-
-    // Calculate progress percentage
-    const progress = goal > 0 ? Math.min((actual / goal) * 100, 100) : 0;
-
-    return { goal, actual, progress };
-  };
+  // Calculate total monthly goal for Daily Stats (shared logic)
+  const getTotalMonthlyGoalForStats = () => getTotalMonthlyGoal(filteredHabits, monthDays);
 
   // Calculate daily progress for a specific date
   const getDailyProgress = (date: Date) => {
@@ -175,35 +142,6 @@ export const HabitSpreadsheetView = () => {
     const done = completedHabits.length;
     
     return (done / totalHabits) * 100;
-  };
-
-  // Calculate total monthly goal for Daily Stats (sum of all habits' monthly goals)
-  const getTotalMonthlyGoal = () => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const totalDays = monthDays.length;
-    
-    let totalGoal = 0;
-    filteredHabits.forEach((habit) => {
-      if (habit.frequency === 'daily') {
-        // Daily: target_count per day × total days in month
-        totalGoal += totalDays * habit.target_count;
-      } else if (habit.frequency === 'weekly') {
-        // Weekly: calculate number of weeks in the month
-        const firstDay = monthStart.getDay(); // 0 = Sunday, 6 = Saturday
-        const daysInFirstWeek = 7 - firstDay;
-        const remainingDays = totalDays - daysInFirstWeek;
-        const fullWeeks = Math.floor(remainingDays / 7);
-        const daysInLastWeek = remainingDays % 7;
-        const weeksInMonth = (daysInFirstWeek > 0 ? 1 : 0) + fullWeeks + (daysInLastWeek > 0 ? 1 : 0);
-        totalGoal += weeksInMonth * habit.target_count;
-      } else if (habit.frequency === 'monthly') {
-        // Monthly: just the target_count for the whole month
-        totalGoal += habit.target_count;
-      }
-    });
-    
-    return totalGoal;
   };
 
   // Calculate daily goal, actual, and progress for Daily Stats
@@ -547,7 +485,7 @@ export const HabitSpreadsheetView = () => {
                   <div className="flex items-center justify-center gap-1">
                     <Target className="h-3 w-3 text-gray-500" />
                     <span className="text-xs font-semibold text-gray-900">
-                      {getTotalMonthlyGoal()}
+                      {getTotalMonthlyGoalForStats()}
                     </span>
                   </div>
                 </td>
@@ -555,7 +493,7 @@ export const HabitSpreadsheetView = () => {
                 {/* Actual Column for Daily Stats */}
                 <td className="border-r border-gray-300 px-2 text-center bg-gray-50" style={{ width: '80px', minWidth: '80px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   {(() => {
-                    const totalGoal = getTotalMonthlyGoal();
+                    const totalGoal = getTotalMonthlyGoalForStats();
                     const totalActual = chartData.reduce((sum, dayData, index) => sum + getDailyStatsAnalysis(monthDays[index]).actual, 0);
                     return (
                       <span className={`text-xs font-semibold ${
@@ -574,7 +512,7 @@ export const HabitSpreadsheetView = () => {
                 {/* Progress Column for Daily Stats */}
                 <td className="border-r-0 px-2 bg-gray-50" style={{ width: '120px', minWidth: '120px', height: '45px', verticalAlign: 'middle', paddingTop: '6px', paddingBottom: '6px' }}>
                   {(() => {
-                    const totalGoal = getTotalMonthlyGoal();
+                    const totalGoal = getTotalMonthlyGoalForStats();
                     const totalActual = chartData.reduce((sum, dayData, index) => sum + getDailyStatsAnalysis(monthDays[index]).actual, 0);
                     const totalProgress = totalGoal > 0 ? Math.min((totalActual / totalGoal) * 100, 100) : 0;
                     const progressColor = totalProgress >= 100 ? 'bg-green-500' : totalProgress >= 50 ? 'bg-blue-500' : 'bg-yellow-500';
@@ -853,7 +791,7 @@ export const HabitSpreadsheetView = () => {
                       
                       {/* Analysis Cells */}
                       {(() => {
-                        const { goal, actual, progress } = getHabitAnalysis(habit);
+                        const { goal, actual, progress } = getHabitAnalysisForRow(habit);
                         const progressColor = progress >= 100 ? 'bg-green-600' : progress >= 50 ? 'bg-blue-600' : 'bg-yellow-500';
                         
                         return (

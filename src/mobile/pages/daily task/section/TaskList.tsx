@@ -49,6 +49,7 @@ export const TaskList = () => {
     reorderTaskSteps,
     highlightedTask,
     requestDeadlineExtension,
+    departmentMap,
   } = useDailyTask();
   const { user } = useCurrentUser();
   const currentUserId = user?.id;
@@ -354,6 +355,7 @@ export const TaskList = () => {
                       totalCount={totalCount}
                       blockerCount={blockerCount}
                       isTaskCreator={isTaskCreator(task)}
+                      department={departmentMap[task.id]}
                       onToggleStatus={handleStatusToggle}
                       onOpenModal={openTaskModal}
                       onToggleReminder={handleToggleReminder}

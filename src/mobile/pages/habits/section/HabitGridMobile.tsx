@@ -4,7 +4,7 @@ import { useHabitTracker } from '@/features/8-2-HabitTracker/context/HabitTracke
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { Checkbox } from '@/features/ui/checkbox';
 import { Button } from '@/features/ui/button';
-import { ChevronLeft, ChevronRight, Edit, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit, Trash2, PanelLeftClose, PanelLeftOpen, Target } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import { HabitFormModal } from '@/features/8-2-HabitTracker/components/HabitForm
 import { HabitTargetCountModal } from '@/features/8-2-HabitTracker/components/HabitTargetCountModal';
 import { MonthlyHabitDateChangeModal, type MonthlyHabitDateChangeModalData } from '@/mobile/pages/habits/components/MonthlyHabitDateChangeModal';
 import { isHabitActiveOnDay, isHabitCompletedOnDay } from '@/features/8-2-HabitTracker/utils/habitDayUtils';
+import { getHabitAnalysis, getTotalMonthlyGoal } from '@/features/8-2-HabitTracker/utils/habitAnalysisUtils';
 import {
   LineChart,
   Line,
@@ -31,6 +32,9 @@ import {
 import { useToast } from '@/features/ui/use-toast';
 
 const CELL_SIZE = 40;
+const GOAL_WIDTH = 52;
+const ACTUAL_WIDTH = 52;
+const PROGRESS_WIDTH = 88;
 const NAME_WIDTH_EXPANDED = 160;
 const NAME_WIDTH_COLLAPSED = 48;
 const ACTIONS_WIDTH = 56; // edit + delete buttons revealed on swipe
@@ -322,8 +326,8 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
           aria-label={t('habitTracker.habitGrid', 'Daftar habit bulanan')}
         >
           <div className="overflow-x-auto overflow-y-visible seamless-scroll touch-pan-x min-h-0">
-          <div style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE }}>
-            <table className="border-collapse" style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE }}>
+          <div style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE + GOAL_WIDTH + ACTUAL_WIDTH + PROGRESS_WIDTH }}>
+            <table className="border-collapse" style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE + GOAL_WIDTH + ACTUAL_WIDTH + PROGRESS_WIDTH }}>
             <thead>
               <tr>
                 <th
@@ -374,6 +378,24 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
                     </th>
                   );
                 })}
+                <th
+                  className="border-r border-border px-1 py-1 text-center text-[10px] font-semibold text-muted-foreground bg-muted/50"
+                  style={{ width: GOAL_WIDTH, minWidth: GOAL_WIDTH }}
+                >
+                  {t('habitTracker.goal', 'Goal')}
+                </th>
+                <th
+                  className="border-r border-border px-1 py-1 text-center text-[10px] font-semibold text-muted-foreground bg-muted/50"
+                  style={{ width: ACTUAL_WIDTH, minWidth: ACTUAL_WIDTH }}
+                >
+                  {t('habitTracker.actual', 'Actual')}
+                </th>
+                <th
+                  className="border-r border-border px-1 py-1 text-center text-[10px] font-semibold text-muted-foreground bg-muted/50"
+                  style={{ width: PROGRESS_WIDTH, minWidth: PROGRESS_WIDTH }}
+                >
+                  {t('habitTracker.progress', 'Progress')}
+                </th>
               </tr>
               {/* Daily Stats row */}
               <tr className="bg-muted/30 border-b border-border">
@@ -404,6 +426,74 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
                     </td>
                   );
                 })}
+                <td
+                  className="border-r border-border px-1 py-1 text-center bg-muted/30"
+                  style={{ width: GOAL_WIDTH, minWidth: GOAL_WIDTH }}
+                >
+                  <div className="flex items-center justify-center gap-0.5">
+                    <Target className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-foreground">
+                      {getTotalMonthlyGoal(filteredHabits, monthDays)}
+                    </span>
+                  </div>
+                </td>
+                <td
+                  className="border-r border-border px-1 py-1 text-center bg-muted/30"
+                  style={{ width: ACTUAL_WIDTH, minWidth: ACTUAL_WIDTH }}
+                >
+                  {(() => {
+                    const totalGoal = getTotalMonthlyGoal(filteredHabits, monthDays);
+                    const totalActual = chartData.reduce(
+                      (sum, _row, idx) =>
+                        sum +
+                        entries.filter((e) => e.entry_date === format(monthDays[idx], 'yyyy-MM-dd')).length,
+                      0
+                    );
+                    return (
+                      <span
+                        className={`text-[10px] font-semibold ${
+                          totalActual >= totalGoal
+                            ? 'text-green-600'
+                            : totalActual >= totalGoal * 0.5
+                              ? 'text-blue-600'
+                              : 'text-foreground'
+                        }`}
+                      >
+                        {totalActual}
+                      </span>
+                    );
+                  })()}
+                </td>
+                <td
+                  className="border-r border-border px-1 py-1 bg-muted/30"
+                  style={{ width: PROGRESS_WIDTH, minWidth: PROGRESS_WIDTH }}
+                >
+                  {(() => {
+                    const totalGoal = getTotalMonthlyGoal(filteredHabits, monthDays);
+                    const totalActual = chartData.reduce(
+                      (sum, _row, idx) =>
+                        sum +
+                        entries.filter((e) => e.entry_date === format(monthDays[idx], 'yyyy-MM-dd')).length,
+                      0
+                    );
+                    const totalProgress = totalGoal > 0 ? Math.min((totalActual / totalGoal) * 100, 100) : 0;
+                    const progressColor =
+                      totalProgress >= 100 ? 'bg-green-500' : totalProgress >= 50 ? 'bg-blue-500' : 'bg-yellow-500';
+                    return (
+                      <div className="flex items-center gap-1">
+                        <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden min-w-0">
+                          <div
+                            className={`${progressColor} h-1.5 rounded-full transition-all duration-300`}
+                            style={{ width: `${Math.min(totalProgress, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] font-medium text-muted-foreground shrink-0">
+                          {Math.round(totalProgress)}%
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </td>
               </tr>
             </thead>
             <tbody>
@@ -551,6 +641,53 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
                       </td>
                     );
                   })}
+                  {/* Goal, Actual, Progress - same logic as desktop (shared getHabitAnalysis) */}
+                  {(() => {
+                    const { goal, actual, progress } = getHabitAnalysis(habit, monthDays, entries);
+                    const progressColor =
+                      progress >= 100 ? 'bg-green-500' : progress >= 50 ? 'bg-blue-500' : 'bg-yellow-500';
+                    return (
+                      <>
+                        <td
+                          className="border-r border-border px-1 py-1 text-center bg-card"
+                          style={{ width: GOAL_WIDTH, minWidth: GOAL_WIDTH }}
+                        >
+                          <div className="flex items-center justify-center gap-0.5">
+                            <Target className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] font-semibold text-foreground">{goal}</span>
+                          </div>
+                        </td>
+                        <td
+                          className="border-r border-border px-1 py-1 text-center bg-card"
+                          style={{ width: ACTUAL_WIDTH, minWidth: ACTUAL_WIDTH }}
+                        >
+                          <span
+                            className={`text-[10px] font-semibold ${
+                              actual >= goal ? 'text-green-600' : actual >= goal * 0.5 ? 'text-blue-600' : 'text-foreground'
+                            }`}
+                          >
+                            {actual}
+                          </span>
+                        </td>
+                        <td
+                          className="border-r border-border px-1 py-1 bg-card"
+                          style={{ width: PROGRESS_WIDTH, minWidth: PROGRESS_WIDTH }}
+                        >
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden min-w-0">
+                              <div
+                                className={`${progressColor} h-1.5 rounded-full transition-all duration-300`}
+                                style={{ width: `${Math.min(progress, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[9px] font-medium text-muted-foreground shrink-0">
+                              {Math.round(progress)}%
+                            </span>
+                          </div>
+                        </td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>
@@ -623,6 +760,10 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              <div
+                className="flex-shrink-0 border-l border-border bg-muted/30"
+                style={{ width: GOAL_WIDTH + ACTUAL_WIDTH + PROGRESS_WIDTH, minWidth: GOAL_WIDTH + ACTUAL_WIDTH + PROGRESS_WIDTH }}
+              />
             </div>
           </div>
         </div>
