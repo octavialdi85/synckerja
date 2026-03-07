@@ -7,6 +7,7 @@ export interface ProductKnowledge {
   organization_id: string;
   service_id: string | null;
   sub_service_id: string | null;
+  feature_id?: string | null;
   feature_name: string;
   feature_description: string;
   problems_solved: string[];
@@ -41,10 +42,14 @@ export interface ProductKnowledge {
   sub_service_name?: string | null;
 }
 
+/** @deprecated Master features now come from product_knowledge_features table via useProductKnowledgeFeatures */
+export const getMasterFeatures = (data: ProductKnowledge[]): ProductKnowledge[] =>
+  (data || []).filter((row) => row.feature_id == null);
+
 export const useProductKnowledge = () => {
   const { organizationId } = useCurrentOrg();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['product-knowledge', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -112,5 +117,12 @@ export const useProductKnowledge = () => {
     },
     enabled: !!organizationId,
   });
+
+  const data = query.data ?? [];
+
+  return {
+    ...query,
+    data,
+  };
 };
 

@@ -57,17 +57,16 @@ const HabitTrackerMobilePage = () => {
 
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col relative">
                 <HabitTrackerMobileContent />
-                <Button
-                  aria-label={t('habitTracker.addHabit', 'Tambah habit')}
-                  onClick={() => setShowAddModal(true)}
-                  size="icon"
-                  className="fixed right-4 z-40 h-14 w-14 rounded-full shadow-lg flex items-center justify-center p-0 safe-area-bottom"
-                  style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
-                >
-                  <span className="flex items-center justify-center w-full h-full" aria-hidden>
-                    <Plus className="h-6 w-6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                  </span>
-                </Button>
+                <div className="pointer-events-none fixed left-0 right-0 z-50 flex justify-end px-6 fixed-above-nav-safe">
+                  <Button
+                    aria-label={t('habitTracker.addHabit', 'Tambah habit')}
+                    onClick={() => setShowAddModal(true)}
+                    className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('habitTracker.addHabit', 'Tambah habit')}
+                  </Button>
+                </div>
               </div>
 
               <NavigationFooter className="safe-area-bottom-lower" />

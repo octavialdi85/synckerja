@@ -315,9 +315,13 @@ export const HabitGridMobile = ({ currentMonth: currentMonthProp, onMonthChange 
           </Button>
         </div>
 
-        {/* Grid + chart: vertical scroll (nested-scroll-touch-chain) lalu horizontal scroll untuk tabel */}
-        <div className="overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-340px)] min-h-0">
-          <div className="overflow-x-auto overflow-y-visible seamless-scroll">
+        {/* Grid + chart: vertical scroll (scroll-chaining.mdc §3.1) lalu horizontal scroll untuk tabel */}
+        <div
+          className="overflow-y-auto overflow-x-hidden seamless-scroll nested-scroll-touch-chain max-h-[calc(100vh-340px)] min-h-0"
+          role="region"
+          aria-label={t('habitTracker.habitGrid', 'Daftar habit bulanan')}
+        >
+          <div className="overflow-x-auto overflow-y-visible seamless-scroll touch-pan-x min-h-0">
           <div style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE }}>
             <table className="border-collapse" style={{ minWidth: nameColumnWidth + monthDays.length * CELL_SIZE }}>
             <thead>

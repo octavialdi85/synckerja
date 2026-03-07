@@ -26,10 +26,29 @@ import {
 import { Textarea } from '@/features/ui/textarea';
 import { Button } from '@/features/ui/button';
 import { ProductKnowledge } from '../hooks/useProductKnowledge';
+import type { ProductKnowledgeFeature } from '../hooks/useProductKnowledgeFeatures';
 import { LoadingDots } from '@/components/LoadingDots';
 import { Service } from '../hooks/useServices';
 import { SubService } from '../hooks/useSubServices';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { FileText, Eye } from 'lucide-react';
+
+/** Returns true if row has Feature, Feature Description, and at least one persona/content field filled */
+function isRowFullyFilled(item: ProductKnowledge): boolean {
+  const hasBase = !!(item.feature_name?.trim() && item.feature_description?.trim());
+  if (!hasBase) return false;
+  const hasPersona =
+    (item.target_audience != null && (typeof item.target_audience === 'string' ? item.target_audience.trim() !== '' : true)) ||
+    (item.problems_solved?.length ?? 0) > 0 ||
+    !!(item.impact?.trim()) ||
+    !!(item.wants?.trim()) ||
+    !!(item.needs?.trim()) ||
+    !!(item.hidden_needs?.trim()) ||
+    !!(item.false_belief?.trim()) ||
+    !!(item.false_belief_impact?.trim()) ||
+    !!(item.what_makes_them_stop?.trim());
+  return hasPersona;
+}
 
 interface ProductKnowledgeTableProps {
   data: ProductKnowledge[];
@@ -37,8 +56,11 @@ interface ProductKnowledgeTableProps {
   selectedItems: string[];
   onSelectItem: (id: string, checked: boolean) => void;
   onFieldChange: (id: string, field: string, value: any) => void;
+  onFeatureSelect: (id: string, master: ProductKnowledgeFeature | null) => void;
+  onGeneratePromptForRow?: (rowId: string) => void;
   services: Service[];
   subServices: SubService[];
+  masterFeatures: ProductKnowledgeFeature[];
 }
 
 export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
@@ -47,8 +69,11 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
   selectedItems,
   onSelectItem,
   onFieldChange,
+  onFeatureSelect,
+  onGeneratePromptForRow,
   services = [],
   subServices = [],
+  masterFeatures = [],
 }) => {
   const { t } = useAppTranslation();
 
@@ -76,7 +101,7 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
       <div className="rounded-md border border-gray-200 overflow-hidden">
         {/* Satu scroll container untuk tabel: max-height dari CSS agar vertikal & horizontal scroll jalan */}
         <div className="product-knowledge-table-scroll overflow-x-auto overflow-y-auto seamless-scroll nested-scroll-touch-chain">
-          <table className="border-collapse" style={{ minWidth: '3888px', width: '100%' }}>
+          <table className="border-collapse" style={{ minWidth: onGeneratePromptForRow ? '4088px' : '3888px', width: '100%' }}>
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="px-2 py-2 text-center border-r border-gray-200 border-b-2 border-gray-300">
@@ -108,7 +133,7 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                   {t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
                 </th>
                 <th style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
-                  {t('productKnowledge.table.headers.targetMarket', 'Target Market')}
+                  {t('productKnowledge.table.headers.targetMarket', 'Customer Persona')}
                 </th>
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-r border-gray-200 border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.problem', 'Problem')}
@@ -134,18 +159,23 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                 <th style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300">
                   {t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?')}
                 </th>
+                {onGeneratePromptForRow && (
+                  <th style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-2 text-center text-xs font-semibold text-gray-700 uppercase border-b-2 border-gray-300 bg-gray-50">
+                    {t('productKnowledge.table.actions', 'Aksi')}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={16} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={onGeneratePromptForRow ? 17 : 16} className="text-center py-8 border-b border-gray-200">
                     <LoadingDots />
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="text-center py-8 border-b border-gray-200">
+                  <td colSpan={onGeneratePromptForRow ? 17 : 16} className="text-center py-8 border-b border-gray-200">
                     <p className="text-gray-500 text-sm">{t('productKnowledge.table.emptyState', 'No product knowledge found')}</p>
                   </td>
                 </tr>
@@ -157,11 +187,14 @@ export const ProductKnowledgeTable: React.FC<ProductKnowledgeTableProps> = ({
                     isSelected={selectedItems.includes(item.id)}
                     onSelectItem={onSelectItem}
                     onFieldChange={onFieldChange}
+                    onFeatureSelect={onFeatureSelect}
+                    onGeneratePromptForRow={onGeneratePromptForRow}
                     getProductServiceName={getProductServiceName}
                     formatProblems={formatProblems}
                     services={services}
                     subServices={subServices}
                     allProductKnowledge={data}
+                    masterFeatures={masterFeatures}
                   />
                 ))
               )}
@@ -178,11 +211,27 @@ interface ProductKnowledgeRowProps {
   isSelected: boolean;
   onSelectItem: (id: string, checked: boolean) => void;
   onFieldChange: (id: string, field: string, value: any) => void;
+  onFeatureSelect: (id: string, master: ProductKnowledgeFeature | null) => void;
+  onGeneratePromptForRow?: (rowId: string) => void;
   getProductServiceName: (item: ProductKnowledge) => string;
   formatProblems: (problems: string[] | null | undefined) => string;
   services: Service[];
   subServices: SubService[];
-  allProductKnowledge: ProductKnowledge[]; // Add this to check for duplicates
+  allProductKnowledge: ProductKnowledge[];
+  masterFeatures: ProductKnowledgeFeature[];
+}
+
+function MainTableDetailSection({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-3 py-2 bg-gray-100 border-b border-gray-200">
+        <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{label}</span>
+      </div>
+      <div className="text-sm text-gray-900 whitespace-pre-wrap p-3 min-h-[2.5rem]">
+        {value || '—'}
+      </div>
+    </div>
+  );
 }
 
 const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
@@ -190,48 +239,54 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
   isSelected,
   onSelectItem,
   onFieldChange,
+  onFeatureSelect,
+  onGeneratePromptForRow,
   getProductServiceName,
   formatProblems,
   services,
   subServices,
   allProductKnowledge,
+  masterFeatures,
 }) => {
   const { t } = useAppTranslation();
-  const [isEditingFeatureName, setIsEditingFeatureName] = useState(false);
-  const [isEditingFeatureDescription, setIsEditingFeatureDescription] = useState(false);
+  const isFeatureSelected = !!(item.feature_id || item.feature_name);
   const [isEditingTargetMarket, setIsEditingTargetMarket] = useState(false);
   const [isEditingProblems, setIsEditingProblems] = useState(false);
   const [isEditingImpact, setIsEditingImpact] = useState(false);
-  const [isEditingSolution, setIsEditingSolution] = useState(false);
   const [isEditingWants, setIsEditingWants] = useState(false);
   const [isEditingNeeds, setIsEditingNeeds] = useState(false);
   const [isEditingHiddenNeeds, setIsEditingHiddenNeeds] = useState(false);
   const [isEditingFalseBelief, setIsEditingFalseBelief] = useState(false);
   const [isEditingFalseBeliefImpact, setIsEditingFalseBeliefImpact] = useState(false);
   const [isEditingWhatMakesThemStop, setIsEditingWhatMakesThemStop] = useState(false);
-  const [isEditingCompetitiveAdvantage, setIsEditingCompetitiveAdvantage] = useState(false);
   
-  // Popup state untuk view dan edit konten lengkap
+  // Popup state untuk view dan edit konten lengkap (readOnly = hanya baca untuk Feature, Feature Description, Solution, Competitive Advantage)
   const [popupState, setPopupState] = useState<{
     isOpen: boolean;
     field: string | null;
     title: string;
     content: string;
     editedContent: string;
+    readOnly?: boolean;
   }>({
     isOpen: false,
     field: null,
     title: '',
     content: '',
     editedContent: '',
+    readOnly: false,
   });
+
+  const READ_ONLY_POPUP_FIELDS = ['feature', 'featureDescription', 'solution', 'competitiveAdvantage'];
+  const [rowDetailOpen, setRowDetailOpen] = useState(false);
 
   const handleCheckboxChange = (checked: boolean) => {
     onSelectItem(item.id, checked);
   };
 
-  // Helper function untuk membuka popup view/edit
-  const openViewPopup = (field: string, title: string, content: string) => {
+  // Helper function untuk membuka popup view/edit (readOnly untuk Feature, Feature Description, Solution, Competitive Advantage)
+  const openViewPopup = (field: string, title: string, content: string, readOnly?: boolean) => {
+    const isReadOnly = readOnly ?? READ_ONLY_POPUP_FIELDS.includes(field);
     // Format content berdasarkan field type
     let formattedContent = '';
     
@@ -251,6 +306,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       title,
       content: formattedContent,
       editedContent: formattedContent,
+      readOnly: isReadOnly,
     });
   };
 
@@ -264,9 +320,9 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     return content;
   };
 
-  // Handler untuk save dari popup
+  // Handler untuk save dari popup (tidak dipanggil saat readOnly)
   const handlePopupSave = () => {
-    if (!popupState.field) return;
+    if (!popupState.field || popupState.readOnly) return;
 
     const field = popupState.field;
     const newValue = popupState.editedContent.trim();
@@ -326,14 +382,12 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     if (value !== item.feature_name) {
       onFieldChange(item.id, 'feature_name', value);
     }
-    setIsEditingFeatureName(false);
   };
 
   const handleFeatureDescriptionBlur = (value: string) => {
     if (value !== item.feature_description) {
       onFieldChange(item.id, 'feature_description', value);
     }
-    setIsEditingFeatureDescription(false);
   };
 
   // Format target_audience (JSONB) to string
@@ -445,7 +499,6 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     if (value !== item.solusi) {
       onFieldChange(item.id, 'solusi', value);
     }
-    setIsEditingSolution(false);
   };
 
   const handleWantsBlur = (value: string) => {
@@ -556,7 +609,6 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
     if (JSON.stringify(parsed) !== JSON.stringify(currentValue)) {
       onFieldChange(item.id, 'competitive_advantage', parsed);
     }
-    setIsEditingCompetitiveAdvantage(false);
   };
 
   return (
@@ -623,54 +675,54 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         </Select>
       </td>
 
-      {/* Fitur */}
+      {/* Fitur - read-only: klik hanya untuk baca; dropdown hanya untuk assign feature */}
       <td style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureName ? (
-          <Input
-            defaultValue={item.feature_name || ''}
-            onBlur={(e) => handleFeatureNameBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleFeatureNameBlur(e.currentTarget.value);
-              } else if (e.key === 'Escape') {
-                setIsEditingFeatureName(false);
+        <div className="flex items-center gap-1 w-full">
+          <div
+            className="flex-1 min-w-0 text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] flex items-center truncate"
+            onClick={() => openViewPopup('feature', t('productKnowledge.table.headers.feature', 'Feature'), item.feature_name || '', true)}
+            title={item.feature_name || t('productKnowledge.table.selectFeature', 'Select Feature')}
+          >
+            {item.feature_name || <span className="text-gray-400 italic">{t('productKnowledge.table.selectFeature', 'Select Feature')}</span>}
+          </div>
+          <Select
+            value={item.feature_id || (masterFeatures.find((m) => m.feature_name === item.feature_name)?.id) || 'placeholder'}
+            onValueChange={(value) => {
+              if (value === 'placeholder' || value === '') {
+                onFeatureSelect(item.id, null);
+              } else {
+                const master = masterFeatures.find((m) => m.id === value);
+                if (master) onFeatureSelect(item.id, master);
               }
             }}
-            autoFocus
-            className="h-8 text-sm"
-          />
-        ) : (
-          <div
-            className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('feature', t('productKnowledge.table.headers.feature', 'Feature'), item.feature_name || '')}
-            onDoubleClick={() => setIsEditingFeatureName(true)}
-            title={item.feature_name || '-'}
           >
-            {item.feature_name || '-'}
-          </div>
-        )}
+            <SelectTrigger className="h-8 w-8 flex-shrink-0 p-0 border border-gray-200 rounded inline-flex items-center justify-center min-w-[2rem] [&>span:first-child]:hidden [&>*:last-child]:ml-0" title={t('productKnowledge.table.changeFeature', 'Change feature')}>
+              <SelectValue className="sr-only" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="placeholder" disabled>
+                {t('productKnowledge.table.selectFeature', 'Select Feature')}
+              </SelectItem>
+              {masterFeatures.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.feature_name || '-'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </td>
 
-      {/* Fitur Description */}
+      {/* Fitur Description - read-only: klik hanya untuk baca */}
       <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingFeatureDescription ? (
-          <textarea
-            defaultValue={item.feature_description || ''}
-            onBlur={(e) => handleFeatureDescriptionBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingFeatureDescription(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none"
-            rows={3}
-          />
+        {!isFeatureSelected ? (
+          <div className="text-sm text-gray-400 italic min-h-[32px] flex items-center" title={t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}>
+            {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
+          </div>
         ) : (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
             onClick={() => openViewPopup('featureDescription', t('productKnowledge.table.headers.featureDescription', 'Feature Description'), item.feature_description || '')}
-            onDoubleClick={() => setIsEditingFeatureDescription(true)}
             title={item.feature_description || '-'}
           >
             {item.feature_description || '-'}
@@ -678,27 +730,16 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         )}
       </td>
 
-      {/* Solusi */}
+      {/* Solusi - read-only: klik hanya untuk baca */}
       <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingSolution ? (
-          <textarea
-            defaultValue={item.solusi || ''}
-            onBlur={(e) => handleSolutionBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingSolution(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Solution 1: ...&#10;&#10;Solution 2: ..."
-          />
+        {!isFeatureSelected ? (
+          <div className="text-sm text-gray-400 italic min-h-[32px] flex items-center" title={t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}>
+            {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
+          </div>
         ) : (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
             onClick={() => openViewPopup('solution', t('productKnowledge.table.headers.solution', 'Solution'), item.solusi || '')}
-            onDoubleClick={() => setIsEditingSolution(true)}
             title={item.solusi || '-'}
           >
             {item.solusi || '-'}
@@ -706,27 +747,16 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         )}
       </td>
 
-      {/* Competitive Advantage */}
+      {/* Competitive Advantage - read-only: klik hanya untuk baca */}
       <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
-        {isEditingCompetitiveAdvantage ? (
-          <textarea
-            defaultValue={formatCompetitiveAdvantage(item.competitive_advantage)}
-            onBlur={(e) => handleCompetitiveAdvantageBlur(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setIsEditingCompetitiveAdvantage(false);
-              }
-            }}
-            autoFocus
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1 resize-none whitespace-pre-wrap"
-            rows={5}
-            placeholder="Advantage 1: ...&#10;Advantage 2: ..."
-          />
+        {!isFeatureSelected ? (
+          <div className="text-sm text-gray-400 italic min-h-[32px] flex items-center" title={t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}>
+            {t('productKnowledge.table.selectFeatureFirst', 'Select feature first')}
+          </div>
         ) : (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
             onClick={() => openViewPopup('competitiveAdvantage', t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage'), formatCompetitiveAdvantage(item.competitive_advantage))}
-            onDoubleClick={() => setIsEditingCompetitiveAdvantage(true)}
             title={formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
           >
             {formatCompetitiveAdvantage(item.competitive_advantage) || '-'}
@@ -752,7 +782,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         ) : (
           <div
             className="text-sm text-gray-700 cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[32px] truncate"
-            onClick={() => openViewPopup('targetMarket', t('productKnowledge.table.headers.targetMarket', 'Target Market'), formatTargetMarket(item.target_audience))}
+            onClick={() => openViewPopup('targetMarket', t('productKnowledge.table.headers.targetMarket', 'Customer Persona'), formatTargetMarket(item.target_audience))}
             onDoubleClick={() => setIsEditingTargetMarket(true)}
             title={formatTargetMarket(item.target_audience) || '-'}
           >
@@ -959,7 +989,7 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
       </td>
 
       {/* What Makes Them Stop */}
-      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1">
+      <td style={{ width: '280px', minWidth: '280px', maxWidth: '280px' }} className="px-2 py-1 border-r border-gray-200">
         {isEditingWhatMakesThemStop ? (
           <textarea
             defaultValue={item.what_makes_them_stop || ''}
@@ -986,6 +1016,37 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
         )}
       </td>
 
+      {/* Generate prompt (tanpa AI) / See Detail - ujung kolom What Makes Them Stop */}
+      {onGeneratePromptForRow && (
+        <td style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }} className="px-2 py-1 text-center border-gray-200">
+          {isRowFullyFilled(item) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRowDetailOpen(true)}
+              className="gap-1.5 text-xs whitespace-nowrap"
+            >
+              <Eye className="h-4 w-4 shrink-0" />
+              {t('productKnowledge.generate.seeDetail', 'See Detail')}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!item.feature_name?.trim() || !item.feature_description?.trim()}
+              onClick={() => onGeneratePromptForRow(item.id)}
+              className="gap-1.5 text-xs whitespace-nowrap"
+              title={!(item.feature_name?.trim() && item.feature_description?.trim()) ? t('productKnowledge.generate.fillFeatureFirst', 'Isi minimal Feature dan Feature Description di satu baris.') : undefined}
+            >
+              <FileText className="h-4 w-4 shrink-0" />
+              {t('productKnowledge.generate.generatePromptNoAI', 'Generate prompt (tanpa AI)')}
+            </Button>
+          )}
+        </td>
+      )}
+
       {/* View/Edit Popup Dialog */}
       <Dialog open={popupState.isOpen} onOpenChange={(open) => {
         if (!open) {
@@ -999,24 +1060,113 @@ const ProductKnowledgeRow: React.FC<ProductKnowledgeRowProps> = ({
             <DialogTitle>{popupState.title}</DialogTitle>
           </DialogHeader>
           <div className="mt-4 flex-1 overflow-y-auto">
-            <Textarea
-              value={popupState.editedContent}
-              onChange={(e) => setPopupState({ ...popupState, editedContent: e.target.value })}
-              className="min-h-[300px] text-sm whitespace-pre-wrap font-mono"
-              placeholder="Enter content here..."
-            />
+            {popupState.readOnly ? (
+              <div className="min-h-[200px] text-sm whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200">
+                {popupState.content || '-'}
+              </div>
+            ) : (
+              <Textarea
+                value={popupState.editedContent}
+                onChange={(e) => setPopupState({ ...popupState, editedContent: e.target.value })}
+                className="min-h-[300px] text-sm whitespace-pre-wrap font-mono"
+                placeholder="Enter content here..."
+              />
+            )}
           </div>
           <DialogFooter className="mt-4">
-            <Button
-              variant="outline"
-              onClick={handlePopupCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePopupSave}
-            >
-              Save
+            {popupState.readOnly ? (
+              <Button variant="outline" onClick={handlePopupCancel}>
+                {t('common.close', 'Close')}
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={handlePopupCancel}>
+                  Cancel
+                </Button>
+                <Button onClick={handlePopupSave}>
+                  Save
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Row detail modal: Product/Service, Sub Service, dan semua kolom */}
+      <Dialog open={rowDetailOpen} onOpenChange={(open) => !open && setRowDetailOpen(false)}>
+        <DialogContent className="flex flex-col p-0 gap-0 w-[min(560px,85vmin)] h-[min(560px,85vmin)] max-w-[95vw] max-h-[85vh] overflow-hidden">
+          <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-2">
+            <DialogTitle className="text-base">
+              {t('productKnowledge.table.rowDetailTitle', 'Detail Baris')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pb-2 seamless-scroll">
+            <div className="space-y-4 pr-2">
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.productService', 'Product/Service')}
+                value={getProductServiceName(item) || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.subService', 'Sub Service')}
+                value={item.sub_service_name || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.feature', 'Feature')}
+                value={item.feature_name || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.featureDescription', 'Feature Description')}
+                value={item.feature_description || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.solution', 'Solution')}
+                value={item.solusi || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.competitiveAdvantage', 'Competitive Advantage')}
+                value={formatCompetitiveAdvantage(item.competitive_advantage) || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.targetMarket', 'Customer Persona')}
+                value={formatTargetMarket(item.target_audience) || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.problem', 'Problem')}
+                value={formatProblems(item.problems_solved) || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.impact', 'Impact')}
+                value={item.impact || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.wants', 'Wants')}
+                value={item.wants || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.needs', 'Needs')}
+                value={item.needs || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.hiddenNeeds', 'Hidden Needs')}
+                value={item.hidden_needs || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.falseBelief', 'False Belief')}
+                value={item.false_belief || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.falseBeliefImpact', 'False Belief Impact')}
+                value={item.false_belief_impact || '—'}
+              />
+              <MainTableDetailSection
+                label={t('productKnowledge.table.headers.whatMakesThemStop', 'What Makes Them Stop?')}
+                value={item.what_makes_them_stop || '—'}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0 border-t border-gray-200 px-4 py-3 bg-gray-50">
+            <Button variant="outline" onClick={() => setRowDetailOpen(false)}>
+              {t('common.close', 'Tutup')}
             </Button>
           </DialogFooter>
         </DialogContent>
