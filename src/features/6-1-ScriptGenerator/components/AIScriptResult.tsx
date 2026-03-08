@@ -17,6 +17,12 @@ import { parseScriptSections, type ScriptSection, type SectionType } from '../ut
 import { mergeRevisedPart, mergeTableCellRevision, mergeTableRowRevision, deleteTableRow } from '../utils/mergeRevisedPart';
 import { reviseScriptPart, regenerateScriptWithDifferentProblem } from '../services/scriptGeneratorAIService';
 
+/** Format satu baris tabel (string[]) jadi satu baris markdown | a | b | c | */
+function tableRowToMarkdownLine(cells: string[]): string {
+  if (!cells?.length) return '';
+  const escape = (s: string) => String(s ?? '').trim().replace(/\n/g, ' ');
+  return '| ' + cells.map(escape).join(' | ') + ' |';
+}
 /** Remove trailing empty columns so header stays row 0 and we don't get an extra "action" column from markdown trailing pipe */
 function trimEmptyTableColumns(rows: string[][]): string[][] {
   if (rows.length === 0) return rows;
@@ -337,10 +343,26 @@ export const AIScriptResult: React.FC<AIScriptResultProps> = ({
     if (!revisiTarget || !onScriptChange) return;
     setIsRevising(true);
     try {
+      let previousRowText: string | undefined;
+      let nextRowText: string | undefined;
+      if (revisiTarget.tableRow?.tableData?.length) {
+        const { rowIndex, tableData } = revisiTarget.tableRow;
+        if (rowIndex > 0) {
+          const prev = tableData[rowIndex - 1];
+          if (prev?.length) previousRowText = tableRowToMarkdownLine(prev);
+        }
+        if (rowIndex < tableData.length - 1) {
+          const next = tableData[rowIndex + 1];
+          if (next?.length) nextRowText = tableRowToMarkdownLine(next);
+        }
+      }
       const result = await reviseScriptPart(
         revisiTarget.originalText,
         instruction,
-        revisiTarget.tableRow ? 'tableRow' : revisiTarget.sectionType
+        revisiTarget.tableRow ? 'tableRow' : revisiTarget.sectionType,
+        script,
+        previousRowText,
+        nextRowText
       );
       if (!result.success || !result.script) {
         toast.error(result.error || 'Gagal merevisi');

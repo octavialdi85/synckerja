@@ -66,6 +66,8 @@ Deno.serve(async (req: Request) => {
     const fullScript = body.fullScript != null ? String(body.fullScript).trim() : "";
     const instruction = body.instruction != null ? String(body.instruction).trim() : "";
     const sectionType = body.sectionType != null ? String(body.sectionType).trim() : "";
+    const previousRowText = body.previousRowText != null ? String(body.previousRowText).trim() : "";
+    const nextRowText = body.nextRowText != null ? String(body.nextRowText).trim() : "";
 
     const isReframe = body.mode === "reframe";
     const isRevise =
@@ -151,14 +153,42 @@ Buat ulang SELURUH script dengan format yang sama persis (## Konsep Konten ##, *
       const sectionHint = sectionType ? ` (Tipe section: ${sectionType})` : "";
       const tableRowHint =
         sectionType === "tableRow"
-          ? "\n\nPENTING: Ini satu baris dari tabel breakdown script. Revisi sesuai instruksi. Return HANYA satu baris tabel dalam format markdown (| col1 | col2 | col3 | ...). Pastikan kolom Visual, Element Lainnya, dan Tagging menyesuaikan dengan perubahan VO/kolom lain agar konsisten dalam satu baris."
+          ? "\n\nPENTING: Ini satu baris dari tabel breakdown script. Revisi sesuai instruksi. Return HANYA satu baris tabel dalam format markdown (| col1 | col2 | col3 | ...). Pastikan kolom Visual, Element Lainnya, dan Tagging menyesuaikan dengan perubahan VO/kolom lain agar konsisten dalam satu baris. REVISI HARUS NYAMBUNG dengan baris sebelumnya dan baris sesudahnya—jaga alur narasi dan tema agar tidak terasa dipaksakan."
           : "";
-      fullPrompt = `User ingin merevisi bagian script berikut. Instruksi: ${instruction}${sectionHint}
+      const contextBlock =
+        fullScript.length > 0
+          ? `
 
-Teks asli:
+KONTEKS SCRIPT LENGKAP (untuk menjaga tone, struktur, dan konsistensi dengan bagian lain—jangan ubah bagian yang tidak direvisi):
+---
+${fullScript}
+---
+`
+          : "";
+      const hasNeighborRows = sectionType === "tableRow" && (previousRowText.length > 0 || nextRowText.length > 0);
+      const neighborBlock = hasNeighborRows
+        ? `
+
+KONTEKS LANGSUNG (revisi harus nyambung dengan baris ini—jangan ubah baris sebelum/sesudah, hanya revisi baris tengah):
+${previousRowText.length > 0 ? `Baris SEBELUMNYA:\n${previousRowText}\n` : ""}
+Baris yang DIREVISI (teks asli):
+${originalText}
+${nextRowText.length > 0 ? `\nBaris SESUDAHNYA:\n${nextRowText}` : ""}
+
+Revisi HANYA baris tengah di atas agar alur narasi dan tema nyambung dengan baris sebelum dan sesudah.
+`
+        : "";
+      const partToReviseBlock = hasNeighborRows
+        ? ""
+        : `
+
+Bagian yang perlu direvisi (teks asli):
 ---
 ${originalText}
 ---
+`;
+      fullPrompt = `User ingin merevisi bagian script berikut. Instruksi: ${instruction}${sectionHint}
+${contextBlock}${neighborBlock}${partToReviseBlock}
 
 Return HANYA teks yang sudah direvisi, tanpa penjelasan tambahan. Format output harus sama (markdown, tabel, dll) sesuai teks asli. Jangan ubah struktur, hanya revisi konten sesuai instruksi.${tableRowHint}${BAHASA_INSTRUCTION}`;
     } else {

@@ -9,7 +9,10 @@ export interface GenerateScriptWithAIResponse {
 export async function reviseScriptPart(
   originalText: string,
   instruction: string,
-  sectionType?: string
+  sectionType?: string,
+  fullScript?: string,
+  previousRowText?: string,
+  nextRowText?: string
 ): Promise<GenerateScriptWithAIResponse> {
   try {
     const trimmedOriginal = originalText?.trim() ?? '';
@@ -21,13 +24,32 @@ export async function reviseScriptPart(
       };
     }
 
+    const body: {
+      mode: string;
+      originalText: string;
+      instruction: string;
+      sectionType?: string;
+      fullScript?: string;
+      previousRowText?: string;
+      nextRowText?: string;
+    } = {
+      mode: 'revise',
+      originalText: trimmedOriginal,
+      instruction: trimmedInstruction,
+      sectionType: sectionType?.trim() || undefined,
+    };
+    if (fullScript != null && fullScript.trim() !== '') {
+      body.fullScript = fullScript.trim();
+    }
+    if (previousRowText != null && previousRowText.trim() !== '') {
+      body.previousRowText = previousRowText.trim();
+    }
+    if (nextRowText != null && nextRowText.trim() !== '') {
+      body.nextRowText = nextRowText.trim();
+    }
+
     const { data, error } = await supabase.functions.invoke('generate-script-ai', {
-      body: {
-        mode: 'revise',
-        originalText: trimmedOriginal,
-        instruction: trimmedInstruction,
-        sectionType: sectionType?.trim() || undefined,
-      },
+      body,
     });
 
     if (error) {

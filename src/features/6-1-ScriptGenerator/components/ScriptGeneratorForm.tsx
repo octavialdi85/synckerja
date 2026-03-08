@@ -1659,14 +1659,19 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
               </div>
 
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 border border-muted">
+                  {t('scriptGenerator.form.falseBeliefTip', 'Tip: Yang dianggap enteng bikin orang nggak waspada → nggak ada pencegahan → masalah makin gede. Pakai bahasa casual dan relatable.')}
+                </p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="false_belief">False Belief</Label>
+                  <Label htmlFor="false_belief">{t('scriptGenerator.form.falseBeliefLabel', 'Yang suka dianggap enteng')}</Label>
                   <Textarea
                     id="false_belief"
                     value={formData.false_belief || ''}
                     onChange={(e) => handleInputChange('false_belief', e.target.value)}
-                    placeholder={formData.target_market?.trim() ? "Keyakinan salah yang dimiliki pelanggan" : "Pilih Customer Persona terlebih dahulu"}
+                    placeholder={formData.target_market?.trim() ? t('scriptGenerator.form.falseBeliefPlaceholder', 'Contoh: anggap sepele, nggak perlu buru-buru, kayaknya aman-aman aja...') : t('scriptGenerator.form.selectPersonaFirst', 'Pilih Customer Persona terlebih dahulu')}
                     rows={2}
                     disabled={!formData.target_market?.trim()}
                     className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}
@@ -1674,12 +1679,12 @@ export const ScriptGeneratorForm: React.FC<ScriptGeneratorFormProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="false_belief_impact">False Belief Impact</Label>
+                  <Label htmlFor="false_belief_impact">{t('scriptGenerator.form.falseBeliefImpactLabel', 'Dampaknya kalau dianggap enteng')}</Label>
                   <Textarea
                     id="false_belief_impact"
                     value={formData.false_belief_impact || ''}
                     onChange={(e) => handleInputChange('false_belief_impact', e.target.value)}
-                    placeholder={formData.target_market?.trim() ? "Dampak dari keyakinan salah terhadap perilaku pelanggan" : "Pilih Customer Persona terlebih dahulu"}
+                    placeholder={formData.target_market?.trim() ? t('scriptGenerator.form.falseBeliefImpactPlaceholder', 'Contoh: baru sadar pas udah parah, keluar duit lebih banyak, reputasi kena...') : t('scriptGenerator.form.selectPersonaFirst', 'Pilih Customer Persona terlebih dahulu')}
                     rows={2}
                     disabled={!formData.target_market?.trim()}
                     className={cn(!formData.target_market?.trim() && 'bg-gray-100 opacity-70')}

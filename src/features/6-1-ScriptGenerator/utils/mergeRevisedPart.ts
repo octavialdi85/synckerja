@@ -98,18 +98,30 @@ function parseRowLine(line: string): string[] {
     .map((p) => p.trim());
 }
 
+/** True if this row of cells looks like the table header (Timing | VO | Visual | ...) */
+function isTableHeaderRow(cells: string[]): boolean {
+  if (cells.length === 0) return false;
+  const first = (cells[0] ?? '').trim().toLowerCase();
+  if (first === 'timing') return true;
+  const second = (cells[1] ?? '').trim().toLowerCase();
+  if (second.includes('voice over') || second === 'vo') return true;
+  return false;
+}
+
 /**
  * Merge a full table row revision into the full script.
- * AI returns the revised row in markdown format; we replace the row at rowIndex.
+ * - Skips header row in AI response so only data row is used; never replaces row 0 (header).
+ * - Ensures newline before table so "Breakdown Script ###" does not fuse with header line.
  */
 export function mergeTableRowRevision(
   fullScript: string,
   params: TableRowRevision
 ): string {
   const { tableStartIndex, tableEndIndex, rowIndex, revisedRowMarkdown, tableData } = params;
+  if (rowIndex === 0) return fullScript;
+
   const tableMarkdown = fullScript.slice(tableStartIndex, tableEndIndex);
   const parsed = parseMarkdownTable(tableMarkdown);
-  // Prefer section tableData when rowIndex valid there (avoids re-parse mismatch)
   const baseTable = tableData && rowIndex < tableData.length
     ? tableData
     : parsed?.table;
@@ -121,8 +133,11 @@ export function mergeTableRowRevision(
     if (!line.trim().startsWith('|') || !line.trim().endsWith('|')) continue;
     const cells = parseRowLine(line);
     const isAlignment = cells.length > 0 && cells.every((c) => /^[\s:\-]+$/.test(c));
-    if (cells.length > 0 && !isAlignment) {
+    if (isAlignment) continue;
+    if (cells.length > 0 && isTableHeaderRow(cells)) continue;
+    if (cells.length > 0) {
       newCells = cells;
+      break;
     }
   }
   // Fallback: AI returned plain text without table format - use as VO cell (column 1)
@@ -144,7 +159,15 @@ export function mergeTableRowRevision(
     ri === rowIndex ? newCells : r
   );
   const newTableMarkdown = stringifyMarkdownTable(newTable);
-  return fullScript.slice(0, tableStartIndex) + newTableMarkdown + fullScript.slice(tableEndIndex);
+
+  const before = fullScript.slice(0, tableStartIndex);
+  const after = fullScript.slice(tableEndIndex);
+  const needsNewline =
+    before.length > 0 &&
+    !before.endsWith('\n') &&
+    newTableMarkdown.length > 0 &&
+    !newTableMarkdown.startsWith('\n');
+  return before + (needsNewline ? '\n' : '') + newTableMarkdown + after;
 }
 
 /**
@@ -172,7 +195,14 @@ export function mergeTableCellRevision(
       : r
   );
   const newTableMarkdown = stringifyMarkdownTable(newTable);
-  return fullScript.slice(0, tableStartIndex) + newTableMarkdown + fullScript.slice(tableEndIndex);
+  const before = fullScript.slice(0, tableStartIndex);
+  const after = fullScript.slice(tableEndIndex);
+  const needsNewline =
+    before.length > 0 &&
+    !before.endsWith('\n') &&
+    newTableMarkdown.length > 0 &&
+    !newTableMarkdown.startsWith('\n');
+  return before + (needsNewline ? '\n' : '') + newTableMarkdown + after;
 }
 
 export interface TableRowDelete {
@@ -199,5 +229,12 @@ export function deleteTableRow(fullScript: string, params: TableRowDelete): stri
   const newTable = baseTable.filter((_, i) => i !== rowIndex);
   if (newTable.length === 0) return fullScript;
   const newTableMarkdown = stringifyMarkdownTable(newTable);
-  return fullScript.slice(0, tableStartIndex) + newTableMarkdown + fullScript.slice(tableEndIndex);
+  const before = fullScript.slice(0, tableStartIndex);
+  const after = fullScript.slice(tableEndIndex);
+  const needsNewline =
+    before.length > 0 &&
+    !before.endsWith('\n') &&
+    newTableMarkdown.length > 0 &&
+    !newTableMarkdown.startsWith('\n');
+  return before + (needsNewline ? '\n' : '') + newTableMarkdown + after;
 }
