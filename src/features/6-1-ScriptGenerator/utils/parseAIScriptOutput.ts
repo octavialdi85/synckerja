@@ -2,14 +2,15 @@ import { stripBriefIntroductorySentence } from '@/features/share/utils/briefUtil
 
 /**
  * Extracts the Concept section from AI-generated script.
- * Matches: ## Concept of Content ##, ## Konsep Konten ##, **Konsep Konten**, etc.
- * Returns content until next ## or ### heading.
+ * Only the concept paragraph; stops before **Judul Script**, **Format & Style**, Breakdown Script table, or ## CAPTION.
  */
 function extractConcept(script: string): string {
   const conceptPatterns = [
-    /##\s*Concept\s+of\s+Content\s*##\s*\n([\s\S]*?)(?=\n##|\n###|$)/i,
-    /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n([\s\S]*?)(?=\n##|\n###|$)/i,
-    /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n([\s\S]*?)(?=\n##|\n###|\n\*\*[A-Za-z]|$)/i,
+    // ## Concept of Content ## or ## Konsep Konten ## — stop at next ##/### or **Judul/**Format/Breakdown
+    /##\s*Concept\s+of\s+Content\s*##\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+    /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+    // **Konsep Konten** — stop at ##/### or **Judul/**Format/Breakdown
+    /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|\n\*\*[A-Za-z]|$)/i,
   ];
   for (const pattern of conceptPatterns) {
     const match = script.match(pattern);
@@ -77,9 +78,9 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
       // Remove concept section from brief (saved separately to dashboard Concept)
       if (concept) {
         const conceptSectionPatterns = [
-          /##\s*Concept\s+of\s+Content\s*##[\s\S]*?(?=\n##|\n###|$)/i,
-          /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##[\s\S]*?(?=\n##|\n###|$)/i,
-          /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*[\s\S]*?(?=\n##|\n###|\n\*\*[A-Za-z]|$)/i,
+          /##\s*Concept\s+of\s+Content\s*##[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+          /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+          /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|\n\*\*[A-Za-z]|$)/i,
         ];
         for (const cp of conceptSectionPatterns) {
           brief = brief.replace(cp, '').trim();
@@ -100,9 +101,9 @@ export function parseAIScriptOutput(script: string): { brief: string; caption: s
   let brief = trimmed;
   if (concept) {
     const conceptSectionPatterns = [
-      /##\s*Concept\s+of\s+Content\s*##[\s\S]*?(?=\n##|\n###|$)/i,
-      /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##[\s\S]*?(?=\n##|\n###|$)/i,
-      /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*[\s\S]*?(?=\n##|\n###|\n\*\*[A-Za-z]|$)/i,
+      /##\s*Concept\s+of\s+Content\s*##[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+      /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+      /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*[\s\S]*?(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|\n\*\*[A-Za-z]|$)/i,
     ];
     for (const cp of conceptSectionPatterns) {
       brief = brief.replace(cp, '').trim();

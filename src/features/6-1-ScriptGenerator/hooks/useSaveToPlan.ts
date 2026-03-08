@@ -62,9 +62,14 @@ export function useSaveToPlan() {
       }
 
       const { brief: rawBrief, caption: parsedCaption, concept } = parseAIScriptOutput(script);
-      const brief = saveBrief
+      let brief = saveBrief
         ? stripScriptKontenDigitalMarketing(stripBreakdownScriptLabel(rawBrief))
         : rawBrief;
+
+      // Fallback: jika parser mengembalikan brief kosong (mis. format AI tidak standar), pakai seluruh script sebagai brief
+      if (saveBrief && !brief.trim() && script.trim()) {
+        brief = stripScriptKontenDigitalMarketing(stripBreakdownScriptLabel(script.trim()));
+      }
 
       // Use caption from parseAIScriptOutput, fallback to getCaptionFallback when format differs
       const caption = parsedCaption.trim() || getCaptionFallback(script);

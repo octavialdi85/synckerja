@@ -20,20 +20,21 @@ export interface ParseScriptSectionsResult {
 
 /**
  * Find the full concept section (including heading) for boundary extraction.
+ * Only the concept paragraph; stops before **Judul Script**, **Format & Style**, or Breakdown Script table.
  */
 function findConceptSection(script: string): { content: string; startIndex: number; endIndex: number } | null {
   const conceptPatterns: Array<{ pattern: RegExp; fullMatch: RegExp }> = [
     {
-      pattern: /##\s*Concept\s+of\s+Content\s*##\s*\n([\s\S]*?)(?=\n##|\n###|$)/i,
-      fullMatch: /(##\s*Concept\s+of\s+Content\s*##\s*\n[\s\S]*?)(?=\n##|\n###|$)/i,
+      pattern: /##\s*Concept\s+of\s+Content\s*##\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+      fullMatch: /(##\s*Concept\s+of\s+Content\s*##\s*\n[\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
     },
     {
-      pattern: /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n([\s\S]*?)(?=\n##|\n###|$)/i,
-      fullMatch: /(##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n[\s\S]*?)(?=\n##|\n###|$)/i,
+      pattern: /##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
+      fullMatch: /(##\s*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\s*##\s*\n[\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|$)/i,
     },
     {
-      pattern: /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n([\s\S]*?)(?=\n##|\n###|\n\*\*[A-Za-z]|$)/i,
-      fullMatch: /(\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n[\s\S]*?)(?=\n##|\n###|\n\*\*[A-Za-z]|$)/i,
+      pattern: /\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n([\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|\n\*\*[A-Za-z]|$)/i,
+      fullMatch: /(\*\*Konsep\s+Konten(?:\s+Digital\s+Marketing)?\*\*\s*\n[\s\S]*?)(?=\n##|\n###|\n\s*\*\*Judul\s+Script|\n\s*\*\*Format\s|\n\s*Breakdown\s+Script\s+dalam\s+bentuk|\n\*\*[A-Za-z]|$)/i,
     },
   ];
   for (const { fullMatch } of conceptPatterns) {
