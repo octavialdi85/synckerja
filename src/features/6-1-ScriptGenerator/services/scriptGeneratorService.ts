@@ -845,6 +845,19 @@ function buildChatGPTPrompt(request: ScriptGeneratorRequest): string {
     promptParts.push('');
   }
 
+  // STRUKTUR OUTPUT WAJIB - agar Caption dan Concept bisa di-save di popup Save to Plan / Brief Content
+  promptParts.push('**⚠️ STRUKTUR OUTPUT WAJIB (untuk Save to Plan / Brief Content):**');
+  promptParts.push('================================================================');
+  promptParts.push('1. CAPTION: Script HARUS memuat tepat satu blok CAPTION dengan format PERSIS seperti berikut (judul di baris sendiri, teks caption di baris berikutnya):');
+  promptParts.push('   ## CAPTION ##');
+  promptParts.push('   [teks caption singkat dan padat di sini, maksimal 50 kata]');
+  promptParts.push('   Jangan gunakan variasi lain (mis. hanya "Caption:" tanpa ##). Tanpa blok ini, Caption tidak bisa disimpan ke plan.');
+  promptParts.push('');
+  promptParts.push('2. KONSEP (jika ada): Jika script menyertakan konsep, HARUS pakai heading PERSIS salah satu: ## Konsep Konten ## atau ## Concept of Content ## di baris sendiri, lalu baris baru, lalu isi paragraf konsep. Tanpa heading ini, Concept tidak bisa disimpan ke plan.');
+  promptParts.push('');
+  promptParts.push('3. Urutan akhir script: ... [tabel breakdown] ... lalu baris kosong, lalu ## CAPTION ##, lalu teks caption, lalu (opsional) ## Struktur ## atau **⚠️ HASHTAG** dan hashtag. Return HANYA script lengkap, tanpa penjelasan.');
+  promptParts.push('');
+
   return promptParts.join('\n');
 }
 
