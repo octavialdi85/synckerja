@@ -53,6 +53,7 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showApprovalButtons, setShowApprovalButtons] = useState(false);
   const skipNextAutoSaveRef = useRef(false);
+  const prevOpenedRef = useRef<{ isOpen: boolean; socialMediaPlanId?: string }>({ isOpen: false });
 
   const {
     targetAudience: targetAudienceFetched,
@@ -69,7 +70,8 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
     deleteComment
   } = useLinkComments(socialMediaPlanId || '', 'brief');
 
-  // Reset or sync state when dialog opens/closes or data changes
+  // Sync form from props only when dialog first opens or when switching to another plan.
+  // Do not overwrite while modal is open for the same plan (avoids refetch/realtime wiping user edits).
   useEffect(() => {
     if (!isOpen) {
       setBriefText('');
@@ -80,17 +82,23 @@ const BriefDialog: React.FC<BriefDialogProps> = ({
       setShowPreview(false);
       setAccordionOpen('brief');
       setBriefViewMode('rendered');
+      prevOpenedRef.current = { isOpen: false };
       return;
     }
-    setBriefText(stripBriefIntroductorySentence(brief || ''));
-    setNewComment('');
-    setShowPreview(false);
-    setAccordionOpen('brief');
-    setTargetAudienceText(targetAudienceProp !== undefined ? (targetAudienceProp ?? '') : '');
-    setCaptionText(captionProp !== undefined ? (captionProp ?? '') : '');
-    setLinkReferenceText(linkReferenceProp !== undefined ? (linkReferenceProp ?? '') : '');
-    skipNextAutoSaveRef.current = true;
-  }, [isOpen, brief, socialMediaPlanId]);
+    const justOpened = !prevOpenedRef.current.isOpen;
+    const planChanged = prevOpenedRef.current.socialMediaPlanId !== socialMediaPlanId;
+    if (justOpened || planChanged) {
+      setBriefText(stripBriefIntroductorySentence(brief || ''));
+      setNewComment('');
+      setShowPreview(false);
+      setAccordionOpen('brief');
+      setTargetAudienceText(targetAudienceProp !== undefined ? (targetAudienceProp ?? '') : '');
+      setCaptionText(captionProp !== undefined ? (captionProp ?? '') : '');
+      setLinkReferenceText(linkReferenceProp !== undefined ? (linkReferenceProp ?? '') : '');
+      skipNextAutoSaveRef.current = true;
+    }
+    prevOpenedRef.current = { isOpen: true, socialMediaPlanId };
+  }, [isOpen, socialMediaPlanId, brief, targetAudienceProp, captionProp, linkReferenceProp]);
 
   // When extended data finishes loading, populate target audience and caption (if not controlled by props)
   useEffect(() => {

@@ -33,6 +33,7 @@ import { useContentPlannerEmployees } from "./hook/useContentPlannerEmployees";
 import { useCreativeProductionEmployees } from "./hook/useCreativeProductionEmployees";
 import { useOptimizedFiltering } from "./hook/useOptimizedFiltering";
 import { useUserData } from "./hook/useUserData";
+import { setBriefModalOpenPlanId } from "./hook/briefModalOpenRef";
 import { useDigitalMarketingEmployees } from "./hook/useDigitalMarketingEmployees";
 import { useCreativeEmployees } from "./hook/useCreativeEmployees";
 import { useCurrentUserRole } from "./hook/useCurrentUserRole";
@@ -138,7 +139,21 @@ const SocialMediaContent = () => {
   const [activeMainTab, setActiveMainTab] = useState("dashboard");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const VALID_STATUS_VALUES = ['all', 'Ready To Post', 'Content Need Review', 'Content Revision', 'Prod Revision', 'Prod Need Review'];
+  const [statusFilter, setStatusFilterState] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && VALID_STATUS_VALUES.includes(fromUrl) ? fromUrl : 'all';
+  });
+  const setStatusFilter = useCallback((value: string) => {
+    const next = value && VALID_STATUS_VALUES.includes(value) ? value : 'all';
+    setStatusFilterState(next);
+    setSearchParams((prev) => {
+      const nextParams = new URLSearchParams(prev);
+      if (next === 'all') nextParams.delete('status');
+      else nextParams.set('status', next);
+      return nextParams;
+    }, { replace: true });
+  }, [setSearchParams]);
   const [serviceFilter, setServiceFilter] = useState("all");
   const [activePerformanceTab, setActivePerformanceTab] = useState("content-planner");
 
@@ -1140,8 +1155,9 @@ const SocialMediaContent = () => {
       if (shouldUpdateStatus) {
         handleFieldChange(briefDialog.id, 'status', 'Need Review');
       }
+      closeBriefDialog();
     }
-  }, [briefDialog.id, handleFieldChange]);
+  }, [briefDialog.id, handleFieldChange, closeBriefDialog]);
 
   // Title Dialog Handlers
   const openTitleDialog = useCallback((id: string, title: string | null, approved?: boolean) => {
@@ -1167,6 +1183,19 @@ const SocialMediaContent = () => {
       handleFieldChange(titleDialog.id, 'title', title);
     }
   }, [titleDialog.id, handleFieldChange]);
+
+  // Apply status/field updates from BriefDialog (e.g. approved, status)
+  const handleBriefStatusUpdate = useCallback((planId: string, updates: Record<string, any>) => {
+    Object.entries(updates).forEach(([field, value]) => {
+      handleFieldChange(planId, field, value);
+    });
+  }, [handleFieldChange]);
+
+  // Signal to realtime hook: skip social_media_plans refetch while Brief modal is open
+  useEffect(() => {
+    setBriefModalOpenPlanId(briefDialog.isOpen && briefDialog.id ? briefDialog.id : null);
+    return () => setBriefModalOpenPlanId(null);
+  }, [briefDialog.isOpen, briefDialog.id]);
 
   return (
     <StandardLayout>
@@ -1290,6 +1319,7 @@ const SocialMediaContent = () => {
                                     onContentPillarDataChange={handleMasterDataChange} 
                                     loading={false}
                                     approvalAccess={approvalAccess}
+                                    hasActiveFilters={statusFilter !== 'all' || serviceFilter !== 'all'}
                                     requestApproval={requestApproval}
                                     handleUnapproval={handleUnapproval}
                                     onCarouselFirstUploadSuccess={handleCarouselFirstUploadSuccess}
@@ -1331,6 +1361,7 @@ const SocialMediaContent = () => {
             brief={briefDialog.brief || ""} 
             onSave={saveBrief}
             socialMediaPlanId={briefDialog.id}
+            onStatusUpdate={handleBriefStatusUpdate}
           />
 
           <TitleDialog 

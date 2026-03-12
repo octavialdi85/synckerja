@@ -136,10 +136,13 @@ export const SocialMediaFilters = React.memo<SocialMediaFiltersProps>(({
           />
         </div>
         <ReviewCommentNotificationBell onOpenPreview={onNotificationPreviewRequest} />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select
+          value={statusFilter && statusFilter !== '' ? statusFilter : 'all'}
+          onValueChange={(value) => setStatusFilter(value || 'all')}
+        >
           <SelectTrigger className="w-48 h-9">
             <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Filter by status" />
+            <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>

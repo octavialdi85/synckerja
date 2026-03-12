@@ -1,5 +1,6 @@
 import React from 'react';
-import { Settings, Shield, Users, Calendar, FileText, Bell, Lock, Sparkles } from 'lucide-react';
+import { Settings, Shield, Users, Calendar, FileText, Bell, Lock, Sparkles, Image, Scan } from 'lucide-react';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface SettingsSidebarProps {
   activeSection: string;
@@ -62,6 +63,20 @@ const settingsSections = [
     description: 'Google Gemini API & rate limit',
     icon: Sparkles,
     status: 'active'
+  },
+  {
+    id: 'asset-digital',
+    title: 'Digital Assets',
+    description: 'Manage digital assets and media library',
+    icon: Image,
+    status: 'active'
+  },
+  {
+    id: 'detect-from-image',
+    titleKey: 'detectFromImage.sidebarTitle',
+    descriptionKey: 'detectFromImage.sidebarDescription',
+    icon: Scan,
+    status: 'active'
   }
 ];
 
@@ -69,11 +84,14 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   activeSection,
   onSectionChange
 }) => {
+  const { t } = useAppTranslation();
   return (
     <div className="space-y-2">
       {settingsSections.map((section) => {
         const IconComponent = section.icon;
         const isActive = activeSection === section.id;
+        const title = 'titleKey' in section && section.titleKey ? t(section.titleKey, 'Detect from Image') : (section as { title?: string }).title ?? '';
+        const description = 'descriptionKey' in section && section.descriptionKey ? t(section.descriptionKey, 'Analyze image: scene or character') : (section as { description?: string }).description ?? '';
         
         return (
           <button
@@ -97,7 +115,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   <h3 className={`text-sm font-medium truncate ${
                     isActive ? 'text-blue-900' : 'text-gray-900'
                   }`}>
-                    {section.title}
+                    {title}
                   </h3>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ml-1 ${
                     section.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -108,7 +126,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 <p className={`text-xs leading-tight ${
                   isActive ? 'text-blue-700' : 'text-gray-600'
                 }`}>
-                  {section.description}
+                  {description}
                 </p>
               </div>
             </div>

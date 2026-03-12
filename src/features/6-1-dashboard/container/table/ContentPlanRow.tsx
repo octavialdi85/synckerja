@@ -14,7 +14,6 @@ import { GoogleDriveLinkCell, PostLinkCell } from './cells/LinkCells';
 import { validateRequiredFields } from './cells/ValidationHelper';
 import GoogleDriveLinkDialog from '../../modal/GoogleDriveLinkDialog';
 import SocialMediaLinksDialog from '../../modal/SocialMediaLinksDialog';
-import BriefDialog from '../../modal/BriefDialog';
 import type { DigitalMarketingEmployee } from '../../hook/useDigitalMarketingEmployees';
 import type { CreativeEmployee } from '../../hook/useCreativeEmployees';
 import { useToast } from '@/features/1-login/hooks/use-toast';
@@ -93,7 +92,6 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 }) => {
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
   const [isSocialLinksDialogOpen, setIsSocialLinksDialogOpen] = useState(false);
-  const [isBriefDialogOpen, setIsBriefDialogOpen] = useState(false);
   const [showApprovalOptions, setShowApprovalOptions] = useState({
     status: true,
     production_status: true
@@ -734,29 +732,11 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
     handleGoogleDriveLinkChange(link);
   };
 
-  // Handle status updates from BriefDialog - REAL-TIME UPDATE
-  const handleBriefStatusUpdate = (planId: string, updates: any) => {
-    devLog.debug('Brief status update - applying real-time:', {
-      planId,
-      updates
-    });
-
-    // Apply updates immediately using the existing onFieldChange callback
-    Object.entries(updates).forEach(([field, value]) => {
-      onFieldChange(planId, field, value);
-    });
-  };
-
-  // Handle Brief Dialog
+  // Open Brief via page-level dialog so modal state survives row unmount/refetch
   const handleBriefClick = () => {
-    // REMOVED: No more content locking
-    setIsBriefDialogOpen(true);
+    onOpenBriefDialog(plan.id, plan.brief);
   };
-  const handleBriefSave = (brief: string) => {
-    onFieldChange(plan.id, 'brief', brief);
-    setIsBriefDialogOpen(false);
-  };
-  
+
   // Only log PIC checks if there's a mismatch (pic_id exists but employee not found)
   if (plan.pic_id && !selectedPIC) {
     logger.rateLimited(`pic-missing:${plan.id}`, 5000, () => {
@@ -1192,9 +1172,6 @@ export const ContentPlanRow = memo<ContentPlanRowProps>(({
 
       {/* Social Media Links Dialog */}
       <SocialMediaLinksDialog isOpen={isSocialLinksDialogOpen} onClose={() => setIsSocialLinksDialogOpen(false)} socialMediaPlanId={plan.id} planTitle={plan.title} />
-
-      {/* Brief Dialog - NOW WITH REAL-TIME STATUS UPDATE */}
-      <BriefDialog isOpen={isBriefDialogOpen} onClose={() => setIsBriefDialogOpen(false)} brief={plan.brief} onSave={handleBriefSave} socialMediaPlanId={plan.id} onStatusUpdate={handleBriefStatusUpdate} />
 
       {/* Auto-create Branding Plan task when approved toggled ON and not exists - uses DailyTaskProvider from dashboard */}
       <CreateTaskDialog

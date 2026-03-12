@@ -34,6 +34,8 @@ interface ContentPlanTableProps {
   onContentPillarDataChange: () => void;
   loading?: boolean;
   approvalAccess?: ApprovalAccess; // Batch-checked approval access from parent
+  /** When true, empty state shows "no match for filters" instead of "no content plans". */
+  hasActiveFilters?: boolean;
   requestApproval?: (plan: ContentPlan, oldStatus: string | null, oldApproved?: boolean, oldCompletionDate?: string | null) => boolean; // Hook untuk approval dengan task step
   handleUnapproval?: (planId: string) => Promise<void>; // Hook untuk un-approval dengan task step deletion
   onCarouselFirstUploadSuccess?: (planId: string) => void; // When first carousel image uploaded, auto-populate PIC Production
@@ -56,6 +58,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onOpenTitleDialog,
   loading = false,
   approvalAccess,
+  hasActiveFilters = false,
   requestApproval,
   handleUnapproval,
   onCarouselFirstUploadSuccess,
@@ -241,7 +244,9 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
           <tbody>
             <tr>
               <td colSpan={24} className="p-8 text-center text-gray-500">
-                No content plans found. Create a new content plan to get started.
+                {hasActiveFilters
+                  ? 'No content plans match the current filters. Try changing Status, Month, or Service.'
+                  : 'No content plans found. Create a new content plan to get started.'}
               </td>
             </tr>
           </tbody>

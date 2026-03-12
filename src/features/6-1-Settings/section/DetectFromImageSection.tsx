@@ -1,0 +1,1616 @@
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Button } from '@/features/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
+import { toast } from 'sonner';
+import { Lightbulb, ImageIcon, Copy, User, Box, Layout, Download, Trash2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/features/ui/command';
+
+export type DesignResult = {
+  headline?: string;
+  sub_headline?: string;
+  main_color?: string;
+  other_colors?: string;
+  text?: string;
+  elements?: string;
+  font?: string;
+  layout_style_description?: string;
+  layout_change_recommendation?: string;
+  character_in_design?: string;
+  product_in_design?: string;
+};
+
+export type CharacterResult = {
+  name?: string;
+  age?: string;
+  nationality?: string;
+  gender?: string;
+  hair_description?: string;
+  face_description?: string;
+  accessories?: string;
+  body_shape?: string;
+  height?: string;
+  additional_details?: string;
+};
+
+export type CharacterSlot = {
+  characterId: string | null;
+  expression: string | null;
+  bodyPose: string | null;
+  handGesture: string | null;
+};
+
+const CHAR_AI = '__ai__';
+
+const EXPRESSION_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: 'happy', labelKey: 'detectFromImage.expressionHappy' },
+  { value: 'sad', labelKey: 'detectFromImage.expressionSad' },
+  { value: 'angry', labelKey: 'detectFromImage.expressionAngry' },
+  { value: 'cool', labelKey: 'detectFromImage.expressionCool' },
+  { value: 'bad_mood', labelKey: 'detectFromImage.expressionBadMood' },
+  { value: 'surprised', labelKey: 'detectFromImage.expressionSurprised' },
+  { value: 'neutral', labelKey: 'detectFromImage.expressionNeutral' },
+  { value: 'excited', labelKey: 'detectFromImage.expressionExcited' },
+  { value: 'confused', labelKey: 'detectFromImage.expressionConfused' },
+  { value: 'thoughtful', labelKey: 'detectFromImage.expressionThoughtful' },
+  { value: 'serious', labelKey: 'detectFromImage.expressionSerious' },
+];
+
+const BODY_POSE_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: 'standing', labelKey: 'detectFromImage.bodyPoseStanding' },
+  { value: 'sitting', labelKey: 'detectFromImage.bodyPoseSitting' },
+  { value: 'walking', labelKey: 'detectFromImage.bodyPoseWalking' },
+  { value: 'running', labelKey: 'detectFromImage.bodyPoseRunning' },
+  { value: 'leaning', labelKey: 'detectFromImage.bodyPoseLeaning' },
+  { value: 'kneeling', labelKey: 'detectFromImage.bodyPoseKneeling' },
+  { value: 'lying_down', labelKey: 'detectFromImage.bodyPoseLyingDown' },
+  { value: 'squatting', labelKey: 'detectFromImage.bodyPoseSquatting' },
+  { value: 'cross_legged', labelKey: 'detectFromImage.bodyPoseCrossLegged' },
+  { value: 'hands_on_knees', labelKey: 'detectFromImage.bodyPoseHandsOnKnees' },
+];
+
+const HAND_GESTURE_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: 'pointing_up', labelKey: 'detectFromImage.handGesturePointingUp' },
+  { value: 'pointing_down', labelKey: 'detectFromImage.handGesturePointingDown' },
+  { value: 'pointing_to_side', labelKey: 'detectFromImage.handGesturePointingToSide' },
+  { value: 'waving', labelKey: 'detectFromImage.handGestureWaving' },
+  { value: 'arms_crossed', labelKey: 'detectFromImage.handGestureArmsCrossed' },
+  { value: 'hands_on_hips', labelKey: 'detectFromImage.handGestureHandsOnHips' },
+  { value: 'thumbs_up', labelKey: 'detectFromImage.handGestureThumbsUp' },
+  { value: 'open_palms', labelKey: 'detectFromImage.handGestureOpenPalms' },
+  { value: 'holding_object', labelKey: 'detectFromImage.handGestureHoldingObject' },
+  { value: 'hand_on_chin', labelKey: 'detectFromImage.handGestureHandOnChin' },
+  { value: 'arms_relaxed', labelKey: 'detectFromImage.handGestureArmsRelaxed' },
+];
+
+const MAX_CHARACTER_SLOTS = 5;
+const MAX_LAYOUT_COMPOSITION_IMAGES = 7;
+
+function emptyCharacterSlot(): CharacterSlot {
+  return { characterId: null, expression: null, bodyPose: null, handGesture: null };
+}
+
+function buildCombinedPrompt(data: {
+  name?: string | null;
+  age?: string | null;
+  gender?: string | null;
+  hair_description?: string | null;
+  face_description?: string | null;
+  additional_details?: string | null;
+}): string {
+  const parts = [
+    data.name,
+    data.age,
+    data.gender,
+    data.hair_description,
+    data.face_description,
+    data.additional_details,
+  ].filter((v) => v != null && String(v).trim() !== '' && String(v).trim() !== '—');
+  return parts.join('\n');
+}
+
+export const DetectFromImageSection: React.FC = () => {
+  const { organizationId } = useCurrentOrg();
+  const { t } = useAppTranslation();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [mode, setMode] = useState<'scene' | 'character' | 'design'>('scene');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [artisticDescription, setArtisticDescription] = useState('');
+  const [characterResult, setCharacterResult] = useState<CharacterResult | null>(null);
+  const [designResult, setDesignResult] = useState<DesignResult | null>(null);
+  const [designCharacters, setDesignCharacters] = useState<{ id: string; name: string | null }[]>([]);
+  const [designObjects, setDesignObjects] = useState<{ id: string; name: string | null }[]>([]);
+  const [designBrands, setDesignBrands] = useState<{
+    id: string;
+    brand_name: string | null;
+    primary_color_hex: string | null;
+    secondary_color_hex: string | null;
+    accent_color_hex: string | null;
+    text_color_hex: string | null;
+  }[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [characterSlots, setCharacterSlots] = useState<CharacterSlot[]>(() => [emptyCharacterSlot()]);
+  const [designReplace, setDesignReplace] = useState<Record<string, string>>({});
+  const [designCompanyLogos, setDesignCompanyLogos] = useState<{ id: string; brand_name: string | null; logo_path: string | null }[]>([]);
+  const [selectedCompanyLogoId, setSelectedCompanyLogoId] = useState<string | null>(null);
+  const [designImageAspectRatio, setDesignImageAspectRatio] = useState<'1:1' | '4:5' | '9:16' | '16:9'>('1:1');
+  const [brandComboboxOpen, setBrandComboboxOpen] = useState(false);
+  const [companyLogoComboboxOpen, setCompanyLogoComboboxOpen] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [layoutCompositionSlots, setLayoutCompositionSlots] = useState<(File | null)[]>(() =>
+    Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, () => null)
+  );
+  const [activeCompositionSlotIndex, setActiveCompositionSlotIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const layoutCompositionInputRef = useRef<HTMLInputElement>(null);
+  const uploadClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const compositionSlotClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const readClipboardAsFile = useCallback((): Promise<File | null> => {
+    if (typeof navigator?.clipboard?.read !== 'function') return Promise.resolve(null);
+    return navigator.clipboard.read().then((items) => {
+      for (const item of items) {
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (type) {
+          return item.getType(type).then((blob) => new File([blob], 'pasted.png', { type }));
+        }
+      }
+      return null;
+    }).catch(() => null);
+  }, []);
+
+  const clearPreview = useCallback(() => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  }, [previewUrl]);
+
+  useEffect(() => {
+    return () => clearPreview();
+  }, [clearPreview]);
+
+  const [layoutCompositionUrls, setLayoutCompositionUrls] = useState<(string | null)[]>(() =>
+    Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, () => null)
+  );
+  useEffect(() => {
+    const urls = layoutCompositionSlots.map((f) => (f ? URL.createObjectURL(f) : null));
+    setLayoutCompositionUrls(urls);
+    return () => {
+      urls.forEach((u) => { if (u) URL.revokeObjectURL(u); });
+    };
+  }, [layoutCompositionSlots]);
+
+  const fetchDesignAssets = useCallback(async () => {
+    if (!organizationId) return;
+    try {
+      const [charRes, objRes, brandRes, logoRes] = await Promise.all([
+        supabase
+          .from('digital_asset_characters')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('digital_asset_objects')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('digital_asset_brand_colors')
+          .select('id, brand_name, primary_color_hex, secondary_color_hex, accent_color_hex, text_color_hex')
+          .eq('organization_id', organizationId)
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('digital_asset_company_logos')
+          .select('id, brand_name, logo_path')
+          .eq('organization_id', organizationId)
+          .order('updated_at', { ascending: false }),
+      ]);
+      if (charRes.error) throw charRes.error;
+      if (objRes.error) throw objRes.error;
+      if (brandRes.error) throw brandRes.error;
+      if (logoRes.error) throw logoRes.error;
+      setDesignCharacters((charRes.data as { id: string; name: string | null }[]) || []);
+      setDesignObjects((objRes.data as { id: string; name: string | null }[]) || []);
+      setDesignBrands(
+        (brandRes.data as {
+          id: string;
+          brand_name: string | null;
+          primary_color_hex: string | null;
+          secondary_color_hex: string | null;
+          accent_color_hex: string | null;
+          text_color_hex: string | null;
+        }[]) || []
+      );
+      setDesignCompanyLogos(
+        (logoRes.data as { id: string; brand_name: string | null; logo_path: string | null }[]) || []
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (organizationId && mode === 'design') {
+      fetchDesignAssets();
+    }
+  }, [organizationId, mode, fetchDesignAssets]);
+
+  const setFile = useCallback(
+    (file: File | null) => {
+      clearPreview();
+      setSelectedFile(file);
+      setArtisticDescription('');
+      setCharacterResult(null);
+      setDesignResult(null);
+      setCharacterSlots([emptyCharacterSlot()]);
+      setSelectedProductId(null);
+      setSelectedBrandId(null);
+      setSelectedCompanyLogoId(null);
+      setDesignReplace({});
+      setGeneratedImageUrl(null);
+      setLayoutCompositionSlots(Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, () => null));
+      if (file) {
+        setPreviewUrl(URL.createObjectURL(file));
+      }
+    },
+    [clearPreview]
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const item = e.clipboardData?.items?.[0];
+      if (item?.kind === 'file' && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) setFile(file);
+      }
+    },
+    [setFile]
+  );
+
+  const handleSlotPaste = useCallback((i: number) => (e: React.ClipboardEvent) => {
+    e.stopPropagation();
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          setLayoutCompositionSlots((prev) => {
+            const next = [...prev];
+            next[i] = file;
+            return next;
+          });
+        }
+        return;
+      }
+    }
+  }, []);
+
+  const handleSlotDrop = useCallback((i: number) => (e: React.DragEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const list = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+    if (!list.length) return;
+    setLayoutCompositionSlots((prev) => {
+      const next = [...prev];
+      next[i] = list[0];
+      return next;
+    });
+  }, []);
+
+  const handleSlotClick = useCallback((i: number) => () => {
+    if (compositionSlotClickTimeoutRef.current) clearTimeout(compositionSlotClickTimeoutRef.current);
+    compositionSlotClickTimeoutRef.current = setTimeout(() => {
+      compositionSlotClickTimeoutRef.current = null;
+      readClipboardAsFile().then((file) => {
+        if (file) setLayoutCompositionSlots((prev) => { const next = [...prev]; next[i] = file; return next; });
+      });
+    }, 250);
+  }, [readClipboardAsFile]);
+
+  const handleSlotDoubleClick = useCallback((i: number) => () => {
+    if (compositionSlotClickTimeoutRef.current) {
+      clearTimeout(compositionSlotClickTimeoutRef.current);
+      compositionSlotClickTimeoutRef.current = null;
+    }
+    setActiveCompositionSlotIndex(i);
+    layoutCompositionInputRef.current?.click();
+  }, []);
+
+  const handleCompositionFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (files.length && activeCompositionSlotIndex !== null) {
+      setLayoutCompositionSlots((prev) => {
+        const next = [...prev];
+        next[activeCompositionSlotIndex] = files[0];
+        return next;
+      });
+      setActiveCompositionSlotIndex(null);
+    }
+  }, [activeCompositionSlotIndex]);
+
+  const removeLayoutCompositionSlot = useCallback((i: number) => {
+    setLayoutCompositionSlots((prev) => {
+      const next = [...prev.slice(0, i), ...prev.slice(i + 1)];
+      return [...next, null].slice(0, MAX_LAYOUT_COMPOSITION_IMAGES);
+    });
+  }, []);
+
+  /* Paste image (Ctrl+V) tanpa perlu klik area upload dulu */
+  useEffect(() => {
+    const onDocumentPaste = (e: ClipboardEvent) => {
+      const target = e.target as Node;
+      if (target && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target as HTMLElement).isContentEditable)) {
+        return;
+      }
+      const item = e.clipboardData?.items?.[0];
+      if (item?.kind === 'file' && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) setFile(file);
+      }
+    };
+    document.addEventListener('paste', onDocumentPaste);
+    return () => document.removeEventListener('paste', onDocumentPaste);
+  }, [setFile]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (file?.type.startsWith('image/')) setFile(file);
+    },
+    [setFile]
+  );
+
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+
+  const getBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.replace(/^data:image\/\w+;base64,/, ''));
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+    });
+
+  const getCompressedImageBase64 = (file: File, maxSize = 1024, quality = 0.8): Promise<{ base64: string; mimeType: string }> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        let width = w;
+        let height = h;
+        if (w > maxSize || h > maxSize) {
+          if (w >= h) {
+            width = maxSize;
+            height = Math.round((h * maxSize) / w);
+          } else {
+            height = maxSize;
+            width = Math.round((w * maxSize) / h);
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(img.src);
+          reject(new Error('Canvas not supported'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const mimeType = 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+        URL.revokeObjectURL(img.src);
+        resolve({ base64, mimeType });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        reject(new Error('Failed to load image'));
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+  const handleStartAnalysis = async () => {
+    if (!selectedFile || !organizationId) {
+      toast.error(t('detectFromImage.errorNoImage', 'Select or paste an image first.'));
+      return;
+    }
+    setIsAnalyzing(true);
+    setArtisticDescription('');
+    setCharacterResult(null);
+    setDesignResult(null);
+    setCharacterSlots([emptyCharacterSlot()]);
+    setSelectedProductId(null);
+    setDesignReplace({});
+    setGeneratedImageUrl(null);
+    try {
+      const base64 = await getBase64(selectedFile);
+      const apiType = mode === 'scene' ? 'scene' : mode === 'character' ? 'character' : 'design';
+      const { data, error } = await supabase.functions.invoke('detect-digital-asset-image', {
+        body: { imageBase64: base64, type: apiType },
+      });
+      if (data?.error) {
+        const msg = String(data.error);
+        if (msg.includes('limit') || msg.includes('429')) {
+          toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+        } else if (msg.includes('config') || msg.includes('Script AI')) {
+          toast.error(t('detectFromImage.errorConfig', 'Script AI config not found. Configure at Settings > Script AI Generator.'));
+        } else {
+          toast.error(msg);
+        }
+        return;
+      }
+      if (error) throw error;
+      if (apiType === 'scene') {
+        setArtisticDescription((data?.description as string) ?? '');
+      } else if (apiType === 'character') {
+        setCharacterResult((data as CharacterResult) ?? null);
+      } else {
+        setGeneratedImageUrl(null);
+        setSelectedBrandId(null);
+        setSelectedCompanyLogoId(null);
+        setDesignResult((data as DesignResult) ?? null);
+        if (data && typeof data === 'object') {
+          const d = data as DesignResult;
+        setDesignReplace({
+          headline: d.headline ?? '',
+          sub_headline: d.sub_headline ?? '',
+          main_color: d.main_color ?? '',
+          other_colors: d.other_colors ?? '',
+          text: d.text ?? '',
+          elements: d.elements ?? '',
+          font: d.font ?? '',
+          layout_style_description: d.layout_style_description ?? '',
+        });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : t('digitalAssets.detectError', 'Image detection failed.'));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleCopyDescription = () => {
+    if (!artisticDescription) return;
+    navigator.clipboard.writeText(artisticDescription);
+    toast.success(t('detectFromImage.successCopy', 'Description copied to clipboard.'));
+  };
+
+  const buildDesignCopyText = (): string => {
+    if (!designResult) return '';
+    const lines: string[] = [];
+    const getValue = (field: keyof DesignResult): string => {
+      const v = designReplace[field] ?? designResult[field];
+      return (v != null ? String(v).trim() : '') ?? '';
+    };
+    const selectedBrand = selectedBrandId ? designBrands.find((b) => b.id === selectedBrandId) : null;
+    const add = (label: string, value: string) => {
+      if (value !== '') lines.push(`${label}: ${value}`);
+    };
+    add(t('detectFromImage.headline', 'Headline'), getValue('headline'));
+    add(t('detectFromImage.subHeadline', 'Sub headline'), getValue('sub_headline'));
+
+    if (selectedBrand != null) {
+      /* Saat brand dipilih: kirim 4 warna dengan peran jelas agar AI pakai semua (termasuk accent) */
+      const primary = (selectedBrand.primary_color_hex ?? '').trim();
+      const secondary = (selectedBrand.secondary_color_hex ?? '').trim();
+      const accent = (selectedBrand.accent_color_hex ?? '').trim();
+      const textColor = (selectedBrand.text_color_hex ?? '').trim();
+      if (primary) lines.push('Primary color (main background/dominant): ' + primary);
+      if (secondary) lines.push('Secondary color: ' + secondary);
+      if (accent) lines.push('Accent color (use for buttons, highlights, call-to-action, icons, and accent elements): ' + accent);
+      if (textColor) lines.push('Text color: ' + textColor);
+      if (primary || secondary || accent || textColor) {
+        lines.push('');
+        lines.push('Use ALL of the above brand colors in the design. Apply accent color visibly for buttons, highlights, or key visual elements.');
+      }
+    } else {
+      const mainColorValue = getValue('main_color');
+      const otherColorsValue = getValue('other_colors');
+      add(t('detectFromImage.mainColor', 'Main color'), mainColorValue);
+      add(t('detectFromImage.otherColors', 'Other colors'), otherColorsValue);
+    }
+
+    add(t('detectFromImage.text', 'Text'), getValue('text'));
+    add(t('detectFromImage.elements', 'Elements'), getValue('elements'));
+    add(t('detectFromImage.font', 'Font'), getValue('font'));
+    const layoutStyleVal = getValue('layout_style_description');
+    if (layoutStyleVal !== '') {
+      lines.push('');
+      lines.push(t('detectFromImage.layoutStyle', 'Layout style'));
+      lines.push(layoutStyleVal);
+    }
+    if (designResult.character_in_design?.trim()) {
+      lines.push('');
+      add(t('detectFromImage.characterInDesign', 'Character in design'), designResult.character_in_design);
+    }
+    if (designResult.product_in_design?.trim()) {
+      lines.push('');
+      add(t('detectFromImage.productInDesign', 'Product in design'), designResult.product_in_design);
+    }
+    if (selectedProductId) {
+      const name = designObjects.find((o) => o.id === selectedProductId)?.name ?? selectedProductId;
+      lines.push('');
+      lines.push(`${t('detectFromImage.replaceProductWith', 'Replace product with')}: ${name ?? ''}`);
+    }
+    const slotsWithCharacter = characterSlots.filter((s) => s.characterId != null && s.characterId !== '');
+    if (slotsWithCharacter.length > 0) {
+      lines.push('');
+      const getExprLabel = (v: string | null) => (v && v !== CHAR_AI ? EXPRESSION_OPTIONS.find((o) => o.value === v)?.labelKey ?? v : null);
+      const getPoseLabel = (v: string | null) => (v && v !== CHAR_AI ? BODY_POSE_OPTIONS.find((o) => o.value === v)?.labelKey ?? v : null);
+      const getGestureLabel = (v: string | null) => (v && v !== CHAR_AI ? HAND_GESTURE_OPTIONS.find((o) => o.value === v)?.labelKey ?? v : null);
+      slotsWithCharacter.forEach((slot, idx) => {
+        const name = designCharacters.find((c) => c.id === slot.characterId)?.name ?? slot.characterId ?? '';
+        const n = idx + 1;
+        const parts: string[] = [`Character ${n}: ${name}`];
+        const exprL = getExprLabel(slot.expression);
+        if (exprL) parts.push(`Expression: ${t(exprL)}`);
+        const poseL = getPoseLabel(slot.bodyPose);
+        if (poseL) parts.push(`Body pose: ${t(poseL)}`);
+        const gestL = getGestureLabel(slot.handGesture);
+        if (gestL) parts.push(`Hand gesture: ${t(gestL)}`);
+        lines.push(parts.join(', ') + '.');
+      });
+      lines.push('');
+      lines.push(t('detectFromImage.gestureUnspecifiedInstruction', 'Untuk karakter yang tidak ada instruksi gesture, pilih pose yang natural dan sesuai adegan.'));
+    }
+    return lines.join('\n');
+  };
+
+  const handleCopyDesign = () => {
+    const text = buildDesignCopyText();
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toast.success(t('detectFromImage.promptCopied', 'Copied'));
+  };
+
+  const selectedBrandForDisplay = selectedBrandId ? designBrands.find((b) => b.id === selectedBrandId) : null;
+  const displayMainColor = selectedBrandForDisplay
+    ? (selectedBrandForDisplay.primary_color_hex ?? designReplace['main_color'] ?? '')
+    : (designReplace['main_color'] ?? '');
+  const displayOtherColors = selectedBrandForDisplay
+    ? [selectedBrandForDisplay.secondary_color_hex, selectedBrandForDisplay.accent_color_hex, selectedBrandForDisplay.text_color_hex]
+        .filter((s) => s != null && String(s).trim() !== '')
+        .map((s) => String(s).trim())
+        .join('; ')
+    : (designReplace['other_colors'] ?? '');
+
+  const handleGenerateDesignImage = async () => {
+    const characterReferences: { imageBase64: string; mimeType: string }[] = [];
+    const slotsWithCharacter = characterSlots.filter((s) => s.characterId != null && s.characterId !== '');
+
+    for (const slot of slotsWithCharacter) {
+      const characterId = slot.characterId!;
+      const { data: characterRow, error: charError } = await supabase
+        .from('digital_asset_characters')
+        .select('id, name, combined_prompt, reference_image_path')
+        .eq('id', characterId)
+        .single();
+      if (charError || !characterRow) {
+        toast.error(t('digitalAssets.detectError', 'Image generation failed.'));
+        return;
+      }
+      const refPath = (characterRow as { reference_image_path?: string | null }).reference_image_path;
+      if (!refPath || String(refPath).trim() === '') {
+        const name = (characterRow as { name?: string | null }).name;
+        toast.error(
+          t(
+            'detectFromImage.errorCharacterNoReferencePhoto',
+            'Selected character has no reference photo. Add one in Digital Assets > Character.'
+          ) + (name ? ` (${name})` : '')
+        );
+        return;
+      }
+      try {
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from('digital-asset-character-images')
+          .createSignedUrl(refPath, 3600);
+        if (signedError || !signedData?.signedUrl) {
+          toast.error(
+            t('detectFromImage.errorCharacterReferenceLoadFailed', 'Failed to load character reference photo.')
+          );
+          return;
+        }
+        const res = await fetch(signedData.signedUrl);
+        if (!res.ok) {
+          toast.error(
+            t('detectFromImage.errorCharacterReferenceLoadFailed', 'Failed to load character reference photo.')
+          );
+          return;
+        }
+        const blob = await res.blob();
+        const mime = blob.type?.startsWith('image/') ? blob.type : 'image/jpeg';
+        const file = new File([blob], 'character-reference.jpg', { type: mime });
+        const { base64, mimeType } = await getCompressedImageBase64(file, 400, 0.6);
+        characterReferences.push({ imageBase64: base64, mimeType });
+      } catch (err) {
+        console.error(err);
+        toast.error(
+          t('detectFromImage.errorCharacterReferenceLoadFailed', 'Failed to load character reference photo.')
+        );
+        return;
+      }
+    }
+
+    let companyLogoBase64: string | undefined;
+    let companyLogoMimeType: string | undefined;
+    if (selectedCompanyLogoId) {
+      const logoEntry = designCompanyLogos.find((l) => l.id === selectedCompanyLogoId);
+      if (!logoEntry) {
+        toast.error(t('detectFromImage.errorCompanyLogoLoadFailed', 'Failed to load company logo.'));
+        return;
+      }
+      if (!logoEntry.logo_path || String(logoEntry.logo_path).trim() === '') {
+        toast.error(
+          t(
+            'detectFromImage.errorCompanyLogoNoFile',
+            'Selected company logo has no image. Upload a logo in Digital Assets > Company Logo.'
+          )
+        );
+        return;
+      }
+      try {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('digital-asset-company-logos')
+            .createSignedUrl(logoEntry.logo_path, 3600);
+          if (signedError || !signedData?.signedUrl) {
+            toast.error(t('detectFromImage.errorCompanyLogoLoadFailed', 'Failed to load company logo.'));
+            return;
+          }
+          const res = await fetch(signedData.signedUrl);
+          if (!res.ok) {
+            toast.error(t('detectFromImage.errorCompanyLogoLoadFailed', 'Failed to load company logo.'));
+            return;
+          }
+          const blob = await res.blob();
+          const mime = blob.type?.startsWith('image/') ? blob.type : 'image/png';
+          const file = new File([blob], 'company-logo.png', { type: mime });
+          const { base64, mimeType } = await getCompressedImageBase64(file, 512, 0.8);
+          companyLogoBase64 = base64;
+          companyLogoMimeType = mimeType;
+        } catch (err) {
+          console.error(err);
+          toast.error(t('detectFromImage.errorCompanyLogoLoadFailed', 'Failed to load company logo.'));
+          return;
+        }
+    }
+
+    let prompt = buildDesignCopyText();
+    if (!prompt.trim()) {
+      toast.error(t('detectFromImage.errorEmptyPrompt', 'Add at least one "Replace to..." value or select character/product to generate from.'));
+      return;
+    }
+    const shouldSendReference =
+      selectedFile != null && designResult != null && characterReferences.length === 0;
+    if (shouldSendReference) {
+      const referenceInstruction =
+        'The attached image is the reference design. Generate a new image that keeps the same layout, style, and composition. Apply only the following text and color changes. Do not reproduce the reference exactly; create a new image in the same style.\n\n';
+      prompt = referenceInstruction + prompt;
+    }
+    if (characterReferences.length > 0) {
+      const textOnlyInstruction =
+        'Generate an image according to the design description below. ';
+      if (!shouldSendReference) prompt = textOnlyInstruction + prompt;
+    }
+    setIsGeneratingImage(true);
+    try {
+      const body: {
+        prompt: string;
+        aspectRatio: string;
+        referenceImageBase64?: string;
+        referenceImageMimeType?: string;
+        characterReferences?: { imageBase64: string; mimeType: string }[];
+        companyLogoBase64?: string;
+        companyLogoMimeType?: string;
+        compositionReferences?: { imageBase64: string; mimeType: string }[];
+        elementsText?: string;
+        layoutStyleText?: string;
+      } = {
+        prompt,
+        aspectRatio: designImageAspectRatio,
+      };
+      const elementsVal = (designReplace['elements'] ?? '').trim();
+      const layoutStyleVal = (designReplace['layout_style_description'] ?? '').trim();
+      if (elementsVal) body.elementsText = elementsVal;
+      if (layoutStyleVal) body.layoutStyleText = layoutStyleVal;
+      if (shouldSendReference && selectedFile) {
+        const { base64: referenceBase64, mimeType: referenceMimeType } = await getCompressedImageBase64(
+          selectedFile,
+          1024,
+          0.8
+        );
+        body.referenceImageBase64 = referenceBase64;
+        body.referenceImageMimeType = referenceMimeType;
+      }
+      if (characterReferences.length > 0) {
+        body.characterReferences = characterReferences;
+      }
+      if (companyLogoBase64 && companyLogoMimeType) {
+        body.companyLogoBase64 = companyLogoBase64;
+        body.companyLogoMimeType = companyLogoMimeType;
+      }
+      const filledSlots = layoutCompositionSlots.filter((f): f is File => f != null);
+      if (filledSlots.length > 0) {
+        const compositionReferences: { imageBase64: string; mimeType: string }[] = [];
+        for (const file of filledSlots) {
+          const { base64: imageBase64, mimeType } = await getCompressedImageBase64(file, 1024, 0.8);
+          compositionReferences.push({ imageBase64, mimeType });
+        }
+        body.compositionReferences = compositionReferences;
+      }
+      const { data, error } = await supabase.functions.invoke('generate-design-image', {
+        body,
+      });
+      if (data?.error) {
+        const msg = String(data.error);
+        if (msg.includes('limit') || msg.includes('429')) {
+          toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+        } else if (msg.includes('config') || msg.includes('Script AI')) {
+          toast.error(t('detectFromImage.errorConfig', 'Script AI config not found. Configure at Settings > Script AI Generator.'));
+        } else {
+          toast.error(msg);
+        }
+        return;
+      }
+      if (error) throw error;
+      const base64 = data?.imageBase64;
+      const mimeType = data?.mimeType ?? 'image/png';
+      if (!base64) {
+        toast.error(t('digitalAssets.detectError', 'Image generation failed.'));
+        return;
+      }
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      setGeneratedImageUrl(dataUrl);
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err instanceof Error ? err.message : t('digitalAssets.detectError', 'Image generation failed.');
+      const isFetchFailed =
+        typeof msg === 'string' &&
+        (msg.includes('Failed to send a request') || msg.includes('FunctionsFetchError') || msg.includes('fetch'));
+      if (isFetchFailed) {
+        toast.error(
+          t(
+            'detectFromImage.errorRequestTooLarge',
+            'Request failed (timeout or payload too large). Try a smaller reference image.'
+          )
+        );
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleDownloadGeneratedImage = () => {
+    if (!generatedImageUrl) return;
+    const ext = generatedImageUrl.startsWith('data:image/jpeg') || generatedImageUrl.startsWith('data:image/jpg') ? 'jpg' : 'png';
+    const filename = `design-generated-${Date.now()}.${ext}`;
+    const a = document.createElement('a');
+    a.href = generatedImageUrl;
+    a.download = filename;
+    a.click();
+  };
+
+  const handleSaveToCharacterFromScene = async () => {
+    if (!organizationId || !artisticDescription) return;
+    try {
+      const { error } = await supabase.from('digital_asset_characters').insert({
+        organization_id: organizationId,
+        name: t('detectFromImage.defaultNameFromScene', 'From scene'),
+        additional_details: artisticDescription,
+        age: null,
+        nationality: null,
+        gender: null,
+        hair_description: null,
+        face_description: null,
+        accessories: null,
+        body_shape: null,
+        height: null,
+      });
+      if (error) throw error;
+      toast.success(t('detectFromImage.successSaveCharacter', 'Saved to Character successfully.'));
+    } catch (err) {
+      console.error(err);
+      toast.error(t('digitalAssets.saveError', 'Failed to save.'));
+    }
+  };
+
+  const handleSaveToObject = async () => {
+    if (!organizationId || !artisticDescription) return;
+    try {
+      const { error } = await supabase.from('digital_asset_objects').insert({
+        organization_id: organizationId,
+        name: t('detectFromImage.defaultNameFromScene', 'From scene'),
+        description: artisticDescription,
+      });
+      if (error) throw error;
+      toast.success(t('detectFromImage.successSaveObject', 'Saved to Object successfully.'));
+    } catch (err) {
+      console.error(err);
+      toast.error(t('digitalAssets.saveError', 'Failed to save.'));
+    }
+  };
+
+  const handleSaveCharacterFromExtraction = async () => {
+    if (!organizationId || !characterResult) return;
+    const combinedPromptString = buildCombinedPrompt({
+      name: characterResult.name?.trim().toLowerCase() === 'unknown' ? null : characterResult.name,
+      age: characterResult.age,
+      gender: characterResult.gender,
+      hair_description: characterResult.hair_description,
+      face_description: characterResult.face_description,
+      additional_details: characterResult.additional_details,
+    });
+    const payload = {
+      organization_id: organizationId,
+      name: (characterResult.name?.trim().toLowerCase() === 'unknown' ? null : characterResult.name) ?? null,
+      age: characterResult.age ?? null,
+      nationality: characterResult.nationality ?? null,
+      gender: characterResult.gender ?? null,
+      hair_description: characterResult.hair_description ?? null,
+      face_description: characterResult.face_description ?? null,
+      accessories: characterResult.accessories ?? null,
+      body_shape: characterResult.body_shape ?? null,
+      height: characterResult.height ?? null,
+      additional_details: characterResult.additional_details ?? null,
+      combined_prompt: combinedPromptString || null,
+    };
+    try {
+      const { data: inserted, error: insertError } = await supabase
+        .from('digital_asset_characters')
+        .insert(payload)
+        .select('id')
+        .single();
+      if (insertError) throw insertError;
+      const characterId = inserted?.id;
+      if (!characterId) throw new Error('No id returned');
+
+      if (selectedFile) {
+        const ext = selectedFile.name?.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? '.jpg';
+        const path = `${organizationId}/${characterId}${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('digital-asset-character-images')
+          .upload(path, selectedFile, { upsert: true, contentType: selectedFile.type || 'image/jpeg' });
+        if (uploadError) {
+          console.error(uploadError);
+          toast.success(t('detectFromImage.successSaveCharacter', 'Saved to Character successfully.'));
+          toast.error(t('detectFromImage.imageUploadFailed', 'Character saved but image upload failed.'));
+          return;
+        }
+        const { error: updateError } = await supabase
+          .from('digital_asset_characters')
+          .update({ reference_image_path: path })
+          .eq('id', characterId);
+        if (updateError) {
+          console.error(updateError);
+          toast.success(t('detectFromImage.successSaveCharacter', 'Saved to Character successfully.'));
+          toast.error(t('detectFromImage.imageUploadFailed', 'Character saved but image upload failed.'));
+          return;
+        }
+      }
+      toast.success(t('detectFromImage.successSaveCharacter', 'Saved to Character successfully.'));
+    } catch (err) {
+      console.error(err);
+      toast.error(t('digitalAssets.saveError', 'Failed to save.'));
+    }
+  };
+
+  return (
+    <div className="space-y-4 bg-white text-gray-900 border border-gray-200 rounded-lg p-4">
+      {/* Tips - full width */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-2">
+        <Lightbulb className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-blue-900">{t('detectFromImage.tipsTitle', 'Two analysis modes')}</p>
+          <p className="text-xs text-blue-800 mt-1">{t('detectFromImage.tipsBody', 'Scene Analysis: one long artistic description. Character Extraction: structured data (name, age, gender, hair, face, clothing/detail).')}</p>
+        </div>
+      </div>
+
+      {/* Two columns: Upload (left) | Result (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left column: Upload Image + Mode + Start Analysis */}
+        <div className="space-y-4">
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setFile(f);
+                e.target.value = '';
+              }}
+            />
+            <div
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+              onClick={() => {
+                if (uploadClickTimeoutRef.current) clearTimeout(uploadClickTimeoutRef.current);
+                uploadClickTimeoutRef.current = setTimeout(() => {
+                  uploadClickTimeoutRef.current = null;
+                  readClipboardAsFile().then((file) => { if (file) setFile(file); });
+                }, 250);
+              }}
+              onDoubleClick={() => {
+                if (uploadClickTimeoutRef.current) {
+                  clearTimeout(uploadClickTimeoutRef.current);
+                  uploadClickTimeoutRef.current = null;
+                }
+                fileInputRef.current?.click();
+              }}
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center text-sm text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer min-h-[200px] flex flex-col items-center justify-center"
+            >
+              {previewUrl ? (
+                <div className="space-y-2 w-full flex-1 flex flex-col min-h-0">
+                  <img src={previewUrl} alt="Preview" className="w-full max-h-[320px] min-h-[200px] mx-auto rounded object-contain flex-1" />
+                  <p className="font-medium text-gray-900 truncate px-2 text-sm">{selectedFile?.name}</p>
+                  <p className="text-xs">{t('detectFromImage.pasteOrDrop', 'Paste image here (Ctrl+V) or click to change file')}</p>
+                </div>
+              ) : (
+                <>
+                  <ImageIcon className="h-10 w-10 mx-auto text-gray-400 mb-2" />
+                  <p>{t('detectFromImage.pasteOrDrop', 'Paste image here (Ctrl+V) or click Choose File')}</p>
+                  <p className="text-xs mt-1 text-gray-500">{t('detectFromImage.singleClickPasteDoubleClickFile', 'Single click to paste from clipboard, double-click to choose file.')}</p>
+                  <p className="text-xs mt-1 text-gray-500">{t('detectFromImage.pasteWorksAnywhere', 'Ctrl+V works from anywhere on this page — no need to click here first.')}</p>
+                  <p className="text-xs mt-1 text-gray-500">{t('detectFromImage.noFileChosen', 'No file chosen')}</p>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border-2 border-slate-300 bg-white shadow-md overflow-hidden">
+            <div className="px-4 py-3 border-b-2 border-slate-300 bg-slate-100">
+              <h4 className="text-sm font-semibold text-slate-800">{t('detectFromImage.modeTitle', 'Select Analysis Mode')}</h4>
+              <p className="text-xs text-slate-600 mt-0.5">{t('detectFromImage.modeTitleHint', 'Pilih mode lalu klik Start Analysis.')}</p>
+            </div>
+            <div className="p-4 space-y-4 bg-white">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('scene')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    mode === 'scene' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <Box className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{t('detectFromImage.modeScene', 'Scene Analysis')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('character')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    mode === 'character' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <User className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{t('detectFromImage.modeCharacter', 'Character Extraction')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('design')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    mode === 'design' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <Layout className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{t('detectFromImage.modeDesign', 'Design Extraction')}</span>
+                </button>
+              </div>
+              <Button
+                type="button"
+                onClick={handleStartAnalysis}
+                disabled={!selectedFile || isAnalyzing}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isAnalyzing ? (
+                  <span className="animate-pulse">{t('digitalAssets.detecting', 'Detecting...')}</span>
+                ) : (
+                  t('detectFromImage.startAnalysis', 'Start Analysis')
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {designResult && (
+            <>
+              {/* Section: Teks & Headline */}
+              <div className="rounded-xl border-2 border-slate-300 bg-white shadow-md overflow-hidden">
+                <div className="px-4 py-3 border-b-2 border-slate-300 bg-slate-100">
+                  <h5 className="text-sm font-semibold text-slate-800">{t('detectFromImage.textContentSection', 'Teks & Headline')}</h5>
+                  <p className="text-xs text-slate-600 mt-0.5">{t('detectFromImage.textContentSectionHint', 'Edit teks di bawah untuk hasil generate gambar.')}</p>
+                </div>
+                <div className="p-4 space-y-5 bg-white">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.headline', 'Headline')}</label>
+                    <div className="text-xs text-gray-500 bg-slate-100 rounded-md px-3 py-2 border border-slate-200">
+                      <span className="line-clamp-1" title={designResult.headline ?? ''}>{designResult.headline ?? '—'}</span>
+                    </div>
+                    <input
+                      value={designReplace['headline'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, headline: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      className="w-full rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.subHeadline', 'Sub headline')}</label>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 max-h-12 overflow-y-auto">
+                      <span className="line-clamp-2" title={designResult.sub_headline ?? ''}>{designResult.sub_headline ?? '—'}</span>
+                    </div>
+                    <textarea
+                      value={designReplace['sub_headline'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, sub_headline: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      rows={2}
+                      className="w-full min-h-[72px] rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-y"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.text', 'Text')}</label>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 max-h-12 overflow-y-auto">
+                      <span className="line-clamp-2" title={designResult.text ?? ''}>{designResult.text ?? '—'}</span>
+                    </div>
+                    <textarea
+                      value={designReplace['text'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, text: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      rows={3}
+                      className="w-full min-h-[80px] rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-y"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: Warna & Brand */}
+              <div className="rounded-xl border-2 border-slate-300 bg-white shadow-md overflow-hidden">
+                <div className="px-4 py-3 border-b-2 border-slate-300 bg-slate-100">
+                  <h5 className="text-sm font-semibold text-slate-800">{t('detectFromImage.colorsAndBrandSection', 'Warna & Brand')}</h5>
+                  <p className="text-xs text-slate-600 mt-0.5">{t('detectFromImage.colorsAndBrandSectionHint', 'Pilih brand untuk pakai warna brand, atau isi manual Main color & Other colors.')}</p>
+                </div>
+                <div className="p-4 space-y-4 bg-white">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.useBrand', 'Gunakan Brand')}</label>
+                    <Popover open={brandComboboxOpen} onOpenChange={setBrandComboboxOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={brandComboboxOpen}
+                          className="w-full justify-between text-sm text-gray-700 border-gray-200"
+                        >
+                          <span className="truncate">
+                            {selectedBrandId
+                              ? designBrands.find((b) => b.id === selectedBrandId)?.brand_name ?? selectedBrandId
+                              : t('detectFromImage.noBrandSelected', 'No brand selected')}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-60 p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder={t('detectFromImage.searchBrandPlaceholder', 'Search brand...')} className="h-8 text-xs" />
+                          <CommandList>
+                            <CommandEmpty>{t('digitalAssets.noBrandColors', 'No brand colors yet.')}</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="__none__"
+                                onSelect={() => {
+                                  setSelectedBrandId(null);
+                                  setBrandComboboxOpen(false);
+                                }}
+                              >
+                                <span className="text-xs">{t('detectFromImage.noBrandOption', '— Tidak pilih —')}</span>
+                              </CommandItem>
+                              {designBrands.map((b) => (
+                                <CommandItem
+                                  key={b.id}
+                                  value={b.brand_name ?? b.id}
+                                  onSelect={() => {
+                                    setSelectedBrandId(b.id);
+                                    setBrandComboboxOpen(false);
+                                  }}
+                                >
+                                  <span className="text-xs truncate">{b.brand_name ?? b.id}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {selectedBrandId && selectedBrandForDisplay ? (
+                    <div className="space-y-2 pt-3 border-t-2 border-slate-200">
+                      <p className="text-xs font-semibold text-gray-600">{t('detectFromImage.brandColorsFrom', 'Warna dari brand')}: {selectedBrandForDisplay.brand_name ?? '—'}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color') },
+                          { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color') },
+                          { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color') },
+                          { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color') },
+                        ].map(({ key, label }) => {
+                          const hex = selectedBrandForDisplay[key] ?? '';
+                          return (
+                            <div key={key} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
+                              <span className="flex-shrink-0 w-8 h-8 rounded-md border border-gray-200" style={{ backgroundColor: hex || '#e5e7eb' }} title={hex || ''} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-gray-700 truncate">{label}</p>
+                                <p className="text-xs text-gray-500 font-mono truncate">{hex || '—'}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.mainColor', 'Main color')}</label>
+                        <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 mb-1">
+                          <span className="line-clamp-1" title={designResult.main_color ?? ''}>{designResult.main_color ?? '—'}</span>
+                        </div>
+                        <input
+                          value={displayMainColor}
+                          onChange={(e) => setDesignReplace((prev) => ({ ...prev, main_color: e.target.value }))}
+                          placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.otherColors', 'Other colors')}</label>
+                        <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 mb-1">
+                          <span className="line-clamp-1" title={designResult.other_colors ?? ''}>{designResult.other_colors ?? '—'}</span>
+                        </div>
+                        <input
+                          value={displayOtherColors}
+                          onChange={(e) => setDesignReplace((prev) => ({ ...prev, other_colors: e.target.value }))}
+                          placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-1.5 pt-3 border-t-2 border-slate-200">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.useCompanyLogo', 'Use Company Logo')}</label>
+                    <Popover open={companyLogoComboboxOpen} onOpenChange={setCompanyLogoComboboxOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={companyLogoComboboxOpen}
+                          className="w-full justify-between text-sm text-gray-700 border-gray-200"
+                        >
+                          <span className="truncate">
+                            {selectedCompanyLogoId
+                              ? designCompanyLogos.find((l) => l.id === selectedCompanyLogoId)?.brand_name ?? selectedCompanyLogoId
+                              : t('detectFromImage.noCompanyLogoSelected', 'No company logo selected')}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-60 p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder={t('detectFromImage.searchCompanyLogoPlaceholder', 'Search company logo...')} className="h-8 text-xs" />
+                          <CommandList>
+                            <CommandEmpty>{t('digitalAssets.noCompanyLogos', 'No company logos yet.')}</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="__none__"
+                                onSelect={() => {
+                                  setSelectedCompanyLogoId(null);
+                                  setCompanyLogoComboboxOpen(false);
+                                }}
+                              >
+                                <span className="text-xs">{t('detectFromImage.noCompanyLogoOption', '— Tidak pilih —')}</span>
+                              </CommandItem>
+                              {designCompanyLogos.map((l) => (
+                                <CommandItem
+                                  key={l.id}
+                                  value={l.brand_name ?? l.id}
+                                  onSelect={() => {
+                                    setSelectedCompanyLogoId(l.id);
+                                    setCompanyLogoComboboxOpen(false);
+                                  }}
+                                >
+                                  <span className="text-xs truncate">{l.brand_name ?? l.id}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Right column: Description / Character Result */}
+        <div className="min-h-[280px] flex flex-col">
+          {artisticDescription ? (
+            <div className="border border-gray-200 rounded-lg p-4 space-y-3 flex-1 flex flex-col">
+              <h4 className="text-sm font-semibold text-gray-900">{t('detectFromImage.resultArtistic', 'Artistic Description Result')}</h4>
+              <textarea
+                readOnly
+                value={artisticDescription}
+                className="w-full min-h-[180px] flex-1 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900"
+                rows={8}
+              />
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button type="button" variant="outline" size="sm" onClick={handleCopyDescription} className="border-gray-300">
+                  <Copy className="h-4 w-4 mr-2" />
+                  {t('detectFromImage.copyDescription', 'Copy Description')}
+                </Button>
+                <Button type="button" size="sm" onClick={handleSaveToCharacterFromScene} className="bg-blue-600 hover:bg-blue-700">
+                  <User className="h-4 w-4 mr-2" />
+                  {t('detectFromImage.saveToCharacter', 'Save to Character')}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={handleSaveToObject} className="border-gray-300">
+                  <Box className="h-4 w-4 mr-2" />
+                  {t('detectFromImage.saveToObject', 'Save to Object')}
+                </Button>
+              </div>
+            </div>
+          ) : characterResult ? (
+            <div className="border border-gray-200 rounded-lg p-4 space-y-3 flex-1 flex flex-col">
+              <h4 className="text-sm font-semibold text-gray-900">{t('detectFromImage.resultCharacter', 'Character Data Result')}</h4>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm flex-1">
+                <div>
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.characterName', 'Name (Suggestion)')}</dt>
+                  <dd className="text-gray-900">{characterResult.name && characterResult.name.trim().toLowerCase() !== 'unknown' ? characterResult.name : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.age', 'Age')}</dt>
+                  <dd className="text-gray-900">{characterResult.age ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.gender', 'Gender')}</dt>
+                  <dd className="text-gray-900">{characterResult.gender ?? '—'}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.hair', 'Hair')}</dt>
+                  <dd className="text-gray-900">{characterResult.hair_description ?? '—'}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.face', 'Face')}</dt>
+                  <dd className="text-gray-900">{characterResult.face_description ?? '—'}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.clothingDetail', 'Clothing/Detail')}</dt>
+                  <dd className="text-gray-900">{characterResult.additional_details ?? '—'}</dd>
+                </div>
+              </dl>
+              {/* Prompt gabungan (versi 2) */}
+              {(() => {
+                const combinedPrompt = buildCombinedPrompt({
+                  name: characterResult.name && characterResult.name.trim().toLowerCase() !== 'unknown' ? characterResult.name : null,
+                  age: characterResult.age,
+                  gender: characterResult.gender,
+                  hair_description: characterResult.hair_description,
+                  face_description: characterResult.face_description,
+                  additional_details: characterResult.additional_details,
+                });
+                return combinedPrompt ? (
+                  <div className="space-y-2 pt-4 border-t-2 border-slate-300">
+                    <h4 className="text-sm font-semibold text-gray-900">{t('detectFromImage.combinedPromptTitle', 'Combined prompt')}</h4>
+                    <textarea
+                      readOnly
+                      value={combinedPrompt}
+                      className="w-full min-h-[100px] rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900"
+                      rows={6}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-300"
+                      onClick={() => {
+                        navigator.clipboard.writeText(combinedPrompt);
+                        toast.success(t('detectFromImage.promptCopied', 'Copied'));
+                      }}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      {t('detectFromImage.copyPrompt', 'Copy prompt')}
+                    </Button>
+                  </div>
+                ) : null;
+              })()}
+              <Button type="button" size="sm" onClick={handleSaveCharacterFromExtraction} className="bg-blue-600 hover:bg-blue-700 mt-2">
+                <User className="h-4 w-4 mr-2" />
+                {t('detectFromImage.saveToCharacter', 'Save to Character')}
+              </Button>
+            </div>
+          ) : designResult ? (
+            <div className="border-2 border-slate-300 rounded-xl p-4 space-y-4 flex-1 flex flex-col overflow-auto bg-slate-50/50">
+              <h4 className="text-sm font-semibold text-slate-800 pb-2 border-b-2 border-slate-300">{t('detectFromImage.resultDesign', 'Design Extraction Result')}</h4>
+
+              {/* Section: Font, Elements & Composition — urutan: Font → Elements → Composition */}
+              <div className="rounded-xl border-2 border-slate-300 bg-white shadow-md overflow-hidden">
+                <div className="px-4 py-3 border-b-2 border-slate-300 bg-slate-100">
+                  <h5 className="text-sm font-semibold text-slate-800">{t('detectFromImage.fontElementsLayoutSection', 'Font, Elements & Composition')}</h5>
+                  <p className="text-xs text-slate-600 mt-0.5">{t('detectFromImage.fontElementsLayoutSectionHint', 'Edit font, elemen, dan komposisi untuk hasil generate.')}</p>
+                </div>
+                <div className="p-4 space-y-5 bg-white">
+                  {/* 1. Font */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.font', 'Font')}</label>
+                    <div className="text-xs text-gray-500 bg-slate-100 rounded-md px-3 py-2 border border-slate-200">
+                      <span className="line-clamp-2" title={designResult.font ?? ''}>{designResult.font ?? '—'}</span>
+                    </div>
+                    <input
+                      value={designReplace['font'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, font: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      className="w-full rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    />
+                  </div>
+                  {/* 2. Elements */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.elements', 'Elements')}</label>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 max-h-16 overflow-y-auto">
+                      <span className="line-clamp-3" title={designResult.elements ?? ''}>{designResult.elements ?? '—'}</span>
+                    </div>
+                    <textarea
+                      value={designReplace['elements'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, elements: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      rows={3}
+                      className="w-full min-h-[80px] rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-y"
+                    />
+                  </div>
+                  {/* 3. Composition (editable like Elements) — defines composition for single frame/image */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('detectFromImage.layoutStyle', 'Composition')}</label>
+                    <p className="text-xs text-gray-500">{t('detectFromImage.compositionSectionHint', 'Everything in this section defines the composition to be created in a single frame/image.')}</p>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 max-h-16 overflow-y-auto">
+                      <span className="line-clamp-3" title={designResult.layout_style_description ?? ''}>{designResult.layout_style_description ?? '—'}</span>
+                    </div>
+                    {/* Composition & style references: 7 numbered slots */}
+                    <input
+                      ref={layoutCompositionInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleCompositionFileInputChange}
+                    />
+                    <div className="flex flex-row gap-2 items-start flex-wrap">
+                      {Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, (_, i) => (
+                        <div key={i} className="flex-shrink-0 w-[72px] space-y-1">
+                          <label className="block text-xs font-medium text-gray-700 truncate text-center">
+                            {t('detectFromImage.layoutCompositionSlotLabel', 'Gambar ke-{n}', { n: i + 1 }).replace('{n}', String(i + 1))}
+                          </label>
+                          {layoutCompositionSlots[i] == null ? (
+                            <div
+                              data-layout-composition-zone
+                              role="button"
+                              tabIndex={0}
+                              onPaste={handleSlotPaste(i)}
+                              onDrop={handleSlotDrop(i)}
+                              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                              onClick={handleSlotClick(i)}
+                              onDoubleClick={handleSlotDoubleClick(i)}
+                              className="min-h-[56px] rounded-md border-2 border-dashed border-gray-300 bg-gray-50/50 hover:border-gray-400 hover:bg-gray-50 flex items-center justify-center p-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                              title={t('detectFromImage.layoutCompositionSlotHint', 'Paste (Ctrl+V) atau klik/drop') + ' — ' + t('detectFromImage.singleClickPasteDoubleClickFileShort', 'Klik sekali = paste, dua kali = pilih file')}
+                            >
+                              <span className="text-[10px] text-gray-500 text-center leading-tight">
+                                {t('detectFromImage.layoutCompositionSlotHintShort', 'Paste/klik')}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="relative inline-block">
+                              <img
+                                src={layoutCompositionUrls[i] ?? ''}
+                                alt=""
+                                className="w-12 h-12 object-cover rounded border border-gray-200"
+                              />
+                              <button
+                                type="button"
+                                aria-label={t('detectFromImage.removeReference', 'Remove')}
+                                onClick={() => removeLayoutCompositionSlot(i)}
+                                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <textarea
+                      value={designReplace['layout_style_description'] ?? ''}
+                      onChange={(e) => setDesignReplace((prev) => ({ ...prev, layout_style_description: e.target.value }))}
+                      placeholder={t('detectFromImage.replaceWithPlaceholder', 'Ganti dengan...')}
+                      rows={3}
+                      className="w-full min-h-[80px] rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-y"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-4 mt-4 border-t-2 border-slate-300">
+                <p className="text-sm font-semibold text-slate-800">{t('detectFromImage.replaceCharacterWith', 'Replace character with')}</p>
+                {characterSlots.map((slot, index) => (
+                  <div key={index} className="rounded-lg border-2 border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {t('detectFromImage.characterSlotTitle', 'Character {n}', { n: index + 1 }).replace('{n}', String(index + 1))}
+                      </p>
+                      {index > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setCharacterSlots((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="ml-1 text-xs">{t('detectFromImage.removeCharacter', 'Hapus')}</span>
+                        </Button>
+                      )}
+                    </div>
+                    <select
+                      value={slot.characterId ?? ''}
+                      onChange={(e) =>
+                        setCharacterSlots((prev) =>
+                          prev.map((s, i) => (i === index ? { ...s, characterId: e.target.value || null } : s))
+                        )
+                      }
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                    >
+                      <option value="">{t('detectFromImage.noCharacterSelected', '— Tidak pilih —')}</option>
+                      {designCharacters.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
+                      ))}
+                    </select>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.expression', 'Expression')}</label>
+                      <select
+                        value={slot.expression ?? CHAR_AI}
+                        onChange={(e) =>
+                          setCharacterSlots((prev) =>
+                            prev.map((s, i) => (i === index ? { ...s, expression: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                          )
+                        }
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                      >
+                        <option value={CHAR_AI}>{t('detectFromImage.expressionLetAiChoose', '— Biarkan AI pilih —')}</option>
+                        {EXPRESSION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.bodyPose', 'Body pose')}</label>
+                      <select
+                        value={slot.bodyPose ?? CHAR_AI}
+                        onChange={(e) =>
+                          setCharacterSlots((prev) =>
+                            prev.map((s, i) => (i === index ? { ...s, bodyPose: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                          )
+                        }
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                      >
+                        <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
+                        {BODY_POSE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.handGesture', 'Hand gesture')}</label>
+                      <select
+                        value={slot.handGesture ?? CHAR_AI}
+                        onChange={(e) =>
+                          setCharacterSlots((prev) =>
+                            prev.map((s, i) => (i === index ? { ...s, handGesture: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                          )
+                        }
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                      >
+                        <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
+                        {HAND_GESTURE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+                {characterSlots.length < MAX_CHARACTER_SLOTS && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-300 text-gray-700"
+                    onClick={() => setCharacterSlots((prev) => [...prev, emptyCharacterSlot()])}
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    {t('detectFromImage.addCharacter', 'Tambah karakter')}
+                  </Button>
+                )}
+                <p className="text-sm font-semibold text-gray-900 mt-2">{t('detectFromImage.replaceProductWith', 'Replace product with')}</p>
+                <select
+                  value={selectedProductId ?? ''}
+                  onChange={(e) => setSelectedProductId(e.target.value || null)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                >
+                  <option value="">{t('detectFromImage.noProductSelected', '— Tidak pilih —')}</option>
+                  {designObjects.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name ?? o.id}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 pt-4 border-t-2 border-slate-300">
+                <p className="text-sm font-semibold text-gray-900">{t('detectFromImage.aspectRatio', 'Aspect ratio')}</p>
+                <select
+                  value={designImageAspectRatio}
+                  onChange={(e) => setDesignImageAspectRatio((e.target.value as '1:1' | '4:5' | '9:16' | '16:9'))}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                >
+                  <option value="1:1">{t('detectFromImage.aspectRatioSquare', 'Square (1:1)')}</option>
+                  <option value="4:5">{t('detectFromImage.aspectRatio4_5', '4:5')}</option>
+                  <option value="9:16">{t('detectFromImage.aspectRatioPortrait', 'Portrait (9:16)')}</option>
+                  <option value="16:9">{t('detectFromImage.aspectRatioLandscape', 'Landscape (16:9)')}</option>
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleGenerateDesignImage}
+                  disabled={isGeneratingImage || !buildDesignCopyText().trim()}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isGeneratingImage ? t('detectFromImage.generatingImage', 'Generating...') : t('detectFromImage.generateImage', 'Generate image')}
+                </Button>
+              </div>
+              {generatedImageUrl && (
+                <div className="space-y-2 pt-4 border-t-2 border-slate-300">
+                  <img src={generatedImageUrl} alt="Generated design" className="w-full max-w-md rounded-md border border-gray-200 object-contain bg-gray-50" />
+                  <Button type="button" variant="outline" size="sm" onClick={handleDownloadGeneratedImage} className="border-gray-300">
+                    <Download className="h-4 w-4 mr-2" />
+                    {t('detectFromImage.downloadImage', 'Download')}
+                  </Button>
+                </div>
+              )}
+              <Button type="button" variant="outline" size="sm" onClick={handleCopyDesign} className="border-gray-300 mt-2 w-fit">
+                <Copy className="h-4 w-4 mr-2" />
+                {t('detectFromImage.copyDesign', 'Salin')}
+              </Button>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg p-4 flex-1 flex flex-col items-center justify-center text-center text-gray-500 bg-gray-50/50 min-h-[280px]">
+              <p className="text-sm">{t('detectFromImage.resultArtistic', 'Artistic Description Result')}</p>
+              <p className="text-xs mt-1">{t('detectFromImage.resultPlaceholder', 'Artistic description or character extraction result will appear here after you run analysis.')}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

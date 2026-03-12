@@ -30,14 +30,16 @@ function getSupabaseClient(): ReturnType<typeof createClient<Database>> {
     fetch: async (url: RequestInfo | URL, options: RequestInit = {}) => {
       const urlStr = typeof url === 'string' ? url : url instanceof Request ? url.url : (url as URL).href;
       const isAuthRequest = urlStr.includes('/auth/v1/');
+      const isEdgeFunction = urlStr.includes('/functions/v1/');
       // Detect refresh token vs login: refresh_token in URL params or body
       const isRefreshToken = urlStr.includes('grant_type=refresh_token') || 
                             (options.body && typeof options.body === 'string' && options.body.includes('grant_type=refresh_token'));
       // Refresh token: 1 retry on 503/PGRST002 so transient server issues don't expire session immediately
       // Login: longer timeout (40s) and 1 retry on timeout so slow networks can complete
+      // Edge Functions (e.g. generate-design-image): long timeout (120s) so AI image generation can finish
       const isLoginRequest = isAuthRequest && !isRefreshToken;
       const MAX_RETRIES = isRefreshToken ? 1 : (isAuthRequest ? 1 : 1);
-      const TIMEOUT_MS = isRefreshToken ? 18000 : (isAuthRequest ? 40000 : 25000);
+      const TIMEOUT_MS = isRefreshToken ? 18000 : (isEdgeFunction ? 120000 : (isAuthRequest ? 40000 : 25000));
       
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         // Create abort controller for timeout if not already provided

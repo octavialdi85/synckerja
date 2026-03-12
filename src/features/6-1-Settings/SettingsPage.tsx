@@ -8,11 +8,15 @@ import { SettingsSidebar } from './section/SettingsSidebar';
 import { ApprovalAccessSection } from './section/ApprovalAccessSection';
 import { ContentSchedulingSection } from './section/ContentSchedulingSection';
 import { ScriptAIConfigSection } from './section/ScriptAIConfigSection';
+import { DigitalAssetsSection } from './section/DigitalAssetsSection';
+import { DetectFromImageSection } from './section/DetectFromImageSection';
 import { ComingSoonSection } from './section/ComingSoonSection';
 import { ApprovalAccessModal } from './modal/ApprovalAccessModal';
+import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useAppTranslation();
   const [activeSection, setActiveSection] = useState('approval-access');
   const [activeMainTab, setActiveMainTab] = useState('settings');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -170,6 +174,8 @@ export const SettingsPage: React.FC = () => {
     navigate(`/digital-marketing/social-media/${newTab}`);
   };
 
+  const onNavigateToDetectImage = () => setActiveSection('detect-from-image');
+
   const renderContent = () => {
     switch (activeSection) {
       case 'approval-access':
@@ -189,6 +195,10 @@ export const SettingsPage: React.FC = () => {
         );
       case 'scheduling':
         return <ContentSchedulingSection />;
+      case 'asset-digital':
+        return <DigitalAssetsSection onNavigateToDetectImage={onNavigateToDetectImage} />;
+      case 'detect-from-image':
+        return <DetectFromImageSection />;
       case 'script-ai':
         return <ScriptAIConfigSection />;
       default:
@@ -246,11 +256,15 @@ export const SettingsPage: React.FC = () => {
                             <h2 className="text-sm font-semibold text-gray-900 truncate">
                               {activeSection === 'approval-access' ? 'Approval Access' : 
                                activeSection === 'scheduling' ? 'Content Scheduling' : 
+                               activeSection === 'asset-digital' ? 'Digital Assets' : 
+                               activeSection === 'detect-from-image' ? t('detectFromImage.title', 'Detect from Image') :
                                activeSection === 'script-ai' ? 'Script AI Configuration' : 'Settings'}
                             </h2>
                             <p className="text-xs text-gray-500 mt-1">
                               {activeSection === 'approval-access' ? 'Manage approval access configurations' : 
                                activeSection === 'scheduling' ? 'Configure required platforms for content scheduling' : 
+                               activeSection === 'asset-digital' ? 'Manage digital assets and media library' : 
+                               activeSection === 'detect-from-image' ? t('detectFromImage.description', 'Analyze image with AI then save to Character or Object') :
                                activeSection === 'script-ai' ? 'Konfigurasi Google AI API untuk Script Generator' : 
                                'Configure social media settings'}
                             </p>
