@@ -988,9 +988,9 @@ export const DetectFromImageSection: React.FC = () => {
         }
         characterStructuredReferences.push(entry);
 
-        const hasClothesImages = (refs?.clothes?.some((f) => f != null)) ?? false;
-        const hasFootImage = (refs?.foot != null) ?? false;
-        const hasAccessoriesImages = (refs?.accessories?.some((f) => f != null)) ?? false;
+        const hasClothesImages = Boolean(refs?.clothes?.some((f) => f != null));
+        const hasFootImage = refs?.foot != null;
+        const hasAccessoriesImages = Boolean(refs?.accessories?.some((f) => f != null));
         const faceHairParts = [row.hair_description, row.face_description].filter((s) => s != null && String(s).trim() !== '');
         characterTextParts.push({
           faceHair: faceHairParts.length > 0 ? faceHairParts.join(' ') : undefined,
