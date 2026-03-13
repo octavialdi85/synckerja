@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { toast } from 'sonner';
-import { Lightbulb, ImageIcon, Copy, User, Box, Layout, Download, Trash2 } from 'lucide-react';
+import { Lightbulb, ImageIcon, Copy, User, Box, Layout, Download, Trash2, RectangleHorizontal, RectangleVertical, Square } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/features/ui/command';
 
@@ -29,10 +29,11 @@ export type CharacterResult = {
   gender?: string;
   hair_description?: string;
   face_description?: string;
+  clothing_description?: string;
+  additional_details?: string;
   accessories?: string;
   body_shape?: string;
   height?: string;
-  additional_details?: string;
 };
 
 export type CharacterSlot = {
@@ -87,6 +88,35 @@ const HAND_GESTURE_OPTIONS: { value: string; labelKey: string }[] = [
 
 const MAX_CHARACTER_SLOTS = 5;
 const MAX_LAYOUT_COMPOSITION_IMAGES = 7;
+const MAX_CHARACTER_ACCESSORIES = 5;
+
+export type CharacterStructuredRef = {
+  head: File | null;
+  clothes: (File | null)[];
+  logo: File | null;
+  foot: File | null;
+  accessories: (File | null)[];
+  headDescription: string;
+  clothesDescriptions: string[];
+  logoDescription: string;
+  footDescription: string;
+  accessoriesDescriptions: string[];
+};
+
+function emptyCharacterStructuredRef(): CharacterStructuredRef {
+  return {
+    head: null,
+    clothes: [null, null],
+    logo: null,
+    foot: null,
+    accessories: Array.from({ length: MAX_CHARACTER_ACCESSORIES }, () => null),
+    headDescription: '',
+    clothesDescriptions: ['', ''],
+    logoDescription: '',
+    footDescription: '',
+    accessoriesDescriptions: Array.from({ length: MAX_CHARACTER_ACCESSORIES }, () => ''),
+  };
+}
 
 function emptyCharacterSlot(): CharacterSlot {
   return { characterId: null, expression: null, bodyPose: null, handGesture: null };
@@ -98,6 +128,7 @@ function buildCombinedPrompt(data: {
   gender?: string | null;
   hair_description?: string | null;
   face_description?: string | null;
+  clothing_description?: string | null;
   additional_details?: string | null;
 }): string {
   const parts = [
@@ -106,6 +137,7 @@ function buildCombinedPrompt(data: {
     data.gender,
     data.hair_description,
     data.face_description,
+    data.clothing_description,
     data.additional_details,
   ].filter((v) => v != null && String(v).trim() !== '' && String(v).trim() !== '—');
   return parts.join('\n');
@@ -134,10 +166,21 @@ export const DetectFromImageSection: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [characterSlots, setCharacterSlots] = useState<CharacterSlot[]>(() => [emptyCharacterSlot()]);
+  const [characterStructuredRefs, setCharacterStructuredRefs] = useState<CharacterStructuredRef[]>(() => [
+    emptyCharacterStructuredRef(),
+  ]);
+  const [activeCharacterRef, setActiveCharacterRef] = useState<{
+    slotIndex: number;
+    category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories';
+    subIndex: number;
+  } | null>(null);
   const [designReplace, setDesignReplace] = useState<Record<string, string>>({});
   const [designCompanyLogos, setDesignCompanyLogos] = useState<{ id: string; brand_name: string | null; logo_path: string | null }[]>([]);
   const [selectedCompanyLogoId, setSelectedCompanyLogoId] = useState<string | null>(null);
-  const [designImageAspectRatio, setDesignImageAspectRatio] = useState<'1:1' | '4:5' | '9:16' | '16:9'>('1:1');
+  const [designImageAspectRatio, setDesignImageAspectRatio] = useState<'1:1' | '4:5' | '9:16' | '16:9' | 'custom'>('1:1');
+  const [customSizeWidth, setCustomSizeWidth] = useState<string>('');
+  const [customSizeHeight, setCustomSizeHeight] = useState<string>('');
+  const [customSizeUnit, setCustomSizeUnit] = useState<'px' | 'in' | 'mm' | 'cm'>('px');
   const [brandComboboxOpen, setBrandComboboxOpen] = useState(false);
   const [companyLogoComboboxOpen, setCompanyLogoComboboxOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
@@ -148,8 +191,10 @@ export const DetectFromImageSection: React.FC = () => {
   const [activeCompositionSlotIndex, setActiveCompositionSlotIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const layoutCompositionInputRef = useRef<HTMLInputElement>(null);
+  const characterStructuredInputRef = useRef<HTMLInputElement>(null);
   const uploadClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const compositionSlotClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const characterStructuredClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const readClipboardAsFile = useCallback((): Promise<File | null> => {
     if (typeof navigator?.clipboard?.read !== 'function') return Promise.resolve(null);
@@ -185,6 +230,34 @@ export const DetectFromImageSection: React.FC = () => {
       urls.forEach((u) => { if (u) URL.revokeObjectURL(u); });
     };
   }, [layoutCompositionSlots]);
+
+  type CharacterStructuredUrlsItem = { head: string | null; clothes: (string | null)[]; logo: string | null; foot: string | null; accessories: (string | null)[] };
+  const [characterStructuredUrls, setCharacterStructuredUrls] = useState<CharacterStructuredUrlsItem[]>(() => [
+    { head: null, clothes: [null, null], logo: null, foot: null, accessories: Array.from({ length: MAX_CHARACTER_ACCESSORIES }, () => null) },
+  ]);
+  const characterStructuredUrlsRef = useRef<CharacterStructuredUrlsItem[]>([]);
+  useEffect(() => {
+    const toRevoke = characterStructuredUrlsRef.current;
+    const next = characterStructuredRefs.map((ref) => {
+      const head = ref.head ? URL.createObjectURL(ref.head) : null;
+      const clothes = ref.clothes.map((f) => (f ? URL.createObjectURL(f) : null));
+      const logo = ref.logo ? URL.createObjectURL(ref.logo) : null;
+      const foot = ref.foot ? URL.createObjectURL(ref.foot) : null;
+      const accessories = ref.accessories.map((f) => (f ? URL.createObjectURL(f) : null));
+      return { head, clothes, logo, foot, accessories };
+    });
+    characterStructuredUrlsRef.current = next;
+    setCharacterStructuredUrls(next);
+    return () => {
+      toRevoke.forEach((item) => {
+        if (item.head) URL.revokeObjectURL(item.head);
+        item.clothes.forEach((u) => { if (u) URL.revokeObjectURL(u); });
+        if (item.logo) URL.revokeObjectURL(item.logo);
+        if (item.foot) URL.revokeObjectURL(item.foot);
+        item.accessories.forEach((u) => { if (u) URL.revokeObjectURL(u); });
+      });
+    };
+  }, [characterStructuredRefs]);
 
   const fetchDesignAssets = useCallback(async () => {
     if (!organizationId) return;
@@ -249,6 +322,7 @@ export const DetectFromImageSection: React.FC = () => {
       setCharacterResult(null);
       setDesignResult(null);
       setCharacterSlots([emptyCharacterSlot()]);
+      setCharacterStructuredRefs([emptyCharacterStructuredRef()]);
       setSelectedProductId(null);
       setSelectedBrandId(null);
       setSelectedCompanyLogoId(null);
@@ -346,6 +420,118 @@ export const DetectFromImageSection: React.FC = () => {
     });
   }, []);
 
+  const setCharacterStructuredRefFile = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number, file: File | null) => {
+      setCharacterStructuredRefs((prev) => {
+        const next = prev.map((ref, i) => {
+          if (i !== slotIndex) return ref;
+          const nextRef = { ...ref };
+          if (category === 'head') nextRef.head = file;
+          else if (category === 'clothes') {
+            nextRef.clothes = [...nextRef.clothes];
+            nextRef.clothes[subIndex] = file;
+          } else if (category === 'logo') nextRef.logo = file;
+          else if (category === 'foot') nextRef.foot = file;
+          else {
+            nextRef.accessories = [...nextRef.accessories];
+            nextRef.accessories[subIndex] = file;
+          }
+          return nextRef;
+        });
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleCharacterStructuredClick = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number) => () => {
+      if (characterStructuredClickTimeoutRef.current) clearTimeout(characterStructuredClickTimeoutRef.current);
+      characterStructuredClickTimeoutRef.current = setTimeout(() => {
+        characterStructuredClickTimeoutRef.current = null;
+        readClipboardAsFile().then((file) => {
+          if (file) setCharacterStructuredRefFile(slotIndex, category, subIndex, file);
+        });
+      }, 250);
+    },
+    [readClipboardAsFile, setCharacterStructuredRefFile]
+  );
+
+  const handleCharacterStructuredDoubleClick = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number) => () => {
+      if (characterStructuredClickTimeoutRef.current) {
+        clearTimeout(characterStructuredClickTimeoutRef.current);
+        characterStructuredClickTimeoutRef.current = null;
+      }
+      setActiveCharacterRef({ slotIndex, category, subIndex });
+      characterStructuredInputRef.current?.click();
+    },
+    []
+  );
+
+  const handleCharacterStructuredPaste = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number) =>
+      (e: React.ClipboardEvent) => {
+        const item = e.clipboardData?.items?.[0];
+        if (item?.kind === 'file' && item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) setCharacterStructuredRefFile(slotIndex, category, subIndex, file);
+        }
+      },
+    [setCharacterStructuredRefFile]
+  );
+
+  const handleCharacterStructuredDrop = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number) =>
+      (e: React.DragEvent) => {
+        e.preventDefault();
+        const file = e.dataTransfer?.files?.[0];
+        if (file?.type.startsWith('image/')) setCharacterStructuredRefFile(slotIndex, category, subIndex, file);
+      },
+    [setCharacterStructuredRefFile]
+  );
+
+  const handleCharacterStructuredFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (files.length && activeCharacterRef) {
+      const { slotIndex, category, subIndex } = activeCharacterRef;
+      setCharacterStructuredRefFile(slotIndex, category, subIndex, files[0]);
+      setActiveCharacterRef(null);
+    }
+  }, [activeCharacterRef, setCharacterStructuredRefFile]);
+
+  const removeCharacterStructuredRef = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number) => {
+      setCharacterStructuredRefFile(slotIndex, category, subIndex, null);
+    },
+    [setCharacterStructuredRefFile]
+  );
+
+  const setCharacterStructuredRefDescription = useCallback(
+    (slotIndex: number, category: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', subIndex: number, value: string) => {
+      setCharacterStructuredRefs((prev) => {
+        return prev.map((ref, i) => {
+          if (i !== slotIndex) return ref;
+          const nextRef = { ...ref };
+          if (category === 'head') nextRef.headDescription = value;
+          else if (category === 'clothes') {
+            nextRef.clothesDescriptions = [...nextRef.clothesDescriptions];
+            nextRef.clothesDescriptions[subIndex] = value;
+          } else if (category === 'logo') nextRef.logoDescription = value;
+          else if (category === 'foot') nextRef.footDescription = value;
+          else {
+            nextRef.accessoriesDescriptions = [...nextRef.accessoriesDescriptions];
+            nextRef.accessoriesDescriptions[subIndex] = value;
+          }
+          return nextRef;
+        });
+      });
+    },
+    []
+  );
+
   /* Paste image (Ctrl+V) tanpa perlu klik area upload dulu */
   useEffect(() => {
     const onDocumentPaste = (e: ClipboardEvent) => {
@@ -436,6 +622,7 @@ export const DetectFromImageSection: React.FC = () => {
     setCharacterResult(null);
     setDesignResult(null);
     setCharacterSlots([emptyCharacterSlot()]);
+    setCharacterStructuredRefs([emptyCharacterStructuredRef()]);
     setSelectedProductId(null);
     setDesignReplace({});
     setGeneratedImageUrl(null);
@@ -596,26 +783,60 @@ export const DetectFromImageSection: React.FC = () => {
   const handleGenerateDesignImage = async () => {
     const characterReferences: { imageBase64: string; mimeType: string }[] = [];
     const slotsWithCharacter = characterSlots.filter((s) => s.characterId != null && s.characterId !== '');
+    type CharacterRow = {
+      slotIndex: number;
+      id: string;
+      name: string | null;
+      reference_image_path: string | null;
+      hair_description: string | null;
+      face_description: string | null;
+      clothing_description: string | null;
+      accessories: string | null;
+      additional_details: string | null;
+    };
+    const characterRows: CharacterRow[] = [];
 
-    for (const slot of slotsWithCharacter) {
-      const characterId = slot.characterId!;
+    for (let slotIndex = 0; slotIndex < characterSlots.length; slotIndex++) {
+      const slot = characterSlots[slotIndex];
+      if (!slot.characterId || slot.characterId === '') continue;
+      const characterId = slot.characterId;
       const { data: characterRow, error: charError } = await supabase
         .from('digital_asset_characters')
-        .select('id, name, combined_prompt, reference_image_path')
+        .select('id, name, reference_image_path, hair_description, face_description, clothing_description, accessories, additional_details')
         .eq('id', characterId)
         .single();
       if (charError || !characterRow) {
         toast.error(t('digitalAssets.detectError', 'Image generation failed.'));
         return;
       }
-      const refPath = (characterRow as { reference_image_path?: string | null }).reference_image_path;
+      const row = characterRow as {
+        id: string;
+        name: string | null;
+        reference_image_path: string | null;
+        hair_description?: string | null;
+        face_description?: string | null;
+        clothing_description?: string | null;
+        accessories?: string | null;
+        additional_details?: string | null;
+      };
+      characterRows.push({
+        slotIndex,
+        id: row.id,
+        name: row.name,
+        reference_image_path: row.reference_image_path,
+        hair_description: row.hair_description ?? null,
+        face_description: row.face_description ?? null,
+        clothing_description: row.clothing_description ?? null,
+        accessories: row.accessories ?? null,
+        additional_details: row.additional_details ?? null,
+      });
+      const refPath = row.reference_image_path;
       if (!refPath || String(refPath).trim() === '') {
-        const name = (characterRow as { name?: string | null }).name;
         toast.error(
           t(
             'detectFromImage.errorCharacterNoReferencePhoto',
             'Selected character has no reference photo. Add one in Digital Assets > Character.'
-          ) + (name ? ` (${name})` : '')
+          ) + (row.name ? ` (${row.name})` : '')
         );
         return;
       }
@@ -712,12 +933,90 @@ export const DetectFromImageSection: React.FC = () => {
     }
     setIsGeneratingImage(true);
     try {
+      type StructuredRefEntry = {
+        head?: { imageBase64: string; mimeType: string; description?: string };
+        clothes?: Array<{ imageBase64: string; mimeType: string; description?: string }>;
+        logo?: { imageBase64: string; mimeType: string; description?: string };
+        foot?: { imageBase64: string; mimeType: string; description?: string };
+        accessories?: Array<{ imageBase64: string; mimeType: string; description?: string }>;
+      };
+      const characterStructuredReferences: StructuredRefEntry[] = [];
+      const characterTextParts: Array<{
+        faceHair?: string;
+        clothing?: string;
+        foot?: string;
+        accessories?: string;
+      }> = [];
+
+      for (const row of characterRows) {
+        const refs = characterStructuredRefs[row.slotIndex];
+        const entry: StructuredRefEntry = {};
+        if (refs?.head) {
+          const { base64, mimeType } = await getCompressedImageBase64(refs.head, 1024, 0.8);
+          const desc = refs.headDescription?.trim();
+          entry.head = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
+        }
+        if (refs?.clothes?.length) {
+          entry.clothes = [];
+          for (let i = 0; i < refs.clothes.length; i++) {
+            const f = refs.clothes[i];
+            if (!f) continue;
+            const { base64, mimeType } = await getCompressedImageBase64(f, 1024, 0.8);
+            const desc = refs.clothesDescriptions?.[i]?.trim();
+            entry.clothes.push({ imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) });
+          }
+        }
+        if (refs?.logo) {
+          const { base64, mimeType } = await getCompressedImageBase64(refs.logo, 1024, 0.8);
+          const desc = refs.logoDescription?.trim();
+          entry.logo = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
+        }
+        if (refs?.foot) {
+          const { base64, mimeType } = await getCompressedImageBase64(refs.foot, 1024, 0.8);
+          const desc = refs.footDescription?.trim();
+          entry.foot = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
+        }
+        if (refs?.accessories?.length) {
+          entry.accessories = [];
+          for (let i = 0; i < refs.accessories.length; i++) {
+            const f = refs.accessories[i];
+            if (!f) continue;
+            const { base64, mimeType } = await getCompressedImageBase64(f, 1024, 0.8);
+            const desc = refs.accessoriesDescriptions?.[i]?.trim();
+            entry.accessories.push({ imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) });
+          }
+        }
+        characterStructuredReferences.push(entry);
+
+        const hasClothesImages = (refs?.clothes?.some((f) => f != null)) ?? false;
+        const hasFootImage = (refs?.foot != null) ?? false;
+        const hasAccessoriesImages = (refs?.accessories?.some((f) => f != null)) ?? false;
+        const faceHairParts = [row.hair_description, row.face_description].filter((s) => s != null && String(s).trim() !== '');
+        characterTextParts.push({
+          faceHair: faceHairParts.length > 0 ? faceHairParts.join(' ') : undefined,
+          clothing: hasClothesImages ? undefined : (row.clothing_description?.trim() || undefined),
+          foot: hasFootImage ? undefined : (row.additional_details?.trim() || undefined),
+          accessories: hasAccessoriesImages ? undefined : (row.accessories?.trim() || undefined),
+        });
+      }
+
       const body: {
         prompt: string;
         aspectRatio: string;
+        customWidth?: number;
+        customHeight?: number;
+        customUnit?: string;
         referenceImageBase64?: string;
         referenceImageMimeType?: string;
         characterReferences?: { imageBase64: string; mimeType: string }[];
+        characterStructuredReferences?: Array<{
+          head?: { imageBase64: string; mimeType: string; description?: string };
+          clothes?: Array<{ imageBase64: string; mimeType: string; description?: string }>;
+          logo?: { imageBase64: string; mimeType: string; description?: string };
+          foot?: { imageBase64: string; mimeType: string; description?: string };
+          accessories?: Array<{ imageBase64: string; mimeType: string; description?: string }>;
+        }>;
+        characterTextParts?: Array<{ faceHair?: string; clothing?: string; foot?: string; accessories?: string }>;
         companyLogoBase64?: string;
         companyLogoMimeType?: string;
         compositionReferences?: { imageBase64: string; mimeType: string }[];
@@ -727,6 +1026,15 @@ export const DetectFromImageSection: React.FC = () => {
         prompt,
         aspectRatio: designImageAspectRatio,
       };
+      if (designImageAspectRatio === 'custom') {
+        const w = Number(customSizeWidth);
+        const h = Number(customSizeHeight);
+        if (Number.isFinite(w) && w >= 1 && w <= 99999 && Number.isFinite(h) && h >= 1 && h <= 99999) {
+          body.customWidth = w;
+          body.customHeight = h;
+          body.customUnit = customSizeUnit;
+        }
+      }
       const elementsVal = (designReplace['elements'] ?? '').trim();
       const layoutStyleVal = (designReplace['layout_style_description'] ?? '').trim();
       if (elementsVal) body.elementsText = elementsVal;
@@ -743,6 +1051,12 @@ export const DetectFromImageSection: React.FC = () => {
       if (characterReferences.length > 0) {
         body.characterReferences = characterReferences;
       }
+      if (characterStructuredReferences.length > 0) {
+        body.characterStructuredReferences = characterStructuredReferences;
+      }
+      if (characterTextParts.length > 0) {
+        body.characterTextParts = characterTextParts;
+      }
       if (companyLogoBase64 && companyLogoMimeType) {
         body.companyLogoBase64 = companyLogoBase64;
         body.companyLogoMimeType = companyLogoMimeType;
@@ -758,6 +1072,8 @@ export const DetectFromImageSection: React.FC = () => {
       }
       const { data, error } = await supabase.functions.invoke('generate-design-image', {
         body,
+        // Perpanjang timeout agar request sampai ke Gemini (generate image bisa 60–120 detik)
+        timeout: 180000, // 3 menit (default client sering 60s)
       });
       if (data?.error) {
         const msg = String(data.error);
@@ -859,6 +1175,7 @@ export const DetectFromImageSection: React.FC = () => {
       gender: characterResult.gender,
       hair_description: characterResult.hair_description,
       face_description: characterResult.face_description,
+      clothing_description: characterResult.clothing_description,
       additional_details: characterResult.additional_details,
     });
     const payload = {
@@ -869,6 +1186,7 @@ export const DetectFromImageSection: React.FC = () => {
       gender: characterResult.gender ?? null,
       hair_description: characterResult.hair_description ?? null,
       face_description: characterResult.face_description ?? null,
+      clothing_description: characterResult.clothing_description ?? null,
       accessories: characterResult.accessories ?? null,
       body_shape: characterResult.body_shape ?? null,
       height: characterResult.height ?? null,
@@ -922,7 +1240,7 @@ export const DetectFromImageSection: React.FC = () => {
         <Lightbulb className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-medium text-blue-900">{t('detectFromImage.tipsTitle', 'Two analysis modes')}</p>
-          <p className="text-xs text-blue-800 mt-1">{t('detectFromImage.tipsBody', 'Scene Analysis: one long artistic description. Character Extraction: structured data (name, age, gender, hair, face, clothing/detail).')}</p>
+          <p className="text-xs text-blue-800 mt-1">{t('detectFromImage.tipsBody', 'Scene Analysis: one long artistic description. Character Extraction: structured data (name, age, gender, hair, face, clothing, detail).')}</p>
         </div>
       </div>
 
@@ -1304,7 +1622,11 @@ export const DetectFromImageSection: React.FC = () => {
                   <dd className="text-gray-900">{characterResult.face_description ?? '—'}</dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-gray-500 font-medium">{t('detectFromImage.clothingDetail', 'Clothing/Detail')}</dt>
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.clothing', 'Clothing')}</dt>
+                  <dd className="text-gray-900">{characterResult.clothing_description ?? '—'}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-gray-500 font-medium">{t('detectFromImage.detail', 'Detail')}</dt>
                   <dd className="text-gray-900">{characterResult.additional_details ?? '—'}</dd>
                 </div>
               </dl>
@@ -1316,6 +1638,7 @@ export const DetectFromImageSection: React.FC = () => {
                   gender: characterResult.gender,
                   hair_description: characterResult.hair_description,
                   face_description: characterResult.face_description,
+                  clothing_description: characterResult.clothing_description,
                   additional_details: characterResult.additional_details,
                 });
                 return combinedPrompt ? (
@@ -1457,89 +1780,197 @@ export const DetectFromImageSection: React.FC = () => {
 
               <div className="space-y-2 pt-4 mt-4 border-t-2 border-slate-300">
                 <p className="text-sm font-semibold text-slate-800">{t('detectFromImage.replaceCharacterWith', 'Replace character with')}</p>
+                <input
+                  ref={characterStructuredInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleCharacterStructuredFileInputChange}
+                />
                 {characterSlots.map((slot, index) => (
                   <div key={index} className="rounded-lg border-2 border-slate-200 bg-slate-50 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-gray-700">
+                      <span className="text-xs font-semibold text-slate-700">
                         {t('detectFromImage.characterSlotTitle', 'Character {n}', { n: index + 1 }).replace('{n}', String(index + 1))}
-                      </p>
+                      </span>
                       {index > 0 && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => setCharacterSlots((prev) => prev.filter((_, i) => i !== index))}
+                          onClick={() => {
+                            setCharacterSlots((prev) => prev.filter((_, i) => i !== index));
+                            setCharacterStructuredRefs((prev) => prev.filter((_, i) => i !== index));
+                          }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           <span className="ml-1 text-xs">{t('detectFromImage.removeCharacter', 'Hapus')}</span>
                         </Button>
                       )}
                     </div>
-                    <select
-                      value={slot.characterId ?? ''}
-                      onChange={(e) =>
-                        setCharacterSlots((prev) =>
-                          prev.map((s, i) => (i === index ? { ...s, characterId: e.target.value || null } : s))
-                        )
-                      }
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                    >
-                      <option value="">{t('detectFromImage.noCharacterSelected', '— Tidak pilih —')}</option>
-                      {designCharacters.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
-                      ))}
-                    </select>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.expression', 'Expression')}</label>
-                      <select
-                        value={slot.expression ?? CHAR_AI}
-                        onChange={(e) =>
-                          setCharacterSlots((prev) =>
-                            prev.map((s, i) => (i === index ? { ...s, expression: e.target.value === CHAR_AI ? null : e.target.value } : s))
-                          )
-                        }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                      >
-                        <option value={CHAR_AI}>{t('detectFromImage.expressionLetAiChoose', '— Biarkan AI pilih —')}</option>
-                        {EXPRESSION_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="min-w-0">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.characterLabel', 'Character')}</label>
+                        <select
+                          value={slot.characterId ?? ''}
+                          onChange={(e) =>
+                            setCharacterSlots((prev) =>
+                              prev.map((s, i) => (i === index ? { ...s, characterId: e.target.value || null } : s))
+                            )
+                          }
+                          className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 min-w-0"
+                        >
+                          <option value="">{t('detectFromImage.noCharacterSelected', '— Tidak pilih —')}</option>
+                          {designCharacters.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-0">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.expression', 'Expression')}</label>
+                        <select
+                          value={slot.expression ?? CHAR_AI}
+                          onChange={(e) =>
+                            setCharacterSlots((prev) =>
+                              prev.map((s, i) => (i === index ? { ...s, expression: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                            )
+                          }
+                          className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 min-w-0"
+                        >
+                          <option value={CHAR_AI}>{t('detectFromImage.expressionLetAiChoose', '— Biarkan AI pilih —')}</option>
+                          {EXPRESSION_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-0">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.bodyPose', 'Body pose')}</label>
+                        <select
+                          value={slot.bodyPose ?? CHAR_AI}
+                          onChange={(e) =>
+                            setCharacterSlots((prev) =>
+                              prev.map((s, i) => (i === index ? { ...s, bodyPose: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                            )
+                          }
+                          className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 min-w-0"
+                        >
+                          <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
+                          {BODY_POSE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-0">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.handGesture', 'Hand gesture')}</label>
+                        <select
+                          value={slot.handGesture ?? CHAR_AI}
+                          onChange={(e) =>
+                            setCharacterSlots((prev) =>
+                              prev.map((s, i) => (i === index ? { ...s, handGesture: e.target.value === CHAR_AI ? null : e.target.value } : s))
+                            )
+                          }
+                          className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 min-w-0"
+                        >
+                          <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
+                          {HAND_GESTURE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.bodyPose', 'Body pose')}</label>
-                      <select
-                        value={slot.bodyPose ?? CHAR_AI}
-                        onChange={(e) =>
-                          setCharacterSlots((prev) =>
-                            prev.map((s, i) => (i === index ? { ...s, bodyPose: e.target.value === CHAR_AI ? null : e.target.value } : s))
-                          )
-                        }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                      >
-                        <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
-                        {BODY_POSE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">{t('detectFromImage.handGesture', 'Hand gesture')}</label>
-                      <select
-                        value={slot.handGesture ?? CHAR_AI}
-                        onChange={(e) =>
-                          setCharacterSlots((prev) =>
-                            prev.map((s, i) => (i === index ? { ...s, handGesture: e.target.value === CHAR_AI ? null : e.target.value } : s))
-                          )
-                        }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                      >
-                        <option value={CHAR_AI}>{t('detectFromImage.gestureLetAiChoose', '— Biarkan AI pilih —')}</option>
-                        {HAND_GESTURE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                        ))}
-                      </select>
+                    {/* Structured reference uploads: Head, Clothes, Logo, Foot, Accessories — vertical layout with instruction per slot */}
+                    <div className="pt-3 border-t border-slate-200 mt-3">
+                      <p className="text-xs font-medium text-slate-600 mb-2">{t('detectFromImage.characterStructuredRefsTitle', 'Referensi (opsional)')}</p>
+                      <div className="flex flex-col gap-3">
+                        {(() => {
+                          const refs = characterStructuredRefs[index];
+                          const urls = characterStructuredUrls[index];
+                          if (!refs || !urls) return null;
+                          const placeholderKey = (cat: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories') => {
+                            if (cat === 'head') return 'detectFromImage.refInstructionHeadPlaceholder';
+                            if (cat === 'clothes') return 'detectFromImage.refInstructionClothesPlaceholder';
+                            if (cat === 'logo') return 'detectFromImage.refInstructionLogoPlaceholder';
+                            if (cat === 'foot') return 'detectFromImage.refInstructionFootPlaceholder';
+                            return 'detectFromImage.refInstructionAccessoriesPlaceholder';
+                          };
+                          const getDescription = (cat: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories', sub: number) => {
+                            if (cat === 'head') return refs.headDescription ?? '';
+                            if (cat === 'clothes') return refs.clothesDescriptions?.[sub] ?? '';
+                            if (cat === 'logo') return refs.logoDescription ?? '';
+                            if (cat === 'foot') return refs.footDescription ?? '';
+                            return refs.accessoriesDescriptions?.[sub] ?? '';
+                          };
+                          const renderRow = (
+                            cat: 'head' | 'clothes' | 'logo' | 'foot' | 'accessories',
+                            sub: number,
+                            label: string,
+                            file: File | null,
+                            url: string | null
+                          ) => {
+                            const isEmpty = !file && !url;
+                            const boxHeight = 56;
+                            return (
+                              <div key={`${cat}-${sub}`} className="space-y-1">
+                                <label className="block text-xs font-medium text-gray-700 truncate">{label}</label>
+                                <div className="flex gap-2 items-stretch" style={{ minHeight: boxHeight }}>
+                                  <div className="flex-shrink-0 w-[72px] flex items-center justify-center rounded-md overflow-hidden" style={{ height: boxHeight }}>
+                                    {isEmpty ? (
+                                      <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onPaste={handleCharacterStructuredPaste(index, cat, sub)}
+                                        onDrop={handleCharacterStructuredDrop(index, cat, sub)}
+                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onClick={handleCharacterStructuredClick(index, cat, sub)}
+                                        onDoubleClick={handleCharacterStructuredDoubleClick(index, cat, sub)}
+                                        className="w-full h-full min-h-[56px] rounded-md border-2 border-dashed border-gray-300 bg-gray-50/50 hover:border-gray-400 hover:bg-gray-50 flex items-center justify-center p-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                        title={t('detectFromImage.layoutCompositionSlotHint', 'Paste (Ctrl+V) atau klik/drop') + ' — ' + t('detectFromImage.singleClickPasteDoubleClickFileShort', 'Klik sekali = paste, dua kali = pilih file')}
+                                      >
+                                        <span className="text-[10px] text-gray-500 text-center leading-tight">
+                                          {t('detectFromImage.layoutCompositionSlotHintShort', 'Paste/klik')}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="relative w-full h-full flex items-center justify-center bg-gray-100 rounded border border-gray-200">
+                                        <img
+                                          src={url ?? ''}
+                                          alt=""
+                                          className="max-w-full max-h-full w-12 h-12 object-cover rounded border border-gray-200"
+                                        />
+                                        <button
+                                          type="button"
+                                          aria-label={t('detectFromImage.removeReference', 'Remove')}
+                                          onClick={() => removeCharacterStructuredRef(index, cat, sub)}
+                                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <textarea
+                                    placeholder={t(placeholderKey(cat))}
+                                    value={getDescription(cat, sub)}
+                                    onChange={(e) => setCharacterStructuredRefDescription(index, cat, sub, e.target.value)}
+                                    className="flex-1 min-w-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-500 resize-y w-full"
+                                    style={{ minHeight: boxHeight, height: boxHeight }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          };
+                          return (
+                            <>
+                              {renderRow('head', 0, t('detectFromImage.characterRefHead', 'Head'), refs.head, urls.head)}
+                              {refs.clothes.map((f, i) => renderRow('clothes', i, t('detectFromImage.characterRefClothesN', 'Clothes {n}', { n: i + 1 }).replace('{n}', String(i + 1)), f, urls.clothes[i] ?? null))}
+                              {renderRow('logo', 0, t('detectFromImage.characterRefLogo', 'Logo'), refs.logo, urls.logo)}
+                              {renderRow('foot', 0, t('detectFromImage.characterRefFoot', 'Foot'), refs.foot, urls.foot)}
+                              {refs.accessories.map((f, i) => renderRow('accessories', i, t('detectFromImage.characterRefAccessoriesN', 'Accessories {n}', { n: i + 1 }).replace('{n}', String(i + 1)), f, urls.accessories[i] ?? null))}
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1549,7 +1980,10 @@ export const DetectFromImageSection: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="border-gray-300 text-gray-700"
-                    onClick={() => setCharacterSlots((prev) => [...prev, emptyCharacterSlot()])}
+                    onClick={() => {
+                      setCharacterSlots((prev) => [...prev, emptyCharacterSlot()]);
+                      setCharacterStructuredRefs((prev) => [...prev, emptyCharacterStructuredRef()]);
+                    }}
                   >
                     <User className="h-4 w-4 mr-2" />
                     {t('detectFromImage.addCharacter', 'Tambah karakter')}
@@ -1571,19 +2005,86 @@ export const DetectFromImageSection: React.FC = () => {
                 <p className="text-sm font-semibold text-gray-900">{t('detectFromImage.aspectRatio', 'Aspect ratio')}</p>
                 <select
                   value={designImageAspectRatio}
-                  onChange={(e) => setDesignImageAspectRatio((e.target.value as '1:1' | '4:5' | '9:16' | '16:9'))}
+                  onChange={(e) => setDesignImageAspectRatio((e.target.value as '1:1' | '4:5' | '9:16' | '16:9' | 'custom'))}
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                 >
                   <option value="1:1">{t('detectFromImage.aspectRatioSquare', 'Square (1:1)')}</option>
                   <option value="4:5">{t('detectFromImage.aspectRatio4_5', '4:5')}</option>
                   <option value="9:16">{t('detectFromImage.aspectRatioPortrait', 'Portrait (9:16)')}</option>
                   <option value="16:9">{t('detectFromImage.aspectRatioLandscape', 'Landscape (16:9)')}</option>
+                  <option value="custom">{t('detectFromImage.aspectRatioCustom', 'Custom')}</option>
                 </select>
+                {designImageAspectRatio === 'custom' && (
+                  <div className="grid grid-cols-3 gap-2 pt-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('detectFromImage.customSizeWidth', 'Lebar')}</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99999}
+                        value={customSizeWidth}
+                        onChange={(e) => setCustomSizeWidth(e.target.value)}
+                        placeholder="1080"
+                        className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('detectFromImage.customSizeHeight', 'Tinggi')}</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99999}
+                        value={customSizeHeight}
+                        onChange={(e) => setCustomSizeHeight(e.target.value)}
+                        placeholder="1920"
+                        className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">{t('detectFromImage.customSizeUnit', 'Unit')}</label>
+                      <select
+                        value={customSizeUnit}
+                        onChange={(e) => setCustomSizeUnit((e.target.value as 'px' | 'in' | 'mm' | 'cm'))}
+                        className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                      >
+                        <option value="px">{t('detectFromImage.customSizeUnitPx', 'px')}</option>
+                        <option value="in">{t('detectFromImage.customSizeUnitIn', 'inci')}</option>
+                        <option value="mm">{t('detectFromImage.customSizeUnitMm', 'mm')}</option>
+                        <option value="cm">{t('detectFromImage.customSizeUnitCm', 'cm')}</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {designImageAspectRatio === 'custom' && (() => {
+                  const w = Number(customSizeWidth);
+                  const h = Number(customSizeHeight);
+                  const valid = Number.isFinite(w) && w >= 1 && w <= 99999 && Number.isFinite(h) && h >= 1 && h <= 99999;
+                  if (!valid) return null;
+                  const isLandscape = w > h;
+                  const isPortrait = h > w;
+                  const isSquare = w === h;
+                  const Icon = isLandscape ? RectangleHorizontal : isPortrait ? RectangleVertical : Square;
+                  const labelKey = isLandscape ? 'detectFromImage.orientationLandscape' : isPortrait ? 'detectFromImage.orientationPortrait' : 'detectFromImage.orientationSquare';
+                  return (
+                    <div className="flex items-center gap-2 pt-1.5 text-sm text-gray-600">
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>{t(labelKey, isLandscape ? 'Landscape' : isPortrait ? 'Portrait' : 'Square')}</span>
+                    </div>
+                  );
+                })()}
                 <Button
                   type="button"
                   size="sm"
                   onClick={handleGenerateDesignImage}
-                  disabled={isGeneratingImage || !buildDesignCopyText().trim()}
+                  disabled={
+                    isGeneratingImage ||
+                    !buildDesignCopyText().trim() ||
+                    (designImageAspectRatio === 'custom' &&
+                      (!customSizeWidth.trim() ||
+                        !customSizeHeight.trim() ||
+                        !(Number(customSizeWidth) >= 1 && Number(customSizeWidth) <= 99999) ||
+                        !(Number(customSizeHeight) >= 1 && Number(customSizeHeight) <= 99999)))
+                  }
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {isGeneratingImage ? t('detectFromImage.generatingImage', 'Generating...') : t('detectFromImage.generateImage', 'Generate image')}
@@ -1591,7 +2092,7 @@ export const DetectFromImageSection: React.FC = () => {
               </div>
               {generatedImageUrl && (
                 <div className="space-y-2 pt-4 border-t-2 border-slate-300">
-                  <img src={generatedImageUrl} alt="Generated design" className="w-full max-w-md rounded-md border border-gray-200 object-contain bg-gray-50" />
+                  <img src={generatedImageUrl} alt="Generated design" className="w-full max-w-full rounded-md border border-gray-200 object-contain bg-gray-50" />
                   <Button type="button" variant="outline" size="sm" onClick={handleDownloadGeneratedImage} className="border-gray-300">
                     <Download className="h-4 w-4 mr-2" />
                     {t('detectFromImage.downloadImage', 'Download')}

@@ -18,6 +18,7 @@ export interface DigitalAssetCharacter {
   gender: string | null;
   hair_description: string | null;
   face_description: string | null;
+  clothing_description: string | null;
   accessories: string | null;
   body_shape: string | null;
   height: string | null;
@@ -65,6 +66,7 @@ const emptyCharacterForm = (): Partial<DigitalAssetCharacter> => ({
   gender: '',
   hair_description: '',
   face_description: '',
+  clothing_description: '',
   accessories: '',
   body_shape: '',
   height: '',
@@ -97,6 +99,7 @@ function buildCombinedPromptFromForm(data: {
   gender?: string | null;
   hair_description?: string | null;
   face_description?: string | null;
+  clothing_description?: string | null;
   additional_details?: string | null;
 }): string {
   const parts = [
@@ -105,6 +108,7 @@ function buildCombinedPromptFromForm(data: {
     data.gender,
     data.hair_description,
     data.face_description,
+    data.clothing_description,
     data.additional_details,
   ].filter((v) => v != null && String(v).trim() !== '' && String(v).trim() !== '—');
   return parts.join('\n');
@@ -355,6 +359,7 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
         gender: characterForm.gender ?? null,
         hair_description: characterForm.hair_description ?? null,
         face_description: characterForm.face_description ?? null,
+        clothing_description: characterForm.clothing_description ?? null,
         accessories: characterForm.accessories ?? null,
         body_shape: characterForm.body_shape ?? null,
         height: characterForm.height ?? null,
@@ -393,6 +398,7 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
       gender: c.gender ?? '',
       hair_description: c.hair_description ?? '',
       face_description: c.face_description ?? '',
+      clothing_description: c.clothing_description ?? '',
       accessories: c.accessories ?? '',
       body_shape: c.body_shape ?? '',
       height: c.height ?? '',
@@ -846,11 +852,21 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
                 </div>
               </div>
               <div>
-                <Label className="text-gray-700">{t('digitalAssets.additionalDetails', 'Additional Details')}</Label>
+                <Label className="text-gray-700">{t('digitalAssets.clothing', 'Clothing')}</Label>
+                <textarea
+                  value={characterForm.clothing_description ?? ''}
+                  onChange={(e) => setCharacterForm((f) => ({ ...f, clothing_description: e.target.value }))}
+                  placeholder={t('digitalAssets.clothingPlaceholder', 'What the character is wearing...')}
+                  className="mt-1 w-full min-h-[80px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <Label className="text-gray-700">{t('digitalAssets.detail', 'Detail')}</Label>
                 <textarea
                   value={characterForm.additional_details ?? ''}
                   onChange={(e) => setCharacterForm((f) => ({ ...f, additional_details: e.target.value }))}
-                  placeholder={t('digitalAssets.additionalDetailsPlaceholder', 'Clothing, special features, or other info...')}
+                  placeholder={t('digitalAssets.detailPlaceholder', 'Setting, background, special features, other notes...')}
                   className="mt-1 w-full min-h-[80px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                   rows={3}
                 />

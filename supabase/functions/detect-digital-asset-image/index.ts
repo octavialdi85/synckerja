@@ -16,10 +16,11 @@ const CHARACTER_PROMPT = `Analyze this image of a person/character. Extract and 
 - gender: (e.g. "Male" or "Female")
 - hair_description: detailed hair description
 - face_description: detailed face description
+- clothing_description: what the person is wearing only (clothes, outfit, garments). Do not include setting or background here.
+- additional_details: other details such as setting, background, pose context, special features, props. Do not repeat clothing here.
 - accessories: glasses, jewelry, etc.
 - body_shape: build/body type
 - height: approximate height if visible (e.g. "175cm")
-- additional_details: clothing, special features, other notes
 
 Return ONLY valid JSON, no markdown or extra text.`;
 
