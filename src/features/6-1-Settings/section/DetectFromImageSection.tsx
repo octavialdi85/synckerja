@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 import { toast } from 'sonner';
-import { Lightbulb, ImageIcon, Copy, User, Box, Layout, Download, Trash2, RectangleHorizontal, RectangleVertical, Square } from 'lucide-react';
+import { Lightbulb, ImageIcon, Copy, User, Box, Layout, Download, Trash2, RectangleHorizontal, RectangleVertical, Square, Loader2, RefreshCw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/features/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/features/ui/command';
 
@@ -86,6 +86,29 @@ const HAND_GESTURE_OPTIONS: { value: string; labelKey: string }[] = [
   { value: 'arms_relaxed', labelKey: 'detectFromImage.handGestureArmsRelaxed' },
 ];
 
+const CAMERA_MOVEMENT_OPTIONS: { value: string; labelKey: string; descriptionKey: string }[] = [
+  { value: 'static', labelKey: 'detectFromImage.cameraMovementStatic', descriptionKey: 'detectFromImage.cameraMovementStaticDesc' },
+  { value: 'pan_left_right', labelKey: 'detectFromImage.cameraMovementPan', descriptionKey: 'detectFromImage.cameraMovementPanDesc' },
+  { value: 'tilt_up_down', labelKey: 'detectFromImage.cameraMovementTilt', descriptionKey: 'detectFromImage.cameraMovementTiltDesc' },
+  { value: 'zoom_in', labelKey: 'detectFromImage.cameraMovementZoomIn', descriptionKey: 'detectFromImage.cameraMovementZoomInDesc' },
+  { value: 'zoom_out', labelKey: 'detectFromImage.cameraMovementZoomOut', descriptionKey: 'detectFromImage.cameraMovementZoomOutDesc' },
+  { value: 'dolly_in', labelKey: 'detectFromImage.cameraMovementDollyIn', descriptionKey: 'detectFromImage.cameraMovementDollyInDesc' },
+  { value: 'dolly_out', labelKey: 'detectFromImage.cameraMovementDollyOut', descriptionKey: 'detectFromImage.cameraMovementDollyOutDesc' },
+  { value: 'tracking', labelKey: 'detectFromImage.cameraMovementTracking', descriptionKey: 'detectFromImage.cameraMovementTrackingDesc' },
+  { value: 'crane', labelKey: 'detectFromImage.cameraMovementCrane', descriptionKey: 'detectFromImage.cameraMovementCraneDesc' },
+  { value: 'rotation_360', labelKey: 'detectFromImage.cameraMovement360', descriptionKey: 'detectFromImage.cameraMovement360Desc' },
+  { value: 'pov', labelKey: 'detectFromImage.cameraMovementPOV', descriptionKey: 'detectFromImage.cameraMovementPOVDesc' },
+  { value: 'handheld', labelKey: 'detectFromImage.cameraMovementHandheld', descriptionKey: 'detectFromImage.cameraMovementHandheldDesc' },
+  { value: 'over_shoulder', labelKey: 'detectFromImage.cameraMovementOverShoulder', descriptionKey: 'detectFromImage.cameraMovementOverShoulderDesc' },
+  { value: 'rack_focus', labelKey: 'detectFromImage.cameraMovementRackFocus', descriptionKey: 'detectFromImage.cameraMovementRackFocusDesc' },
+  { value: 'push_in_dramatic', labelKey: 'detectFromImage.cameraMovementPushIn', descriptionKey: 'detectFromImage.cameraMovementPushInDesc' },
+];
+
+/** Master negative prompt (bilingual) appended when copying Scene Analysis super prompt. */
+const SCENE_ANALYSIS_MASTER_NEGATIVE_PROMPT =
+  'DO NOT include: misspelled or garbled text; unreadable or corrupted text; jumbled letters or merged words; nonsensical character sequences; wrong symbols (e.g. ampersand, accented or foreign characters) replacing correct letters; partial or cut-off text; text that resembles correct words but with wrong spelling or character substitution; watermarks; foreign or unintended logos; any text not explicitly mentioned in the positive prompt; text artifacts; distorted or broken fonts; stretched or deformed glyphs; distorted or deformed faces; low quality or blurry areas; unnatural or extra fingers/hands; messy or inconsistent background.\n\n' +
+  'Jangan sertakan: teks salah eja atau tidak terbaca; teks rusak atau terkorupsi; huruf acak atau kata yang menyatu; rangkaian karakter yang tidak bermakna; simbol salah (mis. ampersand, aksen atau karakter asing) menggantikan huruf yang benar; teks terpotong atau tidak lengkap; teks yang mirip kata benar tapi salah eja atau salah karakter; watermark; logo asing atau tidak dimaksudkan; teks yang tidak disebut dalam prompt positif; artefak teks; font rusak atau terdistorsi; glyph meregang atau cacat; wajah terdistorsi; kualitas rendah atau buram; tangan/jari aneh; background berantakan atau tidak konsisten.';
+
 const MAX_CHARACTER_SLOTS = 5;
 const MAX_LAYOUT_COMPOSITION_IMAGES = 7;
 const MAX_CHARACTER_ACCESSORIES = 5;
@@ -143,6 +166,99 @@ function buildCombinedPrompt(data: {
   return parts.join('\n');
 }
 
+type SceneAnalysisMasterData = {
+  name: string | null;
+  hair_description?: string | null;
+  face_description?: string | null;
+  clothing_description?: string | null;
+  accessories?: string | null;
+  additional_details?: string | null;
+};
+
+function buildSceneAnalysisSuperPrompt(params: {
+  designReplace: Record<string, string>;
+  designResult: DesignResult | null;
+  characterSlots: CharacterSlot[];
+  characterStructuredRefs: CharacterStructuredRef[];
+  designCharacters: { id: string; name: string | null }[];
+  sceneAnalysisCameraMovement: string;
+  sceneAnalysisLanguage: string;
+  sceneAnalysisCharacterNarasi: Record<number, string>;
+  sceneAnalysisCharacterMasters: Record<string, SceneAnalysisMasterData>;
+  getLabel: (key: string) => string;
+  cameraMovementOptions: { value: string; labelKey: string }[];
+  expressionOptions: { value: string; labelKey: string }[];
+  bodyPoseOptions: { value: string; labelKey: string }[];
+  handGestureOptions: { value: string; labelKey: string }[];
+}): string {
+  const sections: string[] = [];
+  const g = (field: keyof DesignResult) => params.designReplace[field] ?? params.designResult?.[field] ?? '';
+  const sceneParts: string[] = [];
+  if (g('font')) sceneParts.push(`Font: ${g('font')}`);
+  if (g('elements')) sceneParts.push(`Elements: ${g('elements')}`);
+  if (g('layout_style_description')) sceneParts.push(`Composition: ${g('layout_style_description')}`);
+  if (g('headline')) sceneParts.push(`Headline: ${g('headline')}`);
+  if (g('sub_headline')) sceneParts.push(`Sub headline: ${g('sub_headline')}`);
+  if (g('text')) sceneParts.push(`Text: ${g('text')}`);
+  if (g('main_color')) sceneParts.push(`Main color: ${g('main_color')}`);
+  if (g('other_colors')) sceneParts.push(`Other colors: ${g('other_colors')}`);
+  if (sceneParts.length > 0) {
+    sections.push('--- DESKRIPSI ADEGAN ---\n' + sceneParts.join('\n'));
+  }
+  const charSlots = params.characterSlots
+    .map((slot, index) => ({ slot, index }))
+    .filter(({ slot }) => slot.characterId != null && slot.characterId !== '');
+  if (charSlots.length > 0) {
+    const charLines: string[] = [];
+    for (const { slot, index } of charSlots) {
+      const master = params.sceneAnalysisCharacterMasters[slot.characterId!];
+      const name = master?.name ?? params.designCharacters.find((c) => c.id === slot.characterId)?.name ?? slot.characterId ?? `Character ${index + 1}`;
+      const refs = params.characterStructuredRefs[index];
+      const parts: string[] = [`Karakter: ${name}`];
+      if (slot.expression) {
+        const opt = params.expressionOptions.find((o) => o.value === slot.expression);
+        parts.push(`Ekspresi: ${opt ? params.getLabel(opt.labelKey) : slot.expression}`);
+      }
+      if (slot.bodyPose) {
+        const opt = params.bodyPoseOptions.find((o) => o.value === slot.bodyPose);
+        parts.push(`Pose: ${opt ? params.getLabel(opt.labelKey) : slot.bodyPose}`);
+      }
+      if (slot.handGesture) {
+        const opt = params.handGestureOptions.find((o) => o.value === slot.handGesture);
+        parts.push(`Hand gesture: ${opt ? params.getLabel(opt.labelKey) : slot.handGesture}`);
+      }
+      if (master?.hair_description) parts.push(`Rambut: ${master.hair_description}`);
+      if (master?.face_description) parts.push(`Wajah: ${master.face_description}`);
+      if (master?.clothing_description) parts.push(`Pakaian: ${master.clothing_description}`);
+      if (master?.accessories) parts.push(`Aksesoris: ${master.accessories}`);
+      if (master?.additional_details) parts.push(`Detail: ${master.additional_details}`);
+      if (refs) {
+        if (refs.headDescription?.trim()) parts.push(`Instruksi head: ${refs.headDescription.trim()}`);
+        refs.clothesDescriptions?.forEach((d, i) => { if (d?.trim()) parts.push(`Instruksi clothes ${i + 1}: ${d.trim()}`); });
+        if (refs.logoDescription?.trim()) parts.push(`Instruksi logo: ${refs.logoDescription.trim()}`);
+        if (refs.footDescription?.trim()) parts.push(`Instruksi foot: ${refs.footDescription.trim()}`);
+        refs.accessoriesDescriptions?.forEach((d, i) => { if (d?.trim()) parts.push(`Instruksi aksesoris ${i + 1}: ${d.trim()}`); });
+      }
+      charLines.push(parts.join('\n'));
+    }
+    sections.push('--- KARAKTER ---\n' + charLines.join('\n\n'));
+  }
+  const camOpt = params.cameraMovementOptions.find((o) => o.value === params.sceneAnalysisCameraMovement);
+  sections.push('--- KAMERA ---\n' + (camOpt ? params.getLabel(camOpt.labelKey) : params.sceneAnalysisCameraMovement || '—'));
+  const narasiLines = charSlots
+    .map(({ slot, index }) => {
+      const master = params.sceneAnalysisCharacterMasters[slot.characterId!];
+      const name = master?.name ?? params.designCharacters.find((c) => c.id === slot.characterId)?.name ?? slot.characterId ?? `Character ${index + 1}`;
+      return { name, text: params.sceneAnalysisCharacterNarasi[index] };
+    })
+    .filter(({ text }) => text != null && String(text).trim() !== '');
+  if (narasiLines.length > 0) {
+    sections.push('--- NARASI (dialog per karakter) ---\n' + narasiLines.map(({ name, text }) => `${name}: ${String(text).trim()}`).join('\n'));
+  }
+  sections.push('--- BAHASA ---\n' + (params.sceneAnalysisLanguage === 'en' ? 'English' : 'Indonesia'));
+  return sections.join('\n\n');
+}
+
 export const DetectFromImageSection: React.FC = () => {
   const { organizationId } = useCurrentOrg();
   const { t } = useAppTranslation();
@@ -195,6 +311,32 @@ export const DetectFromImageSection: React.FC = () => {
   const uploadClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const compositionSlotClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const characterStructuredClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Import to Scene Analysis */
+  const [sceneAnalysisImported, setSceneAnalysisImported] = useState(false);
+  const [sceneAnalysisLanguage, setSceneAnalysisLanguage] = useState<string>('id');
+  const [sceneAnalysisCameraMovement, setSceneAnalysisCameraMovement] = useState<string>('static');
+  const [sceneAnalysisCharacterNarasi, setSceneAnalysisCharacterNarasi] = useState<Record<number, string>>({});
+  type SceneAnalysisCharacterMaster = {
+    id: string;
+    name: string | null;
+    reference_image_path: string | null;
+    reference_image_url?: string | null;
+    hair_description?: string | null;
+    face_description?: string | null;
+    clothing_description?: string | null;
+    accessories?: string | null;
+    additional_details?: string | null;
+  };
+  const [sceneAnalysisCharacterMasters, setSceneAnalysisCharacterMasters] = useState<Record<string, SceneAnalysisCharacterMaster>>({});
+  const [sceneAnalysisGeneratedNegativePrompt, setSceneAnalysisGeneratedNegativePrompt] = useState<string | null>(null);
+  const [sceneAnalysisNegativePromptLoading, setSceneAnalysisNegativePromptLoading] = useState(false);
+  const [sceneAnalysisNegativePromptError, setSceneAnalysisNegativePromptError] = useState<string | null>(null);
+  const hasAutoGeneratedNegativePromptRef = useRef(false);
+  const [sceneAnalysisImageDescriptionPrompt, setSceneAnalysisImageDescriptionPrompt] = useState<string | null>(null);
+  const [sceneAnalysisImageDescriptionLoading, setSceneAnalysisImageDescriptionLoading] = useState(false);
+  const [sceneAnalysisImageDescriptionError, setSceneAnalysisImageDescriptionError] = useState<string | null>(null);
+  const hasAutoGeneratedImageDescriptionRef = useRef(false);
 
   const readClipboardAsFile = useCallback((): Promise<File | null> => {
     if (typeof navigator?.clipboard?.read !== 'function') return Promise.resolve(null);
@@ -329,6 +471,9 @@ export const DetectFromImageSection: React.FC = () => {
       setDesignReplace({});
       setGeneratedImageUrl(null);
       setLayoutCompositionSlots(Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, () => null));
+      setSceneAnalysisImported(false);
+      setSceneAnalysisCharacterMasters({});
+      setSceneAnalysisCharacterNarasi({});
       if (file) {
         setPreviewUrl(URL.createObjectURL(file));
       }
@@ -769,6 +914,56 @@ export const DetectFromImageSection: React.FC = () => {
     toast.success(t('detectFromImage.promptCopied', 'Copied'));
   };
 
+  const handleImportToSceneAnalysis = useCallback(async () => {
+    if (!generatedImageUrl) return;
+    const slotsWithCharacter = characterSlots.filter((s) => s.characterId != null && s.characterId !== '');
+    if (slotsWithCharacter.length === 0) {
+      toast.error(t('detectFromImage.sceneAnalysisErrorNoCharacter'));
+      return;
+    }
+    const masters: Record<string, SceneAnalysisCharacterMaster> = {};
+    for (const slot of slotsWithCharacter) {
+      const characterId = slot.characterId!;
+      const { data: row, error } = await supabase
+        .from('digital_asset_characters')
+        .select('id, name, reference_image_path, hair_description, face_description, clothing_description, accessories, additional_details')
+        .eq('id', characterId)
+        .single();
+      if (error || !row) {
+        toast.error(t('detectFromImage.sceneAnalysisErrorNoCharacter'));
+        return;
+      }
+      const refPath = (row as { reference_image_path?: string | null }).reference_image_path;
+      if (!refPath || String(refPath).trim() === '') {
+        toast.error(t('detectFromImage.sceneAnalysisErrorNoCharacter'));
+        return;
+      }
+      let signedUrl: string | null = null;
+      try {
+        const { data: signedData } = await supabase.storage
+          .from('digital-asset-character-images')
+          .createSignedUrl(refPath, 3600);
+        signedUrl = signedData?.signedUrl ?? null;
+      } catch {
+        // keep signedUrl null; panel can still show name/refs
+      }
+      masters[characterId] = {
+        id: (row as { id: string }).id,
+        name: (row as { name: string | null }).name ?? null,
+        reference_image_path: refPath,
+        reference_image_url: signedUrl,
+        hair_description: (row as { hair_description?: string | null }).hair_description ?? null,
+        face_description: (row as { face_description?: string | null }).face_description ?? null,
+        clothing_description: (row as { clothing_description?: string | null }).clothing_description ?? null,
+        accessories: (row as { accessories?: string | null }).accessories ?? null,
+        additional_details: (row as { additional_details?: string | null }).additional_details ?? null,
+      };
+    }
+    setSceneAnalysisCharacterMasters(masters);
+    setSceneAnalysisImported(true);
+    setMode('scene');
+  }, [generatedImageUrl, characterSlots, t]);
+
   const selectedBrandForDisplay = selectedBrandId ? designBrands.find((b) => b.id === selectedBrandId) : null;
   const displayMainColor = selectedBrandForDisplay
     ? (selectedBrandForDisplay.primary_color_hex ?? designReplace['main_color'] ?? '')
@@ -1127,6 +1322,198 @@ export const DetectFromImageSection: React.FC = () => {
     a.click();
   };
 
+  const generateSceneNegativePrompt = useCallback(async () => {
+    if (!generatedImageUrl) return;
+    const imageBase64 = generatedImageUrl.includes('base64,') ? generatedImageUrl.split('base64,')[1]?.trim() ?? generatedImageUrl : generatedImageUrl;
+    const baseSP = buildSceneAnalysisSuperPrompt({
+      designReplace,
+      designResult,
+      characterSlots,
+      characterStructuredRefs,
+      designCharacters,
+      sceneAnalysisCameraMovement,
+      sceneAnalysisLanguage,
+      sceneAnalysisCharacterNarasi,
+      sceneAnalysisCharacterMasters,
+      getLabel: (key) => t(key),
+      cameraMovementOptions: CAMERA_MOVEMENT_OPTIONS,
+      expressionOptions: EXPRESSION_OPTIONS,
+      bodyPoseOptions: BODY_POSE_OPTIONS,
+      handGestureOptions: HAND_GESTURE_OPTIONS,
+    });
+    const superPromptText = sceneAnalysisImageDescriptionPrompt
+      ? `--- DESKRIPSI DARI GAMBAR ---\n${sceneAnalysisImageDescriptionPrompt}\n\n${baseSP}`
+      : baseSP;
+    const narrationText = Object.entries(sceneAnalysisCharacterNarasi)
+      .filter(([, v]) => v?.trim())
+      .map(([, v]) => v)
+      .join(' | ');
+    setSceneAnalysisNegativePromptLoading(true);
+    setSceneAnalysisNegativePromptError(null);
+    try {
+      const cameraMovementLabel = CAMERA_MOVEMENT_OPTIONS.find((o) => o.value === sceneAnalysisCameraMovement)?.value ?? sceneAnalysisCameraMovement;
+      const { data: data2, error: error2 } = await supabase.functions.invoke('generate-scene-negative-prompt', {
+        body: {
+          imageBase64,
+          superPrompt: superPromptText,
+          language: sceneAnalysisLanguage === 'id' ? 'Indonesian' : 'English',
+          cameraMovement: cameraMovementLabel,
+          narration: narrationText,
+        },
+        timeout: 120000, // 2 menit agar request ke Gemini sempat selesai
+      });
+      if (data2?.error) {
+        const msg = String(data2.error);
+        if (msg.includes('limit') || msg.includes('429')) {
+          toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+        } else if (msg.includes('config') || msg.includes('Script AI')) {
+          toast.error(t('detectFromImage.errorConfig', 'Script AI config not found. Configure at Settings > Script AI Generator.'));
+        } else {
+          toast.error(msg);
+        }
+        setSceneAnalysisNegativePromptError(msg);
+        return;
+      }
+      if (error2) {
+        let serverMsg: string | null = null;
+        const ctx = (error2 as { context?: unknown }).context;
+        if (ctx && typeof ctx === 'object' && ctx instanceof Response) {
+          try {
+            const body = await ctx.clone().json() as { error?: string };
+            if (body?.error) serverMsg = body.error;
+          } catch {
+            // ignore
+          }
+        }
+        const msg = serverMsg ?? (error2 instanceof Error ? error2.message : t('detectFromImage.errorGenerateNegativePrompt', 'Failed to generate negative prompt.'));
+        setSceneAnalysisNegativePromptError(msg);
+        toast.error(msg);
+        return;
+      }
+      const negativePrompt = data2?.negativePrompt;
+      if (typeof negativePrompt === 'string' && negativePrompt.trim()) {
+        setSceneAnalysisGeneratedNegativePrompt(negativePrompt.trim());
+      } else {
+        setSceneAnalysisNegativePromptError(t('detectFromImage.errorNoNegativePrompt', 'No negative prompt generated.'));
+      }
+    } catch (err) {
+      console.error(err);
+      let msg = err instanceof Error ? err.message : t('detectFromImage.errorGenerateNegativePrompt', 'Failed to generate negative prompt.');
+      const ctx = (err as { context?: unknown }).context;
+      if (ctx && typeof ctx === 'object' && ctx instanceof Response) {
+        try {
+          const body = await (ctx as Response).clone().json() as { error?: string };
+          if (body?.error) msg = body.error;
+        } catch {
+          // keep msg
+        }
+      }
+      setSceneAnalysisNegativePromptError(msg);
+      toast.error(msg);
+    } finally {
+      setSceneAnalysisNegativePromptLoading(false);
+    }
+  }, [
+    generatedImageUrl,
+    sceneAnalysisImageDescriptionPrompt,
+    designReplace,
+    designResult,
+    characterSlots,
+    characterStructuredRefs,
+    designCharacters,
+    sceneAnalysisCameraMovement,
+    sceneAnalysisLanguage,
+    sceneAnalysisCharacterNarasi,
+    sceneAnalysisCharacterMasters,
+    t,
+  ]);
+
+  const generateSceneImageDescription = useCallback(async () => {
+    if (!generatedImageUrl) return;
+    const imageBase64 = generatedImageUrl.includes('base64,') ? generatedImageUrl.split('base64,')[1]?.trim() ?? generatedImageUrl : generatedImageUrl;
+    let imageBase64Second = '';
+    try {
+      const secondFile = layoutCompositionSlots[0] ?? selectedFile ?? null;
+      if (secondFile instanceof File) {
+        imageBase64Second = await getBase64(secondFile);
+      }
+    } catch {
+      // omit second image
+    }
+    setSceneAnalysisImageDescriptionLoading(true);
+    setSceneAnalysisImageDescriptionError(null);
+    try {
+      const body: { imageBase64: string; imageBase64Second?: string } = { imageBase64 };
+      if (imageBase64Second.length >= 100) body.imageBase64Second = imageBase64Second;
+      const { data, error } = await supabase.functions.invoke('generate-scene-image-description', {
+        body,
+        timeout: 120000,
+      });
+      if (data?.error) {
+        const msg = String(data.error);
+        if (msg.includes('limit') || msg.includes('429')) {
+          toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+        } else if (msg.includes('config') || msg.includes('Script AI')) {
+          toast.error(t('detectFromImage.errorConfig', 'Script AI config not found. Configure at Settings > Script AI Generator.'));
+        } else {
+          toast.error(msg);
+        }
+        setSceneAnalysisImageDescriptionError(msg);
+        return;
+      }
+      if (error) {
+        let serverMsg: string | null = null;
+        const ctx = (error as { context?: unknown }).context;
+        if (ctx && typeof ctx === 'object' && ctx instanceof Response) {
+          try {
+            const resBody = await ctx.clone().json() as { error?: string };
+            if (resBody?.error) serverMsg = resBody.error;
+          } catch {
+            // ignore
+          }
+        }
+        const msg = serverMsg ?? (error instanceof Error ? error.message : t('detectFromImage.sceneAnalysisImageDescriptionError', 'Failed to generate image description.'));
+        setSceneAnalysisImageDescriptionError(msg);
+        toast.error(msg);
+        return;
+      }
+      const prompt = data?.imageDescriptionPrompt;
+      if (typeof prompt === 'string' && prompt.trim()) {
+        setSceneAnalysisImageDescriptionPrompt(prompt.trim());
+      } else {
+        setSceneAnalysisImageDescriptionError(t('detectFromImage.sceneAnalysisImageDescriptionError', 'Failed to generate image description.'));
+      }
+    } catch (err) {
+      console.error(err);
+      let msg = err instanceof Error ? err.message : t('detectFromImage.sceneAnalysisImageDescriptionError', 'Failed to generate image description.');
+      const ctx = (err as { context?: unknown }).context;
+      if (ctx && typeof ctx === 'object' && ctx instanceof Response) {
+        try {
+          const resBody = await (ctx as Response).clone().json() as { error?: string };
+          if (resBody?.error) msg = resBody.error;
+        } catch {
+          // keep msg
+        }
+      }
+      setSceneAnalysisImageDescriptionError(msg);
+      toast.error(msg);
+    } finally {
+      setSceneAnalysisImageDescriptionLoading(false);
+    }
+  }, [generatedImageUrl, layoutCompositionSlots, selectedFile, getBase64, t]);
+
+  useEffect(() => {
+    if (mode !== 'scene' || !sceneAnalysisImported || !generatedImageUrl || hasAutoGeneratedImageDescriptionRef.current) return;
+    hasAutoGeneratedImageDescriptionRef.current = true;
+    generateSceneImageDescription();
+  }, [mode, sceneAnalysisImported, generatedImageUrl, generateSceneImageDescription]);
+
+  useEffect(() => {
+    if (mode !== 'scene' || !sceneAnalysisImported || !generatedImageUrl || hasAutoGeneratedNegativePromptRef.current) return;
+    hasAutoGeneratedNegativePromptRef.current = true;
+    generateSceneNegativePrompt();
+  }, [mode, sceneAnalysisImported, generatedImageUrl, generateSceneNegativePrompt]);
+
   const handleSaveToCharacterFromScene = async () => {
     if (!organizationId || !artisticDescription) return;
     try {
@@ -1310,16 +1697,6 @@ export const DetectFromImageSection: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setMode('scene')}
-                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
-                    mode === 'scene' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <Box className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{t('detectFromImage.modeScene', 'Scene Analysis')}</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setMode('character')}
                   className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                     mode === 'character' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
@@ -1337,6 +1714,16 @@ export const DetectFromImageSection: React.FC = () => {
                 >
                   <Layout className="h-4 w-4 flex-shrink-0" />
                   <span className="truncate">{t('detectFromImage.modeDesign', 'Design Extraction')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('scene')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    mode === 'scene' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <Box className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{t('detectFromImage.modeScene', 'Scene Analysis')}</span>
                 </button>
               </div>
               <Button
@@ -1573,7 +1960,190 @@ export const DetectFromImageSection: React.FC = () => {
 
         {/* Right column: Description / Character Result */}
         <div className="min-h-[280px] flex flex-col">
-          {artisticDescription ? (
+          {mode === 'scene' && sceneAnalysisImported ? (
+            <div className="border-2 border-slate-300 rounded-xl p-4 space-y-4 flex-1 flex flex-col overflow-auto bg-slate-50/50">
+              <h4 className="text-sm font-semibold text-slate-800 pb-2 border-b-2 border-slate-300">{t('detectFromImage.modeScene', 'Scene Analysis')}</h4>
+              {/* Referensi gambar */}
+              {generatedImageUrl && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">{t('detectFromImage.sceneAnalysisGeneratedImageLabel')}</p>
+                  <img src={generatedImageUrl} alt="Design result" className="w-full max-w-full rounded-md border border-gray-200 object-contain bg-white max-h-48" />
+                </div>
+              )}
+              {layoutCompositionUrls.some((u) => u != null) && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">{t('detectFromImage.layoutStyle', 'Composition')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {layoutCompositionUrls.map((url, i) =>
+                      url ? (
+                        <div key={i} className="flex flex-col items-center">
+                          <span className="text-[10px] text-slate-500">{t('detectFromImage.sceneAnalysisCompositionImageLabel', 'Gambar {n}', { n: i + 1 }).replace('{n}', String(i + 1))}</span>
+                          <img src={url} alt="" className="w-16 h-16 rounded border border-gray-200 object-cover" />
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Bahasa & Pergerakan kamera */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">{t('detectFromImage.sceneAnalysisLanguage')}</label>
+                  <select
+                    value={sceneAnalysisLanguage}
+                    onChange={(e) => setSceneAnalysisLanguage(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900"
+                  >
+                    <option value="id">{t('detectFromImage.sceneAnalysisLanguageId')}</option>
+                    <option value="en">{t('detectFromImage.sceneAnalysisLanguageEn')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">{t('detectFromImage.sceneAnalysisCameraMovement')}</label>
+                  <select
+                    value={sceneAnalysisCameraMovement}
+                    onChange={(e) => setSceneAnalysisCameraMovement(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900"
+                    title={CAMERA_MOVEMENT_OPTIONS.find((o) => o.value === sceneAnalysisCameraMovement) ? t(CAMERA_MOVEMENT_OPTIONS.find((o) => o.value === sceneAnalysisCameraMovement)!.descriptionKey) : undefined}
+                  >
+                    {CAMERA_MOVEMENT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {/* Per karakter: nama, foto, narasi */}
+              {characterSlots
+                .map((slot, index) => ({ slot, index }))
+                .filter(({ slot }) => slot.characterId != null && slot.characterId !== '')
+                .map(({ slot, index }) => {
+                  const master = sceneAnalysisCharacterMasters[slot.characterId!];
+                  const name = master?.name ?? designCharacters.find((c) => c.id === slot.characterId)?.name ?? slot.characterId ?? `Character ${index + 1}`;
+                  const photoUrl = master?.reference_image_url ?? characterStructuredUrls[index]?.head ?? null;
+                  return (
+                    <div key={index} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        {photoUrl ? <img src={photoUrl} alt="" className="w-10 h-10 rounded object-cover border border-gray-200" /> : <User className="h-10 w-10 text-slate-300" />}
+                        <span className="font-medium text-sm text-slate-800">{name}</span>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{t('detectFromImage.sceneAnalysisNarasiPlaceholder')}</label>
+                        <textarea
+                          placeholder={t('detectFromImage.sceneAnalysisNarasiPlaceholder')}
+                          value={sceneAnalysisCharacterNarasi[index] ?? ''}
+                          onChange={(e) => setSceneAnalysisCharacterNarasi((prev) => ({ ...prev, [index]: e.target.value }))}
+                          rows={2}
+                          className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-500 resize-y"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              {/* Super prompt */}
+              <div className="space-y-2 pt-2 border-t-2 border-slate-300">
+                <label className="block text-xs font-semibold text-slate-700">{t('detectFromImage.sceneAnalysisSuperPrompt')}</label>
+                {sceneAnalysisImageDescriptionError && (
+                  <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{sceneAnalysisImageDescriptionError}</p>
+                )}
+                {(() => {
+                  const baseSuperPrompt = buildSceneAnalysisSuperPrompt({
+                    designReplace,
+                    designResult,
+                    characterSlots,
+                    characterStructuredRefs,
+                    designCharacters,
+                    sceneAnalysisCameraMovement,
+                    sceneAnalysisLanguage,
+                    sceneAnalysisCharacterNarasi,
+                    sceneAnalysisCharacterMasters,
+                    getLabel: (key) => t(key),
+                    cameraMovementOptions: CAMERA_MOVEMENT_OPTIONS,
+                    expressionOptions: EXPRESSION_OPTIONS,
+                    bodyPoseOptions: BODY_POSE_OPTIONS,
+                    handGestureOptions: HAND_GESTURE_OPTIONS,
+                  });
+                  const effectiveSuperPrompt = sceneAnalysisImageDescriptionPrompt
+                    ? `--- DESKRIPSI DARI GAMBAR ---\n${sceneAnalysisImageDescriptionPrompt}\n\n${baseSuperPrompt}`
+                    : baseSuperPrompt;
+                  const textareaValue = sceneAnalysisImageDescriptionLoading && !sceneAnalysisImageDescriptionPrompt
+                    ? `${t('detectFromImage.sceneAnalysisImageDescriptionPlaceholder')}\n\n${baseSuperPrompt}`
+                    : effectiveSuperPrompt;
+                  return (
+                    <>
+                      <textarea
+                        readOnly
+                        value={textareaValue}
+                        className="w-full min-h-[180px] rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 font-mono"
+                        rows={12}
+                      />
+                    </>
+                  );
+                })()}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-semibold text-slate-600">{t('detectFromImage.sceneAnalysisNegativePromptSection')}</label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-slate-600"
+                      disabled={sceneAnalysisNegativePromptLoading}
+                      onClick={() => generateSceneNegativePrompt()}
+                    >
+                      {sceneAnalysisNegativePromptLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      {sceneAnalysisNegativePromptLoading ? t('detectFromImage.generating', 'Generating…') : t('detectFromImage.regenerateNegativePrompt', 'Regenerate')}
+                    </Button>
+                  </div>
+                  {sceneAnalysisNegativePromptError && (
+                    <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{sceneAnalysisNegativePromptError}</p>
+                  )}
+                  <pre className="w-full rounded-md border border-gray-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 font-mono whitespace-pre-wrap max-h-[140px] overflow-y-auto">
+                    {sceneAnalysisNegativePromptLoading && !sceneAnalysisGeneratedNegativePrompt
+                      ? t('detectFromImage.negativePromptPlaceholder', 'Reading image, super prompt, language, camera movement, and narration to generate the best negative prompt…')
+                      : (sceneAnalysisGeneratedNegativePrompt ?? SCENE_ANALYSIS_MASTER_NEGATIVE_PROMPT)}
+                  </pre>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-300"
+                  onClick={() => {
+                    const baseSP = buildSceneAnalysisSuperPrompt({
+                      designReplace,
+                      designResult,
+                      characterSlots,
+                      characterStructuredRefs,
+                      designCharacters,
+                      sceneAnalysisCameraMovement,
+                      sceneAnalysisLanguage,
+                      sceneAnalysisCharacterNarasi,
+                      sceneAnalysisCharacterMasters,
+                      getLabel: (key) => t(key),
+                      cameraMovementOptions: CAMERA_MOVEMENT_OPTIONS,
+                      expressionOptions: EXPRESSION_OPTIONS,
+                      bodyPoseOptions: BODY_POSE_OPTIONS,
+                      handGestureOptions: HAND_GESTURE_OPTIONS,
+                    });
+                    const positiveText = sceneAnalysisImageDescriptionPrompt
+                      ? `--- DESKRIPSI DARI GAMBAR ---\n${sceneAnalysisImageDescriptionPrompt}\n\n${baseSP}`
+                      : baseSP;
+                    const negativeText = sceneAnalysisGeneratedNegativePrompt ?? SCENE_ANALYSIS_MASTER_NEGATIVE_PROMPT;
+                    const combinedText = positiveText + '\n\n--- NEGATIVE PROMPT ---\n' + negativeText;
+                    navigator.clipboard.writeText(combinedText);
+                    toast.success(t('detectFromImage.promptCopied', 'Copied'));
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  {t('detectFromImage.copyDesign', 'Salin')}
+                </Button>
+              </div>
+            </div>
+          ) : artisticDescription ? (
             <div className="border border-gray-200 rounded-lg p-4 space-y-3 flex-1 flex flex-col">
               <h4 className="text-sm font-semibold text-gray-900">{t('detectFromImage.resultArtistic', 'Artistic Description Result')}</h4>
               <textarea
@@ -2093,16 +2663,28 @@ export const DetectFromImageSection: React.FC = () => {
               {generatedImageUrl && (
                 <div className="space-y-2 pt-4 border-t-2 border-slate-300">
                   <img src={generatedImageUrl} alt="Generated design" className="w-full max-w-full rounded-md border border-gray-200 object-contain bg-gray-50" />
-                  <Button type="button" variant="outline" size="sm" onClick={handleDownloadGeneratedImage} className="border-gray-300">
-                    <Download className="h-4 w-4 mr-2" />
-                    {t('detectFromImage.downloadImage', 'Download')}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={handleDownloadGeneratedImage} className="border-gray-300">
+                      <Download className="h-4 w-4 mr-2" />
+                      {t('detectFromImage.downloadImage', 'Download')}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={handleCopyDesign} className="border-gray-300">
+                      <Copy className="h-4 w-4 mr-2" />
+                      {t('detectFromImage.copyDesign', 'Salin')}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleImportToSceneAnalysis}
+                      disabled={!characterSlots.some((s) => s.characterId != null && s.characterId !== '')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                    >
+                      <Box className="h-4 w-4 mr-2" />
+                      {t('detectFromImage.importToSceneAnalysis', 'Import to Scene Analysis')}
+                    </Button>
+                  </div>
                 </div>
               )}
-              <Button type="button" variant="outline" size="sm" onClick={handleCopyDesign} className="border-gray-300 mt-2 w-fit">
-                <Copy className="h-4 w-4 mr-2" />
-                {t('detectFromImage.copyDesign', 'Salin')}
-              </Button>
             </div>
           ) : (
             <div className="border border-gray-200 rounded-lg p-4 flex-1 flex flex-col items-center justify-center text-center text-gray-500 bg-gray-50/50 min-h-[280px]">
