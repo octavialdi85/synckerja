@@ -860,14 +860,16 @@ export const DetectFromImageSection: React.FC = () => {
       const accent = (selectedBrand.accent_color_hex ?? '').trim();
       const accentPct = selectedBrand.accent_color_percent ?? 10;
       const textColor = (selectedBrand.text_color_hex ?? '').trim();
-      if (bgHex) lines.push(`Background color (canvas/page): ${bgHex}, ~${bgPct}%`);
-      if (primary) lines.push(`Primary color (dominant): ${primary}, ~${primaryPct}%`);
-      if (secondary) lines.push(`Secondary color: ${secondary}, ~${secondaryPct}%`);
-      if (accent) lines.push(`Accent color (buttons, highlights, call-to-action, icons): ${accent}, ~${accentPct}%`);
-      if (textColor) lines.push('Text color: ' + textColor);
       if (bgHex || primary || secondary || accent || textColor) {
         lines.push('');
-        lines.push('Use the above color percentages as approximate visual proportion in the design. Use ALL brand colors; apply accent visibly for buttons, highlights, or key elements.');
+        lines.push('BRAND COLOR PALETTE — respect these percentages as approximate visual proportion (total 100%):');
+        if (bgHex) lines.push(`- Background (canvas/page): ${bgHex} — must occupy about ${bgPct}% of the visible area.`);
+        if (primary) lines.push(`- Primary (dominant): ${primary} — about ${primaryPct}% of the design.`);
+        if (secondary) lines.push(`- Secondary: ${secondary} — about ${secondaryPct}%.`);
+        if (accent) lines.push(`- Accent (buttons, highlights, CTAs, icons): ${accent} — about ${accentPct}%.`);
+        if (textColor) lines.push(`- Text color (for copy only, no percentage): ${textColor}.`);
+        lines.push('');
+        lines.push('IMPORTANT: The four percentages above (background + primary + secondary + accent) must add up to 100%. Use each color in roughly the stated proportion so the result matches the brand. Do not ignore or underuse any of these colors.');
       }
     } else {
       const mainColorValue = getValue('main_color');
