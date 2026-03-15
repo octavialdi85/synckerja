@@ -274,9 +274,14 @@ export const DetectFromImageSection: React.FC = () => {
   const [designBrands, setDesignBrands] = useState<{
     id: string;
     brand_name: string | null;
+    background_color_hex: string | null;
+    background_color_percent: number | null;
     primary_color_hex: string | null;
+    primary_color_percent: number | null;
     secondary_color_hex: string | null;
+    secondary_color_percent: number | null;
     accent_color_hex: string | null;
+    accent_color_percent: number | null;
     text_color_hex: string | null;
   }[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -417,7 +422,7 @@ export const DetectFromImageSection: React.FC = () => {
           .order('updated_at', { ascending: false }),
         supabase
           .from('digital_asset_brand_colors')
-          .select('id, brand_name, primary_color_hex, secondary_color_hex, accent_color_hex, text_color_hex')
+          .select('id, brand_name, background_color_hex, background_color_percent, primary_color_hex, primary_color_percent, secondary_color_hex, secondary_color_percent, accent_color_hex, accent_color_percent, text_color_hex')
           .eq('organization_id', organizationId)
           .order('updated_at', { ascending: false }),
         supabase
@@ -436,9 +441,14 @@ export const DetectFromImageSection: React.FC = () => {
         (brandRes.data as {
           id: string;
           brand_name: string | null;
+          background_color_hex: string | null;
+          background_color_percent: number | null;
           primary_color_hex: string | null;
+          primary_color_percent: number | null;
           secondary_color_hex: string | null;
+          secondary_color_percent: number | null;
           accent_color_hex: string | null;
+          accent_color_percent: number | null;
           text_color_hex: string | null;
         }[]) || []
       );
@@ -841,18 +851,23 @@ export const DetectFromImageSection: React.FC = () => {
     add(t('detectFromImage.subHeadline', 'Sub headline'), getValue('sub_headline'));
 
     if (selectedBrand != null) {
-      /* Saat brand dipilih: kirim 4 warna dengan peran jelas agar AI pakai semua (termasuk accent) */
+      const bgHex = (selectedBrand.background_color_hex ?? '').trim();
+      const bgPct = selectedBrand.background_color_percent ?? 40;
       const primary = (selectedBrand.primary_color_hex ?? '').trim();
+      const primaryPct = selectedBrand.primary_color_percent ?? 30;
       const secondary = (selectedBrand.secondary_color_hex ?? '').trim();
+      const secondaryPct = selectedBrand.secondary_color_percent ?? 20;
       const accent = (selectedBrand.accent_color_hex ?? '').trim();
+      const accentPct = selectedBrand.accent_color_percent ?? 10;
       const textColor = (selectedBrand.text_color_hex ?? '').trim();
-      if (primary) lines.push('Primary color (main background/dominant): ' + primary);
-      if (secondary) lines.push('Secondary color: ' + secondary);
-      if (accent) lines.push('Accent color (use for buttons, highlights, call-to-action, icons, and accent elements): ' + accent);
+      if (bgHex) lines.push(`Background color (canvas/page): ${bgHex}, ~${bgPct}%`);
+      if (primary) lines.push(`Primary color (dominant): ${primary}, ~${primaryPct}%`);
+      if (secondary) lines.push(`Secondary color: ${secondary}, ~${secondaryPct}%`);
+      if (accent) lines.push(`Accent color (buttons, highlights, call-to-action, icons): ${accent}, ~${accentPct}%`);
       if (textColor) lines.push('Text color: ' + textColor);
-      if (primary || secondary || accent || textColor) {
+      if (bgHex || primary || secondary || accent || textColor) {
         lines.push('');
-        lines.push('Use ALL of the above brand colors in the design. Apply accent color visibly for buttons, highlights, or key visual elements.');
+        lines.push('Use the above color percentages as approximate visual proportion in the design. Use ALL brand colors; apply accent visibly for buttons, highlights, or key elements.');
       }
     } else {
       const mainColorValue = getValue('main_color');
@@ -1855,17 +1870,18 @@ export const DetectFromImageSection: React.FC = () => {
                       <p className="text-xs font-semibold text-gray-600">{t('detectFromImage.brandColorsFrom', 'Warna dari brand')}: {selectedBrandForDisplay.brand_name ?? '—'}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {[
-                          { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color') },
-                          { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color') },
-                          { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color') },
-                          { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color') },
-                        ].map(({ key, label }) => {
+                          { key: 'background_color_hex' as const, label: t('digitalAssets.brandColorBackground', 'Background Color'), percent: selectedBrandForDisplay.background_color_percent ?? 40 },
+                          { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color'), percent: selectedBrandForDisplay.primary_color_percent ?? 30 },
+                          { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color'), percent: selectedBrandForDisplay.secondary_color_percent ?? 20 },
+                          { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color'), percent: selectedBrandForDisplay.accent_color_percent ?? 10 },
+                          { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color'), percent: null as number | null },
+                        ].map(({ key, label, percent }) => {
                           const hex = selectedBrandForDisplay[key] ?? '';
                           return (
                             <div key={key} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
                               <span className="flex-shrink-0 w-8 h-8 rounded-md border border-gray-200" style={{ backgroundColor: hex || '#e5e7eb' }} title={hex || ''} />
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs font-medium text-gray-700 truncate">{label}</p>
+                                <p className="text-xs font-medium text-gray-700 truncate">{label}{percent != null ? ` (~${percent}%)` : ''}</p>
                                 <p className="text-xs text-gray-500 font-mono truncate">{hex || '—'}</p>
                               </div>
                             </div>
