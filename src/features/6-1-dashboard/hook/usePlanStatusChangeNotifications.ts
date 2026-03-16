@@ -32,6 +32,7 @@ export function usePlanStatusChangeNotifications() {
   const { data: notifications = [], isLoading, error, refetch } = useQuery({
     queryKey: [...QUERY_KEY, userId, organizationId],
     enabled: !!userId && !!organizationId,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
     queryFn: async (): Promise<PlanStatusChangeNotificationRow[]> => {
       if (!userId || !organizationId) return [];
       const { data, error: qErr } = await supabase

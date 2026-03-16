@@ -539,6 +539,7 @@ const App = () => (
                   <SocialMediaDashboardPage />
                 </ProtectedRoute>
               } />
+              {/* Tab-switch reload prevented by usePermissionConfiguration (no loading on refetch) + query refetchOnWindowFocus: false in feature */}
               <Route path="/digital-marketing/social-media/dashboard" element={
                 <ProtectedRoute>
                   <SocialMediaDashboardPage />
@@ -554,6 +555,7 @@ const App = () => (
                   <ProductKnowledgePage />
                 </ProtectedRoute>
               } />
+              {/* Tab-switch reload prevented by usePermissionConfiguration (no loading on refetch) + query refetchOnWindowFocus: false in feature */}
               <Route path="/digital-marketing/social-media/script-generator" element={
                 <ProtectedRoute>
                   <ScriptGeneratorPage />

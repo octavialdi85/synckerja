@@ -88,8 +88,12 @@ export const usePermissionConfiguration = () => {
       clearTimeout(timeoutTimer);
 
       try {
-        setLoading(true);
-        
+        // Only show loading on initial load (no configs yet). When refetching after tab focus,
+        // keep loading false so ProtectedRoute does not unmount route content (avoids "reload" UX).
+        if (configurations.length === 0) {
+          setLoading(true);
+        }
+
         // Fetch only real data from Supabase table
         const { data: customConfigs, error } = await (supabase as any)
           .from('permission_configurations')

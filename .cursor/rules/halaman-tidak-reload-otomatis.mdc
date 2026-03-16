@@ -1,0 +1,64 @@
+---
+description: Halaman tidak reload otomatis saat pindah tab/window. Standar agar konten (hasil generate, draft, state) tidak hilang ketika user kembali ke tab. Berlaku untuk route protected, query TanStack, dan permission/config loading.
+alwaysApply: true
+---
+
+# Halaman Tidak Reload Otomatis
+
+Rule ini memastikan **halaman tidak reload atau unmount otomatis** ketika user pindah ke tab/window lain lalu kembali. Tujuan: konten (hasil generate, draft, state) **tetap ada** setelah kembali ke tab — tanpa refetch massal atau tampilan loading yang unmount route.
+
+**Penyebab yang sudah diperbaiki:**
+1. **ProtectedRoute** menampilkan loading (dan unmount children) saat `configLoading`/`isLoading` jadi `true` — termasuk saat permission config **refetch** setelah tab visible.
+2. **TanStack Query** default `refetchOnWindowFocus: true` — saat tab focus kembali, query refetch dan bisa memicu re-render/reload feeling.
+
+---
+
+## 1. usePermissionConfiguration (global)
+
+**File:** `src/features/1-layouts/sidebar/usePermissionConfiguration.ts`
+
+- **Hanya set loading pada load awal.** Saat **refetch** (mis. effect jalan lagi karena `user`/`organization` referensi berubah setelah tab visible), **jangan** panggil `setLoading(true)` agar ProtectedRoute tidak unmount route content.
+- Pola yang dipakai: `if (configurations.length === 0) { setLoading(true); }` sebelum fetch. Jadi refetch di background tanpa mengubah loading → tidak ada unmount SettingsPage/Dashboard/ScriptGenerator dll.
+
+Saat mengubah logic fetch permission config, **jangan** menghapus atau mengabaikan pengecekan ini.
+
+---
+
+## 2. TanStack Query — refetchOnWindowFocus
+
+**Di seluruh project:** untuk query yang dipakai di halaman yang ingin bebas reload saat pindah tab, selalu set:
+
+```ts
+refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
+```
+
+- **App.tsx** sudah set `focusManager.setEventListener` no-op dan `QueryClient` default `refetchOnWindowFocus: false`. Query individual bisa **override** jadi `true` — hindari itu untuk halaman digital-marketing/settings/dashboard/script-generator dan halaman lain yang tidak ingin refetch on focus.
+- Saat **menambah useQuery baru** di fitur:
+  - `src/features/6-1-dashboard/**`
+  - `src/features/6-1-Settings/**`
+  - `src/features/6-1-ScriptGenerator/**`
+  - `src/features/6-1-ContentCalendar/**`
+  - `src/features/6-1-ProductKnowledge/**`
+  - dan halaman lain yang sama pola (protected route + konten yang tidak boleh hilang)
+
+  **wajib** menyertakan `refetchOnWindowFocus: false` di options query (kecuali ada kebutuhan eksplisit refetch on focus).
+
+---
+
+## 3. Route & ProtectedRoute
+
+- Semua route digital-marketing (dashboard, content-calendar, product-knowledge, script-generator, settings) memakai `<ProtectedRoute>`. Perilaku "tidak reload" sudah didukung oleh:
+  - usePermissionConfiguration (tidak set loading saat refetch), dan
+  - query di masing-masing fitur dengan `refetchOnWindowFocus: false`.
+- Saat **menambah halaman baru** yang tidak boleh reload saat pindah tab: pastikan tidak ada loading state yang unmount children saat refetch (ikuti pola usePermissionConfiguration), dan semua useQuery di halaman itu pakai `refetchOnWindowFocus: false`.
+
+---
+
+## 4. Ringkasan checklist (halaman baru / query baru)
+
+- [ ] Query baru di halaman protected: tambah `refetchOnWindowFocus: false`.
+- [ ] Logic loading (permission/config/org) yang bisa refetch: jangan set loading `true` saat refetch jika data sudah pernah load (stale-while-revalidate tanpa unmount).
+- [ ] Jangan pasang listener `visibilitychange` / `focus` yang memicu reload, full refetch, atau navigasi kecuali memang dibutuhkan (mis. notifikasi).
+
+**File acuan:**  
+`src/features/1-layouts/sidebar/usePermissionConfiguration.ts`, `src/App.tsx` (focusManager + QueryClient), `src/features/6-1-dashboard/SocialMediaDashboardPage.tsx`, `src/features/6-1-Settings/SettingsPage.tsx`, `src/features/6-1-ScriptGenerator/ScriptGeneratorPage.tsx`.

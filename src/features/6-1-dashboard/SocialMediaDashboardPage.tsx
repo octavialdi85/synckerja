@@ -203,6 +203,7 @@ const SocialMediaContent = () => {
   const { data: notificationPreviewPlanFetched } = useQuery({
     queryKey: ['social-media-plan', notificationPreviewPlanId],
     enabled: !!notificationPreviewPlanId && !!organizationId,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
     queryFn: async (): Promise<ContentPlan | null> => {
       if (!notificationPreviewPlanId || !organizationId) return null;
       const { data, error } = await supabase

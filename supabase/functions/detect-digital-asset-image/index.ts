@@ -184,7 +184,10 @@ Deno.serve(async (req: Request) => {
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      console.error("Gemini API error:", geminiRes.status, errText);
+      const isTemporary = geminiRes.status === 503 || geminiRes.status === 429;
+      if (!isTemporary) {
+        console.error("Gemini API error:", geminiRes.status, errText);
+      }
       let errMsg = "Failed to detect image";
       try {
         const errJson = JSON.parse(errText);
@@ -192,7 +195,9 @@ Deno.serve(async (req: Request) => {
       } catch {
         // use default
       }
-      return jsonResponse({ error: errMsg }, 500);
+      // Pass through 503 (overloaded) and 429 (quota) so client can show "try again later"
+      const status = isTemporary ? geminiRes.status : 500;
+      return jsonResponse({ error: errMsg }, status);
     }
 
     const geminiData = await geminiRes.json();

@@ -31,6 +31,7 @@ export function useReviewCommentNotifications() {
   const { data: notifications = [], refetch } = useQuery({
     queryKey: [...QUERY_KEY, userId, organizationId],
     enabled: !!userId && !!organizationId,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
     queryFn: async (): Promise<ReviewCommentNotificationRow[]> => {
       if (!userId || !organizationId) return [];
       const { data, error } = await supabase
@@ -64,6 +65,7 @@ export function useReviewCommentNotifications() {
   const unreadCountQuery = useQuery({
     queryKey: [...QUERY_KEY, 'unread', userId, organizationId],
     enabled: !!userId && !!organizationId,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
     queryFn: async (): Promise<number> => {
       if (!userId || !organizationId) return 0;
       const { count, error } = await supabase

@@ -836,12 +836,16 @@ export const DetectFromImageSection: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('detect-digital-asset-image', {
         body: { imageBase64: base64, type: apiType },
       });
-      if (data?.error) {
-        const msg = String(data.error);
+      // Prefer server error message when present (e.g. 500 with JSON body)
+      const serverMessage = data && typeof data === 'object' && 'error' in data ? String((data as { error: unknown }).error) : '';
+      if (serverMessage) {
+        const msg = serverMessage;
         if (msg.includes('limit') || msg.includes('429')) {
           toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
         } else if (msg.includes('config') || msg.includes('Script AI')) {
           toast.error(t('detectFromImage.errorConfig', 'Script AI config not found. Configure at Settings > Script AI Generator.'));
+        } else if (msg.includes('high demand') || msg.includes('try again later') || msg.includes('UNAVAILABLE')) {
+          toast.error(t('detectFromImage.errorModelBusy', 'Model is busy. Please try again in a moment.'));
         } else {
           toast.error(msg);
         }
@@ -878,8 +882,18 @@ export const DetectFromImageSection: React.FC = () => {
         msg.includes('429') ||
         msg.includes('Too Many Requests') ||
         (typeof err === 'object' && err != null && (err as { context?: { status?: number } }).context?.status === 429);
+      const is503OrBusy =
+        msg.includes('503') ||
+        msg.includes('high demand') ||
+        msg.includes('try again later') ||
+        (typeof err === 'object' && err != null && (err as { context?: { status?: number } }).context?.status === 503);
+      const isEdgeFunctionError = msg.includes('Edge Function') || msg.includes('FunctionsFetchError');
       if (is429) {
         toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+      } else if (is503OrBusy) {
+        toast.error(t('detectFromImage.errorModelBusy', 'Model is busy. Please try again in a moment.'));
+      } else if (isEdgeFunctionError) {
+        toast.error(t('detectFromImage.errorService', 'Detection service error. Check Settings > Script AI Generator (API key & config) or try again later.'));
       } else {
         toast.error(msg || t('digitalAssets.detectError', 'Image detection failed.'));
       }

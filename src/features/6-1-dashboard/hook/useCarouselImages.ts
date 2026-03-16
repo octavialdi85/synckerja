@@ -43,6 +43,7 @@ export function useCarouselImages(socialMediaPlanId: string | undefined) {
     enabled: !!socialMediaPlanId,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
   });
 
   const uploadMutation = useMutation({
@@ -243,6 +244,7 @@ export function useCarouselCountsMap(planIds: string[]) {
     },
     enabled: planIds.length > 0,
     staleTime: 60 * 1000,
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
   });
   return { countsMap: query.data ?? {}, isLoading: query.isLoading, refetch: query.refetch };
 }

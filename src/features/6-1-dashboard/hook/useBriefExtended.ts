@@ -14,6 +14,7 @@ export function useBriefExtended(socialMediaPlanId: string | undefined, isOpen: 
 
   const query = useQuery({
     queryKey: [QUERY_KEY, socialMediaPlanId],
+    refetchOnWindowFocus: false, // Disabled to prevent reload when switching windows
     queryFn: async (): Promise<BriefExtendedData> => {
       if (!socialMediaPlanId) {
         return { targetAudience: null, caption: null, linkReference: null };

@@ -404,13 +404,25 @@ Deno.serve(async (req: Request) => {
         hasCharacterSelection
           ? "CRITICAL — REPLACE CHARACTER IN REFERENCE: The user has selected character(s) from the dropdown. You MUST REPLACE the person(s) shown in the composition reference images (Gambar ke-1, Gambar ke-2, Gambar ke-3, etc.) with the selected character(s). Do NOT keep or redraw the original person from those images. Draw the SELECTED character(s) — using the character reference images (face, hair, body, clothes) provided earlier — in the same position, pose, and setting as the person in the composition reference. The output must show the character chosen from the dropdown, not the original person in Gambar ke-N. Use the composition reference only for layout, pose, and scene; the face and body must be the selected character.\n\n"
           : "";
+      // CRITICAL: When user asks to use a composition reference as the MAIN image (e.g. "ganti gambar utama dengan referensi gambar 1"), the main subject MUST come from that Gambar ke-N, not from the first/reference design image.
+      const layoutLower = layoutStyleText.toLowerCase();
+      const useRefAsMainMatch = layoutLower.match(/(?:ganti|replace|pakai|use)\s+(?:gambar\s+utama|main\s+image|gambar\s+utama)\s+(?:dengan|with)\s+(?:referensi\s+)?(?:gambar|image)\s*(\d+)/i)
+        || layoutLower.match(/(?:referensi|reference)\s+(?:gambar|image)\s*(\d+)\s+sebagai\s+(?:gambar\s+utama|main)/i);
+      const mainRefNum = useRefAsMainMatch ? Math.min(parseInt(useRefAsMainMatch[1], 10) || 1, compositionReferences.length) : 0;
+      const compositionPriorityRule =
+        mainRefNum >= 1
+          ? `CRITICAL — COMPOSITION SECTION REQUEST: The user has requested that the MAIN image/subject be taken from Reference image ${mainRefNum} (Gambar ke-${mainRefNum}). You MUST use the CONTENT of Gambar ke-${mainRefNum} (the main product, drink, subject, or scene in that image) as the PRIMARY subject of the generated image. Do NOT use the first/reference design image as the main subject when the user has explicitly asked to use Gambar ke-${mainRefNum} instead. The main visual (e.g. the drink, product, or central element) in your output MUST match Gambar ke-${mainRefNum}. Follow this Composition section instruction exactly.\n\n`
+          : layoutStyleText !== ""
+            ? "CRITICAL — COMPOSITION SECTION: The user has provided instructions in the Composition section (text below). You MUST follow them. If the user asks to use a reference image (Gambar ke-N) as the main image or main subject, the MAIN subject of the generated image MUST be based on that referenced image, not on the first/reference design image. Do not ignore or override the Composition section.\n\n"
+            : "";
       parts.push({
         text:
           replaceCharRule +
+          compositionPriorityRule +
           "The images above are numbered composition/style references (Gambar ke-1, Gambar ke-2, etc.). Use them for composition (layout, arrangement, positioning) and visual style (mood, colors, look). " +
           (hasCharacterSelection
             ? "Remember: any person visible in those images must be REPLACED by the selected character(s) from the dropdown; do not copy the original person.\n\n"
-            : "Combine with the design description below.\n\n"),
+            : "When the user specifies in the Composition section to use one of these as the main image (e.g. Gambar ke-1), that image's main subject MUST be the primary content of the output. Combine with the design description below.\n\n"),
       });
     }
     const customSize = parseCustomSize(body);
@@ -552,7 +564,9 @@ Deno.serve(async (req: Request) => {
             : "";
       parts.push({
         text:
-          "MANDATORY COMPOSITION (from user-editable text area — apply exactly): Everything described below defines the composition to be created in a single frame/image. " +
+          "MANDATORY COMPOSITION — DO NOT IGNORE (from Composition Section): The user's instructions below define what must appear in the generated image. You MUST follow them exactly. " +
+          "If the user asks to use a reference image (e.g. 'ganti gambar utama dengan referensi gambar 1' or 'replace main image with reference image 1'), the MAIN subject of the output MUST be taken from that Gambar ke-N — not from the first/reference design image. " +
+          "Everything described below defines the composition to be created in a single frame/image. " +
           layoutPrefix +
           "The composition, arrangement, and layout of the generated image MUST follow this description precisely:\n\n" +
           layoutStyleText +

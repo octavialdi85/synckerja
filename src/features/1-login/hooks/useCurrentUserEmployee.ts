@@ -66,7 +66,7 @@ export const useCurrentUserEmployee = () => {
     enabled: !!user?.id && !!organizationId,
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 60 * 1000, // 1 minute
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnWindowFocus: false, // Disabled: prevent refetch/reload when switching tabs (user request)
   });
 };
 
