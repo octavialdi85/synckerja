@@ -592,7 +592,7 @@ export const DetectFromImageSection: React.FC = () => {
       readClipboardAsFile().then((file) => {
         if (file) setLayoutCompositionSlots((prev) => { const next = [...prev]; next[i] = file; return next; });
       });
-    }, 250);
+    }, 5000);
   }, [readClipboardAsFile]);
 
   const handleSlotDoubleClick = useCallback((i: number) => () => {
@@ -656,7 +656,7 @@ export const DetectFromImageSection: React.FC = () => {
         readClipboardAsFile().then((file) => {
           if (file) setCharacterStructuredRefFile(slotIndex, category, subIndex, file);
         });
-      }, 250);
+      }, 5000);
     },
     [readClipboardAsFile, setCharacterStructuredRefFile]
   );
@@ -1823,7 +1823,7 @@ export const DetectFromImageSection: React.FC = () => {
                 uploadClickTimeoutRef.current = setTimeout(() => {
                   uploadClickTimeoutRef.current = null;
                   readClipboardAsFile().then((file) => { if (file) setFile(file); });
-                }, 250);
+                }, 5000);
               }}
               onDoubleClick={() => {
                 if (uploadClickTimeoutRef.current) {
