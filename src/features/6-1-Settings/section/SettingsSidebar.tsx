@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Shield, Users, Calendar, FileText, Bell, Lock, Sparkles, Image, Scan } from 'lucide-react';
+import { Shield, Calendar, Sparkles, Image, Scan } from 'lucide-react';
 import { useAppTranslation } from '@/features/share/i18n/useAppTranslation';
 
 interface SettingsSidebarProps {
@@ -20,41 +20,6 @@ const settingsSections = [
     title: 'Content Scheduling',
     description: 'Set up posting schedules and automation',
     icon: Calendar,
-    status: 'active'
-  },
-  {
-    id: 'content-management',
-    title: 'Content Management',
-    description: 'Manage content types, pillars, and categories',
-    icon: FileText,
-    status: 'active'
-  },
-  {
-    id: 'user-permissions',
-    title: 'User Permissions',
-    description: 'Configure user roles and access levels',
-    icon: Users,
-    status: 'active'
-  },
-  {
-    id: 'notifications',
-    title: 'Notifications',
-    description: 'Configure notification preferences and alerts',
-    icon: Bell,
-    status: 'active'
-  },
-  {
-    id: 'security',
-    title: 'Security Settings',
-    description: 'Advanced security and privacy configurations',
-    icon: Lock,
-    status: 'active'
-  },
-  {
-    id: 'general',
-    title: 'General Settings',
-    description: 'Basic application settings and preferences',
-    icon: Settings,
     status: 'active'
   },
   {
