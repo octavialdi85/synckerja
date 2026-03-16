@@ -42,14 +42,9 @@ export interface DigitalAssetBrandColor {
   id: string;
   organization_id: string;
   brand_name: string | null;
-  background_color_hex: string | null;
-  background_color_percent: number | null;
   primary_color_hex: string | null;
-  primary_color_percent: number | null;
   secondary_color_hex: string | null;
-  secondary_color_percent: number | null;
   accent_color_hex: string | null;
-  accent_color_percent: number | null;
   text_color_hex: string | null;
   created_at?: string;
   updated_at?: string;
@@ -87,14 +82,9 @@ const emptyObjectForm = (): Partial<DigitalAssetObject> => ({
 
 const emptyBrandColorForm = (): Partial<DigitalAssetBrandColor> => ({
   brand_name: '',
-  background_color_hex: '',
-  background_color_percent: 40,
   primary_color_hex: '',
-  primary_color_percent: 30,
   secondary_color_hex: '',
-  secondary_color_percent: 20,
   accent_color_hex: '',
-  accent_color_percent: 10,
   text_color_hex: '',
 });
 
@@ -504,23 +494,13 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
   const handleBrandColorSave = async () => {
     if (!organizationId) return;
     const toHex = (v: string | null | undefined) => (v ?? '').trim().replace(/^#/, '');
-    const bg = toHex(brandColorForm.background_color_hex);
     const primary = toHex(brandColorForm.primary_color_hex);
     const secondary = toHex(brandColorForm.secondary_color_hex);
     const accent = toHex(brandColorForm.accent_color_hex);
     const text = toHex(brandColorForm.text_color_hex);
     const validHex = (h: string) => !h || /^[0-9A-Fa-f]{6}$/.test(h);
-    if (!validHex(bg) || !validHex(primary) || !validHex(secondary) || !validHex(accent) || !validHex(text)) {
+    if (!validHex(primary) || !validHex(secondary) || !validHex(accent) || !validHex(text)) {
       toast.error(t('digitalAssets.brandColorInvalidHex', 'Enter valid hex colors (e.g. FF5733) for all fields.'));
-      return;
-    }
-    const bgPct = Math.min(100, Math.max(0, Number(brandColorForm.background_color_percent) || 40));
-    const primaryPct = Math.min(100, Math.max(0, Number(brandColorForm.primary_color_percent) || 30));
-    const secondaryPct = Math.min(100, Math.max(0, Number(brandColorForm.secondary_color_percent) || 20));
-    const accentPct = Math.min(100, Math.max(0, Number(brandColorForm.accent_color_percent) || 10));
-    const totalPercent = bgPct + primaryPct + secondaryPct + accentPct;
-    if (totalPercent !== 100) {
-      toast.error(t('digitalAssets.brandColorTotalPercentMustBe100', 'Total color percentage must be 100%.'));
       return;
     }
     setBrandColorSaving(true);
@@ -528,14 +508,9 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
       const payload = {
         organization_id: organizationId,
         brand_name: brandColorForm.brand_name?.trim() || null,
-        background_color_hex: bg ? `#${bg}` : null,
-        background_color_percent: bgPct,
         primary_color_hex: primary ? `#${primary}` : null,
-        primary_color_percent: primaryPct,
         secondary_color_hex: secondary ? `#${secondary}` : null,
-        secondary_color_percent: secondaryPct,
         accent_color_hex: accent ? `#${accent}` : null,
-        accent_color_percent: accentPct,
         text_color_hex: text ? `#${text}` : null,
       };
       if (editingBrandColorId) {
@@ -565,14 +540,9 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
   const handleBrandColorEdit = (b: DigitalAssetBrandColor) => {
     setBrandColorForm({
       brand_name: b.brand_name ?? '',
-      background_color_hex: b.background_color_hex ?? '',
-      background_color_percent: b.background_color_percent ?? 40,
       primary_color_hex: b.primary_color_hex ?? '',
-      primary_color_percent: b.primary_color_percent ?? 30,
       secondary_color_hex: b.secondary_color_hex ?? '',
-      secondary_color_percent: b.secondary_color_percent ?? 20,
       accent_color_hex: b.accent_color_hex ?? '',
-      accent_color_percent: b.accent_color_percent ?? 10,
       text_color_hex: b.text_color_hex ?? '',
     });
     setEditingBrandColorId(b.id);
@@ -1059,20 +1029,20 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
                   className="mt-1 border-gray-300 bg-white"
                 />
               </div>
-              {[
-                { key: 'background_color_hex' as const, label: t('digitalAssets.brandColorBackground', 'Background Color'), percentKey: 'background_color_percent' as const },
-                { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color'), percentKey: 'primary_color_percent' as const },
-                { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color'), percentKey: 'secondary_color_percent' as const },
-                { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color'), percentKey: 'accent_color_percent' as const },
-                { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color'), percentKey: null },
-              ].map(({ key, label, percentKey }) => {
+              {(['primary_color_hex', 'secondary_color_hex', 'accent_color_hex', 'text_color_hex'] as const).map((key, i) => {
+                const labels = [
+                  t('digitalAssets.brandColorPrimary', 'Primary Color'),
+                  t('digitalAssets.brandColorSecondary', 'Secondary Color'),
+                  t('digitalAssets.brandColorAccent', 'Accent Color'),
+                  t('digitalAssets.brandColorText', 'Text Color'),
+                ];
                 const val = brandColorForm[key] ?? '';
                 const hexNorm = val.replace(/^#/, '').slice(0, 6);
                 const displayHex = /^[0-9A-Fa-f]{6}$/.test(hexNorm) ? `#${hexNorm}` : '#000000';
                 return (
                   <div key={key}>
-                    <Label className="text-gray-700">{label}</Label>
-                    <div className="flex gap-2 mt-1 items-center flex-wrap">
+                    <Label className="text-gray-700">{labels[i]}</Label>
+                    <div className="flex gap-2 mt-1 items-center">
                       <input
                         type="color"
                         value={displayHex}
@@ -1083,42 +1053,12 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
                         value={val}
                         onChange={(e) => setBrandColorForm((f) => ({ ...f, [key]: e.target.value }))}
                         placeholder="#000000"
-                        className="flex-1 min-w-[100px] border-gray-300 bg-white font-mono"
+                        className="flex-1 border-gray-300 bg-white font-mono"
                       />
-                      {percentKey && (
-                        <div className="flex items-center gap-1">
-                          <Label className="text-gray-500 text-xs whitespace-nowrap">{t('digitalAssets.brandColorPercent', 'Percentage')}</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={brandColorForm[percentKey] ?? ''}
-                            onChange={(e) => setBrandColorForm((f) => ({ ...f, [percentKey]: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                            className="w-16 border-gray-300 bg-white"
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
               })}
-              {(() => {
-                const bgP = Number(brandColorForm.background_color_percent) || 0;
-                const pP = Number(brandColorForm.primary_color_percent) || 0;
-                const sP = Number(brandColorForm.secondary_color_percent) || 0;
-                const aP = Number(brandColorForm.accent_color_percent) || 0;
-                const total = bgP + pP + sP + aP;
-                return (
-                  <div className="text-sm">
-                    <span className="text-gray-600">{t('digitalAssets.brandColorTotalPercent', 'Total %')}: </span>
-                    <span className={total === 100 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{total}%</span>
-                    {total !== 100 && (
-                      <p className="text-red-600 mt-1">{t('digitalAssets.brandColorTotalPercentMustBe100', 'Total color percentage must be 100%.')}</p>
-                    )}
-                  </div>
-                );
-              })()}
               <div className="flex gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={handleBrandColorCreateNew} className="border-gray-300 text-gray-700">
                   <Plus className="h-4 w-4 mr-2" />
@@ -1146,11 +1086,8 @@ export const DigitalAssetsSection: React.FC<{ onNavigateToDetectImage?: () => vo
                       className="flex items-center justify-between gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100"
                     >
                       <div className="min-w-0 flex-1 flex items-center gap-2">
-                        <div
-                          className="flex gap-1 flex-shrink-0"
-                          title={`${b.background_color_percent ?? 40}% / ${b.primary_color_percent ?? 30}% / ${b.secondary_color_percent ?? 20}% / ${b.accent_color_percent ?? 10}%`}
-                        >
-                          {[b.background_color_hex, b.primary_color_hex, b.secondary_color_hex, b.accent_color_hex, b.text_color_hex].map((hex, i) => (
+                        <div className="flex gap-1 flex-shrink-0">
+                          {[b.primary_color_hex, b.secondary_color_hex, b.accent_color_hex, b.text_color_hex].map((hex, i) => (
                             <span
                               key={i}
                               className="w-8 h-8 rounded border border-gray-300"

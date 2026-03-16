@@ -3415,14 +3415,10 @@ const idTranslations: TranslationDictionary = {
   "digitalAssets.brandColorBrandNamePlaceholder": "mis. Nama merek",
   "digitalAssets.brandColorNamePlaceholder": "mis. Primary Red",
   "digitalAssets.brandColorHex": "Kode Hex",
-  "digitalAssets.brandColorBackground": "Warna dasar",
   "digitalAssets.brandColorPrimary": "Warna Utama",
   "digitalAssets.brandColorSecondary": "Warna Sekunder",
   "digitalAssets.brandColorAccent": "Warna Aksen",
   "digitalAssets.brandColorText": "Warna Teks",
-  "digitalAssets.brandColorPercent": "Persen",
-  "digitalAssets.brandColorTotalPercent": "Total %",
-  "digitalAssets.brandColorTotalPercentMustBe100": "Total persentase warna harus 100%.",
   "digitalAssets.brandColorInvalidHex": "Masukkan kode hex yang valid (mis. FF5733 atau #FF5733).",
   "digitalAssets.confirmDeleteBrandColor": "Hapus brand color ini?",
   "digitalAssets.tipsTitle": "Tips Penggunaan",
@@ -3666,6 +3662,7 @@ const idTranslations: TranslationDictionary = {
   "detectFromImage.noCompanyLogoSelected": "Tidak ada company logo dipilih",
   "detectFromImage.searchCompanyLogoPlaceholder": "Cari company logo...",
   "detectFromImage.noCompanyLogoOption": "— Tidak pilih —",
+  "detectFromImage.companyLogoWhiteBackgroundHint": "Logo akan selalu ditampilkan dengan alas warna putih di hasil generate.",
   "detectFromImage.errorCompanyLogoLoadFailed": "Gagal memuat company logo.",
   "detectFromImage.errorCompanyLogoNoFile": "Company logo yang dipilih tidak memiliki gambar. Unggah logo di Digital Assets > Company Logo.",
   "detectFromImage.replaceTo": "Replace to...",
@@ -3691,7 +3688,8 @@ const idTranslations: TranslationDictionary = {
   "detectFromImage.errorEmptyPrompt": "Isi minimal satu \"Replace to...\" atau pilih karakter/produk untuk generate.",
   "detectFromImage.errorCharacterNoReferencePhoto": "Karakter yang dipilih belum punya foto referensi. Tambahkan di Digital Assets > Karakter.",
   "detectFromImage.errorCharacterReferenceLoadFailed": "Gagal memuat foto referensi karakter.",
-  "detectFromImage.errorRequestTooLarge": "Request gagal (timeout atau payload terlalu besar). Coba gambar referensi lebih kecil."
+  "detectFromImage.errorRequestTooLarge": "Request gagal (timeout atau payload terlalu besar). Kurangi jumlah atau ukuran gambar referensi lalu coba lagi.",
+  "detectFromImage.errorPayloadTooLarge": "Gambar referensi terlalu banyak atau terlalu besar. Kurangi jumlah gambar atau gunakan file lebih kecil agar tetap di bawah batas request."
 };
 
 const enTranslations: TranslationDictionary = {
@@ -7106,14 +7104,10 @@ const enTranslations: TranslationDictionary = {
   "digitalAssets.brandColorBrandNamePlaceholder": "e.g. My Brand",
   "digitalAssets.brandColorNamePlaceholder": "e.g. Primary Red",
   "digitalAssets.brandColorHex": "Hex Code",
-  "digitalAssets.brandColorBackground": "Background Color",
   "digitalAssets.brandColorPrimary": "Primary Color",
   "digitalAssets.brandColorSecondary": "Secondary Color",
   "digitalAssets.brandColorAccent": "Accent Color",
   "digitalAssets.brandColorText": "Text Color",
-  "digitalAssets.brandColorPercent": "Percentage",
-  "digitalAssets.brandColorTotalPercent": "Total %",
-  "digitalAssets.brandColorTotalPercentMustBe100": "Total color percentage must be 100%.",
   "digitalAssets.brandColorInvalidHex": "Enter a valid hex color (e.g. FF5733 or #FF5733).",
   "digitalAssets.confirmDeleteBrandColor": "Delete this brand color?",
   "digitalAssets.tipsTitle": "Usage Tips",
@@ -7357,6 +7351,7 @@ const enTranslations: TranslationDictionary = {
   "detectFromImage.noCompanyLogoSelected": "No company logo selected",
   "detectFromImage.searchCompanyLogoPlaceholder": "Search company logo...",
   "detectFromImage.noCompanyLogoOption": "— Don't select —",
+  "detectFromImage.companyLogoWhiteBackgroundHint": "Logo will always be displayed on a white background in the generated image.",
   "detectFromImage.errorCompanyLogoLoadFailed": "Failed to load company logo.",
   "detectFromImage.errorCompanyLogoNoFile": "Selected company logo has no image. Upload a logo in Digital Assets > Company Logo.",
   "detectFromImage.replaceTo": "Replace to...",
@@ -7382,7 +7377,8 @@ const enTranslations: TranslationDictionary = {
   "detectFromImage.errorEmptyPrompt": "Add at least one \"Replace to...\" value or select character/product to generate from.",
   "detectFromImage.errorCharacterNoReferencePhoto": "Selected character has no reference photo. Add one in Digital Assets > Character.",
   "detectFromImage.errorCharacterReferenceLoadFailed": "Failed to load character reference photo.",
-  "detectFromImage.errorRequestTooLarge": "Request failed (timeout or payload too large). Try a smaller reference image."
+  "detectFromImage.errorRequestTooLarge": "Request failed (timeout or payload too large). Use fewer or smaller reference images and try again.",
+  "detectFromImage.errorPayloadTooLarge": "Too many or too large reference images. Remove some images or use smaller files to stay under the request limit."
 };
 
 export const defaultTranslations: Record<AppLanguage, TranslationDictionary> = {

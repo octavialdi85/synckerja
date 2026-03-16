@@ -72,6 +72,62 @@ const BODY_POSE_OPTIONS: { value: string; labelKey: string }[] = [
   { value: 'hands_on_knees', labelKey: 'detectFromImage.bodyPoseHandsOnKnees' },
 ];
 
+/** Target aspect ratio as width/height (e.g. 4/5 for 4:5 portrait). */
+function getTargetAspectRatio(
+  aspectRatio: '1:1' | '4:5' | '9:16' | '16:9' | 'custom',
+  customWidth: string,
+  customHeight: string
+): number {
+  if (aspectRatio === 'custom') {
+    const w = Number(customWidth);
+    const h = Number(customHeight);
+    if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) return w / h;
+    return 1;
+  }
+  const [a, b] = aspectRatio.split(':').map(Number);
+  return Number.isFinite(a) && Number.isFinite(b) && b > 0 ? a / b : 1;
+}
+
+/**
+ * Force image to target aspect ratio by COVER: scale to fill the frame, center-crop excess.
+ * Hasil selalu mengisi penuh frame tanpa padding; bagian yang overflow dipotong.
+ */
+function fitDataUrlToAspectRatio(dataUrl: string, targetRatio: number): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const currentRatio = w / h;
+      if (Math.abs(currentRatio - targetRatio) < 0.02) {
+        resolve(dataUrl);
+        return;
+      }
+      const canvas = document.createElement('canvas');
+      // Output size with exact target ratio: crop width if image wider, crop height if image taller
+      const outW = currentRatio >= targetRatio ? Math.round(h * targetRatio) : w;
+      const outH = currentRatio >= targetRatio ? h : Math.round(w / targetRatio);
+      const scale = Math.max(outW / w, outH / h);
+      const srcW = Math.min(w, Math.round(outW / scale));
+      const srcH = Math.min(h, Math.round(outH / scale));
+      const srcX = Math.max(0, Math.round((w - srcW) / 2));
+      const srcY = Math.max(0, Math.round((h - srcH) / 2));
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 const HAND_GESTURE_OPTIONS: { value: string; labelKey: string }[] = [
   { value: 'pointing_up', labelKey: 'detectFromImage.handGesturePointingUp' },
   { value: 'pointing_down', labelKey: 'detectFromImage.handGesturePointingDown' },
@@ -274,14 +330,9 @@ export const DetectFromImageSection: React.FC = () => {
   const [designBrands, setDesignBrands] = useState<{
     id: string;
     brand_name: string | null;
-    background_color_hex: string | null;
-    background_color_percent: number | null;
     primary_color_hex: string | null;
-    primary_color_percent: number | null;
     secondary_color_hex: string | null;
-    secondary_color_percent: number | null;
     accent_color_hex: string | null;
-    accent_color_percent: number | null;
     text_color_hex: string | null;
   }[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -370,11 +421,14 @@ export const DetectFromImageSection: React.FC = () => {
   const [layoutCompositionUrls, setLayoutCompositionUrls] = useState<(string | null)[]>(() =>
     Array.from({ length: MAX_LAYOUT_COMPOSITION_IMAGES }, () => null)
   );
+  const layoutCompositionUrlsPrevRef = useRef<(string | null)[]>([]);
   useEffect(() => {
     const urls = layoutCompositionSlots.map((f) => (f ? URL.createObjectURL(f) : null));
+    const toRevoke = layoutCompositionUrlsPrevRef.current;
+    layoutCompositionUrlsPrevRef.current = urls;
     setLayoutCompositionUrls(urls);
     return () => {
-      urls.forEach((u) => { if (u) URL.revokeObjectURL(u); });
+      toRevoke.forEach((u) => { if (u) URL.revokeObjectURL(u); });
     };
   }, [layoutCompositionSlots]);
 
@@ -422,7 +476,7 @@ export const DetectFromImageSection: React.FC = () => {
           .order('updated_at', { ascending: false }),
         supabase
           .from('digital_asset_brand_colors')
-          .select('id, brand_name, background_color_hex, background_color_percent, primary_color_hex, primary_color_percent, secondary_color_hex, secondary_color_percent, accent_color_hex, accent_color_percent, text_color_hex')
+          .select('id, brand_name, primary_color_hex, secondary_color_hex, accent_color_hex, text_color_hex')
           .eq('organization_id', organizationId)
           .order('updated_at', { ascending: false }),
         supabase
@@ -441,14 +495,9 @@ export const DetectFromImageSection: React.FC = () => {
         (brandRes.data as {
           id: string;
           brand_name: string | null;
-          background_color_hex: string | null;
-          background_color_percent: number | null;
           primary_color_hex: string | null;
-          primary_color_percent: number | null;
           secondary_color_hex: string | null;
-          secondary_color_percent: number | null;
           accent_color_hex: string | null;
-          accent_color_percent: number | null;
           text_color_hex: string | null;
         }[]) || []
       );
@@ -824,7 +873,16 @@ export const DetectFromImageSection: React.FC = () => {
       }
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : t('digitalAssets.detectError', 'Image detection failed.'));
+      const msg = err instanceof Error ? err.message : String(err);
+      const is429 =
+        msg.includes('429') ||
+        msg.includes('Too Many Requests') ||
+        (typeof err === 'object' && err != null && (err as { context?: { status?: number } }).context?.status === 429);
+      if (is429) {
+        toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
+      } else {
+        toast.error(msg || t('digitalAssets.detectError', 'Image detection failed.'));
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -851,25 +909,18 @@ export const DetectFromImageSection: React.FC = () => {
     add(t('detectFromImage.subHeadline', 'Sub headline'), getValue('sub_headline'));
 
     if (selectedBrand != null) {
-      const bgHex = (selectedBrand.background_color_hex ?? '').trim();
-      const bgPct = selectedBrand.background_color_percent ?? 40;
+      /* Saat brand dipilih: kirim 4 warna dengan peran jelas agar AI pakai semua (termasuk accent) */
       const primary = (selectedBrand.primary_color_hex ?? '').trim();
-      const primaryPct = selectedBrand.primary_color_percent ?? 30;
       const secondary = (selectedBrand.secondary_color_hex ?? '').trim();
-      const secondaryPct = selectedBrand.secondary_color_percent ?? 20;
       const accent = (selectedBrand.accent_color_hex ?? '').trim();
-      const accentPct = selectedBrand.accent_color_percent ?? 10;
       const textColor = (selectedBrand.text_color_hex ?? '').trim();
-      if (bgHex || primary || secondary || accent || textColor) {
+      if (primary) lines.push('Primary color (main background/dominant): ' + primary);
+      if (secondary) lines.push('Secondary color: ' + secondary);
+      if (accent) lines.push('Accent color (use for buttons, highlights, call-to-action, icons, and accent elements): ' + accent);
+      if (textColor) lines.push('Text color: ' + textColor);
+      if (primary || secondary || accent || textColor) {
         lines.push('');
-        lines.push('BRAND COLOR PALETTE — respect these percentages as approximate visual proportion (total 100%):');
-        if (bgHex) lines.push(`- Background (canvas/page): ${bgHex} — must occupy about ${bgPct}% of the visible area.`);
-        if (primary) lines.push(`- Primary (dominant): ${primary} — about ${primaryPct}% of the design.`);
-        if (secondary) lines.push(`- Secondary: ${secondary} — about ${secondaryPct}%.`);
-        if (accent) lines.push(`- Accent (buttons, highlights, CTAs, icons): ${accent} — about ${accentPct}%.`);
-        if (textColor) lines.push(`- Text color (for copy only, no percentage): ${textColor}.`);
-        lines.push('');
-        lines.push('IMPORTANT: The four percentages above (background + primary + secondary + accent) must add up to 100%. Use each color in roughly the stated proportion so the result matches the brand. Do not ignore or underuse any of these colors.');
+        lines.push('Use ALL of the above brand colors in the design. Apply accent color visibly for buttons, highlights, or key visual elements.');
       }
     } else {
       const mainColorValue = getValue('main_color');
@@ -1160,11 +1211,25 @@ export const DetectFromImageSection: React.FC = () => {
         accessories?: string;
       }> = [];
 
+      let totalRefImages = (shouldSendReference && selectedFile ? 1 : 0) + characterReferences.length
+        + layoutCompositionSlots.filter((f): f is File => f != null).length
+        + (companyLogoBase64 ? 1 : 0);
+      for (const refs of characterStructuredRefs) {
+        if (refs?.head) totalRefImages += 1;
+        totalRefImages += refs?.clothes?.filter(Boolean).length ?? 0;
+        if (refs?.logo) totalRefImages += 1;
+        if (refs?.foot) totalRefImages += 1;
+        totalRefImages += refs?.accessories?.filter(Boolean).length ?? 0;
+      }
+      // Keep total request body under ~1MB (Supabase Edge Function limit) to avoid FunctionsFetchError
+      const compSize = totalRefImages > 8 ? 448 : totalRefImages > 5 ? 512 : totalRefImages > 2 ? 640 : 1024;
+      const compQuality = totalRefImages > 8 ? 0.55 : totalRefImages > 5 ? 0.6 : totalRefImages > 2 ? 0.7 : 0.8;
+
       for (const row of characterRows) {
         const refs = characterStructuredRefs[row.slotIndex];
         const entry: StructuredRefEntry = {};
         if (refs?.head) {
-          const { base64, mimeType } = await getCompressedImageBase64(refs.head, 1024, 0.8);
+          const { base64, mimeType } = await getCompressedImageBase64(refs.head, compSize, compQuality);
           const desc = refs.headDescription?.trim();
           entry.head = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
         }
@@ -1173,18 +1238,18 @@ export const DetectFromImageSection: React.FC = () => {
           for (let i = 0; i < refs.clothes.length; i++) {
             const f = refs.clothes[i];
             if (!f) continue;
-            const { base64, mimeType } = await getCompressedImageBase64(f, 1024, 0.8);
+            const { base64, mimeType } = await getCompressedImageBase64(f, compSize, compQuality);
             const desc = refs.clothesDescriptions?.[i]?.trim();
             entry.clothes.push({ imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) });
           }
         }
         if (refs?.logo) {
-          const { base64, mimeType } = await getCompressedImageBase64(refs.logo, 1024, 0.8);
+          const { base64, mimeType } = await getCompressedImageBase64(refs.logo, compSize, compQuality);
           const desc = refs.logoDescription?.trim();
           entry.logo = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
         }
         if (refs?.foot) {
-          const { base64, mimeType } = await getCompressedImageBase64(refs.foot, 1024, 0.8);
+          const { base64, mimeType } = await getCompressedImageBase64(refs.foot, compSize, compQuality);
           const desc = refs.footDescription?.trim();
           entry.foot = { imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) };
         }
@@ -1193,7 +1258,7 @@ export const DetectFromImageSection: React.FC = () => {
           for (let i = 0; i < refs.accessories.length; i++) {
             const f = refs.accessories[i];
             if (!f) continue;
-            const { base64, mimeType } = await getCompressedImageBase64(f, 1024, 0.8);
+            const { base64, mimeType } = await getCompressedImageBase64(f, compSize, compQuality);
             const desc = refs.accessoriesDescriptions?.[i]?.trim();
             entry.accessories.push({ imageBase64: base64, mimeType, ...(desc ? { description: desc } : {}) });
           }
@@ -1234,10 +1299,19 @@ export const DetectFromImageSection: React.FC = () => {
         compositionReferences?: { imageBase64: string; mimeType: string }[];
         elementsText?: string;
         layoutStyleText?: string;
+        headline?: string;
+        sub_headline?: string;
+        text?: string;
       } = {
         prompt,
         aspectRatio: designImageAspectRatio,
       };
+      const headlineVal = String(designReplace['headline'] ?? designResult?.headline ?? '').trim();
+      const subHeadlineVal = String(designReplace['sub_headline'] ?? designResult?.sub_headline ?? '').trim();
+      const textVal = String(designReplace['text'] ?? designResult?.text ?? '').trim();
+      if (headlineVal) body.headline = headlineVal;
+      if (subHeadlineVal) body.sub_headline = subHeadlineVal;
+      if (textVal) body.text = textVal;
       if (designImageAspectRatio === 'custom') {
         const w = Number(customSizeWidth);
         const h = Number(customSizeHeight);
@@ -1254,8 +1328,8 @@ export const DetectFromImageSection: React.FC = () => {
       if (shouldSendReference && selectedFile) {
         const { base64: referenceBase64, mimeType: referenceMimeType } = await getCompressedImageBase64(
           selectedFile,
-          1024,
-          0.8
+          compSize,
+          compQuality
         );
         body.referenceImageBase64 = referenceBase64;
         body.referenceImageMimeType = referenceMimeType;
@@ -1277,11 +1351,55 @@ export const DetectFromImageSection: React.FC = () => {
       if (filledSlots.length > 0) {
         const compositionReferences: { imageBase64: string; mimeType: string }[] = [];
         for (const file of filledSlots) {
-          const { base64: imageBase64, mimeType } = await getCompressedImageBase64(file, 1024, 0.8);
+          const { base64: imageBase64, mimeType } = await getCompressedImageBase64(file, compSize, compQuality);
           compositionReferences.push({ imageBase64, mimeType });
         }
         body.compositionReferences = compositionReferences;
       }
+
+      const PAYLOAD_LIMIT_BYTES = 900_000;
+      const estimateBodySize = (b: typeof body): number => {
+        let n = (b.prompt?.length ?? 0) + (b.elementsText?.length ?? 0) + (b.layoutStyleText?.length ?? 0) + 5000;
+        if (b.referenceImageBase64) n += b.referenceImageBase64.length;
+        for (const r of b.characterReferences ?? []) n += (r.imageBase64?.length ?? 0);
+        for (const s of b.characterStructuredReferences ?? []) {
+          if (s.head?.imageBase64) n += s.head.imageBase64.length;
+          for (const c of s.clothes ?? []) n += (c.imageBase64?.length ?? 0);
+          if (s.logo?.imageBase64) n += s.logo.imageBase64.length;
+          if (s.foot?.imageBase64) n += s.foot.imageBase64.length;
+          for (const a of s.accessories ?? []) n += (a.imageBase64?.length ?? 0);
+        }
+        if (b.companyLogoBase64) n += b.companyLogoBase64.length;
+        for (const c of b.compositionReferences ?? []) n += (c.imageBase64?.length ?? 0);
+        return n;
+      };
+      const estimatedSize = estimateBodySize(body);
+      if (estimatedSize > PAYLOAD_LIMIT_BYTES) {
+        toast.error(
+          t(
+            'detectFromImage.errorPayloadTooLarge',
+            'Too many or too large reference images. Remove some images or use smaller files to stay under the request limit.'
+          )
+        );
+        return;
+      }
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3025297e-3d48-4c21-b146-4bec28fb6bc4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9d707f' },
+        body: JSON.stringify({
+          sessionId: '9d707f',
+          location: 'DetectFromImageSection.tsx:invoke',
+          message: 'body before invoke',
+          data: { bodyAspectRatio: body.aspectRatio, designImageAspectRatio, customW: customSizeWidth, customH: customSizeHeight },
+          timestamp: Date.now(),
+          hypothesisId: 'H1',
+          runId: 'generate-image',
+        }),
+      }).catch(() => {});
+      // #endregion
+
       const { data, error } = await supabase.functions.invoke('generate-design-image', {
         body,
         // Perpanjang timeout agar request sampai ke Gemini (generate image bisa 60–120 detik)
@@ -1306,23 +1424,51 @@ export const DetectFromImageSection: React.FC = () => {
         return;
       }
       const dataUrl = `data:${mimeType};base64,${base64}`;
-      setGeneratedImageUrl(dataUrl);
+      const targetRatio = getTargetAspectRatio(designImageAspectRatio, customSizeWidth, customSizeHeight);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3025297e-3d48-4c21-b146-4bec28fb6bc4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9d707f' },
+        body: JSON.stringify({
+          sessionId: '9d707f',
+          location: 'DetectFromImageSection.tsx:afterResponse',
+          message: 'before fit',
+          data: { targetRatio, designImageAspectRatio, dataUrlLen: dataUrl.length },
+          timestamp: Date.now(),
+          hypothesisId: 'H2',
+          runId: 'generate-image',
+        }),
+      }).catch(() => {});
+      // #endregion
+      const fittedUrl = await fitDataUrlToAspectRatio(dataUrl, targetRatio);
+      setGeneratedImageUrl(fittedUrl);
     } catch (err) {
       console.error(err);
       const msg =
         err instanceof Error ? err.message : t('digitalAssets.detectError', 'Image generation failed.');
-      const isFetchFailed =
-        typeof msg === 'string' &&
-        (msg.includes('Failed to send a request') || msg.includes('FunctionsFetchError') || msg.includes('fetch'));
-      if (isFetchFailed) {
-        toast.error(
-          t(
-            'detectFromImage.errorRequestTooLarge',
-            'Request failed (timeout or payload too large). Try a smaller reference image.'
-          )
-        );
+      const is429 =
+        (typeof msg === 'string' && (msg.includes('429') || msg.includes('Too Many Requests'))) ||
+        (err != null && typeof err === 'object' && (err as { context?: { status?: number } }).context?.status === 429);
+      if (is429) {
+        toast.error(t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.'));
       } else {
-        toast.error(msg);
+        const isEdgeFunctionFetchError =
+          (err != null && typeof err === 'object' && (err as { name?: string }).name === 'FunctionsFetchError') ||
+          (typeof msg === 'string' &&
+            (msg.includes('Failed to send a request') ||
+              msg.includes('FunctionsFetchError') ||
+              msg.includes('Edge Function') ||
+              msg.includes('fetch')));
+        if (isEdgeFunctionFetchError) {
+          toast.error(
+            t(
+              'detectFromImage.errorRequestTooLarge',
+              'Request failed (timeout or payload too large). Use fewer or smaller reference images and try again.'
+            )
+          );
+        } else {
+          toast.error(msg);
+        }
       }
     } finally {
       setIsGeneratingImage(false);
@@ -1425,8 +1571,10 @@ export const DetectFromImageSection: React.FC = () => {
           // keep msg
         }
       }
-      setSceneAnalysisNegativePromptError(msg);
-      toast.error(msg);
+      const is429 = typeof msg === 'string' && (msg.includes('429') || msg.includes('Too Many Requests'));
+      const displayMsg = is429 ? t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.') : msg;
+      setSceneAnalysisNegativePromptError(displayMsg);
+      toast.error(displayMsg);
     } finally {
       setSceneAnalysisNegativePromptLoading(false);
     }
@@ -1512,8 +1660,10 @@ export const DetectFromImageSection: React.FC = () => {
           // keep msg
         }
       }
-      setSceneAnalysisImageDescriptionError(msg);
-      toast.error(msg);
+      const is429 = typeof msg === 'string' && (msg.includes('429') || msg.includes('Too Many Requests'));
+      const displayMsg = is429 ? t('detectFromImage.errorLimit', 'Daily limit reached. Try again tomorrow.') : msg;
+      setSceneAnalysisImageDescriptionError(displayMsg);
+      toast.error(displayMsg);
     } finally {
       setSceneAnalysisImageDescriptionLoading(false);
     }
@@ -1872,18 +2022,17 @@ export const DetectFromImageSection: React.FC = () => {
                       <p className="text-xs font-semibold text-gray-600">{t('detectFromImage.brandColorsFrom', 'Warna dari brand')}: {selectedBrandForDisplay.brand_name ?? '—'}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {[
-                          { key: 'background_color_hex' as const, label: t('digitalAssets.brandColorBackground', 'Background Color'), percent: selectedBrandForDisplay.background_color_percent ?? 40 },
-                          { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color'), percent: selectedBrandForDisplay.primary_color_percent ?? 30 },
-                          { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color'), percent: selectedBrandForDisplay.secondary_color_percent ?? 20 },
-                          { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color'), percent: selectedBrandForDisplay.accent_color_percent ?? 10 },
-                          { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color'), percent: null as number | null },
-                        ].map(({ key, label, percent }) => {
+                          { key: 'primary_color_hex' as const, label: t('digitalAssets.brandColorPrimary', 'Primary Color') },
+                          { key: 'secondary_color_hex' as const, label: t('digitalAssets.brandColorSecondary', 'Secondary Color') },
+                          { key: 'accent_color_hex' as const, label: t('digitalAssets.brandColorAccent', 'Accent Color') },
+                          { key: 'text_color_hex' as const, label: t('digitalAssets.brandColorText', 'Text Color') },
+                        ].map(({ key, label }) => {
                           const hex = selectedBrandForDisplay[key] ?? '';
                           return (
                             <div key={key} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
                               <span className="flex-shrink-0 w-8 h-8 rounded-md border border-gray-200" style={{ backgroundColor: hex || '#e5e7eb' }} title={hex || ''} />
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs font-medium text-gray-700 truncate">{label}{percent != null ? ` (~${percent}%)` : ''}</p>
+                                <p className="text-xs font-medium text-gray-700 truncate">{label}</p>
                                 <p className="text-xs text-gray-500 font-mono truncate">{hex || '—'}</p>
                               </div>
                             </div>
@@ -1969,6 +2118,7 @@ export const DetectFromImageSection: React.FC = () => {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                    <p className="text-xs text-slate-500">{t('detectFromImage.companyLogoWhiteBackgroundHint', 'Logo akan selalu ditampilkan dengan alas warna putih di hasil generate.')}</p>
                   </div>
                 </div>
               </div>

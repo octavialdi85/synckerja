@@ -108,9 +108,35 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "No active organization" }, 400);
     }
 
-    const body = await req.json().catch(() => ({}));
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch (parseErr) {
+      console.error("generate-design-image: body parse failed", parseErr);
+      return jsonResponse(
+        { error: "Invalid request body (possibly too large). Use fewer or smaller reference images and try again." },
+        400
+      );
+    }
     const prompt = body.prompt != null ? String(body.prompt).trim() : "";
+    const headlineExact = body.headline != null ? String(body.headline).trim() : "";
+    const subHeadlineExact = body.sub_headline != null ? String(body.sub_headline).trim() : "";
+    const textExact = body.text != null ? String(body.text).trim() : "";
+    const verbatimTextBlock =
+      headlineExact !== "" || subHeadlineExact !== "" || textExact !== ""
+        ? "MANDATORY — HEADLINES & TEXT SECTION (strict, no typos):\n" +
+          "ONLY the text strings listed below may appear as visible text. Copy them EXACTLY — character-for-character, in the same order. " +
+          "Do NOT drop, add, or replace any character. Do NOT add spaces inside a word or remove spaces between words. Do NOT duplicate letters or change spelling. " +
+          "Every character in the generated image must match the strings below exactly. No typos, no truncation, no paraphrase. Render sharp and crisp (no blur).\n\n" +
+          (headlineExact !== "" ? `HEADLINE — copy exactly: «${headlineExact}»\n` : "") +
+          (subHeadlineExact !== "" ? `SUB HEADLINE — copy exactly: «${subHeadlineExact}»\n` : "") +
+          (textExact !== "" ? `TEXT — copy exactly: «${textExact}»\n` : "") +
+          "\nFORBIDDEN — do NOT add any text that is not in the three fields above. Only the headline, sub headline, and text strings above may be shown.\n\n"
+        : "";
     const aspectRatio = parseAspectRatio(body.aspectRatio);
+    // #region agent log
+    console.log("[debug] body.aspectRatio:", body.aspectRatio, "parsed aspectRatio:", aspectRatio);
+    // #endregion
     const referenceImageBase64 = body.referenceImageBase64 != null ? String(body.referenceImageBase64).trim() : "";
     const referenceImageMimeType =
       body.referenceImageMimeType != null && String(body.referenceImageMimeType).trim() !== ""
@@ -258,9 +284,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const geminiUrl = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    const generationConfig: Record<string, unknown> = {
+    const generationConfigPrimary: Record<string, unknown> = {
       responseModalities: ["TEXT", "IMAGE"],
     };
+    // aspectRatio will be set below after we compute effectiveAspectRatio and customSize
 
     const parts: unknown[] = [];
     if (referenceImageBase64 !== "") {
@@ -349,10 +376,12 @@ Deno.serve(async (req: Request) => {
       parts.push({
         text:
           "The image above is the company logo that MUST appear in the generated design. " +
-          "Place the logo in the center (horizontally). Keep the logo SMALL and compact—like a typical header or watermark: it must be clearly readable but should occupy only a small fraction of the image (e.g. no larger than 10–15% of the canvas height). Do not make the logo dominate the layout. " +
-          "Ensure the logo has strong contrast with its background (light logo on dark, dark on light, or add outline/glow). " +
+          "MANDATORY: (1) WHITE BACKGROUND (alas putih) — The company logo MUST sit on a WHITE background. Alas putih must be exactly 64×64 pixels — fixed size, same in every image. Keep internal padding minimal: little or no unnecessary space above or below the logo text inside the white base; the logo should fill the alas putih snugly so the white rectangle does not look too tall. " +
+          "(2) CORNERS — The bottom-left and bottom-right corners of the alas putih must be slightly rounded (rounded corners); the top corners can stay sharp. " +
+          "(3) LOGO SIZE — The logo sits inside the 64×64 px alas putih, with minimal top/bottom padding inside. Total block = 64 pixels, consistent in every image for carousel. " +
+          "(4) POSITION — Place the logo at the TOP CENTER, flush with the top edge (nempel ke atas): horizontally centered, top of the alas putih touching the top edge of the frame with minimal or no gap. " +
           "Do NOT use any other logo or brand name from reference images; replace any existing logo with this one. " +
-          "NOTE: If you were also given 'Character N – Logo on chest' images earlier, those are for the CHARACTER'S CLOTHING ONLY (on the character's baju/shirt). Do not use those character logos in the design header—keep them on the character's chest. This company logo is separate and goes in the design layout.\n\n",
+          "NOTE: If you were also given 'Character N – Logo on chest' images earlier, those are for the CHARACTER'S CLOTHING ONLY. Do not use those in the design header—keep them on the character's chest. This company logo is separate and goes in the design layout.\n\n",
       });
     }
     for (let i = 0; i < compositionReferences.length; i++) {
@@ -370,14 +399,22 @@ Deno.serve(async (req: Request) => {
       });
     }
     if (compositionReferences.length > 0) {
+      const hasCharacterSelection = characterReferences.length > 0 || characterStructuredReferences.length > 0;
+      const replaceCharRule =
+        hasCharacterSelection
+          ? "CRITICAL — REPLACE CHARACTER IN REFERENCE: The user has selected character(s) from the dropdown. You MUST REPLACE the person(s) shown in the composition reference images (Gambar ke-1, Gambar ke-2, Gambar ke-3, etc.) with the selected character(s). Do NOT keep or redraw the original person from those images. Draw the SELECTED character(s) — using the character reference images (face, hair, body, clothes) provided earlier — in the same position, pose, and setting as the person in the composition reference. The output must show the character chosen from the dropdown, not the original person in Gambar ke-N. Use the composition reference only for layout, pose, and scene; the face and body must be the selected character.\n\n"
+          : "";
       parts.push({
         text:
-          "The images above are numbered composition/style references (Gambar ke-1, Gambar ke-2, etc.). When the user's description refers to a number (e.g. 'gambar ke 1', 'image 2', 'masukan gambar ke 1 ke dalam handphone'), use the corresponding reference image. If no number is specified for a reference, use your judgment for composition and style. Generate an image that follows the same composition (layout, arrangement, positioning) and visual style (mood, colors, look) as these references where applicable. Combine with the design description below.\n\n",
+          replaceCharRule +
+          "The images above are numbered composition/style references (Gambar ke-1, Gambar ke-2, etc.). Use them for composition (layout, arrangement, positioning) and visual style (mood, colors, look). " +
+          (hasCharacterSelection
+            ? "Remember: any person visible in those images must be REPLACED by the selected character(s) from the dropdown; do not copy the original person.\n\n"
+            : "Combine with the design description below.\n\n"),
       });
     }
     const customSize = parseCustomSize(body);
-    // Jangan kirim aspectRatio ke generationConfig: gemini-3-pro-image-preview tidak mendukung field ini (400 Unknown name "aspectRatio").
-    // Orientasi dan ukuran custom tetap diarahkan lewat prompt (customSizePrefix + LANDSCAPE/PORTRAIT/SQUARE).
+    // Aspect ratio is sent via generationConfig.imageConfig.aspectRatio (see below); prompt also enforces orientation and safe area.
     const numCharRefs = characterReferences.length;
     if (numCharRefs > 0) {
       const charLabels = Array.from({ length: numCharRefs }, (_, i) => `Character ${i + 1}`).join(", ");
@@ -412,29 +449,112 @@ Deno.serve(async (req: Request) => {
                 : h > w
                   ? "OUTPUT ORIENTATION: PORTRAIT (vertical). The image MUST be TALLER than it is WIDE. Height is the longer side; the canvas is vertical. Do NOT output a landscape or square image."
                   : "OUTPUT ORIENTATION: SQUARE. Width equals height. The canvas must be square.";
-            return `MANDATORY — CUSTOM SIZE: ${orientation}\n\nThe generated image MUST be exactly ${w} × ${h} ${unit} (width × height). Aspect ratio MUST be ${w}:${h}. Do NOT use any other dimensions or aspect ratio. Compose the entire layout to fit this exact size; the output dimensions and orientation are non-negotiable.\n\n`;
+            const isWideBanner = w > h && w / h >= 2;
+            const safeAreaCustom =
+              "COMPOSITION FOR CUSTOM SIZE: Keep ALL content (text, logos, people, objects, props, speech bubbles) INSIDE safe margins — at least 12–15% from the TOP, BOTTOM, LEFT, and RIGHT edges. Do NOT crop or cut off any part of a person (full head and body must be visible), any text, or any object. Leave breathing room on all four sides.\n\n";
+            const wideBannerNote = isWideBanner
+              ? "WIDE BANNER RULES: (1) ONE COHESIVE SCENE — do NOT create two separate panels (e.g. solid block left + different scene right with a hard cut). Use a single unified background or a smooth gradient/transition so the whole image feels like one design. (2) BALANCE — distribute content across the width: e.g. left area for text and products (with margin), center for connection or transition, right area for character and scene (with margin). Do NOT pack one side and crop the other. (3) FULL FIGURES — characters must be fully visible (full head, body, arms, held items) with margin from the frame; do NOT cut off heads or legs. (4) Logo and key elements should be placed deliberately (e.g. top center or clearly in one zone), not overlapping a seam between two disjointed areas.\n\n"
+              : "";
+            const cohesiveNote =
+              !isWideBanner && w !== h
+                ? "Create ONE unified composition — background and elements should flow together naturally, not look like separate blocks joined together.\n\n"
+                : "";
+            return `MANDATORY — CUSTOM SIZE: ${orientation}\n\nThe generated image MUST be exactly ${w} × ${h} ${unit} (width × height). Aspect ratio MUST be ${w}:${h}. Do NOT use any other dimensions or aspect ratio. ${safeAreaCustom}${wideBannerNote}${cohesiveNote}Compose the entire layout to fit this exact size; the output dimensions and orientation are non-negotiable. The output image MUST have exactly these dimensions. Do not approximate or use different dimensions.\n\n`;
           })()
         : "";
     const effectiveAspectRatio = aspectRatio === "custom" && !customSize ? "1:1" : aspectRatio;
+    const orientationLabel =
+      aspectRatio === "custom" && customSize
+        ? customSize.width > customSize.height
+          ? "LANDSCAPE"
+          : customSize.height > customSize.width
+            ? "PORTRAIT"
+            : "SQUARE"
+        : effectiveAspectRatio === "1:1"
+          ? "SQUARE"
+          : effectiveAspectRatio === "4:5" || effectiveAspectRatio === "9:16"
+            ? "PORTRAIT"
+            : effectiveAspectRatio === "16:9"
+              ? "LANDSCAPE"
+              : "SQUARE";
+    const displayRatioForFirstPart =
+      aspectRatio === "custom" && customSize
+        ? `${customSize.width}:${customSize.height}`
+        : effectiveAspectRatio;
+    const aspectRatioWarning =
+      "CRITICAL: You MUST output an image with EXACTLY the aspect ratio requested below. If you output a different aspect ratio (e.g. landscape when square or portrait was requested), the image will be cropped and text, logos, and people will be cut off. Always generate at the exact requested aspect ratio.\n\n";
+    const fillCanvasRule =
+      "FILL THE FRAME: The design MUST extend to ALL FOUR EDGES of the image. Do NOT leave white, empty, or blank borders or margins around the design. The background or content must reach every edge of the canvas. No letterboxing, no centering the design in a larger empty canvas.\n\n";
+    const safeAreaRule =
+      "SAFE AREA (CRITICAL): Imagine the output at the EXACT aspect ratio requested. Keep ALL important content INSIDE safe margins — at least 8–10% from the top, bottom, left, and right edges. Do NOT place any text, logos, faces, or key body parts (hands, arms, shoulders) on or past the frame boundary. Background and non-essential fill can go to the edges; headlines, taglines, logos, and people must stay fully visible within the frame. This prevents cropping when the image is displayed at the requested aspect ratio.\n\n";
+    const portraitNoLandscapeRule =
+      orientationLabel === "PORTRAIT" && (effectiveAspectRatio === "9:16" || effectiveAspectRatio === "4:5")
+        ? "CRITICAL — PORTRAIT FRAME FILL: The output is a TALL portrait (height much greater than width). You MUST use the FULL HEIGHT of the canvas. Do NOT create a landscape or horizontal band and place it inside the portrait frame. Do NOT draw a wide horizontal layout that leaves empty space above and below. The ENTIRE image must be composed vertically: content must extend from the top third through the middle third to the bottom third. No empty bands at top or bottom. The result must BE a portrait design that fills the frame, not a landscape design on a portrait canvas.\n\n"
+        : "";
+    const squareNoLandscapeRule =
+      orientationLabel === "SQUARE"
+        ? "CRITICAL — SQUARE FRAME: The output MUST be SQUARE (1:1). Do NOT create a landscape or portrait layout and place it inside a square frame. Compose the design to FILL THE SQUARE — use the full width and full height. No wide horizontal band with empty space above/below; no tall vertical band with empty space on the sides. Content must be arranged for a square canvas.\n\n"
+        : "";
+    const outputFormatFirstPart =
+      orientationLabel === "PORTRAIT"
+        ? `${aspectRatioWarning}OUTPUT FORMAT (MANDATORY): Aspect ratio ${displayRatioForFirstPart}. Orientation: PORTRAIT. ${fillCanvasRule}${safeAreaRule}${portraitNoLandscapeRule}Compose the SCENE vertically (top-to-bottom layout). Do NOT use a horizontal banner layout. Do NOT put a landscape composition inside a portrait frame. The generated image MUST have this exact aspect ratio and MUST fill the full height.\n\n`
+        : orientationLabel === "LANDSCAPE"
+          ? `${aspectRatioWarning}OUTPUT FORMAT (MANDATORY): Aspect ratio ${displayRatioForFirstPart}. Orientation: LANDSCAPE. ${fillCanvasRule}${safeAreaRule}Compose the SCENE horizontally (left-to-right layout). The generated image MUST have this exact aspect ratio.\n\n`
+          : `${aspectRatioWarning}OUTPUT FORMAT (MANDATORY): Aspect ratio ${displayRatioForFirstPart}. Orientation: SQUARE. ${fillCanvasRule}${safeAreaRule}${squareNoLandscapeRule}The generated image MUST be exactly square (same width and height). Do NOT output landscape or portrait. Compose to fill the square frame.\n\n`;
+    const isCustomSize = aspectRatio === "custom" && customSize !== null;
+    const customCompositionRule =
+      isCustomSize
+        ? "CUSTOM SIZE COMPOSITION (CRITICAL): (1) ONE SCENE — The whole image must be ONE cohesive design, not two or more disjointed panels. Background, text, and characters must belong to the same continuous scene with a unified or smoothly transitioning background. (2) SAFE MARGINS — Every element (text, logo, people, objects, props, speech bubbles) must sit at least 12–15% inside the top, bottom, left, and right edges. No cropping of heads, bodies, or text. (3) BALANCED LAYOUT — Distribute content across the canvas so neither side is overcrowded or cropped. Leave space on all sides. (4) FULL FIGURES — People must be fully visible (full head and body in frame) with room to spare; do not cut off at the chin, waist, or edges.\n\n"
+        : "";
+    const compositionRuleForOrientation =
+      orientationLabel === "PORTRAIT"
+        ? "COMPOSITION RULE (CRITICAL — PORTRAIT): You MUST compose the scene for a TALL, VERTICAL layout at the requested aspect ratio. FILL THE ENTIRE FRAME from top to bottom — use the UPPER third, MIDDLE third, and LOWER third with real content; no empty vertical bands. Keep ALL text, logos, and people INSIDE safe margins (at least 8–10% from each edge) so nothing is cut off. Structure: (1) Logo and headline in the UPPER third, well inside the top and side edges, (2) Main visual (characters, product, phone) in the MIDDLE third — full bodies and arms visible, (3) Call-to-action or supporting content in the LOWER third, inset from the bottom. FORBIDDEN: Do NOT draw a landscape or horizontal band and place it in the center of a tall frame. Do NOT leave large empty space at top or bottom. The output must be a single portrait image that uses the full height, not a wide design sitting in the middle of a portrait canvas.\n\n"
+        : orientationLabel === "LANDSCAPE"
+          ? "COMPOSITION RULE (CRITICAL): The CONTENT and LAYOUT must be designed for a HORIZONTAL (landscape) format at the requested aspect ratio. FILL THE FRAME with background edge to edge; keep ALL text, logos, people, objects, and props INSIDE safe margins (at least 10% from top, bottom, left, right) so nothing is cut off. Arrange elements from LEFT TO RIGHT; do not crop arms, shoulders, objects, or text at the edges. Speech bubbles, held items, and background elements must be fully visible within the frame. Do NOT create a vertical composition that leaves empty bands on the sides.\n\n"
+          : orientationLabel === "SQUARE"
+            ? "COMPOSITION RULE (CRITICAL — SQUARE): The CONTENT and LAYOUT must be designed for a SQUARE (1:1) format. FILL THE ENTIRE SQUARE — use both width and height; do NOT draw a landscape or portrait composition inside a square frame. Keep ALL text, logos, and people INSIDE safe margins (at least 10% from top, bottom, left, right) so nothing is cut off. Do NOT place headlines, taglines, or character limbs at the very edge; no cropped text or body parts. The output must BE a square design that fills the frame, not a wide or tall design placed on a square canvas.\n\n"
+            : "";
+    const aspectRatioMandatoryPrefix =
+      aspectRatio === "custom" && customSize
+        ? ""
+        : effectiveAspectRatio === "1:1"
+          ? "MANDATORY — OUTPUT ASPECT RATIO: 1:1. OUTPUT ORIENTATION: SQUARE. The canvas is SQUARE (width = height). You MUST output a SQUARE image that FILLS THE FRAME. Do NOT output a landscape or portrait image. Do NOT draw a wide horizontal or tall vertical layout and place it in a square — compose for the square so content uses the full area with safe margins (10% from each edge). This aspect ratio is non-negotiable.\n\n"
+          : effectiveAspectRatio === "4:5" || effectiveAspectRatio === "9:16"
+            ? `MANDATORY — OUTPUT ASPECT RATIO: ${effectiveAspectRatio}. OUTPUT ORIENTATION: PORTRAIT. The canvas is TALL (height > width). You MUST output a PORTRAIT image that FILLS THE FULL HEIGHT. Do NOT output a landscape or square image. Do NOT create a wide horizontal design and place it inside a portrait frame — the design must USE the full vertical space (top, middle, and bottom). No empty bands at top or bottom. This aspect ratio is non-negotiable.\n\n`
+            : effectiveAspectRatio === "16:9"
+              ? "MANDATORY — OUTPUT ASPECT RATIO: 16:9. OUTPUT ORIENTATION: LANDSCAPE. The canvas MUST be WIDER than it is TALL. You MUST output a LANDSCAPE image only — not portrait, not square. The final image MUST have width greater than height. Do NOT output a portrait or square image. This aspect ratio is non-negotiable.\n\n"
+              : "";
     const characterInstruction =
       numCharRefs > 0
         ? referenceImageBase64 !== ""
-          ? `Generate the image in aspect ratio ${effectiveAspectRatio}. The first attached image is the design reference. The next ${numCharRefs} image(s) are character references.${characterStructuredReferences.length > 0 ? " REMINDER: Character N – Head, Clothes, Logo on chest, Foot, and Accessories images above are MANDATORY. Character N – Logo must be placed ON THE CHARACTER'S BAU (shirt/jacket chest only)—NOT in the design header or layout. For Head: copy the hair from the reference exactly—same texture (if reference has curly hair, draw curly hair; do not draw straight or swept-back). Draw the exact outfit with logo on the character's clothes, and exact shoes and accessories; do not replace with other items from the design description." : ""}\n\nIMPORTANT: In the design description below, each character has optional fields: Expression, Body pose, Hand gesture. Whatever is specified MUST be drawn exactly—e.g. Expression: Sad means that character must look sad (sorrowful face, no smile); Body pose: Sitting means that character must be seated; Hand gesture: Pointing up means that character's hand/arm must be pointing upward. Do not substitute a generic happy pose when the user chose a different expression or gesture.\n\n${companyLogoBase64 !== "" ? "Use the provided company logo in the design; do not use any logo from the reference image.\n\n" : ""}Design description:\n\n`
-          : `Generate the image in aspect ratio ${effectiveAspectRatio}. The attached image(s) are character references in order.${characterStructuredReferences.length > 0 ? " REMINDER: Character N – Head, Clothes, Logo on chest, Foot, and Accessories images above are MANDATORY. Character N – Logo must be placed ON THE CHARACTER'S BAU (shirt/jacket chest only)—NOT in the design header or layout. For Head: copy the hair from the reference exactly—same texture (if reference has curly hair, draw curly hair; do not draw straight or swept-back). Draw the exact outfit with logo on the character's clothes, and exact shoes and accessories; do not replace with other items from the design description." : ""}\n\nIMPORTANT: In the design description below, each character has optional fields: Expression, Body pose, Hand gesture. Whatever is specified MUST be drawn exactly—e.g. Expression: Sad means that character must look sad (sorrowful face, no smile); Body pose: Sitting means that character must be seated; Hand gesture: Pointing up means that character's hand/arm must be pointing upward. Do not substitute a generic happy pose when the user chose a different expression or gesture.\n\n${companyLogoBase64 !== "" ? "Use the provided company logo in the design.\n\n" : ""}Design description:\n\n`
-        : `Generate the image in aspect ratio ${effectiveAspectRatio}.${companyLogoBase64 !== "" ? " Use the provided company logo visibly in the design." : ""}\n\n`;
+          ? `The first attached image is the design reference. The next ${numCharRefs} image(s) are character references.${characterStructuredReferences.length > 0 ? " REMINDER: Character N – Head, Clothes, Logo on chest, Foot, and Accessories images above are MANDATORY. Character N – Logo must be placed ON THE CHARACTER'S BAU (shirt/jacket chest only)—NOT in the design header or layout. For Head: copy the hair from the reference exactly—same texture (if reference has curly hair, draw curly hair; do not draw straight or swept-back). Draw the exact outfit with logo on the character's clothes, and exact shoes and accessories; do not replace with other items from the design description." : ""}\n\nIMPORTANT: In the design description below, each character has optional fields: Expression, Body pose, Hand gesture. Whatever is specified MUST be drawn exactly—e.g. Expression: Sad means that character must look sad (sorrowful face, no smile); Body pose: Sitting means that character must be seated; Hand gesture: Pointing up means that character's hand/arm must be pointing upward. Do not substitute a generic happy pose when the user chose a different expression or gesture.\n\n${companyLogoBase64 !== "" ? "Use the provided company logo in the design; do not use any logo from the reference image.\n\n" : ""}Design description:\n\n`
+          : `The attached image(s) are character references in order.${characterStructuredReferences.length > 0 ? " REMINDER: Character N – Head, Clothes, Logo on chest, Foot, and Accessories images above are MANDATORY. Character N – Logo must be placed ON THE CHARACTER'S BAU (shirt/jacket chest only)—NOT in the design header or layout. For Head: copy the hair from the reference exactly—same texture (if reference has curly hair, draw curly hair; do not draw straight or swept-back). Draw the exact outfit with logo on the character's clothes, and exact shoes and accessories; do not replace with other items from the design description." : ""}\n\nIMPORTANT: In the design description below, each character has optional fields: Expression, Body pose, Hand gesture. Whatever is specified MUST be drawn exactly—e.g. Expression: Sad means that character must look sad (sorrowful face, no smile); Body pose: Sitting means that character must be seated; Hand gesture: Pointing up means that character's hand/arm must be pointing upward. Do not substitute a generic happy pose when the user chose a different expression or gesture.\n\n${companyLogoBase64 !== "" ? "Use the provided company logo in the design.\n\n" : ""}Design description:\n\n`
+        : `${companyLogoBase64 !== "" ? "Use the provided company logo visibly in the design, always on a white background (alas warna putih)." : ""}\n\n`;
 
+    const userEditableSectionsRule =
+      prompt.length > 0 || elementsText !== "" || layoutStyleText !== ""
+        ? "USER-EDITABLE SECTIONS (use these, not the original): The design description below (Font, Elements, Composition, Headlines & text) comes from the user-editable text areas. You MUST follow Font, Elements, and Composition exactly as written. All headline, sub headline, and body text must be rendered SHARP and CRISP — no blur effect, no soft focus, no glow — clearly readable and matching the Font description.\n\n"
+        : "";
     if (elementsText !== "") {
       parts.push({
         text:
-          "MANDATORY ELEMENTS — The following elements MUST appear in the generated image exactly as specified. Do not omit, replace, or generalize any of these. Include every element listed:\n\n" +
+          "MANDATORY ELEMENTS (from user-editable text area — apply exactly): The following elements MUST appear in the generated image exactly as specified. Do not omit, replace, or generalize. Include every element listed:\n\n" +
           elementsText +
           "\n\n",
       });
     }
     if (layoutStyleText !== "") {
+      const layoutPrefix =
+        orientationLabel === "PORTRAIT"
+          ? "IMPORTANT: This image is PORTRAIT (vertical). Use the FULL HEIGHT of the frame — no empty bands at top or bottom. Interpret the composition below as a VERTICAL layout: if it describes elements side-by-side or horizontal, arrange them TOP TO BOTTOM instead. Do NOT draw a single horizontal band in the center; distribute content from top to bottom so the portrait frame is filled.\n\n"
+          : isCustomSize
+            ? "IMPORTANT: Custom dimensions — create ONE unified frame/image. The composition below must be realized as a single cohesive scene (unified or smoothly transitioning background), not as two separate panels side by side. Balance left and right; keep all elements inside safe margins.\n\n"
+            : "";
       parts.push({
         text:
-          "MANDATORY COMPOSITION — Everything described below defines the composition to be created in a single frame/image. The composition, arrangement, and layout of the generated image MUST follow this description precisely:\n\n" +
+          "MANDATORY COMPOSITION (from user-editable text area — apply exactly): Everything described below defines the composition to be created in a single frame/image. " +
+          layoutPrefix +
+          "The composition, arrangement, and layout of the generated image MUST follow this description precisely:\n\n" +
           layoutStyleText +
           "\n\n",
       });
@@ -454,14 +574,50 @@ Deno.serve(async (req: Request) => {
             .filter((s) => s.length > 0)
             .join("\n\n")
         : "";
-    const promptFinal = characterTextBlock ? characterTextBlock + "\n\n" + prompt : prompt;
-    parts.push({ text: customSizePrefix + characterInstruction + promptFinal });
+    const portraitPromptWrap =
+      orientationLabel === "PORTRAIT" && prompt.length > 0
+        ? "LAYOUT CONSTRAINT: Compose the following design in a VERTICAL (portrait) arrangement that FILLS THE FULL HEIGHT. Stack elements from top to bottom; do not place main elements in one horizontal row. Use upper, middle, and lower parts of the frame — no large empty areas at top or bottom.\n\n"
+        : "";
+    const promptFinal = characterTextBlock ? characterTextBlock + "\n\n" + portraitPromptWrap + prompt : (portraitPromptWrap + prompt);
+    const aspectRatioReminder =
+      orientationLabel === "PORTRAIT"
+        ? `\n\nREMINDER: Output aspect ratio must be exactly ${displayRatioForFirstPart}. PORTRAIT — fill the FULL HEIGHT from top to bottom. Do NOT put a landscape or horizontal band inside the portrait frame. Do NOT leave empty space at top or bottom. Keep all text, logos, and people inside safe margins (8–10% from edges) so nothing is cut off.`
+        : isCustomSize
+          ? `\n\nREMINDER: Output must be exactly ${displayRatioForFirstPart} (custom size). ONE cohesive scene — no disjointed panels. Keep ALL elements inside safe margins (12–15% from all edges). Full figures and full text visible; no cropping. Balanced layout left and right.`
+          : `\n\nREMINDER: Output aspect ratio must be exactly ${displayRatioForFirstPart}. Output orientation: ${orientationLabel}. Keep all text, logos, and people inside safe margins (8–10% from edges) so nothing is cut off.`;
+    parts.push({
+      text:
+        (customSizePrefix || aspectRatioMandatoryPrefix) +
+        verbatimTextBlock +
+        customCompositionRule +
+        compositionRuleForOrientation +
+        characterInstruction +
+        userEditableSectionsRule +
+        promptFinal +
+        aspectRatioReminder,
+    });
+    parts.unshift({ text: outputFormatFirstPart });
 
-    const modelsToTry = [IMAGE_MODEL_PRIMARY, IMAGE_MODEL_FALLBACK];
+    // #region agent log
+    console.log("[debug] orientationLabel:", orientationLabel, "firstPartPreview:", (outputFormatFirstPart || "").slice(0, 120), "compositionLen:", compositionRuleForOrientation.length, "parts[0].textPreview:", (parts[0] as { text?: string })?.text?.slice(0, 100));
+    // #endregion
+
+    // Enforce aspect ratio via API when supported (gemini-2.5-flash-image, gemini-3.x image models use generationConfig.imageConfig.aspectRatio).
+    const geminiAspectRatioValue =
+      aspectRatio === "custom" && customSize
+        ? customSizeToAspectRatio(customSize.width, customSize.height)
+        : effectiveAspectRatio;
+    (generationConfigPrimary as Record<string, unknown>).imageConfig = {
+      aspectRatio: geminiAspectRatioValue,
+    };
+
+    // Try fallback first to avoid 503 from primary when under high demand.
+    const modelsToTry = [IMAGE_MODEL_FALLBACK, IMAGE_MODEL_PRIMARY];
     let lastErrorMsg = "Image generation failed";
     let geminiRes: Response | null = null;
 
     for (const model of modelsToTry) {
+      let configToUse: Record<string, unknown> = generationConfigPrimary;
       geminiRes = await fetch(geminiUrl(model), {
         method: "POST",
         headers: {
@@ -470,7 +626,7 @@ Deno.serve(async (req: Request) => {
         },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig,
+          generationConfig: configToUse,
         }),
       });
       if (geminiRes.ok) break;
@@ -484,7 +640,36 @@ Deno.serve(async (req: Request) => {
         // use default
       }
       lastErrorMsg = errMsg;
-      if (geminiRes.status === 404) continue;
+      // If 400 and error mentions imageConfig/aspectRatio, retry same model without imageConfig
+      if (
+        geminiRes.status === 400 &&
+        (errText.includes("aspectRatio") || errText.includes("imageConfig") || errText.includes("Unknown name"))
+      ) {
+        const { imageConfig: _removed, ...configWithoutImage } = generationConfigPrimary as Record<string, unknown>;
+        configToUse = configWithoutImage as Record<string, unknown>;
+        geminiRes = await fetch(geminiUrl(model), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: configToUse,
+          }),
+        });
+        if (geminiRes.ok) break;
+        const retryErrText = await geminiRes.text();
+        console.error(`Gemini API retry without imageConfig (${model}):`, geminiRes.status, retryErrText);
+        try {
+          const retryJson = JSON.parse(retryErrText);
+          lastErrorMsg = retryJson.error?.message ?? lastErrorMsg;
+        } catch {
+          // keep lastErrorMsg
+        }
+      }
+      // 404 = model not found; 503 = high demand/unavailable; 429 = rate limit — try fallback model
+      if (geminiRes.status === 404 || geminiRes.status === 503 || geminiRes.status === 429) continue;
       return jsonResponse({ error: lastErrorMsg }, 500);
     }
 
@@ -523,6 +708,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "AI did not return an image" }, 500);
     }
 
+    // Aspect ratio is enforced on the client (fitDataUrlToAspectRatio) — Sharp is not available in Supabase Deno edge.
+
     if (usageRow?.id) {
       await supabaseAdmin
         .from("script_ai_daily_usage")
@@ -538,9 +725,11 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ imageBase64, mimeType }, 200);
   } catch (err) {
-    console.error("generate-design-image error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("generate-design-image error:", message, stack || err);
     return jsonResponse(
-      { error: err instanceof Error ? err.message : "Unknown error" },
+      { error: message || "Image generation failed. Try fewer or smaller reference images." },
       500
     );
   }
