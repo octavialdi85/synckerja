@@ -56,7 +56,7 @@ export const useOptimizedSubscription = () => {
   // OPTIMIZED: Clear cache when organization becomes null to prevent data leak
   useEffect(() => {
     if (!organizationId) {
-      // Clear subscription cache when org is null
+      // Clear subscription cache when org is null (only key with '' - NOT per-org keys)
       queryClient.removeQueries({
         queryKey: optimizedQueryKeys.subscription.status('')
       });

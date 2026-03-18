@@ -1,5 +1,5 @@
-
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { forceAuthReset } from '@/features/1-login/utils/authCleanup';
@@ -28,6 +28,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -386,13 +387,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signOut = async () => {
     try {
       setLoading(true);
+      // Clear subscription status cache so re-login always fetches fresh expiry (prevents
+      // expired org from reusing stale "active" cache after logout+login without reload)
+      queryClient.removeQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'subscriptionStatus',
+      });
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
+
       // Clear local storage items
       localStorage.removeItem('hasSeenEmployeeWelcome');
       sessionStorage.removeItem('registrationInProgress');
-      
+
     } catch (error) {
       console.error('Error signing out:', error);
       setError(error instanceof Error ? error.message : 'Error signing out');

@@ -11,9 +11,11 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface SubscriptionExpiredPageProps {
   expiryStatus: SubscriptionExpiryStatus;
+  /** When true, applies mobile/Android layout: safe area, full-width card, touch-friendly (e.g. from SubscriptionExpiryGuard on mobile) */
+  isMobile?: boolean;
 }
 
-const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps) => {
+const SubscriptionExpiredPage = ({ expiryStatus, isMobile = false }: SubscriptionExpiredPageProps) => {
   const navigate = useNavigate();
   const { organizationId } = useCurrentOrg();
   // const { t } = useTranslation(); // Commented out - translation not available
@@ -34,7 +36,8 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
         return null;
       }
       
-      return data?.company_name || null;
+      const row = data as unknown as { company_name?: string | null } | null;
+      return row?.company_name ?? null;
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -59,23 +62,30 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
   const expiredType = expiryStatus.isTrialExpired ? 'trial' : 'subscription';
   const expiredDate = expiryStatus.expiredDate ? formatDate(expiryStatus.expiredDate) : '-';
 
+  const wrapperClass = isMobile
+    ? 'min-h-screen flex flex-col bg-gradient-to-br from-red-50 via-white to-red-50 safe-area-top safe-area-bottom overflow-y-auto'
+    : 'min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-red-50 p-4';
+  const cardClass = isMobile ? 'w-full max-w-md mx-auto flex-1 shadow-lg rounded-none border-0' : 'w-full max-w-2xl shadow-lg';
+  const paddingClass = isMobile ? 'p-3 pt-4 pb-6' : 'p-4';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-red-50 p-4">
-      <Card className="w-full max-w-2xl shadow-lg">
-        <CardHeader className="text-center space-y-4 pb-6">
-          <div className="flex justify-center">
-            <div className="rounded-full bg-red-100 p-4">
-              <AlertCircle className="h-12 w-12 text-red-600" />
+    <div className={wrapperClass}>
+      <div className={isMobile ? 'flex-1 flex flex-col p-3 pt-4' : ''}>
+        <Card className={cardClass}>
+          <CardHeader className={`text-center space-y-4 pb-6 ${paddingClass}`}>
+            <div className="flex justify-center">
+              <div className={`rounded-full bg-red-100 ${isMobile ? 'p-3' : 'p-4'}`}>
+                <AlertCircle className={isMobile ? 'h-10 w-10 text-red-600' : 'h-12 w-12 text-red-600'} />
+              </div>
             </div>
-          </div>
-          {/* Organization Name */}
-          {organizationName && (
-            <div className="flex items-center justify-center gap-2 text-lg font-semibold text-gray-700 mb-2">
-              <Building2 className="h-5 w-5 text-gray-600" />
-              <span>{organizationName}</span>
-            </div>
-          )}
-          <CardTitle className="text-2xl md:text-3xl">
+            {/* Organization Name */}
+            {organizationName && (
+              <div className="flex items-center justify-center gap-2 text-lg font-semibold text-gray-700 mb-2">
+                <Building2 className="h-5 w-5 text-gray-600" />
+                <span>{organizationName}</span>
+              </div>
+            )}
+            <CardTitle className={isMobile ? 'text-xl' : 'text-2xl md:text-3xl'}>
             {expiredType === 'trial' 
               ? 'Masa Trial Telah Berakhir'
               : 'Subscription Telah Berakhir'}
@@ -87,7 +97,7 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className={`space-y-6 ${paddingClass}`}>
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>
@@ -157,8 +167,8 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
           <div className="pt-4">
             <Button
               onClick={handleRenewSubscription}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold"
-              size="lg"
+              className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold ${isMobile ? 'py-4 text-base min-h-[48px]' : 'py-6 text-lg'}`}
+              size={isMobile ? 'lg' : 'lg'}
             >
               <CreditCard className="mr-2 h-5 w-5" />
               {expiredType === 'trial'
@@ -171,7 +181,9 @@ const SubscriptionExpiredPage = ({ expiryStatus }: SubscriptionExpiredPageProps)
             Butuh bantuan? Hubungi support kami untuk informasi lebih lanjut.
           </p>
         </CardContent>
-      </Card>
+        </Card>
+        {isMobile && <div className="safe-area-bottom-lower h-2 shrink-0" />}
+      </div>
     </div>
   );
 };

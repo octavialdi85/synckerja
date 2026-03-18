@@ -364,14 +364,14 @@ const VerifyEmail = () => {
   // Show loading while checking access
   if (isLoading) {
     return (
-      <div className="min-h-screen flex">
+      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
         {/* Left Panel - Testimonials */}
-        <div className="hidden lg:flex lg:flex-1">
+        <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
           <AuthTestimonialsPanel />
         </div>
 
         {/* Right Panel - Loading */}
-        <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="auth-right-panel flex-1 flex items-center justify-center p-8 min-h-0 overflow-hidden">
           <div className="w-full max-w-md">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
@@ -384,14 +384,15 @@ const VerifyEmail = () => {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
       {/* Left Panel - Testimonials */}
-      <div className="hidden lg:flex lg:flex-1">
+      <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
         <AuthTestimonialsPanel />
       </div>
 
-      {/* Right Panel - Verification Instructions */}
-      <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+      {/* Right Panel - Verification Instructions: scroll only inside this panel so page has no vertical scroll */}
+      <div className="auth-right-panel flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="text-center mb-6">
@@ -497,6 +498,7 @@ const VerifyEmail = () => {
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
       </div>
     </div>

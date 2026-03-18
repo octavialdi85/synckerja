@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/1-login';
+import { useCurrentOrg } from '@/features/1-login/hooks/useCurrentOrg';
 import { useSubscriptionExpiry } from '@/hooks/useSubscriptionExpiry';
 import { useSubscriptionExpiryRealtime } from '@/hooks/useSubscriptionExpiryRealtime';
 import SubscriptionExpiredPage from '@/features/1-login/pages/SubscriptionExpiredPage';
@@ -25,9 +26,15 @@ interface SubscriptionExpiryGuardProps {
  */
 export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardProps) => {
   const { user, loading: authLoading } = useAuth();
+  const { organizationId, loading: orgLoading } = useCurrentOrg();
   const { expiryStatus, isLoading } = useSubscriptionExpiry();
   const location = useLocation();
   const [isChecking, setIsChecking] = useState(true);
+
+  // Wait for organization to be resolved when user is present and profile is still loading (fixes
+  // race: after login we refetch profile on SIGNED_IN; until org is set we must not allow access
+  // on default expiryStatus. If orgLoading is false and organizationId is null, user has no org.)
+  const waitingForOrg = !!user && organizationId === null && orgLoading;
   
   // Setup realtime subscription to listen for subscription changes
   // Hook will handle conditional setup internally based on organizationId
@@ -111,8 +118,9 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     return <>{children}</>;
   }
 
-  // Unified loading state - combine all loading checks into one simple message
-  const isAnyLoading = authLoading || isLoading || isChecking;
+  // Unified loading state - include "user present but org not loaded yet" so we don't allow
+  // access on the default expiryStatus (isExpired: false) before subscription is fetched
+  const isAnyLoading = authLoading || isLoading || isChecking || waitingForOrg;
   const isMobile = useIsMobile();
 
   if (isAnyLoading) {
@@ -141,7 +149,7 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
     return <>{children}</>;
   }
 
-  // STRICT ENFORCEMENT: If subscription expired, show expired page
+  // STRICT ENFORCEMENT: If subscription expired, show expired page (desktop and mobile/web/Android)
   // This blocks ALL routes except renewal routes (handled by isAllowedRoute check above)
   // The check is based on trial_end_date or subscription_end_date from organization_subscriptions table
   if (expiryStatus.isExpired) {
@@ -151,10 +159,11 @@ export const SubscriptionExpiryGuard = ({ children }: SubscriptionExpiryGuardPro
         daysExpired: expiryStatus.daysExpired,
         trialEndDate: expiryStatus.trialEndDate,
         subscriptionEndDate: expiryStatus.subscriptionEndDate,
-        currentPath: location.pathname
+        currentPath: location.pathname,
+        isMobile
       });
     }
-    return <SubscriptionExpiredPage expiryStatus={expiryStatus} />;
+    return <SubscriptionExpiredPage expiryStatus={expiryStatus} isMobile={isMobile} />;
   }
 
   // Subscription is active, allow access to all routes

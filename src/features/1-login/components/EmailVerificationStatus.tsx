@@ -265,14 +265,15 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
   // Loading state with dynamic verification status
   if (loading) {
     return (
-      <div className="min-h-screen flex">
+      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
         {/* Left Panel - Testimonials */}
-        <div className="hidden lg:flex lg:flex-1">
+        <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
           <AuthTestimonialsPanel />
         </div>
 
         {/* Right Panel - Verification Status */}
-        <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="auth-right-panel flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden flex items-center justify-center p-8">
           <div className="w-full max-w-md">
             {/* Header */}
             <div className="text-center mb-6">
@@ -312,6 +313,7 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
               </CardContent>
             </Card>
           </div>
+          </div>
         </div>
       </div>
     );
@@ -320,14 +322,15 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex">
+      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
         {/* Left Panel - Testimonials */}
-        <div className="hidden lg:flex lg:flex-1">
+        <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
           <AuthTestimonialsPanel />
         </div>
 
         {/* Right Panel - Verification Error */}
-        <div className="auth-right-panel flex-1 flex items-center justify-center p-8">
+        <div className="auth-right-panel flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden flex items-center justify-center p-8">
           <div className="w-full max-w-md">
             {/* Header */}
             <div className="text-center mb-6">
@@ -364,6 +367,7 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
               </CardContent>
             </Card>
           </div>
+          </div>
         </div>
       </div>
     );
@@ -372,14 +376,15 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
   // Success state - only show when showSuccess is true
   if (verified && showSuccess) {
     return (
-      <div className="min-h-screen flex">
+      <div className="fixed inset-0 flex overflow-hidden h-[100dvh] max-h-[100dvh]">
         {/* Left Panel - Testimonials */}
-        <div className="hidden lg:flex lg:flex-1">
+        <div className="hidden lg:flex lg:flex-1 min-h-0 overflow-hidden">
           <AuthTestimonialsPanel />
         </div>
 
         {/* Right Panel - Verification Success */}
-        <div className="auth-right-panel flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8">
+        <div className="auth-right-panel flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden flex items-center justify-center p-4 sm:p-6 md:p-8">
           <div className="w-full max-w-md">
             {/* Header */}
             <div className="text-center mb-6 sm:mb-8">
@@ -419,6 +424,7 @@ export const EmailVerificationStatus = ({ token }: EmailVerificationStatusProps)
                 </div>
               </CardContent>
             </Card>
+          </div>
           </div>
         </div>
       </div>

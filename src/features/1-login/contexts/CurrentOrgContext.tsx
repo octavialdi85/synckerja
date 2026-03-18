@@ -68,9 +68,14 @@ export function CurrentOrgProvider({ children }: { children: React.ReactNode }) 
         setOrganizationId(null);
         setError(null);
       }
+      // After login, refetch profile so organizationId is set and SubscriptionExpiryGuard
+      // can resolve (avoids loading forever when waitingForOrg never clears)
+      if (event === 'SIGNED_IN') {
+        fetchFromProfile();
+      }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchFromProfile]);
 
   const refetch = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
